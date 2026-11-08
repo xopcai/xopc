@@ -32,7 +32,7 @@ import { isPersonalConversation } from '../../personal-agent/repository.js';
 function clampWindowSpan(value: number | undefined, fallback: number): number {
   const parsed = Math.trunc(value ?? fallback);
   if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(200, Math.max(0, parsed));
+  return Math.min(2000, Math.max(0, parsed));
 }
 
 export interface GatewaySessionsApiOptions {
@@ -435,8 +435,8 @@ export class GatewaySessionsApi {
     return { ...result, lastTurnId: normalizedTurnId, session };
   }
 
-  btwQuery(conversationId: string, question: string): Promise<{ text: string; error?: string }> {
-    return this.opts.getAgentService().sessionInspector.btwQuery(conversationId, question);
+  btwQuery(conversationId: string, question: string, options?: import('../../chat-commands/types.js').BtwQueryOptions): Promise<{ text: string; error?: string }> {
+    return this.opts.getAgentService().sessionInspector.btwQuery(conversationId, question, options);
   }
 
   stats() {

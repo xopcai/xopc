@@ -88,6 +88,11 @@ export class EmbeddedRunRegistry {
     return this.byConversationId.get(conversationId)?.handle;
   }
 
+  isActive(conversationId: string): boolean {
+    const prefix = `${JSON.stringify([conversationId]).slice(0, -1)},`;
+    return this.byConversationId.has(conversationId) || [...this.prepared.keys()].some(key => key.startsWith(prefix));
+  }
+
   async abortByConversationId(conversationId: string, reason: 'user_cancelled' | 'parent_cancelled' = 'parent_cancelled', expectedRunId?: string): Promise<boolean> {
     const entry = this.byConversationId.get(conversationId);
     if (!entry || (expectedRunId !== undefined && entry.runId !== expectedRunId)) {
@@ -179,6 +184,10 @@ export function reserveEmbeddedRunCancellation(identity: Pick<EmbeddedRunIdentit
 
 export function getEmbeddedRunByConversationId(conversationId: string): EmbeddedRunHandle | undefined {
   return embeddedRunRegistry.getByConversationId(conversationId);
+}
+
+export function isEmbeddedRunActive(conversationId: string): boolean {
+  return embeddedRunRegistry.isActive(conversationId);
 }
 
 export function abortEmbeddedRun(conversationId: string, reason: 'user_cancelled' | 'parent_cancelled' = 'parent_cancelled', expectedRunId?: string): Promise<boolean> {

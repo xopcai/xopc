@@ -20,6 +20,7 @@ import { registerSettingsCapability } from './settings.js';
 import { registerAppContextCapability } from './app-context.js';
 import { registerAgentCapabilities } from '../../agent-catalog/capabilities.js';
 import { registerLocalAppDelegation } from '../../local-apps/capabilities/delegate.js';
+import { registerAutomationProposalCapabilities } from '../../local-apps/automation-proposals.js';
 import { registerLocalAppP1Capabilities, type LocalAppP1Deps } from '../../local-apps/p1-services.js';
 import { FileSpaceService } from '../../files/file-service.js';
 
@@ -33,6 +34,7 @@ export function createProductDispatcher(getNotes?: () => NotesService | undefine
   registerAppContextCapability(dispatcher);
   registerAgentCapabilities(dispatcher);
   registerLocalAppDelegation(dispatcher);
+  registerAutomationProposalCapabilities(dispatcher);
   const p1Config = () => { const config = taskWrites?.getConfig?.(); if (!config) throw new CapabilityError('UNAVAILABLE', 'Host configuration is unavailable'); return config; };
   let files: FileSpaceService | undefined;
   registerLocalAppP1Capabilities(dispatcher, taskWrites?.localAppP1 ?? { getConfig: p1Config, getFiles: () => {

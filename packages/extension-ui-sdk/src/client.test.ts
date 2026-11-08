@@ -4,6 +4,18 @@ import { createExtensionClient } from './client.js';
 import type { Transport } from './transport.js';
 
 describe('extension client product navigation', () => {
+  it('shares run subscriptions and stops only after the final listener is removed', async () => {
+    const request = vi.fn(async () => undefined), off = vi.fn();
+    const on = vi.fn(() => off);
+    const client = createExtensionClient({ transport: { request, on } as unknown as Transport });
+    const [first, second] = await Promise.all([client.automation.watchRun('run', vi.fn()), client.automation.watchRun('run', vi.fn())]);
+    expect(request.mock.calls).toEqual([['automation.watchRun', { runId: 'run' }]]);
+    first(); first(); expect(request).toHaveBeenCalledTimes(1);
+    second(); expect(request.mock.calls[1]).toEqual(['automation.unwatchRun', { runId: 'run' }]);
+    expect(off).toHaveBeenCalledTimes(2);
+    await client.automation.reviewProposal('proposal');
+    expect(request).toHaveBeenLastCalledWith('automation.reviewProposal', { proposalId: 'proposal' });
+  });
   it('opens host attachment and resource review without supplying authority', async () => {
     const request = vi.fn(async () => undefined);
     const client = createExtensionClient({ transport: { request } as unknown as Transport });

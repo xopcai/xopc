@@ -2,6 +2,7 @@ import { weixinPrivateIdentity } from '../../agent/mcp/weixin-setup-scope.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import type { AutomationDeliveryPolicy } from '../domain/types.js';
 import { randomUUID } from 'node:crypto';
+import { withLocalAppRunAuthority } from '../../local-apps/execution-authority.js';
 
 import { createLogger } from '../../utils/logger.js';
 import { DEFAULT_AGENT_ID, normalizeAgentId } from '../../agent/agent-scope.js';
@@ -460,7 +461,7 @@ export class AutomationService {
     return Math.max(0, this.maxConcurrentRuns - this.activeRuns.size);
   }
 
-  async listRuns(options?: { automationId?: string; projectId?: string; limit?: number; before?: { createdAtMs: number; id: string } }): Promise<AutomationRun[]> {
+  async listRuns(options?: Parameters<typeof listAutomationRuns>[0]): Promise<AutomationRun[]> {
     return listAutomationRuns(options);
   }
 
@@ -737,7 +738,7 @@ export class AutomationService {
           attempt,
           maxAttempts,
         });
-        task = await this.executor.execute(automation, run, controller.signal, {
+        task = await withLocalAppRunAuthority(run.id, controller.signal, executionSignal => this.executor.execute(automation, run, executionSignal, {
           onRunPatch: (patch) => {
             const previousDeadline = run.deadlineAtMs;
             run = { ...run, ...patch };
@@ -749,7 +750,7 @@ export class AutomationService {
               });
             }
           },
-        }, { triggerEvent });
+        }, { triggerEvent }));
         // A timeout consumes the shared automation deadline, so only ordinary
         // failures can start another attempt within the same run.
         const retryable = task.status === 'failed'

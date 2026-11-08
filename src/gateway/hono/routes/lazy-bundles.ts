@@ -90,7 +90,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'local-app-capabilities',
-    match: path => /^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations)?$/.test(path),
+    match: path => /^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations|\/runs\/[^/]+\/events)?$/.test(path),
     load: async () => {
       const { registerLocalAppCapabilityRoutes } = await import('./local-app-capabilities.js');
       return { register: registerLocalAppCapabilityRoutes };
@@ -526,7 +526,9 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'tui',
-    match: (path) => startsWithAny(path, ['/api/tui']),
+    match: (path) => path === '/api/tui/startup-resources' || path === '/api/tui/diff' || path === '/api/tui/manage' || path === '/api/tui/side'
+      || /^\/api\/tui\/capabilities\/(?:skills|mcp|plugins)$/.test(path)
+      || /^\/api\/tui\/sessions\/[^/]+\/(?:policy|search|jobs(?:\/[^/]+(?:\/(?:stop|stdin|resize))?)?|subagents(?:\/[^/]+(?:\/(?:stop|steer|resume|transcript))?)?)$/.test(path),
     load: async () => {
       const { registerTuiRoutes } = await import('./tui.js');
       return { register: registerTuiRoutes };

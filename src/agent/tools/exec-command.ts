@@ -1,3 +1,4 @@
+import { getSessionInteractionPolicy } from '../session/interaction-policy.js';
 import { Type } from '@sinclair/typebox';
 import type {
   AgentTool,
@@ -20,6 +21,7 @@ const DEFAULT_MAX_OUTPUT_CHARS = 50_000;
 
 const ExecCommandSchema = Type.Object({
   cmd: Type.String({ description: 'Command for the default platform shell: /bin/sh on Unix and in Docker; cmd.exe on Windows hosts. Commands start in the workspace; use cwd instead of cd. For verification, invoke the existing test runner directly without shell chains, pipes, or output filters so its exit status and evidence remain unambiguous. Use maxOutputChars to limit output.' }),
+  tty: Type.Optional(Type.Boolean({ description: 'Allocate a terminal for interactive programs. Use managed_job stdin/resize and TUI /terminal to interact.' })),
   cwd: Type.Optional(
     Type.String({
       description: 'Working directory. Relative paths are resolved under the agent workspace.',
@@ -87,6 +89,7 @@ export interface CreateExecCommandToolOptions {
 
 type ExecCommandParams = {
   cmd?: string;
+  tty?: boolean;
   cwd?: string;
   timeoutMs?: number;
   maxOutputChars?: number;
@@ -180,6 +183,8 @@ export function createExecCommandTool(
       signal?: AbortSignal,
       onUpdate?: AgentToolUpdateCallback<ExecCommandUpdateDetails>,
     ): Promise<AgentToolResult<ExecCommandDetails>> {
+      const interaction = getSessionInteractionPolicy(options?.getConversationId?.() ?? workspaceCwd);
+      if ((interaction.mode === 'plan' || interaction.access === 'read-only') && (params.outputs?.length || params.reuseVerification)) throw new Error('Artifact publishing is disabled in Plan and read-only modes.');
       const command = (params.cmd ?? '').trim();
       if (params.yieldTimeMs !== undefined && params.outputs?.length) throw new Error('yieldTimeMs cannot be combined with outputs; publish files after the job completes.');
       if (!command) {
@@ -278,7 +283,7 @@ export function createExecCommandTool(
       const registry = commandRegistry();
       successfulChecks.delete(checkKey);
       let commandResult = await registry.start({
-        workspace: workspaceCwd, isolation,
+        workspace: workspaceCwd, isolation, tty: params.tty,
         owner, command, cwd: policy.effectiveCwd, env: { ...runtimeEnv, COLUMNS: '200' },
         timeoutMs, maxOutputChars, signal,
         snapshot: true,

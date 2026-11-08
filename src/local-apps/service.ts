@@ -20,8 +20,10 @@ import {
   type LocalAppPreviewSnapshot,
 } from '@xopcai/gateway-contract';
 import { CapabilityError } from '../capabilities/runtime/errors.js';
+import { getAutomation } from '../automations/storage/index.js';
 import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
 import { getConnectorConnection } from '../storage/sqlite/connector-repository.js';
+import { automationRunApproved } from './capabilities/automation-policy.js';
 import { validateLocalAppCapabilityContracts } from './capabilities/contracts.js';
 import { recordPublicAssets, resolvePublicAsset } from './public-assets.js';
 import { LocalAppPreviewSessions, type PreviewSource } from './preview-sessions.js';
@@ -415,6 +417,15 @@ export class LocalAppService {
         if (!account || account.currentConnectionId !== binding.connectionId || !connection || connection.status !== 'active'
           || connection.connectorId !== binding.connectorId || connection.accountId !== binding.accountId || connection.principalId !== 'local-owner') {
           throw new CapabilityError('CONTRACT_CHANGED', 'Connector account changed; review its current connection again');
+        }
+      }
+    }
+    if (scopes.automationsRun.mode === 'selected') {
+      for (const approval of scopes.automationsRun.approvals) {
+        if (approval.authority.expiresAt > Date.now() + 30 * 86400000) throw new CapabilityError('INVALID_INPUT', 'Execution approvals last at most 30 days');
+        const automation = getAutomation(approval.id);
+        if (!automation || !automationRunApproved(scopes, automation)) {
+          throw new CapabilityError('CONTRACT_CHANGED', 'Automation changed or cannot run; review its current configuration again');
         }
       }
     }

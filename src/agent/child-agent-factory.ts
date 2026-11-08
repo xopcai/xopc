@@ -1,8 +1,9 @@
+import { getSessionMetadata, isXopcDatabaseOpen } from '../storage/sqlite/index.js';
 import { randomUUID } from 'node:crypto';
-
 import type { AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
+import { monitorChildRun } from './orchestration/child-run-monitor.js';
 import type { Config } from '../config/schema.js';
 import type { EndpointToolRuntime } from '../endpoint-tools/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
@@ -173,9 +174,11 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
           return budget.policy.shouldStopAfterTurn(context);
         },
       };
+      const monitor = monitorChildRun({ id: conversationId, parentConversationId: options.requesterConversationId, task: options.goal, workspace: options.workspace, modelRef: `${options.model.provider}/${options.model.id}`, agentId: options.agentId ?? (isXopcDatabaseOpen() && options.requesterConversationId ? getSessionMetadata(options.requesterConversationId)?.agentId : undefined), allowedTools: [...allow], maxIterations: options.maxIterations,
+        abort: () => controller.abort(Object.assign(new Error('user_cancelled'), { code: 'user_cancelled' })) });
       try {
         const params: Parameters<typeof runXopcEmbeddedTurn>[0] = {
-          conversationId, runId: randomUUID(), workspaceDir: options.workspace,
+          toolPolicyConversationId: options.requesterConversationId, conversationId, runId: randomUUID(), workspaceDir: options.workspace,
           isWorkspaceTrusted: options.isWorkspaceTrusted,
           userMessage: { role: 'user', content: options.goal, timestamp: Date.now() },
           model: options.model, modelRef: `${options.model.provider}/${options.model.id}`,
@@ -189,6 +192,9 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
             + (options.researchCheckpoint ? '\n\nUse research_checkpoint after each verified source, before further searching. Address every requested field, including not_disclosed; keep nextSteps current. A final answer alone does not save findings.' : '')
             + `\n\nDelegation budget: ${JSON.stringify(budget.snapshot().limits)}. Tokens are cumulative across requests. Search before reading targeted chunks; continue truncated reads from their returned next position. If asked for a budget handoff, stop tools and summarize evidence, incomplete work and precise next steps.`,
           onEvent: event => {
+            if (event.type === 'message_end') void runtime.loadMessages().then(messages => monitor.snapshot(messages)).catch(error => log.warn({ err: error }, 'Child transcript snapshot failed'));
+            if (event.type === 'tool_execution_start') monitor.append(`\n[tool] ${event.toolName}\n`);
+            if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') monitor.append(event.assistantMessageEvent.delta);
             const progress = options.progressHooks;
             if (event.type === 'message_end' && event.message.role === 'assistant') {
               const usage = event.message.usage;
@@ -255,14 +261,17 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
         ].filter(Boolean).join('\n\n') || '(no final response)';
         log.info({ conversationId, stopReason, budgetTier: snapshot.tier, usage: snapshot.usage,
           limits: snapshot.limits, handoffRequested: snapshot.handoffRequested, handoffCompleted }, `Delegation stopped: ${stopReason}`);
+        const status = ['user_cancelled', 'parent_cancelled'].includes(stopReason) ? 'cancelled' as const
+          : options.researchCheckpoint && stopReason === 'deadline_exceeded' && !/did not settle/i.test(result.errorMessage ?? '') ? 'partial' as const
+          : !result.ok && !budgetHandoff ? 'failed' as const : stopReason !== 'completed' ? 'partial' as const : 'success' as const;
+        monitor.snapshot(messages);
+        monitor.finish(status, summary);
         return { summary, stopReason, budget: { ...snapshot, stopReason }, handoff: { requested: snapshot.handoffRequested, completed: handoffCompleted, summary },
           toolIterations: snapshot.usage.toolCalls, messages,
-          status: ['user_cancelled', 'parent_cancelled'].includes(stopReason) ? 'cancelled' as const
-            : options.researchCheckpoint && stopReason === 'deadline_exceeded' && !/did not settle/i.test(result.errorMessage ?? '') ? 'partial' as const
-            : !result.ok && !budgetHandoff ? 'failed' as const : stopReason !== 'completed' ? 'partial' as const : 'success' as const,
+          status,
           ...(verification?.type === 'custom' ? { verification: verification.data as Awaited<ReturnType<RunVerification['summary']>> } : {}),
         };
-      } finally { evictEmbeddedSessionRunner(runtime.runtimeId, 'leaf_worker_complete'); }
+      } finally { monitor.dispose(); evictEmbeddedSessionRunner(runtime.runtimeId, 'leaf_worker_complete'); }
     },
   };
 }

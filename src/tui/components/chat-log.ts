@@ -62,6 +62,7 @@ export class ChatLog extends Container {
   private lastStatusEntry: Container | null = null;
   private lastStatusText: Text | null = null;
   private entryRecords: ChatLogEntryRecord[] = [];
+  private entryByComponent = new Map<Component, ChatLogEntryRecord>();
   private viewportRowsProvider: (() => number) | undefined;
   private historyViewDisplayIndex: number | null = null;
   private renderMode: CellRenderMode = 'compact';
@@ -79,7 +80,9 @@ export class ChatLog extends Container {
     this.addChild(component);
     (lifecycle === 'active' ? this.activeCells : this.committedCells).add(component);
     if (meta) {
-      this.entryRecords.push({ component, ...meta });
+      const record = { component, ...meta };
+      this.entryRecords.push(record);
+      this.entryByComponent.set(component, record);
     }
     this.applyRenderMode(component);
   }
@@ -101,6 +104,7 @@ export class ChatLog extends Container {
     this.lastStatusEntry = null;
     this.lastStatusText = null;
     this.entryRecords = [];
+    this.entryByComponent.clear();
     this.historyViewDisplayIndex = null;
     this.activeCells.clear();
     this.committedCells.clear();
@@ -429,7 +433,7 @@ export class ChatLog extends Container {
       const start = allLines.length;
       const childLines = child.render(width);
       allLines.push(...childLines);
-      const record = this.entryRecords.find((entry) => entry.component === child);
+      const record = this.entryByComponent.get(child);
       if (record) {
         ranges.push({ record, start, end: allLines.length });
       }

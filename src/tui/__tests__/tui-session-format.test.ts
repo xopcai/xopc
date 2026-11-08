@@ -109,7 +109,7 @@ describe('GatewayRealtimeBackend session list mapping', () => {
     const sessions = await backend.listSessions();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://gateway.test/api/sessions',
+      'http://gateway.test/api/sessions?excludeArchived=true',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer tok' }),
       }),

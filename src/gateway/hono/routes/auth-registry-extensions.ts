@@ -21,6 +21,10 @@ import { CapabilityError } from '../../../capabilities/runtime/errors.js';
 import { bodyLimit } from 'hono/body-limit';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { listLocalAppAccess, recordLocalAppAccess } from '../../../local-apps/access-audit.js';
+import { listAutomations } from '../../../automations/storage/index.js';
+import { automationConfigurationDigest } from '../../../local-apps/capabilities/automation-policy.js';
+import { automationProposalReview, assertProposalCurrent, readAutomationProposal, resolveAutomationProposal } from '../../../local-apps/automation-proposals.js';
+import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
 import { z } from 'zod';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { localAppDelegationCaller } from '../../security/local-app-delegation-access.js';
@@ -344,6 +348,26 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     return c.json({ grant: service.localApps.getUiGrant(c.req.param('id')) });
   });
 
+  authenticated.get('/api/extensions/:id/automation-proposals/:proposalId', c => {
+    try {
+      const proposal = readAutomationProposal(c.req.param('id'), c.req.param('proposalId'));
+      if (proposal.status !== 'pending' || proposal.decision) return c.json({ proposal });
+      assertProposalCurrent(service.localApps, proposal);
+      return c.json(automationProposalReview(proposal));
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+  authenticated.post('/api/extensions/:id/automation-proposals/:proposalId/review', async c => {
+    try {
+      const decision = z.strictObject({ digest: z.string().regex(/^[a-f0-9]{64}$/), approve: z.boolean(), enable: z.boolean() })
+        .parse(await c.req.json());
+      const dispatcher = createProductDispatcher(() => service.notesServiceInstance, {
+        getAutomations: () => service.automationServiceInstance, getProjects: () => service.projects,
+      });
+      const caller = localAppDelegationCaller(capabilityHttpContext(c), getGatewayPrincipal(c), () => service.getResolvedAuth());
+      return c.json(await resolveAutomationProposal(service.localApps, dispatcher, c.req.param('id'), c.req.param('proposalId'), decision, caller));
+    } catch (error) { return capabilityHttpError(c, error); }
+  });
+
   authenticated.get('/api/extensions/:id/resource-requests/:requestId', c => {
     try {
       const request = readAppResourceRequest(c.req.param('id'), c.req.param('requestId'));
@@ -361,7 +385,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
   });
   authenticated.get('/api/extensions/:id/resource-options', async c => {
     const kind = c.req.query('kind');
-    if (!['notes', 'tasks', 'projects', 'files', 'connectors'].includes(kind ?? '')) return c.json({ error: 'Invalid resource kind' }, 400);
+    if (!['notes', 'tasks', 'projects', 'automations', 'files', 'connectors'].includes(kind ?? '')) return c.json({ error: 'Invalid resource kind' }, 400);
     const search = (c.req.query('search') ?? '').slice(0, 200);
     if (kind === 'files') {
       const items = (await getGatewayFileSpaceService(service).recent(100)).filter(file => file.kind === 'file'
@@ -372,6 +396,14 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     }
     if (kind === 'connectors') return c.json({ items: (await localAppConnectorOptions({ getConfig: () => service.currentConfig as import('../../../config/schema.js').Config,
       getFiles: () => getGatewayFileSpaceService(service) })).filter(item => item.title.toLowerCase().includes(search.toLowerCase())) });
+    if (kind === 'automations') {
+      const items = listAutomations().filter(item => item.name.toLowerCase().includes(search.toLowerCase())).slice(0, 100)
+        .map(item => ({ id: item.id, title: item.name, configurationDigest: automationConfigurationDigest(item),
+          runnable: item.enabled && item.action.kind === 'agent' && (!item.management || item.management.runnable),
+          review: { action: item.action, safety: item.safety, delivery: item.delivery, conversationMode: item.conversationMode,
+            reliability: item.reliability, projectId: item.projectId, enabled: item.enabled } }));
+      return c.json({ items });
+    }
     const table = kind === 'notes' ? 'notes' : kind === 'tasks' ? 'tasks' : 'projects';
     const column = kind === 'notes' ? 'note_id' : kind === 'tasks' ? 'task_id' : 'project_id';
     const title = kind === 'projects' ? 'name' : 'title';

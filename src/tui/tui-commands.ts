@@ -89,7 +89,7 @@ function keyLabel(
 }
 
 export function getSlashCommands(
-  _isLocal: boolean,
+  isLocal: boolean,
   keybindings?: KeybindingsManager,
 ): SlashCommandDef[] {
   const abortKey = keyLabel(keybindings, 'app.interrupt', 'Escape');
@@ -104,52 +104,67 @@ export function getSlashCommands(
     { name: 'retry', description: 'Abort current run if needed and resend the last user message' },
     { name: 'tools', description: `Toggle tool output expanded/collapsed (or ${toolsKey})` },
     { name: 'thinking', description: `Toggle thinking display (or ${thinkingKey})` },
-    { name: 'copy', description: 'Copy last assistant message to clipboard' },
+    { name: 'copy', description: 'Copy last answer, or /copy code to choose a code block' },
+    { name: 'search', description: 'Search transcript content and jump to a matching row' },
+    { name: 'raw', description: 'Inspect the persisted transcript as JSON' },
     { name: 'exit', description: 'Exit the TUI' },
-    { name: 'quit', description: 'Quit the TUI' },
     { name: 'model', description: 'Open model picker (optional search text)' },
-    { name: 'models', description: 'List available models' },
-    { name: 'switch', description: 'Switch model — copy `provider/model` from /models' },
     { name: 'login', description: 'Login to an OAuth provider' },
     { name: 'logout', description: 'Remove stored provider auth profiles' },
     { name: 'usage', description: 'Show token usage statistics' },
+    { name: 'answer', description: 'Answer the pending question or approval' },
+    { name: 'attach', description: 'Attach a local image: /attach <path>' },
+    { name: 'attachments', description: 'List or remove draft attachments' },
+    { name: 'plan', description: 'Toggle Plan mode (inspection only)' },
+    { name: 'permissions', description: 'Choose session tool access' },
+    { name: 'diff', description: 'Inspect staged, unstaged and untracked changes' },
+    { name: 'skills', description: 'Browse skills and insert a skill command' },
+    { name: 'mcp', description: 'Manage MCP connections, tools and sign-in' },
+    { name: 'plugins', description: 'Install, update, authorize and manage plugins' },
+    { name: 'subagents', description: 'Watch delegated work or /subagents stop <id>' },
+    { name: 'terminal', description: 'Attach a running PTY job; Ctrl+] detaches' },
+    { name: 'ps', description: 'List background jobs or inspect /ps <id>' },
+    { name: 'stop', description: 'Stop a background job: /stop <id|all>' },
+    { name: 'stdin', description: 'Send pipe input: /stdin <id> <text>' },
     { name: 'review', description: 'Review current workspace changes for correctness issues' },
-    { name: 'session', description: 'Show current session info' },
     { name: 'project', description: 'Manage current project context' },
     { name: 'agent', description: 'Show or switch agent for this TUI session' },
     { name: 'agents', description: 'List available agents' },
     { name: 'tui-default-agent', description: 'Set default agent for new TUI sessions' },
     { name: 'new', description: 'Start a new isolated TUI conversation' },
     { name: 'fork', description: 'Fork current session transcript into a new session' },
-    { name: 'clone', description: 'Duplicate current session transcript into a new session' },
     { name: 'trust', description: 'Manage project trust and show extension security policy' },
-    { name: 'name', description: 'Show or set current session display name' },
+    { name: 'archived', description: 'Browse archived conversations' },
+    { name: 'archive', description: 'Archive this conversation, preserving its transcript' },
+    { name: 'delete', description: 'Delete this conversation after confirmation' },
+    { name: 'cd', description: 'Change the workspace on the execution host' },
+    { name: 'worktree', description: 'List, create, select or remove managed project worktrees' },
+    { name: 'pwd', description: 'Show the active workspace and execution host' },
+    { name: 'rename', description: 'Show or set current session display name' },
     { name: 'reset', description: 'Reset current session transcript and reload history' },
-    { name: 'clear', description: 'Clear the TUI view without resetting the session' },
+    { name: 'clear', description: 'Clear the view and start a fresh conversation' },
     { name: 'list', description: 'List sessions' },
     { name: 'resume', description: `Open session picker (or ${conversationId})` },
-    { name: 'tree', description: 'Show grouped session tree' },
+    { name: 'tree', description: 'Inspect the current transcript tree' },
     { name: 'timeline', description: 'Jump to a previous turn in the current session' },
     { name: 'scoped-models', description: `Choose models for ${modelCycleKey} cycling` },
-    { name: 'compact', description: 'Compact session history (local API)' },
+    { name: 'compact', description: 'Compact session history' },
     { name: 'think', description: 'Set thinking level (e.g. /think high)' },
     { name: 'reasoning', description: 'Set reasoning visibility (e.g. /reasoning stream)' },
     { name: 'verbose', description: 'Toggle verbose mode' },
     { name: 'status', description: 'Show agent status' },
     { name: 'config', description: 'Show current configuration' },
     { name: 'context', description: 'Show context budget' },
-    { name: 'btw', description: 'Side question without saving to session' },
-    { name: 'aside', description: 'Alias for /btw' },
+    { name: 'side', description: 'Ask a side question without changing the main conversation' },
     { name: 'export', description: 'Export session (markdown/html/json)' },
     { name: 'import', description: 'Import an xopc JSON session export' },
     { name: 'share', description: 'Create a share link for a workspace file/folder/site' },
     { name: 'settings', description: 'Open TUI settings overlay' },
     { name: 'reload', description: 'Reload keybindings, TUI settings, theme, and extension UI' },
-    { name: 'reload-keybindings', description: `Reload ${getTuiKeybindingsPath()}` },
     { name: 'start', description: 'Show welcome message' },
-    { name: 'hotkeys', description: 'Show resolved keyboard shortcuts (pi-style)' },
+    { name: 'hotkeys', description: 'Show resolved keyboard shortcuts' },
     { name: 'changelog', description: 'Show version history' },
-  ];
+  ].filter(command => isLocal || !['project', 'login', 'logout', 'trust'].includes(command.name));
 }
 
 function formatExtraSlashCommands(commands: SlashCommandDef[], seen: Set<string>): string[] {
@@ -172,7 +187,7 @@ export function formatTuiHelpText(
 ): string {
   const commands = getSlashCommands(isLocal, keybindings);
   const interrupt = keyLabel(keybindings, 'app.interrupt', 'Escape');
-  const thinkCycle = keyLabel(keybindings, 'app.thinking.cycle', 'Shift+Tab');
+  const thinkCycle = keyLabel(keybindings, 'app.mode.cycle', 'Shift+Tab');
   const modelNext = keyLabel(keybindings, 'app.model.cycleForward', 'Ctrl+P');
   const modelPrev = keyLabel(keybindings, 'app.model.cycleBackward', 'Shift+Ctrl+P');
   const modelPicker = keyLabel(keybindings, 'app.model.select', 'Ctrl+L');
@@ -203,10 +218,10 @@ export function formatTuiHelpText(
     lines.push('', 'Extension commands:');
     lines.push(...extraCommandLines);
   }
-  lines.push('', 'Keyboard shortcuts (defaults align with pi coding-agent where noted):');
+  lines.push('', 'Keyboard shortcuts:');
   lines.push(`  ${interrupt} — Abort active run`);
-  lines.push(`  ${thinkCycle} — Cycle /think level`);
-  lines.push(`  ${modelNext} / ${modelPrev} — Next / previous model (/switch)`);
+  lines.push(`  ${thinkCycle} — Toggle Default / Plan mode`);
+  lines.push(`  ${modelNext} / ${modelPrev} — Next / previous model (/model)`);
   lines.push(`  ${modelPicker} — Model picker`);
   lines.push(`  ${sessionPicker} — Session picker (rename/delete)`);
   lines.push(`  ${sessionTree} — Session tree`);
@@ -250,7 +265,6 @@ import {
   formatTuiModelsInfo,
   formatTuiSessionInfo,
   formatTuiSessionListInfo,
-  formatTuiSessionTreeInfo,
   formatTuiStoredAuthProfilesInfo,
   formatTuiTranscriptTreeInfo,
   formatTuiTrustInfo,
@@ -271,6 +285,7 @@ export type CommandHandlerDeps = {
   tui: TUI;
   isLocalMode: boolean;
   abortActive: () => Promise<void>;
+  runControlCommand?: (name: string, args: string) => Promise<string | undefined>;
   sendMessage: (text: string) => void;
   requestExit: () => void;
   updateFooter: () => void;
@@ -280,7 +295,6 @@ export type CommandHandlerDeps = {
     openAgentPicker?: () => void;
     openReviewLauncher?: () => void;
     openSessionPicker: () => void;
-    openSessionTree: () => void;
     openTranscriptTree: () => void;
     openTimeline: (initialSearch?: string) => void;
     openUserMessageFork: () => void;
@@ -293,7 +307,7 @@ export type CommandHandlerDeps = {
   setThinkingLevel?: (level: ThinkLevel) => void | Promise<void>;
   setReasoningLevel?: (level: ReasoningLevel) => void | Promise<void>;
   setVerboseLevel?: (level: VerboseLevel) => void | Promise<void>;
-  copyLastAssistant?: () => void | Promise<void>;
+  copyLastAssistant?: (mode?: string) => void | Promise<void>;
   renameCurrentSession?: (name: string) => void | Promise<void>;
   runCompaction?: (instructions?: string) => void | Promise<void | TuiCompactionResult>;
   listModels?: () => TuiModelChoice[] | Promise<TuiModelChoice[]>;
@@ -329,7 +343,7 @@ export type CommandHandlerDeps = {
     getSessionDecision: () => boolean | null;
   };
   runLogin?: (provider?: string) => void | Promise<void>;
-  runBtwQuery?: (question: string) => void | Promise<void>;
+  runSideQuery?: (question: string) => void | Promise<void>;
   forkSession?: (rawKey?: string) => void | Promise<void>;
   skillSlashCommands?: SlashCommandDef[];
   extensionSlashCommands?: TuiExtensionSlashCommandEntry[];
@@ -738,8 +752,47 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     const [commandName, ...restParts] = trimmed.split(/\s+/);
     const normalizedCommand = (commandName ?? '').toLowerCase();
     const commandArgs = restParts.join(' ');
+    const conversationId = state.currentConversationId;
+    const reportCommandError = (error: unknown) => {
+      if (state.currentConversationId !== conversationId) return;
+      chatLog.addSystem(`/${normalizedCommand} failed: ${error instanceof Error ? error.message : String(error)}`);
+      tui.requestRender();
+    };
 
     switch (normalizedCommand) {
+      case 'archived':
+      case 'archive':
+      case 'delete':
+      case 'cd':
+      case 'worktree':
+      case 'pwd':
+      case 'answer':
+      case 'attach':
+      case 'attachments':
+      case 'plan':
+      case 'permissions':
+      case 'diff':
+      case 'search':
+      case 'raw':
+      case 'skills':
+      case 'mcp':
+      case 'plugins':
+      case 'subagents':
+      case 'terminal':
+      case 'ps':
+      case 'stop':
+      case 'stdin':
+        if (!deps.runControlCommand) {
+          chatLog.addSystem('Session controls are unavailable.');
+          tui.requestRender();
+          return;
+        }
+        void deps.runControlCommand(normalizedCommand, commandArgs).then((message) => {
+          if (message) chatLog.addSystem(message);
+        }).catch((error: unknown) => {
+          chatLog.addSystem(`${normalizedCommand} failed: ${error instanceof Error ? error.message : String(error)}`);
+        }).finally(() => tui.requestRender());
+        return;
       case 'help':
         chatLog.addSystem(formatTuiHelpText(
           isLocalMode,
@@ -754,7 +807,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         tui.requestRender();
         return;
       case 'hotkeys':
-      case 'keys':
         chatLog.addSystem(formatXopcTuiHotkeys(keybindings, extensionShortcuts));
         tui.requestRender();
         return;
@@ -772,16 +824,20 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         tui.requestRender();
         return;
-      case 'session':
       case 'status':
         void Promise.resolve(deps.getSessionStats?.())
           .catch(() => undefined)
           .then((stats) => {
             chatLog.addSystem(formatTuiSessionInfo(state, stats));
             tui.requestRender();
-          });
+          }).catch(reportCommandError);
         return;
       case 'project':
+        if (!isLocalMode) {
+          chatLog.addSystem('Use the connected Gateway project settings to manage remote projects. Local project commands are unavailable in Gateway mode.');
+          tui.requestRender();
+          return;
+        }
         try {
           chatLog.addSystem(runTuiProjectCommand(state, commandArgs));
         } catch (err) {
@@ -908,7 +964,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           .then((stats) => {
             chatLog.addSystem(formatTuiUsageInfo(state, stats));
             tui.requestRender();
-          });
+          }).catch(reportCommandError);
         return;
       case 'context':
         chatLog.addSystem(formatTuiContextInfo(state));
@@ -919,6 +975,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         tui.requestRender();
         return;
       case 'trust':
+        if (!isLocalMode) {
+          chatLog.addSystem('Workspace trust is managed on the connected Gateway.');
+          tui.requestRender();
+          return;
+        }
         if (uiOverlays?.openProjectTrust) {
           uiOverlays.openProjectTrust();
           return;
@@ -944,7 +1005,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.exportSession(parseTuiExportRequest(commandArgs))).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       case 'import':
         if (!deps.importSession) {
@@ -954,7 +1015,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.importSession(parseTuiImportRequest(commandArgs))).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       case 'share': {
         if (!deps.createShare) {
@@ -975,50 +1036,41 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.createShare(request)).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       }
-      case 'btw':
-      case 'aside': {
+      case 'side': {
         const question = commandArgs.trim();
-        if (!question) {
-          chatLog.addSystem(
-            'Usage: /btw <question>\nAnswers use the current session as read-only background and are not saved.',
-          );
+        if (!deps.runSideQuery) {
+          chatLog.addSystem('/side is not available in this mode.');
           tui.requestRender();
           return;
         }
-        if (!deps.runBtwQuery) {
-          chatLog.addSystem('/btw is not available in this mode.');
+        void Promise.resolve(deps.runSideQuery(question)).then(() => {
           tui.requestRender();
-          return;
-        }
-        void Promise.resolve(deps.runBtwQuery(question)).then(() => {
-          tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       }
-      case 'models':
-        void Promise.resolve(deps.listModels?.() ?? []).then((models) => {
-          chatLog.addSystem(formatTuiModelsInfo(models));
-          tui.requestRender();
-        });
+      case 'model': {
+        const ref = commandArgs.trim();
+        if (ref === 'list') {
+          void Promise.resolve(deps.listModels?.() ?? []).then(models => {
+            if (state.currentConversationId === conversationId) { chatLog.addSystem(formatTuiModelsInfo(models)); tui.requestRender(); }
+          }).catch(reportCommandError);
+        } else if (ref.includes('/')) {
+          if (!deps.switchModel) { chatLog.addSystem('Model switching is not available in this mode.'); tui.requestRender(); return; }
+          void Promise.resolve(deps.switchModel(ref)).then(() => tui.requestRender()).catch(reportCommandError);
+        } else if (uiOverlays) uiOverlays.openModelPicker(ref || undefined);
+        else { chatLog.addSystem('Use /model list or /model <provider/model>.'); tui.requestRender(); }
         return;
-      case 'model':
-        if (uiOverlays) {
-          uiOverlays.openModelPicker(commandArgs.trim() || undefined);
-          return;
-        }
-        chatLog.addSystem('Model picker is not available in this mode. Use /models and /switch <provider/model>.');
-        tui.requestRender();
-        return;
+      }
       case 'list':
         void Promise.resolve(deps.listSessions?.() ?? []).then((sessions) => {
           chatLog.addSystem(
             formatTuiSessionListInfo(sessions, { currentConversationId: state.currentConversationId }),
           );
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       case 'tree':
         if (uiOverlays) {
@@ -1029,17 +1081,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           void Promise.resolve(deps.loadTranscriptTree()).then((entries) => {
             chatLog.addSystem(formatTuiTranscriptTreeInfo(entries));
             tui.requestRender();
-          });
+          }).catch(reportCommandError);
           return;
         }
-        uiOverlays?.openSessionTree();
-        if (uiOverlays) return;
-        void Promise.resolve(deps.listSessions?.() ?? []).then((sessions) => {
-          chatLog.addSystem(
-            formatTuiSessionTreeInfo(sessions, { currentConversationId: state.currentConversationId }),
-          );
-          tui.requestRender();
-        });
+        chatLog.addSystem('Transcript tree is unavailable in this mode. Use /resume to open another conversation.');
+        tui.requestRender();
         return;
       case 'timeline':
         void runTimelineCommand(commandArgs, deps).catch((err: unknown) => {
@@ -1048,24 +1094,12 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           tui.requestRender();
         });
         return;
-      case 'switch': {
-        const modelRef = commandArgs.trim();
-        if (!modelRef) {
-          chatLog.addSystem('Usage: /switch <provider/model>');
-          tui.requestRender();
-          return;
-        }
-        if (!deps.switchModel) {
-          chatLog.addSystem('Model switching is not available in this mode.');
-          tui.requestRender();
-          return;
-        }
-        void Promise.resolve(deps.switchModel?.(modelRef)).then(() => {
-          tui.requestRender();
-        });
-        return;
-      }
       case 'login':
+        if (!isLocalMode) {
+          chatLog.addSystem('Manage provider credentials on the connected Gateway. /login does not change remote credentials.');
+          tui.requestRender();
+          return;
+        }
         if (deps.runLogin && (!commandArgs.trim() || providerSupportsOAuth(commandArgs.trim()))) {
           void Promise.resolve(deps.runLogin(commandArgs.trim() || undefined))
             .catch((err) => {
@@ -1079,6 +1113,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         tui.requestRender();
         return;
       case 'logout': {
+        if (!isLocalMode) {
+          chatLog.addSystem('Manage provider credentials on the connected Gateway. /logout does not change remote credentials.');
+          tui.requestRender();
+          return;
+        }
         const provider = commandArgs.trim();
         const authProfiles = deps.authProfiles ?? defaultAuthProfiles();
         void (async () => {
@@ -1125,16 +1164,14 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         return;
       }
       case 'exit':
-      case 'quit':
         requestExit();
         return;
       case 'abort':
-      case 'stop':
-      case 'cancel':
         void abortActive().then(() => {
-          chatLog.addSystem('Aborted.');
-          tui.requestRender();
-        });
+          chatLog.addSystem('Stopped.');
+        }).catch((error: unknown) => {
+          chatLog.addSystem(`Stop not confirmed: ${error instanceof Error ? error.message : String(error)}`);
+        }).finally(() => tui.requestRender());
         return;
       case 'recover':
         if (!deps.recoverStream) {
@@ -1181,15 +1218,15 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           tui.requestRender();
           return;
         }
-        void Promise.resolve(deps.copyLastAssistant?.()).then(() => {
+        void Promise.resolve(deps.copyLastAssistant?.(commandArgs || undefined)).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
-      case 'name': {
+      case 'rename': {
         const name = commandArgs.trim();
         if (!name) {
           const currentName = state.sessionInfo.displayName?.trim();
-          chatLog.addSystem(currentName ? `Session name: ${currentName}` : 'Usage: /name <name>');
+          chatLog.addSystem(currentName ? `Session name: ${currentName}` : 'Usage: /rename <name>');
           tui.requestRender();
           return;
         }
@@ -1200,11 +1237,10 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.renameCurrentSession?.(name)).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       }
       case 'resume':
-      case 'sessions':
         if (!uiOverlays) {
           chatLog.addSystem('Session picker is not available in this mode. Use /list to show sessions.');
           tui.requestRender();
@@ -1213,7 +1249,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         uiOverlays?.openSessionPicker();
         return;
       case 'scoped-models':
-      case 'scopedmodels':
         if (!uiOverlays) {
           chatLog.addSystem('Scoped model picker is not available in this mode.');
           tui.requestRender();
@@ -1247,7 +1282,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.setThinkingLevel?.(level)).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       }
       case 'reasoning': {
@@ -1274,7 +1309,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.setReasoningLevel?.(level)).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       }
       case 'verbose': {
@@ -1292,7 +1327,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.setVerboseLevel?.(level)).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       }
       case 'settings':
@@ -1304,8 +1339,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         uiOverlays?.openSettings();
         return;
       case 'reload':
-      case 'reload-keybindings':
-      case 'reload-keybind':
         if (!uiOverlays) {
           chatLog.addSystem('Reload is not available in this mode.');
           tui.requestRender();
@@ -1347,10 +1380,12 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     }
 
     switch (normalizedCommand) {
+      case 'clear':
       case 'new': {
         void (async () => {
           try {
             await abortActive();
+            if (normalizedCommand === 'clear') chatLog.clearAll();
             if (deps.newSession) {
               await deps.newSession();
               chatLog.addSystem(`new session: ${state.currentConversationId}`);
@@ -1377,22 +1412,14 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.forkSession?.(commandArgs.trim() || undefined)).then(() => {
           tui.requestRender();
-        });
+        }).catch(reportCommandError);
         return;
       }
-      case 'clone':
-        void Promise.resolve(deps.forkSession?.(commandArgs.trim() || undefined)).then(() => {
+      case 'reset':
+        void runReset().catch((error: unknown) => {
+          chatLog.addSystem(`Reset failed: ${error instanceof Error ? error.message : String(error)}`);
           tui.requestRender();
         });
-        return;
-      case 'reset':
-      case 'restart':
-        void runReset();
-        return;
-      case 'clear':
-        chatLog.clearAll();
-        chatLog.addSystem('TUI view cleared. Session transcript was not reset.');
-        tui.requestRender();
         return;
       default:
         break;
@@ -1404,7 +1431,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         extensionCmd.handler(commandArgs, extensionCmd.getContext?.()),
       ).then(() => {
         tui.requestRender();
-      });
+      }).catch(reportCommandError);
       return;
     }
 
@@ -1416,6 +1443,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
 
 
 
-    sendMessage(input);
+    chatLog.addSystem(`Unknown command /${normalizedCommand}. Type /help to see available commands.`);
+    tui.requestRender();
   };
 }

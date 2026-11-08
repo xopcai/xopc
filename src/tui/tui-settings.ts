@@ -42,7 +42,7 @@ export const DEFAULT_TUI_SETTINGS: TuiSettings = {
   theme: 'auto',
   showThinking: false,
   toolsExpanded: false,
-  doubleEscapeAction: 'none',
+  doubleEscapeAction: 'fork',
   showTerminalProgress: false,
   showStartupHints: true,
   showImages: true,

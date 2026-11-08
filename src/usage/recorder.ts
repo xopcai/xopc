@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { getExecutionAuthority } from '../infra/execution-authority.js';
 
 import type { AssistantMessage, AssistantMessageEventStream } from '@earendil-works/pi-ai/compat';
 
@@ -30,6 +31,7 @@ export function continuesAfterTool(messages: readonly { role?: string }[]): bool
 }
 
 export function startAiUsageCall(model: AiUsageModel, context: AiUsageContext, input?: unknown): AiUsageCall {
+  getExecutionAuthority()?.reserveModel(model);
   const observation = startObservation(context.operation, 'generation', context);
   observation.update({ 'gen_ai.request.model': model.id, 'gen_ai.system': model.provider });
   observation.input(input);

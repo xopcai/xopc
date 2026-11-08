@@ -145,6 +145,8 @@ export type CommandStreamEvent = {
 };
 
 export type BtwQueryOptions = {
+  signal?: AbortSignal;
+  agentId?: string;
   maxTokens?: number;
   temperature?: number;
   modelRef?: string;

@@ -7,14 +7,25 @@ installed application code; it does not add a process sandbox to the coding agen
 ## Resource grants
 
 The user reviews both the release's action permissions and its data scopes. Data access defaults to
-`none`, including for previously saved action-only Local App grants. Three independent policies are
+`none`, including for previously saved action-only Local App grants. Independent resource policies are
 stored by the host:
 
 - `notesRead`: notes the app may list or read.
 - `notesWrite`: notes the app may change, append to, or create.
 - `tasksRead`: tasks the app may list or read.
+- `automationsRead`: automation summaries and this app's run results it may read.
+- `automationsRun`: individually reviewed automation IDs and configuration digests it may execute.
+- `automationProposals`: static simulation and app-owned proposals, requiring separate host adoption.
 
-Each policy is `none`, `workspace`, or `selected`. A selected policy contains explicit record IDs,
+Automation execution has no workspace-wide grant. Its review, execution effects and run ownership
+boundary are described in [Local App automations](./local-app-automations.md).
+
+Execution approvals separately bound model processing, local tools, file writes, external delivery,
+expiry, lifetime submissions and conservative model-price reservations. Missing new fields deny
+execution for old grants. Host-reviewed proposals cannot grant the app more authority. Run subscriptions
+and recovery use the same pinned contracts, ownership and read scopes as individual invocations.
+
+Read scopes and note write scopes are `none`, `workspace`, or `selected`. A selected policy contains explicit record IDs,
 project IDs, and optionally `includeCreated` for notes created by this app. Project authorization
 includes current and future members of that project. A selected create policy permits creation in
 the approved projects, or unassigned creation when `includeCreated` is enabled. Ownership is recorded

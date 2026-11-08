@@ -59,6 +59,7 @@ export async function runBtwQuery(opts: {
   maxTokens?: number;
   temperature?: number;
   includeSessionContext?: boolean;
+  signal?: AbortSignal;
   onTextDelta?: (delta: string) => void | Promise<void>;
   credentialOptions?: CredentialResolverOptions;
 }): Promise<{ text: string; error?: string }> {
@@ -124,7 +125,7 @@ export async function runBtwQuery(opts: {
       : undefined;
     const modelCallOptions = {
       maxTokens: modelMaxTokens ? Math.min(requestedMaxTokens, modelMaxTokens) : requestedMaxTokens,
-      signal: controller.signal as AbortSignal,
+      signal: opts.signal ? AbortSignal.any([controller.signal, opts.signal]) : controller.signal,
       apiKey,
       ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     };

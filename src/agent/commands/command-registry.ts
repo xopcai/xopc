@@ -1,4 +1,3 @@
-import type { ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,7 +6,9 @@ import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { resolveGlobalSingleton } from '../../utils/global-singleton.js';
 import { redactSensitiveOutput } from '../../utils/logger.js';
-import { spawnProcess } from '../../process/run-process.js';
+import { startCommandTransport, type CommandTransport } from './command-transport.js';
+import { sandboxCommand } from '../sandbox/native-command.js';
+import { getSessionInteractionPolicy } from '../session/interaction-policy.js';
 import { isolatedCommand, removeCommandContainer, type CommandIsolation } from './command-isolation.js';
 import { readWorkspaceRevision } from '../coding/workspace-revision.js';
 
@@ -29,6 +30,7 @@ export interface CommandResult {
   stderr: string;
   aggregatedOutput: string;
   totalOutputBytes: number;
+  outputLength?: number;
   captureTruncated: boolean;
   logPath: string;
   logTruncated: boolean;
@@ -36,11 +38,16 @@ export interface CommandResult {
   endRevision?: string;
   isolation?: 'host' | 'docker';
   containerName?: string;
+  sandbox?: 'read-only' | 'workspace-write';
+  network?: boolean;
+  tty?: boolean;
+  cols?: number;
+  rows?: number;
 }
 interface RunningCommand {
   owner: string;
   result: CommandResult;
-  process: ChildProcess;
+  transport: CommandTransport;
   done: Promise<CommandResult>;
   stop: (status: 'cancelled' | 'timed_out') => void;
 }
@@ -65,7 +72,7 @@ export class CommandRegistry {
 
   async start(input: {
     owner: string; command: string; cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number;
-    workspace?: string; isolation?: CommandIsolation;
+    workspace?: string; isolation?: CommandIsolation; tty?: boolean; cols?: number; rows?: number;
     maxOutputChars?: number; signal?: AbortSignal; snapshot?: boolean;
     onOutput?: (stream: 'stdout' | 'stderr', delta: string) => void;
   }): Promise<CommandResult> {
@@ -77,9 +84,15 @@ export class CommandRegistry {
     const id = randomUUID();
     const startRevision = input.snapshot ? await readWorkspaceRevision(input.cwd) : undefined;
     input.signal?.throwIfAborted();
-    const launch = await isolatedCommand({ id, command: input.command, cwd: input.cwd, workspace: input.workspace ?? input.cwd, isolation: input.isolation });
+    let launch = await isolatedCommand({ id, command: input.command, cwd: input.cwd, workspace: input.workspace ?? input.cwd, isolation: input.isolation });
+    const policy = getSessionInteractionPolicy(input.owner);
+    const readOnly = policy.mode === 'plan' || policy.access === 'read-only';
+    if (readOnly || policy.sandbox === 'workspace-write') {
+      if (launch.containerName) throw new Error('Select one execution isolation boundary; native sandbox and Docker cannot be combined.');
+      launch = await sandboxCommand(launch, { workspace: input.workspace ?? input.cwd, access: readOnly ? 'read-only' : 'workspace-write', network: policy.network === true });
+    }
     const result: CommandResult = {
-      isolation: input.isolation?.mode ?? 'host',
+      sandbox: readOnly ? 'read-only' : policy.sandbox === 'workspace-write' ? 'workspace-write' : undefined, network: policy.network === true, isolation: input.isolation?.mode ?? 'host', tty: input.tty === true, cols: input.cols ?? 100, rows: input.rows ?? 30,
       ...(launch.containerName ? { containerName: launch.containerName } : {}),
       id, command: redactSensitiveOutput(input.command), cwd: input.cwd, status: 'running', exitCode: null,
       createdAtMs: Date.now(), durationMs: 0, timedOut: false, stdout: '', stderr: '', aggregatedOutput: '',
@@ -96,6 +109,7 @@ export class CommandRegistry {
       const raw = String(chunk);
       const value = redactSensitiveOutput(raw);
       result.totalOutputBytes += Buffer.byteLength(raw);
+      result.outputLength = (result.outputLength ?? 0) + value.length;
       result.captureTruncated ||= result[stream].length + value.length > limit || result.aggregatedOutput.length + value.length > limit;
       result[stream] = (result[stream] + value).slice(-limit);
       result.aggregatedOutput = (result.aggregatedOutput + value).slice(-limit);
@@ -108,35 +122,21 @@ export class CommandRegistry {
       result.logTruncated ||= bytes.length > remaining;
       input.onOutput?.(stream, value.length > 16_000 ? `${value.slice(0, 16_000)}\n[stream delta truncated]` : value);
     };
-    const handle = spawnProcess({
-      program: launch.executable,
-      args: launch.args,
-      shell: launch.shell,
-      cwd: input.cwd,
-      env: input.env,
-      detached: process.platform !== 'win32',
-      terminationPolicy: 'tree',
-      keepStdinOpen: true,
-      maxOutputBytes: 0,
-      onOutput: append,
-    });
-    const child = handle.child;
+    const transport = await startCommandTransport({ program: launch.executable, args: launch.args, shell: launch.shell, cwd: input.cwd, env: input.env, tty: input.tty, cols: input.cols, rows: input.rows, onOutput: append });
     const stop = (status: 'cancelled' | 'timed_out') => {
       if (result.status !== 'running' || closed) return;
       result.status = status; result.timedOut = status === 'timed_out';
       if (launch.containerName) containerCleanup = removeCommandContainer(launch.containerName).catch(error => {
         result.status = 'interrupted'; append('stderr', `Container cleanup failed: ${String(error)}`);
       });
-      handle.terminate(status === 'timed_out' ? 'timed_out' : 'cancelled');
+      transport.stop(status === 'timed_out' ? 'timed_out' : 'cancelled');
     };
     const timer = setTimeout(() => stop('timed_out'), commandTimeout(input.timeoutMs));
     timer.unref();
     const abort = () => stop('cancelled');
     input.signal?.addEventListener('abort', abort, { once: true });
     const done = new Promise<CommandResult>(resolve => {
-      child.on('error', error => append('stderr', error.message));
-      child.stdin?.on('error', error => append('stderr', error.message));
-      void handle.completion.then(async processResult => {
+      void transport.completion.then(async processResult => {
         closed = true;
         clearTimeout(timer); input.signal?.removeEventListener('abort', abort);
         if (containerCleanup) await containerCleanup;
@@ -149,7 +149,7 @@ export class CommandRegistry {
         resolve({ ...result });
       });
     });
-    this.running.set(id, { owner: input.owner, result, process: child, done, stop });
+    this.running.set(id, { owner: input.owner, result, transport, done, stop });
     if (input.signal?.aborted) abort();
     return { ...result };
   }
@@ -194,8 +194,14 @@ export class CommandRegistry {
   }
   write(owner: string, id: string, chars: string, end = false): boolean {
     const current = this.running.get(id);
-    if (!current || current.owner !== owner || current.result.status !== 'running' || !current.process.stdin?.writable) return false;
-    if (end) current.process.stdin.end(chars); else current.process.stdin.write(chars);
+    if (!current || current.owner !== owner || current.result.status !== 'running') return false;
+    return current.transport.write(chars, end);
+  }
+  resize(owner: string, id: string, cols: number, rows: number): boolean {
+    if (![cols, rows].every(value => Number.isSafeInteger(value) && value >= 2 && value <= 1000)) throw new Error('Terminal size must be between 2 and 1000.');
+    const current = this.running.get(id);
+    if (!current || current.owner !== owner || !current.transport.resize || current.result.status !== 'running') return false;
+    current.transport.resize(cols, rows); current.result.cols = cols; current.result.rows = rows;
     return true;
   }
   shutdown(): void {

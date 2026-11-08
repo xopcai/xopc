@@ -10,6 +10,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { localAppCapabilities } from '../../../local-apps/capabilities/runtime.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { localAppDelegationCaller } from '../../security/local-app-delegation-access.js';
+import { registerLocalAppRunStreams } from './local-app-run-streams.js';
 import { getGatewayFileSpaceService } from '../../file-space-service.js';
 import type { Config } from '../../../config/schema.js';
 
@@ -19,10 +20,11 @@ const Invocation = z.strictObject({ manifestDigest: Digest, grantRevision: z.uui
 /** Authenticated host API. Iframes must not receive Gateway credentials. */
 export function registerLocalAppCapabilityRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
   const dispatcher = createProductDispatcher(() => deps.service.notesServiceInstance, {
-    getProjects: () => deps.service.projects,
+    getProjects: () => deps.service.projects, getAutomations: () => deps.service.automationServiceInstance,
     localAppP1: { getConfig: () => deps.service.currentConfig as Config, getFiles: () => getGatewayFileSpaceService(deps.service) },
   });
   const path = '/api/local-app-capabilities/:extensionId';
+  registerLocalAppRunStreams(app, deps, dispatcher);
   app.get('/api/local-app-capabilities/catalog', c => c.json({ capabilities: dispatcher.list({ ...capabilityHttpContext(c), surface: 'extension' }) }));
   app.get(path, c => {
     try {
@@ -39,7 +41,7 @@ export function registerLocalAppCapabilityRoutes(app: Hono, deps: AuthenticatedR
       const extensionId = c.req.param('extensionId');
       const id = c.req.param('id');
       const caller = capabilityHttpContext(c);
-      const guarded = id === 'xopc.agent.delegate' || /^xopc\.(connectors|files|apps)\./.test(id)
+      const guarded = id === 'xopc.agent.delegate' || /^xopc\.(automations|connectors|files|apps)\./.test(id)
         ? localAppDelegationCaller(caller, getGatewayPrincipal(c), () => deps.service.getResolvedAuth()) : caller;
       return c.json(await localAppCapabilities(deps.service.localApps, dispatcher, extensionId, manifestDigest, guarded, grantRevision).call(id, call));
     } catch (error) { return capabilityHttpError(c, error); }

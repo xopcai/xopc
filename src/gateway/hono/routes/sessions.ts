@@ -559,8 +559,8 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!Number.isFinite(rowNumber) || rowNumber < 1) {
       return c.json({ ok: false, error: 'rowNumber must be a positive integer' }, 400);
     }
-    const before = parsePositiveInt(c.req.query('before'), 80, 200);
-    const after = parsePositiveInt(c.req.query('after'), 120, 200);
+    const before = parsePositiveInt(c.req.query('before'), 80, 2000);
+    const after = parsePositiveInt(c.req.query('after'), 120, 2000);
     const window = await service.sessions.getTranscriptWindow(key, { rowNumber, before, after });
     if (!window) {
       return c.json({ ok: false, error: 'Session not found' }, 404);

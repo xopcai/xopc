@@ -68,6 +68,11 @@ export interface ExtensionClient {
     pickAttachment(): Promise<{ name: string; mimeType: string; size: number; encoding: 'base64'; content: string }>;
   };
   requests: { review(requestId: string): Promise<void> };
+  automation: {
+    /** Reconnectable host subscription; resumes with a current snapshot and bounded event history. */
+    watchRun(runId: string, handler: StreamHandler): Promise<() => void>;
+    reviewProposal(proposalId: string): Promise<void>;
+  };
   capability: {
     describe(id: string): Promise<CapabilityDescriptor>;
     call(id: string, call: CapabilityCall): Promise<{ status: 'succeeded'; releaseId: string; data: unknown }>;

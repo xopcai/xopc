@@ -15,7 +15,6 @@ import {
   formatScopedModelsSavedHint,
   formatReviewPickerOpenedHint,
   formatSettingsOpenedHint,
-  formatSessionTreeOpenedHint,
   formatThinkingLevelSavedHint,
   formatThinkingSelectorHint,
   openReviewLauncherOverlay,
@@ -457,9 +456,6 @@ it('prefilters searchable picker rows from an initial query', () => {
     expect(formatSettingsOpenedHint(keybindings)).toContain('X toggle');
     expect(formatSettingsOpenedHint(keybindings)).toContain('Z close');
     expect(formatSettingsOpenedHint(keybindings)).toContain('U/D');
-    expect(formatSessionTreeOpenedHint(keybindings)).toContain('X resume');
-    expect(formatSessionTreeOpenedHint(keybindings)).toContain('Z close');
-    expect(formatSessionTreeOpenedHint(keybindings)).toContain('U/D');
     expect(formatTranscriptTreeOpenedHint(keybindings)).toContain('X inspect');
     expect(formatTranscriptTreeOpenedHint(keybindings)).toContain('Z close');
     expect(formatTranscriptTreeOpenedHint(keybindings)).toContain('U/D');

@@ -67,7 +67,6 @@ final class AppState {
             gatewayConfiguration = configurationStore.load()
         #endif
         restoreConversationSelection()
-        Task { await refreshActiveGateway() }
     }
 
     #if DEBUG

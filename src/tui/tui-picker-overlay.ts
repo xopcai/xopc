@@ -6,9 +6,8 @@ import { SearchableSelectList } from './components/searchable-select-list.js';
 import { SessionSelector } from './components/session-selector.js';
 import { ThinkingSelector } from './components/thinking-selector.js';
 import { formatKeyIds } from './format-tui-hotkeys.js';
-import type { TuiAgentInfo, TuiSessionItem } from './tui-backend.js';
+import type { TuiAgentInfo } from './tui-backend.js';
 import type { PickerServices } from './tui-picker-services.js';
-import { formatSessionPickerDescription } from './tui-session-format.js';
 import { searchableSelectListTheme, theme } from './theme.js';
 import { buildTuiTimelineTurns } from './tui-timeline.js';
 import {
@@ -120,13 +119,6 @@ function agentSelectItems(agents: TuiAgentInfo[], currentAgentId?: string): Sele
     }));
 }
 
-export function formatSessionTreeOpenedHint(keybindings: KeybindingsManager): string {
-  const nav = formatSelectNavigationHint(keybindings);
-  const confirm = formatKeyIds(keybindings, 'tui.select.confirm', { capitalize: true });
-  const cancel = formatKeyIds(keybindings, 'tui.select.cancel', { capitalize: true });
-  return `Session tree (${nav} · type to filter · ${confirm} resume · ${cancel} close)`;
-}
-
 export async function openTimelineOverlay(
   svc: PickerServices,
   initialQuery?: string,
@@ -188,46 +180,6 @@ function resumeSession(svc: PickerServices, conversationId: string): void {
       svc.tui.requestRender();
     });
   svc.tui.requestRender();
-}
-
-function sessionTreeGroup(session: TuiSessionItem): { agentId: string; root: string; leaf: string } {
-  return { agentId: session.agentId ?? 'unknown', root: session.sourceChannel ?? 'chat', leaf: session.displayName ?? session.key };
-}
-
-export function sessionTreeSelectItems(
-  sessions: TuiSessionItem[],
-  currentConversationId?: string,
-): SelectItem[] {
-  const byKey = new Map(sessions.map((session) => [session.key, session]));
-  return [...sessions]
-    .sort((a, b) => {
-      const ga = sessionTreeGroup(a);
-      const gb = sessionTreeGroup(b);
-      const groupCmp = `${ga.agentId}:${ga.root}`.localeCompare(`${gb.agentId}:${gb.root}`);
-      if (groupCmp !== 0) return groupCmp;
-      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
-    })
-    .map((session) => {
-      const group = sessionTreeGroup(session);
-      const current = session.key === currentConversationId ? '* ' : '  ';
-      const label = session.displayName?.trim() || group.leaf;
-      const parent = session.forkedFromConversationId
-        ? (byKey.get(session.forkedFromConversationId)?.displayName?.trim() ?? session.forkedFromConversationId)
-        : null;
-      const description = [
-        `${group.agentId}/${group.root}`,
-        formatSessionPickerDescription(session, { showKey: Boolean(session.displayName) }),
-        parent ? `forked from ${parent}` : '',
-      ]
-        .filter(Boolean)
-        .join(' · ');
-  return {
-    value: session.key,
-        label: `${current}${label}`,
-        description,
-        searchText: `${session.key} ${session.displayName ?? ''} ${session.model ?? ''} ${parent ?? ''}`,
-      };
-    });
 }
 
 
@@ -515,33 +467,6 @@ export async function openSessionPickerOverlay(
 
   svc.openOverlay(selector);
   svc.chatLog.addSystem(theme.dim('Session picker'));
-  svc.tui.requestRender();
-}
-
-/** Searchable session tree navigation overlay. */
-export async function openSessionTreeOverlay(svc: PickerServices): Promise<void> {
-  const sessions = await svc.client.listSessions();
-  if (sessions.length === 0) {
-    svc.chatLog.addSystem('No sessions listed.');
-    svc.tui.requestRender();
-    return;
-  }
-
-  const items = sessionTreeSelectItems(sessions, svc.state.currentConversationId);
-  const list = new SearchableSelectList(items, Math.min(14, items.length), searchableSelectListTheme);
-  list.onSelect = (item) => {
-    svc.closeOverlay();
-    svc.tui.setFocus(svc.editor);
-    resumeSession(svc, item.value);
-  };
-  list.onCancel = () => {
-    svc.closeOverlay();
-    svc.tui.setFocus(svc.editor);
-    svc.tui.requestRender();
-  };
-
-  svc.openOverlay(list);
-  svc.chatLog.addSystem(theme.dim(formatSessionTreeOpenedHint(svc.keybindings)));
   svc.tui.requestRender();
 }
 

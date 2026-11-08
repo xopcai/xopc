@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
+import { assertLocalAppDelivery } from '../../local-apps/execution-authority.js';
 
 import { assertUrlSafe } from '../../agent/tools/url-safety.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
@@ -316,6 +317,7 @@ export class AutomationDeliveryRouter {
       try {
         const handler = this.handlers.get(row.kind);
         if (!handler) throw new Error(`Automation delivery handler is unavailable: ${row.kind}`);
+        assertLocalAppDelivery(row.run_id, row.kind);
         await handler({
           deliveryId: row.delivery_id,
           attempt: row.attempts + 1,

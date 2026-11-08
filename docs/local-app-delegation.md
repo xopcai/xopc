@@ -34,8 +34,10 @@ reference. Content already held by an app cannot be recalled or assigned reliabl
   Context may be sent to the configured external model provider. The permission checkbox explicitly
   authorizes this disclosure and potential provider cost; the model is not treated as an authorization boundary.
 - Instruction: 8,000 characters; app context: 16,000; complete supplied payload: 24,000 characters.
-  Oversized context is rejected, not silently shortened. Model output is at most 1,024 requested tokens
-  and 8,192 returned characters; the response reports `completed` or `length`.
+  Oversized context is rejected, not silently shortened. Model output defaults to 1,024 requested
+  tokens, configurable with `maxOutputTokens` from 128 to 4,096. Returned text is bounded
+  to eight characters per requested output token (at most 32,768); the response reports `completed`
+  or `length`.
 - Thirty-second execution deadline, one active provider call per app and four across the Gateway.
   Per-app budgets allow twenty submissions per one-hour window and persist across Gateway restarts
   and regrants. Provider failures also consume submissions; replays do not.
@@ -54,6 +56,15 @@ or widen those permissions. Tool requests returned by a provider are rejected an
 Preview sessions omit this capability in every mode. Sample data and isolated write acceptance never
 make billable model calls; real read-only preview cannot opt into delegation. Preview code should show
 an unavailable state or use declarative example content to test presentation.
+
+`responseFormat: 'json'` requests a JSON-only answer. The host parses and validates it before returning
+the `json` field alongside `text`. Invalid or truncated JSON is never returned as structured success;
+the external-operation receipt retains the uncertain outcome and the same key is not resubmitted.
+This is syntax validation, not a guarantee of semantic correctness or compliance with an app-specific
+schema. Applications must validate their own expected shape before using a result.
+
+For tool-using work, applications can separately bind the host's explicitly approved
+[automation execution capabilities](./local-app-automations.md). Text delegation itself remains tool-less.
 
 ## SDK use
 

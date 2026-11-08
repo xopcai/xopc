@@ -390,57 +390,6 @@ export function formatTuiSessionListInfo(
   return lines.join('\n');
 }
 
-function sessionTreeGroup(session: TuiSessionItem): { agentId: string; root: string; leaf: string } {
-  return { agentId: session.agentId ?? 'unknown', root: session.sourceChannel ?? 'chat', leaf: session.displayName ?? session.key };
-}
-
-export function formatTuiSessionTreeInfo(
-  sessions: TuiSessionItem[],
-  options: { currentConversationId?: string; limitPerGroup?: number } = {},
-): string {
-  if (sessions.length === 0) {
-    return 'Session Tree\n\nNo sessions found.';
-  }
-  const limitPerGroup = options.limitPerGroup ?? 8;
-  const byKey = new Map(sessions.map((session) => [session.key, session]));
-  const groups = new Map<string, TuiSessionItem[]>();
-  for (const session of sessions) {
-    const group = sessionTreeGroup(session);
-    const key = `${group.agentId}:${group.root}`;
-    const list = groups.get(key) ?? [];
-    list.push(session);
-    groups.set(key, list);
-  }
-
-  const lines = ['Session Tree', ''];
-  const sortedGroups = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-  for (const [groupKey, groupSessions] of sortedGroups) {
-    const [agentId, ...rootParts] = groupKey.split(':');
-    lines.push(`${agentId}/${rootParts.join(':')}`);
-    const sorted = [...groupSessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
-    const visible = sorted.slice(0, limitPerGroup);
-    for (const session of visible) {
-      const current = session.key === options.currentConversationId ? '*' : ' ';
-      const group = sessionTreeGroup(session);
-      const label = session.displayName?.trim() || group.leaf;
-      const description = formatSessionPickerDescription(session, {
-        showKey: Boolean(session.displayName),
-      });
-      lines.push(`  ${current} ${label}${description ? ` — ${description}` : ''}`);
-      if (session.forkedFromConversationId) {
-        const source = byKey.get(session.forkedFromConversationId);
-        const sourceLabel = source?.displayName?.trim() || session.forkedFromConversationId;
-        lines.push(`      forked from ${sourceLabel}`);
-      }
-    }
-    if (sorted.length > visible.length) {
-      lines.push(`    ... ${sorted.length - visible.length} more`);
-    }
-  }
-  lines.push('', 'Use /resume to search and open a session.');
-  return lines.join('\n');
-}
-
 export function formatTuiTranscriptTreeInfo(
   entries: TuiTranscriptTreeEntry[],
   options: { limit?: number; allEntries?: TuiTranscriptTreeEntry[] } = {},
@@ -578,6 +527,8 @@ export function formatTuiSessionInfo(state: TuiState, stats?: TuiSessionStats): 
     `Agent: ${formatMaybe(state.sessionInfo.agentId)}`,
     `Connection: ${connectionLabel} (${formatMaybe(state.connectionStatus)})`,
     `Activity: ${formatMaybe(state.activityStatus)}`,
+    `Mode: ${state.sessionInfo.interactionPolicy?.mode ?? 'unavailable'}`,
+    `Permissions: ${state.sessionInfo.interactionPolicy?.access ?? 'unavailable'}`,
     `Model: ${formatModelLabel(state)}`,
     `Thinking: ${formatMaybe(state.sessionInfo.thinkingLevel)}`,
     `Reasoning: ${formatMaybe(state.sessionInfo.reasoningLevel)}`,

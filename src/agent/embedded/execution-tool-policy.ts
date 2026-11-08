@@ -1,5 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
+import { getSessionInteractionPolicy, isReadOnlySessionTool } from '../session/interaction-policy.js';
+import { getExecutionAuthority } from '../../infra/execution-authority.js';
 import { PERSONAL_MAIN_TOOL_IDS } from '../../personal-agent/policy.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
@@ -17,6 +19,7 @@ export const PERSONAL_REQUEST_TOOL_IDS = [
 export type ExecutionToolPolicy = Readonly<{
   surface: 'agent' | 'personal_main' | 'personal_request_worker';
   taskExecution: boolean;
+  readOnly?: boolean;
   nativeMcp: boolean;
   externalMaterialization: boolean;
   discovery: boolean;
@@ -33,13 +36,21 @@ export function resolveExecutionToolPolicy(conversationId: string): ExecutionToo
     surface = 'personal_request_worker';
   }
   const configured = surface === 'agent';
+  const authority = getExecutionAuthority();
+  const interaction = getSessionInteractionPolicy(conversationId);
+  const readOnly = interaction.mode === 'plan' || interaction.access === 'read-only';
+  const unrestricted = configured && !readOnly && (!authority || authority.unrestrictedTools);
   const taskExecution = Boolean(isXopcDatabaseOpen()
     && new TaskConversationRepository().resolveActiveExecutionSession(conversationId));
-  return { surface, taskExecution, nativeMcp: configured, externalMaterialization: configured,
-    discovery: configured, codemode: configured, revision: 'unified-tool-discovery-v1' };
+  return { surface, taskExecution, readOnly, nativeMcp: unrestricted, externalMaterialization: unrestricted,
+    discovery: unrestricted, codemode: unrestricted, revision: `unified-tool-discovery-v1:${interaction.mode}:${interaction.access}:${interaction.sandbox ?? 'configured'}:${interaction.network ?? false}:${authority?.revision ?? ''}` };
 }
 
 export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): boolean {
+  const authority = getExecutionAuthority();
+  authority?.assertCurrent();
+  if (policy.readOnly && !isReadOnlySessionTool(name)) return false;
+  if (authority && !authority.allowsTool(name)) return false;
   if (TASK_EXECUTION_TOOL_IDS.includes(name) && !policy.taskExecution) return false;
   if (policy.surface === 'agent') return !name.startsWith('personal_');
   const names: readonly string[] = policy.surface === 'personal_main' ? PERSONAL_MAIN_TOOL_IDS : PERSONAL_REQUEST_TOOL_IDS;

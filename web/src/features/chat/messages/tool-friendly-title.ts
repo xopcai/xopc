@@ -31,6 +31,8 @@ export type ToolExecutionLabels = {
   noActionsExecuted: string;
   actionsExecuted: string;
   stepFailed: string;
+  waitingApproval: string;
+  waitingInput: string;
   phone?: Record<'discover' | 'set_mode' | 'open' | 'observe' | 'step' | 'run' | 'status' | 'pause' | 'request_user' | 'resume' | 'cancel' | 'close' | 'default', ToolExecutionLabel>;
   builtins: Record<
     'automation' | 'browser' | 'clarification' | 'codeExecution' | 'toolSearch' | 'computer' | 'connection' | 'desktopPet' | 'delegation' | 'diagnostics' | 'imageGeneration' | 'imageInspection' | 'job' | 'manual' | 'mediaRead' | 'mediaSend' | 'memoryMaintenance' | 'memoryRead' | 'memoryUpdate' | 'message' | 'publish' | 'planning' | 'review' | 'sessionRecall' | 'sessionSearch' | 'sessionStatus' | 'share' | 'skillInstall' | 'skillManage' | 'skillSearch' | 'skillView' | 'speech' | 'structuredOutput' | 'todo' | 'webExtract',
@@ -162,6 +164,8 @@ export function getPublicToolExecutionTitle(
   friendlyLabels: FriendlyToolTitleLabels,
   runningLabels: Record<ToolDisplayKind, string>,
 ): string {
+  const pending = operationDetails(block);
+  if (pending?.status === 'waiting') return pending.kind === 'approval' ? labels.waitingApproval : labels.waitingInput;
   const id = normalizedToolId(block.name);
   if (id === 'automation' || id === 'managed_job' || id === 'todo') {
     const input = asRecord(block.input);

@@ -1,17 +1,22 @@
+import type { ClarificationResponseCommand, ClarificationWaitSnapshot } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mkdir, readdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { resolveStateDir } from '../../config/paths.js';
-
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION, type RealtimeEventPayload } from '@xopcai/realtime-protocol';
 import { isSessionCommandRejected, sessionInputCommandSchema, type SessionCreation, type SessionInputCommand } from '@xopcai/gateway-contract';
 
+import type { TuiManagementCommand } from '../tui-management.js';
+import type { TuiCapability, TuiCapabilityKind } from '../tui-capabilities.js';
+import type { ChildRunView } from '../../agent/orchestration/child-run-monitor.js';
+import type { TuiClarification } from '../tui-clarification.js';
+import type { SessionInteractionPolicy } from '../../agent/session/interaction-policy.js';
+import type { TuiJob, TuiHistoryMatch } from '../backend-services.js';
+import { resolveStateDir } from '../../config/paths.js';
 import { parseModelRef } from '../../agent/models/selection.js';
 import type { ExportFormat } from '../../session/types.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
-import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import type { SessionTimelineItem } from '../../session/transcript-outline.js';
 import { createLogger } from '../../utils/logger.js';
 import type {
@@ -59,6 +64,7 @@ async function gatewayFetch(
   path: string,
   credential: GatewayCredential | undefined,
   init?: RequestInit,
+  timeoutMs = 30_000,
 ): Promise<Response> {
   const authorization = gatewayCredentialAuthorization(credential);
   const headers: Record<string, string> = {
@@ -66,7 +72,19 @@ async function gatewayFetch(
     ...(authorization ? { Authorization: authorization } : {}),
     ...(init?.headers as Record<string, string> | undefined),
   };
-  return fetch(`${baseUrl}${path}`, { ...init, headers });
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+  return fetch(`${baseUrl}${path}`, { ...init, headers, signal });
+}
+
+async function requireGatewayResponse(response: Response, operation: string): Promise<void> {
+  if (response.ok) return;
+  const body = await response.json().catch(() => null) as { error?: string | { message?: string } } | null;
+  const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
+  const reason = response.status === 401 || response.status === 403
+    ? 'Gateway authentication or permission denied'
+    : operation;
+  throw new Error(`${reason} (${response.status})${message ? `: ${message}` : ''}`);
 }
 
 /**
@@ -358,19 +376,17 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async abortChat(opts: { conversationId: string; runId: string }): Promise<{ ok: boolean }> {
+    const res = await gatewayFetch(this.baseUrl, '/api/agent/abort', this.credential, {
+      method: 'POST',
+      body: JSON.stringify({ runId: opts.runId }),
+    });
+    await requireGatewayResponse(res, 'Stop request failed');
+    const json = await res.json() as { ok?: boolean; payload?: { aborted?: boolean; idle?: boolean } };
+    if (json.ok !== true || (!json.payload?.aborted && !json.payload?.idle)) return { ok: false };
     this.chatAbort?.abort();
     this.chatAbort = null;
     this.unsubscribeActiveRun();
-    try {
-      const res = await gatewayFetch(this.baseUrl, '/api/agent/abort', this.credential, {
-        method: 'POST',
-        body: JSON.stringify({ runId: opts.runId }),
-      });
-      const json = (await res.json()) as { ok?: boolean };
-      return { ok: json.ok ?? false };
-    } catch {
-      return { ok: false };
-    }
+    return { ok: true };
   }
 
   async submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{
@@ -479,27 +495,9 @@ export class GatewayRealtimeBackend implements TuiBackend {
   async loadHistory(opts: { conversationId: string; limit?: number }): Promise<{ messages: HistoryMessage[] }> {
     await this.reconcileInput(opts.conversationId);
     if (this.drafts.has(opts.conversationId)) return { messages: [] };
-    try {
-      const res = await gatewayFetch(
-        this.baseUrl,
-        `/api/sessions/${encodeURIComponent(opts.conversationId)}?include=transcriptRows`,
-        this.credential,
-      );
-      if (!res.ok) return { messages: [] };
-      const json = (await res.json()) as {
-        session?: { transcriptRows?: unknown[] };
-      };
-      const rows = Array.isArray(json.session?.transcriptRows)
-        ? (json.session.transcriptRows as TranscriptStoredRow[])
-        : [];
-      return {
-        messages: transcriptRowsToClientHistory(rows, { limit: opts.limit }),
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, errorMessage }, `Failed to load history: ${errorMessage}`);
-      return { messages: [] };
-    }
+    const limit = Math.min(2000, Math.max(1, Math.trunc(opts.limit ?? 200)));
+    const window = await this.loadHistoryWindow({ conversationId: opts.conversationId, rowNumber: Number.MAX_SAFE_INTEGER, before: limit - 1, after: 0 });
+    return { messages: window.messages };
   }
 
   async loadHistoryWindow(opts: { conversationId: string; rowNumber: number; before?: number; after?: number }) {
@@ -514,14 +512,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
         `/api/sessions/${encodeURIComponent(opts.conversationId)}/transcript/window?${params.toString()}`,
         this.credential,
       );
-      if (!res.ok) {
-        return {
-          messages: [],
-          startRowNumber: 0,
-          endRowNumber: 0,
-          totalRows: 0,
-        };
-      }
+      await requireGatewayResponse(res, 'History window load failed');
       const json = (await res.json()) as {
         payload?: {
           messages?: unknown[];
@@ -548,7 +539,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
         },
         `Failed to load history window: ${errorMessage}`,
       );
-      return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
+      throw error;
     }
   }
 
@@ -559,7 +550,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
         `/api/sessions/${encodeURIComponent(conversationId)}?include=transcriptRows`,
         this.credential,
       );
-      if (!res.ok) return [];
+      await requireGatewayResponse(res, 'Transcript tree load failed');
       const json = (await res.json()) as {
         session?: { transcriptRows?: unknown[] };
       };
@@ -570,7 +561,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, conversationId, errorMessage }, `Failed to load transcript tree: ${errorMessage}`);
-      return [];
+      throw error;
     }
   }
 
@@ -581,13 +572,13 @@ export class GatewayRealtimeBackend implements TuiBackend {
         `/api/sessions/${encodeURIComponent(conversationId)}/timeline`,
         this.credential,
       );
-      if (!res.ok) return [];
+      await requireGatewayResponse(res, 'Timeline load failed');
       const json = (await res.json()) as { items?: unknown[] };
       return Array.isArray(json.items) ? (json.items as SessionTimelineItem[]) : [];
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, conversationId, errorMessage }, `Failed to load timeline: ${errorMessage}`);
-      return [];
+      throw error;
     }
   }
 
@@ -598,7 +589,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
         `/api/sessions/${encodeURIComponent(conversationId)}?include=transcriptRows`,
         this.credential,
       );
-      if (!res.ok) return computeTuiSessionStats([]);
+      await requireGatewayResponse(res, 'Session statistics load failed');
       const json = (await res.json()) as {
         session?: { transcriptRows?: unknown[] };
       };
@@ -609,14 +600,78 @@ export class GatewayRealtimeBackend implements TuiBackend {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, conversationId, errorMessage }, `Failed to load session stats: ${errorMessage}`);
-      return computeTuiSessionStats([]);
+      throw error;
     }
   }
 
-  async listSessions(): Promise<TuiSessionItem[]> {
+  async getClarification(conversationId: string): Promise<TuiClarification | null> {
+    if (this.drafts.has(conversationId)) return null;
+    const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}/clarification`, this.credential);
+    await requireGatewayResponse(res, 'Question recovery failed');
+    const { payload } = await res.json() as { payload: ClarificationWaitSnapshot };
+    const wait = payload.clarification;
+    return wait?.status === 'open' ? wait : null;
+  }
+  async submitClarification(_conversationId: string, requestId: string, command: ClarificationResponseCommand): Promise<void> {
+    const res = await gatewayFetch(this.baseUrl, `/api/clarifications/${encodeURIComponent(requestId)}/responses`, this.credential,
+      { method: 'POST', body: JSON.stringify(command) });
+    await requireGatewayResponse(res, 'Question response failed');
+  }
+
+  private async controlRequest<T>(conversationId: string, action: string, body?: unknown): Promise<T> {
+    const res = await gatewayFetch(this.baseUrl, `/api/tui/sessions/${encodeURIComponent(conversationId)}/${action}`, this.credential,
+      body === undefined ? undefined : { method: 'POST', body: JSON.stringify(body) });
+    await requireGatewayResponse(res, 'Session control failed');
+    return (await res.json() as { payload: T }).payload;
+  }
+  async manageCapability(conversationId: string, command: TuiManagementCommand) {
+    const draft = this.drafts.get(conversationId);
+    const params = new URLSearchParams(draft ? { agentId: draft.agentId, ...(draft.projectId ? { projectId: draft.projectId } : {}) } : { conversationId });
+    const res = await gatewayFetch(this.baseUrl, `/api/tui/manage?${params}`, this.credential, { method: 'POST', body: JSON.stringify(command) });
+    await requireGatewayResponse(res, 'Capability action failed');
+    return (await res.json() as { payload: unknown }).payload;
+  }
+  async listCapabilities(conversationId: string, kind: TuiCapabilityKind): Promise<TuiCapability[]> {
+    const draft = this.drafts.get(conversationId);
+    const params = new URLSearchParams(draft
+      ? { agentId: draft.agentId, ...(draft.projectId ? { projectId: draft.projectId } : {}) }
+      : { conversationId });
+    const res = await gatewayFetch(this.baseUrl, `/api/tui/capabilities/${kind}?${params}`, this.credential);
+    await requireGatewayResponse(res, 'Capability inventory failed');
+    return (await res.json() as { payload: TuiCapability[] }).payload;
+  }
+
+  async listSubagents(conversationId: string) { return this.controlRequest<ChildRunView[]>(conversationId, 'subagents'); }
+  async getSubagent(conversationId: string, id: string) { return this.controlRequest<ChildRunView>(conversationId, `subagents/${encodeURIComponent(id)}`); }
+  async steerSubagent(conversationId: string, id: string, text: string) { await this.controlRequest(conversationId, `subagents/${encodeURIComponent(id)}/steer`, { text }); }
+  async resumeSubagent(conversationId: string, id: string, text: string) { await this.controlRequest(conversationId, `subagents/${encodeURIComponent(id)}/resume`, { text }); }
+  async getSubagentTranscript(conversationId: string, id: string) { return this.controlRequest<string>(conversationId, `subagents/${encodeURIComponent(id)}/transcript`); }
+  async stopSubagent(conversationId: string, id: string) { await this.controlRequest(conversationId, `subagents/${encodeURIComponent(id)}/stop`, {}); }
+
+  async getInteractionPolicy(conversationId: string) { return this.controlRequest<SessionInteractionPolicy>(conversationId, 'policy'); }
+  async setInteractionPolicy(conversationId: string, policy: SessionInteractionPolicy) {
+    return this.controlRequest<SessionInteractionPolicy>(conversationId, 'policy', policy);
+  }
+  async getWorkspaceDiff(conversationId: string) {
+    const draft = this.drafts.get(conversationId);
+    const params = new URLSearchParams(draft
+      ? { agentId: draft.agentId, ...(draft.projectId ? { projectId: draft.projectId } : {}) }
+      : { conversationId });
+    const res = await gatewayFetch(this.baseUrl, `/api/tui/diff?${params}`, this.credential);
+    await requireGatewayResponse(res, 'Workspace diff failed');
+    return (await res.json() as { payload: string }).payload;
+  }
+  async searchHistory(conversationId: string, query: string) { return this.controlRequest<TuiHistoryMatch[]>(conversationId, 'search', { query }); }
+  async listJobs(conversationId: string) { return this.controlRequest<TuiJob[]>(conversationId, 'jobs'); }
+  async getJob(conversationId: string, id: string) { return this.controlRequest<TuiJob>(conversationId, `jobs/${encodeURIComponent(id)}`); }
+  async resizeJob(conversationId: string, id: string, cols: number, rows: number) { await this.controlRequest(conversationId, `jobs/${encodeURIComponent(id)}/resize`, { cols, rows }); }
+  async stopJob(conversationId: string, id: string) { await this.controlRequest(conversationId, `jobs/${encodeURIComponent(id)}/stop`, {}); }
+  async writeJob(conversationId: string, id: string, text: string) { await this.controlRequest(conversationId, `jobs/${encodeURIComponent(id)}/stdin`, { text }); }
+
+  async listSessions(options?: { archived?: boolean }): Promise<TuiSessionItem[]> {
     try {
-      const res = await gatewayFetch(this.baseUrl, '/api/sessions', this.credential);
-      if (!res.ok) return [];
+      const res = await gatewayFetch(this.baseUrl, options?.archived ? '/api/sessions?status=archived' : '/api/sessions?excludeArchived=true', this.credential);
+      await requireGatewayResponse(res, 'Session list load failed');
       const json = (await res.json()) as {
         items?: Array<{
           key: string;
@@ -648,8 +703,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
           typeof s.customData?.forkedFromConversationId === 'string' ? s.customData.forkedFromConversationId : undefined,
         cwd: typeof s.cwd === 'string' ? s.cwd : undefined,
       }));
-    } catch {
-      return [];
+    } catch (error) {
+      throw error;
     }
   }
 
@@ -717,6 +772,9 @@ export class GatewayRealtimeBackend implements TuiBackend {
         gatewayFetch(this.baseUrl, sessionPath, this.credential),
         gatewayFetch(this.baseUrl, `${sessionPath}/agent-config`, this.credential),
       ]);
+
+      await requireGatewayResponse(sessionRes, 'Session information load failed');
+      await requireGatewayResponse(agentCfgRes, 'Session configuration load failed');
 
       type SessionRow = {
         agentId: string;
@@ -806,29 +864,30 @@ export class GatewayRealtimeBackend implements TuiBackend {
       }
 
       return out;
-    } catch {
-      return {};
+    } catch (error) {
+      throw error;
     }
   }
 
   async listModels(): Promise<TuiModelChoice[]> {
     try {
       const res = await gatewayFetch(this.baseUrl, '/api/models', this.credential);
-      if (!res.ok) return [];
+      await requireGatewayResponse(res, 'Model list load failed');
       const json = (await res.json()) as {
         ok?: boolean;
         payload?: { models?: TuiModelChoice[] };
       };
       return (json.payload?.models ?? []).map(normalizeGatewayModelChoice);
-    } catch {
-      return [];
+    } catch (error) {
+      throw error;
     }
   }
 
   async resetSession(conversationId: string): Promise<void> {
-    await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}/reset`, this.credential, {
+    const response = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}/reset`, this.credential, {
       method: 'POST',
-    }).catch(() => {});
+    });
+    await requireGatewayResponse(response, 'Session reset failed');
   }
 
   async compactSession(
@@ -883,6 +942,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async exportSession(conversationId: string, format: ExportFormat): Promise<string> {
+    await this.reconcileInput(conversationId);
+    if (this.drafts.has(conversationId)) throw new Error('This conversation is an unsent draft; there is no persisted transcript yet.');
     const params = new URLSearchParams({ format });
     const res = await gatewayFetch(
       this.baseUrl,
@@ -973,17 +1034,29 @@ export class GatewayRealtimeBackend implements TuiBackend {
     };
   }
 
-  async btwQuery(conversationId: string, question: string): Promise<{ text: string; error?: string }> {
-    const res = await gatewayFetch(
-      this.baseUrl,
-      `/api/sessions/${encodeURIComponent(conversationId)}/btw`,
-      this.credential,
-      { method: 'POST', body: JSON.stringify({ question }) },
-    );
-    if (!res.ok) {
-      return { text: '', error: `BTW failed (${res.status})` };
-    }
-    return (await res.json()) as { text: string; error?: string };
+  async sideQuery(conversationId: string, question: string, options?: { signal?: AbortSignal; onDelta?: (text: string) => void }): Promise<{ text: string; error?: string }> {
+    const draft = this.drafts.get(conversationId);
+    const res = await gatewayFetch(this.baseUrl, '/api/tui/side', this.credential, { method: 'POST', signal: options?.signal,
+      body: JSON.stringify({ conversationId, question, ...(draft ? { agentId: draft.agentId } : {}) }) }, 95_000);
+    await requireGatewayResponse(res, 'Side chat failed');
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('Side chat stream is unavailable');
+    const decoder = new TextDecoder(); let pending = '', result: { text: string; error?: string } | undefined;
+    const consume = (line: string) => {
+      if (!line.trim()) return;
+      const event = JSON.parse(line) as { delta?: string; result?: { text: string; error?: string } };
+      if (typeof event.delta === 'string') options?.onDelta?.(event.delta);
+      if (event.result) result = event.result;
+    };
+    try {
+      for (;;) { const chunk = await reader.read(); if (chunk.done) break; pending += decoder.decode(chunk.value, { stream: true });
+        if (pending.length > 2_000_000) throw new Error('Side stream record exceeds the size limit');
+        let newline: number; while ((newline = pending.indexOf('\n')) >= 0) { consume(pending.slice(0, newline)); pending = pending.slice(newline + 1); }
+      }
+      pending += decoder.decode(); if (pending.trim()) consume(pending);
+    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+    if (!result) throw new Error('Side chat connection ended before completion');
+    return result;
   }
 
   async forkSession(
@@ -1201,6 +1274,19 @@ export class GatewayRealtimeBackend implements TuiBackend {
     } catch {
       return { ok: false };
     }
+  }
+
+  async restoreSession(conversationId: string) {
+    const response = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}/unarchive`, this.credential, { method: 'POST', body: '{}' });
+    await requireGatewayResponse(response, 'Restore failed');
+    const result = await response.json() as { unarchived?: boolean };
+    if (!result.unarchived) throw new Error('Restore was not confirmed');
+  }
+  async archiveSession(conversationId: string): Promise<void> {
+    if (this.drafts.has(conversationId)) throw new Error('Only saved conversations can be archived.');
+    const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}/archive`, this.credential, { method: 'POST' });
+    await requireGatewayResponse(res, 'Archive failed');
+    if (!(await res.json() as { archived?: boolean }).archived) throw new Error('Archive was not confirmed.');
   }
 
   async deleteSession(conversationId: string): Promise<{ ok: boolean }> {

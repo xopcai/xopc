@@ -271,7 +271,7 @@ export class SessionSelector implements Component, Focusable {
   }
 
   private matchesAction(keyData: string, action: Keybinding, aliases: string[] = []): boolean {
-    if (this.keybindings?.matches(keyData, action)) return true;
+    if (this.keybindings) return this.keybindings.matches(keyData, action);
     return aliases.some((key) => keyData === key || matchesKey(keyData, key as never));
   }
 

@@ -18,6 +18,18 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+import { createLogger } from '../utils/logger.js';
+import { sandboxCommand } from '../agent/sandbox/native-command.js';
+import { createCapabilityControls } from './tui-capability-controls.js';
+import { attachTuiTerminal } from './tui-terminal.js';
+import { createTuiSideChat } from './tui-side-chat.js';
+import { readTuiImageFiles } from './tui-image-files.js';
+import { SearchableSelectList } from './components/searchable-select-list.js';
+import { searchableSelectListTheme } from './theme.js';
+import { createTuiControlCommands } from './tui-control-commands.js';
+import { TextViewer } from './components/text-viewer.js';
+import { ExtensionSelectDialog, ExtensionInputDialog } from './components/extension-dialog.js';
+import { collectTuiClarification } from './tui-clarification.js';
 import type { ReasoningLevel, ThinkLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import { TuiDraftFileStore } from './backends/embedded-drafts.js';
@@ -73,7 +85,6 @@ import {
   openReviewLauncherOverlay,
   openScopedModelsOverlay,
   openSessionPickerOverlay,
-  openSessionTreeOverlay,
   openSettingsOverlay,
   openTimelineOverlay,
   openTranscriptTreeOverlay,
@@ -142,17 +153,13 @@ import type {
 import type {
   TuiEditorFactory,
   TuiForkOptions,
-  TuiModelRegistryModel,
   TuiNavigateTreeOptions,
   TuiNewSessionOptions,
-  TuiReasoningLevel,
   TuiReplacedSessionContext,
   TuiReplacementResult,
   TuiSwitchSessionOptions,
-  TuiThinkingLevel,
-  TuiVerboseLevel,
 } from '../extensions/types/tui.js';
-import { getAllModels, getAllProviders, getApiKey, isProviderConfiguredSync } from '../providers/index.js';
+import { getAllProviders, isProviderConfiguredSync } from '../providers/index.js';
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from '../project-trust/trust-store.js';
 import { transcriptTreeEntryIdToRowNumber } from './tui-transcript-tree.js';
 import {
@@ -178,6 +185,8 @@ export {
 export { withTuiSuspended } from './tui-suspend.js';
 
 const THINK_LEVEL_CYCLE: ThinkLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive'];
+
+const log = createLogger('TUI');
 
 function nextThinkLevel(current: string | undefined): ThinkLevel {
   const c = (current ?? 'medium').toLowerCase();
@@ -358,7 +367,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   state.scopedModelRefs = loadScopedModelRefs();
   state.showThinking = tuiSettings.showThinking;
   state.toolsExpanded = tuiSettings.toolsExpanded;
-  let pendingImageAttachments: TuiInboundAttachment[] = [];
+  let pendingImageAttachments: TuiInboundAttachment[] = await readTuiImageFiles(opts.images ?? []);
   const pendingNextTurnCustomMessages: string[] = [];
   let lastRetryMessageText: string | null = null;
   let setExtensionLabel = (_entryId: string, _label: string | undefined): void => {};
@@ -675,8 +684,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   let activeEditorSelectorClose: (() => void) | null = null;
+  let cancelPendingDialog: (() => void) | undefined;
 
   const closeEditorSelector = () => {
+    const cancel = cancelPendingDialog;
+    cancelPendingDialog = undefined;
+    cancel?.();
     const close = activeEditorSelectorClose;
     close?.();
   };
@@ -690,6 +703,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     const close = () => {
       if (activeEditorSelectorClose !== close) return;
       activeEditorSelectorClose = null;
+      (component as Component & { dispose?: () => void }).dispose?.();
       editorContainer.clear();
       editorContainer.addChild(editor as Component);
       tui.setFocus(editor as Component);
@@ -808,160 +822,13 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
   };
 
-  const createReplacementContext = (): TuiReplacedSessionContext => {
-    const model = state.sessionInfo.model
-      ? {
-          ...(state.sessionInfo.modelProvider ? { provider: state.sessionInfo.modelProvider } : {}),
-          id: state.sessionInfo.model,
-          ref: state.sessionInfo.modelProvider
-            ? `${state.sessionInfo.modelProvider}/${state.sessionInfo.model}`
-            : state.sessionInfo.model,
-          contextWindow: state.sessionInfo.contextWindow ?? null,
-        }
-      : undefined;
-    return {
-      mode: 'tui',
-      hasUI: true,
-      signal: client.getActiveSignal?.(),
-      ui: {
-        select: async () => undefined,
-        confirm: async () => false,
-        input: async () => undefined,
-        notify: (message, level) => {
-          const prefix = level === 'error' ? 'Error: ' : level === 'warn' || level === 'warning' ? 'Warning: ' : '';
-          chatLog.addSystem(`${prefix}${message}`);
-          tui.requestRender();
-        },
-        onTerminalInput: (handler) => tui.addInputListener(handler),
-        setStatus: () => {},
-        setWorkingMessage: (message) => {
-          extensionWorkingMessage = message?.trim() || undefined;
-          renderStatus();
-        },
-        setWorkingVisible: (visible) => {
-          extensionWorkingVisible = visible;
-          renderStatus();
-        },
-        setWorkingIndicator: (indicator) => {
-          extensionWorkingIndicator = indicator ?? undefined;
-          statusLoader?.setIndicator(indicator ?? undefined);
-          renderStatus();
-        },
-        setHiddenThinkingLabel: (label) => {
-          chatLog.setHiddenThinkingLabel(label ?? undefined);
-          tui.requestRender();
-        },
-        setWidget: () => {},
-        setFooter: () => {},
-        setHeader: () => {},
-        custom: async () => undefined as never,
-        setTitle: (title) => tui.terminal.setTitle(title),
-        pasteToEditor: (text) => editor.handleInput(`\x1b[200~${text}\x1b[201~`),
-        setEditorText: (text) => editor.setText(text),
-        getEditorText: () => editor.getExpandedText?.() ?? editor.getText(),
-        editor: async () => undefined,
-        addAutocompleteProvider: () => () => {},
-        setEditorComponent,
-        getEditorComponent: () => editorComponentFactory,
-        theme,
-        getAllThemes: getAllExtensionThemes,
-        getTheme: getExtensionTheme,
-        setTheme: setExtensionTheme,
-        getToolsExpanded: () => state.toolsExpanded,
-        setToolsExpanded: (expanded) => {
-          state.toolsExpanded = expanded;
-          tuiSettings = { ...tuiSettings, toolsExpanded: expanded };
-          saveTuiSettings(tuiSettings);
-          chatLog.setToolsExpanded(expanded);
-          updateFooter();
-          tui.requestRender();
-        },
-      },
-      sessionManager: sessionSnapshot.manager(),
-      modelRegistry: {
-        find(provider, modelId) {
-          return getAllModels().find(
-            (candidate) => candidate.provider === provider && candidate.id === modelId,
-          ) as unknown as TuiModelRegistryModel | undefined;
-        },
-        async getApiKeyAndHeaders(nextModel) {
-          const provider = typeof nextModel.provider === 'string' ? nextModel.provider : undefined;
-          if (!provider) return { ok: false, error: 'Model provider is missing.' };
-          try {
-            return { ok: true, apiKey: await getApiKey(provider), headers: {} };
-          } catch (error) {
-            return {
-              ok: false,
-              error: error instanceof Error ? error.message : String(error),
-            };
-          }
-        },
-      },
-      model,
-      cwd: process.cwd(),
-      conversationId: state.currentConversationId,
-      isProjectTrusted: isCurrentProjectTrusted,
-      isIdle: () => !state.activeRunId && !state.isCompacting,
-      hasPendingMessages: () => state.compactionQueue.length > 0,
-      abort: () => abortActive(),
-      shutdown: () => requestExit(),
-      compact: (options) =>
-        runCompaction(options?.customInstructions, {
-          onComplete: options?.onComplete,
-          onError: options?.onError,
-        }),
-      getSystemPrompt: getExtensionSystemPrompt,
-      getSystemPromptOptions: () => ({
-        cwd: process.cwd(),
-        conversationId: state.currentConversationId,
-        ...(model ? { model } : {}),
-      }),
-      waitForIdle: waitForTuiIdle,
-      newSession: (options) => runExtensionNewSession(options),
-      fork: (entryId, options) => runExtensionFork(entryId, options),
-      navigateTree: (targetId, options) => runExtensionNavigateTree(targetId, options),
-      switchSession: (sessionPath, options) => runExtensionSwitchSession(sessionPath, options),
-      reload: async () => {
-        await loadSessionHistory({ merge: true });
-        await refreshSessionInfoWithBorder();
-      },
-      getModel: () => model,
-      setModel: (modelRef) => switchCurrentModel(modelRef),
-      getThinkingLevel: () => state.sessionInfo.thinkingLevel as TuiThinkingLevel | undefined,
-      setThinkingLevel,
-      getReasoningLevel: () => state.sessionInfo.reasoningLevel as TuiReasoningLevel | undefined,
-      setReasoningLevel,
-      getVerboseLevel: () => state.sessionInfo.verboseLevel as TuiVerboseLevel | undefined,
-      setVerboseLevel,
-      getCommands: () =>
-        slashCommands.map((command) => ({
-          name: command.name,
-          description: command.description,
-          source: 'builtin' as const,
-        })),
-      getContextUsage: () => {
-        const tokens = state.sessionInfo.totalTokens ?? state.sessionInfo.contextTokens ?? null;
-        const contextWindow = state.sessionInfo.contextWindow ?? null;
-        const percent = state.sessionInfo.contextUsagePercent ?? null;
-        if (tokens == null && contextWindow == null) return undefined;
-        return {
-          estimatedTokens: tokens,
-          tokens,
-          contextWindow,
-          usagePercent: percent,
-          percent,
-        };
-      },
-      notify: (message, level) => {
-        const prefix = level === 'error' ? 'Error: ' : level === 'warn' || level === 'warning' ? 'Warning: ' : '';
-        chatLog.addSystem(`${prefix}${message}`);
-        tui.requestRender();
-      },
-      sendMessage: async (message, options) => sendExtensionMessage(message, options),
-      sendUserMessage: async (content, options) =>
-        sendExtensionUserMessage(content as ExtensionUserMessageContent, options),
-    };
-  };
+  const createReplacementContext = (): TuiReplacedSessionContext => Object.assign(
+    extensionRuntime.createContext('xopc-session'),
+    {
+      sendMessage: async (message: ExtensionCustomMessage, options?: ExtensionSendMessageOptions) => sendExtensionMessage(message, options),
+      sendUserMessage: async (content: Parameters<TuiReplacedSessionContext['sendUserMessage']>[0], options?: ExtensionSendUserMessageOptions) => sendExtensionUserMessage(content as ExtensionUserMessageContent, options),
+    },
+  );
 
   const runWithReplacementContext = async (
     callback: ((ctx: TuiReplacedSessionContext) => Promise<void>) | undefined,
@@ -1133,6 +1000,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const busyStates = new Set([
     'sending',
     'waiting',
+    'awaiting-input',
     'streaming',
     'running',
     'compacting',
@@ -1243,8 +1111,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const refreshModelChoices = async () => {
     try {
       modelChoices = await client.listModels();
-    } catch {
-      modelChoices = [];
+    } catch (error) {
+      chatLog.addStatus(`Models unavailable: ${error instanceof Error ? error.message : String(error)}`);
     }
     bottomBar.invalidate();
     tui.requestRender();
@@ -1268,7 +1136,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
     tui.terminal.setProgress(false);
     void (async () => {
-      client.stop();
+      try { await client.stop(); } catch (error) { log.warn({ err: error }, 'TUI backend shutdown failed'); }
       await drainAndStopTuiSafely(tui);
       restoreStdio();
       if (options?.showResumeHint !== false) {
@@ -1303,6 +1171,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     abortActive,
     resetCurrentSession,
     clearChatForSessionSwitch,
+    sessionVersion,
   } = sessionActions;
   const setSession = async (key: string) => {
     clearTimeout(composerDraftTimer);
@@ -1310,6 +1179,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     pendingImageAttachments = [];
     editor.setText('');
     clearTimeout(composerDraftTimer);
+    closeEditorSelector();
     await changeSession(key);
     restoreComposerDraft();
   };
@@ -1351,7 +1221,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const refreshSessionInfoWithBorder = async () => {
+    const conversationId = state.currentConversationId;
     await refreshSessionInfo();
+    try {
+      const policy = await client.getInteractionPolicy(conversationId);
+      if (conversationId === state.currentConversationId) state.sessionInfo.interactionPolicy = policy;
+    } catch (error) {
+      if (conversationId === state.currentConversationId) chatLog.addStatus(`Mode unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
     updateEditorBorderColor();
   };
 
@@ -1549,12 +1426,22 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
   };
 
-  const copyLastAssistant = async () => {
-    const text = chatLog.getLastAssistantText().trim();
+  const copyLastAssistant = async (mode?: string) => {
+    let text = chatLog.getLastAssistantText().trim();
+    const version = sessionVersion();
+    if (mode && mode !== 'code') throw new Error('Usage: /copy [code]');
     if (!text) {
       chatLog.addSystem('No assistant messages to copy yet.');
       tui.requestRender();
       return;
+    }
+    if (mode === 'code') {
+      const blocks = [...text.matchAll(/^```([^\n]*)\n([\s\S]*?)^```\s*$/gm)];
+      if (!blocks.length) { chatLog.addStatus('The last answer has no fenced code blocks.'); tui.requestRender(); return; }
+      const choices = blocks.map((block, index) => `${index + 1}. ${block[1]?.trim() || 'code'} · ${block[2]?.trim().split('\n')[0]?.slice(0, 80) ?? ''}`);
+      const selected = await dialogs.choose('Copy code block', choices);
+      if (!selected || version !== sessionVersion()) return;
+      text = blocks[choices.indexOf(selected)]![2]!.replace(/\n$/, '');
     }
     try {
       await copyTextToClipboard(text);
@@ -1570,7 +1457,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const renameCurrentSession = async (name: string) => {
     const nextName = name.trim();
     if (!nextName) {
-      chatLog.addSystem('Usage: /name <name>');
+      chatLog.addSystem('Usage: /rename <name>');
       tui.requestRender();
       return;
     }
@@ -1745,37 +1632,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
   };
 
-  const runBtwQuery = async (question: string) => {
-    const previousStatus = state.activityStatus;
-    const runId = `btw-${randomUUID()}`;
-    try {
-      setActivityStatus('waiting');
-      state.progressMessage = 'btw';
-      chatLog.addUser(`/btw ${question}`);
-      chatLog.addStatus(theme.dim('BTW running...'));
-      tui.requestRender();
-      const result = await client.btwQuery(state.currentConversationId, question);
-      if (result.error) {
-        chatLog.addSystem(`BTW failed: ${result.error}`);
-        return;
-      }
-      chatLog.finalizeAssistant(
-        {
-          role: 'assistant',
-          content: [{ type: 'text', text: `BTW\n\n${result.text}` }],
-          timestamp: Date.now(),
-        } as AgentMessage,
-        runId,
-      );
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      chatLog.addSystem(`BTW failed: ${errorMessage}`);
-    } finally {
-      state.activityStatus = previousStatus;
-      renderStatus();
-      tui.requestRender();
-    }
-  };
 
   const forkCurrentSession = async (rawKey?: string) => {
     const targetRaw = rawKey?.trim() || randomUUID();
@@ -2101,7 +1957,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     openAgentPicker: () => {},
     openReviewLauncher: () => {},
     openSessionPicker: () => {},
-    openSessionTree: () => {},
     openTimeline: (_initialSearch?: string) => {},
     openTranscriptTree: () => {},
     openUserMessageFork: () => {},
@@ -2167,11 +2022,207 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     updateFooter();
   };
 
+  const dialogs = {
+    choose: (title: string, options: string[]): Promise<string | undefined> => new Promise((resolveChoice) => {
+      const finish = (value?: string) => {
+        cancelPendingDialog = undefined;
+        closeCommandOverlay();
+        resolveChoice(value);
+      };
+      openCommandOverlay(new ExtensionSelectDialog(title, options, { onSelect: finish, onCancel: () => finish() }, keybindings));
+      cancelPendingDialog = () => finish();
+      tui.requestRender();
+    }),
+    input: (title: string): Promise<string | undefined> => new Promise((resolveInput) => {
+      const finish = (value?: string) => {
+        cancelPendingDialog = undefined;
+        closeCommandOverlay();
+        resolveInput(value);
+      };
+      openCommandOverlay(new ExtensionInputDialog(title, undefined, { onSubmit: finish, onCancel: () => finish() }, keybindings));
+      cancelPendingDialog = () => finish();
+      tui.requestRender();
+    }),
+  };
+  let answeringRequest: string | undefined;
+  const showPendingClarification = async () => {
+    const conversationId = state.currentConversationId;
+    try {
+      const request = await client.getClarification(conversationId);
+      if (!request || conversationId !== state.currentConversationId || answeringRequest === request.id) return;
+      answeringRequest = request.id;
+      state.progressMessage = request.kind === 'approval' ? 'Waiting for approval' : 'Waiting for your answer';
+      if (state.activeRunId) setActivityStatus('awaiting-input');
+      try {
+        const command = await collectTuiClarification(request, dialogs);
+        if (conversationId !== state.currentConversationId) return;
+        await client.submitClarification(conversationId, request.id, command);
+        chatLog.addStatus(command.action === 'cancel' ? 'Question cancelled.' : 'Response submitted.');
+      } finally {
+        if (answeringRequest === request.id) answeringRequest = undefined;
+        if (conversationId === state.currentConversationId) state.progressMessage = null;
+      }
+    } catch (error) {
+      if (conversationId === state.currentConversationId) chatLog.addSystem(`Question response failed: ${error instanceof Error ? error.message : String(error)}. Use /answer to retry.`);
+    } finally { tui.requestRender(); }
+  };
+
+  const executeControlCommand = createTuiControlCommands({
+    client, state, sessionVersion, choose: dialogs.choose, input: dialogs.input,
+    showText: (title, text, load) => {
+      openCommandOverlay(new TextViewer(title, text, { rows: () => tui.terminal.rows,
+        close: closeCommandOverlay, render: () => tui.requestRender(), keybindings, load }));
+      tui.requestRender();
+    },
+    refresh: () => { updateFooter(); tui.requestRender(); },
+  });
+
+  const runSideQuery = createTuiSideChat({
+    client, conversationId: () => state.currentConversationId, sessionVersion, input: dialogs.input,
+    notice: (message) => { chatLog.addStatus(message); tui.requestRender(); },
+    stream: (read, cancel) => {
+      openCommandOverlay(new TextViewer('Side chat · Escape cancels', read(), { rows: () => tui.terminal.rows, close: closeCommandOverlay, render: () => tui.requestRender(), keybindings, load: async () => read(), onDispose: cancel, intervalMs: 100 }));
+      tui.requestRender();
+    },
+    show: (answer, followUp) => {
+      openCommandOverlay(new TextViewer('Side chat', answer, { rows: () => tui.terminal.rows,
+        close: closeCommandOverlay, render: () => tui.requestRender(), keybindings, reply: followUp }));
+      tui.requestRender();
+    },
+  });
+
+  const capabilityControls = createCapabilityControls({ client, conversationId: () => state.currentConversationId, sessionVersion, ...dialogs,
+    show: (title, content) => { openCommandOverlay(new TextViewer(title, content, { rows: () => tui.terminal.rows, close: closeCommandOverlay, render: () => tui.requestRender(), keybindings })); tui.requestRender(); } });
+
+  const runControlCommand = async (name: string, args: string): Promise<string | undefined> => {
+    const version = sessionVersion();
+    if (name === 'mcp' || name === 'plugins') { await capabilityControls(name, args); return; }
+    if (name === 'cd') {
+      if (!args.trim()) throw new Error('Usage: /cd <workspace-path-on-execution-host>');
+      if (state.activeRunId) throw new Error('Stop the run before changing workspaces.');
+      await client.patchSession(state.currentConversationId, { workingDirectory: args.trim() });
+      if (version === sessionVersion()) await refreshSessionInfoWithBorder();
+      return;
+    }
+    if (name === 'worktree') {
+      const [action, ...rest] = args.trim().split(/\s+/); const id = rest.join(' ');
+      const command = action === 'create' ? { action: 'worktree.create' as const, baseRef: id || 'HEAD' }
+        : action === 'use' ? { action: 'worktree.use' as const, id }
+        : action === 'remove' ? { action: 'worktree.remove' as const, id } : { action: 'worktree.list' as const };
+      if (action && !['create', 'use', 'remove', 'list'].includes(action)) throw new Error('Usage: /worktree [list|create [base]|use <id>|remove <id>]');
+      if (command.action !== 'worktree.list' && await dialogs.choose(`Apply ${command.action}?`, ['Cancel', 'Confirm']) !== 'Confirm') return;
+      if (version !== sessionVersion()) return;
+      const result = await client.manageCapability(state.currentConversationId, command);
+      if (version !== sessionVersion()) return;
+      await refreshSessionInfoWithBorder();
+      openCommandOverlay(new TextViewer('Worktrees', JSON.stringify(result, null, 2), { rows: () => tui.terminal.rows, close: closeCommandOverlay, render: () => tui.requestRender(), keybindings })); tui.requestRender();
+      return;
+    }
+    if (name === 'terminal') {
+      if (!args.trim()) throw new Error('Usage: /terminal <job-id>');
+      stdioFilter.pause();
+      try { await withTuiSuspended(tui, () => attachTuiTerminal(client, state.currentConversationId, args.trim())); }
+      finally { stdioFilter.resume(); }
+      return;
+    }
+    if (name === 'raw') {
+      if (args) throw new Error('Usage: /raw');
+      const raw = await client.exportSession(state.currentConversationId, 'json');
+      if (version !== sessionVersion()) return;
+      openCommandOverlay(new TextViewer('Persisted transcript · JSON', raw, { rows: () => tui.terminal.rows,
+        close: closeCommandOverlay, render: () => tui.requestRender(), keybindings }));
+      tui.requestRender();
+      return;
+    }
+    if (name === 'search') {
+      const query = args.trim() || await dialogs.input('Search this conversation');
+      if (!query || version !== sessionVersion()) return;
+      const matches = await client.searchHistory(state.currentConversationId, query);
+      if (version !== sessionVersion()) return;
+      if (!matches.length) return 'No transcript matches.';
+      const labels = matches.map(match => `Row ${match.rowNumber} [${match.role}] ${match.preview}`);
+      const selected = await dialogs.choose('Transcript matches', labels);
+      const match = matches[labels.indexOf(selected ?? '')];
+      if (match && version === sessionVersion()) await loadHistoryWindow({ rowNumber: match.rowNumber, before: 20, after: 40 });
+      return;
+    }
+    if (name === 'archived') {
+      const items = await client.listSessions({ archived: true });
+      if (version !== sessionVersion()) return;
+      const labels = items.map(item => `${item.displayName ?? item.key} · ${item.key}`);
+      const selected = await dialogs.choose('Archived conversations', labels);
+      const item = items[labels.indexOf(selected ?? '')];
+      if (!item || version !== sessionVersion()) return;
+      const action = await dialogs.choose('Archived conversation', ['Read transcript', 'Restore and continue']);
+      if (!action || version !== sessionVersion()) return;
+      if (action === 'Restore and continue') { await client.restoreSession(item.key); if (version === sessionVersion()) await setSession(item.key); }
+      else { const transcript = await client.exportSession(item.key, 'json'); if (version === sessionVersion()) { openCommandOverlay(new TextViewer('Archived transcript', transcript, { rows: () => tui.terminal.rows, close: closeCommandOverlay, render: () => tui.requestRender(), keybindings })); tui.requestRender(); } }
+      return;
+    }
+    if (name === 'answer') { await showPendingClarification(); return; }
+    if (name === 'attach') {
+      if (!args.trim()) throw new Error('Usage: /attach <local-image-path>');
+      if (pendingImageAttachments.length >= MAX_CHAT_ATTACHMENTS) throw new Error('Attachment limit reached.');
+      const attachments = await readTuiImageFiles([args.trim()]);
+      if (version !== sessionVersion()) return;
+      if (pendingImageAttachments.length + attachments.length > MAX_CHAT_ATTACHMENTS) throw new Error('Attachment limit reached.');
+      pendingImageAttachments.push(...attachments);
+      saveComposerDraft();
+      updateFooter();
+      return `Attached local image: ${attachments[0]!.name}. /attachments to inspect or remove.`;
+    }
+    if (name === 'archive' || name === 'delete') {
+      const conversationId = state.currentConversationId;
+      const choice = await dialogs.choose(name === 'archive' ? 'Archive this conversation? Its transcript will be kept.' : 'Permanently delete this conversation and its transcript?', ['Cancel', name === 'archive' ? 'Archive' : 'Delete permanently']);
+      if (!choice || choice === 'Cancel' || version !== sessionVersion()) return;
+      await abortActive({ clearUi: false });
+      if (version !== sessionVersion()) return;
+      for (const job of await client.listJobs(conversationId)) { if (job.status === 'running') await client.stopJob(conversationId, job.id); }
+      for (const child of await client.listSubagents(conversationId)) { if (child.status === 'running') await client.stopSubagent(conversationId, child.id); }
+      if (name === 'archive') await client.archiveSession(conversationId);
+      else if (!(await client.deleteSession(conversationId)).ok) throw new Error('Deletion was not confirmed.');
+      if (version !== sessionVersion()) return;
+      await startPreferredNewSession();
+      return name === 'archive' ? 'Conversation archived.' : 'Conversation deleted.';
+    }
+    if (name === 'pwd') {
+      return `Workspace (${isLocalMode ? 'local' : client.connectionLabel}): ${state.sessionInfo.effectiveWorkspacePath ?? 'unavailable'}`;
+    }
+    if (name === 'skills') {
+      const conversationId = state.currentConversationId;
+      const items = await client.listCapabilities(conversationId, name);
+      if (version !== sessionVersion()) return;
+      if (!items.length) return `No ${name} available in this workspace.`;
+      if (name === 'skills') {
+        const enabled = items.filter(item => item.state === 'enabled');
+        const selected = await dialogs.choose('Skills', enabled.map(item => `${item.id} — ${item.description}`));
+        const item = enabled.find(candidate => `${candidate.id} — ${candidate.description}` === selected);
+        if (item && version === sessionVersion()) editor.setText(`/skill:${item.id} ${editor.getText()}`);
+        return;
+      }
+      return items.map(item => `${item.id} [${item.state}]${item.description ? ` — ${item.description}` : ''}`).join('\n');
+    }
+    if (name === 'attachments') {
+      if (args === 'clear') pendingImageAttachments = [];
+      else if (args) {
+        const number = Number(args);
+        if (!Number.isSafeInteger(number) || number < 1 || number > pendingImageAttachments.length) throw new Error('Usage: /attachments [clear|number]');
+        pendingImageAttachments.splice(number - 1, 1);
+      }
+      saveComposerDraft();
+      updateFooter();
+      return pendingImageAttachments.length ? pendingImageAttachments.map((item, index) => `${index + 1}. ${item.name ?? item.type}`).join('\n')
+        + '\n/attachments <number> removes one · /attachments clear removes all' : 'No pending attachments.';
+    }
+    return executeControlCommand(name, args);
+  };
+
   const handleCommand = createTuiCommandHandler({
     state,
     chatLog,
     tui,
     isLocalMode,
+    runControlCommand,
     abortActive,
     sendMessage,
     requestExit,
@@ -2201,7 +2252,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     exportSession: exportCurrentSession,
     importSession: importSessionExport,
     createShare: createShareLink,
-    runBtwQuery,
+    runSideQuery,
     forkSession: forkCurrentSession,
     extensionSlashCommands: extensionRuntime.slashCommands,
     skillSlashCommands,
@@ -2238,6 +2289,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   });
 
   const { runLocalShellLine } = createLocalShellRunner({
+    prepareCommand: async (command, cwd) => {
+      const policy = await client.getInteractionPolicy(state.currentConversationId);
+      const readOnly = policy.mode === 'plan' || policy.access === 'read-only';
+      const launch = { executable: command, args: [], shell: true };
+      return readOnly || policy.sandbox === 'workspace-write'
+        ? sandboxCommand(launch, { access: readOnly ? 'read-only' : 'workspace-write', network: policy.network === true, workspace: cwd })
+        : launch;
+    },
     chatLog,
     tui,
     editor,
@@ -2250,6 +2309,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     },
     keybindings,
     getCwd: () => {
+      if (!isLocalMode) return process.cwd();
       const workspace = state.sessionInfo.effectiveWorkspacePath?.trim();
       if (!workspace) {
         throw new Error('Workspace is not loaded yet.');
@@ -2398,6 +2458,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const setConversationId = (key: string) => {
+    closeEditorSelector();
     state.currentConversationId = resolveConversationId(key);
     composerHistory.switchSession();
     state.chatInputState = createEmptyChatInputState(state.currentConversationId);
@@ -2487,15 +2548,20 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     keybindings,
   };
 
-  uiOverlays.openModelPicker = (initialSearch?: string) => void openModelPickerOverlay(pickerSvc, initialSearch);
-  uiOverlays.openAgentPicker = () => void openAgentPickerOverlay(pickerSvc);
-  uiOverlays.openReviewLauncher = () => void openReviewLauncherOverlay(pickerSvc);
-  uiOverlays.openSessionPicker = () => void openSessionPickerOverlay(pickerSvc);
-  uiOverlays.openSessionTree = () => void openSessionTreeOverlay(pickerSvc);
-  uiOverlays.openTimeline = (initialSearch?: string) => void openTimelineOverlay(pickerSvc, initialSearch);
-  uiOverlays.openTranscriptTree = () => void openTranscriptTreeOverlay(pickerSvc);
-  uiOverlays.openUserMessageFork = () => void openUserMessageForkOverlay(pickerSvc);
-  uiOverlays.openScopedModels = () => void openScopedModelsOverlay(pickerSvc);
+  const openPicker = (work: Promise<void>) => {
+    void work.catch((error: unknown) => {
+      chatLog.addSystem(`Picker unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      tui.requestRender();
+    });
+  };
+  uiOverlays.openModelPicker = (initialSearch?: string) => openPicker(openModelPickerOverlay(pickerSvc, initialSearch));
+  uiOverlays.openAgentPicker = () => openPicker(openAgentPickerOverlay(pickerSvc));
+  uiOverlays.openReviewLauncher = () => openPicker(openReviewLauncherOverlay(pickerSvc));
+  uiOverlays.openSessionPicker = () => openPicker(openSessionPickerOverlay(pickerSvc));
+  uiOverlays.openTimeline = (initialSearch?: string) => openPicker(openTimelineOverlay(pickerSvc, initialSearch));
+  uiOverlays.openTranscriptTree = () => openPicker(openTranscriptTreeOverlay(pickerSvc));
+  uiOverlays.openUserMessageFork = () => openPicker(openUserMessageForkOverlay(pickerSvc));
+  uiOverlays.openScopedModels = () => openPicker(openScopedModelsOverlay(pickerSvc));
   uiOverlays.openThinkingSelector = () => openThinkingSelectorOverlay(pickerSvc);
   uiOverlays.openSettings = () => openSettingsOverlay(pickerSvc);
   uiOverlays.openProjectTrust = () => openProjectTrustOverlay(pickerSvc);
@@ -2524,7 +2590,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       return;
     }
     if (state.activeRunId) {
-      void abortActive();
+      void abortActive().catch((error: unknown) => {
+        chatLog.addSystem(`Stop not confirmed: ${error instanceof Error ? error.message : String(error)}`);
+        tui.requestRender();
+      });
       return;
     }
     if (editor.getText().trim().length > 0) return;
@@ -2538,6 +2607,26 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
   defaultEditor.onCtrlD = () => requestExit();
 
+  defaultEditor.onAction('app.mode.cycle', () => {
+    void runControlCommand('plan', '').then((message) => { if (message) chatLog.addStatus(message); })
+      .catch((error: unknown) => chatLog.addSystem(`Mode change failed: ${error instanceof Error ? error.message : String(error)}`))
+      .finally(() => tui.requestRender());
+  });
+  defaultEditor.onAction('app.response.copy', () => { void copyLastAssistant(); });
+  defaultEditor.onAction('app.view.clear', () => { chatLog.clearAll(); tui.requestRender(); });
+  defaultEditor.onAction('app.history.search', () => {
+    const conversationId = state.currentConversationId;
+    const entries = [...new Set(composerHistoryTexts)];
+    const list = new SearchableSelectList(entries.map((text, index) => ({ value: String(index), label: text, description: '' })), 10, searchableSelectListTheme);
+    list.onSelect = (item) => {
+      closeCommandOverlay();
+      if (conversationId === state.currentConversationId) editor.setText(entries[Number(item.value)] ?? '');
+      tui.requestRender();
+    };
+    list.onCancel = closeCommandOverlay;
+    openCommandOverlay(list);
+    tui.requestRender();
+  });
   defaultEditor.onAction('app.clear', handleCtrlC);
   defaultEditor.onAction('app.exit', () => requestExit());
   defaultEditor.onAction('app.suspend', handleCtrlZ);
@@ -2548,7 +2637,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   defaultEditor.onAction('app.model.cycleForward', () => cycleModel('forward'));
   defaultEditor.onAction('app.model.cycleBackward', () => cycleModel('backward'));
   defaultEditor.onAction('app.model.select', () => uiOverlays.openModelPicker());
-  defaultEditor.onAction('app.session.resume', () => void openSessionPickerOverlay(pickerSvc));
+  defaultEditor.onAction('app.session.resume', () => uiOverlays.openSessionPicker());
   defaultEditor.onAction('app.session.tree', showSessionTree);
   defaultEditor.onAction('app.session.fork', () => uiOverlays.openUserMessageFork());
   defaultEditor.onAction('app.tools.expand', () => {
@@ -2683,6 +2772,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
+    if (typeof data.conversationId === 'string' && data.conversationId !== state.currentConversationId) return;
+    if (evt.event === 'clarify_request') void showPendingClarification();
     if (evt.event === 'session.input-state') {
       if (data.conversationId === state.currentConversationId && Array.isArray(data.inputs) && typeof data.revision === 'number') {
         applyChatInputState(data as unknown as TuiChatInputState);
@@ -2777,6 +2868,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       }
       await refreshModelChoices();
       await loadSessionHistory({ merge: true });
+      void showPendingClarification();
       showStartupCardOnce();
       void refreshStartupResources().then(() => {
         updateFooter();
@@ -2792,7 +2884,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         state.autoMessageSent = true;
         sendMessage(opts.message);
       }
-    })();
+    })().catch((error: unknown) => {
+      chatLog.addSystem(`Session initialization failed: ${error instanceof Error ? error.message : String(error)}. Use /recover to retry.`);
+      tui.requestRender();
+    });
   };
 
   client.onDisconnected = (reason: string) => {

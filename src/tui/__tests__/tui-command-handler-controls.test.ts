@@ -66,7 +66,6 @@ it('handles thinking command through native TUI controls', async () => {
       uiOverlays: {
         openModelPicker: () => {},
         openSessionPicker: () => {},
-        openSessionTree: () => {},
         openTranscriptTree: () => {},
         openUserMessageFork: () => {},
         openScopedModels: () => {},
@@ -232,10 +231,10 @@ it('handles thinking command through native TUI controls', async () => {
       },
     });
 
-    handler('/name');
+    handler('/rename');
     expect(systems.at(-1)).toBe('Session name: Existing name');
 
-    handler('/name Focused work');
+    handler('/rename Focused work');
     await Promise.resolve();
     expect(renamed).toBe('Focused work');
   });
@@ -283,7 +282,7 @@ it('handles thinking command through native TUI controls', async () => {
       getSessionStats,
     });
 
-    handler('/session');
+    handler('/status');
     await vi.waitFor(() => expect(systems.at(-1)).toContain('Name: Main chat'));
     expect(systems.at(-1)).toContain('Name: Main chat');
     expect(systems.at(-1)).toContain('Connection: disconnected (offline)');
@@ -312,7 +311,6 @@ it('handles thinking command through native TUI controls', async () => {
     const keybindings = createXopcTuiKeybindingsManager();
     const systems: string[] = [];
     let switched: string | undefined;
-    let openedTree = 0;
     let openedTranscriptTree = 0;
     let openedUserMessageFork = 0;
     let loadedTree = 0;
@@ -345,9 +343,6 @@ it('handles thinking command through native TUI controls', async () => {
           systems.push(`model picker: ${initialSearch ?? ''}`);
         },
         openSessionPicker: () => {},
-        openSessionTree: () => {
-          openedTree += 1;
-        },
         openTranscriptTree: () => {
           openedTranscriptTree += 1;
         },
@@ -383,7 +378,6 @@ it('handles thinking command through native TUI controls', async () => {
 
     handler('/tree');
     await Promise.resolve();
-    expect(openedTree).toBe(0);
     expect(openedTranscriptTree).toBe(1);
     expect(loadedTree).toBe(0);
 
@@ -394,11 +388,11 @@ it('handles thinking command through native TUI controls', async () => {
     await Promise.resolve();
     expect(forkedRawKey).toBeUndefined();
 
-    handler('/clone target-session');
+    handler('/fork target-session');
     await Promise.resolve();
     expect(forkedRawKey).toBe('target-session');
 
-    handler('/models');
+    handler('/model list');
     await Promise.resolve();
     expect(systems.at(-1)).toContain('openai/gpt-5 — GPT-5');
 
@@ -406,9 +400,9 @@ it('handles thinking command through native TUI controls', async () => {
     expect(systems.at(-1)).toBe('model picker: gpt');
 
     handler('/switch');
-    expect(systems.at(-1)).toBe('Usage: /switch <provider/model>');
+    expect(systems.at(-1)).toContain('Unknown command /switch');
 
-    handler('/switch openai/gpt-5');
+    handler('/model openai/gpt-5');
     await Promise.resolve();
     expect(switched).toBe('openai/gpt-5');
   });
@@ -469,19 +463,20 @@ it('handles thinking command through native TUI controls', async () => {
       requestExit: () => {},
       updateFooter: () => {},
       keybindings: createXopcTuiKeybindingsManager(),
-      runBtwQuery: async (question) => {
+      runSideQuery: async (question) => {
         questions.push(question);
       },
     });
 
-    handler('/btw');
-    expect(systems.at(-1)).toContain('Usage: /btw <question>');
+    handler('/side');
+    await Promise.resolve();
+    expect(questions.at(-1)).toBe('');
 
-    handler('/btw summarize the last answer');
+    handler('/side summarize the last answer');
     await Promise.resolve();
     expect(questions.at(-1)).toBe('summarize the last answer');
 
-    handler('/aside quick check');
+    handler('/side quick check');
     await Promise.resolve();
     expect(questions.at(-1)).toBe('quick check');
   });
@@ -514,7 +509,7 @@ it('handles thinking command through native TUI controls', async () => {
     expect(systems.at(-1)).toContain('xopc TUI');
   });
 
-  it('handles quit command locally', () => {
+  it('handles exit command locally', () => {
     const requestExit = vi.fn();
     const handler = createTuiCommandHandler({
       state: {
@@ -531,14 +526,14 @@ it('handles thinking command through native TUI controls', async () => {
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
-        throw new Error('quit should not be sent to the assistant');
+        throw new Error('exit should not be sent to the assistant');
       },
       requestExit,
       updateFooter: () => {},
       keybindings: createXopcTuiKeybindingsManager(),
     });
 
-    handler('/quit');
+    handler('/exit');
     expect(requestExit).toHaveBeenCalledOnce();
   });
 });
