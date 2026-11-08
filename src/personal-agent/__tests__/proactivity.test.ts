@@ -50,7 +50,7 @@ describe('Personal proactive participation', () => {
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-proactivity-'));
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(dir, 'xopc.db') });
-    now = Date.parse('2026-10-09T12:00:00+08:00'); available = true;
+    now = Date.now(); available = true;
     patchProactivitySettings(ownerId, { ...getProactivitySettings(ownerId), timezone: 'Asia/Shanghai' });
     const catalog = new AgentCatalogRepository(); catalog.ensureInitialized();
     catalog.create({ id: personalAgentId(ownerId), profile: { name: 'Ada' } }, { ready: true });
@@ -156,7 +156,8 @@ describe('Personal proactive participation', () => {
     patchProactivitySettings(ownerId, { ...settings, dailyModelCalls: 1 });
     expect(reserveModelCall(ownerId, now)).toBe(true); expect(reserveModelCall(ownerId, now)).toBe(false);
     expect(reserveModelCall(ownerId, now + 86_400_000)).toBe(true);
-    follow(); now = Date.parse('2026-10-09T23:00:00+08:00'); await service.drain(); expect(call).not.toHaveBeenCalled();
+    now = Date.parse('2026-10-09T22:00:00+08:00'); follow(); now = Date.parse('2026-10-09T23:00:00+08:00');
+    await service.drain(); expect(call).not.toHaveBeenCalled();
   });
   it('serves provenance and feedback through a real authenticated Gateway HTTP path', async () => {
     follow(); await service.drain(); const id = deliveries()[0].id as string;
