@@ -115,3 +115,5 @@ default macOS path or `XOPC_SMOKE_BROWSER`. It makes no model calls. Screenshots
 Preview data, independent read-only grants and isolated write acceptance are described in
 [Local App previews](./local-app-previews.md). Restricted text-only Agent delegation, its explicit consent
 and provider budgets are described in [Local App delegation](./local-app-delegation.md).
+
+Project/task editing, installed external connector actions and file import/export follow the same default-deny authority model. See [P1 scopes and execution boundaries](./local-app-p1.md).

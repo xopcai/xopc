@@ -10,6 +10,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 import { buildExtensionAssetUrl } from './extension-asset-url';
 import { ExtensionPermissionDialog } from './extension-permission-dialog';
+import { ResourceRequestDialog } from './resource-request-dialog';
+import { AttachmentPicker, type AttachmentPrompt } from './attachment-picker';
 import { confirmExtensionUiGrant, resolveExtensionUiGrant, type ExtensionUiGrant } from './extension-authoritative-grants';
 import { useExtensionRouter } from './extension-provider';
 import { buildThemeInfo } from './theme-bridge';
@@ -69,6 +71,19 @@ export function ExtensionIframeHost({
   const generation = useRef(0);
   const confirming = useRef(false);
   const [reviewGrant, setReviewGrant] = useState<ExtensionUiGrant | null>(null);
+  const [resourceReview, setResourceReview] = useState<{ id: string; identity: string } | null>(null);
+  const [attachment, setAttachment] = useState<{ prompt: AttachmentPrompt; identity: string } | null>(null);
+  const proposalIdentity = JSON.stringify([extensionId, gatewayUrl, namespace]);
+  useEffect(() => {
+    const review = (event: Event) => {
+      const detail = (event as CustomEvent<{ extensionId: string; requestId: string }>).detail;
+      if (detail?.extensionId === extensionId) setResourceReview({ id: detail.requestId, identity: proposalIdentity });
+    };
+    const pick = (event: Event) => { const prompt = (event as CustomEvent<AttachmentPrompt>).detail;
+      if (prompt?.extensionId === extensionId) setAttachment({ prompt, identity: proposalIdentity }); };
+    window.addEventListener('extension-review-resource-request', review); window.addEventListener('extension-pick-attachment', pick);
+    return () => { window.removeEventListener('extension-review-resource-request', review); window.removeEventListener('extension-pick-attachment', pick); };
+  }, [extensionId, proposalIdentity]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const resolved = useThemeStore((s) => s.resolved);
   const displayName = extensionName?.trim() || extensionId;
@@ -249,6 +264,9 @@ export function ExtensionIframeHost({
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 flex-col">
+      {ui.localApp && resourceReview?.identity === proposalIdentity ? <ResourceRequestDialog key={resourceReview.id} extensionId={extensionId}
+        requestId={resourceReview.id} zh={language === 'zh'} onClose={() => setResourceReview(null)} /> : null}
+      {ui.localApp && attachment?.identity === proposalIdentity ? <AttachmentPicker prompt={attachment.prompt} zh={language === 'zh'} onClose={() => setAttachment(null)} /> : null}
       {permissionDialog}
       {grantError ? <p role="alert" className="p-3 text-sm text-danger">{grantError}</p> : null}
       {loadError ? (

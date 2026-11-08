@@ -24,9 +24,10 @@ describe('lazy route bundles', () => {
     for (const path of ['/api/local-app-capabilities/catalog', '/api/local-app-capabilities/app', '/api/local-app-capabilities/app/xopc.notes.get/invocations']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('local-app-capabilities');
     }
-    for (const path of ['/api/extensions/app/ui-grant', '/api/extensions/app/resource-options', '/api/extensions/app/access-audit']) {
+    for (const path of ['/api/extensions/app/ui-grant', '/api/extensions/app/resource-options', '/api/extensions/app/access-audit', '/api/extensions/app/resource-requests/request', '/api/extensions/app/resource-requests/request/review']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('auth-registry-extensions');
     }
+    expect(findAuthenticatedLazyRouteBundle('/api/local-app-capabilities/app/resource-requests/request')?.id).not.toBe('local-app-capabilities');
     expect(findAuthenticatedLazyRouteBundle('/api/local-app-capabilities/app/resource-options')?.id).not.toBe('local-app-capabilities');
   });
   it('maps device host enrollment independently', () => {

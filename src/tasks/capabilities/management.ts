@@ -6,6 +6,7 @@ import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { enqueueTaskChangedEvent } from '../task-change-events.js';
 import { TaskDeletionService } from '../task-deletion-service.js';
 import { TaskRepository } from '../task-repository.js';
+import { LocalAppTaskEditSchema } from '../../local-apps/capabilities/projections.js';
 
 export const TaskEditOutputSchema = z.object({ ok: z.literal(true), task: TaskSchema });
 export const TaskDeleteOutputSchema = z.union([
@@ -20,6 +21,7 @@ export function registerTaskManagementCapabilities(dispatcher: CapabilityDispatc
     afterCommit: () => wake?.(false) };
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.tasks.update', description: 'Update task metadata at an exact version.',
+    surfaces: ['http', 'extension'], extensionOutput: LocalAppTaskEditSchema,
     input: TaskPatchRequestSchema.extend({ taskId: z.string().min(1) }), output: TaskEditOutputSchema,
     execute({ taskId, ...patch }, caller) {
       const task = tasks.update(taskId, patch);

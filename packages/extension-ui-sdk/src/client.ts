@@ -14,6 +14,8 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
   const transport = options?.transport ?? new Transport();
 
   const client: ExtensionClient = {
+    files: { pickAttachment: () => transport.request('files.pickAttachment') },
+    requests: { async review(requestId) { await transport.request('apps.reviewRequest', { requestId }); } },
     capability: {
       describe: id => transport.request('capability.describe', { id }),
       call: (id, call) => transport.request('capability.call', { id, call }),

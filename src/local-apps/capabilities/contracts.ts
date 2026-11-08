@@ -4,6 +4,12 @@ import { registerNoteReadCapabilities } from '../../notes/capabilities/read.js';
 import { registerNoteWriteCapabilities } from '../../notes/capabilities/write.js';
 import { registerTaskReadCapabilities } from '../../tasks/capabilities/read.js';
 import { registerLocalAppDelegation } from './delegate.js';
+import { registerProjectReadCapabilities } from '../../projects/capabilities/read.js';
+import { registerProjectWriteCapabilities } from '../../projects/capabilities/write.js';
+import { registerTaskWriteCapabilities } from '../../tasks/capabilities/write.js';
+import { registerTaskManagementCapabilities } from '../../tasks/capabilities/management.js';
+import type { ProjectService } from '../../projects/project-service.js';
+import { registerLocalAppP1Capabilities } from '../p1-services.js';
 
 /** Validate release bindings against the same production definitions without executing a domain service. */
 export function validateLocalAppCapabilityContracts(value: unknown): void {
@@ -15,6 +21,12 @@ export function validateLocalAppCapabilityContracts(value: unknown): void {
   registerNoteWriteCapabilities(dispatcher, { getNotes: unavailable });
   registerTaskReadCapabilities(dispatcher);
   registerLocalAppDelegation(dispatcher);
+  const projects = new Proxy({} as ProjectService, { get: () => unavailable });
+  registerProjectReadCapabilities(dispatcher, projects);
+  registerProjectWriteCapabilities(dispatcher, projects);
+  registerTaskWriteCapabilities(dispatcher, {});
+  registerTaskManagementCapabilities(dispatcher);
+  registerLocalAppP1Capabilities(dispatcher, { getConfig: unavailable, getFiles: unavailable });
   const context = { principalId: 'release-validator', surface: 'extension' as const, scopes: ['gateway.admin'] as const, authorize: () => false };
   for (const binding of bindings) {
     const descriptor = dispatcher.describe(binding.id, context);

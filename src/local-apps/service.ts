@@ -20,6 +20,8 @@ import {
   type LocalAppPreviewSnapshot,
 } from '@xopcai/gateway-contract';
 import { CapabilityError } from '../capabilities/runtime/errors.js';
+import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
+import { getConnectorConnection } from '../storage/sqlite/connector-repository.js';
 import { validateLocalAppCapabilityContracts } from './capabilities/contracts.js';
 import { recordPublicAssets, resolvePublicAsset } from './public-assets.js';
 import { LocalAppPreviewSessions, type PreviewSource } from './preview-sessions.js';
@@ -406,12 +408,22 @@ export class LocalAppService {
     const current = this.getUiGrant(extensionId);
     if (!current.manifestDigest) throw new Error('Extension UI manifest not found');
     if (current.manifestDigest !== expectedManifestDigest) throw new Error('Extension release changed; review permissions again');
+    const scopes = LocalAppResourceScopesSchema.parse(resourceScopes ?? {});
+    if (scopes.connectors.mode === 'selected') {
+      for (const binding of scopes.connectors.bindings) {
+        const account = getConnectorAccount(binding.accountId), connection = getConnectorConnection(binding.connectionId);
+        if (!account || account.currentConnectionId !== binding.connectionId || !connection || connection.status !== 'active'
+          || connection.connectorId !== binding.connectorId || connection.accountId !== binding.accountId || connection.principalId !== 'local-owner') {
+          throw new CapabilityError('CONTRACT_CHANGED', 'Connector account changed; review its current connection again');
+        }
+      }
+    }
     return this.store.saveUiGrant({
       extensionId,
       appId: current.appId,
       manifestDigest: current.manifestDigest,
       permissions: current.permissions,
-      resourceScopes: LocalAppResourceScopesSchema.parse(resourceScopes ?? {}),
+      resourceScopes: scopes,
     });
   }
 

@@ -4,6 +4,13 @@ import { createExtensionClient } from './client.js';
 import type { Transport } from './transport.js';
 
 describe('extension client product navigation', () => {
+  it('opens host attachment and resource review without supplying authority', async () => {
+    const request = vi.fn(async () => undefined);
+    const client = createExtensionClient({ transport: { request } as unknown as Transport });
+    await client.files.pickAttachment();
+    await client.requests.review('request');
+    expect(request.mock.calls).toEqual([['files.pickAttachment'], ['apps.reviewRequest', { requestId: 'request' }]]);
+  });
   it('requests permission review without sending grants or identity', async () => {
     const request = vi.fn(async () => undefined);
     const client = createExtensionClient({ transport: { request } as unknown as Transport });

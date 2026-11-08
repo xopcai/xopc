@@ -9,6 +9,7 @@ import { isValidProjectAgentId, normalizeProjectAgentId } from '../project-agent
 import { inferSuggestedProjectDefaultAgentId } from '../project-agent-suggestion.js';
 import { ProjectWorkspaceConflictError, ProjectWorkspaceMissingError } from '../workspace-project.js';
 import { ensureSessionRecord, getSessionMetadata } from '../../storage/sqlite/index.js';
+import { LocalAppProjectOutputSchema, LocalAppMilestoneOutputSchema, LocalAppProgressOutputSchema } from '../../local-apps/capabilities/projections.js';
 
 export interface ProjectWriteCapabilityDeps {
   getConfig?: () => Config | undefined;
@@ -68,6 +69,7 @@ export function registerProjectWriteCapabilities(dispatcher: CapabilityDispatche
   }));
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.projects.update', description: 'Edit a project at its exact version with recoverable workspace creation.',
+    surfaces: ['http', 'agent', 'extension'], extensionOutput: LocalAppProjectOutputSchema,
     input: ProjectEditInputSchema, output: ProjectMutationOutputSchema,
     execute({ id, expectedVersion, patch }) {
       if (requireProject(id).version !== expectedVersion) throw new CapabilityError('REVISION_CONFLICT', 'Project changed');
@@ -137,6 +139,7 @@ export function registerProjectWriteCapabilities(dispatcher: CapabilityDispatche
   }));
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.projects.create_milestone', description: 'Create a project milestone with a durable receipt.',
+    surfaces: ['http', 'agent', 'extension'], extensionOutput: LocalAppMilestoneOutputSchema,
     input: ProjectMilestoneCreateInputSchema, output: ProjectMilestoneOutputSchema,
     execute({ projectId, ...input }) {
       requireProject(projectId);
@@ -146,6 +149,7 @@ export function registerProjectWriteCapabilities(dispatcher: CapabilityDispatche
   }));
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.projects.update_milestone', description: 'Edit a milestone at its exact updatedAt revision.',
+    surfaces: ['http', 'agent', 'extension'], extensionOutput: LocalAppMilestoneOutputSchema,
     input: ProjectMilestoneUpdateInputSchema, output: ProjectMilestoneOutputSchema,
     execute({ projectId, id, expectedRevision, patch }) {
       requireMilestone(projectId, id, expectedRevision);
@@ -163,6 +167,7 @@ export function registerProjectWriteCapabilities(dispatcher: CapabilityDispatche
   }));
   dispatcher.register(defineAtomicCapability({
     ...policy, id: 'xopc.projects.create_update', description: 'Record progress and change project health at an exact project version.',
+    surfaces: ['http', 'agent', 'extension'], extensionOutput: LocalAppProgressOutputSchema,
     input: ProjectUpdateCreateInputSchema, output: ProjectUpdateOutputSchema,
     execute({ projectId, expectedVersion, ...input }, context) {
       if (requireProject(projectId).version !== expectedVersion) throw new CapabilityError('REVISION_CONFLICT', 'Project changed');

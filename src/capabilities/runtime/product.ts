@@ -20,16 +20,25 @@ import { registerSettingsCapability } from './settings.js';
 import { registerAppContextCapability } from './app-context.js';
 import { registerAgentCapabilities } from '../../agent-catalog/capabilities.js';
 import { registerLocalAppDelegation } from '../../local-apps/capabilities/delegate.js';
+import { registerLocalAppP1Capabilities, type LocalAppP1Deps } from '../../local-apps/p1-services.js';
+import { FileSpaceService } from '../../files/file-service.js';
 
 export function createProductDispatcher(getNotes?: () => NotesService | undefined, taskWrites?: TaskWriteCapabilityDeps & ProjectWriteCapabilityDeps & {
   getAutomations?: () => AutomationService | undefined;
   getLocalApps?: () => LocalAppService | undefined;
+  localAppP1?: LocalAppP1Deps;
 }): CapabilityDispatcher {
   const dispatcher = new CapabilityDispatcher();
   registerSettingsCapability(dispatcher);
   registerAppContextCapability(dispatcher);
   registerAgentCapabilities(dispatcher);
   registerLocalAppDelegation(dispatcher);
+  const p1Config = () => { const config = taskWrites?.getConfig?.(); if (!config) throw new CapabilityError('UNAVAILABLE', 'Host configuration is unavailable'); return config; };
+  let files: FileSpaceService | undefined;
+  registerLocalAppP1Capabilities(dispatcher, taskWrites?.localAppP1 ?? { getConfig: p1Config, getFiles: () => {
+    const projects = taskWrites?.getProjects?.(); if (!projects) throw new CapabilityError('UNAVAILABLE', 'Host files are unavailable');
+    return files ??= new FileSpaceService(p1Config, projects, async () => { throw new CapabilityError('UNAVAILABLE', 'Session files are unavailable'); });
+  } });
   const localApps = taskWrites?.getLocalApps?.();
   if (localApps) {
     registerLocalAppReadCapabilities(dispatcher, localApps);
