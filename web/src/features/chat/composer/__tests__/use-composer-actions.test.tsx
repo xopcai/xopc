@@ -35,14 +35,24 @@ describe('composer acceptance preserves drafts', () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
-  it('prioritizes personal follow-ups by default and preserves an explicit defer action', async () => {
+  it.each([0, 2])('steers a new personal message even with %s queued inputs', async pendingFollowUpsCount => {
     const onAddPendingFollowUp = vi.fn(async () => {});
-    options = { ...options, personal: true, runBusy: true, onAddPendingFollowUp };
+    const onSteerPendingFollowUp = vi.fn();
+    options = { ...options, personal: true, runBusy: true, pendingFollowUpsCount,
+      firstPendingFollowUpId: 'first', onAddPendingFollowUp, onSteerPendingFollowUp };
     await render();
-    await act(async () => actions.flushSteeringDraft());
-    expect(onAddPendingFollowUp).toHaveBeenLastCalledWith('Original', undefined, undefined, true);
-    await act(async () => actions.flushSteeringDraft(false));
-    expect(onAddPendingFollowUp).toHaveBeenLastCalledWith('Original', undefined, undefined, false);
+    await act(async () => actions.send());
+    expect(onAddPendingFollowUp).toHaveBeenCalledExactlyOnceWith('Original', undefined, undefined, false, 'steer');
+    expect(onSteerPendingFollowUp).not.toHaveBeenCalled();
+    expect(options.resetEditor).toHaveBeenCalledOnce();
+  });
+
+  it('keeps ordinary follow-ups queued by default', async () => {
+    const onAddPendingFollowUp = vi.fn(async () => {});
+    options = { ...options, runBusy: true, onAddPendingFollowUp };
+    await render();
+    await act(async () => actions.send());
+    expect(onAddPendingFollowUp).toHaveBeenCalledExactlyOnceWith('Original', undefined, undefined);
   });
 
   it('requests cooperative steering without interrupting a personal reply', async () => {
@@ -54,10 +64,10 @@ describe('composer acceptance preserves drafts', () => {
     expect(options.resetEditor).toHaveBeenCalledOnce();
   });
 
-  it.each([false, true])('steers the first queued input and preserves the whole draft (personal=%s)', async personal => {
+  it('steers the first queued input and preserves the whole draft in ordinary chat', async () => {
     const onSteerPendingFollowUp = vi.fn();
     const onAddPendingFollowUp = vi.fn();
-    options = { ...options, personal, runBusy: true, pendingFollowUpsCount: 2,
+    options = { ...options, runBusy: true, pendingFollowUpsCount: 2,
       firstPendingFollowUpId: 'first', onSteerPendingFollowUp, onAddPendingFollowUp,
       wireAttachmentsPayload: () => [{ type: 'file', name: 'draft.pdf' }],
       getContextRefs: () => [{ kind: 'note', sourceId: 'note', title: 'Draft note', expectedVersion: '1' }] };
@@ -70,9 +80,10 @@ describe('composer acceptance preserves drafts', () => {
     expect(options.clearContextRefs).not.toHaveBeenCalled();
   });
 
-  it.each(['text', 'attachment', 'reference'])('steers a %s draft cooperatively when the queue is empty', async kind => {
+  it.each(['text', 'attachment', 'reference'])('steers a personal %s draft even with queued inputs', async kind => {
     const onAddPendingFollowUp = vi.fn(async () => {});
-    options = { ...options, personal: true, runBusy: true, onAddPendingFollowUp };
+    options = { ...options, personal: true, runBusy: true, pendingFollowUpsCount: 2,
+      firstPendingFollowUpId: 'first', onSteerPendingFollowUp: vi.fn(), onAddPendingFollowUp };
     if (kind !== 'text') options.getTextValue = () => '';
     if (kind === 'attachment') {
       options.getAttachmentCount = () => 1;

@@ -693,7 +693,7 @@
     "followUpQueueTurnOn": "开启排队",
     "followUpQueueModeHint": "排队已开启，新消息将在当前回复结束后发送。",
     "followUpImmediateModeHint": "排队已关闭，新消息将停止当前回复并立即发送。",
-    "inputPlaceholderImmediate": "Enter 停止并立即发送；⌘/Ctrl+Enter 引导第一条排队消息或草稿；Shift+Enter 换行",
+    "inputPlaceholderPersonal": "发送消息，补充当前任务",
     "followUpQueueHeading": "后续问题",
     "followUpQueueClickToEdit": "编辑消息",
     "followUpQueueAttachmentOnly": "（附件）",
