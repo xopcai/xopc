@@ -693,7 +693,7 @@
     "followUpQueueTurnOn": "Turn on queueing",
     "followUpQueueModeHint": "Queueing is on. New messages wait for the current reply.",
     "followUpImmediateModeHint": "Queueing is off. New messages stop the current reply and send immediately.",
-    "inputPlaceholderImmediate": "Enter stops and sends now; ⌘/Ctrl+Enter steers the first queued message or draft; Shift+Enter adds a line",
+    "inputPlaceholderPersonal": "Send a message to guide the current task",
     "followUpQueueHeading": "Follow-ups",
     "followUpQueueClickToEdit": "Edit message",
     "followUpQueueAttachmentOnly": "(attachment)",
