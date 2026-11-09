@@ -761,7 +761,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
               </div>
 
               {discoverSource === DISCOVERY_SOURCE_RECOMMENDED ? (
-                <ServiceRecommendationList layout="cards" initialCount={6} query={discoverSearchQuery} onChanged={async () => { await load(); await mutateConfig(); }} />
+                <ServiceRecommendationList layout="cards" showAll query={discoverSearchQuery} onChanged={async () => { await load(); await mutateConfig(); }} />
               ) : (state.loading || registryLoading) && discoveryCatalog.length === 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label={cs.loading}>
                   {CONNECTOR_SKELETON_KEYS.map((key) => <ConnectorCardSkeleton key={key} />)}

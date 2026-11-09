@@ -8,9 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { CapabilityCatalogItem } from '../capability-catalog';
 
-const mocks = vi.hoisted(() => ({ catalog: vi.fn(), instances: vi.fn(), plan: vi.fn(), extensions: vi.fn() }));
+const mocks = vi.hoisted(() => ({ catalog: vi.fn(), instances: vi.fn(), plan: vi.fn(), extensions: vi.fn(), detail: vi.fn() }));
 vi.mock('../service-recommendation-api', () => ({ fetchServiceRecommendations: mocks.catalog }));
 vi.mock('@/features/connectors/connectors-api', () => ({ fetchConnectorInstances: mocks.instances, fetchStoreConnectorInstallPlan: mocks.plan }));
+vi.mock('@/features/extensions/extension-marketplace-api', () => ({ getExtensionMarketplacePackageDetail: mocks.detail }));
 vi.mock('@/lib/fetch', () => ({ fetchJson: mocks.extensions }));
 vi.mock('@/features/extensions/agent-plugin-dialog', () => ({ AgentPluginDialog: ({ initialSource, extension }: { initialSource: string; extension?: { id: string } }) => <div data-testid="plugin-dialog">{initialSource}:{extension?.id}</div> }));
 vi.mock('@/features/connectors/components/install-connector-dialog', () => ({ InstallConnectorDialog: ({ draft }: { draft: { store?: { packageName: string; reviewHash: string } } }) => <div data-testid="connector-dialog">{draft.store?.packageName}:{draft.store?.reviewHash}</div> }));
@@ -39,13 +40,13 @@ describe('service recommendation actions', () => {
     root = createRoot(container);
   });
   afterEach(() => { act(() => root.unmount()); container.remove(); });
-  async function render(layout: 'list' | 'cards' = 'list') {
-    await act(async () => { root.render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><MemoryRouter><ServiceRecommendationList layout={layout} /><Location /></MemoryRouter></SWRConfig>); });
+  async function render(layout: 'list' | 'cards' = 'list', showAll = false) {
+    await act(async () => { root.render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><MemoryRouter><ServiceRecommendationList layout={layout} showAll={showAll} /><Location /></MemoryRouter></SWRConfig>); });
   }
   async function clickService(name: string) {
     const article = [...container.querySelectorAll('article')].find(row => row.textContent?.includes(name));
     expect(article).toBeDefined();
-    await act(async () => { article?.querySelector('button')?.click(); });
+    await act(async () => { article?.querySelector<HTMLButtonElement>('button:not([aria-haspopup])')?.click(); });
   }
 
   it('opens recommended Plugin cards through the plugin installer', async () => {
@@ -78,6 +79,35 @@ describe('service recommendation actions', () => {
     await clickService('腾讯文档');
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/capabilities/connectors?tab=connected&instance=docs-main');
     expect(mocks.plan).not.toHaveBeenCalled();
+  });
+
+  it('opens card details without starting installation and connects from the dialog', async () => {
+    mocks.detail.mockResolvedValue({ id: 'feishu', description: '完整的飞书服务说明', author: { username: 'XOPC' }, latestVersion: { version: '1.0' } });
+    await render('cards');
+    await act(async () => { container.querySelector<HTMLButtonElement>('[aria-label="查看飞书详情"]')?.click(); });
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('完整的飞书服务说明');
+    expect(dialog?.textContent).toContain('插件内容与范围');
+    expect(container.querySelector('[data-testid="plugin-dialog"]')).toBeNull();
+    expect(mocks.plan).not.toHaveBeenCalled();
+    await act(async () => { [...(dialog?.querySelectorAll('button') ?? [])].find(button => button.textContent === '连接')?.click(); });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[data-testid="plugin-dialog"]')?.textContent).toBe('store:feishu:');
+  });
+
+  it('shows all services in discovery while preserving the compact default elsewhere', async () => {
+    const manyItems = Array.from({ length: 10 }, (_, index) => ({ ...items[0], id: `service-${index}`, name: `Service ${index}`, service: { id: `service-${index}`, source: 'store-plugin' as const } }));
+    mocks.catalog.mockResolvedValue({ items: manyItems, definitions: [], failedSources: 0 });
+    await render('cards', true);
+    expect(container.querySelectorAll('article')).toHaveLength(10);
+    expect(container.textContent).not.toContain('查看更多工作服务');
+  });
+
+  it('keeps the default list compact', async () => {
+    mocks.catalog.mockResolvedValue({ items: [...items, { ...items[0], id: 'extra', service: { id: 'extra', source: 'store-plugin' } }], definitions: [], failedSources: 0 });
+    await render();
+    expect(container.querySelectorAll('article')).toHaveLength(3);
+    expect(container.textContent).toContain('查看更多工作服务');
   });
 
   it('offers retry after total catalog failure', async () => {

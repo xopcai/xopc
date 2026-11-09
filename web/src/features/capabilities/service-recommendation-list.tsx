@@ -19,8 +19,9 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { filterCapabilityCatalog, type CapabilityCatalogItem } from './capability-catalog';
 import { CapabilityIcon } from './capability-icon';
 import { fetchServiceRecommendations } from './service-recommendation-api';
+import { ServiceRecommendationDetailDialog } from './service-recommendation-detail-dialog';
 
-export function ServiceRecommendationList({ initialCount = 3, query = '', layout = 'list', onChanged }: { initialCount?: number; query?: string; layout?: 'list' | 'cards'; onChanged?: () => void | Promise<void> }) {
+export function ServiceRecommendationList({ initialCount = 3, showAll = false, query = '', layout = 'list', onChanged }: { initialCount?: number; showAll?: boolean; query?: string; layout?: 'list' | 'cards'; onChanged?: () => void | Promise<void> }) {
   const navigate = useNavigate();
   const language = useLocaleStore(state => state.language);
   const zh = language.startsWith('zh');
@@ -34,6 +35,7 @@ export function ServiceRecommendationList({ initialCount = 3, query = '', layout
   const [plugin, setPlugin] = useState<{ id: string; extension?: ExtensionApiRow } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+  const [detail, setDetail] = useState<CapabilityCatalogItem | null>(null);
   const items = filterCapabilityCatalog(data?.items ?? [], 'all', query, language);
 
   async function resourcesChanged() {
@@ -80,7 +82,7 @@ export function ServiceRecommendationList({ initialCount = 3, query = '', layout
       ) : null}
       {!isLoading && !error && items.length === 0 ? <p className="py-6 text-center text-sm text-fg-muted">{copy.noWorkServices}</p> : null}
       <div className={layout === 'cards' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'divide-y divide-edge-subtle rounded-xl border border-edge-subtle bg-surface-base/55'}>
-        {(expanded ? items : items.slice(0, initialCount)).map(item => {
+        {(showAll || expanded ? items : items.slice(0, initialCount)).map(item => {
           const extension = extensions?.extensions.find(row => row.format === 'agent-plugin' && row.provenance?.packageName === item.id);
           const instance = instances?.find(row => row.connectorId === item.id);
           const isPlugin = item.service?.source === 'store-plugin';
@@ -89,7 +91,7 @@ export function ServiceRecommendationList({ initialCount = 3, query = '', layout
             : Boolean(instance?.enabled && instance.status === 'connected');
           const installed = isPlugin ? Boolean(extension) : Boolean(instance);
           const action = (isPlugin ? !extensions && !pluginsError : !instances && !instancesError) ? <Skeleton className="h-8 w-16 shrink-0 rounded-lg" /> : (
-            <Button type="button" variant="secondary" className="h-8 shrink-0 px-3 text-xs" disabled={busyId !== null} onClick={() => void connect(item, extension)}>
+            <Button type="button" variant="secondary" className="relative z-10 h-8 shrink-0 px-3 text-xs" disabled={busyId !== null} onClick={() => void connect(item, extension)}>
               {busyId === item.id ? <Loader2 className="size-3.5 animate-spin" /> : !installed ? <Plus className="size-3.5" /> : null}
               {isConnected ? (zh ? '管理' : 'Manage') : installed ? (zh ? '继续设置' : 'Set up') : connectorCopy.connect}
             </Button>
@@ -97,7 +99,7 @@ export function ServiceRecommendationList({ initialCount = 3, query = '', layout
           return (
             <article key={`${item.kind}:${item.id}`} className={cn(
               layout === 'cards'
-                ? 'group flex min-h-[8.75rem] min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4 transition-colors hover:bg-surface-hover/45 focus-within:ring-2 focus-within:ring-accent/30'
+                ? 'group relative flex min-h-[8.75rem] min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4 transition-colors hover:bg-surface-hover/45 focus-within:ring-2 focus-within:ring-accent/30 [content-visibility:auto] [contain-intrinsic-size:auto_8.75rem]'
                 : 'flex min-h-20 items-center gap-3 px-3 py-3 sm:px-4',
             )}>
               {layout === 'cards' ? (
@@ -105,7 +107,9 @@ export function ServiceRecommendationList({ initialCount = 3, query = '', layout
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <CapabilityIcon iconUrl={item.iconUrl} fallback={isPlugin ? Package : Cable} />
-                      <h3 className="min-w-0 truncate text-sm font-semibold text-fg">{item.name}</h3>
+                      <h3 className="min-w-0 truncate text-sm font-semibold text-fg">
+                        <button type="button" className="cursor-pointer text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent" aria-label={zh ? `查看${item.name}详情` : `View ${item.name} details`} aria-haspopup="dialog" onClick={() => setDetail(item)}>{item.name}</button>
+                      </h3>
                     </div>
                     {action}
                   </div>
@@ -125,12 +129,16 @@ export function ServiceRecommendationList({ initialCount = 3, query = '', layout
           );
         })}
       </div>
-      {items.length > initialCount ? (
+      {!showAll && items.length > initialCount ? (
         <button type="button" className="mx-auto mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-accent-fg hover:underline" onClick={() => setExpanded(value => !value)}>
           {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}{expanded ? copy.showFewerServices : copy.showMoreServices}
         </button>
       ) : null}
       {actionError ? <p className="mt-3 text-xs text-danger" role="alert">{actionError}</p> : null}
+      {detail ? <ServiceRecommendationDetailDialog item={detail} definition={data?.definitions.find(definition => definition.id === detail.id)} busy={busyId !== null} onClose={() => setDetail(null)} onConnect={() => {
+        setDetail(null);
+        void connect(detail, extensions?.extensions.find(row => row.format === 'agent-plugin' && row.provenance?.packageName === detail.id));
+      }} /> : null}
       {draft ? <InstallConnectorDialog draft={draft} onChange={setDraft} onClose={() => setDraft(null)} t={connectorCopy} onInstalled={async () => { await resourcesChanged(); setDraft(null); }} /> : null}
       {plugin ? <AgentPluginDialog initialSource={`store:${plugin.id}`} extension={plugin.extension} onClose={() => { setPlugin(null); void resourcesChanged(); }} /> : null}
     </div>
