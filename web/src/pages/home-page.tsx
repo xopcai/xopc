@@ -45,6 +45,7 @@ import {
 import { useHomeSnapshot } from '@/features/tasks/use-home-snapshot';
 import { HomeQuickComposer } from '@/features/tasks/home-quick-composer';
 import { HomeAdvisorCard, type HomeAdvisorReceipt } from '@/features/tasks/home-advisor-card';
+import { HomeObservationCard } from '@/features/tasks/home-observation-card';
 import { HomeAdvisorHistoryDialog } from '@/features/tasks/home-advisor-history-dialog';
 import { HomeAdvisorStatusControl, type HomeAdvisorStatusCopy } from '@/features/tasks/home-advisor-status-control';
 import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
@@ -693,7 +694,7 @@ export function HomePage() {
       </div>
     </section>
   ) : null;
-  const hasPrimary = needsUserCount > 0 || unreadDeliveries.length > 0 || resumable.length > 0 || advisorVisible;
+  const hasPrimary = needsUserCount > 0 || unreadDeliveries.length > 0 || resumable.length > 0 || advisorVisible || Boolean(home?.observation);
 
   return (
     <div className="@container/workbench mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col px-4 pb-6 pt-3 sm:px-6 lg:px-8">
@@ -870,7 +871,7 @@ export function HomePage() {
               {deliverySection}
 
 
-              {resumable.length > 0 || advisorVisible ? (
+              {resumable.length > 0 || advisorVisible || home.observation ? (
                 <section className="space-y-2" aria-labelledby="home-resume-title">
                   <h2 id="home-resume-title" className="flex min-h-9 items-center text-base font-semibold text-fg">{work.resume}</h2>
                   {resumable.length > 0 ? (
@@ -886,13 +887,14 @@ export function HomePage() {
                       ))}
                     </div>
                   ) : null}
-                  {advisorTitle && mode === 'attention' && !advisorReceipt ? (
+                  {home.observation ? <HomeObservationCard observation={home.observation} advisor={home.advisor} language={language} onUpdated={() => void load()} /> : null}
+                  {!home.observation && advisorTitle && mode === 'attention' && !advisorReceipt ? (
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-inset px-3 py-1">
                       <p className="flex min-w-0 flex-1 items-center gap-2 text-xs text-fg-muted"><Sparkles className="size-4 shrink-0 text-accent" aria-hidden /><span className="truncate">{t.home.advisorStatusLabel} · {advisorTitle}</span></p>
                       <Button variant="ghost" aria-expanded={suggestionExpanded} onClick={() => setSuggestionExpanded((value) => !value)}>{suggestionExpanded ? work.hideSuggestion : work.viewSuggestion}</Button>
                     </div>
                   ) : null}
-                  {advisorVisible && !advisorCompact ? (
+                  {!home.observation && advisorVisible && !advisorCompact ? (
                     <HomeAdvisorCard
                       advisor={home.advisor}
                       busy={advisorBusy}

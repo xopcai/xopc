@@ -27,7 +27,7 @@ export type AutomationAction =
       workingDirectory?: string;
       model?: string;
       timeoutSeconds?: number;
-    } | {
+    } | { kind: 'routine'; routineId: string; version: number; hash: string } | {
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;
@@ -321,6 +321,8 @@ export interface PrepareAutomationAgentSessionInput {
 }
 
 export interface AutomationDeps {
+  executeRoutine?: (input: { action: Extract<AutomationAction, { kind: 'routine' }>; run: AutomationRun;
+    signal: AbortSignal; deadlineAtMs: number; onConversation: (id: string) => Promise<void> }) => Promise<AutomationActionTask>;
   getConfig?: () => unknown;
   agentService?: {
     sessionConfig?: {

@@ -14,6 +14,7 @@ export * from './session-input-command.js';
 export * from './welcome-suggestions.js';
 export * from './next-turn-suggestions.js';
 export * from './home.js';
+export * from './observation.js';
 export * from './tool-activity.js';
 export * from './automations.js';
 export * from './user-message-display.js';

@@ -76,6 +76,7 @@ function triggerLabel(automation: Automation): string {
 }
 
 function actionLabel(automation: Automation): string {
+  if (automation.action.kind === 'routine') return `routine:${automation.action.routineId}`;
 
   if (automation.action.kind === 'task_command') return `task:${automation.action.command.type}`;
   if (automation.action.kind === 'system') return `system:${automation.action.capability}`;

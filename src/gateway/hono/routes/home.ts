@@ -1,4 +1,6 @@
 import type { Hono } from 'hono';
+import { ObservationCommandRequestSchema, ObservationTrialRequestSchema, RoutineAdoptRequestSchema, RoutineCommandRequestSchema } from '@xopcai/gateway-contract';
+import { ObservationConflictError } from '../../../home-intelligence/observation.js';
 import {
   HomeAdvisorRefreshRequestSchema,
   HomeAdviceMetricsSchema,
@@ -30,7 +32,49 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
 
   authenticated.get('/api/home', async (c) => {
     const locale = c.req.query('locale');
-    return c.json(await home.getSnapshot(locale, c.req.query('attention') === 'all'));
+    return c.json({ ...await home.getSnapshot(locale, c.req.query('attention') === 'all'),
+      observation: service.currentConfig.userContext.enabled && service.currentConfig.userContext.homeIntelligence.enabled
+        ? service.homeIntelligence.getObservation() : undefined });
+  });
+
+  authenticated.get('/api/home/routines', (c) => c.json({ items:service.homeIntelligence.routines?.list()??[] }));
+  authenticated.post('/api/home/routines/adopt',deps.strictRateLimitMiddleware,async(c)=>{
+    const parsed=RoutineAdoptRequestSchema.safeParse(await c.req.json().catch(()=>null));
+    if(!parsed.success)return c.json({ok:false,error:'Invalid routine agreement'},400);
+    if(!service.homeIntelligence.routines)return c.json({ok:false,error:'Routines unavailable'},503);
+    try{return c.json(service.homeIntelligence.routines.adopt(parsed.data));}
+    catch(err){if(err instanceof ObservationConflictError)return c.json({ok:false,error:err.message},409);throw err;}
+  });
+  authenticated.post('/api/home/routines/:id/command',deps.strictRateLimitMiddleware,async(c)=>{
+    const parsed=RoutineCommandRequestSchema.safeParse(await c.req.json().catch(()=>null));
+    if(!parsed.success)return c.json({ok:false,error:'Invalid routine command'},400);
+    if(!service.homeIntelligence.routines)return c.json({ok:false,error:'Routines unavailable'},503);
+    try{return c.json(await service.homeIntelligence.routines.command(c.req.param('id'),parsed.data));}
+    catch(err){if(err instanceof ObservationConflictError)return c.json({ok:false,error:err.message},409);throw err;}
+  });
+
+  authenticated.post('/api/home/observation/command', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = ObservationCommandRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid observation command' }, 400);
+    try { return c.json(service.homeIntelligence.observationCommand(parsed.data)); }
+    catch (err) { if (err instanceof ObservationConflictError) return c.json({ ok: false, error: err.message }, 409); throw err; }
+  });
+
+  authenticated.post('/api/home/observation/trial', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = ObservationTrialRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid observation trial' }, 400);
+    try { return c.json(service.homeIntelligence.trial(parsed.data)); }
+    catch (err) {
+      if (err instanceof ObservationConflictError || err instanceof HomeOpportunityActionError) return c.json({ ok: false, error: err.message }, 409);
+      throw err;
+    }
+  });
+
+  authenticated.post('/api/home/observation/discussion', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = ObservationTrialRequestSchema.pick({ topicId: true, expectedRevision: true, idempotencyKey: true }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid discussion request' }, 400);
+    try { return c.json(service.homeIntelligence.discussObservation(parsed.data)); }
+    catch (err) { if (err instanceof ObservationConflictError) return c.json({ ok: false, error: err.message }, 409); throw err; }
   });
 
   authenticated.get('/api/home/advisor/metrics', (c) => {
@@ -62,7 +106,7 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       return c.json(service.homeIntelligence.act(c.req.param('id'), parsed.data));
     } catch (error) {
       if (error instanceof HomeOpportunityNotFoundError) return c.json({ ok: false, error: error.message }, 404);
-      if (error instanceof HomeOpportunityActionError || (error instanceof Error && error.message.includes('stale'))) {
+      if (error instanceof ObservationConflictError || error instanceof HomeOpportunityActionError || (error instanceof Error && error.message.includes('stale'))) {
         return c.json({ ok: false, error: error.message }, 409);
       }
       throw error;

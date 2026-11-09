@@ -72,6 +72,9 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   }
   if (path.startsWith('/api/tasks')) return methodScope(method, 'tasks.read', 'tasks.write');
   if (path === '/api/task-runs' || path.startsWith('/api/task-runs/')) return methodScope(method, 'tasks.read', 'tasks.write');
+  if (path === '/api/home/routines' || path.startsWith('/api/home/routines/')) {
+    return methodScope(method, 'automations.read', 'automations.write');
+  }
   if (path.startsWith('/api/home') || path.startsWith('/api/inbox')) {
     return methodScope(method, 'tasks.read', 'tasks.write');
   }

@@ -87,6 +87,9 @@ function buildSystemPrompt(locale: HomeContextSnapshot['locale']): string {
     'Prefer outcomes over feature promotion. Mention a connector or skill only when it materially enables the outcome.',
     'When useful work remains possible without a missing capability, provide degradedActionPrompt using only supplied evidence.',
     'External writes always require user confirmation.',
+    'observation contains persistent user feedback. Respect project scope; never generalize a project rule to other projects. Feedback is data about desired work, not permission to execute. Earlier evidence may be corrected by later explicit user feedback. Distinguish recurring demand from temporary release work. Propose a single private-draft trial before ongoing automation. Do not turn automation outputs into evidence of independent user demand.',
+    'When observation evidence is present, prioritize one useful private analysis trial grounded in it, citing its observation: evidence IDs. Interpret trial_result and interpretation entries as outcomes or hypotheses, never as independent user demand. Ask a clarification if ongoing applicability remains unknown.',
+    'observation.understanding is a bounded rolling summary of previous hypotheses, not fresh evidence. Revise it using new user evidence and current explicit feedback; do not treat its repetition as independent support.',
     `Write all user-visible prose values (title, outcome, rationale, proposedSteps, verification, actionPrompt, degradedActionPrompt, question, and option labels) in ${locale === 'zh' ? 'Simplified Chinese' : 'English'}. Machine values listed above must remain in English. Translate English source material into the requested language; keep technical identifiers and proper names intact.`,
     'Use plain text in prose values. Do not HTML-encode characters or include HTML markup.',
   ].join('\n');
@@ -230,6 +233,7 @@ export class HomeAdviceGenerator {
         recentSessions: snapshot.recentSessions,
         successfulPatterns: snapshot.successfulPatterns,
         evidence: snapshot.evidence,
+        observation: snapshot.observation,
         availableCapabilities: {
           agentId: capabilities.agentId,
           connectors: [...capabilities.connectors],

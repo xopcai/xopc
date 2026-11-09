@@ -5,7 +5,7 @@ import { getExecutionAuthority } from '../../infra/execution-authority.js';
 import { PERSONAL_MAIN_TOOL_IDS } from '../../personal-agent/policy.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
-import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
+import { getXopcDatabase, isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 
@@ -19,6 +19,7 @@ export const PERSONAL_REQUEST_TOOL_IDS = [
 export type ExecutionToolPolicy = Readonly<{
   surface: 'agent' | 'personal_main' | 'personal_request_worker';
   taskExecution: boolean;
+  privateRoutine?: boolean;
   readOnly?: boolean;
   nativeMcp: boolean;
   externalMaterialization: boolean;
@@ -39,16 +40,20 @@ export function resolveExecutionToolPolicy(conversationId: string): ExecutionToo
   const authority = getExecutionAuthority();
   const interaction = getSessionInteractionPolicy(conversationId);
   const readOnly = interaction.mode === 'plan' || interaction.access === 'read-only';
-  const unrestricted = configured && !readOnly && (!authority || authority.unrestrictedTools);
-  const taskExecution = Boolean(isXopcDatabaseOpen()
-    && new TaskConversationRepository().resolveActiveExecutionSession(conversationId));
-  return { surface, taskExecution, readOnly, nativeMcp: unrestricted, externalMaterialization: unrestricted,
-    discovery: unrestricted, codemode: unrestricted, revision: `unified-tool-discovery-v1:${interaction.mode}:${interaction.access}:${interaction.sandbox ?? 'configured'}:${interaction.network ?? false}:${authority?.revision ?? ''}` };
+  const taskSession = isXopcDatabaseOpen() ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId) : undefined;
+  const privateRoutine = Boolean(taskSession && getXopcDatabase().db.prepare(`SELECT 1 FROM observation_routine_executions WHERE task_id=?
+    UNION ALL SELECT 1 FROM observation_methods WHERE validation_task_id=?
+    UNION ALL SELECT 1 FROM home_observation_trials WHERE task_id=? LIMIT 1`).get(taskSession.taskId, taskSession.taskId, taskSession.taskId));
+  const unrestricted = !privateRoutine && configured && !readOnly && (!authority || authority.unrestrictedTools);
+  const taskExecution = Boolean(taskSession);
+  return { surface, taskExecution, privateRoutine, readOnly, nativeMcp: unrestricted, externalMaterialization: unrestricted,
+    discovery: unrestricted, codemode: unrestricted, revision: `unified-tool-discovery-v1:${interaction.mode}:${interaction.access}:${interaction.sandbox ?? 'configured'}:${interaction.network ?? false}:${authority?.revision ?? ''}:${privateRoutine ? 'private-routine' : ''}` };
 }
 
 export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): boolean {
   const authority = getExecutionAuthority();
   authority?.assertCurrent();
+  if (policy.privateRoutine && !PRIVATE_ROUTINE_TOOLS.has(name)) return false;
   if (policy.readOnly && !isReadOnlySessionTool(name)) return false;
   if (authority && !authority.allowsTool(name)) return false;
   if (TASK_EXECUTION_TOOL_IDS.includes(name) && !policy.taskExecution) return false;
@@ -60,3 +65,10 @@ export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): 
 export function filterExecutionTools(policy: ExecutionToolPolicy, tools: readonly AgentTool[]): AgentTool[] {
   return tools.filter(tool => allowsExecutionTool(policy, tool.name));
 }
+
+// Private routines can read evidence and finalize their Task, never delegate or mutate external systems.
+const PRIVATE_ROUTINE_TOOLS = new Set([
+  'read_file', 'list_dir', 'list_directory', 'find', 'grep', 'web_search', 'web_fetch',
+  'knowledge_search', 'knowledge_get', 'knowledge_read', 'session_status', 'session_search', 'session_recall',
+  'user_context_search', 'user_context_get', 'skills_list', 'skill_view', 'tool_manual', 'publish_task_result',
+]);

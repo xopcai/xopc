@@ -66,6 +66,7 @@ export const AutomationTriggerSchema = z.discriminatedUnion('kind', [
 ]);
 
 export const AutomationActionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('routine'), routineId: nonEmptyString.max(100), version: z.number().int().positive(), hash: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
   z.object({
     kind: z.literal('agent'),
     agentId: optionalTrimmedString(64),

@@ -1,4 +1,4 @@
-import { AlertCircle, Download, Loader2, RefreshCw, X } from 'lucide-react';
+import { Download, Info, Loader2, RefreshCw, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -22,7 +22,7 @@ export function UpdateReminderBar({
 }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).updatePanel;
-  const { show, dismiss, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } = reminder;
+  const { show, dismiss, electronCheck, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } = reminder;
 
   const [restartBusy, setRestartBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -120,23 +120,48 @@ export function UpdateReminderBar({
     return (
       <div
         className={cn(
-          'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-red-500/20 bg-red-500/10 px-10 py-2 text-sm text-fg sm:px-12',
+          'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-edge bg-surface-panel px-10 py-2 text-sm text-fg-muted sm:px-12',
           APP_CHROME_DRAG_CLASS,
           compact && 'text-xs',
         )}
       >
-        <div className="flex max-w-[min(100%,52rem)] items-center justify-center gap-2 text-center">
-          <AlertCircle className="size-4 shrink-0 text-red-500 dark:text-red-400" aria-hidden />
-          <span className="min-w-0 break-words">
-            {t.reminderElectronUpdateError.replace('{{detail}}', show.message)}
-          </span>
+        <div className="flex w-full max-w-[52rem] min-w-0 flex-wrap items-center justify-center gap-x-3 gap-y-2">
+          <div className="flex min-w-0 items-center justify-center gap-2" role="status">
+            <Info className="size-4 shrink-0" aria-hidden />
+            <span className="min-w-0 break-words">
+              {/(?:ERR_(?:CONNECTION_\w+|INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|NETWORK_CHANGED|TIMED_OUT)|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ERR_NETWORK|network|timed?\s*out|socket hang up)/i.test(show.message)
+                ? t.reminderElectronUpdateNetworkError
+                : t.reminderElectronUpdateError}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={electronCheck}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs font-medium text-accent-fg hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-accent',
+              APP_CHROME_NO_DRAG_CLASS,
+            )}
+          >
+            <RefreshCw className="size-3" aria-hidden />
+            {t.reminderElectronUpdateRetry}
+          </button>
+          {show.message && (
+            <details className={cn('basis-full min-w-0 text-xs', APP_CHROME_NO_DRAG_CLASS)}>
+              <summary className="mx-auto w-fit cursor-pointer rounded text-fg-subtle hover:text-fg focus-visible:outline-2 focus-visible:outline-accent">
+                {t.reminderElectronUpdateDetails}
+              </summary>
+              <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-edge bg-surface-inset p-2 text-fg-muted select-text">
+                {show.message}
+              </pre>
+            </details>
+          )}
         </div>
         <button
           type="button"
           onClick={dismiss}
-          className={actionsRight}
+          className={cn(actionsRight, 'rounded p-1 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-accent')}
           aria-label={t.dismissAria}
-          title={t.dismissHint}
+          title={t.dismissAria}
         >
           <X className="size-4" />
         </button>
