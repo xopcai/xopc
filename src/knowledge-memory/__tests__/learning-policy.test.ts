@@ -9,6 +9,9 @@ import { canUseKnowledge, deleteKnowledgeItem, searchKnowledgeItems, writeKnowle
 import { replaceKnowledgeChunks } from '../../knowledge/chunks.js';
 import { reconcileAssertion } from '../../user-model/repository.js';
 import { canUseAssertion } from '../../user-model/usage-policy.js';
+import { resolveRoutedConversation } from '../../storage/sqlite/conversation-repository.js';
+import { deleteSessionRecord } from '../../storage/sqlite/session-repository.js';
+import { knowledgeExclusion } from '../usage-policy.js';
 
 const context = { agentId: 'main', workspaceId: '/workspace', conversationId: 'session-1' };
 const policy = { scopes: ['global', 'workspace'] as const, contentSources: ['memory', 'connector'] as const };
@@ -33,6 +36,26 @@ function connected() {
 describe('evidence-aware knowledge learning and retrieval', () => {
   beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
+
+  it('withholds retained knowledge and user assertions after their evidence conversation is deleted', () => {
+    const conversationId = resolveRoutedConversation({ agentId: 'main', source: 'webchat', peerKind: 'direct', peerId: 'owner' });
+    const evidence = createContextEvidence({ sourceType: 'conversation', sourceRef: 'deleted-chat',
+      conversationId, trustLevel: 'owner', observedAt: Date.now() });
+    const item = writeKnowledgeItem({ kind: 'decision', scope: { type: 'global' }, content: 'Use SQLite',
+      canonicalKey: 'linked-chat', confidence: 1, importance: 1, verification: 'supported', originClass: 'owner',
+      evidence: [{ id: evidence.id }] }).item!;
+    const assertion = reconcileAssertion({ subject: { type: 'user', id: 'self' }, predicate: 'preference.database',
+      cardinality: 'single', scope: { type: 'global' }, kind: 'preference', value: 'SQLite', normalizedValue: 'sqlite',
+      statement: 'Use SQLite', authority: 'user_explicit', confidence: 1, inferredImportance: 0.8,
+      consequence: 'low', actionability: 0.8, volatility: 'stable', sensitivity: 'normal', domain: 'preferences',
+      disclosurePolicy: 'referenceable', observedAt: Date.now(), createdBy: 'user', evidenceId: evidence.id }).assertion!;
+    expect(canUseKnowledge(item, context)).toBe(true);
+    expect(canUseAssertion(assertion)).toBe(true);
+    deleteSessionRecord(conversationId);
+    expect(knowledgeExclusion(item, context)).toBe('source_revoked');
+    expect(canUseAssertion(assertion)).toBe(false);
+    expect(searchKnowledgeItems({ query: 'SQLite', context })).toEqual([]);
+  });
 
   it('uses an authorized external report without turning it into owner authority', () => {
     const { item } = connected();

@@ -1,12 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeXopcDatabase, openXopcDatabase } from '../connection.js';
-import { createConversation, requireConversation, resolveRoutedConversation } from '../conversation-repository.js';
-import { resetSessionRecord } from '../session-repository.js';
+import { createConversation, getConversationRouting, requireConversation, resolveRoutedConversation } from '../conversation-repository.js';
+import { deleteSessionRecord, resetSessionRecord } from '../session-repository.js';
 
 beforeEach(() => openXopcDatabase({ path: ':memory:' }));
 afterEach(() => closeXopcDatabase());
 
 describe('conversation identity', () => {
+  it('returns no routing for deleted sources but keeps required lookups strict', () => {
+    const id = resolveRoutedConversation({ agentId: 'main', source: 'webchat', peerKind: 'direct', peerId: 'owner' });
+    expect(getConversationRouting(id)).toMatchObject({ source: 'webchat', peerId: 'owner' });
+    expect(deleteSessionRecord(id)).toBe(true);
+    expect(getConversationRouting(id)).toBeNull();
+    expect(() => requireConversation(id)).toThrow(/Conversation not found/);
+    expect(() => getConversationRouting('invalid')).toThrow();
+  });
+
   it('keeps identity and routing stable across reset', () => {
     const route = { agentId: 'coder', source: 'telegram', peerKind: 'direct' as const, peerId: '123' };
     const id = resolveRoutedConversation(route);

@@ -16,6 +16,9 @@ import type { ProjectTaskContext } from '../project-context.js';
 import { ProjectService } from '../../../projects/index.js';
 import type { Project } from '../../../projects/types.js';
 import { writeKnowledgeItem } from '../../../knowledge-memory/index.js';
+import { resolveRoutedConversation } from '../../../storage/sqlite/conversation-repository.js';
+import { deleteSessionRecord } from '../../../storage/sqlite/session-repository.js';
+import { buildExecutionScopeContextForPrompt } from '../execution-scope.js';
 import { ExecutionEnvironmentStore } from '../../../execution-environments/store.js';
 import { LocalWorktreeManager } from '../../../execution-environments/local-worktree-manager.js';
 import {
@@ -189,6 +192,23 @@ describe('buildActiveProjectContextForPrompt', () => {
 
     expect(text).toContain(`Workspace root: ${scopedProject.workspaceRoot}`);
     expect(text).not.toContain('Source repository (reference only)');
+  });
+
+  it('builds execution context without knowledge from deleted source conversations', () => {
+    seedConversationFixtures();
+    const projects = new ProjectService();
+    const scopedProject = projects.create({ name: 'Retained Memory Project' });
+    const conversationId = '7f9f0629-ac4b-4546-8f45-0d071b02634b';
+    projects.attachSession(conversationId, scopedProject.id);
+    const sourceId = resolveRoutedConversation({ agentId: 'main', source: 'webchat', peerKind: 'direct', peerId: 'source' });
+    writeKnowledgeItem({ kind: 'decision', scope: { type: 'project', id: scopedProject.id },
+      content: 'Retained source decision', canonicalKey: 'deleted-source', confidence: 1, importance: 1,
+      originClass: 'agent', verification: 'supported', sourceConversationId: sourceId });
+    expect(buildExecutionScopeContextForPrompt(conversationId)).toContain('Retained source decision');
+    deleteSessionRecord(sourceId);
+    const text = buildExecutionScopeContextForPrompt(conversationId);
+    expect(text).toContain('Retained Memory Project');
+    expect(text).not.toContain('Retained source decision');
   });
 
   it('keeps objective-relevant project knowledge alongside recent knowledge', () => {
