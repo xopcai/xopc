@@ -30,7 +30,11 @@ export function requireConversation(conversationId: string): SessionMetadata {
 
 export function getConversationRouting(conversationId: string | null | undefined): SessionRoutingMeta | null {
   if (!conversationId) return null;
-  const conversation = requireConversation(conversationId);
+  const id = validateConversationId(conversationId);
+  requireXopcDatabase();
+  // Retained knowledge and evidence can outlive their source conversation.
+  const conversation = getSessionMetadata(id);
+  if (!conversation) return null;
   return {
     source: conversation.sourceChannel,
     accountId: 'default',
