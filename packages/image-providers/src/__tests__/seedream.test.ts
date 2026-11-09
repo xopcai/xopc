@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { executeImageProvider, getImageProviderSpec } from '../index.js';
+import { decodeBase64 } from '../http.js';
 
 const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJYQAAAAASUVORK5CYII=';
 const spec = getImageProviderSpec('seedream');
@@ -61,5 +62,20 @@ describe('Seedream Flash geometry compatibility', () => {
     });
     await executeImageProvider({ ...base, request: { model: model.id, prompt: 'edit', aspectRatio: '9:16', outputFormat: 'jpeg',
       inputImages: [{ blob: new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type: 'image/png' }), fileName: 'ref.png' }] }, fetchImpl });
+  });
+});
+
+// Real 2K PNGs are much larger than the tiny protocol fixtures above.
+describe('large generated-image base64', () => {
+  it.each([4, 8])('decodes %i MiB without a regex stack overflow', megabytes => {
+    const bytes = new Uint8Array(megabytes * 1024 * 1024).fill(123);
+    const base64 = Buffer.from(bytes).toString('base64');
+    const decoded = decodeBase64(base64);
+    expect(decoded.byteLength).toBe(bytes.byteLength);
+    expect(decoded[0]).toBe(123);
+    expect(decoded[decoded.length - 1]).toBe(123);
+  });
+  it.each(['a', 'aaa', 'a===', '====', 'ab=c', 'a a=', '!!!!'])('rejects malformed base64 %s', value => {
+    expect(() => decodeBase64(value)).toThrow('Invalid image base64');
   });
 });

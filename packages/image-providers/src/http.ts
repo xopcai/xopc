@@ -54,7 +54,10 @@ export function encodeBase64(bytes: Uint8Array): string {
 
 export function decodeBase64(value: unknown): Uint8Array {
   if (typeof value !== 'string' || !value || value.length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4
-    || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw new ImageProviderError('Invalid image base64', 502);
+    || value.length % 4 !== 0) throw new ImageProviderError('Invalid image base64', 502);
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  // Repeated-group regexes exhaust V8's stack on multi-megabyte image payloads.
+  if (/[^A-Za-z0-9+/]/.test(value.slice(0, value.length - padding))) throw new ImageProviderError('Invalid image base64', 502);
   return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 }
 
