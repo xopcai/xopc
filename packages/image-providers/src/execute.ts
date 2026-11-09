@@ -1,4 +1,5 @@
 import { getImageProviderSpec } from './catalog.js';
+import { seedreamSize } from './seedreamGeometry.js';
 import { assertImageResponseOk, authenticatedJobUrl, decodeBase64, encodeBase64, imageFromBytes, MAX_IMAGE_BYTES, MAX_RESPONSE_BYTES, readBytesLimited, readImageJson, waitForImagePoll } from './http.js';
 import type { ImageExecution, ImageModel, ImageResult } from './types.js';
 import { ImageProviderError, normalizeImageGeometry, validateImageRequest } from './validation.js';
@@ -134,9 +135,8 @@ async function fal(http: ImageTransport, model: ImageModel): Promise<ImageResult
 async function seedream(http: ImageTransport): Promise<ImageResult> {
   const { request: req } = http.execution;
   const images = await inputUris(http.execution);
-  const body: Json = { model: req.model, prompt: req.prompt, response_format: 'b64_json', watermark: false };
+  const body: Json = { model: req.model, prompt: req.prompt, size: seedreamSize(req), response_format: 'b64_json', watermark: false };
   if (images.length) body.image = images.length === 1 ? images[0] : images;
-  if (req.size) body.size = req.size;
   if (req.outputFormat) body.output_format = req.outputFormat;
   const data = await http.json(http.endpoint('/images/generations'), body, http.bearer());
   if (data.error) throw new ImageProviderError('Seedream image request rejected', 400);

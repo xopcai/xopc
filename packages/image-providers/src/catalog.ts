@@ -1,6 +1,7 @@
 import type { ImageCapabilities, ImageModel, ImageProviderSpec } from './types.js';
+import { seedreamGeometry } from './seedreamGeometry.js';
 
-export const IMAGE_CATALOG_VERSION = '2026-10-16';
+export const IMAGE_CATALOG_VERSION = '2026-11-09';
 const ratios = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
 const square = ['1024x1024', '1536x1024', '1024x1536'];
 const pixelGeometry = (minPixels: number, maxPixels: number, maxEdge: number, step = 1, maxRatio = 8, minEdge = 64) => ({
@@ -22,7 +23,7 @@ const wan = (pro: boolean): ImageCapabilities => {
   return value;
 };
 const gemini = (references: number, resolutions: Array<'1K' | '2K' | '4K'>) => cap(1, references, { aspectRatios: ratios, resolutions }, ['png', 'jpeg']);
-const seedream = cap(1, 10, { sizes: ['1K', '2K', '4K'] }, ['png', 'jpeg']);
+const seedream = cap(1, 10, seedreamGeometry, ['png', 'jpeg']);
 const ideogram = cap(4, 5, { sizes: ['1024x1024', '2048x2048'] });
 ideogram.edit = { enabled: true, maxInputImages: 5 };
 ideogram.output!.qualities = ['low', 'medium', 'high'];
