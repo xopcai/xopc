@@ -14,6 +14,7 @@ import {
   type TerminalCreateInput,
 } from '../ipc/terminal-ipc.js';
 
+vi.mock('electron', () => ({ app: { isPackaged: false } }));
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 
 afterEach(() => {
