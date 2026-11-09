@@ -52,6 +52,7 @@ import { agentListDisplayName } from '@/features/settings/agents/agent-display-n
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
+import { RoutineAutomationDetails } from '@/features/tasks/routine-panel';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import {
@@ -130,6 +131,7 @@ function formatDate(ms: number | undefined, labels: AutomationsMessages, languag
 }
 
 function actionLabel(action: AutomationAction, labels: AutomationsMessages): string {
+  if (action.kind === 'routine') return `Routine · v${action.version}`;
   if (action.kind === 'system') {
     if (action.capability === 'home.advisor.refresh') return 'Home AI suggestions refresh';
     if (action.capability === 'memory.temporal_sweep') return 'Memory temporal sweep';
@@ -2045,6 +2047,7 @@ function AutomationDetails({
       </header>
 
       <div className="grid gap-5 p-5">
+        {automation.action.kind === 'routine' ? <RoutineAutomationDetails routineId={automation.action.routineId} language={language} /> : null}
         {automation.action.kind === 'agent' ? <section aria-label={language === 'zh' ? '要做的事' : 'What this task does'}>
           <h3 className="mb-2 text-sm font-semibold text-fg">{language === 'zh' ? '要做的事' : 'What this task does'}</h3>
           <div className="max-h-48 overflow-y-auto text-sm leading-6 text-fg-muted"><MarkdownView content={automation.action.instruction} compact /></div>

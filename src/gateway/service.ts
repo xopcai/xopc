@@ -183,6 +183,7 @@ import {
 } from '../knowledge/index.js';
 import { EndpointToolRuntime } from '../endpoint-tools/index.js';
 import { HomeIntelligenceHost } from '../home-intelligence/host.js';
+import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
 import { HomeAdviceGenerator } from '../home-intelligence/generator.js';
 import { HomeSnapshotBuilder } from '../home-intelligence/snapshot.js';
 import { HomeCapabilityPreflightService } from '../home-intelligence/capability-preflight.js';
@@ -884,6 +885,11 @@ export class GatewayService {
         if (result.ok === false) return { ok: false, reason: result.reason };
         return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
       },
+      executeRoutine: (input) => {
+        const routines = this.homeIntelligenceHost?.routines;
+        if (!routines) throw new Error('Routine execution is unavailable');
+        return routines.execute(input);
+      },
       executeSystemAction: (input) => this.executeSystemAutomationAction(input),
       onWeixinRunCompleted: (conversationId, principalId, run) => this.deliverWeixinAutomation(conversationId, principalId, run),
       onRunCompleted: (run, context) => this.handleAutomationRunCompleted(run, context),
@@ -1414,6 +1420,13 @@ export class GatewayService {
     });
     this.homeIntelligenceHost = new HomeIntelligenceHost(getSqliteDatabase(), {
       principal: { ownerId: 'local-owner', workspaceId: this.workspacePath },
+      automations: this.automationService,
+      stopRoutineConversation: async (conversationId) => {
+        const active = this.agentRunner.listActiveRuns().filter(run => run.conversationId === conversationId);
+        const stopped = await Promise.all(active.map(run => this.agentRunner.abortAgentRun(run.runId)));
+        return stopped.every(result => result.idle);
+      },
+      canObserve: (id) => resolveUserContextSessionAccess(this.config, id).crossSessionHistory,
       snapshot: new HomeSnapshotBuilder({
         projects: () => this.projects.list({ limit: 500 }).items,
         tasks: () => new TaskRepository().list({ limit: 200 }),
@@ -1612,6 +1625,11 @@ export class GatewayService {
         if (result.ok && result.runId) this.dispatchTaskRuns();
         if (result.ok === false) return { ok: false, reason: result.reason };
         return { ok: true, ...(result.runId ? { runId: result.runId } : {}) };
+      },
+      executeRoutine: (input) => {
+        const routines = this.homeIntelligenceHost?.routines;
+        if (!routines) throw new Error('Routine execution is unavailable');
+        return routines.execute(input);
       },
       executeSystemAction: (input) => this.executeSystemAutomationAction(input),
       onWeixinRunCompleted: (conversationId, principalId, run) => this.deliverWeixinAutomation(conversationId, principalId, run),

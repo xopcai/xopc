@@ -27,7 +27,7 @@ export type AutomationAction =
       workingDirectory?: string;
       model?: string;
       timeoutSeconds?: number;
-    } | {
+    } | { kind: 'routine'; routineId: string; version: number; hash: string } | {
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;

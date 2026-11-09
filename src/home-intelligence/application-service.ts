@@ -32,7 +32,7 @@ export class HomeOpportunityApplicationService {
     expectedRevision: number;
     idempotencyKey: string;
     now: number;
-  }, options: { degraded?: boolean } = {}): HomeOpportunityActionResponse {
+  }, options: { degraded?: boolean; constraints?: string[] } = {}): HomeOpportunityActionResponse {
     return runSqliteWriteTransaction((db) => {
       if (db !== this.db) throw new Error('Home opportunity service database mismatch');
       const taskKey = `home-opportunity:${input.opportunityId}:${input.idempotencyKey}`;
@@ -64,9 +64,10 @@ export class HomeOpportunityApplicationService {
           objective: degraded ? opportunity.degradedActionPrompt! : opportunity.actionPrompt,
           expectedOutputs: [opportunity.outcome],
           acceptanceCriteria: opportunity.verification,
-          constraints: degraded
-            ? ['Use only currently available capabilities and the attached evidence.']
-            : [],
+          constraints: [
+            ...(degraded ? ['Use only currently available capabilities and the attached evidence.'] : []),
+            ...(options.constraints ?? []),
+          ],
           approvalRequired: [], assumptions: [],
           risks: [opportunity.risk],
           acceptancePolicy: 'verified_auto',

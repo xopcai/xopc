@@ -39,20 +39,12 @@ export type UpdateReminderView =
   | { kind: 'npm-restart-required'; version: string }
   | { kind: 'npm'; version: string; channel: string | null };
 
-const ELECTRON_ERROR_PREVIEW_LEN = 160;
-
-function truncateElectronErrorMessage(message: string): string {
-  const t = message.trim();
-  if (t.length <= ELECTRON_ERROR_PREVIEW_LEN) return t;
-  return `${t.slice(0, ELECTRON_ERROR_PREVIEW_LEN - 1)}…`;
-}
-
 /**
  * Single source of truth for update reminder bars (left + right rails).
  * Dismiss persists in localStorage per version so the same build is not nagged again.
  */
 export function useUpdateReminder() {
-  const { npm, electron, isElectron, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } =
+  const { npm, electron, isElectron, electronCheck, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } =
     useUpdateStatus();
   const [dismissed, setDismissed] = useState<Dismissed>(readDismissed);
   const [dismissUi, setDismissUi] = useState({ downloading: false, electronError: false });
@@ -168,8 +160,8 @@ export function useUpdateReminder() {
     if (isElectron && electron?.state === 'downloading' && !dismissUi.downloading) {
       return { kind: 'electron-downloading', percent: Math.round(electron.percent ?? 0) };
     }
-    if (isElectron && electron?.state === 'error' && electron.message && !dismissUi.electronError) {
-      return { kind: 'electron-error', message: truncateElectronErrorMessage(electron.message) };
+    if (isElectron && electron?.state === 'error' && !dismissUi.electronError) {
+      return { kind: 'electron-error', message: electron.message?.trim() ?? '' };
     }
     if (
       !isElectron &&
@@ -235,6 +227,7 @@ export function useUpdateReminder() {
   return {
     show,
     dismiss,
+    electronCheck,
     electronQuitAndInstall,
     runNpmUpdate,
     npmUpdateRunning,

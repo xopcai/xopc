@@ -10,6 +10,8 @@ import type { SessionMetadata } from '../session/types.js';
 import type { HomeSuccessfulPattern } from './strategy.js';
 
 export interface HomeContextSnapshot {
+  observation?: { revision: number; feedback: Array<{ topicId: string; text: string; scope: string; projectId?: string }>;
+    understanding: Array<{ topicId: string; summary: string; projectId?: string }> };
   generatedAt: number;
   locale: 'en' | 'zh';
   projects: Array<Pick<Project, 'id' | 'name' | 'status' | 'health' | 'brief' | 'outcome' | 'successCriteria' | 'targetAt' | 'updatedAt'>>;

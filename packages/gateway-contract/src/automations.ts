@@ -21,6 +21,7 @@ export const AutomationTriggerSchema = z.discriminatedUnion('kind', [
 ]);
 
 export const AutomationActionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('routine'), routineId: z.string(), version: z.number().int().positive(), hash: z.string() }),
   z.object({
     kind: z.literal('agent'),
     agentId: z.string().optional(),

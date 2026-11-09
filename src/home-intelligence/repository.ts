@@ -27,6 +27,7 @@ export interface HomePrincipal {
 }
 
 export type HomeGenerationReason =
+  | 'observation_changed'
   | 'manual_refresh'
   | 'project_changed'
   | 'task_changed'

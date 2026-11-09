@@ -1,0 +1,170 @@
+import { randomUUID } from 'node:crypto';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RoutineCommandRequest } from '@xopcai/gateway-contract';
+import { allowsExecutionTool, resolveExecutionToolPolicy } from '../../agent/embedded/execution-tool-policy.js';
+import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { createConversation } from '../../storage/sqlite/conversation-repository.js';
+import { AutomationService } from '../../automations/service/automation-service.js';
+import { getAutomationRunRequest } from '../../automations/storage/index.js';
+import { closeXopcDatabase, getXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
+import { ObservationRoutines } from '../routines.js';
+import { routinePrincipal, routineTrial, settleTask } from './routine-fixture.js';
+let automations: AutomationService;
+let routines: ObservationRoutines;
+let readable: boolean;
+const dispatch = vi.fn();
+const agreement = (topicId: string, taskId: string) => ({ topicId, trialTaskId: taskId, expectedTaskVersion: new TaskRepository().get(taskId)!.version,
+    idempotencyKey: randomUUID(), schedule: { kind: 'interval' as const, everyMs: 86400000 }, validUntil: Date.now() + 90 * 86400000 });
+const command = (id: string, c: RoutineCommandRequest['command']) => routines.command(id, { expectedRevision: routines.get(id).revision, idempotencyKey: randomUUID(), command: c });
+function adopted() { const fixture = routineTrial(); settleTask(fixture.taskId); return { ...fixture, routine: routines.adopt(agreement(fixture.topicId, fixture.taskId)) }; }
+describe('observation routines', () => {
+    beforeEach(async () => {
+        resetXopcDatabaseSingletonForTest();
+        openXopcDatabase({ path: ':memory:' });
+        readable = true;
+        dispatch.mockReset();
+        automations = new AutomationService();
+        routines = new ObservationRoutines(getXopcDatabase().db, routinePrincipal, { automations, canRead: () => readable, agentId: () => 'main', dispatch, publish: vi.fn() });
+        automations.setDeps({ executeRoutine: routines.execute, onRunCompleted: vi.fn(async () => undefined) });
+        await automations.initialize();
+    });
+    afterEach(async () => { await automations.stop(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
+    it('requires a verified trial and explicit current-version agreement, with durable deduplication', () => {
+        const f = routineTrial();
+        const request = agreement(f.topicId, f.taskId);
+        expect(() => routines.adopt(request)).toThrow('verification');
+        expect(getXopcDatabase().db.prepare('SELECT COUNT(*) AS n FROM automations').get()!.n).toBe(0);
+        settleTask(f.taskId);
+        const r = routines.adopt(request);
+        expect(routines.adopt(request).id).toBe(r.id);
+        expect(r.status).toBe('active');
+        expect(r.methods[0]!.status).toBe('approved');
+        expect(() => routines.adopt({ ...request, idempotencyKey: randomUUID(), expectedTaskVersion: 0 })).toThrow();
+        expect(new ObservationRoutines(getXopcDatabase().db, routinePrincipal, { automations, canRead: () => true, agentId: () => 'main', dispatch, publish: vi.fn() }).get(r.id)).toEqual(r);
+    });
+    it('excludes explicitly one-off trial constraints from the recurring method',()=>{
+        const f=routineTrial();
+        const db=getXopcDatabase().db;
+        db.prepare("UPDATE task_contracts SET constraints_json=? WHERE task_id=?").run(JSON.stringify(['Private draft only','[once] Use the launch-day format']),f.taskId);
+        settleTask(f.taskId);const routine=routines.adopt(agreement(f.topicId,f.taskId));
+        const stored=db.prepare('SELECT contract_json FROM observation_routines WHERE id=?').get(routine.id)!;
+        expect(JSON.parse(String(stored.contract_json)).constraints).toEqual(['Private draft only']);
+    });
+
+    it('waits for actual Task receipts and creates a fresh private Task on each occurrence', async () => {
+        const { routine: r, observation } = adopted();
+        observation.command({ expectedRevision: observation.state().revision, idempotencyKey: 'pause-observer', command: { kind: 'pause' } });
+        const run = await automations.runNow(r.automationId);
+        await vi.waitFor(() => expect(routines.get(r.id).executions).toHaveLength(1));
+        expect((await automations.getRun(run.id))!.status).toBe('running');
+        const first = routines.get(r.id).executions[0]!.taskId;
+        expect(new TaskRepository().get(first)!.contract!.outputDestinations).toEqual([]);
+        settleTask(first);
+        await vi.waitFor(async () => expect((await automations.getRun(run.id))!.status).toBe('succeeded'));
+        const next = await automations.runNow(r.automationId);
+        await vi.waitFor(() => expect(routines.get(r.id).executions).toHaveLength(2));
+        const second = routines.get(r.id).executions.find(e => e.runId === next.id)!.taskId;
+        expect(second).not.toBe(first);
+        settleTask(second, false);
+        await vi.waitFor(async () => expect((await automations.getRun(next.id))!.status).toBe('failed'));
+        expect(routines.get(r.id).executions.find(e => e.taskId === second)!.verdict).toBe('not_achieved');
+    });
+    it('proposes scoped feedback, validates a candidate, pins queued versions and supports rollback', async () => {
+        const { routine: r, observation, topicId } = adopted();
+        const add = (scope: 'once' | 'similar', text: string) => observation.command({ expectedRevision: observation.state().revision, idempotencyKey: randomUUID(), command: { kind: 'feedback', topicId, scope, text } });
+        add('once', 'One-off format');
+        routines.refresh();
+        expect(routines.get(r.id).methods).toHaveLength(1);
+        add('similar', 'Check unresolved blockers');
+        routines.refresh();
+        routines.refresh();
+        expect(routines.get(r.id).methods).toHaveLength(2);
+        await expect(command(r.id, { kind: 'adopt_method', version: 2 })).rejects.toThrow('validation');
+        let current = await command(r.id, { kind: 'validate', version: 2 });
+        const validation = current.methods[0]!.validationTaskId!;
+        const contract = new TaskRepository().get(validation)!.contract!;
+        expect(contract.acceptanceCriteria).toEqual(['Every item has a source', 'Check unresolved blockers']);
+        expect(contract.outputDestinations).toEqual([]);
+        settleTask(validation);
+        const queued = automations.queueRunAtomically(r.automationId);
+        current = await command(r.id, { kind: 'adopt_method', version: 2 });
+        expect(current.adoptedVersion).toBe(2);
+        expect(getAutomationRunRequest(queued.id)!.action).toMatchObject({ version: 1 });
+        automations.dispatchQueuedRun(queued.id);
+        await vi.waitFor(() => expect(routines.get(r.id).executions).toHaveLength(1));
+        const executed = routines.get(r.id).executions[0]!;
+        expect(executed.version).toBe(1);
+        expect(new TaskRepository().get(executed.taskId)!.contract!.acceptanceCriteria).toEqual(['Every item has a source']);
+        settleTask(executed.taskId);
+        await vi.waitFor(async () => expect((await automations.getRun(queued.id))!.status).toBe('succeeded'));
+        expect((await command(r.id, { kind: 'rollback', version: 1 })).adoptedVersion).toBe(1);
+    });
+    it('rejects failed or retracted feedback candidates, and prevents stale revision commands', async () => {
+        const { routine: r, observation, topicId } = adopted();
+        observation.command({ expectedRevision: observation.state().revision, idempotencyKey: 'feedback', command: { kind: 'feedback', topicId, scope: 'similar', text: 'Check links' } });
+        routines.refresh();
+        const current = await command(r.id, { kind: 'validate', version: 2 });
+        settleTask(current.methods[0]!.validationTaskId!, false);
+        await expect(command(r.id, { kind: 'adopt_method', version: 2 })).rejects.toThrow('validation');
+        observation.command({ expectedRevision: observation.state().revision, idempotencyKey: 'retract', command: { kind: 'retract', topicId, feedbackId: observation.state().topics[0]!.feedback[0]!.id } });
+        await expect(command(r.id, { kind: 'validate', version: 2 })).rejects.toThrow('stale');
+        await expect(routines.command(r.id, { expectedRevision: 0, idempotencyKey: 'stale', command: { kind: 'pause' } })).rejects.toThrow('revision');
+    });
+    it('pauses and cancels the running Task, resumes, and permanently ends the routine', async () => {
+        const { routine: r } = adopted();
+        const run = await automations.runNow(r.automationId);
+        await vi.waitFor(() => expect(routines.get(r.id).executions).toHaveLength(1));
+        const taskId = routines.get(r.id).executions[0]!.taskId;
+        expect((await command(r.id, { kind: 'pause' })).status).toBe('paused');
+        await vi.waitFor(async () => expect((await automations.getRun(run.id))!.status).toBe('cancelled'));
+        expect(new TaskRepository().get(taskId)!.phase).toBe('closed');
+        expect(new TaskRunRepository().getActiveRoot(taskId)).toBeUndefined();
+        expect((await command(r.id, { kind: 'resume' })).status).toBe('active');
+        expect((await command(r.id, { kind: 'end' })).status).toBe('ended');
+        await expect(command(r.id, { kind: 'resume' })).rejects.toThrow('ended');
+    });
+    it('enforces private execution tools and detects edited validation contracts', async () => {
+        const { routine: r, observation, topicId } = adopted();
+        observation.command({ expectedRevision: observation.state().revision, idempotencyKey: 'feedback', command: { kind: 'feedback', topicId, scope: 'similar', text: 'Check sources twice' } });
+        routines.refresh();
+        const candidate = await command(r.id, { kind: 'validate', version: 2 });
+        const taskId = candidate.methods[0]!.validationTaskId!;
+        const conversation = createConversation({ agentId: 'main', sourceChannel: 'webchat' });
+        new TaskConversationRepository().activateExecutionSession({ taskId, conversationId: conversation.key, agentId: 'main', runId: new TaskRunRepository().getActiveRoot(taskId)!.id });
+        const policy = resolveExecutionToolPolicy(conversation.key);
+        expect(policy).toMatchObject({ privateRoutine: true, nativeMcp: false, discovery: false, codemode: false });
+        expect(allowsExecutionTool(policy, 'web_search')).toBe(true);
+        expect(allowsExecutionTool(policy, 'publish_task_result')).toBe(true);
+        for (const tool of ['exec_command', 'task_collaboration', 'automation_create', 'xopc_tool_execute', 'browser_use', 'write_file'])
+            expect(allowsExecutionTool(policy, tool), tool).toBe(false);
+        getXopcDatabase().db.prepare("UPDATE task_contracts SET objective='Changed objective' WHERE task_id=?").run(taskId);
+        settleTask(taskId);
+        await expect(command(r.id, { kind: 'adopt_method', version: 2 })).rejects.toThrow('validation');
+    });
+    it('does not claim confirmed cancellation when the execution session cannot be stopped',async()=>{
+        const {routine:r,sourceId}=adopted();
+        const run=await automations.runNow(r.automationId);
+        await vi.waitFor(()=>expect(routines.get(r.id).executions).toHaveLength(1));
+        const taskId=routines.get(r.id).executions[0]!.taskId;
+        getXopcDatabase().db.prepare('UPDATE task_runs SET conversation_id=? WHERE task_id=?').run(sourceId,taskId);
+        await command(r.id,{kind:'pause'});
+        await vi.waitFor(async()=>expect((await automations.getRun(run.id))!.status).toBe('cancelled'));
+        expect((await automations.getRun(run.id))!.termination).toMatchObject({cancellationConfirmed:false});
+        expect(new TaskRunRepository().getActiveRoot(taskId)).toBeUndefined();
+    });
+
+    it('blocks execution when source access is revoked or the agreement has expired', async () => {
+        const { routine: r } = adopted();
+        readable = false;
+        const run = await automations.runNow(r.automationId);
+        await vi.waitFor(async () => expect((await automations.getRun(run.id))!.status).toBe('failed'));
+        expect(getXopcDatabase().db.prepare('SELECT COUNT(*) AS n FROM observation_routine_executions').get()!.n).toBe(0);
+        readable = true;
+        getXopcDatabase().db.prepare('UPDATE observation_routines SET valid_until=0').run();
+        const next = await automations.runNow(r.automationId);
+        await vi.waitFor(async () => expect((await automations.getRun(next.id))!.status).toBe('failed'));
+        expect((await automations.getRun(next.id))!.error).toContain('expired');
+    });
+});

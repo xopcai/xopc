@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ObservationStateSchema } from './observation.js';
 
 export const HomeDecisionSchema = z.object({
   id: z.string(),
@@ -296,6 +297,7 @@ export const HomeOpportunityActionResponseSchema = z.discriminatedUnion('outcome
 ]);
 
 export const HomeResponseSchema = z.object({
+  observation: ObservationStateSchema.optional(),
   runningConversations: z.array(HomeRunningConversationSchema).default([]),
   recentDeliveries: z.array(z.object({
     id: z.string(),

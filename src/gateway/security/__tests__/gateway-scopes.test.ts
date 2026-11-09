@@ -8,6 +8,12 @@ import {
 } from '../gateway-scopes.js';
 
 describe('gateway scopes', () => {
+  it('requires automation permission for routine adoption and lifecycle controls', () => {
+    expect(requiredGatewayScope('GET', '/api/home/routines')).toBe('automations.read');
+    expect(requiredGatewayScope('POST', '/api/home/routines/adopt')).toBe('automations.write');
+    expect(requiredGatewayScope('POST', '/api/home/routines/routine/command')).toBe('automations.write');
+    expect(requiredGatewayScope('POST', '/api/home/observation/command')).toBe('tasks.write');
+  });
   it('requires voice configuration permission without granting general administration', () => {
     expect(requiredGatewayScope('PUT', '/api/voice/selection')).toBe('voice.configure');
     expect(requiredGatewayScope('POST', '/api/voice/boson/reveal-api-key')).toBe('voice.configure');

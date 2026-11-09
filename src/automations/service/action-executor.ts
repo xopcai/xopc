@@ -52,11 +52,13 @@ class AutomationExecutionStoppedError extends Error {
   }
 }
 
+export class AutomationCancellationUnconfirmedError extends Error {}
+
 async function waitForCancellation(promise: Promise<unknown>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      promise.then(() => true, () => true),
+      promise.then(() => true, error => !(error instanceof AutomationCancellationUnconfirmedError)),
       new Promise<boolean>((resolve) => {
         timer = setTimeout(() => resolve(false), CANCELLATION_GRACE_MS);
       }),
@@ -126,6 +128,11 @@ export class AutomationActionExecutor {
   private readonly handlers = new Map<AutomationActionKind, AutomationExecutorRegistration>();
 
   constructor() {
+    this.register('routine', { mode: 'never' }, async (input, action) => {
+      if (!this.deps.executeRoutine) return { status: 'failed', error: 'Routine executor is unavailable' };
+      return this.deps.executeRoutine({ action, run: input.run, signal: input.signal, deadlineAtMs: input.deadlineAtMs,
+        onConversation: async id => { await input.hooks.onRunPatch?.({ conversationId: id }); } });
+    });
     this.register('agent', { mode: 'never' }, (input, action) => this.executeAgent(
       input.automation, action, input.run, input.signal, input.hooks, input.deadlineAtMs, input.context,
     ));
