@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { RoutineSchema, type Routine, type RoutineCommandRequest, type ObservationState } from '@xopcai/gateway-contract';
+import { automationTriggerLabel } from '@/features/automations/automation-display';
+import { messages } from '@/i18n/messages';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
@@ -21,7 +23,7 @@ function ScheduleFields({ time, setTime, day, setDay, zone, setZone, until, setU
     <div className="flex flex-wrap gap-1" role="group" aria-label={zh ? '执行日' : 'Run day'}>{[1, 2, 3, 4, 5, 6, 0].map(d => <Button key={d} type="button" variant={day === d ? 'secondary' : 'ghost'} aria-pressed={day === d} onClick={() => setDay(d)}>{zh ? `周${['日', '一', '二', '三', '四', '五', '六'][d]}` : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]}</Button>)}</div>
     <label className="block text-xs text-fg-muted">{zh ? '执行时间' : 'Run time'}<input className="mt-1 w-full rounded border border-edge bg-surface-inset p-2 text-sm text-fg" type="time" required value={time} onChange={e => setTime(e.target.value)}/></label>
     <label className="block text-xs text-fg-muted">{zh ? '时区' : 'Timezone'}<input className="mt-1 w-full rounded border border-edge bg-surface-inset p-2 text-sm text-fg" required value={zone} onChange={e => setZone(e.target.value)}/></label>
-    <label className="block text-xs text-fg-muted">{zh ? '托管到期日（UTC）' : 'Agreement expiry (UTC)'}<input className="mt-1 w-full rounded border border-edge bg-surface-inset p-2 text-sm text-fg" type="date" required value={until} onChange={e => setUntil(e.target.value)}/></label>
+    <label className="block text-xs text-fg-muted">{zh ? '先安排到这一天（UTC）' : 'Continue through this date (UTC)'}<input className="mt-1 w-full rounded border border-edge bg-surface-inset p-2 text-sm text-fg" type="date" required value={until} onChange={e => setUntil(e.target.value)}/></label>
   </div>;
 }
 function schedule(time: string, day: number, zone: string) { const [h, m] = time.split(':'); return { kind: 'cron' as const, expr: `${m} ${h} * * ${day}`, tz: zone }; }
@@ -38,7 +40,7 @@ export function RoutineAdoption({ topicId, trial, onUpdated, language }: {
     if (!trial.taskVersion)
         return null;
     return <div className="mt-2">
-    <Button variant="secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{zh ? '试做满意后，确认长期托管' : 'Confirm ongoing routine after reviewing the trial'}</Button>
+    <Button variant="secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{zh ? '以后也交给我' : 'Make this recurring'}</Button>
     {open ? <form className="mt-3 space-y-3 rounded-lg border border-edge p-3" onSubmit={e => {
                 e.preventDefault();
                 setBusy(true);
@@ -48,10 +50,10 @@ export function RoutineAdoption({ topicId, trial, onUpdated, language }: {
                         schedule: schedule(time, day, zone), validUntil: Date.parse(`${until}T23:59:59Z`) }),
                 }).then(v => { RoutineSchema.parse(v); setOpen(false); onUpdated(); }).catch(c => { setError(c instanceof Error ? c.message : String(c)); onUpdated(); }).finally(() => setBusy(false));
             }}>
-      <p className="text-sm text-fg">{zh ? '每周期生成私人草稿，保留试做的目标、来源范围与验收标准，不自动发送或发布。仅本次的要求不纳入托管。只有试做验收通过才能启用。' : 'Each occurrence creates a private draft using the trial objective, source scope and acceptance criteria. No sending or publishing. One-off requirements are excluded. A verified trial is required.'}</p>
+      <p className="text-sm text-fg">{zh ? '按这次确认的做法，定期给你一份私人草稿，不自动发送或发布。仅这一次的要求不会沿用；请先确认这次结果已通过检查。' : 'Get a private draft on a recurring schedule using the approach you reviewed. Nothing is sent or published automatically. One-off requests will not carry over; the trial must pass its checks first.'}</p>
       <ScheduleFields {...{ time, setTime, day, setDay, zone, setZone, until, setUntil, zh }}/>
       {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
-      <Button type="submit" disabled={busy}>{zh ? '确认约定并启用' : 'Confirm agreement and enable'}</Button>
+      <Button type="submit" disabled={busy}>{zh ? '确认，按这个安排开始' : 'Confirm and start'}</Button>
     </form> : null}
   </div>;
 }
@@ -76,25 +78,40 @@ export function RoutinePanel({ routine: prop, language, onUpdated }: {
             method: 'POST', body: JSON.stringify({ expectedRevision: routine.revision, idempotencyKey: crypto.randomUUID(), command }),
         }).then(v => { setLocal(RoutineSchema.parse(v)); onUpdated(); }).catch(c => { setError(c instanceof Error ? c.message : String(c)); onUpdated(); }).finally(() => setBusy(false));
     };
-    const stateLabel = routine.status === 'active' ? (zh ? '已托管' : 'Active') : routine.status === 'paused' ? (zh ? '已暂停' : 'Paused') : (zh ? '已结束' : 'Ended');
+    const stateLabel = routine.status === 'active' ? (zh ? '按计划进行' : 'Scheduled') : routine.status === 'paused' ? (zh ? '已暂停' : 'Paused') : (zh ? '已结束' : 'Ended');
+    const labels = messages(language);
+    const scheduleLabel = routine.schedule ? automationTriggerLabel({kind:'schedule',schedule:routine.schedule}, labels.automations, labels.cron, language) : (zh ? '执行时间待确认' : 'Schedule needs review');
+    const latest = routine.executions[0];
+    const improvement = routine.status !== 'ended' ? routine.methods.find(m => m.baseVersion === routine.adoptedVersion && ['candidate','validating'].includes(m.status)) : undefined;
+    const outcomeLabel = (status: string, verdict: string | null) => ['queued','running','waiting'].includes(status)
+      ? (zh ? '正在准备这次结果' : 'Preparing this result')
+      : status === 'succeeded' && verdict === 'achieved' ? (zh ? '结果已完成，可以查看' : 'The result is ready to review')
+      : ['failed','timeout'].includes(status) ? (zh ? '这次没能完成，看看哪里需要调整' : 'This attempt needs attention')
+      : status === 'cancelled' ? (zh ? '这次执行已取消' : 'This run was cancelled') : (zh ? '结果还需要确认' : 'The result needs review');
+    const methodLabel = (status: string) => ({candidate:zh?'待尝试':'Ready to try',validating:zh?'检查改进效果':'Checking the improvement',validated:zh?'已检查':'Checked',approved:zh?'已采用':'Adopted',rejected:zh?'未采用':'Not adopted'})[status] ?? (zh?'待确认':'Needs review');
     return <section className="mt-3 space-y-3 rounded-lg border border-edge p-3" aria-label={zh ? '托管与方法改进' : 'Routine and method improvements'}>
-    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-fg">{routine.title} · {stateLabel}</h3><span className="text-xs text-fg-muted">{zh ? '当前方法' : 'Current method'} v{routine.adoptedVersion}</span></div>
-    <p className="text-xs text-fg-muted">{routine.schedule?.kind === 'cron' ? `${routine.schedule.expr} · ${routine.schedule.tz}` : routine.schedule?.kind === 'interval' ? `${routine.schedule.everyMs / 60000} min` : routine.schedule?.at} · {zh ? '到期' : 'Expires'} {new Date(routine.validUntil).toLocaleDateString(zh ? 'zh-CN' : 'en-US')}</p>
-    <p className="text-xs text-fg-muted">{zh ? '每周期独立执行，生成私人草稿；暂停观察不暂停此项托管。' : 'Each occurrence runs independently and produces a private draft. Pausing observation does not pause this routine.'}</p>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-fg">{routine.title} · {stateLabel}</h3></div>
+    <p className="text-sm text-fg-muted">{scheduleLabel} · {zh ? '安排至' : 'Until'} {new Date(routine.validUntil).toLocaleDateString(zh ? 'zh-CN' : 'en-US')}</p>
+    {latest ? <div className="space-y-2"><p className="text-sm text-fg">{outcomeLabel(latest.status, latest.verdict)}</p><Button variant="primary" onClick={() => setTaskId(latest.taskId)}>{zh ? '查看这次结果' : 'Review this result'}</Button></div> : <p className="text-sm text-fg-muted">{routine.status === 'active' ? (zh ? '到约定时间就开始，结果会显示在这里。' : 'I will start at the agreed time and show the result here.') : (zh ? '已有结果会保留，恢复后再按计划继续。' : 'Past results are kept. Resume to continue the schedule.')}</p>}
+    <p className="text-xs text-fg-muted">{zh ? '每次先给你一份私人草稿。' : 'Each run produces a private draft for you.'}</p>
+    {improvement ? <div className="space-y-2 rounded-lg bg-surface-inset p-3"><p className="text-sm font-medium text-fg">{zh ? '根据你的反馈，我准备这样改进' : 'An improvement based on your feedback'}</p>{improvement.additions.map((a,i)=><p key={i} className="text-sm text-fg-muted">{a}</p>)}<p className="text-xs text-fg-muted">{improvement.validation === 'failed' ? (zh ? '这次改进没通过检查，继续沿用原来的做法。' : 'The improvement did not pass its checks. The current approach stays in use.') : (zh ? '先检查效果，你确认后再用于之后的任务。' : 'Check the result first. Future runs change only after you confirm.')}</p>
+      {improvement.status === 'candidate' ? <Button disabled={busy} onClick={()=>command({kind:'validate',version:improvement.version})}>{zh ? '先试试这个改进' : 'Try this improvement'}</Button> : improvement.validation === 'passed' ? <Button disabled={busy} onClick={()=>command({kind:'adopt_method',version:improvement.version})}>{zh ? '以后这样做' : 'Use this approach going forward'}</Button> : improvement.validationTaskId ? <Button disabled={busy} onClick={()=>setTaskId(improvement.validationTaskId!)}>{zh ? '查看改进结果' : 'Review the improvement'}</Button> : null}
+      <Button variant="ghost" disabled={busy} onClick={()=>command({kind:'reject_method',version:improvement.version})}>{zh ? '先保持原样' : 'Keep the current approach'}</Button>
+    </div> : null}
     {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
-    {routine.status !== 'ended' ? <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={busy} onClick={() => command({ kind: routine.status === 'active' ? 'pause' : 'resume' })}>{routine.status === 'active' ? (zh ? '暂停托管' : 'Pause') : (zh ? '恢复托管' : 'Resume')}</Button><Button variant="ghost" onClick={() => setConfig(!config)}>{zh ? '调整时间与期限' : 'Adjust schedule and expiry'}</Button><Button variant="ghost" onClick={() => setConfirmEnd(true)}>{zh ? '结束托管' : 'End routine'}</Button></div> : null}
+    {routine.status !== 'ended' ? <div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={busy} onClick={() => command({ kind: routine.status === 'active' ? 'pause' : 'resume' })}>{routine.status === 'active' ? (zh ? '暂停托管' : 'Pause') : (zh ? '恢复托管' : 'Resume')}</Button><Button variant="ghost" onClick={() => setConfig(!config)}>{zh ? '调整时间' : 'Change schedule'}</Button><details><summary className="cursor-pointer px-3 py-2 text-sm text-fg-muted">{zh ? '更多安排' : 'More options'}</summary><Button variant="ghost" onClick={() => setConfirmEnd(true)}>{zh ? '结束托管' : 'End routine'}</Button></details></div> : null}
     {confirmEnd ? <div className="space-y-2"><p className="text-sm text-fg">{zh ? '结束后停止未来执行，并请求取消正在运行的本项任务。历史结果保留。' : 'Stop future occurrences and request cancellation of the current routine task. Keep past results.'}</p><Button disabled={busy} onClick={() => { command({ kind: 'end' }); setConfirmEnd(false); }}>{zh ? '确认结束' : 'Confirm end'}</Button><Button variant="ghost" onClick={() => setConfirmEnd(false)}>{zh ? '取消' : 'Cancel'}</Button></div> : null}
     {config && routine.status !== 'ended' ? <form className="space-y-3" onSubmit={e => { e.preventDefault(); command({ kind: 'configure', schedule: schedule(time, day, zone), validUntil: Date.parse(`${until}T23:59:59Z`) }); setConfig(false); }}><ScheduleFields {...{ time, setTime, day, setDay, zone, setZone, until, setUntil, zh }}/><Button type="submit" disabled={busy}>{zh ? '确认调整' : 'Confirm changes'}</Button></form> : null}
-    <details><summary className="text-xs text-accent-fg">{zh ? '方法、验证与版本' : 'Methods, validation and versions'}</summary><p className="mt-2 text-xs text-fg-muted">{zh ? '新增长期反馈会形成候选；先验证，再采用。一次验证通过不代表长期稳定性已证实。' : 'Standing feedback creates candidates. Validate before adoption. One passing validation does not establish long-term reliability.'}</p>
-      {routine.methods.map(m => <div key={m.version} className="mt-3 space-y-2 border-l border-edge pl-3"><p className="text-sm text-fg">v{m.version}{m.version === routine.adoptedVersion ? (zh ? ' · 使用中' : ' · Current') : ''} · {m.status}</p>{m.additions.map((a, i) => <p key={i} className="whitespace-pre-wrap break-words text-xs text-fg-muted">{a}</p>)}
+    <details><summary className="text-xs text-accent-fg">{zh ? '做法与改进记录' : 'Approach and improvement history'}</summary><p className="mt-2 text-xs text-fg-muted">{zh ? '保留你确认过的做法，随时可以切回。暂停寻找新建议不会停止这项安排。' : 'Keep the approaches you approved and restore one when needed. Pausing new suggestions does not stop this arrangement.'}</p>
+      {routine.methods.map(m => <div key={m.version} className="mt-3 space-y-2 border-l border-edge pl-3"><p className="text-sm text-fg">v{m.version}{m.version === routine.adoptedVersion ? (zh ? ' · 使用中' : ' · Current') : ''} · {methodLabel(m.status)}</p>{m.additions.map((a, i) => <p key={i} className="whitespace-pre-wrap break-words text-xs text-fg-muted">{a}</p>)}
         {m.validationTaskId ? <><Button variant="ghost" onClick={() => setTaskId(m.validationTaskId!)}>{zh ? '查看验证任务' : 'Review validation'}</Button><span className="text-xs text-fg-muted">{m.validation === 'passed' ? (zh ? '本次验证通过' : 'This validation passed') : m.validation === 'failed' ? (zh ? '验证未通过' : 'Validation did not pass') : (zh ? '等待验证结果' : 'Awaiting verification')}</span></> : null}
-        {routine.status !== 'ended' && m.status === 'candidate' ? <Button disabled={busy} onClick={() => command({ kind: 'validate', version: m.version })}>{zh ? '先验证改进' : 'Validate improvement'}</Button> : null}
-        {routine.status !== 'ended' && m.validation === 'passed' && m.status === 'validating' ? <Button disabled={busy} onClick={() => command({ kind: 'adopt_method', version: m.version })}>{zh ? '后续使用这个改进' : 'Use improvement for future runs'}</Button> : null}
-        {routine.status !== 'ended' && ['candidate', 'validating'].includes(m.status) ? <Button variant="ghost" disabled={busy} onClick={() => command({ kind: 'reject_method', version: m.version })}>{zh ? '保留原方法' : 'Keep original method'}</Button> : null}
-        {routine.status !== 'ended' && m.status === 'approved' && m.version !== routine.adoptedVersion ? <Button variant="ghost" disabled={busy} onClick={() => command({ kind: 'rollback', version: m.version })}>{zh ? '回退到此版本' : 'Restore this version'}</Button> : null}
+        {routine.status !== 'ended' && m.version !== improvement?.version && m.status === 'candidate' ? <Button disabled={busy} onClick={() => command({ kind: 'validate', version: m.version })}>{zh ? '先试试这个改进' : 'Try this improvement'}</Button> : null}
+        {routine.status !== 'ended' && m.version !== improvement?.version && m.validation === 'passed' && m.status === 'validating' ? <Button disabled={busy} onClick={() => command({ kind: 'adopt_method', version: m.version })}>{zh ? '以后这样做' : 'Use this approach going forward'}</Button> : null}
+        {routine.status !== 'ended' && m.version !== improvement?.version && ['candidate', 'validating'].includes(m.status) ? <Button variant="ghost" disabled={busy} onClick={() => command({ kind: 'reject_method', version: m.version })}>{zh ? '保留原方法' : 'Keep original method'}</Button> : null}
+        {routine.status !== 'ended' && m.status === 'approved' && m.version !== routine.adoptedVersion ? <Button variant="ghost" disabled={busy} onClick={() => command({ kind: 'rollback', version: m.version })}>{zh ? '切回这个做法' : 'Restore this approach'}</Button> : null}
       </div>)}
     </details>
-    {routine.executions.length ? <details><summary className="text-xs text-accent-fg">{zh ? '后续执行结果' : 'Subsequent outcomes'}</summary>{routine.executions.map(e => <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted" key={e.runId}><span>v{e.version} · {e.status} · {e.verdict || (zh ? '未验收' : 'Not verified')}</span><Button variant="ghost" onClick={() => setTaskId(e.taskId)}>{zh ? '查看结果与验收' : 'Review result'}</Button></div>)}</details> : null}
+    {routine.executions.length ? <details><summary className="text-xs text-accent-fg">{zh ? '以往结果' : 'Past results'}</summary>{routine.executions.map(e => <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted" key={e.runId}><span>{outcomeLabel(e.status,e.verdict)} · v{e.version}</span><Button variant="ghost" onClick={() => setTaskId(e.taskId)}>{zh ? '查看结果与验收' : 'Review result'}</Button></div>)}</details> : null}
     {taskId ? <HomeTaskReview taskId={taskId} language={language} onComplete={onUpdated}/> : null}
     <a className="inline-block text-xs text-accent-fg" href={`#/automations?automation=${encodeURIComponent(routine.automationId)}`}>{zh ? '在自动化中管理' : 'Manage in automations'} ›</a>
   </section>;
