@@ -73,6 +73,7 @@ exit $LASTEXITCODE
     let recorded: unknown;
     try { recorded = JSON.parse(readFileSync(report, 'utf8').replace(/^\uFEFF/, '')); } catch { /* No action was taken. */ }
     expect(result.error).toBeUndefined();
+    expect(result.stderr.trim(), result.stdout).toBe('');
     return { ...result, recorded };
   } finally {
     rmSync(temporary, { recursive: true, force: true });
