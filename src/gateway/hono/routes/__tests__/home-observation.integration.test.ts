@@ -11,6 +11,7 @@ import { HomeIntelligenceHost } from '../../../../home-intelligence/host.js';
 import { HomeSnapshotBuilder, type HomeContextSnapshot } from '../../../../home-intelligence/snapshot.js';
 import { appendTranscriptEntry, closeXopcDatabase, getXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
 import { createConversation } from '../../../../storage/sqlite/conversation-repository.js';
+import { TaskRunRepository } from '../../../../tasks/task-run-repository.js';
 import { TaskRepository } from '../../../../tasks/task-repository.js';
 import { buckets } from '../../../rate-limit/index.js';
 import type { GatewayService } from '../../../service.js';
@@ -131,6 +132,26 @@ it('connects durable observation, scoped feedback and private Task trials throug
     expect(preparedTask.body).toContain('10766');
     expect(host.getObservation().topics.find(t=>t.id===starter.topicIds[0])!.trials[0]!.taskId).toBe(prepared.taskId);
     expect((await post('/api/home/observation/prepare',{...prepareRequest,kind:'issue_digest'})).status).toBe(409);
+    buckets.resetAllForTests();
+    const goalRequest={goal:'查清 connector 重复请求的原因',criteria:['复现条件清楚','原因有证据'],firstStep:'整理已知线索',topicIds:starter.topicIds,autoContinue:true,stepBudget:3,locale:'zh',expectedObservationRevision:host.observation.state().revision,idempotencyKey:'continuing-goal'};
+    expect((await fetch(`${base}/api/home/follow-ups`,{method:'POST',body:'{}'})).status).toBe(401);
+    expect((await post('/api/home/follow-ups',{...goalRequest,criteria:[]})).status).toBe(400);
+    const goalResponse=await post('/api/home/follow-ups',goalRequest);
+    let goal=await goalResponse.json();expect(goalResponse.status,JSON.stringify(goal)).toBe(200);
+    expect((await post('/api/home/follow-ups',goalRequest).then(r=>r.json())).id).toBe(goal.id);
+    expect((await fetch(`${base}/api/home/follow-ups`,{headers}).then(r=>r.json())).items[0].rootTaskId).toBe(goal.rootTaskId);
+    const first=goal.steps[0].taskId;
+    expect(new TaskRepository().get(first)!.parentTaskId).toBe(goal.rootTaskId);
+    expect((await fetch(`${base}/api/home?locale=zh`,{headers}).then(r=>r.json())).observation.followUps[0].id).toBe(goal.id);
+    const goalCommand=(command:unknown)=>post(`/api/home/follow-ups/${goal.id}/command`,{expectedRevision:host.followUps.get(goal.id).revision,idempotencyKey:randomUUID(),command});
+    goal=await goalCommand({kind:'pause'}).then(r=>r.json());expect(goal.status).toBe('paused');expect(new TaskRunRepository().getActiveRoot(first)).toBeUndefined();
+    goal=await goalCommand({kind:'resume'}).then(r=>r.json());expect(goal.status).toBe('review');
+    goal=await goalCommand({kind:'continue',nextStep:'分析补充的请求日志',stepBudget:1}).then(r=>r.json());
+    expect(goal.steps).toHaveLength(2);settleTask(goal.steps[1].taskId);await host.followUps.refresh();
+    expect(host.followUps.get(goal.id).status).toBe('review');expect(new TaskRepository().get(goal.rootTaskId)!.phase).not.toBe('closed');
+    expect((await goalCommand({kind:'complete',confirmedCriteria:[0],note:'部分完成'})).status).toBe(409);
+    goal=await goalCommand({kind:'complete',confirmedCriteria:[0,1],note:'已核对日志和复现，符合两项标准'}).then(r=>r.json());expect(goal.status).toBe('done');
+
 
 
   } finally {

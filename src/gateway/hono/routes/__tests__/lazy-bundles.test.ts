@@ -180,6 +180,8 @@ describe('lazy route bundles', () => {
   it('maps every home intelligence route without capturing neighboring paths', () => {
     for (const path of [
       '/api/home',
+      '/api/home/follow-ups',
+      '/api/home/follow-ups/id/command',
       '/api/home/observation/command',
       '/api/home/observation/trial',
       '/api/home/observation/prepare',

@@ -481,6 +481,7 @@ export class TaskRepository {
       db.prepare(
         `DELETE FROM domain_outbox WHERE subject_kind = 'task' AND subject_id = ?`,
       ).run(taskId);
+      db.prepare(`UPDATE home_followups SET status='paused',next_step='',waiting_for='Step history changed; review before resuming',revision=revision+1,updated_at=? WHERE id=(SELECT followup_id FROM home_followup_steps WHERE task_id=?)`).run(Date.now(),taskId);
       const deleted = db.prepare('DELETE FROM tasks WHERE task_id = ?').run(taskId).changes > 0;
       db.prepare(
         `DELETE FROM context_snapshots WHERE owner_kind = 'task' AND owner_id = ?`,

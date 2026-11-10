@@ -20,6 +20,7 @@ export type ExecutionToolPolicy = Readonly<{
   surface: 'agent' | 'personal_main' | 'personal_request_worker';
   taskExecution: boolean;
   privateRoutine?: boolean;
+  followUp?: boolean;
   readOnly?: boolean;
   nativeMcp: boolean;
   externalMaterialization: boolean;
@@ -41,19 +42,20 @@ export function resolveExecutionToolPolicy(conversationId: string): ExecutionToo
   const interaction = getSessionInteractionPolicy(conversationId);
   const readOnly = interaction.mode === 'plan' || interaction.access === 'read-only';
   const taskSession = isXopcDatabaseOpen() ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId) : undefined;
-  const privateRoutine = Boolean(taskSession && getXopcDatabase().db.prepare(`SELECT 1 FROM observation_routine_executions WHERE task_id=?
+  const followUp = Boolean(taskSession && getXopcDatabase().db.prepare('SELECT 1 FROM home_followup_steps WHERE task_id=? UNION ALL SELECT 1 FROM home_followups WHERE root_task_id=? LIMIT 1').get(taskSession.taskId,taskSession.taskId));
+  const privateRoutine = followUp || Boolean(taskSession && getXopcDatabase().db.prepare(`SELECT 1 FROM observation_routine_executions WHERE task_id=?
     UNION ALL SELECT 1 FROM observation_methods WHERE validation_task_id=?
     UNION ALL SELECT 1 FROM home_observation_trials WHERE task_id=? LIMIT 1`).get(taskSession.taskId, taskSession.taskId, taskSession.taskId));
   const unrestricted = !privateRoutine && configured && !readOnly && (!authority || authority.unrestrictedTools);
   const taskExecution = Boolean(taskSession);
-  return { surface, taskExecution, privateRoutine, readOnly, nativeMcp: unrestricted, externalMaterialization: unrestricted,
+  return { surface, taskExecution, privateRoutine, followUp, readOnly, nativeMcp: unrestricted, externalMaterialization: unrestricted,
     discovery: unrestricted, codemode: unrestricted, revision: `unified-tool-discovery-v1:${interaction.mode}:${interaction.access}:${interaction.sandbox ?? 'configured'}:${interaction.network ?? false}:${authority?.revision ?? ''}:${privateRoutine ? 'private-routine' : ''}` };
 }
 
 export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): boolean {
   const authority = getExecutionAuthority();
   authority?.assertCurrent();
-  if (policy.privateRoutine && !PRIVATE_ROUTINE_TOOLS.has(name)) return false;
+  if (policy.privateRoutine && !PRIVATE_ROUTINE_TOOLS.has(name) && !(policy.followUp && name==='task_collaboration')) return false;
   if (policy.readOnly && !isReadOnlySessionTool(name)) return false;
   if (authority && !authority.allowsTool(name)) return false;
   if (TASK_EXECUTION_TOOL_IDS.includes(name) && !policy.taskExecution) return false;

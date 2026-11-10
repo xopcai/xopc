@@ -1,3 +1,4 @@
+import { TaskFollowUpHintSchema } from './follow-ups.js';
 import { z } from 'zod';
 
 const id = z.string().min(1).max(120);
@@ -18,6 +19,7 @@ export const TaskResearchCheckSchema = z.object({
   note: z.string().min(1).max(1000),
 });
 export const TaskResearchResultSchema = z.object({
+  followUp: TaskFollowUpHintSchema.optional(),
   version: z.literal(1), contractVersion: z.number().int().positive(),
   instructionSequence: z.number().int().nonnegative(),
   personalResultHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),

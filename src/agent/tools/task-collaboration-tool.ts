@@ -1,6 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type, type Static } from '@sinclair/typebox';
 
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { taskResearchEvidence } from '../../tasks/task-research-result.js';
 import { parseResultReferenceId } from '@xopcai/gateway-contract';
 
@@ -17,7 +18,7 @@ import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
 const Schema = Type.Object({
   command: Type.Union([Type.Literal('get'), Type.Literal('post')]),
-  section: Type.Optional(Type.Union([Type.Literal('collaboration'), Type.Literal('task'), Type.Literal('brief'), Type.Literal('handoff'), Type.Literal('source'), Type.Literal('evidence')])),
+  section: Type.Optional(Type.Union([Type.Literal('goal'), Type.Literal('collaboration'), Type.Literal('task'), Type.Literal('brief'), Type.Literal('handoff'), Type.Literal('source'), Type.Literal('evidence')])),
   offset: Type.Optional(Type.Integer({ minimum: 0 })),
   materialize: Type.Optional(Type.Boolean()),
   sourceIndex: Type.Optional(Type.Integer({ minimum: 0 })),
@@ -42,12 +43,14 @@ const Schema = Type.Object({
 /** Collaboration only: no product mutations, connection selection or external operations. */
 export function createTaskCollaborationTool(deps: XopcUseToolDeps): AgentTool<typeof Schema> {
   return { name: 'task_collaboration', label: 'Task collaboration', parameters: Schema,
-    description: 'Coordinate the current Task with its originating conversation. get section brief reads the full task body in 4000-character pages (offset/nextOffset); section handoff lists the host-captured original request and selected versioned sources, Read the CURRENT handoff first; source indices can change across work revisions. Only entries marked materializable support materialize=true, with an explicit sourceIndex. section source with materialize=true copies a selected pinned workspace file OR published result artifact into your Task input directory; use the returned executionInputRoot as cwd and readOnlyPath as input, never the owner workspace path. Result body text uses read; materialize requires an exact artifact source. The returned copies are read-only: write revised outputs elsewhere and publish those new files. It grants no wider root access. Otherwise section source reads one sourceIndex (query for result search, revision for pinned extracted text). section evidence lists real successful tool reads, or reads a toolCallId in 4000-character pages. Evidence excerpts must cite that original toolCallId. get with section task reads constraints and waits; default get reads complete ordered messages (afterSequence/limit) or one entryId. post progress for meaningful changes; post question then stop this turn until answered. Initial handoff and source/tool IDs require no ack. Before continuing, post ack only for a user/main_agent collaboration entry of kind answer or instruction, with causationId equal to that entry ID and explain how the result will incorporate it. Confirmation is receipt and intent, not completed verification. Reuse the same Task and executor. Account authorization stays in the main connection UI; answers and instructions cannot change the selected connector/account or permit writes. Preserve idempotencyKey on retries.',
+    description: 'For a continuing goal, get section goal reads confirmed criteria, durable step receipts (offset/nextOffset), and user update previews (afterSequence/nextAfterSequence). Supply entryId to read a linked user update in full (offset/nextOffset). Coordinate the current Task with its originating conversation. get section brief reads the full task body in 4000-character pages (offset/nextOffset); section handoff lists the host-captured original request and selected versioned sources, Read the CURRENT handoff first; source indices can change across work revisions. Only entries marked materializable support materialize=true, with an explicit sourceIndex. section source with materialize=true copies a selected pinned workspace file OR published result artifact into your Task input directory; use the returned executionInputRoot as cwd and readOnlyPath as input, never the owner workspace path. Result body text uses read; materialize requires an exact artifact source. The returned copies are read-only: write revised outputs elsewhere and publish those new files. It grants no wider root access. Otherwise section source reads one sourceIndex (query for result search, revision for pinned extracted text). section evidence lists real successful tool reads, or reads a toolCallId in 4000-character pages. Evidence excerpts must cite that original toolCallId. get with section task reads constraints and waits; default get reads complete ordered messages (afterSequence/limit) or one entryId. post progress for meaningful changes; post question then stop this turn until answered. Initial handoff and source/tool IDs require no ack. Before continuing, post ack only for a user/main_agent collaboration entry of kind answer or instruction, with causationId equal to that entry ID and explain how the result will incorporate it. Confirmation is receipt and intent, not completed verification. Reuse the same Task and executor. Account authorization stays in the main connection UI; answers and instructions cannot change the selected connector/account or permit writes. Preserve idempotencyKey on retries.',
     mutatesWorkspace: true, mutationScope: 'external', requiresExclusiveWorkspaceLock: false,
     async execute(toolCallId, input: Static<typeof Schema>, signal) {
       const conversationId = getEmbeddedExecutionSession() ?? deps.getCurrentConversationId?.();
       const active = conversationId ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId) : undefined;
       if (!active || (deps.getCurrentAgentId?.() && active.agentId !== deps.getCurrentAgentId())) throw new Error('No active Task execution');
+      const privateGoal = getSqliteDatabase().prepare('SELECT 1 FROM home_followup_steps WHERE task_id=? UNION ALL SELECT 1 FROM home_followups WHERE root_task_id=? LIMIT 1').get(active.taskId,active.taskId);
+      if(privateGoal && (input.command!=='get' || !['goal','task','brief','evidence','collaboration'].includes(input.section ?? 'collaboration'))) throw new Error('Continuing goals allow read-only task evidence and brief access');
       const request = personalRequestForExecution(conversationId!);
       if ((!request && getSessionMetadata(conversationId!)?.customData?.personalReadRequestId)
         || (request && ['cancelled', 'completed', 'failed'].includes(request.state))) throw new Error('Personal request is no longer active');
@@ -58,6 +61,21 @@ export function createTaskCollaborationTool(deps: XopcUseToolDeps): AgentTool<ty
             ...(offset + 4000 < text.length ? { nextOffset: offset + 4000 } : {}) };
         };
         const reply = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: {} });
+        if(input.section==='goal'){
+          const goal=getSqliteDatabase().prepare(`SELECT g.* FROM home_followups g WHERE g.root_task_id=? OR EXISTS
+            (SELECT 1 FROM home_followup_steps s WHERE s.followup_id=g.id AND s.task_id=?)`).get(active.taskId,active.taskId) as {id:string;root_task_id:string;goal:string;criteria_json:string;status:string}|undefined;
+          if(!goal)throw new Error('No continuing goal is linked to this Task');
+          if(input.entryId){
+            const entry=new TaskCollaborationRepository().get(input.entryId);
+            if(!entry || entry.taskId!==goal.root_task_id || entry.authorKind!=='user')throw new Error('Goal update is unavailable');
+            return reply(page(entry.body));
+          }
+          const updates=getSqliteDatabase().prepare(`SELECT entry_id AS id,sequence,body FROM task_collaboration_entries WHERE task_id=? AND author_kind='user' AND sequence>? ORDER BY sequence LIMIT 11`).all(goal.root_task_id,input.afterSequence??0) as {id:string;sequence:number;body:string}[];
+          const steps=getSqliteDatabase().prepare(`SELECT s.sequence,s.task_id,s.action FROM home_followup_steps s WHERE s.followup_id=? AND s.sequence>? ORDER BY s.sequence LIMIT 11`).all(goal.id,input.offset??0) as {sequence:number;task_id:string;action:string}[];
+          return reply({goal:goal.goal,criteria:JSON.parse(goal.criteria_json),status:goal.status,updates:updates.slice(0,10).map(u=>({id:u.id,sequence:u.sequence,preview:u.body.slice(0,200)})),...(updates.length>10?{nextAfterSequence:updates[9]!.sequence}:{}),
+            steps:steps.slice(0,10).map(s=>{const run=new TaskRunRepository().getLatestRoot(s.task_id);const receipt=run&&new TaskRunRepository().getReceipt(run.id);return {number:s.sequence,taskId:s.task_id,action:s.action,status:run?.status,receipt:receipt?{summary:receipt.summary.slice(0,1600),verification:receipt.verification.status,verdict:receipt.completionVerdict}:undefined};}),
+            ...(steps.length>10?{nextOffset:steps[9]!.sequence}:{}),note:'Historical receipts report prior work; they are not independent proof of current external state.'});
+        }
         if (input.section === 'brief') return reply(page(new TaskRepository().require(active.taskId).body ?? ''));
         if (input.section === 'handoff') {
           const handoff = getTaskHandoff(active.taskId);

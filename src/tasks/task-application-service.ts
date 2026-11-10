@@ -652,6 +652,7 @@ export class TaskApplicationService {
         ? { ok: false, reason: 'conflict', model: this.#projector.project(task) }
         : { ok: false, reason: 'not_found' };
     }
+    if(getSqliteDatabase().prepare('SELECT 1 FROM home_followups WHERE root_task_id=?').get(taskId)) return {ok:false,reason:'invalid_transition',model:this.#projector.project(task)};
     if (options.actor.kind !== 'user' && !this.#tasks.automaticStartAllowed(taskId)) {
       return { ok: false, reason: 'blocked', model: this.#projector.project(task) };
     }
