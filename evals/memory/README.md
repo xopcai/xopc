@@ -2,6 +2,19 @@
 
 Run deterministic storage/policy tests with root Vitest. Real-model runs are opt-in and use synthetic data in temporary databases, with existing provider credentials shared rather than copied.
 
+## Active acquisition and sparse observations
+
+```sh
+XOPC_MEMORY_LIVE=1 \
+XOPC_MEMORY_LIVE_MODEL=qwen-token-plan-cn/qwen3.8-max \
+XOPC_MEMORY_REPORT=reports/memory/acquisition-qwen-max.json \
+pnpm run eval:memory:acquisition
+```
+
+`acquisition-cases.json` compares cross-session observations disabled/enabled through the actual persistent worker, closing and reopening SQLite between conversations. Three positive patterns and four negative controls check original message provenance, scoped observational authority, persistence and execution-context usability. Additional checks cover a declared invalid-ref fault followed by real-model repair, 26 synthetic legacy-routing receipts, and authorized source learning followed by revocation. There is no production-data backfill or account opt-in in this harness.
+
+This is a small acquisition-component ablation, not a Gateway answer-quality benchmark. Failures remain failures, and relevant source changes during a run invalidate it. See [the design and results note](../../docs/design/technical/memory-acquisition-2026-11-10.md).
+
 ## Evidence review and lesson learning
 
 ```sh

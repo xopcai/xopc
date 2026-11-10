@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
 import {
+  getSqliteDatabase,
   closeXopcDatabase,
   listConnectorLearningJobs,
   getConnectorConnection,
@@ -36,6 +37,7 @@ const { ingestComposioConnectedSource } = vi.hoisted(() => ({
 
 vi.mock('../connected-source-ingestion.js', () => ({ ingestComposioConnectedSource }));
 
+import { getActiveUnderstandingConsent, revokeUnderstandingConsent } from '../../user-context/sources/consent-repository.js';
 import { startConnectorLearningCoordinator } from '../learning-coordinator.js';
 import { encodeConnectedSourceCursor } from '../connected-source-cursor.js';
 import { buildConnectorLearningArguments, getConnectorLearningPlan } from '../learning-recipes.js';
@@ -111,6 +113,50 @@ describe('connector learning coordinator', () => {
     } finally {
       coordinator.stop();
     }
+  });
+
+  it('recovers scanning enabled after startup and links the source instance to the existing consent', async () => {
+    const config = ConfigSchema.parse({});
+    const coordinator = startConnectorLearningCoordinator({ getConfig: () => config, resolveAgentId: () => 'main',
+      initialDelayMs: 60000, composioAdapter: identityAdapter });
+    try {
+      expect(listConnectorLearningJobs({ connectionId: 'gmail-work' })).toEqual([]);
+      upsertConnectorSyncPolicy({ accountId: 'account:gmail-work', scanEnabled: true });
+      await coordinator.runNow();
+      const jobs = listConnectorLearningJobs({ connectionId: 'gmail-work' });
+      expect(jobs.some(job => job.status === 'completed')).toBe(true);
+      const grant = listUnderstandingSourceGrants()[0];
+      expect(grant.config.sourceInstanceId).toBe(jobs[0].sourceInstanceId);
+      expect(getActiveUnderstandingConsent(grant.id)).toBeTruthy();
+      getSqliteDatabase().prepare("DELETE FROM connector_learning_jobs WHERE status='queued'").run();
+      await coordinator.runNow(); await coordinator.runNow();
+      expect(listConnectorLearningJobs({ connectionId: 'gmail-work' }).filter(job => job.status === 'queued')).toHaveLength(1);
+    } finally { coordinator.stop(); }
+  });
+
+  it('does not restore revoked source consent even when scanning remains enabled', async () => {
+    upsertConnectorSyncPolicy({ accountId: 'account:gmail-work', scanEnabled: true });
+    const coordinator = startConnectorLearningCoordinator({ getConfig: () => ConfigSchema.parse({}), resolveAgentId: () => 'main',
+      initialDelayMs: 60000, composioAdapter: identityAdapter });
+    try {
+      const grant = listUnderstandingSourceGrants()[0];
+      revokeUnderstandingConsent(grant.id);
+      getSqliteDatabase().prepare('DELETE FROM connector_learning_jobs').run();
+      await coordinator.runNow();
+      expect(coordinator.enqueueConnection('gmail-work', { reason: 'manual' })).toBeNull();
+      expect(listConnectorLearningJobs({ connectionId: 'gmail-work' })).toEqual([]);
+      expect(getActiveUnderstandingConsent(grant.id)).toBeNull();
+      expect(ingestComposioConnectedSource).not.toHaveBeenCalled();
+    } finally { coordinator.stop(); }
+  });
+
+  it('does not bootstrap an account outside the selected agent installation policy', () => {
+    upsertConnectorSyncPolicy({ accountId: 'account:gmail-work', scanEnabled: true });
+    const coordinator = startConnectorLearningCoordinator({ getConfig: () => ConfigSchema.parse({}), resolveAgentId: () => 'other', initialDelayMs: 60000 });
+    try {
+      expect(listConnectorLearningJobs({ connectionId: 'gmail-work' })).toEqual([]);
+      expect(listUnderstandingSourceGrants()).toEqual([]);
+    } finally { coordinator.stop(); }
   });
 
   it('uses the stored cursor to bound supported incremental reads', () => {

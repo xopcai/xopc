@@ -1,0 +1,72 @@
+[
+  {
+    "id": "sparse-related-choices",
+    "turns": [
+      "这组解释里，我选带简短标题的版本，这样容易扫读。",
+      "看另一组例子，我还是选带简短标题的解释，这样读起来更顺。"
+    ],
+    "expectedPattern": true
+  },
+  {
+    "id": "copied-choice",
+    "turns": [
+      "这组解释里，我选带简短标题的版本，这样容易扫读。",
+      "这组解释里，我选带简短标题的版本，这样容易扫读。"
+    ],
+    "expectedPattern": false
+  },
+  {
+    "id": "different-workspace",
+    "turns": [
+      "这组解释里，我选带简短标题的版本，这样容易扫读。",
+      "看另一组例子，我还是选带简短标题的解释，这样读起来更顺。"
+    ],
+    "otherWorkspace": true,
+    "expectedPattern": false
+  },
+  {
+    "id": "quoted-choice",
+    "turns": [
+      "请只翻译客户原话：『这组解释里，我选带简短标题的版本，这样容易扫读。』",
+      "请只翻译另一位客户原话：『看另一组例子，我还是选带简短标题的解释，这样读起来更顺。』"
+    ],
+    "expectedPattern": false
+  },
+  {
+    "id": "sparse-english-headings",
+    "turns": [
+      "In this example I choose the version with short headings because it is easier to scan.",
+      "On another example I pick short headings again because they are easier to read."
+    ],
+    "expectedPattern": true
+  },
+  {
+    "id": "sparse-example-order",
+    "turns": [
+      "这组说明里，我选先给例子的版本，这样我更容易理解。",
+      "看另一组说明，我还是选先给例子的版本，读起来更清楚。"
+    ],
+    "expectedPattern": true,
+    "semanticTerms": [
+      [
+        "先",
+        "first",
+        "before",
+        "之前"
+      ],
+      [
+        "例子",
+        "举例",
+        "example"
+      ]
+    ]
+  },
+  {
+    "id": "temporary-choices",
+    "turns": [
+      "今天临时我选带简短标题的版本，不代表以后。",
+      "这次临时我选带简短标题的解释，不代表平时。"
+    ],
+    "expectedPattern": false
+  }
+]

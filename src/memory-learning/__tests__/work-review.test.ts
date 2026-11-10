@@ -155,12 +155,12 @@ describe('evidence-based work memory review', () => {
       .toBe('lesson_verification_not_successful');
   });
 
-  it('rejects translation and quotation material instead of persisting it as a tentative work note', () => {
+  it.each([false, true])('rejects translation material even inside a wider quoted span: full=%s', full => {
     seed();
     const text = '请翻译客户原话：“我偏好硬件周报，标识客户测试”。我自己习惯先讲风险。';
     const result = applyWorkCandidates({ candidates: [{ kind: 'note', topicKey: 'client', predicate: 'report.preference', scope: 'session',
       statement: 'Client prefers hardware weekly reports.', confidence: 0.8, importance: 0.6,
-      evidence: [{ ref: 'mixed', quote: '我偏好硬件周报，标识客户测试' }] }],
+      evidence: [{ ref: 'mixed', quote: full ? text : '我偏好硬件周报，标识客户测试' }] }],
       evidence: [{ ref: 'mixed', text, role: 'user', createdAt: Date.now() }], ...context,
       processingPolicy: 'remote_allowed', runId: 'mixed' });
     expect(result[0].reasonCode).toBe('work_quote_not_owned');

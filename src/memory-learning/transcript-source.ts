@@ -14,6 +14,12 @@ export function learningRoleSql(role: 'user' | 'assistant', alias = ''): string 
 export function learningTranscriptMessage(row: { role: string | null; payload_json: string }): AgentMessage | undefined {
   const stored = JSON.parse(row.payload_json) as Record<string, unknown> | null;
   if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return;
+  if (row.role === null && stored.type === 'custom' && stored.customType === 'codemode-tool-result') {
+    const data = stored.data as Record<string, unknown> | undefined;
+    if (data && typeof data.toolName === 'string' && typeof data.toolCallId === 'string' && Array.isArray(data.content)) {
+      return { ...data, role: 'toolResult' } as AgentMessage;
+    }
+  }
   if (row.role === 'custom' && stored.customType === VOICE_TRANSCRIPT_TYPE) return voiceTranscriptMessage(stored) ?? undefined;
   return ['user', 'assistant', 'toolResult'].includes(row.role ?? '') ? stored as AgentMessage : undefined;
 }

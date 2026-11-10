@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { observationCandidateIssue } from '../../memory-learning/evidence-repair.js';
+
 import { assessAssertionSupport, assessOwnerSupport, hasOwnerMemoryDirective, supportsResponseApplicability } from './evidence-policy.js';
 
 import { createContextEvidence } from '../../storage/sqlite/context-evidence-repository.js';
@@ -141,8 +143,9 @@ export function executeUserModelInterpretation(input: {
     }
     return result;
   }
-  const goals = input.interpretation.goals ?? [];
-  const collaborationRules = input.interpretation.collaborationRules ?? [];
+  const imported = new Set(input.evidence.filter(e => e.observationScope).map(e => e.ref));
+  const goals = (input.interpretation.goals ?? []).filter(item => !item.evidenceRefs.some(ref => imported.has(ref)));
+  const collaborationRules = (input.interpretation.collaborationRules ?? []).filter(item => !item.evidenceRefs.some(ref => imported.has(ref)));
   if (!input.interpretation.assertions.length && !goals.length && !collaborationRules.length) return result;
 
   const evidenceByRef = new Map(input.evidence.map((entry) => [entry.ref, entry]));
@@ -156,9 +159,9 @@ export function executeUserModelInterpretation(input: {
     if (!item || item.role !== 'user') continue;
     const evidence = createContextEvidence({
       sourceType: 'conversation',
-      sourceRef: `session:${input.scopeContext.conversationId}:entry:${ref}`,
+      sourceRef: `session:${item.conversationId ?? input.scopeContext.conversationId}:entry:${ref}`,
       sourceRunId: input.extractionRunId,
-      conversationId: input.scopeContext.conversationId,
+      conversationId: item.conversationId ?? input.scopeContext.conversationId,
       ...(input.turnId ? { turnId: input.turnId } : {}),
       messageId: ref,
       contentHash: createHash('sha256').update(item.text).digest('hex'),
@@ -175,6 +178,11 @@ export function executeUserModelInterpretation(input: {
   const latestUserRef = input.evidence.filter((item) => item.role === 'user')
     .sort((a, b) => b.createdAt - a.createdAt)[0]?.ref;
   for (const original of input.interpretation.assertions) {
+    if (observationCandidateIssue(original, input.evidence)) {
+      result.proposed++; result.rejected++;
+      result.outputs.push({ candidateKey: candidateKey(original.predicate, original.scope.type, original.scope.id), outcome: 'rejected', reasonCode: 'observation_scope_or_authority' });
+      continue;
+    }
     if (!supportsResponseApplicability(original.applicability)) {
       result.proposed++; result.rejected++;
       result.outputs.push({ candidateKey: candidateKey(original.predicate, original.scope.type, original.scope.id), outcome: 'rejected', reasonCode: 'unsupported_applicability_operation' });

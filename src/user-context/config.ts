@@ -86,10 +86,14 @@ export const UserModelConfigSchema = z
     showMemoryReferences: z.boolean().default(true),
     processingPolicy: z.enum(['local_only', 'remote_allowed']).default('remote_allowed'),
     extraction: z.object({
+      crossSessionObservations: z.boolean().default(true),
+      observationWindowDays: z.number().int().min(1).max(90).default(30),
+      maxObservationEvidence: z.number().int().min(1).max(12).default(6),
       reviewIntervalTurns: z.number().int().min(1).max(1_000).default(10),
       maxHistoryMessages: z.number().int().min(1).max(200).default(80),
       maxDurationMs: z.number().int().min(1_000).max(600_000).default(120_000),
     }).strict().default({
+      crossSessionObservations: true, observationWindowDays: 30, maxObservationEvidence: 6,
       reviewIntervalTurns: 10,
       maxHistoryMessages: 80,
       maxDurationMs: 120_000,
@@ -124,6 +128,7 @@ export const UserModelConfigSchema = z
     showMemoryReferences: true,
     processingPolicy: 'remote_allowed',
     extraction: {
+      crossSessionObservations: true, observationWindowDays: 30, maxObservationEvidence: 6,
       reviewIntervalTurns: 10,
       maxHistoryMessages: 80,
       maxDurationMs: 120_000,

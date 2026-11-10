@@ -207,8 +207,13 @@ export async function deriveConnectedSourceUnderstanding(input: {
   const consentReceipt = sourceRun
     ? getActiveUnderstandingConsent(sourceRun.grantId) ?? undefined
     : undefined;
+  const allowPersonal = input.config.userContext.enabled && input.config.userContext.userModel.enabled
+    && input.config.userContext.userModel.writePolicy === 'allow' && consentReceipt?.purposes.includes('personalization');
+  const allowWork = input.config.userContext.enabled && input.config.userContext.knowledgeMemory.enabled
+    && input.config.userContext.knowledgeMemory.writePolicy === 'allow' && consentReceipt?.purposes.includes('work_assistance');
+  if (!allowPersonal && !allowWork) return { created: 0, knowledgeCount: 0, status: 'completed' };
   const modelItems = itemsAllowedByConsent(items, consentReceipt);
-  recordConnectedSourceObservations({
+  if (allowPersonal) recordConnectedSourceObservations({
     items: sourceItems, consent: consentReceipt, sourceGrantId: sourceRun?.grantId,
   });
   const effectiveProcessingPolicy = input.processingPolicy === 'remote_allowed'
@@ -231,7 +236,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
     const byRef = new Map(modelItems.map((item) => [item.evidenceRef, item]));
     const outputs: ExtractionOutput[] = [];
     let created = 0;
-    for (const candidate of analysis.profileCandidates.filter(isPortraitCandidate)) {
+    for (const candidate of (allowPersonal ? analysis.profileCandidates.filter(isPortraitCandidate) : [])) {
       const policy = candidatePolicy(candidate);
       const evidenceItems = durableEvidence(candidate, byRef);
       const candidateKey = `connected-profile:${candidate.category}:${candidate.factKey}`;
@@ -307,7 +312,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
         const item = byRef.get(ref);
         return item?.ownerAttribution === 'user' ? [item] : [];
       });
-      if (consentReceipt?.allowedDomains.includes('goals')
+      if (allowPersonal && consentReceipt?.allowedDomains.includes('goals')
         && !consentReceipt.deniedDomains.includes('goals')
         && thread.confidence !== 'low' && goalEvidence.length) {
         const observedAt = Math.max(...goalEvidence.map((item) => item.occurredAt ?? item.modifiedAt ?? Date.now()));
@@ -344,6 +349,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
         }
         if (goalCreated) created += 1;
       }
+      if (!allowWork) continue;
       const evidence = evidenceRefs.flatMap((ref) => {
         const evidenceItem = byRef.get(ref);
         const sourceItem = sourceItems.find(item => `knowledge-source://${item.id}` === ref);

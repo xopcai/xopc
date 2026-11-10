@@ -14,9 +14,37 @@ export interface LearningJob {
 
 export const PERSONAL_UNDERSTANDING_VERSION = 'understanding-v3';
 
+function stablePolicy(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stablePolicy);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, child]) => [key, stablePolicy(child)]));
+}
+
+/** Invalidate learning only for changes affecting evidence, permissions, scope or model routing. */
 export function learningPolicyHash(config: Config): string {
-  const catalog = getSqliteDatabase().prepare('SELECT revision FROM agent_catalog_settings WHERE singleton_id = 1').get();
-  return createHash('sha256').update(JSON.stringify({ config, catalog })).digest('hex');
+  const db = getSqliteDatabase();
+  const settings = db.prepare('SELECT defaults_json, default_agent_id FROM agent_catalog_settings WHERE singleton_id = 1').get() as
+    { defaults_json: string; default_agent_id: string } | undefined;
+  const routes = (models: { chat?: unknown; intents?: { understanding?: unknown } } = {}) => ({
+    chat: models.chat, understanding: models.intents?.understanding,
+  });
+  const agents = (db.prepare(`SELECT id, enabled, workspace_override, overrides_json, deleted_at FROM agents ORDER BY id`).all() as
+    Array<{ id: string; enabled: number; workspace_override: string; overrides_json: string; deleted_at: number | null }>).map(a => ({
+      id: a.id, enabled: a.enabled, workspace: a.workspace_override, deleted: a.deleted_at !== null,
+      models: routes(JSON.parse(a.overrides_json).models),
+    }));
+  const u = config.userContext;
+  const policy = { version: 2, enabled: u.enabled,
+    userModel: { enabled: u.userModel.enabled, writePolicy: u.userModel.writePolicy,
+      sensitiveWritePolicy: u.userModel.sensitiveWritePolicy, processingPolicy: u.userModel.processingPolicy,
+      extraction: u.userModel.extraction },
+    knowledge: { enabled: u.knowledgeMemory.enabled, writePolicy: u.knowledgeMemory.writePolicy,
+      readScopes: u.knowledgeMemory.readScopes, contentSources: u.knowledgeMemory.contentSources,
+      maxBatchChars: u.knowledgeMemory.learning?.maxBatchChars ?? 30000,
+      evidenceReview: u.knowledgeMemory.learning?.evidenceReview ?? true },
+    defaultAgent: settings?.default_agent_id, models: routes(settings ? JSON.parse(settings.defaults_json).models : {}), agents };
+  return createHash('sha256').update(JSON.stringify(stablePolicy(policy))).digest('hex');
 }
 
 /** Recover learning intent from authoritative rows, including notifications lost in a crash. */
