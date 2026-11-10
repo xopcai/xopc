@@ -105,7 +105,7 @@ describe('embedded gateway shutdown', () => {
     });
     await stopGatewayProcessAndWait(50);
     expect(mocks.spawnSync).toHaveBeenCalledWith('taskkill', ['/PID', '12345', '/T', '/F'],
-      expect.objectContaining({ windowsHide: true, stdio: 'ignore' }));
+      expect.objectContaining({ windowsHide: true, stdio: 'ignore', timeout: 5000 }));
     expect(child.killSignals).toEqual([]);
   });
 

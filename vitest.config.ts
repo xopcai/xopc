@@ -69,6 +69,8 @@ export default defineConfig({
             'electron/__tests__/file-resource-path.test.ts',
             'electron/__tests__/terminal-ipc.test.ts',
             'electron/__tests__/quit-impact.test.ts',
+            'electron/__tests__/quit-confirmation.test.ts',
+            'electron/__tests__/installer-quit.test.ts',
             'electron/__tests__/uninstall-paths.test.ts',
           ],
           setupFiles: [setupFile],

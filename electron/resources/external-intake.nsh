@@ -2,6 +2,123 @@
 !include LogicLib.nsh
 !include FileFunc.nsh
 
+Var XopcInstallerPid
+
+!macro xopcLog MESSAGE
+  Push $R7
+  FileOpen $R7 "$TEMP\xopc-install-$XopcInstallerPid.log" a
+  FileWriteUTF16LE $R7 "${MESSAGE}$\r$\n"
+  FileClose $R7
+  Pop $R7
+!macroend
+
+!macro xopcProcessCommand MODE
+  !ifdef BUILD_UNINSTALLER
+    !define /redef XOPC_REGISTRY_ARGUMENT ""
+  !else
+    !define /redef XOPC_REGISTRY_ARGUMENT '-InstallRegistryKey "${INSTALL_REGISTRY_KEY}"'
+  !endif
+  nsExec::ExecToStack /TIMEOUT=30000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\xopc-installer-processes.ps1" -Mode ${MODE} -InstallDirectory "$INSTDIR\." -InstallerProcessId $XopcInstallerPid ${XOPC_REGISTRY_ARGUMENT} -StateFile "$PLUGINSDIR\xopc-owned-processes.json" -LogFile "$TEMP\xopc-install-$XopcInstallerPid.log"'
+  Pop $R0
+  Pop $R9
+!macroend
+
+; Override electron-builder's directory-prefix matching for both installation and removal.
+!macro customCheckAppRunning
+  InitPluginsDir
+  File /oname=$PLUGINSDIR\xopc-installer-processes.ps1 "${BUILD_RESOURCES_DIR}\installer-processes.ps1"
+  File /oname=$PLUGINSDIR\installer-file-locks.ps1 "${BUILD_RESOURCES_DIR}\installer-file-locks.ps1"
+  System::Call 'kernel32::GetCurrentProcessId() i.r0'
+  StrCpy $XopcInstallerPid $0
+  !insertmacro xopcProcessCommand check
+  ${If} $R0 == 0
+    Goto xopc_processes_stopped
+  ${EndIf}
+  ${If} $R0 != 10
+    Goto xopc_process_check_failed
+  ${EndIf}
+
+  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDCANCEL IDOK xopc_request_quit
+  SetErrorLevel 2
+  Quit
+  xopc_request_quit:
+  DetailPrint "$(appClosing)"
+  !insertmacro xopcProcessCommand request
+  ${If} $R0 == 0
+    Goto xopc_processes_stopped
+  ${EndIf}
+  xopc_process_check_failed:
+  DetailPrint "Installer process check result $R0: $R9"
+  !insertmacro xopcLog "phase=preflight exitCode=$R0 output=$R9"
+  ${If} $R0 != 10
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Cannot verify installation file usage. / 无法检查安装文件占用。$\r$\n$R9$\r$\nLog / 日志: $TEMP\xopc-install-$XopcInstallerPid.log" /SD IDCANCEL IDRETRY xopc_retry_check
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)$\r$\nExit xopc from its tray menu. If it runs as administrator, close it in Task Manager. / 请从托盘退出；若以管理员身份运行，请在任务管理器中结束。" /SD IDCANCEL IDRETRY xopc_retry_check
+  SetErrorLevel 2
+  Quit
+  xopc_retry_check:
+  !insertmacro xopcProcessCommand check
+  ${If} $R0 == 0
+    Goto xopc_processes_stopped
+  ${EndIf}
+  ${If} $R0 != 10
+    Goto xopc_process_check_failed
+  ${EndIf}
+  MessageBox MB_YESNOCANCEL|MB_ICONEXCLAMATION "xopc is still running. Force close it? Unsaved work and running tasks may be lost.$\r$\nYes: force close. No: request exit again. Cancel: stop installation.$\r$\nxopc 仍在运行。强制结束可能丢失未保存内容和运行任务。是：强制结束；否：重新请求退出；取消：停止安装。" /SD IDCANCEL IDYES xopc_force_quit IDNO xopc_request_quit
+  SetErrorLevel 2
+  Quit
+  xopc_force_quit:
+  !insertmacro xopcProcessCommand force
+  ${If} $R0 != 0
+    Goto xopc_process_check_failed
+  ${EndIf}
+  xopc_processes_stopped:
+!macroend
+
+!ifndef BUILD_UNINSTALLER
+; Legacy NSIS skips its unsafe prefix scan when the copied uninstaller has the app
+; executable name. Our precise preflight runs first, including the previous directory.
+!macro customPrepareOldUninstaller
+  Push $0
+  Push $R0
+  Push $R9
+  Push $INSTDIR
+  StrCpy $INSTDIR $installationDir
+  !insertmacro customCheckAppRunning
+  Pop $INSTDIR
+  Pop $R9
+  Pop $R0
+  Pop $0
+  StrCpy $uninstallerFileNameTemp "$PLUGINSDIR\${APP_EXECUTABLE_FILENAME}"
+  !insertmacro xopcLog "phase=legacy-uninstall directory=$installationDir executable=$uninstallerFileNameTemp"
+!macroend
+
+!macro customOldUninstallerRetry
+  !insertmacro xopcLog "phase=legacy-uninstall exitCode=$R0 directory=$installationDir attempts=$R5"
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Previous version uninstall failed. / 旧版本卸载失败。$\r$\nExit code / 退出码: $R0$\r$\nDirectory / 目录: $installationDir$\r$\nLog / 日志: $TEMP\xopc-install-$XopcInstallerPid.log" /SD IDCANCEL IDRETRY OneMoreAttempt
+  SetErrorLevel 2
+  Quit
+!macroend
+
+!macro customUnInstallCheck
+  ${If} ${Errors}
+    StrCpy $R0 "launch-error"
+  ${EndIf}
+  !insertmacro xopcLog "phase=legacy-uninstall result=$R0 directory=$installationDir"
+  ${If} $R0 != 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION "Previous version uninstall failed. / 旧版本卸载失败。$\r$\nExit code / 退出码: $R0$\r$\nLog / 日志: $TEMP\xopc-install-$XopcInstallerPid.log" /SD IDOK
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+  !insertmacro customUnInstallCheck
+!macroend
+!endif
+
 !ifndef BUILD_UNINSTALLER
   Var XopcAutomaticUpdates
   Var XopcUpdateCheckbox
@@ -38,6 +155,7 @@ Function XopcPrivacyPage
   Pop $0
   ${If} $0 == error
     MessageBox MB_ICONSTOP "Cannot display privacy options. Installation cancelled."
+    SetErrorLevel 2
     Quit
   ${EndIf}
   InitPluginsDir
@@ -86,6 +204,7 @@ Function XopcPrivacyPage
   Return
   xopc_privacy_failed:
   MessageBox MB_ICONSTOP "Cannot read privacy information. Installation cancelled."
+  SetErrorLevel 2
   Quit
 FunctionEnd
 

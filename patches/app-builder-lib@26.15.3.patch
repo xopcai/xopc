@@ -1,5 +1,5 @@
 diff --git a/out/codeSign/macCodeSign.js b/out/codeSign/macCodeSign.js
-index 9a69042fd48f4759a1c697bf23fa5b44f2da2366..50d9406c0986957265be819664a513d2fef71159 100644
+index 9a69042fd48f4759a1c697bf23fa5b44f2da2366..637cc19f525c6ee3479b377cac4c6c78345aa8ba 100644
 --- a/out/codeSign/macCodeSign.js
 +++ b/out/codeSign/macCodeSign.js
 @@ -156,16 +156,16 @@ async function createKeychain({ tmpDir, cscLink, cscKeyPassword, cscILink, cscIK
@@ -22,3 +22,30 @@ index 9a69042fd48f4759a1c697bf23fa5b44f2da2366..50d9406c0986957265be819664a513d2
      }
      return {
          keychainFile,
+diff --git a/templates/nsis/include/installUtil.nsh b/templates/nsis/include/installUtil.nsh
+index 47367741632726ba0886ac516461dbe98b7aea58..eccb1c1b5a1f8305e61c0ddee119ce970fcd4d55 100644
+--- a/templates/nsis/include/installUtil.nsh
++++ b/templates/nsis/include/installUtil.nsh
+@@ -207,6 +207,9 @@ Function uninstallOldVersion
+   ${endif}
+ 
+   StrCpy $uninstallerFileNameTemp "$PLUGINSDIR\old-uninstaller.exe"
++  !ifmacrodef customPrepareOldUninstaller
++    !insertmacro customPrepareOldUninstaller
++  !endif
+   !insertmacro copyFile "$uninstallerFileName" "$uninstallerFileNameTemp"
+ 
+   # Retry counter
+@@ -216,7 +219,11 @@ Function uninstallOldVersion
+     IntOp $R5 $R5 + 1
+ 
+     ${if} $R5 > 5
+-      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY OneMoreAttempt
++      !ifmacrodef customOldUninstallerRetry
++        !insertmacro customOldUninstallerRetry
++      !else
++        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)" /SD IDCANCEL IDRETRY OneMoreAttempt
++      !endif
+       Return
+     ${endIf}
+ 
