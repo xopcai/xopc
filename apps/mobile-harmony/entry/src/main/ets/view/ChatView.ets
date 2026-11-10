@@ -1,3 +1,4 @@
+import { XopcTaskChatHeader } from './TaskChatHeader';
 import { XopcPhoneViewModel } from '../viewmodel/phoneViewModel';
 import { XopcPhoneView } from './PhoneView';
 import { XopcChatRenderKeys } from '../common/chatRenderKeys';
@@ -82,6 +83,8 @@ export struct XopcChatView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param requestedId: string = '';
   @Param taskId: string = '';
+  @Local taskOverviewOpen: boolean = false;
+  @Event onTaskClose: () => void = (): void => {};
   @Param requestRevision: number = 0;
   @Param focusRevision: number = 0;
   @Param requestedAction: string = '';
@@ -806,6 +809,7 @@ export struct XopcChatView {
   }
   private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
   private dismissOverlay(): boolean {
+    if (this.taskOverviewOpen) { this.taskOverviewOpen = false; return true; }
     if (this.phonePage === 1) { this.phonePage = 0; return true; }
     if (this.personalSettingsOpen) { this.personalSettingsOpen = false; return true; }
     if (this.searchOpen) { this.closeMessageSearch(); return true; }
@@ -1654,7 +1658,7 @@ export struct XopcChatView {
             .enabled(!this.restoringDraft).backgroundColor(Color.Transparent)
             .fontSize(16).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
             .onAppear((): void => { this.focusMountedComposer(); })
-            .onEditChange((editing: boolean): void => { if (editing) this.setPanel(false); })
+            .onEditChange((editing: boolean): void => { if (editing) { this.setPanel(false); this.taskOverviewOpen = false; } })
             .onChange((value: string): void => { this.draft = value; this.cursor = value.length; this.palette.update(value, this.cursor, this.chat.selectedId, appSettings.effectiveLanguage()); })
             .onTextSelectionChange((start: number, end: number): void => {
               this.cursor = end; if (start === end) this.palette.update(this.draft, end, this.chat.selectedId, appSettings.effectiveLanguage()); else this.palette.close();
@@ -1820,7 +1824,7 @@ export struct XopcChatView {
         })
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
-      if (!this.embedded) {
+      if (!this.embedded && !this.taskId) {
         Column().id('chat-status-bar-background').width('100%').height(this.chatTopInset)
           .align(Alignment.TopStart).backgroundColor(this.colors.surface).hitTestBehavior(HitTestMode.None)
         Row({ space: 12 }) {
@@ -1861,6 +1865,15 @@ export struct XopcChatView {
         }.id('chat-floating-header').width('100%').padding({ left: 20, right: 20, top: this.chatTopInset + 8, bottom: 6 })
           .align(Alignment.TopStart).backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.Transparent)
       }
+    if (this.taskId) {
+      XopcTaskChatHeader({ taskId: this.taskId, expanded: this.taskOverviewOpen, topInset: this.chatTopInset,
+        bottomClearance: this.bottomRegionHeight,
+        onToggle: (): void => { this.dismissComposer(); this.taskOverviewOpen = !this.taskOverviewOpen; },
+        onClose: (): void => { this.onTaskClose(); },
+        onSearch: (): void => { this.taskOverviewOpen = false; this.dismissComposer(); this.searchOpen = true; },
+        onOptions: (): void => { this.taskOverviewOpen = false; this.openSheet('actions'); },
+        onNavigate: (route: XopcMobileRoute): void => { this.taskOverviewOpen = false; this.onNavigate(route); } })
+    }
     if (this.sendFlightActive) {
       Text(this.sendFlightText).fontSize(16).lineHeight(20).fontColor(this.colors.foreground)
         .maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis })

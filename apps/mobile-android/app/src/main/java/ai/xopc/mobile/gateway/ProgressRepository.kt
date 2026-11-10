@@ -23,7 +23,8 @@ data class ProgressTask(val id: String, val title: String, val body: String, val
   val objective: String = "", val criteria: List<TaskCriterion> = emptyList(),
   val dueAt: Long? = null, val operationalState: String = "idle", val hasActiveExecution: Boolean = false,
   val activeWaitCount: Int = 0, val latestResult: String = "", val remainingWork: List<String> = emptyList(),
-  val phaseChanges: List<TaskPhaseChange> = emptyList()) {
+  val phaseChanges: List<TaskPhaseChange> = emptyList(),
+  val attention: List<String> = emptyList(), val expectedOutputs: List<String> = emptyList()) {
   fun phaseAction(target: String): String? {
     if (target == phase || target !in setOf("backlog", "ready", "active", "review", "closed")) return null
     val action = "move"
@@ -323,8 +324,12 @@ class ProgressRepository(private val gateway: GatewaySession) {
           entry.optString("fromResolution").takeIf { it.isNotEmpty() })
       }
       val remaining = latest?.optJSONArray("remainingWork")
+      val attention = root.optJSONArray("attention")
+      val outputs = root.getJSONObject("task").optJSONObject("contract")?.optJSONArray("expectedOutputs")
       return base.copy(operationalState = root.optString("operationalState", "idle"),
         hasActiveExecution = hasActiveRun, phaseChanges = history,
+        attention = (0 until (attention?.length() ?: 0)).map { attention!!.getJSONObject(it).optString("summary") }.filter { it.isNotBlank() },
+        expectedOutputs = (0 until (outputs?.length() ?: 0)).map { outputs!!.getString(it) },
         activeWaitCount = (0 until (waits?.length() ?: 0)).count { waits!!.getJSONObject(it).optString("status") == "active" },
         latestResult = latest?.optString("summary").orEmpty(),
         remainingWork = (0 until (remaining?.length() ?: 0)).map { remaining!!.getString(it) },

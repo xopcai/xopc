@@ -1203,6 +1203,7 @@ internal fun MainContent(
     }
   }
   var personalPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
+  val taskNavigation = rememberTaskChatNavigation(connection)
   var progressAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
   var notesAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
   var personalReturnPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
@@ -1450,6 +1451,9 @@ internal fun MainContent(
   val imeVisible = WindowInsets.isImeVisible
   val layoutDirection = LocalLayoutDirection.current
   val tabStateHolder = rememberSaveableStateHolder()
+  BackHandler(enabled = selectedTab == HomeTab.Assistant && isTaskChat(connection) && taskNavigation.canReturn) {
+    taskNavigation.close(onSelectConversation, onSelectTab)
+  }
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
   BackHandler(enabled = quickActionsOpen) { quickActionsOpen = false }
   BackHandler(enabled = selectedTab == HomeTab.Me && personalPage != "home") { leavePersonalPage() }
@@ -1611,7 +1615,7 @@ internal fun MainContent(
           onLoadMessageMedia, onSpeechChunk, onOpenMessageTarget = { target ->
             when (target.kind) {
               "note" -> { onOpenNote(target.id); onSelectTab(HomeTab.Notes) }
-              "task" -> { onOpenProgressTask(target.id); onSelectTab(HomeTab.Progress) }
+              "task" -> taskNavigation.open(target.id, connection, onOpenTaskChat)
               "project" -> { onOpenProgressProject(target.id); onSelectTab(HomeTab.Progress) }
               "automation" -> { onOpenAutomation(target.id); onSelectTab(HomeTab.Progress) }
               "session" -> { onSelectConversation(target.id); onSelectTab(HomeTab.Assistant) }
@@ -1631,7 +1635,12 @@ internal fun MainContent(
           { assistantActionsOpen = it }, onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
           onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, personalModelRequestRevision, { personalModelRequestRevision = 0 },
           phoneAvailable = phoneUi.summary?.available == true, phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.attention,
-          onOpenPhone = { phonePage = true })
+          onOpenPhone = { phonePage = true },
+          taskChrome = { search, options ->
+            TaskConversationChrome(connection, taskNavigation, onSelectConversation, onSelectTab,
+              onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, onSaveProgressTask,
+              onLoadProgressProjects, search, options, insets.calculateBottomPadding())
+          })
         }
         else ConversationsScreen(connection, rootInsets, bottomChromeHeight,
           onConversationSearchChange,
@@ -1658,7 +1667,8 @@ internal fun MainContent(
         onOpenProgressTask, onProgressTaskSearchChange, onSubmitProgressTaskSearch,
         onProgressTaskCommand, onStartProgressTask, onCreateTaskWithChat,
         onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
-        onOpenTaskChat, onSaveProgressTask, onHomeAction = onProgressHomeAction,
+        { taskId -> taskNavigation.openFromProgress(taskId, onOpenTaskChat) },
+        onSaveProgressTask, onHomeAction = onProgressHomeAction,
         onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
         onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
         onCreateAutomation = onCreateAutomation,
@@ -2516,7 +2526,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {},
-  phoneAvailable: Boolean = false, phoneNeedsUser: Boolean = false, onOpenPhone: () -> Unit = {}) {
+  phoneAvailable: Boolean = false, phoneNeedsUser: Boolean = false, onOpenPhone: () -> Unit = {},
+  taskChrome: @Composable (() -> Unit, () -> Unit) -> Unit = { _, _ -> }) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val bottomChromeHeight = bottomChromeInsets.calculateBottomPadding()
@@ -2609,10 +2620,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val showConnectionWait = connection.connectionWait.gatewayId == connection.profile?.gatewayId &&
     connection.connectionWait.conversationId == connection.selectedConversationId &&
     connection.connectionWait.snapshot?.wait?.phase?.let { it != "ready" } == true
-  val messageListState = remember(connection.selectedConversationId) { LazyListState() }
+  val readingPosition = rememberChatReadingPosition(connection.selectedConversationId)
+  val messageListState = readingPosition.listState
   val messageDragged by messageListState.interactionSource.collectIsDraggedAsState()
-  var positionedAtLatest by remember(connection.selectedConversationId) { mutableStateOf(false) }
-  var followBottom by remember(connection.selectedConversationId) { mutableStateOf(true) }
+  var positionedAtLatest by readingPosition.positionedAtLatest
+  var followBottom by readingPosition.followBottom
   var replySpace by remember(connection.selectedConversationId) { mutableStateOf(ChatReplySpace()) }
   var messageViewportHeight by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
   var replyAnchorId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -2867,7 +2879,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   }
     Spacer(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(chatTopInset)
       .background(MaterialTheme.colorScheme.background).testTag("chat-status-bar-background"))
-    Row(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+    if (!isTaskChat(connection)) Row(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
       .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
       .padding(horizontal = 20.dp, vertical = 16.dp).testTag("chat-floating-header"), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
@@ -2912,6 +2924,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
       }
     }
+  if (isTaskChat(connection)) taskChrome({ messageSearchOpen = true }, { optionsOpen = true })
   connection.clarification?.let { prompt ->
     Box(Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
       ClarificationCard(prompt, connection.clarificationBusy, connection.clarificationError, onRespondToClarification, Modifier.fillMaxWidth())

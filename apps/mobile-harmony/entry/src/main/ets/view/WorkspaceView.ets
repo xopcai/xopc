@@ -22,6 +22,7 @@ export struct XopcWorkspaceView {
   @Param section: XopcSection = 'tasks';
   @Param heading: ResourceStr = '';
   @Param initialId: string = '';
+  @Param initialTaskAction: string = '';
   @Param createOnAppear: boolean = false;
   @Param projectId: string = '';
   @Event onExit: () => void = (): void => {};
@@ -48,8 +49,13 @@ export struct XopcWorkspaceView {
   @Local creatingChat: boolean = false;
 
   aboutToAppear(): void {
-    this.model.start(this.section, this.initialId, this.createOnAppear, this.projectId);
+    if (this.initialTaskAction) void this.openTaskAction();
+    else this.model.start(this.section, this.initialId, this.createOnAppear, this.projectId);
     if (this.section === 'tasks') { this.loadAgents(); this.loadProjects(); }
+  }
+  private async openTaskAction(): Promise<void> {
+    await this.model.open(this.initialId);
+    if (this.initialTaskAction === 'edit' && this.model.selected) this.model.editing = true;
   }
   @Monitor('initialId')
   onTargetChange(): void {
@@ -141,6 +147,7 @@ export struct XopcWorkspaceView {
         } catch (_error) { return; }
       }
     }
+    if (this.initialTaskAction) { this.onExit(); return; }
     if (this.model.editing && this.model.selected?.id) { this.model.cancelEdit(); return; }
     if (this.createOnAppear) this.onExit();
     else if (this.model.selected && !this.initialId) this.model.back(); else this.onExit();
@@ -1018,7 +1025,7 @@ export struct XopcWorkspaceView {
             .fontColor(Color.White).enabled(!this.model.busy && !!this.model.title.trim())
             .onClick(async (): Promise<void> => {
               await this.model.save();
-              if (this.createOnAppear && !this.model.error) this.onExit();
+              if ((this.createOnAppear || this.initialTaskAction) && !this.model.error) this.onExit();
             })
         }
       } else {
@@ -1182,8 +1189,9 @@ export struct XopcWorkspaceView {
       }.width('100%').padding({ left: 12, right: 20, top: 10, bottom: 10 })
       if (this.model.error) { Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary).padding(12) }
       if (this.model.selected) {
-        this.detail(this.model.selected)
-        if (this.section === 'tasks' && !this.model.editing && this.model.selected.taskDetail) {
+        if (this.initialTaskAction === 'status') { this.taskStatusSheet(this.model.selected) }
+        else { this.detail(this.model.selected) }
+        if (!this.initialTaskAction && this.section === 'tasks' && !this.model.editing && this.model.selected.taskDetail) {
           this.taskActionBar(this.model.selected)
         }
       }

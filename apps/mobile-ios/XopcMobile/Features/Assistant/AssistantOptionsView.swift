@@ -9,6 +9,7 @@ struct AssistantSessionActionsView: View {
     let onAddReference: (ContextReference) -> Void
     let onConversationUpdated: (ConversationSelection) -> Void
     let onStartScopedConversation: (ProjectRecord?, String?) -> Void
+    var isTaskConversation = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var options = AssistantOptionsState()
@@ -27,24 +28,26 @@ struct AssistantSessionActionsView: View {
                 } label: {
                     optionRow("上下文", value: state.contextSummary?.work.project?.title ?? "Local", symbol: "folder")
                 }
-                NavigationLink {
-                    List(state.agents) { agent in
-                        Button {
-                            dismiss()
-                            onStartConversation(agent.id)
-                        } label: {
-                            HStack {
-                                Text(agent.displayName)
-                                Spacer()
-                                if agent.id == conversation?.agentId {
-                                    Image(systemName: "checkmark")
-                                }
-                            }.frame(minHeight: 44)
-                        }
-                    }.navigationTitle("助手角色")
-                } label: {
-                    optionRow("助手角色", value: state.agents.first(where: { $0.id == conversation?.agentId })?.displayName
-                        ?? state.selectedAgent?.displayName ?? conversation?.agentId ?? "Main", symbol: "person.crop.circle")
+                if !isTaskConversation {
+                    NavigationLink {
+                        List(state.agents) { agent in
+                            Button {
+                                dismiss()
+                                onStartConversation(agent.id)
+                            } label: {
+                                HStack {
+                                    Text(agent.displayName)
+                                    Spacer()
+                                    if agent.id == conversation?.agentId {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }.frame(minHeight: 44)
+                            }
+                        }.navigationTitle("助手角色")
+                    } label: {
+                        optionRow("助手角色", value: state.agents.first(where: { $0.id == conversation?.agentId })?.displayName
+                            ?? state.selectedAgent?.displayName ?? conversation?.agentId ?? "Main", symbol: "person.crop.circle")
+                    }
                 }
                 if let conversation {
                     NavigationLink {
@@ -75,16 +78,18 @@ struct AssistantSessionActionsView: View {
                         } label: { optionRow("后续消息队列", symbol: "square.and.pencil") }
                     }
                 }
-                Button {
-                    dismiss()
-                    onStartConversation(conversation?.agentId ?? state.selectedAgentID ?? "main")
-                } label: { optionRow("新建会话", symbol: "square.and.pencil") }
-                NavigationLink {
-                    SessionEnvironmentSettingsView(configuration: configuration, conversation: conversation,
-                                                   summary: state.contextSummary, onStartScopedConversation: { project, mode in
-                                                       dismiss(); onStartScopedConversation(project, mode)
-                                                   }, onDirectoryChanged: reloadContext)
-                } label: { optionRow("执行环境与范围", symbol: "folder.badge.gearshape") }
+                if !isTaskConversation {
+                    Button {
+                        dismiss()
+                        onStartConversation(conversation?.agentId ?? state.selectedAgentID ?? "main")
+                    } label: { optionRow("新建会话", symbol: "square.and.pencil") }
+                    NavigationLink {
+                        SessionEnvironmentSettingsView(configuration: configuration, conversation: conversation,
+                                                       summary: state.contextSummary, onStartScopedConversation: { project, mode in
+                                                           dismiss(); onStartScopedConversation(project, mode)
+                                                       }, onDirectoryChanged: reloadContext)
+                    } label: { optionRow("执行环境与范围", symbol: "folder.badge.gearshape") }
+                }
                 if let error = options.errorMessage {
                     Text(error).foregroundStyle(.red)
                     Button("重试") { Task { await loadOptions() } }

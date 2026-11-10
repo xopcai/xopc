@@ -12,6 +12,7 @@ messages = [{'id':'long-ai','turnId':'turn-1','role':'assistant','content':long_
  {'id':'user-1','role':'user','content':'请整理移动端布局'},
  {'id':'voice-1','role':'user','content':'','attachments':[{'id':'voice','type':'audio','name':'语音','mimeType':'audio/wav','uri':'media://outbound/voice.wav','durationSeconds':3}]},
  {'id':'ai-1','turnId':'turn-1','role':'assistant','content':'## 检查结果\n\n1. **消息布局**\n   - 收紧列表缩进，换行保留阅读宽度。\n2. **交互**\n   - 长按显示用户消息操作。\n\n所有改动均已记录。'}]
+messages[-1]['deliveries'] = [{'operation':'created','primary':{'kind':'task','id':'task-header','title':'任务顶部栏检查','capabilities':['open']}}]
 keyboard_messages = [{'id':'keyboard-user','role':'user','content':'Explain the result.'},
  {'id':'keyboard-answer','role':'assistant','content':'\n\n'.join(f'Paragraph {i}: a long answer spanning several screens.' for i in range(40))}]
 row={'key':parent,'agentId':'main','name':'移动端布局检查','status':'active','updatedAt':'2026-10-09T08:00:00Z','messageCount':4}

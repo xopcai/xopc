@@ -5,252 +5,254 @@ struct TaskDetailView: View {
     let taskID: String
     let onOpenConversation: (String, String, String) -> Void
 
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var detail: TaskDetailEnvelope?
+    @State private var conversation: ConversationSelection?
+    @State private var voiceCall = RealtimeVoiceCall()
     @State private var error: String?
-    @State private var isWorking = false
+    @State private var overviewExpanded = false
     @State private var showingStatus = false
+    @State private var optionsRevision = 0
+    @State private var searchRevision = 0
     @State private var editingTask: TaskRecord?
+    @State private var confirmsCancel = false
+    @State private var composerHeight: CGFloat = 120
+    @State private var isWorking = false
 
     var body: some View {
-        Group {
-            if let detail {
-                List {
-                    Section {
-                        HStack(alignment: .top, spacing: 16) {
-                            Image(systemName: "doc.text")
-                                .font(.title2)
-                                .foregroundStyle(.blue)
-                                .frame(width: 48, height: 48)
-                                .background(Color.blue.opacity(0.1), in: .circle)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(detail.task.title)
-                                    .mobileTextStyle(.detailTitle)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Button { showingStatus = true } label: {
-                                    Label(LocalizedStringKey(detail.task.phase == "closed" && detail.task.resolution == "done" ? "已完成"
-                                              : detail.task.resolution == "cancelled" ? "cancelled" : detail.task.phase),
-                                    systemImage: "chevron.down")
-                                        .frame(minHeight: 44)
-                                }.disabled(isWorking)
-                                if let projectID = detail.task.projectId {
-                                    Label(projectID, systemImage: "folder")
-                                        .mobileTextStyle(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                if let conversation {
+                    AssistantView(
+                        configuration: configuration, isActive: true, realtimeVoiceCall: voiceCall,
+                        conversation: conversation, personalAgent: nil, quickChatHandoff: nil,
+                        onStartConversation: { _ in }, onStartScopedConversation: { _, _, _ in },
+                        onConversationUpdated: { self.conversation = $0 }, onQuickChatHandled: { _ in },
+                        onPersonalAgentUpdated: { _ in }, onOpenSettings: { optionsRevision += 1 },
+                        onInputFocusChanged: { focused in
+                            if focused {
+                                overviewExpanded = false
                             }
-                        }
-                        .padding(.vertical, 10)
+                        },
+                        showsFloatingHeader: false, sessionActionsRequest: optionsRevision, messageSearchRequest: searchRevision
+                    ) { composer, _ in
+                        composer.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
                     }
-                    Section("说明") {
-                        if let body = detail.task.body, !body.isEmpty {
-                            MarkdownBodyView(parts: MarkdownBlock.parse(body).map(MarkdownPart.init),
-                                             configuration: configuration, conversationID: nil)
-                        } else {
-                            Text("暂无说明").foregroundStyle(.secondary)
-                        }
+                } else if let error {
+                    ContentUnavailableView {
+                        Label("无法读取任务", systemImage: "exclamationmark.triangle")
+                    } description: { Text(error) } actions: {
+                        Button("重试") { Task { await load() } }
                     }
-                    if let objective = detail.task.contract?.objective, !objective.isEmpty, objective != detail.task.title {
-                        Section("目标") { Text(objective) }
-                    }
-                    if let criteria = detail.task.contract?.acceptanceCriteria, !criteria.isEmpty {
-                        Section {
-                            ForEach(criteria.enumerated().map {
-                                TaskCriterionDisplay(version: detail.task.latestContractVersion ?? 0,
-                                                     index: $0.offset, text: $0.element)
-                            }) { criterion in
-                                let status = TaskAcceptanceStatus.resolve(
-                                    criterion.text, index: criterion.index, detail: detail
-                                )
-                                HStack(alignment: .top, spacing: 12) {
-                                    Image(systemName: status == .passed ? "checkmark.circle.fill"
-                                        : status == .failed ? "exclamationmark.circle.fill" : "circle.dotted")
-                                        .foregroundStyle(status == .passed ? .green
-                                            : status == .failed ? .red : .secondary)
-                                        .accessibilityHidden(true)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(criterion.text)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                        Text(label(for: status))
-                                            .mobileTextStyle(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .accessibilityElement(children: .combine)
-                            }
-                        } header: {
-                            HStack {
-                                Text("验收标准")
-                                Spacer()
-                                Text("\(TaskAcceptanceStatus.passedCount(in: detail))/\(criteria.count)")
-                            }
+                } else {
+                    VStack(spacing: 20) {
+                        ForEach(0 ..< 4) { _ in
+                            RoundedRectangle(cornerRadius: 8).fill(.quaternary).frame(height: 64)
                         }
-                    }
-                    if let outputs = detail.task.contract?.expectedOutputs, !outputs.isEmpty {
-                        Section("预期产出") {
-                            ForEach(outputs, id: \.self) { Text($0) }
-                        }
-                    }
-                    if let attention = detail.attention, !attention.isEmpty {
-                        Section("需要留意") {
-                            ForEach(attention.enumerated().map {
-                                TaskAttentionDisplay(index: $0.offset, text: $0.element.summary)
-                            }) { item in
-                                Text(item.text)
-                            }
-                        }
-                    }
-                    Section("详细信息") {
-                        LabeledContent("运行状态") { Text(LocalizedStringKey(detail.operationalState)) }
-                        LabeledContent("阶段") { Text(LocalizedStringKey(detail.task.phase)) }
-                        if let dueAt = detail.task.dueAt {
-                            LabeledContent("截止日期") { Text(dueAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute()) }
-                        }
-                        if let priority = detail.task.priority {
-                            LabeledContent("优先级") { Text(LocalizedStringKey(priority)) }
-                        }
-                        LabeledContent("最近更新") {
-                            Text(detail.task.updatedAt.millisecondsDate, format: .dateTime.month().day().hour().minute())
-                        }
-                    }
-                    if let receipts = detail.receipts, !receipts.isEmpty {
-                        Section("执行结果") {
-                            ForEach(receipts) { receipt in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    if let summary = receipt.summary, !summary.isEmpty {
-                                        Text(summary).mobileTextStyle(.rowTitle)
-                                    } else {
-                                        Text(LocalizedStringKey(receipt.status)).mobileTextStyle(.rowTitle)
-                                    }
-                                    if receipt.needsUser == true {
-                                        Label("需要你的参与", systemImage: "person.crop.circle.badge.exclamationmark").foregroundStyle(.orange)
-                                    }
-                                }
-                            }
-                        }
-                        if let latest = receipts.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) }),
-                           let artifacts = latest.evidence?.filter({ $0.kind == "artifact" }), !artifacts.isEmpty
-                        {
-                            Section("产出文件") {
-                                ForEach(artifacts, id: \.title) { artifact in
-                                    Label(artifact.title, systemImage: "doc")
-                                }
-                            }
-                        }
-                    }
-                    if let changes = detail.phaseChanges, !changes.isEmpty {
-                        Section("变更记录") {
-                            ForEach(changes.reversed()) { change in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack {
-                                        Text(LocalizedStringKey(change.fromPhase))
-                                        if let resolution = change.fromResolution {
-                                            Text(LocalizedStringKey(resolution))
-                                        }
-                                        Text("→")
-                                        Text(LocalizedStringKey(change.toPhase))
-                                        if let resolution = change.toResolution {
-                                            Text(LocalizedStringKey(resolution))
-                                        }
-                                    }
-                                    Text("\(change.actor.kind) · \(change.actor.id ?? "") · \(change.source)")
-                                        .font(.caption).foregroundStyle(.secondary)
-                                    Text(change.createdAt.millisecondsDate, format: .dateTime.year().month().day().hour().minute())
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    if let runs = detail.runs, !runs.isEmpty {
-                        Section("运行记录") {
-                            ForEach(runs) { run in
-                                LabeledContent("第 \(run.attempt) 次") { Text(LocalizedStringKey(run.status)) }
-                            }
-                        }
+                        Spacer()
+                    }.padding(.horizontal, 20).padding(.top, 88).redacted(reason: .placeholder)
+                }
+                if overviewExpanded {
+                    Color.black.opacity(0.12)
+                        .padding(.top, 64).padding(.bottom, composerHeight)
+                        .onTapGesture { setExpanded(false) }
+                        .accessibilityLabel("收起任务详情")
+                }
+                VStack(spacing: 0) {
+                    taskHeader
+                    if overviewExpanded, let detail {
+                        overview(detail)
+                            .frame(height: max(0, min(geometry.size.height * 0.5, geometry.size.height - composerHeight - 64)))
+                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 14, bottomTrailingRadius: 14))
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
-                .safeAreaInset(edge: .bottom) {
-                    VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            Button { showingStatus = true } label: {
-                                Text("调整状态").frame(maxWidth: .infinity, minHeight: 44)
-                            }.accessibilityIdentifier("task-adjust-status")
-                            Button { editingTask = detail.task } label: {
-                                Text("编辑").frame(maxWidth: .infinity, minHeight: 44)
-                            }.accessibilityIdentifier("task-edit")
-                            Button { Task { await openTaskConversation(detail.task) } } label: {
-                                Text("任务对话").frame(maxWidth: .infinity, minHeight: 44)
-                            }.accessibilityIdentifier("task-edit-chat")
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .buttonStyle(.bordered)
-                        .disabled(isWorking)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .background(.regularMaterial)
-                }
-            } else if let error {
-                ContentUnavailableView("无法读取任务", systemImage: "exclamationmark.triangle", description: Text(error))
-            } else {
-                ProgressView("正在读取任务…")
             }
         }
-        .navigationTitle("任务详情")
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
-        .sheet(item: $editingTask, onDismiss: { Task { await load() } }) { task in
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
+        .task(id: taskID) { await load() }
+        .task(id: conversation?.id) {
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(8)) } catch { return }
+                guard editingTask == nil, !showingStatus, !isWorking else { continue }
+                await refresh()
+            }
+        }
+        .sheet(item: $editingTask, onDismiss: { Task { await refresh() } }) { task in
             TaskEditorView(configuration: configuration, task: task)
         }
-        .sheet(isPresented: $showingStatus, onDismiss: { Task { await load() } }) {
+        .sheet(isPresented: $showingStatus, onDismiss: { Task { await refresh() } }) {
             if let detail {
                 TaskStatusView(configuration: configuration, detail: detail)
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
-                    .accessibilityLabel("刷新").disabled(isWorking)
+        .fullScreenCover(isPresented: Binding(get: { voiceCall.phase != .idle && voiceCall.expanded }, set: {
+            if !$0 {
+                voiceCall.minimize()
             }
-        }
-        .alert("操作失败", isPresented: Binding(get: { detail != nil && error != nil }, set: {
+        })) { RealtimeVoiceCallView(call: voiceCall) }
+        .confirmationDialog("取消任务？", isPresented: $confirmsCancel, titleVisibility: .visible) {
+            Button("取消任务", role: .destructive) { Task { await cancelTask() } }
+            Button("保留任务", role: .cancel) {}
+        } message: { Text("结束此任务，不标记为完成。之后可以重新打开。") }
+        .alert("操作失败", isPresented: Binding(get: { conversation != nil && error != nil }, set: {
             if !$0 {
                 error = nil
             }
-        })) {
-            Button("好", role: .cancel) {}
-        } message: { Text(error ?? "未知错误") }
-    }
-}
-
-private extension TaskDetailView {
-    @MainActor
-    func load() async {
-        do { detail = try await GatewayClient(configuration: configuration).fetchTask(id: taskID); error = nil }
-        catch { self.error = error.localizedDescription }
+        })) { Button("好", role: .cancel) { error = nil } } message: { Text(error ?? "") }
     }
 
-    @MainActor
-    func openTaskConversation(_ task: TaskRecord) async {
-        guard !isWorking else { return }
+    private var latestReceipt: TaskReceipt? {
+        detail?.receipts?.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) })
+    }
+
+    private var taskHeader: some View {
+        HStack(spacing: 4) {
+            Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44).contentShape(.rect) }
+                .accessibilityLabel("关闭").accessibilityIdentifier("task-chat-close")
+            Button { setExpanded(!overviewExpanded) } label: {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(detail?.task.title ?? AppLocalization.resolve("任务详情")).font(.subheadline.weight(.medium)).lineLimit(1)
+                        if let detail {
+                            HStack(spacing: 4) {
+                                Text(LocalizedStringKey(detail.task.resolution == "done" ? "已完成"
+                                        : detail.task.resolution == "cancelled" ? "cancelled" : detail.task.phase))
+                                if let summary = latestReceipt?.summary, !summary.isEmpty {
+                                    Text("·"); Text(summary).lineLimit(1)
+                                }
+                            }.font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: overviewExpanded ? "chevron.up" : "chevron.down").font(.caption)
+                }.frame(minHeight: 48).contentShape(.rect)
+            }.disabled(detail == nil).accessibilityIdentifier("task-chat-summary-toggle")
+                .accessibilityValue(overviewExpanded ? "展开" : "收起")
+            Menu {
+                if let detail {
+                    Button("编辑") { editingTask = detail.task }
+                    Button("调整状态") { showingStatus = true }
+                    if detail.allowedCommands?.contains("close") == true {
+                        Button("取消任务", role: .destructive) { confirmsCancel = true }
+                    }
+                }
+                Button("搜索消息") { searchRevision += 1 }
+                Button("会话选项") { optionsRevision += 1 }
+                Button("刷新") { Task { await refresh() } }
+            } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).contentShape(.rect) }
+                .disabled(isWorking).accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
+        }.buttonStyle(.plain).padding(.horizontal, 8).frame(minHeight: 64)
+            .background(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private func overview(_ detail: TaskDetailEnvelope) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let attention = detail.attention, !attention.isEmpty {
+                    overviewSection("需要留意") {
+                        ForEach(attention.enumerated().map { TaskAttentionDisplay(index: $0.offset, text: $0.element.summary) }) {
+                            Text($0.text)
+                        }
+                    }
+                }
+                if let receipt = detail.receipts?.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) }),
+                   let summary = receipt.summary, !summary.isEmpty
+                {
+                    overviewSection("执行结果") { Text(summary).textSelection(.enabled) }
+                }
+                let objective = detail.task.contract?.objective ?? detail.task.body ?? ""
+                if !objective.isEmpty {
+                    overviewSection("目标") { Text(objective).textSelection(.enabled) }
+                }
+                if let criteria = detail.task.contract?.acceptanceCriteria, !criteria.isEmpty {
+                    overviewSection("验收标准") {
+                        ForEach(criteria.enumerated().map {
+                            TaskCriterionDisplay(version: detail.task.latestContractVersion ?? 0, index: $0.offset, text: $0.element)
+                        }) { criterion in
+                            let status = TaskAcceptanceStatus.resolve(criterion.text, index: criterion.index, detail: detail)
+                            Label(criterion.text, systemImage: status == .passed ? "checkmark.circle"
+                                : status == .failed ? "exclamationmark.circle" : "circle")
+                                .accessibilityValue(status == .passed ? "已通过" : status == .failed ? "未通过" : "待核对")
+                        }
+                    }
+                }
+                if let outputs = detail.task.contract?.expectedOutputs, !outputs.isEmpty {
+                    overviewSection("预期产出") { ForEach(outputs, id: \.self) { Text($0) } }
+                }
+                properties(detail, objective: objective)
+                DisclosureGroup("变更记录") {
+                    ForEach(detail.phaseChanges ?? []) { change in
+                        HStack {
+                            Text(LocalizedStringKey(change.fromPhase)); Text("→"); Text(LocalizedStringKey(change.toPhase))
+                        }.padding(.vertical, 4)
+                    }
+                    ForEach(detail.runs ?? []) { run in
+                        LabeledContent("第 \(run.attempt) 次") { Text(LocalizedStringKey(run.status)) }
+                    }
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
+        }.accessibilityIdentifier("task-chat-overview")
+    }
+
+    private func properties(_ detail: TaskDetailEnvelope, objective: String) -> some View {
+        DisclosureGroup("详细信息") {
+            VStack(alignment: .leading, spacing: 10) {
+                if let body = detail.task.body, !body.isEmpty, body != objective {
+                    Text(body)
+                }
+                LabeledContent("运行状态") { Text(LocalizedStringKey(detail.operationalState)) }
+                if let priority = detail.task.priority {
+                    LabeledContent("优先级") { Text(LocalizedStringKey(priority)) }
+                }
+                if let due = detail.task.dueAt {
+                    LabeledContent("截止日期") { Text(due.millisecondsDate, format: .dateTime.month().day().hour().minute()) }
+                }
+                if let projectID = detail.task.projectId {
+                    LabeledContent("项目") { Text(projectID) }
+                }
+            }.padding(.top, 8)
+        }
+    }
+
+    private func overviewSection(_ title: LocalizedStringKey, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+            content()
+        }
+    }
+
+    private func setExpanded(_ expanded: Bool) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { overviewExpanded = expanded }
+    }
+
+    @MainActor private func refresh() async {
+        do { detail = try await GatewayClient(configuration: configuration).fetchTask(id: taskID) }
+        catch is CancellationError {} catch { self.error = error.localizedDescription }
+    }
+
+    @MainActor private func load() async {
+        do {
+            let client = GatewayClient(configuration: configuration)
+            let detail = try await client.fetchTask(id: taskID)
+            self.detail = detail
+            let id = try await client.ensureTaskConversation(taskID: taskID)
+            try Task.checkCancellation()
+            conversation = .existing(id: id, title: detail.task.title, agentId: detail.task.delegateAgentId ?? "main")
+            error = nil
+        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+    }
+
+    @MainActor private func cancelTask() async {
+        guard let detail, !isWorking else { return }
         isWorking = true
         defer { isWorking = false }
         do {
-            let conversationID = try await GatewayClient(configuration: configuration)
-                .ensureTaskConversation(taskID: task.id)
-            onOpenConversation(conversationID, task.title, task.delegateAgentId ?? "main")
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    func label(for status: TaskAcceptanceStatus) -> LocalizedStringKey {
-        switch status {
-        case .passed: "已通过"
-        case .failed: "未通过"
-        case .pending: "待核对"
-        }
+            try await GatewayClient(configuration: configuration).commandTask(detail.task, command: "close", resolution: "cancelled")
+            await refresh()
+        } catch { self.error = error.localizedDescription }
     }
 }
 

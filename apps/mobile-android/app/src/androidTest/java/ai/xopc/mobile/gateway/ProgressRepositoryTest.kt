@@ -51,11 +51,15 @@ class ProgressRepositoryTest {
 
   @Test fun detailRequiresMatchingIdentityAndKeepsDisplayFields() {
     val raw = """{"ok":true,"task":{"id":"task-2","title":"Review","phase":"review",
-      "body":"Check outputs","priority":"high","projectId":"project-1","updatedAt":42,"version":3},
+      "body":"Check outputs","priority":"high","projectId":"project-1","updatedAt":42,"version":3,
+      "contract":{"expectedOutputs":["comparison.md"]}},
+      "attention":[{"kind":"question","summary":"Confirm the budget"}],
       "allowedCommands":["close","request_review"]}"""
     val task = ProgressRepository.parseTaskDetail("task-2", raw)
     assertEquals("project-1", task.projectId)
     assertEquals("high", task.priority)
+    assertEquals(listOf("Confirm the budget"), task.attention)
+    assertEquals(listOf("comparison.md"), task.expectedOutputs)
     assertThrows(IllegalArgumentException::class.java) {
       ProgressRepository.parseTaskDetail("another-task", raw)
     }

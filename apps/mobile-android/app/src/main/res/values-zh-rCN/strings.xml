@@ -878,4 +878,6 @@
     <string name="about_you_scope_workspace">当前工作区</string>
     <string name="about_you_scope_session">当前对话</string>
     <string name="about_you_scope_other">指定范围</string>
+    <string name="task_chat_outputs">预期产出</string>
+    <string name="task_chat_attention">需要你处理</string>
 </resources>

@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.gateway.ProgressAction
 import ai.xopc.mobile.gateway.ProgressItem
@@ -8,6 +9,7 @@ import ai.xopc.mobile.theme.XopcTheme
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -45,11 +47,19 @@ class TaskChatHeaderTest {
     compose.onNodeWithTag("progress-item-header-task").performScrollTo().performClick()
     compose.onNodeWithTag("progress-task-chat").assertIsDisplayed().performClick()
     compose.runOnIdle { assertEquals(task.id, openedTask) }
-    compose.onNodeWithTag("chat-floating-header").assertIsDisplayed()
-    compose.onNodeWithTag("chat-header-search").assertIsDisplayed()
-    compose.onNodeWithTag("assistant-options").assertIsDisplayed().performClick()
+    compose.onNodeWithTag("task-chat-header").assertIsDisplayed()
+    compose.onNodeWithTag("assistant-composer-shell").assertIsDisplayed()
+    compose.onNodeWithTag("task-chat-overview").assertDoesNotExist()
+    compose.onNodeWithTag("task-chat-summary-toggle").performClick()
+    compose.onNodeWithTag("task-chat-overview").assertIsDisplayed()
+    compose.onNodeWithTag("assistant-composer-shell").assertIsDisplayed()
+    compose.onNodeWithTag("task-chat-summary-toggle").performClick()
+    compose.onNodeWithTag("task-chat-overview").assertDoesNotExist()
+    compose.onNodeWithTag("task-chat-menu").performClick()
+    compose.onNodeWithText(compose.activity.getString(R.string.assistant_options)).performClick()
     compose.onNodeWithTag("chat-options-panel").assertIsDisplayed()
     compose.onNodeWithTag("chat-options-close").performClick()
-    compose.onNodeWithTag("chat-header-search").assertIsDisplayed()
+    compose.onNodeWithTag("task-chat-menu").performClick()
+    compose.onNodeWithText(compose.activity.getString(R.string.chat_personal_search)).performClick()
   }
 }

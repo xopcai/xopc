@@ -810,17 +810,18 @@ private fun ProgressTaskList(state: ProgressUiState, filter: String, onFilterCha
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: Boolean,
+internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: Boolean,
   taskChatBusy: Boolean, taskChatError: Boolean,
   onCommand: (String) -> Unit, onStart: (String) -> Unit,
   onOpenTaskChat: (String) -> Unit, agents: List<ai.xopc.mobile.gateway.ConversationAgent>,
   agentsLoading: Boolean, agentsError: Boolean,
-  onRefresh: () -> Unit, onEdit: () -> Unit) {
+  onRefresh: () -> Unit, statusOnly: Boolean = false,
+  onStatusDismiss: () -> Unit = {}, onEdit: () -> Unit) {
   var confirmAction by rememberSaveable(task.id) { mutableStateOf<String?>(null) }
-  var statusOpen by rememberSaveable(task.id) { mutableStateOf(false) }
+  var statusOpen by rememberSaveable(task.id) { mutableStateOf(statusOnly) }
   var agentId by rememberSaveable(task.id) { mutableStateOf("") }
   var confirmStart by rememberSaveable(task.id) { mutableStateOf(false) }
-  Column(Modifier.fillMaxSize().testTag("progress-task-detail")) {
+  if (!statusOnly) Column(Modifier.fillMaxSize().testTag("progress-task-detail")) {
   if (commandError || taskChatError) {
     Text(stringResource(if (commandError) R.string.progress_command_error else R.string.progress_task_chat_error),
       color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag(if (commandError) "progress-command-error" else "progress-task-chat-error"))
@@ -931,7 +932,7 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
       modifier = Modifier.weight(1f).testTag("progress-task-chat")) { Text(stringResource(R.string.progress_task_chat_short)) }
   }
   }
-  if (statusOpen) androidx.compose.material3.ModalBottomSheet(onDismissRequest = { if (!busy) statusOpen = false },
+  if (statusOpen) androidx.compose.material3.ModalBottomSheet(onDismissRequest = { if (!busy) { statusOpen = false; onStatusDismiss() } },
     sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
     Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(20.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1001,7 +1002,7 @@ private fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError: 
 }
 
 @Composable
-private fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
+internal fun ProgressTaskEditor(title: String, onTitleChange: (String) -> Unit,
   body: String, onBodyChange: (String) -> Unit,
   projectId: String, onProjectChange: (String) -> Unit,
   priority: String, onPriorityChange: (String) -> Unit, dueAt: Long?, onDueAtChange: (Long?) -> Unit,
@@ -1069,7 +1070,7 @@ private fun projectStatusLabel(status: String): String {
 }
 
 @Composable
-private fun progressPhaseLabel(phase: String): String = stringResource(when (phase) {
+internal fun progressPhaseLabel(phase: String): String = stringResource(when (phase) {
   "backlog" -> R.string.progress_phase_backlog
   "ready" -> R.string.progress_phase_ready
   "active", "in_progress" -> R.string.progress_phase_active
@@ -1106,7 +1107,7 @@ private fun TaskChoiceField(label: String, selected: String, options: List<Pair<
 
 
 @Composable
-private fun taskExecutionLabel(state: String): String = stringResource(when (state) {
+internal fun taskExecutionLabel(state: String): String = stringResource(when (state) {
   "queued" -> R.string.execution_status_queued
   "running" -> R.string.execution_status_running
   "failed" -> R.string.execution_status_failed
