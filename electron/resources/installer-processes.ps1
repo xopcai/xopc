@@ -9,7 +9,8 @@ param(
   [ValidateRange(0, 60)][int]$WaitSeconds = 15
 )
 $ErrorActionPreference = 'Stop'
-if (-not (Get-Command Get-XopcLockingProcessIds -ErrorAction SilentlyContinue)) {
+# Get-Command on a missing name scans every module, which is costly on ARM64.
+if (-not (Test-Path -LiteralPath 'Function:\Get-XopcLockingProcessIds')) {
   . (Join-Path $PSScriptRoot 'installer-file-locks.ps1')
 }
 
