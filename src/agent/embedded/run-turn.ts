@@ -390,6 +390,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
   let currentModelRequestAt: number | undefined;
   let modelRequestNumber = 0;
   let firstModelTextSeen = false;
+  let firstModelDeltaSeen = false;
   let latencyModelRef: string | undefined;
   let latencyReasoning: string | undefined;
   const {
@@ -730,9 +731,12 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       latencyReasoning = options?.reasoning;
       if (firstModelRequestAt === undefined) {
         firstModelRequestAt = currentModelRequestAt;
-        recordTraceLatency({ embeddedPreparationMs: firstModelRequestAt - preparationStartedAt });
+        const gatewayTiming = params.gatewayRunStartedMonotonic === undefined ? {} : {
+          gatewayRunToFirstModelRequestMs: firstModelRequestAt - params.gatewayRunStartedMonotonic,
+        };
+        recordTraceLatency({ embeddedPreparationMs: firstModelRequestAt - preparationStartedAt, ...gatewayTiming });
         log.info({ conversationId, runId, modelRef: latencyModelRef, thinking: latencyReasoning ?? 'off',
-          phase: 'first_model_request', preparationMs: firstModelRequestAt - preparationStartedAt,
+          phase: 'first_model_request', ...gatewayTiming, preparationMs: firstModelRequestAt - preparationStartedAt,
           messageCount: effectiveContext.messages.length, systemPromptLength: effectiveSystemPrompt.length,
           toolCount: effectiveTools.length, toolSchemaChars: JSON.stringify(effectiveTools).length,
           estimatedContextTokens: assessed.evaluation.estimatedTokens }, 'Embedded first model request ready');
@@ -923,6 +927,20 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     };
 
     unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
+      const delta = event.type === 'message_update' ? event.assistantMessageEvent : undefined;
+      if (!firstModelDeltaSeen && currentModelRequestAt !== undefined && firstModelRequestAt !== undefined
+        && (delta?.type === 'text_delta' || delta?.type === 'thinking_delta' || delta?.type === 'toolcall_delta')
+        && delta.delta.length > 0) {
+        firstModelDeltaSeen = true;
+        const now = performance.now();
+        const latency = {
+          modelFirstDeltaMs: now - currentModelRequestAt,
+          firstRequestToDeltaMs: now - firstModelRequestAt,
+        };
+        recordTraceLatency(latency);
+        log.info({ conversationId, runId, phase: 'first_model_delta', ...latency,
+          modelRequestNumber, deltaType: delta.type }, 'Embedded first model content delta received');
+      }
       if (!firstModelTextSeen && firstModelRequestAt !== undefined && currentModelRequestAt !== undefined && event.type === 'message_update'
         && event.assistantMessageEvent?.type === 'text_delta' && event.assistantMessageEvent.delta.trim()) {
         firstModelTextSeen = true;

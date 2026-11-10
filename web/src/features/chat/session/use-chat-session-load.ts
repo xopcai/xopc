@@ -1,3 +1,6 @@
+import { beginJourney } from '@/lib/performance/diagnostics';
+import { SessionLoadQueue } from './session-load-queue';
+
 import { fetchConfiguredModelsCached } from '../api/registry-api';
 import { patchSessionAgentConfigView } from './patch-session-agent-config-view';
 import { useCallback, useRef, type RefObject } from 'react';
@@ -61,7 +64,8 @@ export function useChatSessionLoad(deps: {
 
   const store = () => useChatSessionStore.getState();
 
-  const loadTailRef = useRef(Promise.resolve<void>(undefined));
+  const loadQueueRef = useRef(new SessionLoadQueue());
+  const activeLoadsRef = useRef(0);
   const historyBeforeCursorRef = useRef<string | null>(null);
   const sessionNamePollGenRef = useRef(0);
 
@@ -164,6 +168,7 @@ export function useChatSessionLoad(deps: {
 
   const loadSessionById = useCallback(
     async (key: string, offset = 0, beforeCursor?: string | null): Promise<Message[] | undefined> => {
+      const mark = beginJourney('session_load');
       const runBody = async (
         k: string,
         o: number,
@@ -171,12 +176,19 @@ export function useChatSessionLoad(deps: {
       ): Promise<Message[] | undefined> => {
         const initialLoad = o === 0 && !cursor;
         // Clarification is hydrated independently from the gateway; transcript refreshes must not clear it.
+        activeLoadsRef.current++;
         loadingSessionRef.current = true;
+        mark('request_started');
         const markHistoryLoading =
           initialLoad && shouldShowHistoryLoading(store().sessions[k]?.historyStatus);
         if (markHistoryLoading) {
           store().setSessionHistoryStatus(k, 'loading');
         }
+        // Observe rejection immediately: history can fail or become obsolete before config settles.
+        const configRequest = initialLoad
+          ? Promise.resolve().then(() => sessionMgrRef.current.loadSessionAgentConfig(k))
+            .then(config => { mark('config_received'); return { config }; }, error => ({ error }))
+          : undefined;
         try {
           const request = { messages: store().sessions[k]?.messages };
           const {
@@ -185,6 +197,7 @@ export function useChatSessionLoad(deps: {
             name,
             nextBeforeCursor,
           } = await sessionMgrRef.current.loadSession(k, o, cursor, taskId, request.messages);
+          mark('history_received');
           if (initialLoad) {
             if (!applyLoadedSessionSnapshot(k, { messages: loaded, hasMore: more, name, nextBeforeCursor }, request)) {
               return store().sessions[k]?.messages;
@@ -192,19 +205,24 @@ export function useChatSessionLoad(deps: {
             if (!isStillViewingSession(k)) {
               return loaded;
             }
-            const cfg = await sessionMgrRef.current.loadSessionAgentConfig(k);
+            mark('history_committed');
+            const result = await configRequest!;
+            if ('error' in result) throw result.error;
+            const cfg = result.config;
             if (!isStillViewingSession(k)) return loaded;
             patchSessionAgentConfigView(k, cfg);
             void refreshModelThinkingSupport(cfg.model);
             return loaded;
           }
-          historyBeforeCursorRef.current = nextBeforeCursor ?? null;
           if (!isStillViewingSession(k)) {
             return undefined;
           }
+          historyBeforeCursorRef.current = nextBeforeCursor ?? null;
           store().prependHistoryMessages(k, loaded, more);
           return undefined;
         } catch (error) {
+          mark('failed');
+          if (routeConversationIdRef.current && !isStillViewingSession(k)) return undefined;
           if (o === 0 && !cursor) {
             historyBeforeCursorRef.current = null;
             const message = error instanceof Error ? error.message : 'Failed to load session';
@@ -242,25 +260,16 @@ export function useChatSessionLoad(deps: {
           }
           return undefined;
         } finally {
-          loadingSessionRef.current = false;
+          activeLoadsRef.current--;
+          loadingSessionRef.current = activeLoadsRef.current > 0;
+          mark('settled');
           if (markHistoryLoading && store().sessions[k]?.historyStatus === 'loading') {
             store().setSessionHistoryStatus(k, 'ready');
           }
         }
       };
 
-      const prev = loadTailRef.current;
-      let releaseTail!: () => void;
-      const tailGate = new Promise<void>((r) => {
-        releaseTail = r;
-      });
-      loadTailRef.current = prev.then(() => tailGate);
-      await prev;
-      try {
-        return await runBody(key, offset, beforeCursor);
-      } finally {
-        releaseTail();
-      }
+      return loadQueueRef.current.run(key, () => runBody(key, offset, beforeCursor));
     },
     [
       routeConversationIdRef,

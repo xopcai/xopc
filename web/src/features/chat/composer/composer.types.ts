@@ -45,6 +45,8 @@ export interface ComposerDispatchReceipt {
 }
 
 export interface ComposerSendOptions {
+  /** Renderer monotonic time at the start of the composer send action. */
+  submittedAt?: number;
   /** Fired immediately before the optimistic user row is inserted into the message list. */
   onDispatched?: (receipt: ComposerDispatchReceipt) => void;
 }

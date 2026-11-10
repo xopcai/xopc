@@ -662,6 +662,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
             attachments,
             thinkingLevel,
             contextRefs,
+            sendOptions?.submittedAt,
           );
         }
         let dispatched = false;
@@ -677,6 +678,8 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
             reserveReplySpace(messageRenderKey ?? clientSubmissionId);
             sendOptions?.onDispatched?.({ clientSubmissionId, messageRenderKey });
           },
+          undefined,
+          sendOptions?.submittedAt,
         );
         if (!dispatched) return acceptance;
         if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);

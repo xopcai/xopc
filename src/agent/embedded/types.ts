@@ -59,6 +59,7 @@ export type RunXopcEmbeddedTurnParams = {
   /** Host-owned parent identity for ephemeral runs that inherit its tools. */
   toolPolicyConversationId?: string;
   runId: string;
+  gatewayRunStartedMonotonic?: number;
   userMessage: AgentMessage;
   model: Model<Api>;
   modelRef: string;

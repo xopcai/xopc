@@ -82,6 +82,20 @@ describe('React chat Markdown', () => {
     expect(links[2].closest('p')?.hidden).toBe(false);
   });
 
+  it('updates a streamed link when the adjacent image arrives, changes, or is removed', async () => {
+    const source = '[View full-size image](https://example.com/first.png)';
+    const show = async (content: string) => {
+      await act(async () => root.render(<MemoryRouter><ChatMarkdownRenderer content={content} streaming /></MemoryRouter>));
+      return container.querySelector('a')?.closest('p')?.hidden;
+    };
+    expect(await show(source)).toBe(false);
+    expect(await show(source + '\n\n![First](https://example.com/first.png)')).toBe(true);
+    expect(await show(source + '\n\n![Other](https://example.com/other.png)')).toBe(false);
+    expect(await show(source + '\n\n![First](https://example.com/first.png)')).toBe(true);
+    expect(await show(source)).toBe(false);
+    expect(await show(source.replace('View full-size image', 'Download image') + '\n\n![First](https://example.com/first.png)')).toBe(false);
+  });
+
   it('retries an authenticated image after a load failure', async () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:retry-cat');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});

@@ -45,6 +45,7 @@ const log = createLogger('EmbeddedTurnForSession');
 export type RunEmbeddedForSessionParams = {
   conversationId: string;
   runId?: string;
+  gatewayRunStartedMonotonic?: number;
   userMessage: AgentMessage;
   dynamicSystemContext?: string;
   llmImages?: import('@earendil-works/pi-ai').ImageContent[];
@@ -386,6 +387,7 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             conversationId,
             verifyChanges: config ? resolveEffectiveAgentProfileForSession(conversationId).agentId === 'coder' : false,
             runId,
+            gatewayRunStartedMonotonic: params.gatewayRunStartedMonotonic,
             userMessage: userMessageForTurn,
             images: params.llmImages,
             model: candidateModel,

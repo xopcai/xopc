@@ -28,6 +28,7 @@ function commandError(c: Context, error: unknown): Response {
 }
 
 export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteDeps, materialize = false) {
+  const receivedAt = performance.now();
   const id = conversationIdSchema.safeParse(c.req.param('conversationId'));
   const body: unknown = await c.req.json().catch(() => null);
   const parsed = materialize ? sessionMaterializeCommandSchema.safeParse(body) : sessionInputCommandSchema.safeParse(body);
@@ -72,6 +73,8 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
       if (command.input.appContext) contexts.push(await deps.service.prepareSessionAppContext(command.input.appContext, principal, id.data, command.clientMessageId));
       return contexts;
     });
+    const receiveMs = performance.now() - receivedAt;
+    c.header('Server-Timing', `session_input;dur=${receiveMs.toFixed(3)}`, { append: true });
     if ('input' in command) recordDeviceExecutionActor(id.data, command.clientMessageId, principal);
     deps.service.emit('session.input-state', payload.inputState);
     if ('kind' in command && command.kind === 'start') deps.service.emit('session.updated', { key: id.data });

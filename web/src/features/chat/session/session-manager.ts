@@ -1,3 +1,4 @@
+import { beginJourney } from '@/lib/performance/diagnostics';
 import {
   buildSessionForkAtTurnPath,
   buildSessionHistoryPath,
@@ -421,6 +422,7 @@ export class SessionManager {
     initialAgentConfig?: SessionInitialAgentConfig;
     executionMode?: LocalSessionOptions['executionMode'];
   }): Promise<SessionInfo> {
+    const mark = beginJourney('new_session');
     const conversationId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const creation = {
@@ -432,6 +434,7 @@ export class SessionManager {
       thinkingLevel: options?.initialAgentConfig?.thinkingLevel ?? 'off',
     };
     await saveLocalSessionDraft({ conversationId, creation, createdAt });
+    mark('draft_saved');
     return { key: conversationId, agentId: creation.agentId, projectId: creation.projectId ?? undefined,
       messageCount: 0, updatedAt: createdAt, sourceChannel: 'webchat' };
   }
@@ -449,7 +452,21 @@ export class SessionManager {
     return result;
   }
 
-  async reconcileDraft(conversationId: string): Promise<void> {
+  private readonly draftReconciliations = new Map<string, Promise<void>>();
+
+  reconcileDraft(conversationId: string): Promise<void> {
+    const scope = useGatewayStore.getState();
+    const key = JSON.stringify([scope.baseUrl, scope.conversationId, conversationId]);
+    const existing = this.draftReconciliations.get(key);
+    if (existing) return existing;
+    const pending = this.reconcileDraftOnce(conversationId).finally(() => {
+      if (this.draftReconciliations.get(key) === pending) this.draftReconciliations.delete(key);
+    });
+    this.draftReconciliations.set(key, pending);
+    return pending;
+  }
+
+  private async reconcileDraftOnce(conversationId: string): Promise<void> {
     const assertScope = captureScope();
     const draft = await readLocalSessionDraft(conversationId);
     assertScope();

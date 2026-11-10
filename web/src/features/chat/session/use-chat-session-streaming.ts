@@ -81,6 +81,7 @@ export function useChatSessionStreaming(deps: {
       appContext?: AppContextEnvelope,
       onDispatched?: (clientSubmissionId: string, messageRenderKey?: string) => void,
       replaceClientSubmissionId?: string,
+      submittedAt?: number,
     ) => Promise<void | boolean>
   >;
 
@@ -349,6 +350,7 @@ export function useChatSessionStreaming(deps: {
       appContext?: AppContextEnvelope,
       onDispatched?: (clientSubmissionId: string, messageRenderKey?: string) => void,
       replaceClientSubmissionId?: string,
+      submittedAt?: number,
     ) => {
       if (!conversationId) return false;
       if (!shouldApplyStreamUpdate(conversationId)) return false;
@@ -502,6 +504,7 @@ export function useChatSessionStreaming(deps: {
             replaceTurnId,
             contextRefs,
             appContext,
+            submittedAt,
           );
         } catch (err) {
           if (!isCurrentSubmission()) return;
@@ -556,7 +559,8 @@ export function useChatSessionStreaming(deps: {
       attachments?: WireAttachment[],
       levelOverride?: string,
       contextRefs?: ComposerContextRef[],
-    ) => sendMessage(content, attachments, levelOverride, contextRefs, turnId),
+      submittedAt?: number,
+    ) => sendMessage(content, attachments, levelOverride, contextRefs, turnId, undefined, undefined, undefined, submittedAt),
     [sendMessage],
   );
 

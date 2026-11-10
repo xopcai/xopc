@@ -133,7 +133,7 @@ export class TurnDispatcher {
     origin: TurnOrigin,
     attachments?: DirectAttachment[],
     thinking?: string,
-    options?: { signal?: AbortSignal; runId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice'; onDeferredAudio?: (audio: WebchatTtsResult) => void },
+    options?: { signal?: AbortSignal; runId?: string; gatewayRunStartedMonotonic?: number; sourceContexts?: AgentSourceContext[]; presentation?: 'voice'; onDeferredAudio?: (audio: WebchatTtsResult) => void },
   ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
     yield* runProcessDirectStreaming(this.buildStreamingDeps(), {
       content,
@@ -143,6 +143,7 @@ export class TurnDispatcher {
       thinking,
       signal: options?.signal,
       runId: options?.runId,
+      gatewayRunStartedMonotonic: options?.gatewayRunStartedMonotonic,
       sourceContexts: options?.sourceContexts,
       presentation: options?.presentation,
       onDeferredAudio: options?.onDeferredAudio,

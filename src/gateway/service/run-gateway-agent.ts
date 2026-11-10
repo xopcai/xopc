@@ -254,7 +254,7 @@ export async function *runGatewayAgent(
           cappedAttachments,
           thinking,
           {
-            signal: mergedSignal, runId, sourceContexts: runOptions?.sourceContexts, presentation: runOptions?.presentation,
+            signal: mergedSignal, runId, gatewayRunStartedMonotonic: runStartedMonotonic, sourceContexts: runOptions?.sourceContexts, presentation: runOptions?.presentation,
             onDeferredAudio: (audio) => {
               const event: SessionAudioReadyEvent = { conversationId, runId, ...audio, createdAtMs: Date.now() };
               publishRealtime('sessions', 'session.audio_ready', event);

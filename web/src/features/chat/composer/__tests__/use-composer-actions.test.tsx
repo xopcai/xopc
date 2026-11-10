@@ -238,7 +238,7 @@ describe('composer acceptance preserves drafts', () => {
       undefined,
       'off',
       [expect.objectContaining({ kind: 'file', fileKind: 'directory', sourceId: 'apps/mobile-ios' })],
-      { onDispatched: expect.any(Function) },
+      { submittedAt: expect.any(Number), onDispatched: expect.any(Function) },
     );
   });
 

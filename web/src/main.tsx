@@ -1,3 +1,4 @@
+import { recordStartupPhase } from '@/lib/performance/diagnostics';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -34,6 +35,7 @@ async function bootstrap(): Promise<void> {
     hydrateThemeFromStorage();
     hydrateFontScaleFromStorage();
     await initGatewayFromWindow();
+    recordStartupPhase('credentials_ready');
     root.render(
       <StrictMode>
         <AppErrorBoundary>

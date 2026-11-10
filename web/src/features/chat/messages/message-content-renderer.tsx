@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -40,7 +39,6 @@ import {
   startStreamingRenderMetrics,
 } from '@/components/markdown/streaming-render-metrics';
 import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-progressive-streaming-markdown';
-import { recordResponseVisible } from '@/features/chat/messages/response-latency';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ChatImageThumbnail } from './chat-image-thumbnail';
@@ -298,12 +296,6 @@ export function ChatMarkdownView({
     onProgressiveRenderComplete,
     immediateFirstCommit,
   );
-  useLayoutEffect(() => {
-    if (!responseRunId || !streamingContent.trim()) return;
-    // The callback runs at the browser's next paint opportunity after the DOM commit.
-    const frame = window.requestAnimationFrame(() => recordResponseVisible(responseRunId, streamingContent));
-    return () => window.cancelAnimationFrame(frame);
-  }, [responseRunId, streamingContent, streaming]);
   useEffect(() => {
     if (!streaming) return;
     startStreamingRenderMetrics(metricsKey);
@@ -417,6 +409,7 @@ export function ChatMarkdownView({
         renderMermaid
         mermaidActions
         streamingMetricsKey={metricsKey}
+        responseRunId={responseRunId}
       />}
       {resolution ? (
         <ChatMarkdownFileActionCard

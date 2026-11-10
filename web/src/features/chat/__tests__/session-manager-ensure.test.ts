@@ -337,6 +337,25 @@ describe('SessionManager materialization confirmation', () => {
     vi.restoreAllMocks();
   });
 
+  it('shares receipt reconciliation between parallel history and configuration reads', async () => {
+    draft!.materialization = { commandId: 'command', purpose: 'session_resources' };
+    vi.mocked(readPendingSessionCommand).mockResolvedValue(undefined);
+    let respond!: (response: Response) => void;
+    mockedApiFetch.mockImplementation(() => new Promise(resolve => { respond = resolve; }));
+    const manager = new SessionManager();
+    const first = manager.reconcileDraft(conversationId);
+    const second = manager.reconcileDraft(conversationId);
+    expect(second).toBe(first);
+    await vi.waitFor(() => expect(mockedApiFetch).toHaveBeenCalledOnce());
+    respond(jsonResponse({}, 404));
+    await Promise.all([first, second]);
+    expect(confirmSessionCommand).not.toHaveBeenCalled();
+    // Completed requests must not turn into a stale receipt cache.
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({}, 404));
+    await manager.reconcileDraft(conversationId);
+    expect(mockedApiFetch).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps an ambiguous append available for explicit composer retry during hydration', async () => {
     draft = undefined;
     vi.mocked(readPendingSessionCommand).mockResolvedValueOnce({
