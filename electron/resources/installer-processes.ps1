@@ -34,9 +34,14 @@ function Get-CreationIdentity($Process) {
   if ($Process.CreationDate -is [DateTime]) { return 'utc-ticks:' + $Process.CreationDate.ToUniversalTime().Ticks }
   return [string]$Process.CreationDate
 }
+function ConvertTo-XopcPath([string]$Path) {
+  if (!$Path) { return $null }
+  # .NET Framework can expand 8.3 names (RUNNER~1) while CIM retains the launch path.
+  return [IO.Path]::GetFullPath($Path)
+}
 function Same-Identity($Current, $Saved) {
   return $Current -and (Get-CreationIdentity $Current) -eq $Saved.CreationIdentity -and
-    [string]::Equals([string]$Current.ExecutablePath, [string]$Saved.ExecutablePath, [StringComparison]::OrdinalIgnoreCase)
+    [string]::Equals([string](ConvertTo-XopcPath $Current.ExecutablePath), [string]$Saved.ExecutablePath, [StringComparison]::OrdinalIgnoreCase)
 }
 
 try {
@@ -55,7 +60,10 @@ try {
   if ($StateFile -and [IO.File]::Exists($StateFile)) { $saved = @(Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json) }
 
   function Get-InstalledProcesses {
-    $all = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+    $all = @(Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object {
+      [pscustomobject]@{ ProcessId=$_.ProcessId; ParentProcessId=$_.ParentProcessId; Name=$_.Name;
+        CreationDate=$_.CreationDate; ExecutablePath=(ConvertTo-XopcPath $_.ExecutablePath) }
+    })
     foreach ($start in @($PID, $InstallerProcessId)) {
       $current = $start
       $visited = @()

@@ -138,7 +138,8 @@ SectionEnd
     const sibling = await keeper(join(oldDirectory + '-backup', 'xopc.exe'));
     const app = await keeper(join(oldDirectory, 'xopc.exe'));
     writeFileSync(join(oldDirectory, 'legacy-marker'), 'keep until successful uninstall');
-    assert.equal(processScript('check').status, 10, 'must find the registered previous directory');
+    const preflight = processScript('check');
+    assert.equal(preflight.status, 10, `must find the registered previous directory: ${preflight.stdout} ${preflight.stderr}`);
     assert.equal(run(join(fixture, 'upgrade.exe'), ['/S']).status, 2, 'silent cancellation must report failure');
     assert.ok(existsSync(join(oldDirectory, 'legacy-marker')));
     assert.ok(!existsSync(join(newDirectory, 'new-marker')));
