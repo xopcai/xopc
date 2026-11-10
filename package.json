@@ -110,6 +110,7 @@
     "eval:personal:style": "tsx evals/personal/style/run.mts",
     "eval:personal:style:prepare": "node evals/personal/style/prepare.mjs",
     "eval:personal:style:check": "tsc -p evals/personal/style/tsconfig.json && python3 -m unittest discover -s evals/personal/style -p 'test_*.py'",
+    "eval:memory:review": "tsx scripts/memory-work-review-benchmark.mts",
     "eval:personal:p0": "tsx scripts/personal-delivery-benchmark.mts",
     "eval:personal:p1": "tsx scripts/personal-delivery-benchmark.mts --suite p1",
     "eval:personal:p2": "tsx scripts/personal-delivery-benchmark.mts --suite p2",

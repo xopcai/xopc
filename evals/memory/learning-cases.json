@@ -1,10 +1,13 @@
 {
-  "version": 4,
+  "version": 5,
   "cases": [
     {
       "id": "ongoing-preference",
       "group": "positive",
-      "expectedKinds": ["preference", "routine"],
+      "expectedKinds": [
+        "preference",
+        "routine"
+      ],
       "turns": [
         "我长期偏好一种说明格式：先给结论，再列证据。这种格式叫结证-{tag}，这是我平时的阅读习惯。请只回复收到。"
       ],
@@ -40,7 +43,8 @@
       "semanticTerms": [
         [
           "标题",
-          "heading"
+          "heading",
+          "title"
         ],
         [
           "短",
@@ -100,7 +104,10 @@
     {
       "id": "mixed-own-and-quote",
       "group": "positive",
-      "expectedKinds": ["preference", "routine"],
+      "expectedKinds": [
+        "preference",
+        "routine"
+      ],
       "turns": [
         "帮我润色这句客户要求：『我偏好硬件周报，标识客报-{tag}』。另外，我自己写周报一直先列风险再讲进度，称为险进-{tag}，这是我的长期习惯。请只回复收到。"
       ],
@@ -136,7 +143,10 @@
     {
       "id": "quoted-value-owned",
       "group": "positive",
-      "expectedKinds": ["preference", "routine"],
+      "expectedKinds": [
+        "preference",
+        "routine"
+      ],
       "turns": [
         "我自己一直喜欢『先举例后解释』的讲解方式，习惯名称是例后-{tag}，平时沟通也这样。请只回复收到。"
       ],

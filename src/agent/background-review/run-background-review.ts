@@ -6,8 +6,9 @@ import { Agent, type AgentMessage, type ThinkingLevel } from '@earendil-works/pi
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import { stripRuntimeContextFromUserMessage } from '../../session/user-message-display.js';
-import { listKnowledgeItems, canUseKnowledge } from '../../knowledge-memory/index.js';
+import { listKnowledgeItems, getKnowledgeItem, canUseKnowledge } from '../../knowledge-memory/index.js';
 import { applyKnowledgeDeletions } from '../../memory-learning/forget-capture.js';
+import { prepareWorkReview, workReviewPrompt, applyWorkReviews, type WorkReviewPlan } from '../../memory-learning/work-review.js';
 import { applyWorkCandidates } from '../../memory-learning/work-capture.js';
 import { failLearningJob, finishLearningJob, learningPolicyHash, type LearningJob } from '../../memory-learning/repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
@@ -162,12 +163,17 @@ async function interpret(params: {
   timeoutMs: number;
   workspaceId?: string;
   model: Model<Api>;
-}): Promise<UserModelInterpretation | null> {
+}): Promise<(UserModelInterpretation & { workReviewPlan?: WorkReviewPlan }) | null> {
   const context = { conversationId: params.conversationId, agentId: extractProfileAgentId(params.conversationId),
     workspaceId: params.workspaceId ?? '', projectId: getSessionMetadata(params.conversationId)?.projectId };
   const access = params.getConfig() ? resolveUserContextSessionAccess(params.getConfig()!, params.conversationId) : undefined;
   const availableKnowledge = access?.knowledge ? listKnowledgeItems({ recordClass: 'memory', limit: 200 })
     .filter(item => canUseKnowledge(item, context, access.knowledgePolicy)).slice(0, 80) : [];
+  const reviewPlan = params.mode === 'transcript' && access?.knowledge
+    && params.getConfig()?.userContext.knowledgeMemory.writePolicy === 'allow'
+    && params.getConfig()?.userContext.knowledgeMemory.learning?.evidenceReview !== false
+    ? prepareWorkReview({ context, policy: access.knowledgePolicy, evidence: params.evidence,
+      processingPolicy: params.getConfig()?.userContext.userModel.processingPolicy ?? 'remote_allowed' }) : undefined;
   const providerStreamFn = createExtensionAwareStreamFn();
   const reviewAgent = new Agent({
     initialState: {
@@ -197,6 +203,7 @@ async function interpret(params: {
         role: 'user',
         content: buildUserModelInterpreterPrompt({
           mode: params.mode,
+          workReviewPrompt: reviewPlan ? workReviewPrompt(reviewPlan) : undefined,
           availableAssertions: params.availableAssertions,
           availableKnowledge: availableKnowledge.map(({ id, content, scope }) => ({ id, content, scope })),
           evidenceTimestamp: new Date(params.evidence.at(-1)?.createdAt ?? Date.now()).toISOString(),
@@ -269,7 +276,7 @@ async function interpret(params: {
     await reviewAgent.waitForIdle().catch(() => {});
     return null;
   }
-  return interpretation;
+  return interpretation ? { ...interpretation, workReviewPlan: reviewPlan } : null;
 }
 
 async function executeReviewInner(params: {
@@ -474,10 +481,16 @@ async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => 
       const deletions = !personalRebuild && access.knowledge ? applyKnowledgeDeletions({ interpretation, evidence, context: deletionContext,
         allowedTargetIds: listKnowledgeItems({ recordClass: 'memory', limit: 200 }).filter(item =>
           canUseKnowledge(item, deletionContext, access.knowledgePolicy)).map(item => item.id) }) : [];
+      const reviews = !personalRebuild && access.knowledge && current.userContext.knowledgeMemory.writePolicy === 'allow'
+        && interpretation.intent !== 'forget' && !interpretation.knowledgeDeletions?.length && interpretation.workReviewPlan
+        ? applyWorkReviews(interpretation.workReviewPlan, interpretation.knowledgeReviews ?? [], evidence, extraction.run.id) : [];
+      const reviewedKeys = new Set(reviews.filter(r => r.outcome !== 'rejected')
+        .map(r => getKnowledgeItem(r.objectId)?.canonicalKey));
       const work = !personalRebuild && interpretation.intent !== 'forget' && !interpretation.knowledgeDeletions?.length
         && access.knowledge && current.userContext.knowledgeMemory.writePolicy === 'allow'
         && access.knowledgePolicy.contentSources.includes('memory') ? applyWorkCandidates({
-          candidates: (interpretation.knowledge ?? []).filter(candidate => access.knowledgePolicy.scopes.includes(candidate.scope)),
+          candidates: (interpretation.knowledge ?? []).filter(candidate => access.knowledgePolicy.scopes.includes(candidate.scope)
+            && !reviewedKeys.has(`work:${candidate.topicKey.normalize('NFKC').toLowerCase()}:${candidate.predicate}`)),
           evidence, conversationId: job.conversation_id, agentId, workspaceId: job.workspace_id, projectId,
           processingPolicy: runtime.processingPolicy, runId: extraction.run.id,
         }) : [];
@@ -486,7 +499,7 @@ async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => 
           ...(output.assertionId ? { objectType: 'assertion' as const, objectId: output.assertionId } : {}),
           ...(output.reasonCode ? { reasonCode: output.reasonCode } : {}),
           outcome: output.outcome === 'rejected' ? 'rejected' as const
-            : output.outcome === 'deduplicated' ? 'deduplicated' as const : 'created' as const })), ...deletions, ...work,
+            : output.outcome === 'deduplicated' ? 'deduplicated' as const : 'created' as const })), ...deletions, ...reviews, ...work,
       ] });
     }, through);
   } catch (err) {

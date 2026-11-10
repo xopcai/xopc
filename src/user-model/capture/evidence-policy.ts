@@ -125,6 +125,15 @@ export function isOwnerAuthoredSpan(text: string, quote: string): boolean {
   return Boolean(owned) && !HYPOTHETICAL.test(owned);
 }
 
+/** Mutating an existing memory requires an entirely owned span, not mixed quoted and owned text. */
+export function isFullyOwnerAuthoredSpan(text: string, quote: string): boolean {
+  const source = text.normalize('NFKC');
+  const normalized = quote.normalize('NFKC');
+  const at = source.indexOf(normalized);
+  return at >= 0 && isOwnerAuthoredSpan(text, quote)
+    && maskNonOwnerSpans(source).slice(at, at + normalized.length).replace(/\s/gu, '') === normalized.replace(/\s/gu, '');
+}
+
 /** A bounded repair hint; these clauses remain subject to normal model and host admission. */
 export function directPreferenceClauses(text: string): string[] {
   const result: string[] = [];

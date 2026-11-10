@@ -147,6 +147,7 @@ export const KnowledgeMemoryConfigSchema = z
     learning: z.object({
       idleFlushMs: z.number().int().min(1_000).max(600_000).default(60_000),
       maxBatchChars: z.number().int().min(4_000).max(120_000).default(30_000),
+      evidenceReview: z.boolean().default(true),
       maxDailyBatches: z.number().int().min(1).max(10_000).default(100),
     }).strict().optional(),
     readScopes: z.array(z.enum(['global', 'agent', 'workspace', 'project', 'session']))
