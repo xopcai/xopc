@@ -114,6 +114,20 @@ describe('connected source understanding', () => {
     ]));
   });
 
+  it('learns authorized work without personal assertions when the user model is disabled', async () => {
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail');
+    const sourceItemIds = upsertKnowledgeSourceItems([sourceRow(sourceInstanceId, 1, true)]).changedItemIds;
+    const config = ConfigSchema.parse({ userContext: { userModel: { enabled: false } } });
+    const result = await deriveConnectedSourceUnderstanding({ config, agentId: 'main', sourceInstanceId, sourceItemIds, sourceRunId, processingPolicy,
+      analyze: vi.fn(async ({ items }) => ({ modelRef: 'test/model', profileCandidates: [], workThreadCandidates: [{
+        topicKey: 'atlas', title: 'Atlas launch', summary: 'Review in progress.', horizon: 'current', status: 'active', confidence: 'high',
+        evidenceRefs: [items[0].evidenceRef],
+      }], sourceStatuses: [] })),
+    });
+    expect(result.created).toBe(0); expect(result.knowledgeCount).toBe(1);
+    expect(listUserAssertions()).toEqual([]); expect(listUserModelObservations()).toEqual([]);
+  });
+
   it('creates only repeated owner-backed durable assertions with separate evidence', async () => {
     const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('slack');
     const sourceItemIds = upsertKnowledgeSourceItems(

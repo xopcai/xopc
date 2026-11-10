@@ -1,5 +1,6 @@
 import type { Config } from '../config/schema.js';
 import {
+  getSqliteDatabase,
   claimNextConnectorLearningJob,
   enqueueConnectorLearningJob,
   listConnectorConnections,
@@ -30,6 +31,7 @@ import {
   updateUnderstandingSourceRun,
 } from '../user-context/sources/repository.js';
 import type { UnderstandingSourceCategory, UnderstandingSourceRun } from '../user-context/sources/types.js';
+import { canAccessConnectorAccount } from './account-access.js';
 import { getConnectorDefinition } from './catalog.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
 import { connectorIdentityKey, normalizeConnectorIdentity } from './connector-identity.js';
@@ -59,15 +61,24 @@ function connectorSourceCategory(toolkit: string): UnderstandingSourceCategory {
   return 'files';
 }
 
+function consentWasRevoked(grantId: string): boolean {
+  return !getActiveUnderstandingConsent(grantId) && Boolean(getSqliteDatabase().prepare(
+    'SELECT 1 FROM understanding_consent_receipts WHERE grant_id = ? LIMIT 1',
+  ).get(grantId));
+}
+
 function ensureUnderstandingSourceRun(
   job: ConnectorLearningJob,
   toolkit: string,
   displayName: string,
   config: Config,
 ): UnderstandingSourceRun {
-  const existing = listUnderstandingSourceGrants({ includeRevoked: true })
+  let existing = listUnderstandingSourceGrants({ includeRevoked: true })
     .find((grant) => grant.sourceKey === `connector-account:${job.accountId}`);
-  if (existing?.status === 'revoked') throw new Error('Source authorization was revoked.');
+  if (existing && (existing.status === 'revoked' || consentWasRevoked(existing.id))) throw new Error('Source authorization was revoked.');
+  if (existing && existing.config.sourceInstanceId !== job.sourceInstanceId) {
+    existing = upsertUnderstandingSourceGrant({ ...existing, config: { ...existing.config, sourceInstanceId: job.sourceInstanceId } });
+  }
   const grant = existing ?? upsertUnderstandingSourceGrant({
     sourceKey: `connector-account:${job.accountId}`,
     adapterId: `connector:${job.connectorId}`,
@@ -79,7 +90,7 @@ function ensureUnderstandingSourceRun(
       ? 'derived_only'
       : 'bounded_raw',
     processingPolicy: config.userContext.userModel.processingPolicy,
-    config: { connectorId: job.connectorId, accountId: job.accountId, readOnly: true },
+    config: { connectorId: job.connectorId, accountId: job.accountId, sourceInstanceId: job.sourceInstanceId, readOnly: true },
   });
   if (!getActiveUnderstandingConsent(grant.id)) {
     grantUnderstandingConsent({
@@ -120,7 +131,7 @@ export type ConnectorLearningCoordinator = {
 
 function learningEnabled(config: Config): boolean {
   return config.userContext.enabled
-    && config.userContext.userModel.enabled;
+    && (config.userContext.userModel.enabled || config.userContext.knowledgeMemory.enabled);
 }
 
 export function startConnectorLearningCoordinator(options: {
@@ -157,9 +168,10 @@ export function startConnectorLearningCoordinator(options: {
     const connection = listConnectorConnections().find((item) => item.id === connectionId && item.status === 'active');
     if (!connection) return null;
     if (!connection.accountId) throw new Error(`Connector account is missing for connection ${connection.id}.`);
-    if (!getConnectorAccount(connection.accountId)?.enabled) return null;
+    const installation = getConnectorInstallation(connection.installationId);
+    if (!installation || !canAccessConnectorAccount(connection, installation, options.resolveAgentId())) return null;
     if (listUnderstandingSourceGrants({ includeRevoked: true })
-      .some((grant) => grant.sourceKey === `connector-account:${connection.accountId}` && grant.status === 'revoked')) return null;
+      .some((grant) => grant.sourceKey === `connector-account:${connection.accountId}` && (grant.status === 'revoked' || consentWasRevoked(grant.id)))) return null;
     if (request.reason === 'manual') {
       const active = listConnectorLearningJobs({ accountId: connection.accountId, limit: 100 })
         .find((job) => job.status === 'running' || (job.status === 'queued' && (!job.nextRunAt || Date.parse(job.nextRunAt) <= Date.now())));
@@ -389,6 +401,7 @@ export function startConnectorLearningCoordinator(options: {
     if (running || stopped) return;
     running = true;
     try {
+      recoverAuthorizedConnections();
       for (let count = 0; count < 10; count += 1) {
         const job = claimNextConnectorLearningJob();
         if (!job) break;
@@ -422,14 +435,22 @@ export function startConnectorLearningCoordinator(options: {
     }
   }
 
-  recoverStaleConnectorLearningJobs(Date.now());
-  if (learningEnabled(options.getConfig())) {
+  function recoverAuthorizedConnections(): void {
+    if (!learningEnabled(options.getConfig())) return;
     for (const connection of activeAccountConnections()) {
-      if (listConnectorLearningJobs({ accountId: connection.accountId, limit: 1 }).length === 0) {
-        enqueueConnection(connection.id, { reason: 'schedule' });
-      }
+      const jobs = listConnectorLearningJobs({ accountId: connection.accountId!, limit: 100 });
+      if (jobs.some(job => ['queued', 'running', 'failed', 'paused'].includes(job.status))) continue;
+      const policy = getConnectorSyncPolicyForConnection(connection.id);
+      if (!policy?.scanEnabled) continue;
+      const last = jobs[0];
+      const nextRunAt = last ? Date.parse(last.updatedAt) + (policy.intervalMinutes ?? 30) * 60000 : undefined;
+      enqueueConnection(connection.id, { reason: 'schedule', nextRunAt,
+        idempotencyKey: last ? `recovery:${connection.accountId}:${last.id}` : undefined });
     }
   }
+
+  recoverStaleConnectorLearningJobs(Date.now());
+  recoverAuthorizedConnections();
 
   timer = setTimeout(() => {
     void runNow();

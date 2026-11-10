@@ -12,6 +12,7 @@ import { listUserAssertions, deleteUserAssertion } from '../../user-model/reposi
 import { buildExecutionContext } from '../../agent/context/execution-context.js';
 import { listContextExtractionOutputs } from '../../storage/sqlite/context-extraction-repository.js';
 import { runPersistentLearningJob } from '../../agent/background-review/run-background-review.js';
+import { listUserModelObservations } from '../../user-model/observation-repository.js';
 import { applyWorkCandidates } from '../work-capture.js';
 
 const prompt = vi.hoisted(() => vi.fn());
@@ -68,6 +69,75 @@ describe('learning worker integration', () => {
     ]));
     expect(getSqliteDatabase().prepare('SELECT state FROM memory_learning_jobs').get()).toMatchObject({ state: 'succeeded' });
   });
+  it.each([false, true])('repairs evidence candidates once and preserves valid work: invalidRepair=%s', async invalidRepair => {
+    ensureSessionRecord(id, '/workspace', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' });
+    const row = appendTranscriptEntry(id, { role: 'user', content: 'Atlas uses SQLite. Atlas cache size is 64 MB.', timestamp: Date.now() });
+    appendTranscriptEntry(id, { role: 'assistant', content: 'Done.', timestamp: Date.now() } as never);
+    const good = { kind: 'project_fact', topicKey: 'atlas', predicate: 'storage.choice', scope: 'workspace', statement: 'Atlas uses SQLite.',
+      confidence: 0.9, importance: 0.8, evidence: [{ ref: 'source_1', quote: 'Atlas uses SQLite.' }] };
+    const bad = { ...good, predicate: 'cache.size', statement: 'Atlas cache size is 64 MB.', evidence: [{ ref: 'source_999', quote: 'Atlas cache size is 64 MB.' }] };
+    const shape = (knowledge: unknown[]) => JSON.stringify({ intent: 'task', assertions: [], targetAssertionIds: [], knowledge });
+    prompt.mockResolvedValueOnce(shape([good, bad])).mockResolvedValueOnce(invalidRepair ? 'invalid JSON' : shape([
+      { ...good, statement: 'An unwanted rewrite of valid work.' }, { ...bad, evidence: [{ ref: 'source_1', quote: 'Atlas cache size is 64 MB.' }] },
+    ]));
+    const config = ConfigSchema.parse({}); enqueueConversationLearning(config, id, '/workspace', true);
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(prompt).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(prompt.mock.calls[1][0])).toContain('host evidence validation');
+    const memories = listKnowledgeItems();
+    expect(memories).toHaveLength(invalidRepair ? 1 : 2);
+    expect(memories.some(m => m.content === good.statement)).toBe(true);
+    expect(memories.some(m => m.content.includes('unwanted'))).toBe(false);
+    expect(JSON.stringify(getSqliteDatabase().prepare('SELECT message_id FROM context_evidence').all())).toContain(row.entry_id);
+    expect(JSON.stringify(getSqliteDatabase().prepare('SELECT message_id FROM context_evidence').all())).not.toContain('source_');
+    expect(getSqliteDatabase().prepare('SELECT state FROM memory_learning_jobs').get()).toMatchObject({ state: 'succeeded' });
+  });
+
+  it('learns host-recorded codemode results while ignoring arbitrary custom stores', async () => {
+    ensureSessionRecord(id, '/workspace', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' });
+    appendTranscriptEntry(id, { type: 'custom', customType: 'codemode-store', data: { text: 'Untrusted sandbox assertion.' } } as never);
+    const row = appendTranscriptEntry(id, { type: 'custom', customType: 'codemode-tool-result', data: { toolName: 'shell', toolCallId: 'call',
+      content: [{ type: 'text', text: 'Atlas uses SQLite for local deployment.' }] } } as never);
+    appendTranscriptEntry(id, { role: 'assistant', content: 'Done.', timestamp: Date.now() } as never);
+    prompt.mockResolvedValue(JSON.stringify({ intent: 'task', assertions: [], targetAssertionIds: [], knowledge: [{ kind: 'project_fact', topicKey: 'atlas',
+      predicate: 'storage.choice', statement: 'Atlas uses SQLite for local deployment.', scope: 'workspace', confidence: 0.9, importance: 0.8,
+      evidence: [{ ref: row.entry_id, quote: 'Atlas uses SQLite for local deployment.' }] }] }));
+    const config = ConfigSchema.parse({}); enqueueConversationLearning(config, id, '/workspace', true);
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(listKnowledgeItems()[0]?.status).toBe('active');
+    expect(JSON.stringify(prompt.mock.calls[0][1])).not.toContain('Untrusted sandbox');
+    expect(JSON.stringify(prompt.mock.calls[0][1])).toContain('[source_role:toolResult]');
+  });
+
+  it.each([false, true, 'routine'] as const)('accumulates choices and repairs scope before committing source lineage: repair=%s', async repair => {
+    const other = '4dffa204-0300-4d2d-89ce-55305490c551';
+    const first = '这组解释里，我选带简短标题的版本，这样容易扫读。';
+    const second = '看另一组例子，我还是选带简短标题的解释，这样读起来更顺。';
+    const config = ConfigSchema.parse({});
+    const rows = [id, other].map((conversationId, index) => {
+      ensureSessionRecord(conversationId, '/workspace', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' });
+      const row = appendTranscriptEntry(conversationId, { role: 'user', content: index ? second : first, timestamp: Date.now() });
+      appendTranscriptEntry(conversationId, { role: 'assistant', content: '收到。', timestamp: Date.now() } as never); return row;
+    });
+    prompt.mockResolvedValueOnce(JSON.stringify({ intent: 'none', assertions: [], targetAssertionIds: [] }));
+    enqueueConversationLearning(config, id, '/workspace', true); await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(listUserAssertions()).toEqual([]); expect(listUserModelObservations()).toHaveLength(1);
+    const response = JSON.stringify({ intent: 'none', targetAssertionIds: [], assertions: [{ intent: 'user_assertion', action: 'create',
+      subject: { type: 'user', id: 'self' }, predicate: 'preference.response.headings', cardinality: 'single', scope: { type: 'workspace', id: '/workspace' },
+      kind: 'preference', value: 'short headings', normalizedValue: 'short headings', statement: 'Prefers explanations with short headings.',
+      authority: 'user_observed', confidence: 0.75, inferredImportance: 0.5, consequence: 'low', actionability: 1,
+      volatility: 'slow', sensitivity: 'normal', disclosurePolicy: 'referenceable', temporalResolution: 'exact', selfContained: true, unresolvedReferences: [],
+      evidence: [{ ref: rows[0].entry_id, quote: first }, { ref: rows[1].entry_id, quote: second }] }] });
+    if (repair) prompt.mockResolvedValueOnce(response.replace('"scope":{"type":"workspace","id":"/workspace"}', '"scope":{"type":"global"}'));
+    prompt.mockResolvedValue(repair === 'routine' ? response.replace('"kind":"preference"', '"kind":"routine"') : response);
+    enqueueConversationLearning(config, other, '/workspace', true); await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(listUserAssertions()).toHaveLength(1);
+    expect(listUserAssertions()[0].authority).toBe('user_observed');
+    expect(JSON.stringify(prompt.mock.calls[1][1])).toContain('observation_scope');
+    const links = getSqliteDatabase().prepare('SELECT conversation_id,message_id FROM context_evidence WHERE evidence_id IN (SELECT evidence_id FROM user_assertion_evidence)').all();
+    expect(links).toEqual(expect.arrayContaining([{ conversation_id: id, message_id: rows[0].entry_id }, { conversation_id: other, message_id: rows[1].entry_id }]));
+  });
+
   it('learns native user transcription with its original provenance and keeps assistant speech non-authoritative', async () => {
     ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sourceChatId: '', sessionType: 'chat' });
     for (const [role, content] of [['user', 'Use SQLite for local deployment.'], ['assistant', 'A speculative assistant name.']] as const) {

@@ -781,6 +781,9 @@ export function deleteUserAssertion(id: string, now = Date.now()): boolean {
     }
     for (const row of rows) db.prepare('DELETE FROM user_assertions WHERE assertion_id = ?').run(row.assertion_id);
     for (const evidenceId of evidenceIds) {
+      const source = db.prepare('SELECT conversation_id, message_id FROM context_evidence WHERE evidence_id=?').get(evidenceId) as { conversation_id: string; message_id: string } | undefined;
+      if (source?.conversation_id && source.message_id) suppressMemory(db, [memoryFingerprint(['conversation-choice-source', source.conversation_id, source.message_id])], now);
+      db.prepare('DELETE FROM user_model_observations WHERE evidence_id=?').run(evidenceId);
       db.prepare(`UPDATE context_evidence SET redacted_excerpt = NULL WHERE evidence_id = ?
         AND NOT EXISTS (SELECT 1 FROM user_assertion_evidence WHERE evidence_id = ?)`).run(evidenceId, evidenceId);
     }

@@ -8,7 +8,7 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest,
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { grantUnderstandingConsent, revokeUnderstandingConsent } from '../../user-context/sources/consent-repository.js';
 import { upsertUnderstandingSourceGrant } from '../../user-context/sources/repository.js';
-import { recoverSourceLearning, runSourceLearning } from '../source-learning.js';
+import { recoverKnowledgeIndexes, recoverSourceLearning, runSourceLearning } from '../source-learning.js';
 
 const modelCall = vi.hoisted(() => vi.fn());
 const endpoint = vi.hoisted(() => ({ value: 'http://localhost:1234' }));
@@ -54,6 +54,34 @@ describe('authorized source work learning', () => {
       { scopes: ['workspace'], contentSources: ['memory', 'local_import'] })).toBe(true);
     recoverSourceLearning(config);
     expect(await runSourceLearning(() => config)).toBe(false);
+  });
+
+  it('repairs retained source indexes created without their current consent binding', async () => {
+    await seed(); const db = getSqliteDatabase();
+    db.prepare('DELETE FROM memory_source_learning_jobs').run();
+    db.prepare('DELETE FROM knowledge_source_chunks').run();
+    db.prepare("UPDATE knowledge_items SET source_json=json_remove(source_json,'$.consentReceiptId') WHERE record_class='source_index'").run();
+    await recoverKnowledgeIndexes(config); recoverSourceLearning(config);
+    expect(db.prepare('SELECT count(*) n FROM knowledge_source_chunks').get()).toMatchObject({ n: 1 });
+    await runSourceLearning(() => config);
+    expect(listKnowledgeItems({ recordClass: 'memory' })).toHaveLength(1);
+    expect(modelCall.mock.calls[0][1].messages[0].content).not.toContain('PRIVATE-SENDER');
+  });
+
+  it('repairs a valid JSON candidate with an invalid source reference before committing it', async () => {
+    await seed();
+    const original = modelCall.getMockImplementation()!;
+    let calls = 0;
+    modelCall.mockImplementation(async (...args) => {
+      const response = await original(...args);
+      if (calls++ === 0) response.content[0].text = response.content[0].text.replaceAll('source_1', 'source_999');
+      return response;
+    });
+    await runSourceLearning(() => config);
+    expect(modelCall).toHaveBeenCalledTimes(2);
+    expect(listKnowledgeItems({ recordClass: 'memory' })).toHaveLength(1);
+    expect(getSqliteDatabase().prepare('SELECT state FROM memory_source_learning_jobs').get()).toMatchObject({ state: 'succeeded' });
+    expect(JSON.stringify(getSqliteDatabase().prepare('SELECT source_ref FROM context_evidence').all())).not.toContain('source_1');
   });
 
   it('never sends local-only source data to a remote endpoint even for an ollama provider', async () => {

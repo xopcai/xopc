@@ -84,11 +84,16 @@ export function recordUserModelObservation(input: Omit<UserModelObservation, 'id
 
 export function listUserModelObservations(input: {
   principalId?: string; domain?: PersonalDomain; sourceGrantId?: string; limit?: number;
+  type?: string; context?: { agentId: string; workspaceId: string; projectId: string };
 } = {}): UserModelObservation[] {
   const clauses = ['principal_id = ?'];
   const values: Array<string | number> = [input.principalId ?? USER_MODEL_PRINCIPAL_ID];
   if (input.domain) { clauses.push('domain = ?'); values.push(input.domain); }
   if (input.sourceGrantId) { clauses.push('source_grant_id = ?'); values.push(input.sourceGrantId); }
+  if (input.type) { clauses.push('observation_type = ?'); values.push(input.type); }
+  if (input.context) for (const key of ['agentId', 'workspaceId', 'projectId'] as const) {
+    clauses.push(`json_extract(context_json, '$.${key}') = ?`); values.push(input.context[key]);
+  }
   values.push(Math.max(1, Math.min(2_000, input.limit ?? 200)));
   return (getSqliteDatabase().prepare(`SELECT * FROM user_model_observations
     WHERE ${clauses.join(' AND ')} ORDER BY observed_at DESC LIMIT ?`).all(...values) as ObservationRow[])

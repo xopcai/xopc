@@ -15,6 +15,8 @@ export const USER_MODEL_CAPTURE_INTENTS = [
 export type UserModelCaptureIntent = typeof USER_MODEL_CAPTURE_INTENTS[number];
 
 export interface CaptureEvidence {
+  conversationId?: string;
+  observationScope?: AssertionCandidate['scope'];
   ref: string;
   role: 'user' | 'assistant' | 'toolResult';
   text: string;

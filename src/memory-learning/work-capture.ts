@@ -45,7 +45,9 @@ export function applyWorkCandidates(input: {
       && entry.text.normalize('NFKC').includes(claim.quote.normalize('NFKC'))));
     if (sources.some(source => !source)) return reject('evidence_quote_mismatch');
     if (!input.source && sources.some((source, index) => source?.role === 'user'
-      && !isOwnerAuthoredSpan(source.text, candidate.evidence[index].quote))) return reject('work_quote_not_owned');
+      && (!isOwnerAuthoredSpan(source.text, candidate.evidence[index].quote)
+        || (/(?:翻译|润色|改写|引文|引用|\b(?:translate|rewrite|quotation|quoted)\b)/iu.test(source.text)
+          && !isFullyOwnerAuthoredSpan(source.text, candidate.evidence[index].quote))))) return reject('work_quote_not_owned');
     if (candidate.lesson) {
       if (input.source) return reject('lesson_runtime_verification_required');
       if (candidate.kind !== 'task_lesson') return reject('lesson_kind_mismatch');

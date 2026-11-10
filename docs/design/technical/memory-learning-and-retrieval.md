@@ -3,6 +3,7 @@
 - 日期：2026-10-11
 - 状态：P0–P2 核心链路已实施；P3 保持评测后选择，见[实施记录](./memory-learning-implementation.md)
 - 后续增量：[工作记忆证据复核与经验学习（2026-11-10）](./memory-evidence-review-2026-11-10.md)
+- 主动采集：[记忆主动采集与漏学修复（2026-11-10）](./memory-acquisition-2026-11-10.md)
 - 范围：用户理解、工作记忆、文件与连接器知识、上下文召回、身份与来源归属
 - 基线：当前仓库源码；本机默认 `~/.xopc` 的只读统计仅作为故障样本，不代表所有安装实例
 - 关联：[现有架构](./memory-architecture.md)、[用户说明](../../user-understanding.md)、[数据获取](./agent-data-acquisition.md)

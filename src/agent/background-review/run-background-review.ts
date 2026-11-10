@@ -9,6 +9,8 @@ import { stripRuntimeContextFromUserMessage } from '../../session/user-message-d
 import { listKnowledgeItems, getKnowledgeItem, canUseKnowledge } from '../../knowledge-memory/index.js';
 import { applyKnowledgeDeletions } from '../../memory-learning/forget-capture.js';
 import { prepareWorkReview, workReviewPrompt, applyWorkReviews, type WorkReviewPlan } from '../../memory-learning/work-review.js';
+import { recallChoiceEvidence, recordChoiceObservations, forgetChoiceObservations } from '../../memory-learning/choice-observations.js';
+import { workEvidenceIssues, mergeEvidenceRepair, observationCandidateIssue } from '../../memory-learning/evidence-repair.js';
 import { applyWorkCandidates } from '../../memory-learning/work-capture.js';
 import { failLearningJob, finishLearningJob, learningPolicyHash, type LearningJob } from '../../memory-learning/repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
@@ -79,7 +81,8 @@ function messageText(message: AgentMessage): string {
 
 function tagMessage(entry: EvidenceMessage): AgentMessage {
   const copy = JSON.parse(JSON.stringify(entry.message)) as AgentMessage;
-  const tag = `[evidence_ref:${entry.ref}] [role:${entry.role}]\n`;
+  const tag = `[evidence_ref:${entry.ref}] [role:${entry.role}]${entry.observationScope
+    ? ` [observation_scope:${JSON.stringify(entry.observationScope)}] [source_conversation:${entry.conversationId}]` : ''}\n`;
   const content = readAgentMessageContent(copy);
   if (typeof content === 'string') return { ...copy, content: `${tag}${content}` } as AgentMessage;
   if (Array.isArray(content)) {
@@ -193,6 +196,7 @@ async function interpret(params: {
   const aliasByRef = new Map([...evidenceAliases].map(([alias, ref]) => [ref, alias]));
   reviewAgent.state.messages = params.evidence.map(entry => tagMessage({ ...entry, ref: aliasByRef.get(entry.ref)! }));
   let interpretation: UserModelInterpretation | null = null;
+  let evidenceRepairBase: UserModelInterpretation | undefined;
   const diagnostics = { conversationId: params.conversationId, provider: params.model.provider, modelId: params.model.id };
   try {
     await runAgentTurnWithTimeout(reviewAgent, async () => {
@@ -229,6 +233,27 @@ async function interpret(params: {
         interpretation = parseUserModelInterpretation(resolved, params.evidence,
           params.availableAssertions.map(item => item.id), value => { failure = value; }, availableKnowledge.map(item => item.id));
         if (interpretation) {
+          if (evidenceRepairBase) {
+            interpretation = mergeEvidenceRepair(evidenceRepairBase, interpretation, params.evidence);
+            return;
+          }
+          const provenanceIssues = workEvidenceIssues(interpretation.knowledge ?? [], params.evidence);
+          const observationIssues = interpretation.assertions.flatMap((candidate, index) => {
+            const reasonCode = observationCandidateIssue(candidate, params.evidence);
+            return reasonCode ? [{ index, predicate: candidate.predicate, reasonCode }] : [];
+          });
+          if (attempt === 0 && (provenanceIssues.length || observationIssues.length) && interpretation.intent !== 'forget' && !interpretation.knowledgeDeletions?.length) {
+            evidenceRepairBase = interpretation;
+            log.debug({ ...diagnostics, phase: 'candidate_repair', count: provenanceIssues.length + observationIssues.length }, 'Repairing learning candidate validation failures');
+            await reviewAgent.prompt({ role: 'user', timestamp: Date.now(), content:
+              'The JSON schema is valid, but these work candidates failed host evidence validation: ' + JSON.stringify({ work: provenanceIssues, observations: observationIssues })
+              + '. Return the complete JSON object. Change ONLY the evidence ref/quote pairs of these candidates, preserving topicKey, predicate and supported meaning. '
+              + 'Use exact quotes with their conditions and exact evidence_ref aliases from the original messages. Allowed aliases: '
+              + JSON.stringify([...evidenceAliases.keys()])
+              + '. For flagged observational assertions, preserve predicate and normalizedValue while using the exact supplied observation_scope, preference/routine, observational authority, normal sensitivity and low/medium consequence. Do not invent evidence, copy an answer into a quote, or change valid personal/work operations. Omit a candidate if it cannot be grounded.' });
+            await reviewAgent.waitForIdle();
+            continue;
+          }
           const represented = new Set(params.availableAssertions.length ? (getSqliteDatabase().prepare(`SELECT DISTINCT e.message_id FROM user_assertion_evidence l
             JOIN context_evidence e ON e.evidence_id=l.evidence_id WHERE l.relation='supports'
             AND l.assertion_id IN (${params.availableAssertions.map(() => '?').join(',')})`)
@@ -258,6 +283,7 @@ async function interpret(params: {
         const fields = { ...diagnostics, ...failure, outputChars: raw.length,
           stopReason: (getLastAssistantMessage(reviewAgent.state.messages) as { stopReason?: string } | undefined)?.stopReason };
         if (attempt === 1) {
+          if (evidenceRepairBase) interpretation = evidenceRepairBase;
           log.warn(fields, 'User-understanding output invalid after one repair attempt');
           return;
         }
@@ -443,13 +469,23 @@ async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => 
   const mainAgent = new Agent({ initialState: { model }, streamFn: createExtensionAwareStreamFn() });
   const runtime = resolveInterpreterRuntime({ conversationId: job.conversation_id, mainAgent, getConfig });
   if (!runtime) { failLearningJob(job, 'processing_policy', true); return; }
+  const observationContext = { conversationId: job.conversation_id, agentId, workspaceId: job.workspace_id,
+    projectId: getSessionMetadata(job.conversation_id)?.projectId };
+  const carried: EvidenceMessage[] = [];
+  let modelChars = chars;
+  for (const source of recallChoiceEvidence(config, observationContext, evidence)) {
+    if (modelChars + source.text.length > maxChars || carried.length + evidence.length >= config.userContext.userModel.extraction.maxHistoryMessages) continue;
+    carried.push({ ...source, message: { role: 'user', content: source.text, timestamp: source.createdAt } });
+    modelChars += source.text.length;
+  }
+  const modelEvidence = [...carried, ...evidence];
   const extraction = claimRegisteredExtraction({ extractorId: 'transcript-synthesis',
     sourceRef: `learning:${job.job_id}:${startSeq}:${through}:${job.lease_token}`,
-    contentForHash: evidence.map(entry => `${entry.ref}:${entry.text}`).join('\n'),
+    contentForHash: modelEvidence.map(entry => `${entry.ref}:${entry.text}`).join('\n'),
     processingPolicy: runtime.processingPolicy, destination: runtime.destination });
   if (!extraction.shouldExecute) throw new Error('Learning extraction is already claimed');
   const interpretation = await interpret({ conversationId: job.conversation_id, mainAgent, getConfig,
-    evidence, mode: 'transcript', availableAssertions: listAvailableAssertions(),
+    evidence: modelEvidence, mode: 'transcript', availableAssertions: listAvailableAssertions(),
     timeoutMs: config.userContext.userModel.extraction.maxDurationMs, workspaceId: job.workspace_id, model: runtime.model });
   if (!interpretation) {
     finishContextExtractionRun({ runId: extraction.run.id, status: 'failed', errorCode: 'model_or_schema_failed' });
@@ -467,10 +503,13 @@ async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => 
     committed = finishLearningJob(job, () => {
       const access = resolveUserContextSessionAccess(current, job.conversation_id);
       const projectId = getSessionMetadata(job.conversation_id)?.projectId;
+      const liveContext = { ...observationContext, projectId };
+      const liveChoices = new Set(recallChoiceEvidence(current, liveContext, evidence).map(source => source.ref));
+      const personalEvidence = modelEvidence.filter(source => !source.observationScope || liveChoices.has(source.ref));
       const result = access.userModel ? executeUserModelInterpretation({ interpretation: personalRebuild ? {
         ...interpretation, intent: 'user_assertion', targetAssertionIds: [], goals: [], collaborationRules: [],
         assertions: interpretation.intent === 'forget' ? [] : interpretation.assertions,
-      } : interpretation, evidence,
+      } : interpretation, evidence: personalEvidence,
         extractionRunId: extraction.run.id, extractorId: 'transcript-synthesis',
         allowRestoreDeleted: !personalRebuild,
         scopeContext: { conversationId: job.conversation_id, agentId, workspaceId: job.workspace_id, projectId },
@@ -494,6 +533,8 @@ async function runPersistentLearningJobInner(job: LearningJob, getConfig: () => 
           evidence, conversationId: job.conversation_id, agentId, workspaceId: job.workspace_id, projectId,
           processingPolicy: runtime.processingPolicy, runId: extraction.run.id,
         }) : [];
+      if (interpretation.intent === 'forget' || interpretation.knowledgeDeletions?.length) forgetChoiceObservations(liveContext);
+      else recordChoiceObservations(current, liveContext, evidence);
       finishContextExtractionRun({ runId: extraction.run.id, status: 'completed', outputs: [
         ...result.outputs.map(output => ({ candidateKey: output.candidateKey,
           ...(output.assertionId ? { objectType: 'assertion' as const, objectId: output.assertionId } : {}),

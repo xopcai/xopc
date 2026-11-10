@@ -1176,6 +1176,7 @@ export const ConfigSchema = z.object({
       showMemoryReferences: true,
       processingPolicy: 'remote_allowed',
       extraction: {
+        crossSessionObservations: true, observationWindowDays: 30, maxObservationEvidence: 6,
         reviewIntervalTurns: 10,
         maxHistoryMessages: 80,
         maxDurationMs: 120_000,
