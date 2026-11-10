@@ -3,6 +3,7 @@
 !include FileFunc.nsh
 
 Var XopcInstallerPid
+Var XopcPowerShell
 
 !macro xopcLog MESSAGE
   Push $R7
@@ -18,7 +19,7 @@ Var XopcInstallerPid
   !else
     !define /redef XOPC_REGISTRY_ARGUMENT '-InstallRegistryKey "${INSTALL_REGISTRY_KEY}"'
   !endif
-  nsExec::ExecToStack /TIMEOUT=30000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\xopc-installer-processes.ps1" -Mode ${MODE} -InstallDirectory "$INSTDIR\." -InstallerProcessId $XopcInstallerPid ${XOPC_REGISTRY_ARGUMENT} -StateFile "$PLUGINSDIR\xopc-owned-processes.json" -LogFile "$TEMP\xopc-install-$XopcInstallerPid.log"'
+  nsExec::ExecToStack /TIMEOUT=30000 '"$XopcPowerShell" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\xopc-installer-processes.ps1" -Mode ${MODE} -InstallDirectory "$INSTDIR\." -InstallerProcessId $XopcInstallerPid ${XOPC_REGISTRY_ARGUMENT} -StateFile "$PLUGINSDIR\xopc-owned-processes.json" -LogFile "$TEMP\xopc-install-$XopcInstallerPid.log"'
   Pop $R0
   Pop $R9
 !macroend
@@ -30,6 +31,11 @@ Var XopcInstallerPid
   File /oname=$PLUGINSDIR\installer-file-locks.ps1 "${BUILD_RESOURCES_DIR}\installer-file-locks.ps1"
   System::Call 'kernel32::GetCurrentProcessId() i.r0'
   StrCpy $XopcInstallerPid $0
+  ; NSIS is x86; use the native host for ARM64/x64 process inspection.
+  StrCpy $XopcPowerShell "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
+  ${If} ${FileExists} "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+    StrCpy $XopcPowerShell "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+  ${EndIf}
   !insertmacro xopcProcessCommand check
   ${If} $R0 == 0
     Goto xopc_processes_stopped
