@@ -21,9 +21,9 @@ function run(mode: string, rows: ReturnType<typeof processRow>[], reusePid = 0, 
   const state = join(temporary, 'state.json');
   const harness = join(temporary, 'harness.ps1');
   writeFileSync(harness, `
-$global:rows = @(ConvertFrom-Json $env:XOPC_INSTALLER_ROWS)
+$global:rows = ConvertFrom-Json $env:XOPC_INSTALLER_ROWS
 $global:stopped = @()
-function Get-XopcLockingProcessIds { param($Files); return @(ConvertFrom-Json $env:XOPC_INSTALLER_LOCKS) }
+function Get-XopcLockingProcessIds { param($Files); foreach ($owner in (ConvertFrom-Json $env:XOPC_INSTALLER_LOCKS)) { [int]$owner } }
 function Get-CimInstance {
   param($ClassName, $Filter, $ErrorAction)
   if ($Filter) {
@@ -33,7 +33,7 @@ function Get-CimInstance {
     return $result
   }
   # Return snapshots, as the real CIM API does.
-  return @(ConvertFrom-Json (ConvertTo-Json -InputObject @($global:rows) -Compress))
+  foreach ($item in (ConvertFrom-Json (ConvertTo-Json -InputObject @($global:rows) -Compress))) { $item }
 }
 function Stop-Process {
   param($Id, [switch]$Force, $ErrorAction)
@@ -49,7 +49,7 @@ function Start-Process {
     else { $global:rows = @() }
   }
 }
-$additional = @(ConvertFrom-Json $env:XOPC_INSTALLER_ADDITIONAL)
+$additional = ConvertFrom-Json $env:XOPC_INSTALLER_ADDITIONAL
 if ($env:XOPC_INSTALLER_MODE -eq 'sequence') {
   & $env:XOPC_INSTALLER_SCRIPT -AdditionalInstallDirectories $additional -StateFile $env:XOPC_INSTALLER_STATE -Mode check -InstallDirectory $env:XOPC_INSTALLER_DIRECTORY -InstallerProcessId 99999 -WaitSeconds 0
   $global:rows = @($global:rows | Where-Object Name -ne 'xopc.exe')
