@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,13 +18,17 @@ const oldDirectory = join(fixture, 'old');
 const newDirectory = join(fixture, 'new');
 const registryKey = `Software\\xopc\\InstallerRegression\\${randomUUID()}`;
 const uninstallKey = registryKey + '\\Uninstall';
-const report = { compiled: false, native: false, checks: [] };
+const report = { compiled: false, native: false, checks: [], installerLogs: [] };
 const processes = [];
 const quote = value => value.replaceAll('$', '$$').replaceAll('"', '$\\"');
 const tool = await getMakeNsisPath();
 const plugins = await getNsisPluginsPath();
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { encoding: 'utf8', timeout: 60_000, ...options });
+  if (command === join(fixture, 'upgrade.exe')) {
+    const log = join(tmpdir(), `xopc-install-${result.pid}.log`);
+    if (existsSync(log)) report.installerLogs.push({ pid: result.pid, exitCode: result.status, content: readFileSync(log, 'utf16le').replace(/^\uFEFF/, '') });
+  }
   if (result.error) throw result.error;
   return result;
 }
@@ -179,7 +183,8 @@ SectionEnd
     assert.equal(processScript('force').status, 0, 'must reap helper without its parent');
     report.checks.push('orphaned native helper detected and stopped');
     await keeper(join(oldDirectory, 'xopc.exe'), 'graceful.exe');
-    assert.equal(run(join(fixture, 'upgrade.exe'), ['/S']).status, 0, 'silent updates must request and await graceful exit');
+    const graceful = run(join(fixture, 'upgrade.exe'), ['/S']);
+    assert.equal(graceful.status, 0, `silent updates must request and await graceful exit: ${JSON.stringify(report.installerLogs.at(-1))}`);
     assert.ok(!existsSync(join(oldDirectory, 'legacy-marker')));
     assert.ok(existsSync(join(newDirectory, 'new-marker')));
     rmSync(join(newDirectory, 'new-marker'));
