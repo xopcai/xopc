@@ -24,7 +24,8 @@ const quote = value => value.replaceAll('$', '$$').replaceAll('"', '$\\"');
 const tool = await getMakeNsisPath();
 const plugins = await getNsisPluginsPath();
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 60_000, ...options });
+  // Legacy x86 executables and their PowerShell probes run under emulation on ARM64.
+  const result = spawnSync(command, args, { encoding: 'utf8', timeout: process.arch === 'arm64' ? 180_000 : 60_000, ...options });
   if (command === join(fixture, 'upgrade.exe')) {
     const log = join(tmpdir(), `xopc-install-${result.pid}.log`);
     if (existsSync(log)) report.installerLogs.push({ pid: result.pid, exitCode: result.status, content: readFileSync(log, 'utf16le').replace(/^\uFEFF/, '') });
