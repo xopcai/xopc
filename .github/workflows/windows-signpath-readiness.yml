@@ -6,6 +6,9 @@ on:
     paths:
       - 'electron/update-preferences.ts'
       - 'electron/auto-updater.ts'
+      - 'electron/main.ts'
+      - 'electron/installer-quit.ts'
+      - 'electron/gateway-process.ts'
       - 'electron/resources/**'
       - 'scripts/*inventory*'
       - 'scripts/*windows*readiness*'
@@ -44,6 +47,7 @@ jobs:
       - name: Installer process regressions and native legacy upgrade acceptance
         run: |
           pnpm exec vitest run --project scripts scripts/__tests__/windows-installer-processes.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-windows-installer-upgrade.mjs
       - run: pnpm run build:ci
       - run: pnpm run electron:build:artifacts
