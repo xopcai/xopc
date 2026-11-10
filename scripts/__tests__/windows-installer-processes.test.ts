@@ -38,12 +38,12 @@ function Get-CimInstance {
 function Stop-Process {
   param($Id, [switch]$Force, $ErrorAction)
   $global:stopped += $Id
-  ConvertTo-Json -InputObject @($global:stopped) | Set-Content $env:XOPC_INSTALLER_REPORT
+  ConvertTo-Json -InputObject @($global:stopped) | Set-Content $env:XOPC_INSTALLER_REPORT -Encoding UTF8
   $global:rows = @($global:rows | Where-Object { $_.ProcessId -ne $Id })
 }
 function Start-Process {
   param($FilePath, $ArgumentList, $WorkingDirectory)
-  @{ executable=$FilePath; argument=$ArgumentList; directory=$WorkingDirectory } | ConvertTo-Json | Set-Content $env:XOPC_INSTALLER_REPORT
+  @{ executable=$FilePath; argument=$ArgumentList; directory=$WorkingDirectory } | ConvertTo-Json | Set-Content $env:XOPC_INSTALLER_REPORT -Encoding UTF8
   if ($env:XOPC_INSTALLER_KEEP_ALIVE -ne 'true') {
     if ($env:XOPC_INSTALLER_DROP_MAIN_ONLY -eq 'true') { $global:rows = @($global:rows | Where-Object Name -ne 'xopc.exe') }
     else { $global:rows = @() }

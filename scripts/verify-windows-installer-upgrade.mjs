@@ -30,7 +30,7 @@ function run(command, args, options = {}) {
 }
 function compile(name, body) {
   const source = join(fixture, name + '.nsi');
-  writeFileSync(source, `Unicode true
+  writeFileSync(source, `\uFEFFUnicode true
 !addincludedir "${quote(join(templates, 'include'))}"
 !addincludedir "${quote(templates)}"
 !addplugindir /x86-unicode "${quote(join(plugins, 'x86-unicode'))}"
