@@ -36,6 +36,7 @@ function run(command, args, options = {}) {
 function compile(name, body) {
   const source = join(fixture, name + '.nsi');
   writeFileSync(source, `\uFEFFUnicode true
+!pragma warning disable 6001
 !addincludedir "${quote(join(templates, 'include'))}"
 !addincludedir "${quote(templates)}"
 !addplugindir /x86-unicode "${quote(join(plugins, 'x86-unicode'))}"
@@ -43,6 +44,7 @@ function compile(name, body) {
 !include MUI2.nsh
 !include FileFunc.nsh
 !define APP_EXECUTABLE_FILENAME "xopc.exe"
+!define PRODUCT_NAME "xopc"
 !define INSTALL_REGISTRY_KEY "${registryKey}"
 !define UNINSTALL_REGISTRY_KEY "${uninstallKey}"
 !define BUILD_RESOURCES_DIR "${quote(join(root, 'electron/resources'))}"
@@ -57,7 +59,7 @@ LangString appClosing 1033 "Closing xopc"
 LangString appCannotBeClosed 1033 "Cannot close xopc"
 LangString uninstallFailed 1033 "Uninstall failed"
 ${body}`);
-  const result = run(tool.path, ['-V2', source], { env: { ...process.env, ...tool.env } });
+  const result = run(tool.path, ['-WX', '-V2', source], { env: { ...process.env, ...tool.env } });
   assert.equal(result.status, 0, result.stdout + result.stderr);
 }
 function powershell(code, extraEnv = {}) {
