@@ -5,13 +5,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import { useReadingPosition } from './use-reading-position';
+
 const clock = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2,'0')}`;
 export function DiscussionLongReview({ id, query, zh, refreshKey, sourceKey, active, tab, onEvidence, onPlay }: {
   id: string; query: string; zh: boolean; refreshKey: string; sourceKey?: string; active: boolean; tab: string;
   onEvidence: (evidence: DiscussionEvidence) => void; onPlay: (start: number,end: number) => void;
 }) {
   const [review,setReview] = useState<DiscussionReview>();
-  const [pending,setPending] = useState<DiscussionReview>();
+  const viewport = useRef<HTMLElement | null>(null);
+  const preserveReading = useReadingPosition(viewport);
   const published = useRef<{ key: string; value: DiscussionReview } | null>(null);
   const explicitRefresh = useRef(false);
   const [loading,setLoading] = useState(true); const [error,setError] = useState('');
@@ -31,20 +34,28 @@ export function DiscussionLongReview({ id, query, zh, refreshKey, sourceKey, act
     const replace = explicitRefresh.current;
     explicitRefresh.current = false;
     const timer = window.setTimeout(() => {
-      void fetchJson<DiscussionReview>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/review?q=${encodeURIComponent(query)}`),{ signal: controller.signal }).then(value => {
+      void fetchJson<DiscussionReview>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/review?q=${encodeURIComponent(query)}`),{ signal: controller.signal }).then(async value => {
         if (generation.current !== current) return;
         const previous = published.current;
         if (!replace && previous?.key === documentKey) {
-          if (previous.value.version !== value.version) setPending(value);
-          return;
+          if (previous.value.version === value.version) return;
+          // Refresh the loaded window against one version, retaining expanded rows.
+          const loadedCount = previous.value.hits.length;
+          while (value.hasMore && value.hits.length < loadedCount) {
+            const next = await fetchJson<DiscussionReview>(apiUrl(`/api/discussions/${encodeURIComponent(id)}/review?q=${encodeURIComponent(query)}&offset=${value.hits.length}&version=${encodeURIComponent(value.version)}`), { signal: controller.signal });
+            if (generation.current !== current) return;
+            if (next.version !== value.version || !next.hits.length) throw new Error('Review changed during refresh');
+            value = { ...next, offset: 0, hits: [...value.hits, ...next.hits] };
+          }
+          preserveReading();
         }
         published.current = { key: documentKey,value };
-        setReview(value); setPending(undefined); setLoadedSource(documentKey); setFreshQuery(query);
+        setReview(value); setLoadedSource(documentKey); setFreshQuery(query);
       }).catch(caught => { if (generation.current === current && !controller.signal.aborted) setError(String(caught)); })
         .finally(() => { if (generation.current === current) setLoading(false); });
     },query ? 200 : 0);
     return () => { generation.current++; controller.abort(); window.clearTimeout(timer); };
-  },[id,query,backgroundRefreshKey,sourceKey,documentKey,tick]);
+  },[id,query,backgroundRefreshKey,sourceKey,documentKey,tick,preserveReading]);
   function refresh() { explicitRefresh.current = true; setTick(value => value + 1); }
   async function more() {
     if (!review || busy) return; const current = generation.current; setBusy(true);
@@ -62,7 +73,7 @@ export function DiscussionLongReview({ id, query, zh, refreshKey, sourceKey, act
     if ((!entry.provisional || entry.kind === 'chapter') && entry.transcriptRevision !== undefined && entry.segments.length) onEvidence({ transcriptRevision: entry.transcriptRevision,stale: entry.stale,audioAvailable: review?.coverage.audioAvailable ?? false,timingVerified: entry.segments.some(s => s.playback.length > 0),segments: entry.segments });
   }
   const label = (entry: DiscussionReviewEntry) => entry.kind === 'chapter' ? (zh ? '章节' : 'Chapter') : entry.kind === 'annotation' ? (zh ? '我的标记' : 'My mark') : entry.kind === 'analysis' ? (zh ? '分析' : 'Analysis') : (zh ? '原文' : 'Transcript');
-  const row = (entry: DiscussionReviewEntry) => <article key={entry.id} className="space-y-2 rounded-xl bg-surface-inset p-4">
+  const row = (entry: DiscussionReviewEntry) => <article data-reading-anchor={`review:${entry.id}`} key={entry.id} className="space-y-2 rounded-xl bg-surface-inset p-4">
     <button className="text-left text-sm text-accent-fg" onClick={() => open(entry)}>{entry.startedAtMs !== undefined ? `${clock(entry.startedAtMs)}${entry.endedAtMs !== undefined ? `–${clock(entry.endedAtMs)}` : ''} · ` : ''}{entry.title || label(entry)}</button>
     <p className="whitespace-pre-wrap text-sm">{entry.kind === 'chapter' && !query && entry.text.length > 300 ? `${entry.text.slice(0,300)}…` : entry.text}</p>
     <p className="text-xs text-fg-muted">{label(entry)}{entry.provisional ? (zh ? ' · 阶段性结果' : ' · Partial result') : ''}{entry.stale ? (zh ? ' · 原文已更新，保留旧版依据' : ' · Earlier transcript revision') : ''}{entry.kind === 'chapter' ? ` · ${entry.highlightCount ?? 0} ${zh ? '个重点' : 'marks'} · ${entry.actionCount ?? 0} ${zh ? '个候选行动' : 'candidate actions'}` : ''}</p>
@@ -70,15 +81,10 @@ export function DiscussionLongReview({ id, query, zh, refreshKey, sourceKey, act
     {entry.playback.slice(0,3).map((range,index) => <Button key={index} onClick={() => onPlay(range.startedAtMs,range.endedAtMs)}>{zh ? '回听上下文' : 'Play context'} {clock(range.startedAtMs)}–{clock(range.endedAtMs)}</Button>)}
     {entry.segments.length ? <Button onClick={() => open(entry)}>{zh ? '查看对应原文' : 'View transcript'}</Button> : <p className="text-xs text-fg-muted">{zh ? '暂无可核实的原文定位' : 'No verified transcript reference'}</p>}
   </article>;
-  return <section aria-label={zh ? '长录音回顾' : 'Recording review'} className="flex flex-col gap-3">
+  return <section ref={element => { viewport.current = element?.closest('main') ?? element; }} aria-label={zh ? '长录音回顾' : 'Recording review'} className="flex flex-col gap-3">
     {error ? <div><p role="alert" className="text-sm text-danger">{error}</p><Button onClick={refresh}>{zh ? '刷新结果' : 'Refresh results'}</Button></div> : null}
     {loading && (!review || loadedSource !== documentKey || freshQuery !== query) ? <Skeleton className="h-20 w-full" /> : null}
     {review && loadedSource === documentKey && (!query || freshQuery === query) ? <>
-      <div className="sticky top-0 z-10 h-0">{pending ? <div className="flex items-center justify-between gap-3 rounded-lg border border-edge-subtle bg-surface-overlay px-3 py-2 text-xs text-fg-muted shadow-popover">
-        <span role="status">{zh ? '内容已更新，当前阅读位置已保留' : 'Updates available. Your reading position is preserved.'}</span>
-        <Button variant="ghost" onClick={() => { published.current = { key: documentKey,value: pending }; setReview(pending); setPending(undefined); }}>{zh ? '查看最新' : 'View latest'}</Button>
-      </div> : null}</div>
-
       {query ? <><h3 className="text-sm font-medium">{zh ? `搜索结果 · ${review.total}` : `Search results · ${review.total}`}</h3><Button onClick={refresh}>{zh ? '刷新结果' : 'Refresh results'}</Button>
         <div aria-label={zh ? '命中位置' : 'Match positions'} className="relative my-3 h-5 rounded bg-surface-inset">{review.hits.filter(hit => hit.startedAtMs !== undefined).map(hit => <button key={hit.id} className="absolute top-0 h-5 w-1.5 rounded bg-accent" style={{ left: `${Math.min(99,100 * hit.startedAtMs! / Math.max(1,review.coverage.durationMs))}%` }} aria-label={`${clock(hit.startedAtMs!)} ${hit.title || label(hit)}`} onClick={() => open(hit)} />)}</div>{!review.total ? <p className="text-sm text-fg-muted">{zh ? '未找到关键词；尚未转写的内容无法搜索。' : 'No matches. Untranscribed audio is not searchable yet.'}</p> : null}{review.hits.map(row)}</> : <>
         {tab === 'summary' && review.chapters.length ? <details className="rounded-xl bg-surface-inset px-4"><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent">{zh ? '章节目录' : 'Chapters'} · {review.chapters.length}</summary><div className="space-y-3 pb-4">{review.chapters.map(row)}</div></details> : null}

@@ -45,13 +45,17 @@ it('refreshes partial processing without needing the whole document to change', 
   await act(async () => vi.advanceTimersByTimeAsync(3000)); await act(async () => vi.advanceTimersByTimeAsync(1));
   expect(mocks.fetch).toHaveBeenCalledTimes(2);
 });
-it('stages background results without replacing expanded content or loaded pages', async () => {
+it('automatically refreshes all loaded pages without remounting existing rows', async () => {
   mocks.fetch.mockResolvedValue(response({ query: '', hasMore: true, total: 2 })); await render('note','',true);
   mocks.fetch.mockResolvedValue(response({ query: '', hits: [{ ...entry,id: 'second',text: 'Loaded second page' }] }));
   await act(async () => button('加载更多结果').click());
-  mocks.fetch.mockResolvedValue(response({ query: '', version: 'v2',hits: [{ ...entry,text: 'Newly corrected text' }] }));
+  const row = container.querySelector('article');
+  mocks.fetch.mockResolvedValueOnce(response({ query: '', version: 'v2',hasMore: true,total: 2,hits: [{ ...entry,text: 'Newly corrected text' }] }))
+    .mockResolvedValue(response({ query: '',version: 'v2',offset: 1,hits: [{ ...entry,id: 'second',text: 'Updated second page' }] }));
   await act(async () => vi.advanceTimersByTimeAsync(3000)); await act(async () => vi.advanceTimersByTimeAsync(1));
-  expect(container.textContent).toContain('Loaded second page'); expect(container.textContent).not.toContain('Newly corrected text');
-  await act(async () => button('查看最新').click());
+  expect(mocks.fetch.mock.calls.at(-1)![0]).toContain('offset=1&version=v2');
+  expect(container.textContent).toContain('Updated second page');
+  expect(container.querySelector('article')).toBe(row);
+  expect(container.textContent).not.toContain('查看最新');
   expect(container.textContent).toContain('Newly corrected text');
 });

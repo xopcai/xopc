@@ -41,7 +41,7 @@ export function PersonalCallSettings({ preferences, settings, failed, disabled, 
         <Select side="top" aria-label={zh ? '通话引擎' : 'Call engine'} value={mode} onChange={event => { void changeMode(event.target.value as EnginePreference); }}>
           <SelectOption value="auto">{zh ? '自动选择' : 'Automatic'}</SelectOption>
           <SelectOption value="natural">{zh ? '实时语音' : 'Realtime voice'}</SelectOption>
-          <SelectOption value="assistant">{zh ? '识别、执行与合成' : 'Transcription, Agent and speech'}</SelectOption>
+          <SelectOption value="assistant">{zh ? '助手语音' : 'Assistant voice'}</SelectOption>
         </Select>
       </label>
       <div inert={mode === 'natural'} aria-hidden={mode === 'natural'} className={mode === 'natural' ? 'hidden' : ''}>

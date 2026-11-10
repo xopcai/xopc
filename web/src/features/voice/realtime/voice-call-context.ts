@@ -11,6 +11,9 @@ export interface VoiceCallTarget {
 
 export interface VoiceCallContextValue {
   active: boolean;
+  expanded: boolean;
+  minimize: () => void;
+  setMiniAnchor: (element: HTMLElement | null) => void;
   conversationId: string | null;
   open: (target: VoiceCallTarget) => void;
 }
