@@ -57,7 +57,8 @@ try {
   $names = @($executables | ForEach-Object { [IO.Path]::GetFileName($_) } | Sort-Object -Unique)
   $excluded = @($PID, $InstallerProcessId)
   $saved = @()
-  if ($StateFile -and [IO.File]::Exists($StateFile)) { $saved = @(Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json) }
+  # Windows PowerShell returns a JSON array as one pipeline item; don't wrap it again.
+  if ($StateFile -and [IO.File]::Exists($StateFile)) { $saved = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json }
 
   function Get-InstalledProcesses {
     $all = @(Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object {
