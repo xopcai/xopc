@@ -91,7 +91,7 @@ describe.skipIf(!available)('Windows installer PowerShell process handling', () 
     expect(run('check', [processRow(1, executable.toUpperCase())]).status).toBe(10);
   });
 
-  it('matches a short-name temporary directory alias to the same installation', () => {
+  it.skipIf(process.platform !== 'win32')('matches a short-name temporary directory alias to the same installation', () => {
     const alias = join(tmpdir(), "xopc install user's 测试", 'xopc.exe');
     expect(run('check', [processRow(1, alias)]).status).toBe(10);
   });

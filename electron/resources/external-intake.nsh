@@ -102,6 +102,14 @@ Var XopcInstallerPid
   Quit
 !macroend
 
+; Do not fall back to executing a legacy uninstaller with its unsafe prefix scan.
+!macro customOldUninstallerLaunchFailed
+  !insertmacro xopcLog "phase=legacy-launch result=failed directory=$installationDir executable=$uninstallerFileNameTemp"
+  MessageBox MB_OK|MB_ICONEXCLAMATION "Cannot launch the previous uninstaller. Check application-control or antivirus rules for temporary executables. / 无法启动旧版卸载器，请检查临时程序的安全策略。$\r$\nLog / 日志: $TEMP\xopc-install-$XopcInstallerPid.log" /SD IDOK
+  SetErrorLevel 2
+  Quit
+!macroend
+
 !macro customUnInstallCheck
   ${If} ${Errors}
     StrCpy $R0 "launch-error"

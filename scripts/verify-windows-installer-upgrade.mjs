@@ -154,12 +154,19 @@ SectionEnd
     assert.ok(existsSync(join(oldDirectory, 'legacy-marker')));
     assert.ok(!existsSync(join(newDirectory, 'new-marker')));
     rmSync(join(oldDirectory, 'fail-uninstall'));
+    const validUninstaller = join(fixture, 'valid-uninstaller.exe');
+    cpSync(join(oldDirectory, 'Uninstall xopc.exe'), validUninstaller);
+    writeFileSync(join(oldDirectory, 'Uninstall xopc.exe'), 'invalid executable');
+    assert.equal(run(join(fixture, 'upgrade.exe'), ['/S']).status, 2, 'unlaunchable legacy executable must not fall back to its unsafe check');
+    assert.ok(existsSync(join(oldDirectory, 'legacy-marker')));
+    assert.ok(!existsSync(join(newDirectory, 'new-marker')));
+    cpSync(validUninstaller, join(oldDirectory, 'Uninstall xopc.exe'));
     assert.equal(run(join(fixture, 'upgrade.exe'), ['/S']).status, 0);
     assert.ok(!existsSync(join(oldDirectory, 'legacy-marker')), 'actual legacy uninstaller must execute');
     assert.ok(existsSync(join(newDirectory, 'new-marker')));
     assert.equal(sibling.exitCode, null, 'legacy prefix matching must not terminate a sibling installation');
     assert.ok(app.pid && helper.pid);
-    report.checks.push('legacy failure preserves files; retry succeeds; sibling process survives legacy uninstall');
+    report.checks.push('legacy failure and launch failure preserve files; retry succeeds; sibling process survives legacy uninstall');
     // Exercise the native Restart Manager binding against an actual running executable.
     const locker = await keeper(join(fixture, 'locked.exe'));
     const owners = powershell(`. $env:XOPC_LOCK_SCRIPT; @(Get-XopcLockingProcessIds @($env:XOPC_LOCK_FILE)) | ConvertTo-Json -Compress`, {
@@ -171,6 +178,7 @@ SectionEnd
     console.log(JSON.stringify(report, null, 2));
   }
 } catch (error) {
+  report.error = String(error.stack ?? error);
   console.error(error);
   throw error;
 } finally {
