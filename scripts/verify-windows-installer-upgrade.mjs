@@ -169,6 +169,9 @@ SectionEnd
     report.native = true;
     console.log(JSON.stringify(report, null, 2));
   }
+} catch (error) {
+  console.error(error);
+  throw error;
 } finally {
   if (process.platform === 'win32') {
     for (const child of processes) {
@@ -180,7 +183,7 @@ SectionEnd
         });
       }
     }
-    powershell(`Remove-Item -LiteralPath ('HKCU:\\' + $env:XOPC_REGRESSION_KEY) -Recurse -Force -ErrorAction SilentlyContinue`, { XOPC_REGRESSION_KEY: registryKey });
+    powershell(`$key = 'HKCU:\\' + $env:XOPC_REGRESSION_KEY; if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }`, { XOPC_REGRESSION_KEY: registryKey });
   }
   mkdirSync(join(root, 'reports'), { recursive: true });
   writeFileSync(join(root, 'reports/windows-installer-upgrade.json'), JSON.stringify(report, null, 2));
