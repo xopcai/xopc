@@ -123,7 +123,7 @@ Var XopcPowerShell
   ${If} ${Errors}
     StrCpy $R0 "launch-error"
   ${EndIf}
-  !insertmacro xopcLog "phase=legacy-uninstall result=$R0 directory=$installationDir"
+  !insertmacro xopcLog "phase=legacy-uninstall result=$R0"
   ${If} $R0 != 0
     MessageBox MB_OK|MB_ICONEXCLAMATION "Previous version uninstall failed. / 旧版本卸载失败。$\r$\nExit code / 退出码: $R0$\r$\nLog / 日志: $TEMP\xopc-install-$XopcInstallerPid.log" /SD IDOK
     SetErrorLevel 2
