@@ -135,7 +135,7 @@ Function .onInit
     Quit
 FunctionEnd
 Section
-  Sleep 300000
+  Sleep 900000
 SectionEnd
 `);
   compile('graceful', `
@@ -206,7 +206,11 @@ SectionEnd
     assert.equal(run(join(fixture, 'upgrade.exe'), ['/S']).status, 0);
     assert.ok(!existsSync(join(oldDirectory, 'legacy-marker')), 'actual legacy uninstaller must execute');
     assert.ok(existsSync(join(newDirectory, 'new-marker')));
-    assert.equal(sibling.exitCode, null, 'legacy prefix matching must not terminate a sibling installation');
+    // spawnSync blocks child exit callbacks; query the OS instead of cached exitCode.
+    powershell(`$p = Get-CimInstance Win32_Process -Filter ('ProcessId = ' + $env:XOPC_SIBLING_PID);
+      if (!$p -or [IO.Path]::GetFullPath($p.ExecutablePath) -ine [IO.Path]::GetFullPath($env:XOPC_SIBLING_EXE)) { throw 'Sibling installation was terminated' }`, {
+      XOPC_SIBLING_PID: String(sibling.pid), XOPC_SIBLING_EXE: join(oldDirectory + '-backup', 'xopc.exe'),
+    });
     assert.ok(app.pid && helper.pid);
     report.checks.push('legacy failure and launch failure preserve files; retry succeeds; sibling process survives legacy uninstall');
     // Exercise the native Restart Manager binding against an actual running executable.
