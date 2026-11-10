@@ -38,6 +38,9 @@ Var XopcInstallerPid
     Goto xopc_process_check_failed
   ${EndIf}
 
+  ${If} ${Silent}
+    Goto xopc_request_quit
+  ${EndIf}
   MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDCANCEL IDOK xopc_request_quit
   SetErrorLevel 2
   Quit
