@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { TaskResearchResultSchema, TurnOutcomeDeliverableSchema, type TaskResearchResult } from '@xopcai/gateway-contract';
+import { TaskFollowUpHintSchema, TaskResearchResultSchema, TurnOutcomeDeliverableSchema, type TaskResearchResult } from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
 import { resolveEffectiveAgentConfigForSession } from '../config/agent-profile.js';
@@ -31,6 +31,7 @@ export { taskInstructionSequence } from './task-instruction-sequence.js';
 const log = createLogger('TaskResearchResult');
 const text = z.string().trim().min(1);
 export const TaskResearchSubmissionSchema = z.object({
+  followUp: TaskFollowUpHintSchema.optional(),
   finalText: text.max(16_000).optional(),
   finalArtifactIds: z.array(text).max(50).refine(ids => new Set(ids).size === ids.length, 'Duplicate final artifact IDs').optional(),
   mode: z.enum(['replace', 'amend']).optional(),
@@ -55,6 +56,7 @@ export function mergeResearchSubmission(input: TaskResearchSubmission, previous?
   for (const source of input.sources) sources.set(source.id, source);
   const refs = new Set([...claims.values()].flatMap(claim => claim.sourceIds));
   return TaskResearchSubmissionSchema.parse({ ...input, finalText: input.finalText ?? previous.finalText,
+    followUp: input.followUp ?? previous.followUp,
     claims: [...claims.values()], sources: [...sources.values()].filter(source => refs.has(source.id)) });
 }
 const ReviewSchema = z.object({
@@ -226,6 +228,7 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
   const link = new TaskConversationRepository().resolveActiveExecutionSession(conversationId);
   const run = link && new TaskRunRepository().getActiveRoot(link.taskId);
   if (!link || !run || run.conversationId !== conversationId || !['running', 'verifying'].includes(run.status)) throw new Error('No active Task execution');
+  if (getSqliteDatabase().prepare('SELECT 1 FROM home_followup_steps WHERE task_id=?').get(link.taskId) && !submitted.followUp) throw new Error('A continuing goal needs followUp: next_step with nextStep/reason, waiting with waitingFor, or review_goal with reason. This never completes the parent goal.');
   const previous = currentTaskResearchResult(run.id);
   const input = mergeResearchSubmission({ ...submitted, mode: submitted.mode ?? (previous ? 'amend' : 'replace') }, previous);
   const task = new TaskRepository().require(link.taskId);
@@ -238,6 +241,7 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
   if (input.finalText && (!finalText || finalText === 'NO_REPLY')) throw new Error('Submit the actual final chat text.');
   const { rows, tools } = taskResearchEvidence(conversationId);
   let result = TaskResearchResultSchema.parse({ version: 1, contractVersion: task.latestContractVersion,
+    ...(input.followUp ? {followUp:input.followUp} : {}),
     ...(finalText ? { finalText } : {}),
     ...(personalSnapshot?.hash ? { personalResultHash: personalSnapshot.hash } : {}),
     instructionSequence: taskInstructionSequence(task.id), sources: bindResearchSources(input, tools),

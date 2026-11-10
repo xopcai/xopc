@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import { FollowUpWorkbench } from './follow-up-workbench';
 import { HomeTaskReview } from './home-task-review';
 import { ObservationStarterList } from './observation-starter-list';
 import { RoutineAdoption, RoutinePanel } from './routine-panel';
@@ -16,6 +17,7 @@ export function HomeObservationCard({ observation, advisor, language, onUpdated 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [showDrafts, setShowDrafts] = useState(false);
   const [text, setText] = useState('');
   const [scope, setScope] = useState<'once' | 'project' | 'similar'>('once');
   const [selected, setSelected] = useState<string>();
@@ -63,6 +65,9 @@ export function HomeObservationCard({ observation, advisor, language, onUpdated 
     {error ? <p role="alert" className="mt-3 text-sm text-danger">{error}</p> : null}
     {notice ? <p role="status" className="mt-3 text-sm text-fg-muted">{notice}</p> : null}
     {selected && !topic && text ? <p className="mt-2 text-sm text-fg-muted">{zh ? '这件事已不在记录中。未保存的内容：' : 'This item is no longer available. Your unsaved note: '}{text}</p> : null}
+    <FollowUpWorkbench observation={observation} language={language} onUpdated={onUpdated}/>
+    {observation.status==='active'?<Button className="mt-3" variant="ghost" aria-expanded={showDrafts} onClick={()=>setShowDrafts(!showDrafts)}>{zh?'一次性整理与定期安排':'One-off drafts and recurring work'}</Button>:null}
+    {(observation.status!=='active' || showDrafts) ? <>
     {observation.status === 'disabled' ? <div className="mt-3 space-y-3">
       <p className="text-base font-medium text-fg">{zh ? '把重复的事，慢慢交给我' : 'Let me take recurring work off your hands'}</p>
       <p className="max-w-prose text-sm leading-6 text-fg-muted">{zh ? '我会结合你在 xopc 中的工作记录，寻找可以代劳的事情。有合适的建议时，先做一次给你看。' : 'I can look through your work in xopc for tasks I could take on, then offer a first draft for you to review.'}</p>
@@ -109,6 +114,7 @@ export function HomeObservationCard({ observation, advisor, language, onUpdated 
       {reviewId ? <HomeTaskReview taskId={reviewId} language={language} onComplete={onUpdated} /> : null}
       {resume ? <div className="mt-3 space-y-2"><p className="text-sm text-fg-muted">{zh ? '恢复后，要补看暂停期间的工作吗？' : 'Include work from while suggestions were paused?'}</p><div className="flex flex-wrap gap-2">{(['catch_up', 'new_only'] as const).map(mode => <Button key={mode} disabled={busy} onClick={() => void run(async () => { await command({ kind: 'resume', mode }); setResume(false); })}>{mode === 'catch_up' ? (zh ? '一起补看' : 'Include earlier work') : (zh ? '只看之后的工作' : 'New work only')}</Button>)}<Button variant="ghost" onClick={() => setResume(false)}>{zh ? '取消' : 'Cancel'}</Button></div></div> : null}
     </>}
+    </> : null}
     {editing && topic ? <form className="mt-3 space-y-3 rounded-lg border border-edge p-3" onSubmit={event => { event.preventDefault(); void run(async () => {
       await command({ kind: 'feedback', topicId: topic.id, text, scope }); setText(''); setEditing(false); setNotice(zh ? '已记下。改变定期做法前，会先请你确认。' : 'Preference saved. I will ask before changing the recurring approach.');
     }); }}>

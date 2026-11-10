@@ -5,6 +5,11 @@ import { submitTaskResearchResult, type TaskResearchSubmission } from '../../tas
 
 const id = Type.String({ minLength: 1, maxLength: 120 });
 const schema = Type.Object({
+  followUp: Type.Optional(Type.Union([
+    Type.Object({state:Type.Literal('next_step'),nextStep:Type.String({minLength:1,maxLength:1000}),reason:Type.String({minLength:1,maxLength:1000})},{additionalProperties:false}),
+    Type.Object({state:Type.Literal('waiting'),waitingFor:Type.String({minLength:1,maxLength:1000}),nextStep:Type.Optional(Type.String({minLength:1,maxLength:1000}))},{additionalProperties:false}),
+    Type.Object({state:Type.Literal('review_goal'),reason:Type.String({minLength:1,maxLength:1000})},{additionalProperties:false}),
+  ],{description:'For continuing-goal steps, propose the next bounded step, say exactly what input is missing, or request goal review. Never declare the parent goal complete.'})),
   finalText: Type.Optional(Type.String({ minLength: 1, maxLength: 16_000,
     description: 'Exact final chat reply, including any required limitations. The host reviews and delivers this text without rewriting it. Supply it when the chat reply itself is a deliverable. Omit for connected-app results saved with personal_request_result.' })),
   finalArtifactIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 50, uniqueItems: true })),

@@ -218,11 +218,11 @@ export class HomeObservation {
     });
   }
 
-  state(): ObservationState {
+  state(topicIds?: readonly string[]): ObservationState {
     const session = this.session();
     if (!session) return { status: 'disabled', revision: 0, analyzedRevision: 0, lastProcessedAt: null, topics: [] };
-    const topics = this.db.prepare('SELECT * FROM home_observation_topics WHERE session_id=? AND excluded=0 ORDER BY rowid DESC LIMIT 20')
-      .all(session.id) as TopicRow[];
+    const topics = this.db.prepare(`SELECT * FROM home_observation_topics WHERE session_id=? AND excluded=0 ${topicIds ? `AND id IN (${topicIds.map(()=>'?').join(',') || 'NULL'})` : ''} ORDER BY rowid DESC ${topicIds ? '' : 'LIMIT 20'}`)
+      .all(session.id,...(topicIds ?? [])) as TopicRow[];
       return { id: session.id, status: session.status, revision: session.revision, analyzedRevision: session.analyzed_revision,
       lastProcessedAt: session.last_processed_at, topics: topics.filter(t => this.readable(t.source_key)).map(t => ({
         id: t.id, title: t.title, projectId: t.project_id ?? undefined, revision: t.revision,

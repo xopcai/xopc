@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { ObservationPrepareRequestSchema, ObservationCommandRequestSchema, ObservationTrialRequestSchema, RoutineAdoptRequestSchema, RoutineCommandRequestSchema } from '@xopcai/gateway-contract';
+import { FollowUpCreateSchema, FollowUpCommandSchema, ObservationPrepareRequestSchema, ObservationCommandRequestSchema, ObservationTrialRequestSchema, RoutineAdoptRequestSchema, RoutineCommandRequestSchema } from '@xopcai/gateway-contract';
 import { ObservationConflictError } from '../../../home-intelligence/observation.js';
 import {
   HomeAdvisorRefreshRequestSchema,
@@ -35,6 +35,20 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
     return c.json({ ...await home.getSnapshot(locale, c.req.query('attention') === 'all'),
       observation: service.currentConfig.userContext.enabled && service.currentConfig.userContext.homeIntelligence.enabled
         ? service.homeIntelligence.getObservation() : undefined });
+  });
+
+  authenticated.get('/api/home/follow-ups',(c)=>c.json({items:service.homeIntelligence.followUps.list()}));
+  authenticated.post('/api/home/follow-ups',deps.strictRateLimitMiddleware,async(c)=>{
+    const parsed=FollowUpCreateSchema.safeParse(await c.req.json().catch(()=>null));
+    if(!parsed.success)return c.json({ok:false,error:'Invalid continuing goal'},400);
+    try{return c.json(service.homeIntelligence.followUps.create(parsed.data));}
+    catch(err){if(err instanceof ObservationConflictError)return c.json({ok:false,error:err.message},409);throw err;}
+  });
+  authenticated.post('/api/home/follow-ups/:id/command',deps.strictRateLimitMiddleware,async(c)=>{
+    const parsed=FollowUpCommandSchema.safeParse(await c.req.json().catch(()=>null));
+    if(!parsed.success)return c.json({ok:false,error:'Invalid goal action'},400);
+    try{return c.json(await service.homeIntelligence.followUps.command(c.req.param('id'),parsed.data));}
+    catch(err){if(err instanceof ObservationConflictError)return c.json({ok:false,error:err.message},409);throw err;}
   });
 
   authenticated.get('/api/home/routines', (c) => c.json({ items:service.homeIntelligence.routines?.list()??[] }));

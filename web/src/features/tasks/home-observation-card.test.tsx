@@ -25,6 +25,8 @@ function render(observation = state, advisor: HomeAdvisor = { state: 'quiet', re
 describe('Home observation card', () => {
   it('keeps raw conversation titles and scan status out of the empty card, with a usable chat entry', () => {
     const {container,button}=render({...state,analyzedRevision:0});
+    expect(container.textContent).toContain('把一件事推进到完成');
+    act(()=>button('一次性整理与定期安排').click());
     expect(container.textContent).toContain('先做一件具体的事');
     expect(container.textContent).not.toContain('项目周报');
     expect(container.textContent).not.toContain('正在整理');
@@ -41,6 +43,7 @@ describe('Home observation card', () => {
   it('confirms a concrete deliverable and starts a real private Task without a chat handoff',async()=>{
     fetchJson.mockResolvedValue({outcome:'task',taskId:'prepared',href:'/tasks/prepared'});
     const {container,button}=render({...state,starters:[{kind:'pr_review',topicIds:['topic'],requestCount:3,previews:['审查 PR 11622']}]});
+    act(()=>button('一次性整理与定期安排').click());
     expect(container.textContent).toContain('最近有 3 条相关请求');
     expect(container.textContent).toContain('PR 审查准备清单');
     expect(container.querySelector('a')).toBeNull();
@@ -62,6 +65,7 @@ describe('Home observation card', () => {
     }};
     fetchJson.mockResolvedValue({outcome:'task',taskId:'trial',href:'/tasks/trial'});
     const {container,button}=render(state,advisor);
+    act(()=>button('一次性整理与定期安排').click());
     expect(container.textContent).toContain('一份附来源的周报草稿');
     expect(container.querySelector('details')?.open).toBe(false);
     await act(async()=>button('先帮我做一次').click());

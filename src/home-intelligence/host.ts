@@ -8,6 +8,7 @@ import type { HomeOpportunityActionRequest, HomeOpportunityActionResponse, HomeO
 
 import { TaskApplicationService } from '../tasks/task-application-service.js';
 import { TaskRepository } from '../tasks/task-repository.js';
+import { HomeFollowUps } from './follow-ups.js';
 import { observationStarters } from './observation-starters.js';
 import { createLogger } from '../utils/logger.js';
 import { HomeAdviceBudgetExceededError, isHomeProseLocalized, type HomeAdviceGenerator, type HomeModelGeneration } from './generator.js';
@@ -79,6 +80,7 @@ export interface HomeIntelligenceHostDeps {
 
 export class HomeIntelligenceHost {
   readonly routines?: ObservationRoutines;
+  readonly followUps: HomeFollowUps;
   readonly observation: HomeObservation;
   private readonly repository: HomeIntelligenceRepository;
   private readonly opportunities: HomeOpportunityApplicationService;
@@ -97,6 +99,7 @@ export class HomeIntelligenceHost {
       canRead:id=>deps.canObserve?.(id)??false,stopConversation:deps.stopRoutineConversation,agentId:()=>deps.capabilities().agentId,
       dispatch:()=>deps.dispatchTaskRuns?.(),publish:()=>deps.publish('home.advisor.updated',{state:'routine_changed'}) });
     this.observation = new HomeObservation(db, deps.principal, id => deps.canObserve?.(id) ?? false);
+    this.followUps = new HomeFollowUps(db,deps.principal,this.observation,{agentId:()=>deps.capabilities().agentId,dispatch:()=>deps.dispatchTaskRuns?.(),publish:()=>deps.publish('home.advisor.updated',{state:'goal_changed'}),stopConversation:deps.stopRoutineConversation});
     this.repository = new HomeIntelligenceRepository(db);
     this.opportunities = new HomeOpportunityApplicationService(db, deps.principal, () => deps.capabilities().agentId);
     this.now = deps.now ?? Date.now;
@@ -173,7 +176,14 @@ export class HomeIntelligenceHost {
   getObservation() {
     const state=this.observation.state();
     const routines=this.routines?.list()??[];
-    return {...state,starters:observationStarters(state),topics:state.topics.map(topic=>({...topic,routine:routines.find(r=>r.topicId===topic.id)}))};
+    const followUps=this.followUps.list();
+    const followUpCandidates=state.status==='active'?state.topics.filter(t=>!followUps.some(f=>!['done','ended'].includes(f.status)&&f.topicIds.includes(t.id))).flatMap(t=>{
+      const request=t.entries.filter(e=>e.kind==='user_work').at(-1);
+      if(request && t.entries.some(e=>['trial_result','execution_result'].includes(e.kind) && e.createdAt>=request.createdAt && /"verdict"\s*:\s*"achieved"/.test(e.text)))return [];
+      if(!request || !/(?:持续|继续)(?:跟进|推进|排查)|直到.{1,80}(?:解决|完成)|(?:帮我|请).{0,30}(?:跟进|排查|定位|解决|推进|修复)/i.test(request.text) || /(?:不用|不再).{0,12}(?:跟进|推进|排查)|已经解决|修复完成/.test(request.text))return [];
+      return [{topicId:t.id,goal:request.text.slice(0,300),firstStep:this.localeHint==='zh'?'整理已知事实、尚未解决的问题，以及下一步需要的资料。':'Organize known facts, open questions and the evidence needed next.',evidence:request.text.slice(0,300)}];
+    }).slice(0,2):[];
+    return {...state,followUps,followUpCandidates,starters:observationStarters(state),topics:state.topics.map(topic=>({...topic,routine:routines.find(r=>r.topicId===topic.id)}))};
   }
 
   prepareObservation(input: ObservationPrepareRequest): HomeOpportunityActionResponse {
@@ -407,13 +417,16 @@ export class HomeIntelligenceHost {
   }
 
   async tick(): Promise<void> {
+    if(this.stopped)return;
+    await this.followUps.refresh();
     if (this.running || this.stopped || this.deps.enabled?.() === false) return;
     this.running = true;
     try {
       const now = this.now();
       this.routines?.refresh();
-      if (this.observation.state().status === 'paused') return;
       this.observation.collect(now);
+      await this.followUps.refresh();
+      if (this.observation.state().status === 'paused') return;
       const observed = this.observation.state();
       if (observed.status === 'active' && observed.analyzedRevision < observed.revision
         && observed.lastProcessedAt !== null && now - observed.lastProcessedAt >= 60_000) {

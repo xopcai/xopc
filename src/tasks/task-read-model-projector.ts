@@ -80,7 +80,8 @@ export class TaskReadModelProjector {
     });
     const allocating = allocation && ['pending', 'selecting'].includes(allocation.status);
     const allowedCommands = this.allowedCommands(task, activeRun?.status, waits.length > 0, paused)
-      .filter(command => !(allocation && allocation.status !== 'assigned' && command === 'start'));
+      .filter(command => !(allocation && allocation.status !== 'assigned' && command === 'start'))
+      .filter(command => command!=='start' || !getSqliteDatabase().prepare('SELECT 1 FROM home_followups WHERE root_task_id=?').get(task.id));
     if (allocation && ['blocked', 'failed'].includes(allocation.status) && task.phase !== 'closed' && !paused) {
       allowedCommands.push('retry_allocation');
     }
