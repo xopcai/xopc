@@ -83,6 +83,10 @@ Installation registers the `xopc` URL protocol, shortcuts, and Windows Open With
 
 ## Troubleshooting
 
+On Windows, closing the window keeps xopc in the background. To exit completely, use **Quit** in the system tray menu. The installer requests a full exit before replacing files. If a task confirmation appears, approve it to continue. If xopc still runs, retry after quitting from the tray; force close only if you accept losing running tasks. For older versions or elevated instances, exit the app manually in Task Manager. If PowerShell or process inspection is blocked, installation stops rather than guessing which processes to terminate.
+
+Upgrade checks include the previous installation directories and packaged helper processes, even if the main window has already exited. Installation diagnostics are saved to `%TEMP%\xopc-install-<installer-pid>.log`; previous-version uninstall failures report their own phase and exit code. For regression verification, run `node scripts/verify-windows-installer-upgrade.mjs` on Windows, or add `--compile-only` to compile its legacy and current NSIS fixtures on another platform. Fixtures use an isolated temporary directory and registry key.
+
 | Symptom | What to do |
 | --- | --- |
 | The Gateway does not start | Close other xopc windows, relaunch, and check whether the configured port is already in use |

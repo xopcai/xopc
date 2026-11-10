@@ -19,6 +19,7 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 
+import { finishQuitCleanup, isInstallerQuitRequest } from './installer-quit.js';
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
 import { ExternalIntakeQueue, intakePaths } from './external-intake.js';
 import { xopcDeepLinkTarget } from './deep-link.js';
@@ -348,8 +349,9 @@ app.on('open-file', (event, path) => {
   }, 80);
 });
 const gotTheLock = app.requestSingleInstanceLock();
-if (gotTheLock && process.platform !== 'darwin') receiveExternalFiles(intakePaths(process.argv.slice(process.defaultApp ? 2 : 1), process.cwd()));
-if (!gotTheLock) {
+const installerQuitRequested = isInstallerQuitRequest(process.argv, process.platform, app.isPackaged);
+if (gotTheLock && !installerQuitRequested && process.platform !== 'darwin') receiveExternalFiles(intakePaths(process.argv.slice(process.defaultApp ? 2 : 1), process.cwd()));
+if (!gotTheLock || installerQuitRequested) {
   app.quit();
 }
 
@@ -390,6 +392,17 @@ if (process.platform === 'darwin') {
 
 if (gotTheLock) {
   app.on('second-instance', (_event, commandLine, workingDirectory) => {
+    if (isInstallerQuitRequest(commandLine, process.platform, app.isPackaged)) {
+      void app.whenReady().then(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
+        app.quit();
+      });
+      return;
+    }
     receiveExternalFiles(intakePaths(commandLine.slice(1), workingDirectory));
     const url = commandLine.find((arg) => arg.startsWith('xopc://'));
     if (url) handleDeepLink(url);
@@ -406,7 +419,6 @@ if (gotTheLock) {
 
 /** True while `before-quit` has run so window `close` does not call `preventDefault` during a normal quit. */
 let appIsQuitting = false;
-let quitCleanupStarted = false;
 let quitCleanupComplete = false;
 let quitCleanupPromise: Promise<void> | null = null;
 
@@ -1259,7 +1271,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  if (!gotTheLock) return;
+  if (!gotTheLock || installerQuitRequested) return;
 
   // Align Chromium media / screen capture with OS privacy before granting renderer access.
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
@@ -1576,28 +1588,29 @@ app.on('before-quit', (event) => {
   }
 
   appIsQuitting = true;
-  if (!quitCleanupStarted) {
-    quitCleanupStarted = true;
-    destroyDesktopPetWindow();
-    destroyTray();
-    stopVoiceInputHotkey();
-    globalShortcut.unregisterAll();
-    stopAllPowerSaveBlockers();
-    stopCronDisplayWakeBlocker();
-    stopAllTerminals();
-    stopTunnelStatusPolling();
-    stopAutoUpdater();
-  }
-
   if (quitCleanupComplete) {
     return;
   }
 
   event.preventDefault();
   if (!quitCleanupPromise) {
-    quitCleanupPromise = Promise.all([stopGatewayProcessAndWait(), desktopEndpointHost?.close(), desktopTransport?.close()]).then(() => undefined).finally(() => {
+    quitCleanupPromise = finishQuitCleanup([
+      () => destroyDesktopPetWindow(),
+      () => destroyTray(),
+      () => stopVoiceInputHotkey(),
+      () => globalShortcut.unregisterAll(),
+      () => stopAllPowerSaveBlockers(),
+      () => stopCronDisplayWakeBlocker(),
+      () => stopAllTerminals(),
+      () => stopTunnelStatusPolling(),
+      () => stopAutoUpdater(),
+      () => stopGatewayProcessAndWait(),
+      () => desktopEndpointHost?.close(),
+      () => desktopTransport?.close(),
+    ], message => appendElectronStartupLog(`quit cleanup failed: ${message}`)).then(clean => {
       quitCleanupComplete = true;
-      app.quit();
+      if (clean) app.quit();
+      else app.exit(0);
     });
   }
 });

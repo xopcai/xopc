@@ -10,6 +10,9 @@ on:
       - 'scripts/*inventory*'
       - 'scripts/*windows*readiness*'
       - 'scripts/verify-windows-installer-ui.ps1'
+      - 'scripts/verify-windows-installer-upgrade.mjs'
+      - 'scripts/__tests__/windows-installer-processes.test.ts'
+      - 'patches/app-builder-lib@26.15.3.patch'
       - 'scripts/build-voice-hotkey-helper*'
       - 'scripts/electron-builder*'
       - '.github/workflows/windows-signpath-readiness.yml'
@@ -38,6 +41,10 @@ jobs:
           node-version: 26.12.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Installer process regressions and native legacy upgrade acceptance
+        run: |
+          pnpm exec vitest run --project scripts scripts/__tests__/windows-installer-processes.test.ts
+          node scripts/verify-windows-installer-upgrade.mjs
       - run: pnpm run build:ci
       - run: pnpm run electron:build:artifacts
       - name: Build unsigned readiness installer
@@ -50,5 +57,6 @@ jobs:
           name: signpath-readiness-${{ matrix.arch }}
           path: |
             reports/windows-signpath-*.json
+            reports/windows-installer-upgrade.json
             dist/release/dependency-inventory-*.json
           if-no-files-found: warn

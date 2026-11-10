@@ -470,6 +470,7 @@ export function stopGatewayProcess(): void {
       try {
         const killed = spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
           windowsHide: true,
+          timeout: 5000,
           encoding: 'utf8',
           stdio: 'ignore',
         });

@@ -4,3 +4,6 @@
 
 # Shell scripts must remain executable in Bash on Windows.
 *.sh text eol=lf
+
+# Unified patch context lines intentionally contain a single space.
+*.patch text eol=lf -whitespace
