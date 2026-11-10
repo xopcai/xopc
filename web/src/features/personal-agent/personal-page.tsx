@@ -100,10 +100,42 @@ export function PersonalPage() {
   const openSettings = useCallback(() => navigate('/settings/personal', {
     state: { settingsBackPath: `${routerLocation.pathname}${routerLocation.search}${routerLocation.hash}` },
   }), [routerLocation.pathname, routerLocation.search, routerLocation.hash, navigate]);
+  const currentMenuAnchor = useRef<HTMLDivElement | null>(null);
+  const activityPopoverRef = useRef<HTMLDivElement | null>(null);
+  const setMenuAnchor = useCallback((element: HTMLDivElement | null) => {
+    const previous = activityPopoverRef.current;
+    activityPopoverRef.current = element;
+    if (element || currentMenuAnchor.current === previous) {
+      currentMenuAnchor.current = element;
+      voiceCallRef.current.setMiniAnchor(element);
+    }
+  }, []);
+  const setSettingsAnchor = useCallback((element: HTMLDivElement | null) => {
+    const previous = profilePopoverRef.current;
+    profilePopoverRef.current = element;
+    if (element || currentMenuAnchor.current === previous) {
+      currentMenuAnchor.current = element;
+      voiceCallRef.current.setMiniAnchor(element);
+    }
+  }, []);
+  useLayoutEffect(() => {
+    const anchor = showSettings ? profilePopoverRef.current : showActivity ? activityPopoverRef.current : null;
+    currentMenuAnchor.current = anchor;
+    voiceCallRef.current.setMiniAnchor(anchor);
+  }, [showSettings, showActivity]);
+  useEffect(() => () => voiceCallRef.current.setMiniAnchor(null), []);
   const toggleQuickSettings = useCallback(() => {
+    voiceCallRef.current.minimize();
     setShowActivity(false);
     setShowSettings(open => !open);
   }, []);
+
+  useEffect(() => {
+    if (voiceCall.expanded) {
+      setShowSettings(false);
+      setShowActivity(false);
+    }
+  }, [voiceCall.expanded]);
 
   useEffect(() => {
     const updateProfile = (event: Event) => {
@@ -133,6 +165,8 @@ export function PersonalPage() {
 
   useEffect(() => { void refresh(); }, [refresh]);
   const openActivity = useCallback(async () => {
+    voiceCallRef.current.minimize();
+    setShowSettings(false);
     const request = ++activityRequestRef.current;
     setShowActivity(true);
     setActivity(null);
@@ -202,8 +236,10 @@ export function PersonalPage() {
   useLayoutEffect(() => {
     const ready = record?.state === 'ready';
     const callLabel = zh ? '语音通话' : 'Voice call';
-    const callClass = 'touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50';
+    const callClass = 'touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg';
     const openCall = () => {
+      setShowSettings(false);
+      setShowActivity(false);
       if (ready) voiceCallRef.current.open({ conversationId: record.conversationId, name: record.displayName });
     };
     const avatar = ready ? record.appearance : 'loopi';
@@ -219,18 +255,18 @@ export function PersonalPage() {
         <h1 className="min-w-0 truncate text-sm font-semibold text-fg sm:text-base">{title}</h1>
       </div>,
       end: ready ? <div className="flex items-center gap-1">
-          <button type="button" disabled={voiceCall.active} onClick={openCall} className={callClass} aria-label={callLabel} title={callLabel}><Phone className="size-5" /></button>
+          <button type="button" aria-pressed={voiceCall.expanded} onClick={openCall} className={callClass} aria-label={callLabel} title={callLabel}><Phone className="size-5" /></button>
           <Popover.Root open={showActivity} onOpenChange={open => { if (open) void openActivity(); else setShowActivity(false); }}>
             <Popover.Trigger asChild>
               <button type="button" aria-pressed={showActivity} className="touch-target rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '正在做的事' : 'Activity'}><ListTodo className="size-5" /></button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label={zh ? '派发的任务' : 'Delegated tasks'} className="xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex h-[min(34rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-1rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl focus:outline-none">
+              <Popover.Content ref={setMenuAnchor} onInteractOutside={event => { if (event.target instanceof Element && event.target.closest('[data-voice-call-mini]')) event.preventDefault(); }} side="bottom" align="end" sideOffset={8} collisionPadding={8} aria-label={zh ? '派发的任务' : 'Delegated tasks'} className={`xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex h-[min(34rem,calc(100dvh-6rem))] ${voiceCall.active ? 'max-h-[min(var(--radix-popover-content-available-height),calc(100dvh-12rem))]' : 'max-h-[var(--radix-popover-content-available-height)]'} w-[min(22rem,calc(100vw-1rem))] min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl focus:outline-none`}>
                 <div className="flex shrink-0 items-start justify-between gap-3 px-6 pb-3 pt-6">
                   <div className="min-w-0"><h2 className="text-base font-semibold tracking-tight text-fg">{zh ? '交给我推进的事' : 'Delegated work'}</h2><p className="mt-1 text-xs text-fg-muted">{activity ? (zh ? `最近更新 · 共 ${activity.total} 项` : `Recently updated · ${activity.total} total`) : (zh ? '查看任务进展与结果' : 'Follow progress and results')}</p></div>
                   <Popover.Close className="touch-target -mr-2 -mt-1 rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭活动' : 'Close activity'}><X className="size-4" /></Popover.Close>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-5 pt-3">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-5 pt-3">
                   {!activity && !activityError && <div className="space-y-2"><Skeleton className="h-18 rounded-2xl" /><Skeleton className="h-18 rounded-2xl" /><Skeleton className="h-18 rounded-2xl" /></div>}
                   {activityError && <div className="px-5 py-12 text-center"><p className="text-sm text-fg-muted">{zh ? '暂时无法读取任务' : 'Could not load tasks'}</p><button type="button" onClick={() => void openActivity()} className="mt-3 rounded-lg px-3 py-2 text-sm text-accent hover:bg-surface-hover">{zh ? '重试' : 'Try again'}</button></div>}
                   {activity?.items.length === 0 && <div className="px-5 py-16 text-center"><ListTodo className="mx-auto size-7 text-fg-subtle" aria-hidden /><p className="mt-4 text-sm font-medium text-fg">{zh ? '还没有派发的任务' : 'No delegated work yet'}</p><p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '你可以在对话里直接告诉我想推进的事。' : 'Tell me what you would like to move forward in chat.'}</p></div>}
@@ -247,7 +283,7 @@ export function PersonalPage() {
         </div> : null,
     });
     return () => clearPageHeader();
-  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, clearPageHeader, loadMoreActivity, openActivity, record, setPageHeader, showActivity, showSettings, toggleQuickSettings, voiceCall.active, zh]);
+  }, [activity, activityError, activityLoadedCount, activityLoadingMore, activityMoreError, clearPageHeader, loadMoreActivity, openActivity, record, setPageHeader, showActivity, showSettings, toggleQuickSettings, setMenuAnchor, voiceCall.active, voiceCall.expanded, zh]);
 
   if (loading) return <div className="mx-auto w-full max-w-2xl space-y-5 px-6 py-12"><Skeleton className="h-20 w-20 rounded-full" /><Skeleton className="h-9 w-72" /><Skeleton className="h-44 w-full rounded-2xl" /></div>;
 
@@ -265,13 +301,17 @@ export function PersonalPage() {
       <Popover.Root open={showSettings} onOpenChange={setShowSettings}>
         <Popover.Anchor virtualRef={settingsButtonRef} />
         <Popover.Portal>
-          <Popover.Content ref={profilePopoverRef} side="bottom" align="end" sideOffset={8} collisionPadding={8}
+          <Popover.Content ref={setSettingsAnchor} side="bottom" align="end" sideOffset={8} collisionPadding={8}
             aria-label={zh ? 'Ada 快捷设置' : 'Ada quick settings'}
             onInteractOutside={event => {
-              if (event.target instanceof Node && (settingsButtonRef.current?.contains(event.target) || profileButtonRef.current?.contains(event.target) || profilePopoverRef.current?.contains(event.target))) event.preventDefault();
+              if (event.target instanceof Node && (settingsButtonRef.current?.contains(event.target) || profileButtonRef.current?.contains(event.target) || profilePopoverRef.current?.contains(event.target) || (event.target instanceof Element && event.target.closest('[data-voice-call-mini]')))) event.preventDefault();
             }}
-            className="xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex max-h-[calc(100dvh-5rem)] w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl outline-none">
-            <div className="min-h-0 overflow-y-auto p-4">
+            className={`xopc-session-context-popover data-[state=closed]:pointer-events-none z-50 flex h-[min(34rem,calc(100dvh-6rem))] ${voiceCall.active ? 'max-h-[min(var(--radix-popover-content-available-height),calc(100dvh-12rem))]' : 'max-h-[var(--radix-popover-content-available-height)]'} min-h-0 w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-xl outline-none`}>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
+              <h2 className="text-sm font-semibold text-fg">{zh ? '快捷设置' : 'Quick settings'}</h2>
+              <Popover.Close className="touch-target -mr-2 rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={zh ? '关闭设置' : 'Close settings'}><X className="size-4" /></Popover.Close>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
               <PersonalProfileSettings zh={zh} onOpenVoiceServices={openSettings} />
             </div>
             <button type="button" onClick={openSettings} className="shrink-0 border-t border-edge px-4 py-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">{zh ? '更多设置' : 'More settings'}</button>

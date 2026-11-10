@@ -2,7 +2,7 @@ import { openCapabilitySettings } from '@/features/settings/models-hub/open-capa
 import * as Dialog from '@radix-ui/react-dialog';
 import { Presence } from '@radix-ui/react-presence';
 import { AudioLines, Captions, Ellipsis, Mic, MicOff, Minimize2, Phone, PhoneOff } from 'lucide-react';
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -36,10 +36,42 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const voice = useRealtimeVoice({ disabled: false, chat: m, onTranscript: () => {} });
   const starting = useRef(false);
   const startAttempt = useRef(0);
+  const [miniAnchor, setMiniAnchor] = useState<HTMLElement | null>(null);
+  const [dockedPosition, setDockedPosition] = useState<{ left: number; top: number } | null>(null);
+  const registerMiniAnchor = useCallback((element: HTMLElement | null) => setMiniAnchor(element), []);
   const miniCardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; left: number; top: number; width: number; height: number; moved: boolean } | null>(null);
   const suppressMiniClick = useRef(false);
   const [miniPosition, setMiniPosition] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const card = miniCardRef.current;
+    if (!miniAnchor || !card || expanded) {
+      setDockedPosition(null);
+      return;
+    }
+    const update = () => {
+      const rect = (miniAnchor.parentElement?.hasAttribute('data-radix-popper-content-wrapper') ? miniAnchor.parentElement : miniAnchor).getBoundingClientRect();
+      const width = card.offsetWidth;
+      const height = card.offsetHeight;
+      const gap = 12;
+      setDockedPosition(clampMiniPosition(
+        rect.right - width,
+        rect.bottom + gap,
+        width, height,
+      ));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(miniAnchor);
+    observer.observe(card);
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [miniAnchor, expanded, target]);
   useEffect(() => {
     const keepInView = () => {
       const card = miniCardRef.current;
@@ -50,7 +82,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('resize', keepInView);
   }, []);
   const startMiniDrag = (event: PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || miniAnchor) return;
     suppressMiniClick.current = false;
     const rect = miniCardRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -89,11 +121,17 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   };
   const context = {
     active,
+    setMiniAnchor: registerMiniAnchor,
+    expanded: Boolean(target && expanded),
+    minimize: () => {
+      setExpanded(false);
+      setMore(false);
+    },
     conversationId: active ? target?.conversationId ?? null : null,
     open: (next: VoiceCallTarget) => {
       start(next);
       setMiniPosition(null);
-      setExpanded(false);
+      setExpanded(Boolean(target));
     },
   };
   const status = voice.error ? m.callFailed
@@ -118,13 +156,15 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const settingsPath = `/settings/capabilities/models?configure=conversation&returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
   const settingsLink = <Link to={settingsPath} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); openCapabilitySettings('conversation'); setExpanded(false); } }} className="text-sm text-accent-fg hover:underline">{m.callSettings}</Link>;
 
+  const miniStylePosition = dockedPosition ?? miniPosition;
+
   return <VoiceCallContext.Provider value={context}>
     {children}
     <Presence present={Boolean(target && !expanded)}>
-      <div ref={miniCardRef} data-state={target && !expanded ? 'open' : 'closed'} data-side="bottom"
+      <div ref={miniCardRef} data-voice-call-mini="" data-state={target && !expanded ? 'open' : 'closed'} data-side="bottom"
         inert={!target || expanded} aria-hidden={!target || expanded}
-        style={{ transformOrigin: 'top right', ...(miniPosition ? { left: miniPosition.left, top: miniPosition.top, right: 'auto' } : {}) }}
-        className="xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-5 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-overlay p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
+        style={{ transformOrigin: 'top right', ...(miniStylePosition ? { left: miniStylePosition.left, top: miniStylePosition.top, right: 'auto' } : {}) }}
+        className="xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-3 top-[calc(5rem+env(safe-area-inset-top))] z-50 flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-xl border border-edge bg-surface-overlay p-3 shadow-float" role="region" aria-label={m.voiceConversation}>
         <button type="button" aria-label={language === 'zh' ? '展开通话' : 'Expand call'} onClick={() => { if (suppressMiniClick.current) { suppressMiniClick.current = false; return; } setExpanded(true); }} onPointerDown={startMiniDrag} onPointerMove={moveMiniDrag} onPointerUp={endMiniDrag} onPointerCancel={cancelMiniDrag} className="min-w-0 touch-none select-none rounded-lg text-left cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <span className="block truncate text-sm font-medium text-fg">{target?.name ?? lastTargetName.current}</span>
           <span className="block text-xs text-fg-muted">{status}{connected ? ` · ${voice.elapsedLabel}` : ''}</span>
@@ -135,7 +175,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     </Presence>
     <Dialog.Root open={Boolean(target && expanded)} onOpenChange={(open) => { if (!open) setExpanded(false); }} modal={false}>
       <Dialog.Portal>
-        <Dialog.Content onInteractOutside={(event) => event.preventDefault()} data-side="bottom" style={{ transformOrigin: 'top right' }}
+        <Dialog.Content onCloseAutoFocus={(event) => event.preventDefault()} onInteractOutside={(event) => event.preventDefault()} data-side="bottom" style={{ transformOrigin: 'top right' }}
           className="xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[71] flex h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-fg shadow-float focus:outline-none">
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
             <div className="min-w-0"><Dialog.Title className="truncate font-medium">{target?.name ?? lastTargetName.current}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{m.callSessionHint}</Dialog.Description></div>

@@ -10,13 +10,15 @@ import { PersonalPage } from '@/features/personal-agent/personal-page';
 import { fetchJson } from '@/lib/fetch';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-const { openVoiceCall } = vi.hoisted(() => ({ openVoiceCall: vi.fn() }));
+const { openVoiceCall, minimizeVoiceCall, callState } = vi.hoisted(() => ({
+  openVoiceCall: vi.fn(), minimizeVoiceCall: vi.fn(), callState: { active: false, expanded: false },
+}));
 
 vi.mock('@/features/chat/chat-page', () => ({
   ChatPage: ({ personalWelcome }: { personalWelcome?: { addressAs?: string } }) => <div data-testid="personal-chat" data-user-name={personalWelcome?.addressAs} />,
 }));
 vi.mock('@/features/voice/realtime/voice-call-context', () => ({
-  useVoiceCall: () => ({ active: false, open: openVoiceCall }),
+  useVoiceCall: () => ({ ...callState, open: openVoiceCall, minimize: minimizeVoiceCall, setMiniAnchor: vi.fn() }),
 }));
 vi.mock('@/features/personal-agent/personal-avatar', () => ({
   PersonalAvatar: ({ appearance, className }: { appearance: string; className?: string }) => <span data-testid="personal-avatar" data-appearance={appearance} className={className} />,
@@ -32,6 +34,8 @@ describe('Personal AI editor', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
       .IS_REACT_ACT_ENVIRONMENT = true;
+    callState.active = false;
+    callState.expanded = false;
     let revision = 1;
     vi.mocked(fetchJson).mockImplementation(async (url, options) => {
       if (String(url).includes('/activity')) return { ok: true, payload: { items: [], total: 0 } };
@@ -119,6 +123,30 @@ describe('Personal AI editor', () => {
     act(() => headerRoot.render(usePageHeaderStore.getState().end));
     expect(document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Delegated tasks"]')).toBeNull();
     expect(headerContainer.querySelector('button[aria-label="Activity"]')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('switches between settings, tasks and an ongoing call without overlapping panels', async () => {
+    callState.active = true;
+    callState.expanded = true;
+    await act(async () => root.render(<MemoryRouter><PersonalPage /></MemoryRouter>));
+    const renderHeader = () => act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    const click = async (label: string) => {
+      renderHeader();
+      await act(async () => headerContainer.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click());
+      renderHeader();
+    };
+    await click('Ada settings');
+    expect(minimizeVoiceCall).toHaveBeenCalled();
+    expect(document.querySelector('[aria-label="Ada quick settings"]')).not.toBeNull();
+    await click('Activity');
+    expect(document.querySelector('[aria-label="Ada quick settings"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Delegated tasks"]')).not.toBeNull();
+    await click('Ada settings');
+    expect(document.querySelector('[aria-label="Delegated tasks"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Ada quick settings"]')).not.toBeNull();
+    await click('Voice call');
+    expect(openVoiceCall).toHaveBeenCalledExactlyOnceWith({ conversationId: 'conversation-1', name: 'Ada' });
+    expect(document.querySelector('[aria-label="Ada quick settings"]')).toBeNull();
   });
 
   it('refreshes an open delegated task when its run finishes', async () => {

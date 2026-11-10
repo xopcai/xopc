@@ -87,12 +87,17 @@ it('does not reopen a closed evidence panel when its request completes late', as
   await act(async () => resolve(evidence));
   expect(container.querySelector('[aria-label="原话证据"]')).toBeNull();
 });
-it('keeps the current transcript readable until the user accepts a live update', async () => {
+it('automatically updates transcript rows while retaining the viewport and audio player', async () => {
   await render(); await act(async () => button('原文').click());
+  const viewport = container.querySelector('main')!; viewport.scrollTop = 360;
+  const player = container.querySelector('audio');
+  const segment = container.querySelector('#discussion-segment-0');
   mocks.detail = { ...mocks.detail!, transcript: { ...mocks.detail!.transcript, revision: 8, segments: mocks.detail!.transcript.segments.map((segment,index) => index ? segment : { ...segment,displayText: 'New corrected source',revision: 2 }) } };
   await render();
-  expect(container.querySelector('#discussion-segment-0')?.textContent).toContain('Current segment 0');
-  await act(async () => button('内容已更新 · 查看最新').click());
+  expect(viewport.scrollTop).toBe(360);
+  expect(container.querySelector('audio')).toBe(player);
+  expect(container.querySelector('#discussion-segment-0')).toBe(segment);
+  expect(container.textContent).not.toContain('查看最新');
   expect(container.querySelector('#discussion-segment-0')?.textContent).toContain('New corrected source');
 });
 it('does not restore playback from a late evidence response after the original audio is deleted', async () => {
@@ -102,4 +107,47 @@ it('does not restore playback from a late evidence response after the original a
   await act(async () => resolve(evidence));
   expect(container.textContent).toContain('First source');
   expect([...container.querySelectorAll('button')].some(button => button.textContent?.startsWith('播放原话'))).toBe(false);
+});
+
+it('defers live summary replacement during editing and catches up when the editor closes', async () => {
+  await render();
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="编辑概要"]')!.click());
+  const editor = document.querySelector('textarea')!;
+  expect(editor.value).toBe('Summary');
+  mocks.detail = { ...mocks.detail!, organization: { ...mocks.detail!.organization!, revision: 2, organization: { ...mocks.detail!.organization!.organization!, summary: 'Automatically updated summary' } } };
+  await render();
+  expect(document.querySelector('textarea')).toBe(editor);
+  expect(editor.value).toBe('Summary');
+  await act(async () => [...document.querySelectorAll('button')].find(button => button.textContent === '取消')!.click());
+  expect(container.textContent).toContain('Automatically updated summary');
+  expect(container.textContent).not.toContain('查看最新');
+});
+
+it('publishes follow-up results in place after processing completes', async () => {
+  await render();
+  const viewport = container.querySelector('main')!;
+  viewport.scrollTop = 240;
+  const player = container.querySelector('audio');
+  const summary = container.querySelector('[data-reading-anchor="summary"]');
+  mocks.detail = { ...mocks.detail!, discussion: { ...mocks.detail!.discussion, status: 'organizing' } };
+  await render();
+  expect(summary?.textContent).toBe('Summary');
+
+  mocks.detail = {
+    ...mocks.detail,
+    discussion: { ...mocks.detail.discussion, status: 'completed' },
+    transcript: { ...mocks.detail.transcript, revision: 8 },
+    organization: {
+      ...mocks.detail.organization!, revision: 2, transcriptRevision: 8,
+      organization: { ...mocks.detail.organization!.organization!, summary: 'Summary with follow-up results' },
+    },
+  };
+  await render();
+  expect(container.querySelector('[data-reading-anchor="summary"]')).toBe(summary);
+  expect(summary?.textContent).toBe('Summary with follow-up results');
+  expect(viewport.scrollTop).toBe(240);
+  expect(container.querySelector('audio')).toBe(player);
+  expect(container.textContent).not.toContain('查看最新');
+  expect(container.textContent).not.toContain('当前阅读位置已保留');
+  expect(container.querySelector<HTMLButtonElement>('[aria-label="编辑概要"]')!.disabled).toBe(false);
 });
