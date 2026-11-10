@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 const powershell = process.env.XOPC_TEST_POWERSHELL ?? (process.platform === 'win32' ? 'powershell.exe' : 'pwsh');
 const available = spawnSync(powershell, ['-NoProfile', '-Command', 'exit 0']).status === 0;
 const script = fileURLToPath(new URL('../../electron/resources/installer-processes.ps1', import.meta.url));
-const directory = join(tmpdir(), "xopc install user's 测试");
+const directory = join(realpathSync.native(tmpdir()), "xopc install user's 测试");
 const executable = join(directory, 'xopc.exe');
 const processRow = (id: number, path: string | null, parent = 0) => ({
   ProcessId: id, ParentProcessId: parent, ExecutablePath: path, Name: 'xopc.exe', CreationDate: 'original',
@@ -89,6 +89,11 @@ describe.skipIf(!available)('Windows installer PowerShell process handling', () 
 
   it('matches the exact installed executable without case sensitivity', () => {
     expect(run('check', [processRow(1, executable.toUpperCase())]).status).toBe(10);
+  });
+
+  it('matches a short-name temporary directory alias to the same installation', () => {
+    const alias = join(tmpdir(), "xopc install user's 测试", 'xopc.exe');
+    expect(run('check', [processRow(1, alias)]).status).toBe(10);
   });
 
   it('excludes the installer PID even if it was renamed to xopc.exe', () => {
