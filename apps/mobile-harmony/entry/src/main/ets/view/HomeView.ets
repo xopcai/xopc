@@ -83,6 +83,7 @@ export struct XopcHomeView {
   @Local intake: XopcShareIntake = shareIntake;
   private chatRepository: XopcChatRepository = new XopcChatRepository();
   private personalOpening: boolean = false;
+  private taskOpening: boolean = false;
   private quickEditor: TextInputController = new TextInputController();
   private deletedChatIds: Set<string> = new Set<string>();
   private replacementRevision: number = 0;
@@ -123,7 +124,7 @@ export struct XopcHomeView {
   }
   private navigate(route: XopcMobileRoute): void {
     if (route.page === 'project-new-chat') { void this.openProjectChat(route.projectId ?? ''); return; }
-    if (route.page === 'task-chat') { void this.openTaskChat(route); return; }
+    if (route.page === 'task-chat' || (route.page === 'tasks' && !!route.itemId)) { void this.openTaskChat(route); return; }
     if (route.page === 'understanding-chat') {
       void this.openUnderstandingChat(route);
       return;
@@ -151,7 +152,8 @@ export struct XopcHomeView {
 
   private async openTaskChat(route: XopcMobileRoute): Promise<void> {
     const taskId = route.itemId;
-    if (!taskId) return;
+    if (!taskId || this.taskOpening) return;
+    this.taskOpening = true;
     try {
       const id = await this.chatRepository.ensureTaskConversation(taskId);
       const target: XopcMobileRoute = {
@@ -160,7 +162,7 @@ export struct XopcHomeView {
       this.pathStack.pushPath({ name: 'task-conversation', param: target });
     } catch (error) {
       this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
-    }
+    } finally { this.taskOpening = false; }
   }
 
   private async openUnderstandingChat(route: XopcMobileRoute): Promise<void> {
@@ -432,8 +434,13 @@ export struct XopcHomeView {
       NavDestination() {
         XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
           taskId: (param as XopcMobileRoute).itemId, activePage: true, embedded: false,
+          onTaskClose: (): void => { this.pathStack.pop(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).onBackPressed((): boolean => { if (layoutState.dismissChatOverlay?.()) return true; this.pathStack.pop(); return true; })
+    } else if (page === 'task-edit' || page === 'task-status') {
+      XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.tasks'), initialId: (param as XopcMobileRoute).itemId,
+        initialTaskAction: page === 'task-edit' ? 'edit' : 'status', onExit: (): void => { this.pathStack.pop(); },
+        onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'tasks' || page === 'projects' || page === 'automations' || page === 'project-settings'
       || page === 'task-create' || page === 'automation-create') {
       XopcWorkspaceView({ section: page === 'tasks' || page === 'task-create' ? 'tasks'

@@ -34,7 +34,11 @@ struct ChatMessageLinkDestination: View {
 
     var body: some View {
         NavigationStack {
-            content.toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { router.destination = nil } } }
+            if case .route("tasks", _) = link {
+                content
+            } else {
+                content.toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { router.destination = nil } } }
+            }
         }
     }
 

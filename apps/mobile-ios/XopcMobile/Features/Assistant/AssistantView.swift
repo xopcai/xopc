@@ -17,6 +17,9 @@ struct AssistantView<Dock: View>: View {
     let onPersonalAgentUpdated: (PersonalAgentRecord) -> Void
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
+    var showsFloatingHeader = true
+    var sessionActionsRequest = 0
+    var messageSearchRequest = 0
     var externalIntake: ExternalIntakeBatch?
     var onExternalIntakeFinished: (UUID, String?) -> Void = { _, _ in }
     let bottomDock: (AssistantComposer, Bool) -> Dock
@@ -118,12 +121,16 @@ struct AssistantView<Dock: View>: View {
                 .accessibilityHidden(true)
         }
         .overlay(alignment: .top) {
-            floatingHeader.padding(.horizontal, 20).padding(.top, 8)
+            if showsFloatingHeader {
+                floatingHeader.padding(.horizontal, 20).padding(.top, 8)
+            }
         }
     }
 
     private var chatLifecycle: some View {
         chatLayout
+            .onChange(of: sessionActionsRequest) { showingSessionActions = true }
+            .onChange(of: messageSearchRequest) { showingMessageSearch = true }
             .fullScreenCover(isPresented: $showingMessageSearch) {
                 ChatMessageSearchView(messages: state.messages, configuration: configuration,
                                       conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
@@ -190,7 +197,9 @@ struct AssistantView<Dock: View>: View {
             .onChange(of: configuration) { attachmentError = nil; restoreComposerDraft() }
             .onChange(of: draft) {
                 attachmentError = nil
-                if readAloud.state == .failed { readAloud.stop() }
+                if readAloud.state == .failed {
+                    readAloud.stop()
+                }
                 scheduleComposerSave()
             }
             .onChange(of: attachments) { scheduleComposerSave() }
@@ -238,7 +247,8 @@ struct AssistantView<Dock: View>: View {
                     onConversationUpdated: onConversationUpdated,
                     onStartScopedConversation: { project, mode in
                         requestStart(.scoped(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main"))
-                    }
+                    },
+                    isTaskConversation: !showsFloatingHeader
                 )
             }
             .sheet(item: $executionPresentation) { presentation in

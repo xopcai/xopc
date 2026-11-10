@@ -464,7 +464,8 @@ final class ParityAcceptanceUITests: XCTestCase {
         let task = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "task-")).firstMatch
         XCTAssertTrue(task.waitForExistence(timeout: 10))
         task.tap()
-        XCTAssertTrue(app.buttons["编辑"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["task-chat-summary-toggle"].waitForExistence(timeout: 10))
+        app.buttons["task-chat-summary-toggle"].tap()
         try app.performAccessibilityAudit(for: [
             .elementDetection,
             .hitRegion,
@@ -1949,11 +1950,10 @@ final class MobileLayoutParityUITests: XCTestCase {
         let review = app.buttons["查看结果并验收"]
         XCTAssertTrue(review.waitForExistence(timeout: 10))
         review.tap()
-        XCTAssertTrue(app.navigationBars["任务详情"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["task-chat-summary-toggle"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["确认"].exists)
-        let status = app.buttons["task-adjust-status"]
-        XCTAssertTrue(status.isHittable)
-        status.tap()
+        app.buttons["task-chat-menu"].tap()
+        app.buttons["调整状态"].tap()
         XCTAssertTrue(app.navigationBars["调整状态"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["task-phase-active"].isEnabled)
         let complete = app.buttons["task-complete"]
@@ -1971,16 +1971,47 @@ final class MobileLayoutParityUITests: XCTestCase {
         let tasks = app.cells.containing(.staticText, identifier: "任务顶部栏检查").firstMatch
         XCTAssertTrue(tasks.waitForExistence(timeout: 10))
         tasks.tap()
-        let openChat = app.buttons["task-edit-chat"]
-        XCTAssertTrue(openChat.waitForExistence(timeout: 10))
-        openChat.tap()
-        XCTAssertTrue(app.buttons["搜索消息"].waitForExistence(timeout: 10))
-        let settings = app.buttons["会话选项"]
-        XCTAssertTrue(settings.isHittable)
-        settings.tap()
+        let toggle = app.buttons["task-chat-summary-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        let composer = app.textFields["assistant-chat-composer"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.scrollViews["task-chat-overview"].exists)
+        toggle.tap()
+        let overview = app.scrollViews["task-chat-overview"]
+        XCTAssertTrue(overview.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(overview.frame.height, app.frame.height * 0.55)
+        XCTAssertTrue(composer.isHittable)
+        overview.swipeUp()
+        capture("task-chat-overview-expanded")
+        composer.tap()
+        XCTAssertTrue(overview.waitForNonExistence(timeout: 5))
+        app.buttons["task-chat-menu"].tap()
+        app.buttons["会话选项"].tap()
         XCTAssertTrue(app.navigationBars["会话选项"].waitForExistence(timeout: 5))
-        app.buttons["关闭"].tap()
-        XCTAssertTrue(app.buttons["搜索消息"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["新建会话"].exists)
+        app.navigationBars["会话选项"].buttons["关闭"].tap()
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        capture("task-chat-overview-collapsed")
+        app.buttons["task-chat-close"].tap()
+        XCTAssertTrue(tasks.waitForExistence(timeout: 5))
+    }
+
+    func testTaskReceiptOpensChatAndReturnsToTheSourceMessage() {
+        tab("conversations")
+        let personal = app.buttons["conversations-personal-agent-entry"]
+        XCTAssertTrue(personal.waitForExistence(timeout: 10))
+        personal.tap()
+        XCTAssertTrue(app.buttons["chat-header-search"].waitForExistence(timeout: 10))
+        let predicate = NSPredicate(format: "label CONTAINS %@", "任务顶部栏检查")
+        let button = app.buttons.matching(predicate).firstMatch
+        let receipt = button.waitForExistence(timeout: 3) ? button : app.links.matching(predicate).firstMatch
+        XCTAssertTrue(receipt.waitForExistence(timeout: 5))
+        receipt.tap()
+        XCTAssertTrue(app.buttons["task-chat-summary-toggle"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["assistant-chat-composer"].exists)
+        app.buttons["task-chat-close"].tap()
+        XCTAssertTrue(app.buttons["chat-header-search"].waitForExistence(timeout: 5))
+        XCTAssertTrue(receipt.isHittable)
     }
 
     func testMessageSearchBottomControlsAndClose() {
@@ -2153,7 +2184,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.buttons["profile-personal-agent-configure"].tap()
         capture("profile-personal-configuration")
     }
+}
 
+private extension MobileLayoutParityUITests {
     private func openChat() {
         tab("conversations")
         let title = app.staticTexts["移动端布局检查"].firstMatch

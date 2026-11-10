@@ -878,4 +878,6 @@
     <string name="about_you_scope_workspace">This workspace</string>
     <string name="about_you_scope_session">This conversation</string>
     <string name="about_you_scope_other">Assigned context</string>
+    <string name="task_chat_outputs">Expected outputs</string>
+    <string name="task_chat_attention">Needs your attention</string>
 </resources>

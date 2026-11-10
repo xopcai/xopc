@@ -69,7 +69,20 @@ struct AppRootView: View {
                 onRemove: appState.removeGatewayProfile
             )
         }
-        .sheet(item: $messageLinks.destination) { link in
+        .sheet(item: Binding(get: {
+            if case .route("tasks", _) = messageLinks.destination {
+                return nil
+            }
+            return messageLinks.destination
+        }, set: { messageLinks.destination = $0 })) { link in
+            ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks)
+        }
+        .fullScreenCover(item: Binding(get: {
+            if case .route("tasks", _) = messageLinks.destination {
+                return messageLinks.destination
+            }
+            return nil
+        }, set: { messageLinks.destination = $0 })) { link in
             ChatMessageLinkDestination(link: link, appState: appState, router: messageLinks)
         }
         .alert("无法打开链接", isPresented: Binding(get: { messageLinks.errorMessage != nil }, set: {

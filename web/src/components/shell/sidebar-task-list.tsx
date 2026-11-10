@@ -111,6 +111,16 @@ const SIDEBAR_STALE_DAYS = 60;
 const SIDEBAR_DRAG_MIME = 'application/x-xopc-sidebar-item';
 
 type SessionView = 'recent' | 'projects';
+
+const SESSION_VIEW_STORAGE_KEY = 'xopc-web-sidebar-session-view';
+
+function readSessionView(): SessionView {
+  try {
+    return globalThis.localStorage?.getItem(SESSION_VIEW_STORAGE_KEY) === 'projects' ? 'projects' : 'recent';
+  } catch {
+    return 'recent';
+  }
+}
 type RecentPeriod = 'today' | 'yesterday' | 'older';
 
 type SidebarSortSpec = {
@@ -1122,7 +1132,7 @@ function SidebarTaskListContent({
   const [creatingProject, setCreatingProject] = useState(false);
   const [autoUnderstand, setAutoUnderstand] = useState(false);
   const [includedConversationId, setIncludedConversationId] = useState<string | undefined>(() => activeConversationId);
-  const [view, setView] = useState<SessionView>('recent');
+  const [view, setView] = useState<SessionView>(readSessionView);
   const [showOlder, setShowOlder] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
@@ -1665,6 +1675,11 @@ function SidebarTaskListContent({
 
   const changeView = (next: SessionView) => {
     setView(next);
+    try {
+      globalThis.localStorage?.setItem(SESSION_VIEW_STORAGE_KEY, next);
+    } catch {
+      /* Optional preference; storage may be unavailable. */
+    }
     if (next !== 'projects' || !activeConversationId) return;
     const active = recentItems.find((session) => session.key === activeConversationId)
       ?? items.find((session) => session.key === activeConversationId);
