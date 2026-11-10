@@ -89,7 +89,7 @@ await writeFile(join(root, 'two.txt'), 'ACTIVITY_FIXTURE_TWO');
 await writeFile(join(evidence, 'activity-events.log'), '');
 const token = randomUUID(), base = `http://127.0.0.1:${port}`;
 Object.assign(process.env, { XOPC_STATE_DIR: root, XOPC_CONFIG_PATH: join(root, 'xopc.json'), XOPC_WORKSPACE: root,
-  PI_CODING_AGENT_DIR: join(root, 'pi'), XOPC_LOG_LEVEL: 'warn', XOPC_LOG_CONSOLE: 'false' });
+  PI_CODING_AGENT_DIR: join(root, 'pi'), XOPC_LOG_LEVEL: 'info', XOPC_LOG_CONSOLE: 'true', XOPC_PRETTY_LOGS: 'false' });
 await writeFile(join(root, 'xopc.json'), JSON.stringify(ConfigSchema.parse({ gateway: { port, auth: { mode: 'token', token } } })));
 await writeFile(join(root, 'models.json'), JSON.stringify({ providers: { 'activity-lab': { baseUrl: `http://127.0.0.1:${modelAddress.port}/v1`, api: 'openai-completions', apiKey: 'synthetic-test-key', models: [{ id: 'lab', name: 'Activity controlled model', input: ['text'], reasoning: false, contextWindow: 128000, maxTokens: 2048 }] } } }));
 const route = { primary: 'activity-lab/lab', fallbacks: [] };
@@ -112,7 +112,10 @@ try {
   browser = await chromium.launch({ headless: true, channel: process.env.XOPC_BROWSER_CHANNEL || 'chrome' });
   const context = await browser.newContext({ viewport: { width: 1365, height: 1000 }, locale: 'en-US' });
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await context.addInitScript(() => localStorage.setItem('xopc.language', 'en'));
+  await context.addInitScript(() => {
+    localStorage.setItem('xopc.language', 'en');
+    localStorage.setItem('xopc.performance', '1');
+  });
   const auth = await context.request.post(base + '/api/browser-session', { headers: { Authorization: `Bearer ${token}`, Origin: base, 'Sec-Fetch-Site': 'same-origin' } }); assert(auth.ok(), `${auth.status()}: ${await auth.text()}`);
   const page = await context.newPage(); page.setDefaultTimeout(30000);
   const errors: string[] = [];
@@ -272,11 +275,41 @@ try {
   await page.screenshot({ path: join(evidence, 'settings-simple.png') });
   await page.goto(url);
   await composer.click();
+  const previousRunIds = await page.evaluate(() => ((window as any).__xopcResponseLatencyMetrics() as { runId: string }[])
+    .map(sample => sample.runId));
   await page.keyboard.insertText('PURE_FINAL_E2E_START: Reply directly with the final table. Do not call tools.');
   await composer.press('Enter');
   const pureArticle = page.locator('article').filter({ hasText: 'PURE_FINAL_E2E_RESULT' }).last();
   await pureArticle.getByRole('table').waitFor();
   assert.equal(await pureArticle.locator('[data-assistant-work-log]').count(), 0);
+  const latencyHandle = await page.waitForFunction(previous =>
+    ((window as any).__xopcResponseLatencyMetrics() as Array<{ runId: string; firstVisibleMs?: number }>)
+      .find(sample => !previous.includes(sample.runId) && Number.isFinite(sample.firstVisibleMs)), previousRunIds);
+  const clientLatency = await latencyHandle.jsonValue() as { runId: string } & Record<string, number>;
+  for (const phase of ['senderStartedMs', 'endpointClaimMs', 'environmentCaptureMs', 'postStartedMs', 'postResponseMs',
+    'gatewayInputReceiptMs', 'inputAcceptedMs', 'runBoundMs', 'firstTextMs', 'firstVisibleMs', 'firstRenderLagMs']) {
+    assert(Number.isFinite(clientLatency[phase]) && clientLatency[phase] >= 0, `Missing client latency phase ${phase}`);
+  }
+  assert(clientLatency.postStartedMs <= clientLatency.postResponseMs);
+  assert(clientLatency.inputAcceptedMs <= clientLatency.runBoundMs);
+  assert(clientLatency.runBoundMs <= clientLatency.firstTextMs && clientLatency.firstTextMs <= clientLatency.firstVisibleMs);
+  const findPhase = (phase: string) => logs.split('\n').flatMap(line => {
+    try { return [JSON.parse(line)]; } catch { return []; }
+  }).find(entry => entry.runId === clientLatency.runId && entry.phase === phase);
+  const modelRequest = findPhase('first_model_request');
+  const modelDelta = findPhase('first_model_delta');
+  const modelText = findPhase('first_model_text');
+  const gatewayText = findPhase('first_response_text');
+  assert(Number.isFinite(modelRequest?.gatewayRunToFirstModelRequestMs));
+  assert(Number.isFinite(modelDelta?.modelFirstDeltaMs));
+  assert(Number.isFinite(modelText?.firstRequestToTextMs));
+  assert(Number.isFinite(gatewayText?.queueMs));
+  const responseLatency = {
+    client: clientLatency,
+    gateway: { queueMs: gatewayText.queueMs, runToModelRequestMs: modelRequest.gatewayRunToFirstModelRequestMs,
+      modelFirstDeltaMs: modelDelta.modelFirstDeltaMs, firstModelRequestToTextMs: modelText.firstRequestToTextMs,
+      runToTextMs: gatewayText.latencyMs },
+  };
   const pureTable = await pureArticle.getByRole('table').elementHandle();
   await page.screenshot({ path: join(evidence, 'pure-streaming-final.png') });
   releasePure();
@@ -290,8 +323,8 @@ try {
   if (dropEnd !== 'none') assert(dropped.message >= 3);
   if (dropEnd === 'all') { assert(dropped.run >= 1); assert(dropped.sessions >= 1); }
   await Promise.all(['failure.png', 'failure.html', 'model.json'].map(name => rm(join(evidence, name), { force: true })));
-  await writeFile(join(evidence, 'result.json'), JSON.stringify({ ok: true, checks: ['production WebUI and authenticated Gateway', 'actual Agent file tools', 'live unclassified text outside process', 'streaming final Markdown table outside process', 'pure text streaming table without activity container', 'reasoning collapsed by default', 'consecutive tool aggregation', 'completion auto-collapse', 'public narration and result retain their order', 'completed process can reopen', 'SQLite history reload', 'narrow viewport', 'existing off/on/stream settings via UI', 'developer details toggle', 'simple/advanced settings preserved', 'clipboard contains only final result'], observed, dropEnd, dropped }, null, 2));
-  console.log(JSON.stringify({ ok: true, evidence }));
+  await writeFile(join(evidence, 'result.json'), JSON.stringify({ ok: true, checks: ['production WebUI and authenticated Gateway', 'actual Agent file tools', 'live unclassified text outside process', 'streaming final Markdown table outside process', 'pure text streaming table without activity container', 'reasoning collapsed by default', 'consecutive tool aggregation', 'completion auto-collapse', 'public narration and result retain their order', 'completed process can reopen', 'SQLite history reload', 'narrow viewport', 'existing off/on/stream settings via UI', 'developer details toggle', 'simple/advanced settings preserved', 'clipboard contains only final result'], observed, dropEnd, dropped, responseLatency }, null, 2));
+  console.log(JSON.stringify({ ok: true, evidence, responseLatency }));
 } catch (error) {
   if (browser) for (const context of browser.contexts()) for (const page of context.pages()) {
     await page.screenshot({ path: join(evidence, 'failure.png') }).catch(() => {});

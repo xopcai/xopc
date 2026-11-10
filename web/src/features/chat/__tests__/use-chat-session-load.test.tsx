@@ -215,7 +215,7 @@ describe('useChatSessionLoad', () => {
       resolveLoad({ messages: [user], hasMore: false });
       await request;
       expect(useChatSessionStore.getState().sessions[conversationId].messages).toBe(committed);
-      expect(sessionManager.loadSessionAgentConfig).not.toHaveBeenCalled();
+      expect(sessionManager.loadSessionAgentConfig).toHaveBeenCalledOnce();
       // Replay-gap reloads use the same fence, including a response arriving after reset.
       const beforeReset = { messages: committed };
       store.setCommittedSnapshot(conversationId, { messages: [], hasMore: false });
@@ -312,6 +312,72 @@ describe('useChatSessionLoad', () => {
     } finally {
       act(() => root.unmount());
     }
+  });
+
+  it('requests configuration before history resolves instead of adding a second network round trip', async () => {
+    const root = createRoot(document.createElement('div'));
+    let resolveHistory!: (value: { messages: Message[]; hasMore: boolean }) => void;
+    const manager = {
+      loadSession: vi.fn(() => new Promise(resolve => { resolveHistory = resolve; })),
+      loadSessionAgentConfig: vi.fn(async () => ({ model: '', thinkingLevel: 'off' })),
+    } as unknown as SessionManager;
+    let load!: ReturnType<typeof useChatSessionLoad>;
+    function Harness() {
+      load = useChatSessionLoad({
+        sessionMgrRef: { current: manager }, routeConversationIdRef: { current: conversationId },
+        sendingRef: { current: false }, streamingRef: { current: false }, loadingSessionRef: { current: false },
+        messagesLenRef: { current: 0 }, thinkingSupportGenRef: { current: 0 }, navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main', detachForNewConversation: vi.fn(),
+        conversationId, sessionAgentId: 'main', currentProjectId: null, hasMore: false,
+      });
+      return null;
+    }
+    try {
+      act(() => root.render(<Harness />));
+      const request = load.loadSessionById(conversationId);
+      await vi.waitFor(() => expect(manager.loadSessionAgentConfig).toHaveBeenCalledOnce());
+      expect(manager.loadSession).toHaveBeenCalledOnce();
+      resolveHistory({ messages: [], hasMore: false });
+      await request;
+      expect(useChatSessionStore.getState().sessions[conversationId].historyStatus).toBe('ready');
+    } finally { act(() => root.unmount()); }
+  });
+
+  it('loads the selected session while an old request is pending and ignores its late error', async () => {
+    const root = createRoot(document.createElement('div'));
+    let rejectOld!: (error: Error) => void;
+    const route = { current: 'old' };
+    const manager = {
+      loadSession: vi.fn((key: string) => key === 'old'
+        ? new Promise((_resolve, reject) => { rejectOld = reject; })
+        : Promise.resolve({ messages: [], hasMore: false })),
+      loadSessionAgentConfig: vi.fn(async () => ({ model: '', thinkingLevel: 'off' })),
+      loadSessions: vi.fn(),
+    } as unknown as SessionManager;
+    let load!: ReturnType<typeof useChatSessionLoad>;
+    function Harness() {
+      load = useChatSessionLoad({
+        sessionMgrRef: { current: manager }, routeConversationIdRef: route,
+        sendingRef: { current: false }, streamingRef: { current: false }, loadingSessionRef: { current: false },
+        messagesLenRef: { current: 0 }, thinkingSupportGenRef: { current: 0 }, navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main', detachForNewConversation: vi.fn(),
+        conversationId: 'selected', sessionAgentId: 'main', currentProjectId: null, hasMore: false,
+      });
+      return null;
+    }
+    try {
+      act(() => root.render(<Harness />));
+      const old = load.loadSessionById('old');
+      await Promise.resolve();
+      route.current = 'selected';
+      useChatSessionStore.setState({ focusedConversationId: 'selected' });
+      await load.loadSessionById('selected');
+      expect(useChatSessionStore.getState().sessions.selected.historyStatus).toBe('ready');
+      rejectOld(new Error('HTTP 404: gone'));
+      await old;
+      expect(useChatSessionStore.getState().shellError).toBeNull();
+      expect(manager.loadSessions).not.toHaveBeenCalled();
+    } finally { act(() => root.unmount()); }
   });
 
   it('applies a workspace override and refreshes the effective workspace', async () => {

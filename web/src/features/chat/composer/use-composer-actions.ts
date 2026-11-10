@@ -135,6 +135,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
   const flushRef = useRef<() => void>(() => {});
   const editCommitPending = useRef(false);
   const send = useCallback(() => {
+    const submittedAt = performance.now();
     const intent = composerSubmitIntent(latestOptions.current);
     if (intent === 'blocked') return;
     if (intent === 'queue') { flushRef.current(); return; }
@@ -167,7 +168,7 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
       draft.attachments.length > 0 ? draft.attachments : undefined,
       getThinkingLevel(),
       draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
-      { onDispatched: (receipt) => onDispatched?.(receipt, draft) },
+      { submittedAt, onDispatched: (receipt) => onDispatched?.(receipt, draft) },
     ];
     const result = onSend(...sendArgs);
     commitAcceptedSend(result, (conversationId) => {

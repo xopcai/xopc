@@ -124,6 +124,7 @@ export interface ProcessDirectStreamingInput {
   thinking?: string;
   signal?: AbortSignal;
   runId?: string;
+  gatewayRunStartedMonotonic?: number;
   sourceContexts?: AgentSourceContext[];
   presentation?: 'voice';
   /** Delivers durable audio independently of the completed text run. */
@@ -561,6 +562,7 @@ async function* runProcessDirectStreamingInner(
                 sourceContexts,
                 presentation: input.presentation,
                 requireVisibleReply: input.origin.type === 'endpoint' || (input.origin.type === 'system' && input.origin.source === 'cli'),
+                gatewayRunStartedMonotonic: input.gatewayRunStartedMonotonic,
                 runId: input.runId,
                 onEvent: (embeddedEvent) => {
                   const event = { ...embeddedEvent };

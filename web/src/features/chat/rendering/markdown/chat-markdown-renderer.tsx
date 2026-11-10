@@ -1,3 +1,6 @@
+import { createMathBudget } from './math-budget';
+import { createDuplicateImageLinkTracker, isGenericImageLinkLabel } from './duplicate-image-links';
+import { performanceDiagnosticsEnabled } from '@/lib/performance/diagnostics';
 import { remarkXopcMath, mathRanges } from '@xopcai/markdown-math/remark';
 import { rehypeXopcMath } from '@xopcai/markdown-math/rehype';
 import { cjk } from '@streamdown/cjk';
@@ -19,6 +22,7 @@ import '@/components/markdown/markdown.css';
 import 'katex/dist/katex.min.css';
 
 import { ChatImageThumbnail } from '../../messages/chat-image-thumbnail';
+import { recordResponseVisible, responseVisibilityPending } from '../../messages/response-latency';
 import { PartErrorBoundary } from '../part-error-boundary';
 import { createChatBlockParser, parseChatMarkdownBlocks } from './chat-math-blocks';
 import { MathElement } from '@/components/markdown/math-element';
@@ -31,6 +35,7 @@ import { createRevealPlugin, REVEAL_DURATION_MS, RevealBudgetContext, RevealLedg
 type Environment = {
   openLink: (href: string) => void; linkError: string | null;
   streaming: boolean; initialBlocks: number; mathRemaining: number[]; metricsKey?: string;
+  trackImageLink: ReturnType<typeof createDuplicateImageLinkTracker>;
   copy: boolean; renderMermaid: boolean; mermaidActions: boolean;
   openFile?: (target: WorkspaceFileLinkTarget) => void;
   loadImage?: (target: WorkspaceFileLinkTarget) => Promise<Blob>;
@@ -63,7 +68,7 @@ function ChatLink({ node, href = '', children, className, ...props }: ComponentP
   const label = (labels.destinations as Record<string, string>)[destination] ?? labels.open;
   const visibleLabel = internal && /^(?:xopc:\/\/|#\/|Open(?: in xopc)?$|打开$)/i.test(text) ? label : children;
   const effectiveHref = internalRoute ? `#${internalRoute}` : href;
-  return <a {...props} href={effectiveHref} target={internal || target || fragment ? undefined : '_blank'} rel="noopener noreferrer"
+  return <a {...props} ref={isGenericImageLinkLabel(text) ? environment.trackImageLink : undefined} href={effectiveHref} target={internal || target || fragment ? undefined : '_blank'} rel="noopener noreferrer"
     className={[className, target ? 'markdown-file-link' : ''].filter(Boolean).join(' ') || undefined}
     data-xopc-link-kind={fragment ? 'document-fragment' : target ? undefined : intent.kind}
     data-xopc-file-path={target?.path} data-xopc-file-kind={target?.kind} data-xopc-line={target?.line}
@@ -222,8 +227,8 @@ const ChatBlock = memo(function ChatBlock(props: BlockProps) {
 export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
   content, compact = false, breaks = false, className, codeCopy = true,
   onWorkspaceFileOpen, onWorkspaceImageLoad, renderMermaid = true, mermaidActions = false,
-  streamingMetricsKey, streaming = false,
-}: MarkdownViewProps & { streaming?: boolean }) {
+  streamingMetricsKey, responseRunId, streaming = false,
+}: MarkdownViewProps & { streaming?: boolean; responseRunId?: string }) {
   const id = useId();
   const host = useRef<HTMLDivElement>(null);
   const openAppLink = useAppLinkOpener();
@@ -255,35 +260,34 @@ export const ChatMarkdownRenderer = memo(function ChatMarkdownRenderer({
   const [chatBlocks] = useState(createChatBlockParser);
   const [initialBlocks] = useState(() => mode === 'streaming' ? parseChatMarkdownBlocks(content).length : 0);
   const plugins = useMemo(() => ({ cjk, math: { name: 'katex' as const, type: 'math' as const, remarkPlugin: remarkXopcMath, rehypePlugin: [rehypeXopcMath, { streaming }] as NonNullable<BlockProps['rehypePlugins']>[number] } }), [streaming]);
-  const mathRemaining = useMemo(() => {
-    let used = 0;
-    return chatBlocks(content).map(block => { const remaining = Math.max(0, 256 - used); used += mathRanges(block).length; return remaining; });
-  }, [content, chatBlocks]);
+  const [mathBudget] = useState(createMathBudget);
+  const [trackImageLink] = useState(createDuplicateImageLinkTracker);
+  const mathRemaining = useMemo(() => mathBudget(chatBlocks(content)), [content, chatBlocks, mathBudget]);
   const environment = useMemo<Environment>(() => ({ openLink, linkError, streaming, initialBlocks, mathRemaining, metricsKey: streamingMetricsKey,
-    copy: codeCopy, renderMermaid, mermaidActions, openFile: onWorkspaceFileOpen, loadImage: onWorkspaceImageLoad,
-  }), [openLink, linkError, streaming, initialBlocks, mathRemaining, streamingMetricsKey, codeCopy, renderMermaid, mermaidActions, onWorkspaceFileOpen, onWorkspaceImageLoad]);
+    trackImageLink, copy: codeCopy, renderMermaid, mermaidActions, openFile: onWorkspaceFileOpen, loadImage: onWorkspaceImageLoad,
+  }), [openLink, linkError, streaming, initialBlocks, mathRemaining, streamingMetricsKey, trackImageLink, codeCopy, renderMermaid, mermaidActions, onWorkspaceFileOpen, onWorkspaceImageLoad]);
   const remarkPlugins = useMemo(() => [...Object.values(defaultRemarkPlugins), [remarkChatContent, { breaks }]] as NonNullable<BlockProps['remarkPlugins']>, [breaks]);
   const rehypePlugins = useMemo(() => [...baseRehype,
     ...(onWorkspaceFileOpen ? [rehypeChatFileMentions] : []),
     [rehypeChatFragments, { prefix: `xopc-markdown-${id}` }],
   ] as NonNullable<BlockProps['rehypePlugins']>, [id, onWorkspaceFileOpen]);
   useLayoutEffect(() => {
-    if (!import.meta.env.DEV || !streamingMetricsKey) return;
+    if (!performanceDiagnosticsEnabled || !responseRunId || !content.trim()) return;
+    const frame = requestAnimationFrame(() => {
+      if (responseVisibilityPending(responseRunId)) {
+        // Opening Markdown syntax can commit without producing visible text.
+        const element = host.current;
+        if (!element?.getClientRects().length || !element.innerText?.trim()) return;
+      }
+      recordResponseVisible(responseRunId, content);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [content, responseRunId, streaming]);
+  useLayoutEffect(() => {
+    if (!performanceDiagnosticsEnabled || !streamingMetricsKey) return;
     const blocks = host.current?.querySelectorAll('.markdown-stream-block');
     recordStreamingShape(streamingMetricsKey, Math.max(0, (blocks?.length ?? 0) - 1), blocks?.item((blocks.length ?? 1) - 1)?.textContent?.length ?? 0);
   }, [content, streamingMetricsKey]);
-  useLayoutEffect(() => {
-    const paragraphs = host.current?.querySelectorAll<HTMLParagraphElement>('p') ?? [];
-    for (const paragraph of paragraphs) {
-      paragraph.hidden = false;
-      const link = paragraph.querySelector<HTMLAnchorElement>('a');
-      if (!link || paragraph.textContent?.trim() !== link.textContent?.trim() ||
-        !/^(?:查看(?:高清|原|大)?图片|查看大图|查看原图|view(?: (?:full[- ]size|original|hd))? image)$/i.test(link.textContent?.trim() ?? '')) continue;
-      const next = paragraph.nextElementSibling ?? paragraph.closest('.markdown-stream-block')?.nextElementSibling?.firstElementChild;
-      const images = next?.querySelectorAll<HTMLImageElement>('img[data-chat-image-source]');
-      if (next?.matches('[data-chat-media]') && images?.length === 1 && images[0].dataset.chatImageSource === link.getAttribute('href')) paragraph.hidden = true;
-    }
-  }, [content]);
   return <ImageLightboxProvider interactive closeLabel={messages(locale).chat.attachmentPreviewClose}><EnvironmentContext.Provider value={environment}><BlockSourceContext.Provider value={content}><RevealBudgetContext.Provider value={budget}>
     <div ref={host} className="markdown-render-boundary" data-chat-markdown={id}>
       <PartErrorBoundary content={content}>

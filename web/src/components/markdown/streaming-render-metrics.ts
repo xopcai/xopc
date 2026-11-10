@@ -1,3 +1,5 @@
+import { performanceDiagnosticsEnabled } from '@/lib/performance/diagnostics';
+
 export type StreamingRenderMetricsSnapshot = {
   key: string;
   deltaCount: number;
@@ -43,7 +45,7 @@ function now(): number {
 }
 
 function metricFor(key: string): MutableStreamingRenderMetrics | null {
-  if (!import.meta.env.DEV || !key) return null;
+  if (!performanceDiagnosticsEnabled || !key) return null;
   const existing = metrics.get(key);
   if (existing) return existing;
   if (metrics.size >= MAX_TRACKED_STREAMS) {
@@ -80,7 +82,7 @@ export function getPageRenderMetrics(): PageRenderMetricsSnapshot { return { ...
 function startPerformanceObservers(): void {
   if (
     performanceObserversStarted ||
-    !import.meta.env.DEV ||
+    !performanceDiagnosticsEnabled ||
     typeof PerformanceObserver === 'undefined'
   ) {
     return;
@@ -219,7 +221,7 @@ declare global {
   }
 }
 
-if (import.meta.env.DEV && typeof window !== 'undefined') {
+if (performanceDiagnosticsEnabled && typeof window !== 'undefined') {
   window.__xopcStreamingRenderMetrics = getStreamingRenderMetrics;
   window.__xopcPageRenderMetrics = getPageRenderMetrics;
 }

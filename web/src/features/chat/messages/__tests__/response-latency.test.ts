@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   beginResponseLatency, bindResponseLatency, discardPendingResponseLatency, finishResponseLatency, getResponseLatencyMetrics,
-  hasCompleteOpeningSentence, recordResponseText, recordResponseVisible, resetResponseLatencyMetrics,
+  hasCompleteOpeningSentence, markResponseSubmission, recordResponseText, recordResponseVisible, resetResponseLatencyMetrics,
 } from '../response-latency';
 
 afterEach(() => { vi.restoreAllMocks(); resetResponseLatencyMetrics(); });
@@ -11,9 +11,17 @@ describe('response latency measurement', () => {
   it('measures local input, text and visible sentence separately without storing content', () => {
     let timestamp = 100;
     vi.spyOn(performance, 'now').mockImplementation(() => timestamp);
-    beginResponseLatency('conversation');
+    const timing = beginResponseLatency('conversation', 90);
+    timestamp = 115;
+    markResponseSubmission(timing, 'endpointClaimMs', 100);
+    timestamp = 120;
+    markResponseSubmission(timing, 'postStartedMs');
+    timestamp = 140;
+    markResponseSubmission(timing, 'postStartedMs'); // Retries preserve the first POST start.
+    timestamp = 175;
+    markResponseSubmission(timing, 'postResponseMs');
     timestamp = 200;
-    bindResponseLatency('conversation', 'run');
+    bindResponseLatency('conversation', 'run', timing);
     timestamp = 500;
     recordResponseText('run');
     timestamp = 550;
@@ -21,22 +29,22 @@ describe('response latency measurement', () => {
     timestamp = 600;
     recordResponseVisible('run', '先看结论。后续');
     finishResponseLatency('run', 'cancelled');
-    expect(getResponseLatencyMetrics()).toEqual([{ runId: 'run', firstTextMs: 400,
-      firstVisibleMs: 450, firstSentenceMs: 500, firstRenderLagMs: 50, status: 'cancelled' }]);
+    expect(getResponseLatencyMetrics()).toEqual([{ runId: 'run', senderStartedMs: 10, endpointClaimMs: 15, postStartedMs: 30,
+      postResponseMs: 85, runBoundMs: 110, firstTextMs: 410,
+      firstVisibleMs: 460, firstSentenceMs: 510, firstRenderLagMs: 50, status: 'cancelled' }]);
     timestamp = 900;
     recordResponseText('run');
     recordResponseVisible('run', '再补充。');
-    expect(getResponseLatencyMetrics()[0]?.firstVisibleMs).toBe(450);
+    expect(getResponseLatencyMetrics()[0]?.firstVisibleMs).toBe(460);
     expect(JSON.stringify(getResponseLatencyMetrics())).not.toContain('先看');
   });
 
   it('does not classify resumed history or silent output as a new response', () => {
-    bindResponseLatency('history', 'old-run');
+    bindResponseLatency('history', 'old-run', beginResponseLatency('other'));
     recordResponseText('old-run');
     recordResponseVisible('old-run', 'Old result.');
     expect(getResponseLatencyMetrics()).toEqual([]);
-    beginResponseLatency('new');
-    bindResponseLatency('new', 'new-run');
+    bindResponseLatency('new', 'new-run', beginResponseLatency('new'));
     recordResponseText('new-run');
     recordResponseVisible('new-run', 'NO_REPLY');
     finishResponseLatency('new-run', 'error');
@@ -59,8 +67,7 @@ describe('response latency measurement', () => {
 
   it('bounds retained measurements', () => {
     for (let index = 0; index < 45; index++) {
-      beginResponseLatency(`chat-${index}`);
-      bindResponseLatency(`chat-${index}`, `run-${index}`);
+      bindResponseLatency(`chat-${index}`, `run-${index}`, beginResponseLatency(`chat-${index}`));
     }
     expect(getResponseLatencyMetrics()).toHaveLength(40);
   });
@@ -70,12 +77,13 @@ describe('response latency measurement', () => {
     vi.spyOn(performance, 'now').mockImplementation(() => timestamp);
     const rejected = beginResponseLatency('chat');
     discardPendingResponseLatency('chat', rejected);
-    bindResponseLatency('chat', 'history');
+    bindResponseLatency('chat', 'history', rejected);
     expect(getResponseLatencyMetrics()).toHaveLength(0);
     timestamp = 2;
-    beginResponseLatency('chat');
+    const newer = beginResponseLatency('chat');
     discardPendingResponseLatency('chat', rejected);
-    bindResponseLatency('chat', 'new-run');
-    expect(getResponseLatencyMetrics()).toEqual([{ runId: 'new-run' }]);
+    bindResponseLatency('chat', 'stale-run', rejected);
+    bindResponseLatency('chat', 'new-run', newer);
+    expect(getResponseLatencyMetrics()).toEqual([{ runId: 'new-run', senderStartedMs: 0, runBoundMs: 0 }]);
   });
 });

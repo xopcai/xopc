@@ -1,3 +1,4 @@
+import { recordStartupPhase } from '@/lib/performance/diagnostics';
 import { memo, useEffect, useRef, type MutableRefObject } from 'react';
 
 import {
@@ -72,6 +73,11 @@ export const ChatComposerInput = memo(function ChatComposerInput({
   chatMessages: { clipboardFileTypeUnsupported: string };
 }) {
   const isComposingRef = useRef(false);
+  useEffect(() => {
+    if (disabled || hidden || !editorRef.current) return;
+    const frame = requestAnimationFrame(() => recordStartupPhase('composer_ready_frame'));
+    return () => cancelAnimationFrame(frame);
+  }, [disabled, hidden, editorRef]);
   useEffect(() => {
     const el = editorRef.current;
     if (!el || disabled) return;

@@ -684,7 +684,7 @@ export const MessageBubble = memo(function MessageBubble({
                     userTurnDocument={message.userTurnDocument}
                     contextRefs={message.contextRefs}
                     responseRunId={isAssistant ? message.turnId : undefined}
-                    immediateFirstCommit={usesConversationText(message, personal)}
+                    immediateFirstCommit
                     processItems={processItems}
                     processCollapsed={processDisclosure.collapsed}
                     renderActivity={!personal && assistantTurnView ? (blocks, isTail) => {

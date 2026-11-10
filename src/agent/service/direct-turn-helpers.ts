@@ -167,6 +167,7 @@ export interface RunDirectAgentTurnDeps {
 export interface RunDirectAgentTurnInput {
   conversationId: string;
   runId?: string;
+  gatewayRunStartedMonotonic?: number;
   userMessage: AgentMessage;
   abortSignal?: AbortSignal;
   deadlineAtMs?: number;
@@ -223,6 +224,7 @@ export async function runDirectAgentTurn(
   const result = await runEmbeddedTurnForSession({
     conversationId: input.conversationId,
     runId: turnId,
+    gatewayRunStartedMonotonic: input.gatewayRunStartedMonotonic,
     userMessage: sourceEnrichedMessage,
     dynamicSystemContext: [userContext.dynamicSystemContext, taskContext].filter(Boolean).join('\n\n'),
     llmImages,

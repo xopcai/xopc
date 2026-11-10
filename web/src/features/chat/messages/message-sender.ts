@@ -39,7 +39,7 @@ import { readLocalSessionDraft, saveLocalSessionDraft, readSessionTranscript, re
 import { useGatewayStore } from '@/stores/gateway-store';
 import { patchSessionAgentConfigView } from '../session/patch-session-agent-config-view';
 import { SessionManager, type SessionAgentConfig } from '../session/session-manager';
-import { beginResponseLatency, bindResponseLatency, discardPendingResponseLatency, recordResponseText, finishResponseLatency } from './response-latency';
+import { beginResponseLatency, bindResponseLatency, discardPendingResponseLatency, markResponseSubmission, recordResponseText, finishResponseLatency } from './response-latency';
 
 async function retryDelay(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -62,6 +62,7 @@ async function postSessionInput(
   body: string,
   signal: AbortSignal,
   expectedConversationId?: string,
+  onAttempt?: () => void,
 ): Promise<Response> {
   let lastError: unknown;
   for (const delayMs of SESSION_INPUT_RETRY_DELAYS_MS) {
@@ -71,6 +72,7 @@ async function postSessionInput(
     const abort = () => controller.abort();
     signal.addEventListener('abort', abort, { once: true });
     try {
+      onAttempt?.();
       const response = await apiFetch(url, {
         method: 'POST',
         headers: {
@@ -380,6 +382,7 @@ export class MessageSender {
     replaceTurnId?: string,
     contextRefs?: WireContextRef[],
     appContext?: AppContextEnvelope,
+    submittedAt?: number,
   ): Promise<void> {
     if (this.isSending) throw new Error('A submission is already in progress');
     if (replaceTurnId && appContext) throw new Error('Application context requires a new input');
@@ -394,7 +397,13 @@ export class MessageSender {
     this._abort = controller;
     this._chatId = chatId;
 
-    const latencyStartedAt = beginResponseLatency(chatId);
+    const latency = beginResponseLatency(chatId, submittedAt);
+    const captureEnvironment = async () => {
+      const startedAt = performance.now();
+      const environment = await captureTurnEnvironment();
+      markResponseSubmission(latency, 'environmentCaptureMs', startedAt);
+      return environment;
+    };
 
     try {
       const capped =
@@ -408,13 +417,15 @@ export class MessageSender {
       if (selection?.modelConfigSaving) throw new Error('Wait for model configuration to finish saving');
       let configVersion = selection?.configVersion;
       const inputControl = readInputControl(chatId);
+      const claimStartedAt = performance.now();
       const origin = await waitForEndpointTurnClaim(controller.signal);
+      markResponseSubmission(latency, 'endpointClaimMs', claimStartedAt);
       const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs, appContext: capturedContext })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
       let clientMessageId = claimSubmissionId(chatId, fingerprint);
       const input = { content, attachments: capped, contextRefs, appContext: capturedContext, endpointContext: undefined as import('@xopcai/gateway-contract').EndpointContext | undefined, interactionCapabilities: undefined as import('@xopcai/gateway-contract').InteractionCapabilities | undefined };
       let body: object;
       if (taskId || replaceTurnId) {
-        if (!replaceTurnId) input.endpointContext = await captureTurnEnvironment();
+        if (!replaceTurnId) input.endpointContext = await captureEnvironment();
         body = { clientMessageId, configVersion, delivery: 'next', ...input, thinking: thinkingLevel, origin,
           expectedTranscriptId: replaceTurnId ? await readSessionTranscript(chatId) : undefined, controlVersion: inputControl.version };
       } else {
@@ -447,7 +458,7 @@ export class MessageSender {
           clientMessageId = pending.clientMessageId;
           body = sessionInputCommandSchema.parse({ ...pending, origin });
         } else if (draft) {
-          input.endpointContext = draft.submission?.input.endpointContext ?? await captureTurnEnvironment();
+          input.endpointContext = draft.submission?.input.endpointContext ?? await captureEnvironment();
           const proposed = { kind: 'start' as const, clientMessageId, creation: draft.creation, input };
           if (draft.submission && canonicalSessionCommand(draft.submission.input) !== canonicalSessionCommand(input)) {
             throw new Error('The first input is awaiting confirmation. Retry it before sending different content.');
@@ -457,7 +468,7 @@ export class MessageSender {
           draft.submission ??= proposed;
           await saveLocalSessionDraft(draft);
         } else {
-          input.endpointContext = await captureTurnEnvironment();
+          input.endpointContext = await captureEnvironment();
           body = sessionInputCommandSchema.parse({ kind: 'append', clientMessageId,
             expectedTranscriptId: await readSessionTranscript(chatId), configVersion, delivery: 'next', input, origin,
             controlVersion: inputControl.version, ...(inputControl.paused ? { execution: 'single' } : {}) });
@@ -476,7 +487,11 @@ export class MessageSender {
         JSON.stringify(body),
         controller.signal,
         taskId ? chatId : undefined,
+        () => markResponseSubmission(latency, 'postStartedMs'),
       );
+      markResponseSubmission(latency, 'postResponseMs');
+      const receiptDuration = res.headers?.get('Server-Timing')?.match(/(?:^|,)\s*session_input;dur=(\d+(?:\.\d+)?)/)?.[1];
+      if (receiptDuration !== undefined) latency.gatewayInputReceiptMs = Number(receiptDuration);
 
       if (!res.ok) {
         assertScope();
@@ -516,12 +531,14 @@ export class MessageSender {
         if (json.payload?.agentConfig) patchSessionAgentConfigView(chatId, json.payload.agentConfig);
       }
       completeSubmission(chatId, clientMessageId);
+      markResponseSubmission(latency, 'inputAcceptedMs');
       callbacks?.onInputAccepted?.();
       const state = taskId || replaceTurnId ? json.payload?.state : json.payload?.inputState;
       if (replaceTurnId && state) window.dispatchEvent(new CustomEvent('session-input-state', { detail: { ...state, conversationId: chatId } }));
       const resolvedChatId = json.payload?.conversationId?.trim() || chatId;
       const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
       if (state?.activeRunId && ownInput?.id === state.activeInputId) {
+        if (ownInput) bindResponseLatency(chatId, state.activeRunId, latency);
         await this.resume(state.activeRunId, resolvedChatId, callbacks, { replayFromStart: true });
         return;
       }
@@ -544,6 +561,7 @@ export class MessageSender {
           assertScope();
           const current = snapshot.payload;
           if (current?.activeRunId && current.activeInputId === ownInput.id) {
+            bindResponseLatency(chatId, current.activeRunId, latency);
             await this.resume(current.activeRunId, resolvedChatId, callbacks, { replayFromStart: true });
             return;
           }
@@ -571,7 +589,7 @@ export class MessageSender {
         return;
       }
     } finally {
-      discardPendingResponseLatency(chatId, latencyStartedAt);
+      discardPendingResponseLatency(chatId, latency);
       if (this._abort === controller) {
         this._abort = undefined;
         dispatchPendingAgentRunChanged(chatId);
@@ -606,7 +624,6 @@ export class MessageSender {
     // A resumed successor owns its own controller and subscription. A predecessor's
     // completion must never dispose or clear the successor's recovery cursor.
     this._abort?.abort();
-    bindResponseLatency(chatId, runId);
     const controller = new AbortController();
     this._abort = controller;
     this._chatId = chatId;
@@ -727,7 +744,6 @@ export class MessageSender {
 
     switch (event) {
       case 'run_start':
-        if (typeof parsed.runId === 'string' && this._chatId) bindResponseLatency(this._chatId, parsed.runId);
         if (typeof parsed.runId === 'string' && this._chatId) {
           this._trackedRunId = parsed.runId;
           setPendingAgentRun(this._chatId, parsed.runId);

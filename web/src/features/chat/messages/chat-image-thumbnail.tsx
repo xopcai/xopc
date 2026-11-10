@@ -44,7 +44,7 @@ export function ChatImageThumbnail({ source, load, onOpen, alt = '', className, 
   }, [src]);
   const size = dimensions?.source === source ? dimensions : null;
   const scale = size ? Math.min(1, 320 / size.width, 280 / size.height) : 1;
-  return <span className="chat-image-thumbnail" data-image-loading={ready !== source && !error || undefined}
+  return <span className="chat-image-thumbnail" data-chat-media-source={source} data-image-loading={ready !== source && !error || undefined}
     style={size ? { width: size.width * scale, aspectRatio: `${size.width} / ${size.height}` } : undefined}>
     {ready !== source && !error && <Skeleton as="span" className="pointer-events-none absolute inset-0" />}
     {!error && <img key={`${source}:${attempt}`} {...props} ref={imageRef} src={src} alt={alt} loading="lazy" decoding="async"
