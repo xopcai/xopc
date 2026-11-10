@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { ObservationCommandRequestSchema, ObservationTrialRequestSchema, RoutineAdoptRequestSchema, RoutineCommandRequestSchema } from '@xopcai/gateway-contract';
+import { ObservationPrepareRequestSchema, ObservationCommandRequestSchema, ObservationTrialRequestSchema, RoutineAdoptRequestSchema, RoutineCommandRequestSchema } from '@xopcai/gateway-contract';
 import { ObservationConflictError } from '../../../home-intelligence/observation.js';
 import {
   HomeAdvisorRefreshRequestSchema,
@@ -58,6 +58,13 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid observation command' }, 400);
     try { return c.json(service.homeIntelligence.observationCommand(parsed.data)); }
     catch (err) { if (err instanceof ObservationConflictError) return c.json({ ok: false, error: err.message }, 409); throw err; }
+  });
+
+  authenticated.post('/api/home/observation/prepare', deps.strictRateLimitMiddleware, async (c) => {
+    const parsed = ObservationPrepareRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ok:false,error:'Invalid draft request'},400);
+    try { return c.json(service.homeIntelligence.prepareObservation(parsed.data)); }
+    catch (err) { if (err instanceof ObservationConflictError) return c.json({ok:false,error:err.message},409); throw err; }
   });
 
   authenticated.post('/api/home/observation/trial', deps.strictRateLimitMiddleware, async (c) => {

@@ -25,16 +25,32 @@ function render(observation = state, advisor: HomeAdvisor = { state: 'quiet', re
 describe('Home observation card', () => {
   it('keeps raw conversation titles and scan status out of the empty card, with a usable chat entry', () => {
     const {container,button}=render({...state,analyzedRevision:0});
-    expect(container.textContent).toContain('暂时还没有值得推荐的事项');
+    expect(container.textContent).toContain('先做一件具体的事');
     expect(container.textContent).not.toContain('项目周报');
     expect(container.textContent).not.toContain('正在整理');
     const link=container.querySelector<HTMLAnchorElement>('a')!;
-    expect(link.textContent).toContain('说说我经常重复做的事');
+    expect(link.textContent).toContain('PR 审查准备清单');
     expect(new URL(link.href).hash).toContain('/chat/new?draft=');
     expect(fetchJson).not.toHaveBeenCalled();
     act(()=>button('记录与设置').click());
     expect(container.textContent).toContain('正在整理最近的工作记录');
-    expect(container.textContent).toContain('项目周报');
+    expect(container.textContent).not.toContain('项目周报');
+    expect(container.textContent).not.toContain('整理周报');
+  });
+
+  it('confirms a concrete deliverable and starts a real private Task without a chat handoff',async()=>{
+    fetchJson.mockResolvedValue({outcome:'task',taskId:'prepared',href:'/tasks/prepared'});
+    const {container,button}=render({...state,starters:[{kind:'pr_review',topicIds:['topic'],requestCount:3,previews:['审查 PR 11622']}]});
+    expect(container.textContent).toContain('最近有 3 条相关请求');
+    expect(container.textContent).toContain('PR 审查准备清单');
+    expect(container.querySelector('a')).toBeNull();
+    act(()=>button('看看会做什么').click());
+    expect(fetchJson).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('你会得到：PR 审查准备清单');
+    await act(async()=>container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(fetchJson.mock.calls[0][0]).toContain('/observation/prepare');
+    expect(JSON.parse(fetchJson.mock.calls[0][1].body)).toMatchObject({kind:'pr_review',topicIds:['topic'],expectedRevision:3,locale:'zh'});
+    expect(container.textContent).toContain('Trial review prepared');
   });
 
   it('offers a grounded first attempt without turning unrelated history into a recommendation',async()=>{
@@ -54,9 +70,10 @@ describe('Home observation card', () => {
   });
 
   it('keeps one-off feedback scoped and retains the input on a stale revision response', async () => {
-    const { container, button } = render();
+    const { container, button } = render({...state,topics:state.topics.map(t=>({...t,feedback:[{id:'feedback',text:'每项附来源',scope:'similar',status:'active',createdAt:1}]}))});
     act(() => button('记录与设置').click());
-    act(() => button('补充这件事').click());
+    act(() => button('管理').click());
+    act(() => button('调整要求').click());
     const input = container.querySelector('textarea')!;
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, '只在发布期需要');
@@ -73,12 +90,13 @@ describe('Home observation card', () => {
 
   it('requires explicit resume coverage and a separate forget confirmation', async () => {
     fetchJson.mockResolvedValue(state);
-    const { container, button } = render({ ...state, status: 'paused' });
+    const { container, button } = render({ ...state, status: 'paused',topics:state.topics.map(t=>({...t,feedback:[{id:'feedback',text:'每项附来源',scope:'similar',status:'active',createdAt:1}]})) });
     act(() => button('恢复寻找建议').click());
     expect(fetchJson).not.toHaveBeenCalled();
     await act(async () => button('只看之后的工作').click());
     expect(JSON.parse(fetchJson.mock.calls[0][1].body).command).toEqual({ kind: 'resume', mode: 'new_only' });
     act(() => button('记录与设置').click());
+    act(() => button('管理').click());
     act(() => button('不再参考这件事').click());
     expect(fetchJson).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain('原始记录、已有任务和自动化保留');

@@ -182,6 +182,7 @@ describe('lazy route bundles', () => {
       '/api/home',
       '/api/home/observation/command',
       '/api/home/observation/trial',
+      '/api/home/observation/prepare',
       '/api/home/observation/discussion',
       '/api/home/routines',
       '/api/home/routines/adopt',

@@ -8,6 +8,7 @@ import type { ObservationCommandRequest } from '@xopcai/gateway-contract';
 
 import { appendTranscriptEntry, closeXopcDatabase, getXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
+import { observationStarters } from '../observation-starters.js';
 import { HomeObservation } from '../observation.js';
 import { HomeIntelligenceHost } from '../host.js';
 import { HomeSnapshotBuilder, type HomeContextSnapshot } from '../snapshot.js';
@@ -29,6 +30,21 @@ function observer(canRead = (_id: string) => true) { return new HomeObservation(
 describe('long-term Home observation', () => {
   beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
+
+  it('extracts actual user requests before truncation and repairs old context-only excerpts on read',()=>{
+    const wrapped=`<source_contexts>\n<source_context kind="device_context">${'Frozen device metadata. '.repeat(150)}</source_context>\n</source_contexts>\n\n<user_message>\n[2026-11-10 13:45 GMT+8] 审查 today-cloud PR 10766\n</user_message>`;
+    source(wrapped);source('Review PR 11622');source('hello');
+    const o=observer();cmd(o,{kind:'start',backfillDays:30});o.collect(now);
+    const entries=o.state().topics.flatMap(t=>t.entries);
+    expect(entries.some(e=>e.text==='审查 today-cloud PR 10766')).toBe(true);
+    expect(JSON.stringify(o.context(now))).not.toContain('device_context');
+    const original=entries.find(e=>e.text.includes('10766'))!;
+    getXopcDatabase().db.prepare('UPDATE home_observation_entries SET text=? WHERE id=?').run(wrapped.slice(0,1000),original.id);
+    expect(o.state().topics.flatMap(t=>t.entries).find(e=>e.id===original.id)!.text).toBe('审查 today-cloud PR 10766');
+    const starters=observationStarters(o.state());
+    expect(starters).toHaveLength(1);expect(starters[0]).toMatchObject({kind:'pr_review',requestCount:2});
+    cmd(o,{kind:'pause'});expect(observationStarters(o.state())).toEqual([]);
+  });
 
   it('recovers authoritative rows without notifications and does not count replays', () => {
     source(); const first = observer(); cmd(first, { kind: 'start', backfillDays: 30 });

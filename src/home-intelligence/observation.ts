@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import type { HomeEvidence, HomeOpportunity, ObservationCommandRequest, ObservationState } from '@xopcai/gateway-contract';
 
+import { stripRuntimeContextFromUserMessage } from '../session/user-message-display.js';
 import { runSqliteSavepoint } from '../storage/sqlite/transaction.js';
 import { inferMemorySensitivity } from '../agent/memory/sensitivity.js';
 import { OWNER_LEARNING_SESSION_SQL } from '../memory-learning/transcript-source.js';
@@ -14,12 +15,17 @@ type SourceRow = { conversation_id: string; transcript_id: string; seq: number; 
 
 export class ObservationConflictError extends Error {}
 
+function cleanWorkText(text: string): string {
+  const clean = stripRuntimeContextFromUserMessage(text).trim();
+  return /<\/?(?:source_contexts?|user_message|xopc_task_execution)\b/i.test(clean) ? '' : clean.slice(0, 1000);
+}
+
 function textContent(payload: string): string {
   try {
     const value = JSON.parse(payload);
     const content = value?.content;
-    return (typeof content === 'string' ? content : Array.isArray(content)
-      ? content.filter((part: { type?: string }) => part.type === 'text').map((part: { text?: string }) => part.text ?? '').join('\n') : '').trim().slice(0, 1000);
+    return cleanWorkText(typeof content === 'string' ? content : Array.isArray(content)
+      ? content.filter((part: { type?: string }) => part.type === 'text').map((part: { text?: string }) => part.text ?? '').join('\n') : '');
   } catch { return ''; }
 }
 
@@ -221,7 +227,11 @@ export class HomeObservation {
       lastProcessedAt: session.last_processed_at, topics: topics.filter(t => this.readable(t.source_key)).map(t => ({
         id: t.id, title: t.title, projectId: t.project_id ?? undefined, revision: t.revision,
         entries: (this.db.prepare('SELECT id,kind,text,source_ref AS sourceRef,created_at AS createdAt FROM home_observation_entries WHERE topic_id=? ORDER BY created_at DESC,rowid DESC LIMIT 20').all(t.id) as ObservationState['topics'][number]['entries'])
-          .filter(e => !e.sourceRef || this.readable(e.sourceRef)).reverse(),
+          .filter(e => !e.sourceRef || this.readable(e.sourceRef)).map(e => {
+            if (e.kind !== 'user_work') return e;
+            const original = this.db.prepare(`SELECT payload_json FROM transcript_entries WHERE entry_id=(SELECT source_key FROM home_observation_entries WHERE id=?)`).get(e.id) as {payload_json:string}|undefined;
+            return {...e,text:original ? textContent(original.payload_json) : cleanWorkText(e.text)};
+          }).filter(e => e.text && !/<\/?(?:source_contexts?|xopc_task_execution)\b/i.test(e.text)).reverse(),
         feedback: this.db.prepare('SELECT id,text,scope,status,created_at AS createdAt FROM home_observation_feedback WHERE topic_id=? ORDER BY created_at DESC LIMIT 40').all(t.id) as ObservationState['topics'][number]['feedback'],
         trials: this.db.prepare(`SELECT t.task_id AS taskId,t.title,t.phase,t.resolution,t.version AS taskVersion FROM home_observation_trials l
           JOIN tasks t ON t.task_id=l.task_id WHERE l.topic_id=? ORDER BY l.created_at DESC LIMIT 10`).all(t.id) as ObservationState['topics'][number]['trials'],

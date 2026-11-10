@@ -111,6 +111,27 @@ it('connects durable observation, scoped feedback and private Task trials throug
     expect((await routineCommand({kind:'adopt_method',version:2}).then(r=>r.json())).adoptedVersion).toBe(2);
     expect((await routineCommand({kind:'rollback',version:1}).then(r=>r.json())).adoptedVersion).toBe(1);
     expect((await routineCommand({kind:'pause'}).then(r=>r.json())).status).toBe('paused');
+    const reviewSource = randomUUID();
+    createConversation({agentId:'main',sourceChannel:'webchat',name:'PR reviews',routing:{source:'webchat',accountId:'default',agentId:'main',peerKind:'direct',peerId:'owner'}},'',reviewSource);
+    appendTranscriptEntry(reviewSource,{role:'user',content:'Review PR 11622',timestamp:Date.now()});
+    appendTranscriptEntry(reviewSource,{role:'user',content:'审查 today-cloud PR 10766',timestamp:Date.now()});
+    host.observation.collect();
+    const preparedState=host.getObservation();
+    const starter=preparedState.starters.find(s=>s.kind==='pr_review')!;
+    expect(starter.requestCount).toBe(2);
+    const prepareRequest={kind:starter.kind,topicIds:starter.topicIds,locale:'zh',expectedRevision:preparedState.revision,idempotencyKey:'prepare-draft'};
+    expect((await fetch(`${base}/api/home/observation/prepare`,{method:'POST',body:'{}'})).status).toBe(401);
+    expect((await post('/api/home/observation/prepare',{...prepareRequest,topicIds:['unreadable']})).status).toBe(409);
+    const preparedResponse=await post('/api/home/observation/prepare',prepareRequest);
+    const prepared=await preparedResponse.json();expect(preparedResponse.status,JSON.stringify(prepared)).toBe(200);
+    expect(await post('/api/home/observation/prepare',prepareRequest).then(r=>r.json())).toEqual(prepared);
+    const preparedTask=new TaskRepository().get(prepared.taskId)!;
+    expect(preparedTask.contract!.expectedOutputs).toEqual(['PR 审查准备清单']);
+    expect(preparedTask.contract!.outputDestinations).toEqual([]);
+    expect(preparedTask.body).toContain('10766');
+    expect(host.getObservation().topics.find(t=>t.id===starter.topicIds[0])!.trials[0]!.taskId).toBe(prepared.taskId);
+    expect((await post('/api/home/observation/prepare',{...prepareRequest,kind:'issue_digest'})).status).toBe(409);
+
 
   } finally {
     host.stop(); await automations.stop(); await new Promise<void>((resolve, reject) => listener.close(e => e ? reject(e) : resolve()));
