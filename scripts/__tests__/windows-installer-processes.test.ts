@@ -155,6 +155,14 @@ describe.skipIf(!available)('Windows installer PowerShell process handling', () 
     expect(result.recorded).toEqual([2]);
   });
 
+  it('preserves real CIM date identities through JSON snapshots', () => {
+    const helper = { ...processRow(2, join(directory, 'resources', 'custom-helper.exe'), 1),
+      Name: 'custom-helper.exe', CreationDate: '2026-11-10T01:00:00.123Z' };
+    const result = run('sequence', [processRow(1, executable), helper]);
+    expect(result.status).toBe(0);
+    expect(result.recorded).toEqual([2]);
+  });
+
   it('does not kill a PID whose creation time changed after inspection', () => {
     const result = run('force', [processRow(1, executable)], 1);
     expect(result.status).toBe(10);

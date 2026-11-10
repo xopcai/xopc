@@ -30,7 +30,8 @@ function Get-RegisteredDirectories {
   }
 }
 function Get-CreationIdentity($Process) {
-  if ($Process.CreationDate -is [DateTime]) { return $Process.CreationDate.ToUniversalTime().ToString('o') }
+  # A prefix prevents ConvertFrom-Json from coercing ISO timestamps back to DateTime.
+  if ($Process.CreationDate -is [DateTime]) { return 'utc-ticks:' + $Process.CreationDate.ToUniversalTime().Ticks }
   return [string]$Process.CreationDate
 }
 function Same-Identity($Current, $Saved) {
