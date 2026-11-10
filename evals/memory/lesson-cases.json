@@ -1,0 +1,6 @@
+[
+  {"id":"verified-cache-recovery","condition":"Only when the Atlas staging cache is stale.","action":"Removed the Atlas staging cache.","verification":"Atlas staging tests passed after clearing the stale cache.","verificationRole":"toolResult","expectedReusable":true},
+  {"id":"failed-proposed-fix","condition":"Only when the Atlas staging cache is stale.","action":"Removed the Atlas staging cache.","verification":"Atlas staging tests failed after clearing the stale cache. The cause is unknown.","verificationRole":"toolResult","expectedReusable":false},
+  {"id":"assistant-success-not-verification","condition":"仅在星河服务预发布缓存过期时适用。","action":"清除了星河服务的预发布缓存。","verification":"星河服务预发布测试全部通过。","verificationRole":"assistant","expectedReusable":false},
+  {"id":"verified-zh","condition":"仅在星河服务预发布缓存过期时适用。","action":"清除了星河服务的预发布缓存。","verification":"清除过期缓存后，星河服务预发布测试全部通过。","verificationRole":"toolResult","expectedReusable":true}
+]

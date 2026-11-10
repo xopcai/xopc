@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { assessAssertionSupport, assessOwnerSupport, hasOwnerMemoryDirective, supportsResponseApplicability } from './evidence-policy.js';
 
+import { WorkReviewSchema, type WorkReview } from '../../memory-learning/work-review.js';
+
 import { WorkCandidateSchema, type WorkCandidate } from '../../memory-learning/work-candidate.js';
 
 import type { AssertionCandidate, AssertionAuthority } from '../domain.js';
@@ -55,6 +57,7 @@ export interface ParsedCollaborationRuleCandidate {
 
 export interface UserModelInterpretation {
   knowledge?: WorkCandidate[];
+  knowledgeReviews?: WorkReview[];
   knowledgeDeletions?: Array<{ targetKnowledgeIds: string[]; boundary: string; reread?: { subject: string; property: 'date_time' | 'price' }; evidenceRefs: string[]; evidence: Array<{ ref: string; quote: string }>; retained?: Array<{ targetKnowledgeId: string; spans: string[] }> }>;
   intent: UserModelCaptureIntent;
   assertions: ParsedAssertionOperation[];
@@ -143,6 +146,7 @@ const CollaborationRuleSchema = z.object({
 }).merge(GroundingSchema).strict();
 
 const InterpretationSchema = z.object({
+  knowledgeReviews: z.array(WorkReviewSchema).max(4).default([]),
   knowledge: z.array(WorkCandidateSchema).max(8).default([]),
   knowledgeDeletions: z.array(z.object({
     targetKnowledgeIds: z.array(z.string().min(1)).max(16),
@@ -332,6 +336,7 @@ export function parseUserModelInterpretation(
   return {
     rejectedCandidates,
     knowledge: parsed.knowledge,
+    knowledgeReviews: parsed.knowledgeReviews,
     knowledgeDeletions: parsed.knowledgeDeletions.flatMap(item => {
       const evidenceRefs = groundedEvidenceRefs(item, evidenceByRef);
       if (!evidenceRefs || (item.intent ?? parsed.intent) !== 'forget') return [];

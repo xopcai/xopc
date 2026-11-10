@@ -10,7 +10,9 @@ import { claimLearningJob, enqueueConversationLearning, PERSONAL_UNDERSTANDING_V
 import { writeKnowledgeItem, listKnowledgeItems } from '../../knowledge-memory/index.js';
 import { listUserAssertions, deleteUserAssertion } from '../../user-model/repository.js';
 import { buildExecutionContext } from '../../agent/context/execution-context.js';
+import { listContextExtractionOutputs } from '../../storage/sqlite/context-extraction-repository.js';
 import { runPersistentLearningJob } from '../../agent/background-review/run-background-review.js';
+import { applyWorkCandidates } from '../work-capture.js';
 
 const prompt = vi.hoisted(() => vi.fn());
 vi.mock('@earendil-works/pi-agent-core', () => ({ Agent: class {
@@ -40,6 +42,32 @@ const id = '4dffa204-0300-4d2d-89ce-55305490c550';
 describe('learning worker integration', () => {
   beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); seedTestAgentCatalog(); prompt.mockReset(); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
+  it('reviews original evidence in the existing model call and commits the repair with its audit and cursor', async () => {
+    ensureSessionRecord(id, '/workspace', { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' });
+    const text = 'Atlas timeout is 30 seconds only in staging; production stays at 5 seconds.';
+    const row = appendTranscriptEntry(id, { role: 'user', content: text, timestamp: Date.now() });
+    const result = applyWorkCandidates({ candidates: [{ kind: 'project_fact', topicKey: 'atlas', predicate: 'timeout.value', scope: 'workspace',
+      statement: 'Atlas timeout is 30 seconds.', confidence: 0.9, importance: 0.8, evidence: [{ ref: row.entry_id, quote: text }] }],
+      evidence: [{ ref: row.entry_id, role: 'user', text, createdAt: row.created_at }], conversationId: id, agentId: 'main',
+      workspaceId: '/workspace', processingPolicy: 'remote_allowed', runId: 'seed' })[0];
+    appendTranscriptEntry(id, { role: 'user', content: 'Correction: review the Atlas timeout summary.', timestamp: Date.now() });
+    appendTranscriptEntry(id, { role: 'assistant', content: 'Checking.', timestamp: Date.now() } as never);
+    prompt.mockResolvedValue(JSON.stringify({ intent: 'task', assertions: [], targetAssertionIds: [], knowledgeReviews: [{
+      targetId: result.objectId, action: 'revise', reason: 'qualifier_lost', replacement: text,
+      evidence: [{ ref: row.entry_id, quote: text }],
+    }], knowledge: [{ kind: 'project_fact', topicKey: 'atlas', predicate: 'timeout.value', scope: 'workspace',
+      statement: 'Atlas timeout is 30 seconds.', confidence: 0.9, importance: 0.8, evidence: [{ ref: row.entry_id, quote: text }] }] }));
+    const config = ConfigSchema.parse({}); enqueueConversationLearning(config, id, '/workspace', true);
+    await runPersistentLearningJob(claimLearningJob()!, () => config);
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(JSON.stringify(prompt.mock.calls[0][0])).toContain('complete original rows');
+    expect(listKnowledgeItems()[0].content).toBe(text);
+    const extraction = getSqliteDatabase().prepare('SELECT extraction_run_id FROM context_extraction_outputs').get()!;
+    expect(listContextExtractionOutputs(String(extraction.extraction_run_id))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reasonCode: 'review_revised' }),
+    ]));
+    expect(getSqliteDatabase().prepare('SELECT state FROM memory_learning_jobs').get()).toMatchObject({ state: 'succeeded' });
+  });
   it('learns native user transcription with its original provenance and keeps assistant speech non-authoritative', async () => {
     ensureSessionRecord(id, '', { agentId: 'main', sourceChannel: 'webchat', sourceChatId: '', sessionType: 'chat' });
     for (const [role, content] of [['user', 'Use SQLite for local deployment.'], ['assistant', 'A speculative assistant name.']] as const) {

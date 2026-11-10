@@ -48,6 +48,10 @@ process.env.XOPC_WORKSPACE = join(directory, 'workspace');
 process.env.XOPC_LOG_DIR = join(directory, 'logs');
 process.env.XOPC_LOG_LEVEL = 'warn';
 const { openXopcDatabase, closeXopcDatabase, getSqliteDatabase, setSessionConfig } = await import('../src/storage/sqlite/index.js');
+const { resolveModel } = await import('../src/providers/index.js');
+const { getModelThinking } = await import('../src/providers/model-thinking.js');
+const thinkingOptions = getModelThinking(resolveModel(model));
+const thinkingLevel = thinkingOptions.options.includes('off') ? 'off' : thinkingOptions.initialValue;
 const { AgentDefaultsSchema } = await import('../src/agent-config/index.js');
 const { AgentCatalogRepository } = await import('../src/agent-catalog/repository.js');
 const { createConversation } = await import('../src/storage/sqlite/conversation-repository.js');
@@ -64,7 +68,7 @@ const agentId = personalAgentId('local-owner');
 const primary = personalConversationId('local-owner');
 const workspace = join(directory, 'workspace'); mkdirSync(workspace, { recursive: true });
 const catalog = new AgentCatalogRepository();
-catalog.ensureInitialized(AgentDefaultsSchema.parse({ models: { ...defaults.models, chat: { primary: model, fallbacks: [] },
+catalog.ensureInitialized(AgentDefaultsSchema.parse({ runtime: { thinkingLevel }, models: { ...defaults.models, chat: { primary: model, fallbacks: [] },
   intents: { ...defaults.models.intents, understanding: { primary: model, fallbacks: [] } } } }));
 for (const id of [agentId, 'memory-observer']) {
   catalog.create({ id, enabled: true, workspace, profile: id === agentId ? { name: 'Memory acceptance', instructions: personalInstructions() } : { name: 'Isolated observer' } }, { ready: true });
@@ -75,7 +79,7 @@ function session(id: string = randomUUID(), options: { agent?: string; projectId
   createConversation({ agentId: agent, sourceChannel: 'webchat', name: 'Synthetic memory acceptance',
     ...(options.projectId ? { projectId: options.projectId } : {}),
     ...(agent === agentId ? { customData: { personalAgent: true } } : {}) }, options.cwd ?? workspace, id);
-  setSessionConfig(id, { modelOverride: model, fixedModel: true, thinkingLevel: 'off', workingDirectoryOverride: options.cwd ?? workspace,
+  setSessionConfig(id, { modelOverride: model, fixedModel: true, thinkingLevel, workingDirectoryOverride: options.cwd ?? workspace,
     ...(options.temporary ? { userContextMode: 'temporary' as const } : {}) }, options.cwd ?? workspace);
   return id;
 }
@@ -164,6 +168,7 @@ async function turn(name: string, content: string, conversationId = primary, cli
   const contextAudit = db.prepare('SELECT metrics_json FROM execution_context_runs WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1').get(conversationId);
   const entry = { assistantTexts, contextMetrics: contextAudit ? JSON.parse(String(contextAudit.metrics_json)) : undefined, name, conversationId, prompt: content, reply, tools, calls, state, durationMs: Date.now() - started, passed: false };
   report.cases.push(entry); persist(); console.log(JSON.stringify({ name, state: state?.status, reply, tools: tools.map(tool => ({ name: tool.name, status: tool.details?.status, error: tool.details?.error })), durationMs: entry.durationMs }));
+  assert.equal(state?.status, 'completed', `${name}: input failed: ${state?.error ?? 'no terminal result'}`);
   assert.equal(rows.filter(row => row.role === 'user').length, 1, `${name}: duplicate user transcript write`);
   const rawPayloads = rows.map(row => JSON.stringify(row));
   assert.equal(new Set(rawPayloads).size, rawPayloads.length, `${name}: duplicate transcript payload`);

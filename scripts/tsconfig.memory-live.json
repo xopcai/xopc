@@ -1,6 +1,6 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": { "noEmit": true, "allowImportingTsExtensions": true },
-  "include": ["./personal-memory-live-smoke.mts"],
+  "include": ["./personal-memory-live-smoke.mts", "./memory-work-review-benchmark.mts"],
   "exclude": ["../node_modules", "../dist"]
 }

@@ -16,10 +16,10 @@ it('persists distinct rejection causes by ordinal without persisting rejected va
   expect(listContextExtractionOutputs(run.run.id).map(row => row.reasonCode)).toEqual(['missing_project_scope', 'evidence_quote_mismatch', 'evidence_ref_missing']);
 });
 
-it.each(['用户喜欢冗长铺垫。', 'Prefers long introductions.', '习惯所有回答写十段。'])('does not admit a user profile through the work knowledge side channel: %s', statement => {
+it.each(['用户喜欢冗长铺垫。', 'Prefers long introductions.', '习惯所有回答写十段。'].flatMap(statement => [true, false].map(quoted => [statement, quoted] as const)))('does not admit a user profile through the work knowledge side channel: %s quoted=%s', (statement, quoted) => {
   const outputs = applyWorkCandidates({ candidates: [{ kind: 'note', topicKey: 'user-style', predicate: 'user.preference',
     statement, scope: 'workspace', confidence: 0.95, importance: 0.8, evidence: [{ ref: 'source', quote: '我喜欢冗长铺垫' }] }],
-    evidence: [{ ref: 'source', role: 'user', text: '请翻译客户原话：『我喜欢冗长铺垫』。', createdAt: 1 }],
+    evidence: [{ ref: 'source', role: 'user', text: quoted ? '请翻译客户原话：『我喜欢冗长铺垫』。' : '我喜欢冗长铺垫', createdAt: 1 }],
     conversationId: '', agentId: 'main', workspaceId: '/workspace', processingPolicy: 'local_only', runId: 'test' });
-  expect(outputs[0]).toMatchObject({ outcome: 'rejected', reasonCode: 'personal_profile_requires_assertion' });
+  expect(outputs[0]).toMatchObject({ outcome: 'rejected', reasonCode: quoted ? 'work_quote_not_owned' : 'personal_profile_requires_assertion' });
 });
