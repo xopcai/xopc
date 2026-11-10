@@ -36,6 +36,7 @@ function compile(name, body) {
 !addplugindir /x86-unicode "${quote(join(plugins, 'x86-unicode'))}"
 !include LogicLib.nsh
 !include MUI2.nsh
+!include FileFunc.nsh
 !define APP_EXECUTABLE_FILENAME "xopc.exe"
 !define INSTALL_REGISTRY_KEY "${registryKey}"
 !define UNINSTALL_REGISTRY_KEY "${uninstallKey}"
@@ -66,9 +67,9 @@ function processScript(mode, additionalArgs = []) {
     join(root, 'electron/resources/installer-processes.ps1'), '-Mode', mode, '-InstallDirectory', newDirectory,
     '-InstallRegistryKey', registryKey, '-InstallerProcessId', String(process.pid), '-WaitSeconds', '0', ...additionalArgs]);
 }
-async function keeper(path) {
+async function keeper(path, binary = 'keeper.exe') {
   mkdirSync(dirname(path), { recursive: true });
-  cpSync(join(fixture, 'keeper.exe'), path);
+  cpSync(join(fixture, binary), path);
   const child = spawn(path, ['/S'], { stdio: 'ignore' });
   processes.push(child);
   await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
@@ -122,7 +123,35 @@ Section "Uninstall"
   !insertmacro customCheckAppRunning
 SectionEnd
 `);
-  compile('keeper', 'Section\n Sleep 300000\nSectionEnd\n');
+  compile('keeper', `
+Function .onInit
+  \${GetParameters} $0
+  StrCmp $0 "--quit-for-install" 0 +2
+    Quit
+FunctionEnd
+Section
+  Sleep 300000
+SectionEnd
+`);
+  compile('graceful', `
+Function .onInit
+  \${GetParameters} $0
+  StrCmp $0 "--quit-for-install" 0 done
+  \${GetParent} "$EXEPATH" $1
+  FileOpen $2 "$1\\quit-request" w
+  FileClose $2
+  Quit
+  done:
+FunctionEnd
+Section
+  \${GetParent} "$EXEPATH" $1
+  loop:
+  IfFileExists "$1\\quit-request" done
+  Sleep 100
+  Goto loop
+  done:
+SectionEnd
+`);
   report.compiled = true;
   report.checks.push('legacy NSIS, patched upgrade and new uninstall branches compile');
   if (process.argv.includes('--compile-only')) {
@@ -149,6 +178,13 @@ SectionEnd
     assert.equal(processScript('check').status, 10, 'orphaned helper must block replacement');
     assert.equal(processScript('force').status, 0, 'must reap helper without its parent');
     report.checks.push('orphaned native helper detected and stopped');
+    await keeper(join(oldDirectory, 'xopc.exe'), 'graceful.exe');
+    assert.equal(run(join(fixture, 'upgrade.exe'), ['/S']).status, 0, 'silent updates must request and await graceful exit');
+    assert.ok(!existsSync(join(oldDirectory, 'legacy-marker')));
+    assert.ok(existsSync(join(newDirectory, 'new-marker')));
+    rmSync(join(newDirectory, 'new-marker'));
+    writeFileSync(join(oldDirectory, 'legacy-marker'), 'preserve on failed upgrade');
+    report.checks.push('silent upgrade requests graceful exit instead of default-cancelling');
     writeFileSync(join(oldDirectory, 'fail-uninstall'), 'fail');
     assert.equal(run(join(fixture, 'upgrade.exe'), ['/S']).status, 2, 'legacy uninstall failure must abort upgrade');
     assert.ok(existsSync(join(oldDirectory, 'legacy-marker')));
