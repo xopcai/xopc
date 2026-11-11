@@ -24,7 +24,8 @@ struct TaskDetailView: View {
                         }
                     }
                     if let receipt = detail.receipts?.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) }),
-                       let summary = receipt.summary, !summary.isEmpty {
+                       let summary = receipt.summary, !summary.isEmpty
+                    {
                         Section("执行结果") { Text(summary).textSelection(.enabled) }
                     }
                     if let objective = detail.task.contract?.objective ?? detail.task.body, !objective.isEmpty {
@@ -59,7 +60,9 @@ struct TaskDetailView: View {
         }
         .task(id: taskID) { await load() }
         .onChange(of: showingConversation) { _, showing in
-            if !showing { Task { await load() } }
+            if !showing {
+                Task { await load() }
+            }
         }
     }
 
@@ -71,6 +74,7 @@ struct TaskDetailView: View {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct TaskConversationView: View {
     let configuration: GatewayConfiguration
     let taskID: String
@@ -146,7 +150,9 @@ struct TaskConversationView: View {
         }
         .environment(\.openURL, OpenURLAction { url in
             if case let .route("tasks", id) = ChatMessageLink.resolve(url.absoluteString) {
-                if id != taskID { nestedTaskID = id }
+                if id != taskID {
+                    nestedTaskID = id
+                }
             } else {
                 openURL(url)
             }

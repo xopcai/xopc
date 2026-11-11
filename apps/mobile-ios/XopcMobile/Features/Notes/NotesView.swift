@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import SwiftUI
 
 // swiftlint:disable:next type_body_length
@@ -42,7 +43,7 @@ struct NotesView: View {
             .accessibilityIdentifier("library-category")
             .padding(.horizontal, 20)
             List {
-                if section.showsNotes && (pendingVoiceNote != nil || pendingVoiceNoteLoadFailed) {
+                if section.showsNotes, pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
                     Button {
                         presentedSheet = .voice
                     } label: {
@@ -58,12 +59,15 @@ struct NotesView: View {
                     }
                     .accessibilityHint("打开本地待上传录音")
                 }
-                if section == .all && !isLoading && !isSearchingFiles && !deliveriesLoading
-                    && error == nil && fileSearchError == nil && deliveryError == nil && notes.isEmpty
-                    && visibleFiles.isEmpty && visibleDeliveries.isEmpty && pendingVoiceNote == nil {
+                if section == .all, !isLoading, !isSearchingFiles, !deliveriesLoading,
+                   error == nil, fileSearchError == nil, deliveryError == nil, notes.isEmpty,
+                   visibleFiles.isEmpty, visibleDeliveries.isEmpty, pendingVoiceNote == nil
+                {
                     ContentUnavailableView("没有匹配的资料", systemImage: "folder")
                 }
-                if section == .notes { statusPicker }
+                if section == .notes {
+                    statusPicker
+                }
                 if section.showsNotes {
                     if isLoading, notes.isEmpty {
                         loadingRows
@@ -84,10 +88,10 @@ struct NotesView: View {
                         }
                     }
                 }
-                if section.showsFiles && (section == .files || !visibleFiles.isEmpty || isSearchingFiles || fileSearchError != nil) {
+                if section.showsFiles, section == .files || !visibleFiles.isEmpty || isSearchingFiles || fileSearchError != nil {
                     fileSection
                 }
-                if section.showsDeliveries && (section == .deliveries || !visibleDeliveries.isEmpty || deliveriesLoading || deliveryError != nil) {
+                if section.showsDeliveries, section == .deliveries || !visibleDeliveries.isEmpty || deliveriesLoading || deliveryError != nil {
                     deliverySection
                 }
             }
@@ -172,7 +176,9 @@ struct NotesView: View {
             _ = await (notes, files)
         }
         .onChange(of: section) {
-            if section != .notes { status = "" }
+            if section != .notes {
+                status = ""
+            }
         }
         .alert("无法读取笔记", isPresented: errorBinding) {
             Button("重试") { Task { await load() } }
@@ -214,7 +220,9 @@ struct NotesView: View {
 
     private var fileSection: some View {
         Section("文件") {
-            if isSearchingFiles { ProgressListSkeleton() }
+            if isSearchingFiles {
+                ProgressListSkeleton()
+            }
             if let fileSearchError {
                 Text(fileSearchError).foregroundStyle(.secondary)
                 Button("重试") { Task { await loadMatchingFiles() } }
@@ -235,7 +243,9 @@ struct NotesView: View {
 
     private var deliverySection: some View {
         Section("近期成果") {
-            if deliveriesLoading && deliveries.isEmpty { ProgressListSkeleton() }
+            if deliveriesLoading, deliveries.isEmpty {
+                ProgressListSkeleton()
+            }
             if let deliveryError {
                 Text(deliveryError).foregroundStyle(.secondary)
                 Button("重试") { Task { await loadDeliveries() } }
@@ -243,7 +253,7 @@ struct NotesView: View {
             ForEach(visibleDeliveries.prefix(section == .all && search.isEmpty ? 3 : deliveries.count)) { item in
                 HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation)
             }
-            if section == .deliveries && visibleDeliveries.isEmpty && !deliveriesLoading && deliveryError == nil {
+            if section == .deliveries, visibleDeliveries.isEmpty, !deliveriesLoading, deliveryError == nil {
                 Text("没有匹配的近期成果").foregroundStyle(.secondary)
             }
         }
@@ -375,7 +385,11 @@ struct NotesView: View {
             let files = try await query.isEmpty ? client.fetchRecentFiles() : client.searchFiles(query: query)
             guard revision == fileSearchRevision,
                   search.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
-            if query.isEmpty { recentFiles = files } else { matchedFiles = files }
+            if query.isEmpty {
+                recentFiles = files
+            } else {
+                matchedFiles = files
+            }
             fileSearchError = nil
         } catch is CancellationError {
         } catch {
@@ -470,10 +484,21 @@ struct NoteRow: View {
 private enum LibrarySection: String, CaseIterable, Identifiable {
     case all, notes, files, deliveries
 
-    var id: Self { self }
-    var showsNotes: Bool { self == .all || self == .notes }
-    var showsFiles: Bool { self == .all || self == .files }
-    var showsDeliveries: Bool { self == .all || self == .deliveries }
+    var id: Self {
+        self
+    }
+
+    var showsNotes: Bool {
+        self == .all || self == .notes
+    }
+
+    var showsFiles: Bool {
+        self == .all || self == .files
+    }
+
+    var showsDeliveries: Bool {
+        self == .all || self == .deliveries
+    }
 
     var title: LocalizedStringKey {
         switch self {

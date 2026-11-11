@@ -1932,6 +1932,7 @@ final class GatewayPairingE2EUITests: XCTestCase {
 }
 
 @MainActor
+// swiftlint:disable:next type_body_length
 final class MobileLayoutParityUITests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -1966,7 +1967,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.navigationBars["任务详情"].buttons.firstMatch.tap()
 
         let projects = app.buttons["项目"].firstMatch
-        if !projects.isHittable { app.swipeUp() }
+        if !projects.isHittable {
+            app.swipeUp()
+        }
         XCTAssertTrue(projects.waitForExistence(timeout: 5))
         projects.tap()
         let project = app.staticTexts["资料测试项目"]

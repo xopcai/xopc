@@ -27,7 +27,9 @@ struct ComposerErrorRecoveryTests {
         let recorder = VoiceRecorder()
         let permission = ComposerPermissionGate()
         let starting = Task { await recorder.start(requestPermission: { await permission.wait() }) }
-        while !(await permission.waiting) { await Task.yield() }
+        while await !(permission.waiting) {
+            await Task.yield()
+        }
         recorder.cancel()
         await permission.resolve()
         await starting.value
@@ -39,7 +41,15 @@ struct ComposerErrorRecoveryTests {
 
 private actor ComposerPermissionGate {
     private var continuation: CheckedContinuation<Bool, Never>?
-    var waiting: Bool { continuation != nil }
-    func wait() async -> Bool { await withCheckedContinuation { continuation = $0 } }
-    func resolve() { continuation?.resume(returning: true); continuation = nil }
+    var waiting: Bool {
+        continuation != nil
+    }
+
+    func wait() async -> Bool {
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func resolve() {
+        continuation?.resume(returning: true); continuation = nil
+    }
 }
