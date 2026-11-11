@@ -1,8 +1,9 @@
 import type { ChannelStatusAdapter } from '@xopcai/xopc/channels/plugin-types.js';
 
+import { probeFeishuBot } from '../transport/client/bot-info.js';
 import type { ResolvedFeishuAccount } from '../state/accounts.js';
 
-export function createFeishuStatusAdapter(): ChannelStatusAdapter<ResolvedFeishuAccount> {
+export function createFeishuStatusAdapter(getState: (accountId: string) => 'online' | 'connecting' | 'error' | undefined = () => undefined): ChannelStatusAdapter<ResolvedFeishuAccount> {
   return {
     defaultRuntime: {
       accountId: 'default',
@@ -15,17 +16,20 @@ export function createFeishuStatusAdapter(): ChannelStatusAdapter<ResolvedFeishu
       channelId: 'feishu',
       enabled: account.enabled,
       configured: account.configured,
-      status: account.configured ? 'online' : 'unconfigured',
+      status: account.configured ? getState(account.accountId) ?? 'offline' : 'unconfigured',
     }),
-    resolveAccountState: ({ configured, enabled }) => {
+    resolveAccountState: ({ account, configured, enabled }) => {
       if (!enabled) return 'disabled';
       if (!configured) return 'error';
-      return 'online';
+      const state = getState(account.accountId);
+      return state === 'online' || state === 'error' ? state : 'offline';
     },
     probeAccount: async ({ account, timeoutMs, cfg }) => {
-      // Best-effort: ensure credentials present. Real probe will call Feishu API later.
+      const info = await probeFeishuBot(account, AbortSignal.timeout(Math.max(1000, Math.min(timeoutMs ?? 10_000, 30_000))))
+        .catch(() => ({ ok: false as const }));
       return {
-        ok: account.configured,
+        ...info,
+        state: getState(account.accountId),
         timeoutMs,
         domain: account.domain,
         mode: account.connectionMode,

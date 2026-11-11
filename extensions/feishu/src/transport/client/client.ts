@@ -2,7 +2,12 @@ import type { ResolvedFeishuAccount } from '../../state/accounts.js';
 import { loadFeishuLarkSdk } from './lark-sdk.js';
 import { createFeishuLarkSdkPinoLogger } from './lark-sdk-logger.js';
 
-export function createFeishuClient(account: ResolvedFeishuAccount): {
+export function createFeishuClient(account: ResolvedFeishuAccount, lifecycle?: {
+  onReady?: () => void;
+  onError?: (error: unknown) => void;
+  onReconnecting?: () => void;
+  onReconnected?: () => void;
+}): {
   wsClient: any;
   dispatcher: any;
   api: any;
@@ -17,23 +22,24 @@ export function createFeishuClient(account: ResolvedFeishuAccount): {
     appSecret: account.appSecret,
     logger: sdkLogger,
     loggerLevel: l.LoggerLevel.info,
-    ...(apiBaseUrl ? { baseURL: apiBaseUrl } : {}),
+    ...(apiBaseUrl ? { domain: apiBaseUrl } : {}),
   });
 
   const dispatcher = new l.EventDispatcher({ verifyChallenge: false, logger: sdkLogger, loggerLevel: l.LoggerLevel.info } as any);
   const wsClient = new l.WSClient({
     appId: account.appId,
     appSecret: account.appSecret,
-    eventDispatcher: dispatcher,
+    ...lifecycle,
+    handshakeTimeoutMs: 15_000,
     logger: sdkLogger,
     loggerLevel: l.LoggerLevel.info,
-    ...(apiBaseUrl ? { baseURL: apiBaseUrl } : {}),
+    ...(apiBaseUrl ? { domain: apiBaseUrl } : {}),
   });
 
   return { wsClient, dispatcher, api };
 }
 
-function resolveFeishuBaseUrl(domain: string): string | undefined {
+export function resolveFeishuBaseUrl(domain: string): string | undefined {
   if (domain === 'feishu') {
     return 'https://open.feishu.cn';
   }

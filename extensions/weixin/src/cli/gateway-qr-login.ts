@@ -13,6 +13,7 @@ import {
   saveWeixinAccount,
 } from "../auth/accounts.js";
 import {
+  cancelWeixinQrLogin,
   DEFAULT_ILINK_BOT_TYPE,
   getWeixinActiveLoginSnapshot,
   startWeixinLoginWithQr,
@@ -39,6 +40,17 @@ type TerminalRecord =
   | { phase: "done"; ok: false; message: string };
 
 const completedSessions = new Map<string, TerminalRecord>();
+const deferredLogins = new Map<string, { accountId: string; ownerId?: string; persist: () => void; cleanup: () => void }>();
+
+export function getDeferredWeixinLogin(id: string) {
+  return deferredLogins.get(id);
+}
+
+export function cancelWeixinGatewayQrLogin(id: string): void {
+  cancelWeixinQrLogin(id);
+  deferredLogins.delete(id);
+  completedSessions.delete(id);
+}
 
 function loadConfigSnapshot(configPath: string | undefined, fallback: Config | undefined): Config {
   if (fallback) return fallback;
@@ -57,7 +69,10 @@ function saveConfigSnapshot(configPath: string | undefined, config: Config): voi
 
 function rememberCompleted(conversationId: string, state: TerminalRecord): void {
   completedSessions.set(conversationId, state);
-  setTimeout(() => completedSessions.delete(conversationId), 10 * 60_000);
+  setTimeout(() => {
+    completedSessions.delete(conversationId);
+    deferredLogins.delete(conversationId);
+  }, 5 * 60_000).unref();
 }
 
 export function getWeixinGatewayQrLoginStatus(conversationId: string): WeixinGatewayQrLoginStatus {
@@ -91,6 +106,7 @@ export type WeixinGatewayQrLoginStartOptions = {
   verbose?: boolean;
   /** Config snapshot from the already-running gateway; avoids loading the heavy config loader from Electron dynamic extension code. */
   initialConfig?: Config;
+  deferPersistence?: boolean;
   /** After credentials + config file are written (or login failed after wait). */
   onPersisted?: (r: { ok: boolean; accountId?: string; message: string; config?: Config }) => void | Promise<void>;
 };
@@ -109,6 +125,7 @@ export async function startWeixinGatewayQrLogin(
 
   const startResult = await startWeixinLoginWithQr({
     accountId: opts.account?.trim() || undefined,
+    freshSession: opts.deferPersistence,
     botType: DEFAULT_ILINK_BOT_TYPE,
     routeTag,
     verbose,
@@ -139,16 +156,26 @@ export async function startWeixinGatewayQrLogin(
 
     const normalizedId = normalizeWeixinAccountId(waitResult.accountId);
 
-    try {
+    const persist = () => {
       saveWeixinAccount(normalizedId, {
         token: waitResult.botToken,
         baseUrl: waitResult.baseUrl?.trim() || baseUrl,
         userId: waitResult.userId,
       });
       registerWeixinAccountId(normalizedId);
+    };
+    const cleanup = () => {
       if (waitResult.userId) {
         clearStaleAccountsForUserId(normalizedId, waitResult.userId, clearContextTokensForAccount);
       }
+    };
+    if (opts.deferPersistence) {
+      deferredLogins.set(conversationId, { accountId: normalizedId, ownerId: waitResult.userId, persist, cleanup });
+      rememberCompleted(conversationId, { phase: "done", ok: true, accountId: normalizedId });
+      return;
+    }
+    try {
+      persist();
     } catch (err) {
       const message = `Saved login failed: ${String(err)}`;
       logger.error(message);
@@ -158,8 +185,9 @@ export async function startWeixinGatewayQrLogin(
     }
 
     try {
-      const nextCfg = mergeWeixinConfigAfterLogin(cfg as Config, normalizedId);
+      const nextCfg = mergeWeixinConfigAfterLogin(cfg as Config, normalizedId, waitResult.userId);
       saveConfigSnapshot(configPath, nextCfg);
+      cleanup();
       await opts.onPersisted?.({ ok: true, accountId: normalizedId, message: "OK", config: nextCfg });
       rememberCompleted(conversationId, { phase: "done", ok: true, accountId: normalizedId });
       return;
@@ -169,7 +197,9 @@ export async function startWeixinGatewayQrLogin(
 
     await opts.onPersisted?.({ ok: true, accountId: normalizedId, message: "OK", config: cfg as Config });
     rememberCompleted(conversationId, { phase: "done", ok: true, accountId: normalizedId });
-  })();
+  })().catch(() => {
+    rememberCompleted(conversationId, { phase: "done", ok: false, message: "Weixin login failed." });
+  });
 
   return { ok: true, conversationId, qrcodeUrl: startResult.qrcodeUrl };
 }

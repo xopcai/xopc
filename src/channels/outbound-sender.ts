@@ -15,6 +15,7 @@
  * error semantics easier to reason about.
  */
 
+import type { InboundDelivery } from '../infra/bus/index.js';
 import type { Config } from '../config/schema.js';
 
 import type { OutboundMessage } from './transport-types.js';
@@ -22,6 +23,7 @@ import { INTERNAL_OUTBOUND_DROP_CHANNEL } from './internal-outbound.js';
 import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
 import { maybeApplyTtsToPayload } from '../voice/tts/payload.js';
 import { deliverOutboundMessage } from './outbound/deliver.js';
+import { ChannelMessageJournal } from './message-journal.js';
 import { OutboundPersistStore } from './outbound/persist-store.js';
 import type { ChannelPluginRegistry } from './plugin-registry.js';
 import { createLogger } from '../utils/logger.js';
@@ -54,6 +56,9 @@ export class ChannelOutboundSender {
   private readonly opts: ChannelOutboundSenderOptions;
   private hooks?: OutboundChannelHooks;
   private persistStore?: OutboundPersistStore;
+  private replyJournal?: ChannelMessageJournal<OutboundMessage, never>;
+  private replyRecoveryDone = false;
+  private readonly replyReceipts = new WeakMap<OutboundMessage, string>();
 
   constructor(opts: ChannelOutboundSenderOptions) {
     this.opts = opts;
@@ -65,6 +70,47 @@ export class ChannelOutboundSender {
 
   enablePersistence(agentId: string): void {
     this.persistStore = new OutboundPersistStore(agentId);
+    this.replyJournal = new ChannelMessageJournal<OutboundMessage, never>('agent-reply', agentId);
+    this.replyRecoveryDone = false;
+  }
+
+  persistReply(message: OutboundMessage, delivery: InboundDelivery): boolean {
+    if (!this.replyJournal) return true;
+    this.recoverInterruptedReplies();
+    const id = JSON.stringify([message.channel, delivery.scope, delivery.id]);
+    const accepted = this.replyJournal.accept([{ id, payload: message }]).length > 0;
+    if (accepted) this.replyReceipts.set(message, id);
+    return accepted;
+  }
+
+  async sendQueued(message: OutboundMessage): Promise<void> {
+    const id = this.replyReceipts.get(message);
+    if (!id || !this.replyJournal) {
+      await this.send(message);
+      return;
+    }
+    this.replyReceipts.delete(message);
+    await this.dispatchReply(id, message);
+  }
+
+  private async dispatchReply(id: string, message: OutboundMessage): Promise<void> {
+    const journal = this.replyJournal;
+    if (!journal?.begin(id)) return;
+    try {
+      await this.send(message, { skipPersist: true, requireDelivery: true });
+    } catch {
+      journal.finish(id, 'interrupted');
+      log.warn({ channel: message.channel, deliveryId: id }, 'Channel reply delivery could not be confirmed');
+      return;
+    }
+    journal.finish(id, 'completed');
+  }
+
+  private recoverInterruptedReplies(): void {
+    if (!this.replyJournal || this.replyRecoveryDone) return;
+    const interrupted = this.replyJournal.recoverInterrupted();
+    this.replyRecoveryDone = true;
+    if (interrupted) log.warn({ interrupted }, 'Channel replies interrupted during delivery');
   }
 
   /**
@@ -73,6 +119,13 @@ export class ChannelOutboundSender {
    * land on disk.
    */
   async replayPending(): Promise<void> {
+    const journal = this.replyJournal;
+    if (journal) {
+      this.recoverInterruptedReplies();
+      for (const { id, payload } of journal.pending(500)) {
+        await this.dispatchReply(id, payload);
+      }
+    }
     if (!this.persistStore) return;
     const pending = [...this.persistStore.peek()];
     for (const p of pending) {
@@ -168,7 +221,7 @@ export class ChannelOutboundSender {
         'Outbound send threw',
       );
       // No queueId means the persist-store was never engaged — caller is responsible for retrying.
-      if (!queueId) throw err;
+      if (!queueId || options?.requireDelivery) throw err;
     }
   }
 

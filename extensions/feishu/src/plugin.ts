@@ -45,6 +45,7 @@ import { createFeishuStreamingAdapter } from './streaming/streaming-adapter.js';
 import { readFrameworkAllowFromList } from './auth/pairing.js';
 import { feishuGatewaySetupActions } from './adapters/gateway-setup.js';
 import { handleFeishuChannelMessageAction } from './actions/message-action-handler.js';
+import { feishuInboundScope } from './transport/reliability/message-ingress.js';
 import { createFeishuInboundPipeline, type FeishuInboundWork } from './transport/reliability/inbound-pipeline.js';
 
 const log = createLogger('FeishuPlugin');
@@ -102,11 +103,9 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   readonly pairing = createStandardPairingAdapter('feishu');
 
   onboard: ChannelOnboardAdapter = {
-    isConfigured: (config) => {
-      const feishu = config.channels?.feishu as Record<string, unknown> | undefined;
-      const appId = typeof feishu?.appId === 'string' ? feishu.appId.trim() : '';
-      const appSecret = typeof feishu?.appSecret === 'string' ? feishu.appSecret.trim() : '';
-      return feishu?.enabled === true && Boolean(appId && appSecret);
+    isConfigured: config => {
+      const account = resolveFeishuAccount(config);
+      return account.enabled && account.configured;
     },
     configure: async (config) => {
       const { feishuOnboardAdapter } = await import('./adapters/onboard-cli.js');
@@ -126,6 +125,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   private bus!: MessageBus;
   private cfg!: Config;
   private abortControllers = new Map<string, AbortController>();
+  private monitorTasks = new Map<string, Promise<void>>();
+  private transportStates = new Map<string, 'connecting' | 'online' | 'error'>();
   private inboundPipeline?: ReturnType<typeof createFeishuInboundPipeline>;
 
   config = {
@@ -137,7 +138,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       channelId: 'feishu',
       enabled: account.enabled,
       configured: account.configured,
-      status: account.configured ? undefined : 'unconfigured',
+      status: account.configured ? this.transportStates.get(account.accountId) : 'unconfigured',
     }),
   };
 
@@ -186,7 +187,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
 
   streaming = createFeishuStreamingAdapter(() => this.cfg);
 
-  status: ChannelStatusAdapter<ResolvedFeishuAccount> = createFeishuStatusAdapter();
+  status: ChannelStatusAdapter<ResolvedFeishuAccount> = createFeishuStatusAdapter(accountId => this.transportStates.get(accountId));
 
   doctor: ChannelDoctorAdapter = createFeishuDoctorAdapter();
 
@@ -339,7 +340,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       const enqueueInbound = (work: FeishuInboundWork) => {
         const p = this.inboundPipeline;
         if (!p) {
-          return this.bus.publishInbound(work.inbound);
+          return this.bus.publishInbound(work.inbound, work.delivery);
         }
         return p.enqueue(work);
       };
@@ -350,24 +351,33 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         enqueueInbound,
         inboundDebounceDefaultMs: defaultDebounce,
         abortSignal: ac.signal,
+        onState: (state: 'connecting' | 'online' | 'error') => { if (!ac.signal.aborted) this.transportStates.set(accountId, state); },
         security: {
           checkAccess: (ctx: ChannelSecurityContext) => this.security.checkAccess?.(ctx, account, this.cfg),
         },
       };
-      const runner =
-        account.connectionMode === 'webhook'
+      try {
+        this.bus.restoreDurableInbound?.(this.id, feishuInboundScope(account));
+        const runner = account.connectionMode === 'webhook'
           ? (await import('./transport/webhook/monitor.js')).createFeishuWebhookMonitor(monitorDeps)
           : (await import('./transport/socket-mode/monitor.js')).createFeishuSocketModeMonitor(monitorDeps);
 
-      void runner.run().catch((err) => {
-        if ((err as { name?: string } | undefined)?.name === 'AbortError') {
-          log.debug({ accountId }, 'Feishu monitor stopped');
-          return;
-        }
-        log.error({ err, accountId }, 'Feishu monitor exited with error');
-      });
-
-      log.info({ accountId, mode: account.connectionMode }, 'Feishu monitor started');
+        const task = runner.run().catch((err) => {
+          if (ac.signal.aborted) return;
+          this.transportStates.set(accountId, 'error');
+          log.error({ err, accountId }, 'Feishu monitor exited with error');
+        }).finally(() => {
+          if (this.abortControllers.get(accountId) !== ac) return;
+          this.abortControllers.delete(accountId);
+          this.monitorTasks.delete(accountId);
+          if (ac.signal.aborted) this.transportStates.delete(accountId);
+        });
+        this.monitorTasks.set(accountId, task);
+        log.info({ accountId, mode: account.connectionMode }, 'Feishu monitor started');
+      } catch (err) {
+        this.abortControllers.delete(accountId);
+        throw err;
+      }
     }
   }
 
@@ -382,7 +392,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       const ac = this.abortControllers.get(id);
       if (ac) {
         ac.abort();
-        this.abortControllers.delete(id);
+        await this.monitorTasks.get(id);
       }
     }
     // Only unregister the broker capability on a full stop. Per-account stops
@@ -396,7 +406,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
     const ids = listFeishuAccountIds(cfg);
     return ids.some((id) => {
       const a = resolveFeishuAccount(cfg, id);
-      return a.enabled !== false && a.configured && this.abortControllers.has(id);
+      return a.enabled !== false && a.configured && this.transportStates.get(id) === 'online';
     });
   }
 

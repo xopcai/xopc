@@ -13,7 +13,7 @@
  */
 
 import type { Bot } from 'grammy';
-import { InputFile } from 'grammy';
+import { GrammyError, InputFile } from 'grammy';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelSendOptions, ChannelSendResult } from '@xopcai/xopc/channels/channel-domain.js';
 import type { TelegramAccountManager } from './account-manager.js';
@@ -21,8 +21,9 @@ import { buildSendOptions, parseDataUrl, resolveMediaMethod } from './send-optio
 import { splitTelegramCaption } from './caption.js';
 import { renderTelegramHtmlText, markdownToTelegramChunks } from './format.js';
 import { sentMessageCache } from './sent-cache.js';
-import { createRetryRunner, isRecoverableNetworkError } from '@xopcai/xopc/infra/retry.js';
+import { createRetryRunner } from '@xopcai/xopc/infra/retry.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
+import { sendTelegramRichMessage } from './rich-message.js';
 import { isTelegramHtmlParseError } from './errors.js';
 
 const log = createLogger('TelegramOutboundSender');
@@ -295,46 +296,29 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
       attempts: 3,
       minDelayMs: 300,
       maxDelayMs: 5000,
-      shouldRetry: (err) => isRecoverableNetworkError(err, 'send'),
+      shouldRetry: err => err instanceof GrammyError && err.error_code === 429,
+      retryAfterMs: err => err instanceof GrammyError ? (err.parameters.retry_after ?? 0) * 1000 : undefined,
     });
 
-    // Send first chunk
-    const sendFirstChunk = async (): Promise<number> => {
-      const sendOptions = buildSendOptions({
-        threadId: options?.threadId,
-        replyToMessageId: options?.replyToMessageId,
-        silent: options?.silent,
-      });
+    const rich = await retryRunner(() => sendTelegramRichMessage(bot.api, chatId, content, options), 'sendRichMessage');
+    if (rich !== undefined) return rich;
+    if (!chunks.length) return 0;
 
+    const sendChunk = async (chunk: typeof chunks[number], replyToMessageId?: string): Promise<number> => {
+      const sendOptions = buildSendOptions({ ...options, replyToMessageId });
       try {
-        const result = await bot.api.sendMessage(chatId, chunks[0].html, {
-          ...sendOptions,
-          parse_mode: 'HTML',
-        });
+        const result = await bot.api.sendMessage(chatId, chunk.html, { ...sendOptions, parse_mode: 'HTML' });
         return result.message_id;
       } catch (err) {
-        // Fallback to plain text on HTML parse error
-        if (isTelegramHtmlParseError(err)) {
-          log.warn({ chatId, err }, 'HTML parse error, retrying with plain text');
-          const plainResult = await bot.api.sendMessage(chatId, chunks[0].text, {
-            reply_to_message_id: options?.replyToMessageId ? parseInt(options.replyToMessageId, 10) : undefined,
-          });
-          return plainResult.message_id;
-        }
-        throw err;
+        if (!isTelegramHtmlParseError(err)) throw err;
+        const result = await bot.api.sendMessage(chatId, chunk.text, sendOptions);
+        return result.message_id;
       }
     };
 
-    const firstMessageId = await retryRunner(sendFirstChunk, 'sendMessage');
-
-    // Send remaining chunks as replies
-    for (let i = 1; i < chunks.length; i++) {
-      await retryRunner(async () => {
-        await bot.api.sendMessage(chatId, chunks[i].html, {
-          parse_mode: 'HTML',
-          reply_to_message_id: firstMessageId,
-        });
-      }, `sendMessage-reply-${i}`);
+    const firstMessageId = await retryRunner(() => sendChunk(chunks[0], options?.replyToMessageId), 'sendMessage');
+    for (const chunk of chunks.slice(1)) {
+      await retryRunner(() => sendChunk(chunk, String(firstMessageId)), 'sendMessage');
     }
 
     return firstMessageId;

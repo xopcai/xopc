@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { DurableState } from '@xopcai/xopc/storage/sqlite/durable-state.js';
 
 type TelegramUpdateOffsetState = { lastUpdateId: number; botId: string | null };
@@ -21,4 +23,9 @@ export function writeTelegramUpdateOffset(params: { accountId?: string; botToken
     value: { botId: id, lastUpdateId: previous?.botId === id ? Math.max(previous.lastUpdateId, params.lastUpdateId) : params.lastUpdateId },
     result: undefined,
   }));
+}
+
+export function telegramInboundScope(accountId: string, token: string): string {
+  const identity = botId(token) ?? createHash('sha256').update(token).digest('hex');
+  return JSON.stringify([accountKey(accountId), identity]);
 }

@@ -2,29 +2,41 @@ import { decryptAesEcb } from "./aes-ecb.js";
 import { buildCdnDownloadUrl, ENABLE_CDN_URL_FALLBACK } from "./cdn-url.js";
 import { logger } from "../util/logger.js";
 
-/**
- * Download raw bytes from the CDN (no decryption).
- */
-async function fetchCdnBytes(url: string, label: string): Promise<Buffer> {
-  let res: Response;
+const IDLE_TIMEOUT_MS = 15_000;
+const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024 + 16;
+
+async function fetchCdnBytes(url: string, label: string, parent?: AbortSignal): Promise<Buffer> {
+  const timeout = new AbortController();
+  const signal = parent ? AbortSignal.any([parent, timeout.signal]) : timeout.signal;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const resetTimer = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => timeout.abort(new Error('Weixin media download stalled')), IDLE_TIMEOUT_MS);
+  };
+  resetTimer();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
-    res = await fetch(url);
-  } catch (err) {
-    const cause =
-      (err as NodeJS.ErrnoException).cause ?? (err as NodeJS.ErrnoException).code ?? "(no cause)";
-    logger.error(
-      `${label}: fetch network error url=${url} err=${String(err)} cause=${String(cause)}`,
-    );
-    throw err;
+    const response = await fetch(url, { signal });
+    if (!response.ok || !response.body) throw new Error(`${label}: CDN download returned HTTP ${response.status}`);
+    if (Number(response.headers.get('content-length')) > MAX_DOWNLOAD_BYTES) throw new Error('Weixin media exceeds the attachment limit');
+    reader = response.body.getReader();
+    const parts: Uint8Array[] = [];
+    let bytes = 0;
+    resetTimer();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return Buffer.concat(parts, bytes);
+      if (!value.length) continue;
+      bytes += value.length;
+      if (bytes > MAX_DOWNLOAD_BYTES) throw new Error('Weixin media exceeds the attachment limit');
+      parts.push(value);
+      resetTimer();
+    }
+  } finally {
+    if (timer) clearTimeout(timer);
+    timeout.abort();
+    if (reader) await reader.cancel().catch(() => {});
   }
-  logger.debug(`${label}: response status=${res.status} ok=${res.ok}`);
-  if (!res.ok) {
-    const body = await res.text().catch(() => "(unreadable)");
-    const msg = `${label}: CDN download ${res.status} ${res.statusText} body=${body}`;
-    logger.error(msg);
-    throw new Error(msg);
-  }
-  return Buffer.from(await res.arrayBuffer());
 }
 
 /**
@@ -45,7 +57,7 @@ function parseAesKey(aesKeyBase64: string, label: string): Buffer {
   if (decoded.length === 32 && /^[0-9a-fA-F]{32}$/.test(decoded.toString("ascii"))) {
     return Buffer.from(decoded.toString("ascii"), "hex");
   }
-  const msg = `${label}: aes_key must decode to 16 raw bytes or 32-char hex string, got ${decoded.length} bytes (base64="${aesKeyBase64}")`;
+  const msg = `${label}: aes_key must decode to 16 raw bytes or 32-char hex string, got ${decoded.length} bytes`;
   logger.error(msg);
   throw new Error(msg);
 }
@@ -60,6 +72,7 @@ export async function downloadAndDecryptBuffer(
   cdnBaseUrl: string,
   label: string,
   fullUrl?: string,
+  signal?: AbortSignal,
 ): Promise<Buffer> {
   const key = parseAesKey(aesKeyBase64, label);
   let url: string;
@@ -70,8 +83,7 @@ export async function downloadAndDecryptBuffer(
   } else {
     throw new Error(`${label}: fullUrl is required (CDN URL fallback is disabled)`);
   }
-  logger.debug(`${label}: fetching url=${url}`);
-  const encrypted = await fetchCdnBytes(url, label);
+  const encrypted = await fetchCdnBytes(url, label, signal);
   logger.debug(`${label}: downloaded ${encrypted.byteLength} bytes, decrypting`);
   const decrypted = decryptAesEcb(encrypted, key);
   logger.debug(`${label}: decrypted ${decrypted.length} bytes`);
@@ -86,6 +98,7 @@ export async function downloadPlainCdnBuffer(
   cdnBaseUrl: string,
   label: string,
   fullUrl?: string,
+  signal?: AbortSignal,
 ): Promise<Buffer> {
   let url: string;
   if (fullUrl) {
@@ -95,6 +108,5 @@ export async function downloadPlainCdnBuffer(
   } else {
     throw new Error(`${label}: fullUrl is required (CDN URL fallback is disabled)`);
   }
-  logger.debug(`${label}: fetching url=${url}`);
-  return fetchCdnBytes(url, label);
+  return fetchCdnBytes(url, label, signal);
 }

@@ -77,9 +77,6 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 1.5.2
         version: 1.5.2
-      '@grammyjs/runner':
-        specifier: ^2.0.3
-        version: 2.0.3(grammy@1.43.0(encoding@0.1.13))
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.25)
@@ -150,8 +147,8 @@ importers:
         specifier: ^13.0.6
         version: 13.0.6
       grammy:
-        specifier: ^1.43.0
-        version: 1.43.0(encoding@0.1.13)
+        specifier: ^1.46.0
+        version: 1.46.0(encoding@0.1.13)
       hono:
         specifier: 4.12.25
         version: 4.12.25
@@ -217,8 +214,8 @@ importers:
         version: 4.6.6
     devDependencies:
       '@larksuiteoapi/node-sdk':
-        specifier: ^1.66.0
-        version: 1.66.0
+        specifier: 1.76.0
+        version: 1.76.0
       '@resvg/resvg-js':
         specifier: ^2.6.2
         version: 2.6.2
@@ -497,8 +494,8 @@ importers:
   extensions/feishu:
     dependencies:
       '@larksuiteoapi/node-sdk':
-        specifier: ^1.39.0
-        version: 1.66.0
+        specifier: 1.76.0
+        version: 1.76.0
       '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
@@ -540,9 +537,6 @@ importers:
 
   extensions/telegram:
     dependencies:
-      '@grammyjs/runner':
-        specifier: ^2.0.3
-        version: 2.0.3(grammy@1.43.0(encoding@0.1.13))
       '@inquirer/prompts':
         specifier: ^8.4.2
         version: 8.5.0(@types/node@26.6.5)
@@ -553,8 +547,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
       grammy:
-        specifier: ^1.42.0
-        version: 1.43.0(encoding@0.1.13)
+        specifier: ^1.46.0
+        version: 1.46.0(encoding@0.1.13)
       undici:
         specifier: 8.12.2
         version: 8.12.2
@@ -563,8 +557,8 @@ importers:
         version: 4.6.6
     devDependencies:
       '@grammyjs/types':
-        specifier: ^3.26.0
-        version: 3.27.3
+        specifier: 5.0.0
+        version: 5.0.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -2083,14 +2077,8 @@ packages:
       '@modelcontextprotocol/sdk':
         optional: true
 
-  '@grammyjs/runner@2.0.3':
-    resolution: {integrity: sha512-nckmTs1dPWfVQteK9cxqxzE+0m1VRvluLWB8UgFzsjg62w3qthPJt0TYtJBEdG7OedvfQq4vnFAyE6iaMkR42A==}
-    engines: {node: '>=12.20.0 || >=14.13.1'}
-    peerDependencies:
-      grammy: ^1.13.1
-
-  '@grammyjs/types@3.27.3':
-    resolution: {integrity: sha512-yUKMLliGsGbnxu96YUJ7km7B0zy4PzeH/Jvti5705R/LeKDMqkDV4DckMSt+OrliWQpTwQljHE0QLol5zgxBkg==}
+  '@grammyjs/types@5.0.0':
+    resolution: {integrity: sha512-iq1Qrq1iPKkB8yAa0qSuIURMZOCuqTY5pWy5gHpCeL1oQ+GPadGhw/cDTVE8waJwuCzacUzuIjRv1sESvk7u7A==}
 
   '@hono/node-server@1.19.14':
     resolution: {integrity: sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw==}
@@ -2458,8 +2446,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@larksuiteoapi/node-sdk@1.66.0':
-    resolution: {integrity: sha512-ueKbbdvmVGVie3KvKbvHZqvDC/gg3M0rRDeyQanQWK+i2bQgiiTpIfpqVWvxuTgprV31yqV7HPMjN6KegWSCfA==}
+  '@larksuiteoapi/node-sdk@1.76.0':
+    resolution: {integrity: sha512-v/bxQNCugwAmMPbZtBGJtSu8hdQLiB1/29Jr+GBIG18DyQ4LYyp7gxQ74pkhXVSuoUeH4v+/ZHAw/SW+KMrj2g==}
 
   '@lezer/common@1.5.2':
     resolution: {integrity: sha512-sxQE460fPZyU3sdc8lafxiPwJHBzZRy/udNFynGQky1SePYBdhkBl1kOagA9uT3pxR8K09bOrmTUqA9wb/PjSQ==}
@@ -6104,8 +6092,8 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
-  grammy@1.43.0:
-    resolution: {integrity: sha512-7dYm06A945mXuIk/5HUlSjeyIYChW8vCEiU2dkOKKqJJzwAWxTkCc91Eqbz7TgODh2rtFFKWI/fekowWHOkmjQ==}
+  grammy@1.46.0:
+    resolution: {integrity: sha512-/8Qw+iisrUdOMk+p2mjEHouMm/BBdBEN1DHh16wiTpRUZkxDG3PxexdjCvR+wvK3LWPdrEvnQbdrwpU954sPhg==}
     engines: {node: ^12.20.0 || >=14.13.1}
 
   has-flag@4.0.0:
@@ -7433,10 +7421,6 @@ packages:
 
   prosemirror-view@1.42.4:
     resolution: {integrity: sha512-H/LErnE8Vms1GYkvhfj6G3K9rc2p+o5EHGmTwvPOl0f21wPPxlMVRB8ICOseH+COb2oPKFEoufbgY6yet/dR4w==}
-
-  protobufjs@7.6.5:
-    resolution: {integrity: sha512-/FPD0nUc9jH6rfFjji9IBqOz4pcSE3CsT1m7Ep6Mdb0LxSUMj8hgl6GomOvZzpNpAqqGaXA0P3VSrZLFzIhQrw==}
-    engines: {node: '>=12.0.0'}
 
   protobufjs@7.6.6:
     resolution: {integrity: sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg==}
@@ -10062,12 +10046,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@grammyjs/runner@2.0.3(grammy@1.43.0(encoding@0.1.13))':
-    dependencies:
-      abort-controller: 3.0.0
-      grammy: 1.43.0(encoding@0.1.13)
-
-  '@grammyjs/types@3.27.3': {}
+  '@grammyjs/types@5.0.0': {}
 
   '@hono/node-server@1.19.14(hono@4.12.25)':
     dependencies:
@@ -10359,14 +10338,14 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@larksuiteoapi/node-sdk@1.66.0':
+  '@larksuiteoapi/node-sdk@1.76.0':
     dependencies:
       axios: 1.20.0
       lodash.identity: 3.0.0
       lodash.merge: 4.6.2
       lodash.pickby: 4.6.0
-      protobufjs: 7.6.5
-      qs: 6.15.2
+      protobufjs: 7.6.6
+      qs: 6.16.1
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
@@ -13913,9 +13892,9 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  grammy@1.43.0(encoding@0.1.13):
+  grammy@1.46.0(encoding@0.1.13):
     dependencies:
-      '@grammyjs/types': 3.27.3
+      '@grammyjs/types': 5.0.0
       abort-controller: 3.0.0
       debug: 4.4.3
       node-fetch: 2.7.0(encoding@0.1.13)
@@ -15547,20 +15526,6 @@ snapshots:
       prosemirror-model: 1.25.11
       prosemirror-state: 1.4.4
       prosemirror-transform: 1.12.1
-
-  protobufjs@7.6.5:
-    dependencies:
-      '@protobufjs/aspromise': 1.1.2
-      '@protobufjs/base64': 1.1.2
-      '@protobufjs/codegen': 2.0.5
-      '@protobufjs/eventemitter': 1.1.1
-      '@protobufjs/fetch': 1.1.1
-      '@protobufjs/float': 1.0.2
-      '@protobufjs/path': 1.1.2
-      '@protobufjs/pool': 1.1.0
-      '@protobufjs/utf8': 1.1.2
-      '@types/node': 26.6.5
-      long: 5.3.2
 
   protobufjs@7.6.6:
     dependencies:

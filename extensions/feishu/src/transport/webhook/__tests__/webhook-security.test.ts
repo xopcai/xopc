@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { closeXopcDatabase, openXopcDatabase } from '@xopcai/xopc/storage/sqlite/connection.js';
 import { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 
 import { createFeishuWebhookMonitor } from '../monitor.js';
@@ -52,9 +53,11 @@ describe('Feishu webhook security hardening (xopc)', () => {
   afterEach(() => {
     for (const ac of abortControllers) ac.abort();
     abortControllers.length = 0;
+    closeXopcDatabase();
   });
 
-  it('rejects invalid signatures with 401', async () => {
+  it('rejects invalid signatures and dispatches each authenticated message once', async () => {
+    openXopcDatabase({ path: ':memory:' });
     const port = await getFreePort();
     const path = '/feishu-test-invalid-signature';
     const url = `http://127.0.0.1:${port}${path}`;
@@ -80,12 +83,15 @@ describe('Feishu webhook security hardening (xopc)', () => {
     };
 
     const bus = new MessageBus();
+    const received: string[] = [];
+    bus.on('inbound', message => received.push(message.content));
     const ac = new AbortController();
     abortControllers.push(ac);
     const monitor = createFeishuWebhookMonitor({
       account,
       config: { channels: { feishu: { enabled: true } } } as any,
-      bus,
+      enqueueInbound: work => bus.publishInbound(work.inbound),
+      inboundDebounceDefaultMs: 0,
       abortSignal: ac.signal,
       security: { checkAccess: () => ({ allowed: true }) },
     });
@@ -103,7 +109,26 @@ describe('Feishu webhook security hardening (xopc)', () => {
     expect(response.status).toBe(401);
     expect(await response.text()).toBe('Invalid signature');
 
-    ac.abort();
-    await runPromise.catch(() => undefined);
+    const event = JSON.stringify({
+      schema: '2.0',
+      header: { event_type: 'im.message.receive_v1', event_id: 'evt_fixture', token: 'verify_token' },
+      event: {
+        sender: { sender_type: 'user', sender_id: { open_id: 'ou_fixture' } },
+        message: { message_id: 'om_fixture', chat_id: 'oc_fixture', chat_type: 'p2p', message_type: 'text', content: JSON.stringify({ text: 'hello' }) },
+      },
+    });
+    try {
+      for (let repeat = 0; repeat < 2; repeat++) {
+        const valid = await fetch(url, {
+          method: 'POST', headers: signFeishuPayload({ encryptKey: 'encrypt_key', rawBody: event }), body: event,
+        });
+        expect(valid.status).toBe(200);
+      }
+      expect((await bus.consumeInbound()).content).toBe('hello');
+      expect(received).toEqual(['hello']);
+    } finally {
+      ac.abort();
+      await runPromise.catch(() => undefined);
+    }
   });
 });

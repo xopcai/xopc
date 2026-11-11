@@ -943,6 +943,7 @@ export function ChannelsSettingsPanel({
                 locale={language}
                 messages={ch}
                 compact
+                onStarted={() => setShowConnectionOptions(true)}
                 onChanged={async () => {
                   await mutateConfig();
                   await refreshChannelState();

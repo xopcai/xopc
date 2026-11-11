@@ -4,14 +4,11 @@ Connect a Feishu or Lark bot through the guided QR setup, or configure an intern
 
 ## Guided setup
 
-1. Ensure the optional Feishu SDK is available. For a global xopc installation, run `npm install -g @larksuiteoapi/node-sdk@1.66.0`.
-2. Open **Channels → Feishu**.
-3. Choose **Configure**.
-4. Select **Feishu (China)** or **Lark (international)**.
-5. Scan the QR code and complete the platform prompts.
-6. Keep connection mode set to **WebSocket / Socket Mode**.
-7. Keep direct messages on **Pairing**, then save.
-8. Send the bot a test message and approve the pairing request.
+1. Open **Channels → Feishu**, select **Feishu** or **Lark**, and click **Connect**.
+2. On first use, the Gateway installs the Feishu component on demand. Scan the QR code and confirm in Feishu or Lark.
+3. Send the code displayed in the console in a private chat with the bot. The console confirms two-way delivery after the bot replies.
+
+A new QR-configured account restricts direct messages to the scanner. When the platform does not return the scanner's identity, normal chats require pairing. Complete any required app publication or administrator approval before sending the verification message.
 
 ## Manual app setup
 

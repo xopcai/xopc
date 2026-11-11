@@ -1,10 +1,11 @@
+import { createHash, randomUUID } from 'node:crypto';
+
 import type { FeishuConfig } from '../schema/config-schema.js';
+import { cancelChannelConnectionProbe, getChannelConnectionProbe, startChannelConnectionProbe } from '@xopcai/xopc/channels/connection-probe.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type {
   ChannelRuntimeActionAdapter,
-  ChannelRuntimeActionPayload,
 } from '@xopcai/xopc/channels/plugins/types.adapters.js';
-import { mergeDistinctSenderIds } from '@xopcai/xopc/channels/pairing/index.js';
 
 import {
   beginAppRegistration,
@@ -13,23 +14,24 @@ import {
   type FeishuDomain,
   type AppRegistrationResult,
 } from '../auth/app-registration.js';
+import { probeFeishuBot } from '../transport/client/bot-info.js';
+import { ensureFeishuLarkSdk } from '../transport/client/lark-sdk.js';
 
-type FeishuGatewaySetupDone =
-  | { phase: 'done'; ok: true; accountId: string; appId: string; domain: FeishuDomain; result: AppRegistrationResult }
-  | { phase: 'done'; ok: false; message: string };
-
-type FeishuGatewaySetupActive = {
-  startedAt: number;
-  qrPayload: string;
+type SetupSession = {
+  accountId: string;
+  controller: AbortController;
+  configHash: string;
+  qrUrl: string;
+  expiresAt: number;
+  outcome?: { ok: true; result: AppRegistrationResult } | { ok: false; message: string };
 };
 
-const activeSessions = new Map<string, FeishuGatewaySetupActive>();
-const completedSessions = new Map<string, FeishuGatewaySetupDone>();
+const sessions = new Map<string, SetupSession>();
+const channelHash = (cfg: Config) => createHash('sha256').update(JSON.stringify(cfg.channels?.feishu ?? {})).digest('hex');
 
-function rememberCompleted(conversationId: string, state: FeishuGatewaySetupDone): void {
-  activeSessions.delete(conversationId);
-  completedSessions.set(conversationId, state);
-  setTimeout(() => completedSessions.delete(conversationId), 10 * 60_000);
+function cancelSetup(id: string): void {
+  sessions.get(id)?.controller.abort();
+  sessions.delete(id);
 }
 
 function readInput(input: unknown): Record<string, unknown> {
@@ -42,45 +44,39 @@ function normalizeDomain(input: unknown): FeishuDomain {
   return input === 'lark' ? 'lark' : 'feishu';
 }
 
-function buildFeishuConfig(config: Config, result: AppRegistrationResult): Config {
+export function buildFeishuConfig(config: Config, result: AppRegistrationResult, accountId = 'default'): Config {
   const existing = config.channels?.feishu as FeishuConfig | undefined;
+  const account = Object.hasOwn(existing?.accounts ?? {}, accountId) ? existing?.accounts?.[accountId] : undefined;
   const ownerOpenId = result.openId?.trim();
-  const previousAllowFrom = Array.isArray(existing?.allowFrom)
-    ? (existing.allowFrom as Array<string | number>)
-    : [];
-  const allowFrom = ownerOpenId
-    ? mergeDistinctSenderIds(previousAllowFrom, [ownerOpenId])
-    : previousAllowFrom;
+  const sameApp = account?.appId === result.appId && (account.domain ?? existing?.domain ?? 'feishu') === result.domain;
+  const access = sameApp ? {} : {
+    dmPolicy: ownerOpenId ? 'allowlist' as const : 'pairing' as const,
+    allowFrom: ownerOpenId ? [ownerOpenId] : [],
+    groupPolicy: 'allowlist' as const,
+    groupAllowFrom: [],
+    requireMention: true,
+    tools: { doc: false, wiki: false, drive: false, perm: false, bitable: false, scopes: false },
+  };
 
   return {
     ...config,
     channels: {
       ...config.channels,
       feishu: {
-        ...(existing ?? {}),
+        ...existing,
         enabled: true,
-        accounts: { ...existing?.accounts, default: { ...existing?.accounts?.default, enabled: true, appId: result.appId, appSecret: result.appSecret } },
-        domain: result.domain,
-        connectionMode: 'websocket',
-        dmPolicy: existing?.dmPolicy ?? 'open',
-        groupPolicy: existing?.groupPolicy ?? 'allowlist',
-        allowFrom,
-        groupAllowFrom: Array.isArray(existing?.groupAllowFrom) ? existing.groupAllowFrom : allowFrom,
-        requireMention: typeof existing?.requireMention === 'boolean' ? existing.requireMention : true,
-        streaming: typeof existing?.streaming === 'boolean' ? existing.streaming : false,
-        reactionNotifications: existing?.reactionNotifications ?? 'own',
-        actions: { ...(existing?.actions as Record<string, unknown> | undefined), reactions: true },
-        tools: {
-          doc: true,
-          wiki: true,
-          drive: true,
-          perm: false,
-          bitable: true,
-          scopes: true,
-          ...(existing?.tools as Record<string, unknown> | undefined),
+        accounts: {
+          ...existing?.accounts,
+          [accountId]: {
+            ...(sameApp ? account : undefined),
+            ...access,
+            enabled: true,
+            appId: result.appId,
+            appSecret: result.appSecret,
+            domain: result.domain,
+            connectionMode: sameApp ? account.connectionMode ?? existing?.connectionMode ?? 'websocket' : 'websocket',
+          },
         },
-        historyLimit: typeof existing?.historyLimit === 'number' ? existing.historyLimit : 50,
-        textChunkLimit: typeof existing?.textChunkLimit === 'number' ? existing.textChunkLimit : 4000,
       },
     },
   };
@@ -90,60 +86,50 @@ function isZh(locale: string | undefined): boolean {
   return locale?.toLowerCase().startsWith('zh') === true;
 }
 
-function statusPayload(
-  state: FeishuGatewaySetupDone | undefined,
-  active: FeishuGatewaySetupActive | undefined,
-  locale?: string,
-): ChannelRuntimeActionPayload {
-  const zh = isZh(locale);
-  if (!state && active) {
-    return {
-      type: 'poll',
-      phase: 'pending',
-      ok: undefined,
-      qrPayload: active.qrPayload,
-      message: zh ? '等待飞书 / Lark 确认…' : 'Waiting for Feishu/Lark confirmation...',
-    };
-  }
-  if (!state) {
-    return {
-      type: 'poll',
-      phase: 'unknown',
-      ok: false,
-      message: zh ? '没有活动的飞书配置会话。请重新开始，二维码可能已过期。' : 'No active Feishu setup session. Start again or the QR may have expired.',
-    };
-  }
-  if (state.ok === false) {
-    return {
-      type: 'poll',
-      phase: 'done',
-      ok: false,
-      message: state.message,
-    };
-  }
+function setupVerification(result: AppRegistrationResult, accountId: string, zh: boolean, info: Awaited<ReturnType<typeof probeFeishuBot>>) {
   return {
-    type: 'poll',
-    phase: 'done',
-    ok: true,
-    accountId: state.accountId,
-    appId: state.appId,
-    domain: state.domain,
-    message: zh ? '飞书配置完成。' : 'Feishu setup complete.',
-    configChanged: true,
+    ...startChannelConnectionProbe({
+      channel: 'feishu', accountId, identity: result.appId, ownerId: result.openId?.trim(), zh, configChanged: true,
+    }),
+    ...(info.ok && info.name ? { botName: info.name } : {}),
+    ...(!info.ok ? {
+      setupHint: zh
+        ? '若找不到机器人，请在开放平台检查机器人能力、长连接事件订阅、发布和管理员审批。'
+        : 'If the bot is unavailable, check bot access, long-connection subscriptions, publication and administrator approval.',
+    } : {}),
   };
 }
 
-function completedNextConfig(cfg: Config, state: FeishuGatewaySetupDone | undefined): Config | undefined {
-  if (!state || state.ok === false) return undefined;
-  return buildFeishuConfig(cfg, state.result);
-}
-
 export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
-  async runAction({ cfg, actionId, input, locale }) {
+  async runAction({ cfg, actionId, input, locale, accountId: requestedAccountId }) {
     const zh = isZh(locale);
+    const raw = readInput(input);
+    const id = typeof raw.conversationId === 'string' ? raw.conversationId : '';
+    const accountId = requestedAccountId || 'default';
+    const domain = normalizeDomain(raw.domain);
+    if (actionId === 'setup.verify.status') {
+      return { ok: true, payload: getChannelConnectionProbe('feishu', accountId, id, zh) };
+    }
+    if (actionId === 'setup.verify.cancel') {
+      cancelChannelConnectionProbe('feishu', accountId, id);
+      return { ok: true, payload: { type: 'ok' } };
+    }
+    if (actionId === 'setup.cancel') {
+      if (sessions.get(id)?.accountId === accountId) cancelSetup(id);
+      return { ok: true, payload: { type: 'ok' } };
+    }
+
+    if (actionId === 'setup.start' || actionId === 'setup.manual') {
+      try {
+        await ensureFeishuLarkSdk();
+      } catch {
+        return {
+          ok: false,
+          message: zh ? '飞书组件安装失败。请检查网络后重试。' : 'Could not install the Feishu component. Check the network and retry.',
+        };
+      }
+    }
     if (actionId === 'setup.start') {
-      const raw = readInput(input);
-      const domain = normalizeDomain(raw.domain);
       const supported = await initAppRegistration(domain);
       if (!supported) {
         return {
@@ -151,13 +137,13 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
           payload: {
             type: 'form',
             submitAction: 'setup.manual',
-            message: zh ? '飞书扫码创建不可用。请在高级配置中手动填写应用凭据。' : 'Feishu scan-to-create is unavailable. Enter app credentials manually in Advanced configuration.',
+            message: zh ? '扫码创建暂不可用，请填写应用凭据。' : 'Scan-to-create is unavailable. Enter app credentials.',
             schema: {
               type: 'object',
               properties: {
                 appId: { type: 'string', title: 'App ID' },
                 appSecret: { type: 'string', title: 'App Secret', format: 'password' },
-                domain: { type: 'string', enum: ['feishu', 'lark'], default: domain, title: zh ? '域名' : 'Domain' },
+                domain: { type: 'string', enum: ['feishu', 'lark'], default: domain },
               },
               required: ['appId', 'appSecret'],
             },
@@ -167,88 +153,89 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       }
 
       const begin = await beginAppRegistration(domain);
-      const conversationId = begin.deviceCode;
-      activeSessions.set(conversationId, {
-        startedAt: Date.now(),
-        qrPayload: begin.qrUrl,
+      const conversationId = randomUUID();
+      const expireInSec = Math.max(1, Math.min(600, begin.expireInSec));
+      for (const [activeId, active] of sessions) {
+        if (active.accountId === accountId) cancelSetup(activeId);
+      }
+      const session: SetupSession = {
+        accountId,
+        controller: new AbortController(),
+        configHash: channelHash(cfg),
+        qrUrl: begin.qrUrl,
+        expiresAt: Date.now() + expireInSec * 1000,
+      };
+      sessions.set(conversationId, session);
+      setTimeout(() => cancelSetup(conversationId), expireInSec * 1000).unref();
+      void pollAppRegistration({
+        deviceCode: begin.deviceCode,
+        intervalSec: begin.intervalSec,
+        expireInSec,
+        initialDomain: domain,
+        signal: session.controller.signal,
+      }).then(outcome => {
+        if (outcome.status === 'success') session.outcome = { ok: true, result: outcome.result };
+        else session.outcome = {
+          ok: false,
+          message: outcome.status === 'access_denied'
+            ? (zh ? '已拒绝授权。' : 'Authorization denied.')
+            : (zh ? '授权未完成，请重试。' : 'Authorization did not finish. Please retry.'),
+        };
+      }).catch(() => {
+        session.outcome = { ok: false, message: zh ? '授权已结束。' : 'Authorization ended.' };
       });
-
-      void (async () => {
-        const outcome = await pollAppRegistration({
-          deviceCode: begin.deviceCode,
-          intervalSec: begin.intervalSec,
-          expireInSec: begin.expireInSec,
-          initialDomain: domain,
-        });
-
-        if (outcome.status !== 'success') {
-          const message =
-            outcome.status === 'access_denied'
-              ? (zh ? '用户拒绝授权。' : 'User denied authorization.')
-              : outcome.status === 'expired'
-                ? (zh ? '配置会话已过期。' : 'Setup session expired.')
-                : outcome.status === 'timeout'
-                  ? (zh ? '配置超时。' : 'Setup timed out.')
-                  : outcome.message ?? (zh ? '飞书配置失败。' : 'Feishu setup failed.');
-          rememberCompleted(conversationId, { phase: 'done', ok: false, message });
-          return;
-        }
-
-        rememberCompleted(conversationId, {
-          phase: 'done',
-          ok: true,
-          accountId: 'default',
-          appId: outcome.result.appId,
-          domain: outcome.result.domain,
-          result: outcome.result,
-        });
-      })();
 
       return {
         ok: true,
         payload: {
-          type: 'qr',
-          conversationId,
-          qrPayload: begin.qrUrl,
-          statusAction: 'setup.status',
+          type: 'qr', conversationId, accountId, qrPayload: begin.qrUrl,
+          statusAction: 'setup.status', cancelAction: 'setup.cancel', expiresInSec: expireInSec,
           pollIntervalMs: Math.max(1000, begin.intervalSec * 1000),
-          expiresInSec: begin.expireInSec,
-          message: zh ? '请使用飞书 / Lark 扫码创建并授权应用。' : 'Scan with Feishu/Lark to create and authorize an app.',
+          message: zh ? '使用飞书或 Lark 扫码创建并授权应用。' : 'Scan with Feishu or Lark to create and authorize the app.',
         },
       };
     }
 
     if (actionId === 'setup.status') {
-      const raw = readInput(input);
-      const conversationId = typeof raw.conversationId === 'string' ? raw.conversationId : '';
-      if (!conversationId) return { ok: false, message: zh ? '缺少配置 conversationId' : 'Missing setup conversationId' };
-      const completed = completedSessions.get(conversationId);
-      return {
-        ok: true,
-        payload: statusPayload(completed, activeSessions.get(conversationId), locale),
-        nextConfig: completedNextConfig(cfg, completed),
-      };
-    }
-
-    if (actionId === 'setup.manual') {
-      const raw = readInput(input);
-      const appId = typeof raw.appId === 'string' ? raw.appId.trim() : '';
-      const appSecret = typeof raw.appSecret === 'string' ? raw.appSecret.trim() : '';
-      const domain = normalizeDomain(raw.domain);
-      if (!appId || !appSecret) {
-        return { ok: false, message: zh ? 'App ID 和 App Secret 为必填项。' : 'App ID and App Secret are required.' };
+      const session = sessions.get(id);
+      if (!session || session.accountId !== accountId || session.expiresAt <= Date.now()) {
+        return { ok: true, payload: { type: 'poll', phase: 'unknown', ok: false, message: zh ? '二维码已过期，请重新连接。' : 'The QR code expired. Connect again.' } };
       }
+      if (session.configHash !== channelHash(cfg)) {
+        cancelSetup(id);
+        return { ok: true, payload: { type: 'poll', phase: 'done', ok: false, message: zh ? '飞书设置已变更，请重新连接。' : 'Feishu settings changed. Connect again.' } };
+      }
+      if (!session.outcome) return { ok: true, payload: { type: 'poll', phase: 'pending', qrPayload: session.qrUrl } };
+      if (session.outcome.ok === false) {
+        const { message } = session.outcome;
+        cancelSetup(id);
+        return { ok: true, payload: { type: 'poll', phase: 'done', ok: false, message } };
+      }
+      const { result } = session.outcome;
+      const info = await probeFeishuBot(result).catch(() => ({ ok: false as const }));
+      if (sessions.get(id) !== session) return { ok: false, message: zh ? '授权会话已结束。' : 'Authorization session ended.' };
       return {
         ok: true,
-        nextConfig: buildFeishuConfig(cfg, { appId, appSecret, domain }),
-        payload: {
-          type: 'ok',
-          message: zh ? '飞书配置已保存。' : 'Feishu configuration saved.',
-          configChanged: true,
+        nextConfig: buildFeishuConfig(cfg, result, accountId),
+        beforeConfigSaved: () => {
+          if (sessions.get(id) !== session) throw new Error('Feishu setup session is no longer active');
+        },
+        onConfigSaved: () => {
+          cancelSetup(id);
+          return setupVerification(result, accountId, zh, info);
         },
       };
     }
 
-    return { ok: false, message: `${zh ? '不支持的飞书操作' : 'Unsupported Feishu action'}: ${actionId}` };
+    if (actionId === 'setup.manual') {
+      const appId = typeof raw.appId === 'string' ? raw.appId.trim() : '';
+      const appSecret = typeof raw.appSecret === 'string' ? raw.appSecret.trim() : '';
+      if (!appId || !appSecret) return { ok: false, message: zh ? '请填写 App ID 和 App Secret。' : 'Enter the App ID and App Secret.' };
+      const result = { appId, appSecret, domain };
+      const info = await probeFeishuBot(result).catch(() => ({ ok: false as const }));
+      return { ok: true, nextConfig: buildFeishuConfig(cfg, result, accountId), onConfigSaved: () => setupVerification(result, accountId, zh, info) };
+    }
+
+    return { ok: false, message: zh ? '不支持的飞书操作。' : 'Unsupported Feishu action.' };
   },
 };

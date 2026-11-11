@@ -145,6 +145,7 @@ export async function apiGetFetch(params: {
   timeoutMs?: number;
   label: string;
   routeTag?: string;
+  abortSignal?: AbortSignal;
 }): Promise<string> {
   const base = ensureTrailingSlash(params.baseUrl);
   const url = new URL(params.endpoint, base);
@@ -158,19 +159,22 @@ export async function apiGetFetch(params: {
     controller != null && timeoutMs != null
       ? setTimeout(() => controller.abort(), timeoutMs)
       : undefined;
+  const signal = controller && params.abortSignal
+    ? AbortSignal.any([controller.signal, params.abortSignal])
+    : controller?.signal ?? params.abortSignal;
   try {
     const res = await fetch(url.toString(), {
       method: "GET",
       headers: hdrs,
-      ...(controller ? { signal: controller.signal } : {}),
+      signal,
       // 复用连接，避免 VPN/网络不稳定时卡住
       keepalive: true,
     });
     if (t !== undefined) clearTimeout(t);
     const rawText = await res.text();
-    logger.debug(`${params.label} status=${res.status} raw=${redactBody(rawText)}`);
+    logger.debug(`${params.label} status=${res.status}`);
     if (!res.ok) {
-      throw new Error(`${params.label} ${res.status}: ${rawText}`);
+      throw new Error(`${params.label} ${res.status}`);
     }
     return rawText;
   } catch (err) {
@@ -272,21 +276,26 @@ export async function getUpdates(
       keepalive: true,
       abortSignal: params.abortSignal,
     });
-    const resp: GetUpdatesResp = JSON.parse(rawText);
-    return resp;
+    return JSON.parse(rawText, (key: string, value: unknown, context?: { source?: string }) => {
+      if ((key === 'message_id' || key === 'svr_id' || key === 'seq') && typeof value === 'number'
+        && context?.source && /^-?\d+$/.test(context.source)) {
+        return context.source;
+      }
+      return value;
+    }) as GetUpdatesResp;
   } catch (err) {
     if (params.abortSignal?.aborted && err instanceof Error && err.name === "AbortError") {
       throw err;
     }
     if (err instanceof Error && err.name === "AbortError") {
       logger.debug(`getUpdates: client-side timeout after ${timeout}ms, returning empty response`);
-      return { ret: 0, msgs: [], get_updates_buf: params.get_updates_buf };
+      return { ret: 0, msgs: [], get_updates_buf: params.get_updates_buf, timedOut: true };
     }
     if (isUndiciHeadersTimeout(err)) {
       logger.debug(
         `getUpdates: undici headers timeout (UND_ERR_HEADERS_TIMEOUT), returning empty response`,
       );
-      return { ret: 0, msgs: [], get_updates_buf: params.get_updates_buf ?? "" };
+      return { ret: 0, msgs: [], get_updates_buf: params.get_updates_buf ?? "", timedOut: true };
     }
     throw err;
   } finally {

@@ -84,7 +84,7 @@ describe('channel action routes', () => {
       ok: true,
       payload: { type: 'ok', message: 'saved', configChanged: true },
     });
-    expect(saveConfig).toHaveBeenCalledWith(nextConfig);
+    expect(saveConfig).toHaveBeenCalledWith(nextConfig, expect.any(Object), undefined);
     expect(reloadConfig).not.toHaveBeenCalled();
   });
 

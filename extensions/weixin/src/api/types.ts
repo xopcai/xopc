@@ -132,6 +132,7 @@ export interface VideoItem {
 }
 
 export interface RefMessage {
+  svr_id?: string;
   message_item?: MessageItem;
   title?: string; // 摘要
 }
@@ -152,8 +153,8 @@ export interface MessageItem {
 
 /** Unified message (proto: WeixinMessage). Replaces the old split Message + MessageContent + FullMessage. */
 export interface WeixinMessage {
-  seq?: number;
-  message_id?: number;
+  seq?: number | string;
+  message_id?: number | string;
   from_user_id?: string;
   to_user_id?: string;
   client_id?: string;
@@ -176,6 +177,8 @@ export interface GetUpdatesReq {
 
 /** GetUpdates response: bytes fields are base64 strings in JSON. */
 export interface GetUpdatesResp {
+  /** Client-side poll timeout, without an acknowledgement from the platform. */
+  timedOut?: boolean;
   ret?: number;
   /** Error code returned by the server (e.g. -14 = session timeout). Present when request fails. */
   errcode?: number;

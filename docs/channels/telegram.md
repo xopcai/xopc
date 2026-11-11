@@ -11,13 +11,11 @@ Connect a Telegram bot to use an xopc Agent in private chats and groups.
 
 ## Connect it to xopc
 
-1. Open **Channels → Telegram** in the Gateway console.
-2. Choose **Configure** and paste the bot token.
-3. Keep the direct-message policy set to **Pairing**.
-4. Disable groups initially, or use a group allowlist with mention required.
-5. Save and wait for the health check to succeed.
+1. Open **Channels → Telegram** in the Gateway console, select **Connect**, and paste the bot token.
+2. After xopc checks the token, scan the QR code or open the link and tap **Start** in Telegram.
+3. After the bot replies, verify the Telegram user shown in the console and confirm the connection.
 
-Then send the bot a private Telegram message. Approve the displayed pairing code in xopc.
+With pairing enabled, the confirmed user can chat with the bot directly. Group access, proxies, and API roots are available in advanced settings.
 
 ## Terminal setup
 

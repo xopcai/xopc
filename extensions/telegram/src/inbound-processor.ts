@@ -15,6 +15,7 @@ import type { Message } from '@grammyjs/types';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type { TelegramAccountManager } from './account-manager.js';
+import { telegramInboundScope } from './update-offset-store.js';
 import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopc/chat-commands/command-parse.js';
@@ -632,7 +633,10 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
         transcribedVoice: !!transcribedText || undefined,
       },
       attachments: attachments.length > 0 ? attachments : undefined,
-    });
+    }, bot?.token ? {
+      scope: telegramInboundScope(accountId, bot.token),
+      id: JSON.stringify([chatId, message.message_id]),
+    } : undefined);
   };
 
   // Main enqueue function

@@ -5,11 +5,9 @@
  * Supports QR scan-to-create and manual credential input.
  */
 
-import fs from 'node:fs';
+import { confirm, input, password, select } from '@inquirer/prompts';
 
-import { confirm, input, select } from '@inquirer/prompts';
-
-import type { Config } from '@xopcai/xopc/config/schema.js';
+import { loadConfig, saveConfig } from '@xopcai/xopc/config/loader.js';
 import { mergeDistinctSenderIds } from '@xopcai/xopc/channels/pairing/index.js';
 import type { ChannelCliLoginAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 
@@ -21,29 +19,12 @@ import {
   type FeishuDomain,
 } from '../auth/app-registration.js';
 
+import { buildFeishuConfig } from './gateway-setup.js';
+import { resolveFeishuAccount } from '../state/accounts.js';
+import { ensureFeishuLarkSdk } from '../transport/client/lark-sdk.js';
+
 type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 type GroupPolicy = 'open' | 'disabled' | 'allowlist';
-
-function loadConfigFromPath(configPath: string): Config {
-  try {
-    const raw = fs.readFileSync(configPath, 'utf8');
-    return JSON.parse(raw) as Config;
-  } catch {
-    return {} as Config;
-  }
-}
-
-function writeConfigToPath(configPath: string, config: Config): void {
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
-}
-
-function isFeishuConfigured(config: Config): boolean {
-  const feishu = config.channels?.feishu as Record<string, unknown> | undefined;
-  if (!feishu) return false;
-  const appId = typeof feishu.appId === 'string' ? feishu.appId.trim() : '';
-  const appSecret = typeof feishu.appSecret === 'string' ? feishu.appSecret.trim() : '';
-  return Boolean(appId && appSecret);
-}
 
 function parseAllowlistRaw(raw: string): Array<string | number> {
   if (!raw.trim()) return [];
@@ -65,6 +46,7 @@ async function acquireCredentials(params: {
   appSecret: string;
   domain: FeishuDomain;
   ownerOpenId?: string;
+  scanned?: boolean;
 }> {
   const domain = await select<FeishuDomain>({
     message: 'Feishu/Lark domain:',
@@ -104,6 +86,7 @@ async function acquireCredentials(params: {
         appSecret: outcome.result.appSecret,
         domain: outcome.result.domain,
         ownerOpenId: outcome.result.openId,
+        scanned: true,
       };
     }
 
@@ -129,7 +112,7 @@ async function acquireCredentials(params: {
   ).trim();
 
   const appSecret = (
-    await input({
+    await password({
       message: 'App Secret:',
       validate: (value) => value.trim().length > 0 || 'App Secret cannot be empty',
     })
@@ -148,7 +131,7 @@ async function promptSecurityPolicies(ownerOpenId?: string): Promise<{
   const dmPolicy = await select<DmPolicy>({
     message: 'DM (private chat) policy:',
     choices: [
-      { value: 'open', name: 'open  [default]', description: 'Anyone can DM the bot after setup' },
+      { value: 'open', name: 'open', description: 'Anyone can DM the bot after setup' },
       {
         value: 'pairing',
         name: 'pairing',
@@ -157,7 +140,7 @@ async function promptSecurityPolicies(ownerOpenId?: string): Promise<{
       { value: 'allowlist', name: 'allowlist', description: 'Only allowlisted users' },
       { value: 'disabled', name: 'disabled', description: 'Disable DMs' },
     ],
-    default: 'open',
+    default: ownerOpenId?.trim() ? 'allowlist' : 'pairing',
   });
 
   let allowFrom: Array<string | number> = [];
@@ -209,10 +192,10 @@ export const feishuCliLoginAdapter: ChannelCliLoginAdapter = {
       console.log(`[feishu-login] configPath=${configPath}, timeoutMs=${timeoutMs}`);
     }
 
-    const config = loadConfigFromPath(configPath);
-    const existingFeishu = config.channels?.feishu as Record<string, unknown> | undefined;
-    const existingAppId = typeof existingFeishu?.appId === 'string' ? existingFeishu.appId : '';
-    const alreadyConfigured = isFeishuConfigured(config);
+    const config = loadConfig(configPath);
+    const target = resolveFeishuAccount(config, accountId);
+    const existingAppId = target.appId ?? '';
+    const alreadyConfigured = target.configured;
 
     console.log(`\n${'='.repeat(50)}`);
     console.log('📱 Feishu / Lark login');
@@ -234,32 +217,18 @@ export const feishuCliLoginAdapter: ChannelCliLoginAdapter = {
       timeoutMs,
     });
 
-    const policies = await promptSecurityPolicies(credentials.ownerOpenId);
-
-    const nextFeishu: Record<string, unknown> = {
-      ...(existingFeishu ?? {}),
-      enabled: true,
-      appId: credentials.appId,
-      appSecret: credentials.appSecret,
-      domain: credentials.domain,
-      connectionMode: (existingFeishu?.connectionMode as string) || 'websocket',
-      dmPolicy: policies.dmPolicy,
-      groupPolicy: policies.groupPolicy,
-      allowFrom: policies.allowFrom,
-      groupAllowFrom: policies.groupAllowFrom,
-      requireMention: policies.requireMention,
-    };
-
-    const nextConfig: Config = {
-      ...config,
-      channels: {
-        ...config.channels,
-        feishu: nextFeishu,
-      },
-    };
+    if (writeConfig) await ensureFeishuLarkSdk();
+    const base = buildFeishuConfig(config, {
+      appId: credentials.appId, appSecret: credentials.appSecret, domain: credentials.domain, openId: credentials.ownerOpenId,
+    }, target.accountId);
+    const section = base.channels?.feishu as import('../schema/config-schema.js').FeishuConfig;
+    const account = section.accounts?.[target.accountId];
+    if (!credentials.scanned && account) {
+      Object.assign(account, await promptSecurityPolicies(credentials.ownerOpenId));
+    }
 
     if (writeConfig) {
-      writeConfigToPath(configPath, nextConfig);
+      await saveConfig(base, configPath);
       console.log(`✅ Feishu configuration saved to ${configPath}\n`);
     } else {
       console.log('✅ Feishu credentials acquired (--credentials-only: config not updated).\n');
@@ -267,8 +236,8 @@ export const feishuCliLoginAdapter: ChannelCliLoginAdapter = {
 
     return {
       ok: true,
-      message: `Feishu login complete (App ID: ${credentials.appId}).`,
-      accountId: accountId ?? undefined,
+      message: `Feishu authorized. Send a message after starting the Gateway (App ID: ${credentials.appId}).`,
+      accountId: target.accountId,
     };
   },
 };

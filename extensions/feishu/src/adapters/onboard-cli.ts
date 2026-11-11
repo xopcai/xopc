@@ -1,10 +1,10 @@
 /**
  * Feishu interactive onboarding (CLI onboard) — {@link ChannelOnboardAdapter}.
  *
- * This configures the single-account layout under `channels.feishu.*`.
+ * Stores credentials in the selected Feishu account.
  */
 
-import { confirm, input, select } from '@inquirer/prompts';
+import { confirm, input, password, select } from '@inquirer/prompts';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import { mergeDistinctSenderIds } from '@xopcai/xopc/channels/pairing/index.js';
@@ -18,6 +18,10 @@ import {
   type FeishuDomain,
 } from '../auth/app-registration.js';
 
+import { buildFeishuConfig } from './gateway-setup.js';
+import { resolveFeishuAccount } from '../state/accounts.js';
+import { ensureFeishuLarkSdk } from '../transport/client/lark-sdk.js';
+
 type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 type GroupPolicy = 'open' | 'disabled' | 'allowlist';
 type RenderMode = 'auto' | 'raw' | 'card';
@@ -25,12 +29,8 @@ type ConnectionMode = 'websocket' | 'webhook';
 type ReactionNotifications = 'off' | 'own' | 'all';
 
 function isFeishuConfigured(config: Config): boolean {
-  const feishu = config.channels?.feishu as Record<string, unknown> | undefined;
-  if (!feishu) return false;
-  const appId = typeof feishu.appId === 'string' ? feishu.appId.trim() : '';
-  const appSecret = typeof feishu.appSecret === 'string' ? feishu.appSecret.trim() : '';
-  const enabled = feishu.enabled === true;
-  return enabled && Boolean(appId && appSecret);
+  const account = resolveFeishuAccount(config);
+  return account.enabled && account.configured;
 }
 
 function parseAllowlistRaw(raw: string): Array<string | number> {
@@ -50,9 +50,10 @@ async function configureFeishu(config: Config): Promise<Config> {
   console.log('📱 Feishu / Lark setup');
   console.log(`${'='.repeat(50)}\n`);
 
-  const existing = config.channels?.feishu as Record<string, unknown> | undefined;
-  const existingAppId = typeof existing?.appId === 'string' ? existing.appId : '';
-  const existingDomain = typeof existing?.domain === 'string' ? existing.domain : '';
+  const target = resolveFeishuAccount(config);
+  const existing = target as unknown as Record<string, unknown>;
+  const existingAppId = target.appId ?? '';
+  const existingDomain = target.domain;
 
   if (existing?.enabled === true && existingAppId) {
     const keep = await confirm({
@@ -102,7 +103,9 @@ async function configureFeishu(config: Config): Promise<Config> {
       appSecret = outcome.result.appSecret;
       domain = outcome.result.domain;
       ownerOpenId = outcome.result.openId;
-      console.log(`✅ App created. Domain detected as "${domain}".\n`);
+      console.log(`App authorized in "${domain}". Send a message after starting the Gateway.\n`);
+      await ensureFeishuLarkSdk();
+      return buildFeishuConfig(config, outcome.result, target.accountId);
     }
   }
 
@@ -115,7 +118,7 @@ async function configureFeishu(config: Config): Promise<Config> {
       validate: (v) => v.trim().length > 0 || 'App ID cannot be empty',
     })).trim();
 
-    appSecret = (await input({
+    appSecret = (await password({
       message: 'App Secret:',
       validate: (v) => v.trim().length > 0 || 'App Secret cannot be empty',
     })).trim();
@@ -166,7 +169,7 @@ async function configureFeishu(config: Config): Promise<Config> {
   const dmPolicy = await select<DmPolicy>({
     message: 'DM (private chat) policy:',
     choices: [
-      { value: 'open', name: 'open  [default]', description: 'Anyone can DM the bot after setup' },
+      { value: 'open', name: 'open', description: 'Anyone can DM the bot after setup' },
       {
         value: 'pairing',
         name: 'pairing',
@@ -175,7 +178,7 @@ async function configureFeishu(config: Config): Promise<Config> {
       { value: 'allowlist', name: 'allowlist', description: 'Only allowlisted users can DM' },
       { value: 'disabled', name: 'disabled', description: 'Disable DMs' },
     ],
-    default: 'open',
+    default: ownerOpenId?.trim() ? 'allowlist' : 'pairing',
   });
 
   let allowFrom: Array<string | number> | undefined;
@@ -294,11 +297,13 @@ async function configureFeishu(config: Config): Promise<Config> {
     textChunkLimit: typeof existing?.textChunkLimit === 'number' ? existing.textChunkLimit : 4000,
   };
 
+  await ensureFeishuLarkSdk();
+  const section = config.channels?.feishu as import('../schema/config-schema.js').FeishuConfig | undefined;
   const newConfig: Config = {
     ...config,
     channels: {
       ...config.channels,
-      feishu: nextFeishu,
+      feishu: { ...section, enabled: true, accounts: { ...section?.accounts, [target.accountId]: nextFeishu } },
     },
   };
 

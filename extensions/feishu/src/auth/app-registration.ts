@@ -4,6 +4,8 @@
  * Shared between `cli-login.ts` (channels login) and `onboard-cli.ts` (onboard wizard).
  */
 
+import { setTimeout as delay } from 'node:timers/promises';
+
 export type FeishuDomain = 'feishu' | 'lark';
 
 export type AppRegistrationResult = {
@@ -22,12 +24,12 @@ function accountsBaseUrl(domain: FeishuDomain): string {
   return domain === 'lark' ? LARK_ACCOUNTS_URL : FEISHU_ACCOUNTS_URL;
 }
 
-async function postRegistration<T>(baseUrl: string, body: Record<string, string>): Promise<T> {
+async function postRegistration<T>(baseUrl: string, body: Record<string, string>, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${baseUrl}${REGISTRATION_PATH}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(body).toString(),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]) : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   return (await response.json()) as T;
 }
@@ -85,6 +87,7 @@ export async function pollAppRegistration(params: {
   intervalSec: number;
   expireInSec: number;
   initialDomain: FeishuDomain;
+  signal?: AbortSignal;
 }): Promise<
   | { status: 'success'; result: AppRegistrationResult }
   | { status: 'access_denied' | 'expired' | 'timeout'; message?: string }
@@ -110,15 +113,15 @@ export async function pollAppRegistration(params: {
         action: 'poll',
         device_code: params.deviceCode,
         tp: 'ob_cli_app',
-      });
+      }, params.signal);
     } catch {
-      await sleep(intervalSec * 1000);
+      await delay(intervalSec * 1000, undefined, { signal: params.signal });
       continue;
     }
 
     if (pollResponse.user_info?.tenant_brand) {
       const isLark = pollResponse.user_info.tenant_brand === 'lark';
-      if (!domainSwitched && isLark) {
+      if (!domainSwitched && isLark && domain !== 'lark' && !pollResponse.client_secret) {
         domain = 'lark';
         domainSwitched = true;
         continue;
@@ -154,7 +157,7 @@ export async function pollAppRegistration(params: {
       }
     }
 
-    await sleep(intervalSec * 1000);
+    await delay(intervalSec * 1000, undefined, { signal: params.signal });
   }
 
   return { status: 'timeout' };
@@ -176,8 +179,4 @@ export async function printQrCode(url: string): Promise<void> {
     console.log('Open this URL in a browser to scan:\n');
     console.log(url);
   }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }

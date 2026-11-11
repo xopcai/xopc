@@ -11,8 +11,14 @@ export interface InboundDebounceOptions<T> {
   onError?: (err: unknown, items: T[]) => void;
 }
 
+interface DebounceEntry<T> {
+  item: T;
+  resolve?: () => void;
+  reject?: (err: unknown) => void;
+}
+
 interface DebounceBuffer<T> {
-  items: T[];
+  items: DebounceEntry<T>[];
   timeout: ReturnType<typeof setTimeout> | null;
   debounceMs: number;
 }
@@ -44,11 +50,7 @@ export function createInboundDebouncer<T>(options: InboundDebounceOptions<T>) {
       buffer.timeout = null;
     }
     if (buffer.items.length === 0) return;
-    try {
-      await onFlush(buffer.items);
-    } catch (err) {
-      onError?.(err, buffer.items);
-    }
+    await process(buffer.items);
   }
   
   async function flushKey(key: string): Promise<void> {
@@ -63,34 +65,47 @@ export function createInboundDebouncer<T>(options: InboundDebounceOptions<T>) {
     buffer.timeout.unref?.();
   }
   
-  async function enqueue(item: T): Promise<void> {
+  async function process(entries: DebounceEntry<T>[]): Promise<void> {
+    const items = entries.map(entry => entry.item);
+    try {
+      await onFlush(items);
+      for (const entry of entries) entry.resolve?.();
+    } catch (err) {
+      for (const entry of entries) entry.reject?.(err);
+      onError?.(err, items);
+    }
+  }
+
+  async function enqueueEntry(entry: DebounceEntry<T>): Promise<void> {
+    const { item } = entry;
     const key = buildKey(item);
     const debounceMs = resolveMs(item);
     const canDebounce = debounceMs > 0 && (shouldDebounce?.(item) ?? true);
-    
-    if (!canDebounce) {
-      if (key && buffers.has(key)) await flushKey(key);
-      try { await onFlush([item]); } catch (err) { onError?.(err, [item]); }
+
+    if (!key || !canDebounce) {
+      if (key) await flushKey(key);
+      await process([entry]);
       return;
     }
-    
-    if (!key) {
-      try { await onFlush([item]); } catch (err) { onError?.(err, [item]); }
-      return;
-    }
-    
-    const existing = buffers.get(key);
-    if (existing) {
-      existing.items.push(item);
-      existing.debounceMs = debounceMs;
-      scheduleFlush(key, existing);
-    } else {
-      const buffer: DebounceBuffer<T> = { items: [item], timeout: null, debounceMs };
-      buffers.set(key, buffer);
-      scheduleFlush(key, buffer);
-    }
+
+    const buffer = buffers.get(key) ?? { items: [], timeout: null, debounceMs };
+    buffer.items.push(entry);
+    buffer.debounceMs = debounceMs;
+    buffers.set(key, buffer);
+    scheduleFlush(key, buffer);
   }
-  
+
+  function enqueue(item: T): Promise<void> {
+    return enqueueEntry({ item });
+  }
+
+  /** Resolve only after buffered items are dispatched. Used by durable ingress. */
+  function enqueueAndWait(item: T): Promise<void> {
+    return new Promise((resolve, reject) => {
+      void enqueueEntry({ item, resolve, reject }).catch(reject);
+    });
+  }
+
   async function flushAll(): Promise<void> {
     const keys = Array.from(buffers.keys());
     await Promise.all(keys.map(key => flushKey(key)));
@@ -100,7 +115,7 @@ export function createInboundDebouncer<T>(options: InboundDebounceOptions<T>) {
     return buffers.size;
   }
   
-  return { enqueue, flushKey, flushAll, getBufferCount };
+  return { enqueue, enqueueAndWait, flushKey, flushAll, getBufferCount };
 }
 
 export function hasControlCommand(text: string): boolean {

@@ -59,7 +59,7 @@ export function getWeixinLoginApiContext(cfg: Config, accountHint?: string): { b
   return { baseUrl: DEFAULT_BASE_URL, routeTag: sectionRouteTag };
 }
 
-export function mergeWeixinConfigAfterLogin(cfg: Config, normalizedAccountId: string): Config {
+export function mergeWeixinConfigAfterLogin(cfg: Config, normalizedAccountId: string, ownerId?: string): Config {
   const prev = cfg.channels?.weixin as Record<string, unknown> | undefined;
   const prevAccounts = (prev?.accounts as Record<string, Record<string, unknown>> | undefined) ?? {};
   const merged = {
@@ -72,7 +72,9 @@ export function mergeWeixinConfigAfterLogin(cfg: Config, normalizedAccountId: st
         accounts: {
           ...prevAccounts,
           [normalizedAccountId]: {
-            ...(prevAccounts[normalizedAccountId] ?? {}),
+            ...(prevAccounts[normalizedAccountId] ?? (ownerId?.trim()
+              ? { dmPolicy: 'allowlist', allowFrom: [ownerId.trim()] }
+              : { dmPolicy: 'pairing', allowFrom: [] })),
             enabled: true,
           },
         },
@@ -160,7 +162,7 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
 
   if (opts.writeConfig !== false) {
     try {
-      const next = mergeWeixinConfigAfterLogin(cfg, normalizedId);
+      const next = mergeWeixinConfigAfterLogin(cfg, normalizedId, waitResult.userId);
       const { saveConfig } = await import('@xopcai/xopc/config/loader.js');
       await saveConfig(next, configPath);
     } catch (err) {

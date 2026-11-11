@@ -6,143 +6,60 @@ const MEDIA_GROUP_GAP_MS = 800;
 const MAX_TEXT_FRAGMENTS = 12;
 const MAX_TEXT_FRAGMENT_CHARS = 50_000;
 
-type PendingTextFragment = {
-  key: string;
-  messages: Message[];
-  timer?: ReturnType<typeof setTimeout>;
-};
-
-type PendingMediaGroup = {
-  key: string;
-  messages: Message[];
-  timer?: ReturnType<typeof setTimeout>;
-};
-
 export type TelegramCoalescedInbound = {
   ctx: Context;
   accountId: string;
   messages: Message[];
 };
 
+type Input = {
+  ctx: Context;
+  accountId: string;
+  message: Message;
+  onReady: (batch: TelegramCoalescedInbound) => Promise<void>;
+};
+
+type Group = {
+  messages: Message[];
+  waiters: Array<{ resolve: () => void; reject: (err: unknown) => void }>;
+  size: number;
+  timer?: ReturnType<typeof setTimeout>;
+};
+
 export function createTelegramInboundCoalescer() {
-  const textFragments = new Map<string, PendingTextFragment>();
-  const mediaGroups = new Map<string, PendingMediaGroup>();
+  const groups = new Map<string, Group>();
 
   return {
-    async enqueue(params: {
-      ctx: Context;
-      accountId: string;
-      message: Message;
-      onReady: (batch: TelegramCoalescedInbound) => Promise<void>;
-    }): Promise<void> {
-      const { ctx, accountId, message, onReady } = params;
-      const mediaGroupId = message.media_group_id;
-      if (mediaGroupId) {
-        await enqueueMediaGroup({
-          key: `${accountId}:${ctx.chat?.id}:${mediaGroupId}`,
-          ctx,
-          accountId,
-          message,
-          onReady,
-          mediaGroups,
-        });
+    async enqueue({ ctx, accountId, message, onReady }: Input): Promise<void> {
+      const album = message.media_group_id;
+      const fragment = (message.text?.length ?? 0) >= 3500;
+      if (!album && !fragment) {
+        await onReady({ ctx, accountId, messages: [message] });
         return;
       }
 
-      if (message.text && message.message_id) {
-        await enqueueTextFragment({
-          key: `${accountId}:${ctx.chat?.id}:${ctx.from?.id}:${message.message_id}`,
-          ctx,
-          accountId,
-          message,
-          onReady,
-          textFragments,
-        });
-        return;
-      }
+      const key = JSON.stringify([accountId, ctx.chat?.id, message.message_thread_id, ctx.from?.id, album ?? 'text']);
+      const group = groups.get(key) ?? { messages: [], waiters: [], size: 0 };
+      groups.set(key, group);
+      group.messages.push(message);
+      group.size += message.text?.length ?? 0;
+      if (group.timer) clearTimeout(group.timer);
 
-      await onReady({ ctx, accountId, messages: [message] });
+      await new Promise<void>((resolve, reject) => {
+        group.waiters.push({ resolve, reject });
+        const flush = () => {
+          groups.delete(key);
+          const messages = [...group.messages].sort((a, b) => a.message_id - b.message_id);
+          const last = messages.at(-1)!;
+          const readyMessages = album ? messages : [{ ...last, text: messages.map(item => item.text ?? '').join('') }];
+          void Promise.resolve().then(() => onReady({ ctx, accountId, messages: readyMessages })).then(
+            () => { for (const waiter of group.waiters) waiter.resolve(); },
+            err => { for (const waiter of group.waiters) waiter.reject(err); },
+          );
+        };
+        if (group.messages.length >= MAX_TEXT_FRAGMENTS || group.size >= MAX_TEXT_FRAGMENT_CHARS) flush();
+        else group.timer = setTimeout(flush, album ? MEDIA_GROUP_GAP_MS : TEXT_FRAGMENT_GAP_MS);
+      });
     },
   };
-}
-
-async function enqueueMediaGroup(params: {
-  key: string;
-  ctx: Context;
-  accountId: string;
-  message: Message;
-  onReady: (batch: TelegramCoalescedInbound) => Promise<void>;
-  mediaGroups: Map<string, PendingMediaGroup>;
-}): Promise<void> {
-  const existing = params.mediaGroups.get(params.key);
-  const entry = existing ?? { key: params.key, messages: [] };
-  entry.messages.push(params.message);
-  if (entry.timer) clearTimeout(entry.timer);
-  entry.timer = setTimeout(async () => {
-    params.mediaGroups.delete(params.key);
-    await params.onReady({
-      ctx: params.ctx,
-      accountId: params.accountId,
-      messages: entry.messages,
-    });
-  }, MEDIA_GROUP_GAP_MS);
-  entry.timer.unref?.();
-  params.mediaGroups.set(params.key, entry);
-}
-
-async function enqueueTextFragment(params: {
-  key: string;
-  ctx: Context;
-  accountId: string;
-  message: Message;
-  onReady: (batch: TelegramCoalescedInbound) => Promise<void>;
-  textFragments: Map<string, PendingTextFragment>;
-}): Promise<void> {
-  const text = params.message.text ?? '';
-  const isFragmentCandidate = text.length >= 3500;
-  if (!isFragmentCandidate) {
-    await params.onReady({ ctx: params.ctx, accountId: params.accountId, messages: [params.message] });
-    return;
-  }
-
-  const baseKey = `${params.accountId}:${params.ctx.chat?.id}:${params.ctx.from?.id}`;
-  const existing = [...params.textFragments.values()].find((e) => e.key.startsWith(baseKey));
-  const entry = existing ?? { key: `${baseKey}:${params.message.message_id}`, messages: [] };
-
-  if (entry.messages.length >= MAX_TEXT_FRAGMENTS) {
-    await flushTextFragment(entry, params);
-    return;
-  }
-
-  entry.messages.push(params.message);
-  const combinedLen = entry.messages.reduce((n, m) => n + (m.text?.length ?? 0), 0);
-  if (combinedLen > MAX_TEXT_FRAGMENT_CHARS) {
-    await flushTextFragment(entry, params);
-    return;
-  }
-
-  if (entry.timer) clearTimeout(entry.timer);
-  entry.timer = setTimeout(async () => {
-    await flushTextFragment(entry, params);
-  }, TEXT_FRAGMENT_GAP_MS);
-  entry.timer.unref?.();
-  params.textFragments.set(entry.key, entry);
-}
-
-async function flushTextFragment(
-  entry: PendingTextFragment,
-  params: {
-    ctx: Context;
-    accountId: string;
-    onReady: (batch: TelegramCoalescedInbound) => Promise<void>;
-    textFragments: Map<string, PendingTextFragment>;
-  },
-): Promise<void> {
-  params.textFragments.delete(entry.key);
-  if (entry.timer) clearTimeout(entry.timer);
-  if (entry.messages.length === 0) return;
-  const mergedText = entry.messages.map((m) => m.text ?? '').join('');
-  const base = entry.messages[entry.messages.length - 1]!;
-  const merged: Message = { ...base, text: mergedText };
-  await params.onReady({ ctx: params.ctx, accountId: params.accountId, messages: [merged] });
 }

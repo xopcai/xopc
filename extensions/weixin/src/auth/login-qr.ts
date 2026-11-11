@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { apiGetFetch } from "../api/api.js";
 import { logger } from "../util/logger.js";
 import { redactToken } from "../util/redact.js";
+
+type QrStatus = "wait" | "scaned" | "confirmed" | "expired" | "scaned_but_redirect" | "need_verifycode" | "confirmed_but_need_verifycode";
 
 type ActiveLogin = {
   conversationId: string;
@@ -11,7 +14,9 @@ type ActiveLogin = {
   qrcodeUrl: string;
   startedAt: number;
   botToken?: string;
-  status?: "wait" | "scaned" | "confirmed" | "expired" | "scaned_but_redirect";
+  status?: QrStatus;
+  verifyCode?: string;
+  controller: AbortController;
   error?: string;
   /** The current effective polling base URL; may be updated on IDC redirect. */
   currentApiBaseUrl?: string;
@@ -29,13 +34,25 @@ const FIXED_BASE_URL = "https://ilinkai.weixin.qq.com";
 
 const activeLogins = new Map<string, ActiveLogin>();
 
+export function cancelWeixinQrLogin(id: string): void {
+  activeLogins.get(id)?.controller.abort();
+  activeLogins.delete(id);
+}
+
+export function submitWeixinQrVerificationCode(id: string, code: string): boolean {
+  const login = activeLogins.get(id);
+  if (!login?.status?.includes('need_verifycode') || !/^\d{4,8}$/.test(code)) return false;
+  login.verifyCode = code;
+  return true;
+}
+
 interface QRCodeResponse {
   qrcode: string;
   qrcode_img_content: string;
 }
 
 interface StatusResponse {
-  status: "wait" | "scaned" | "confirmed" | "expired" | "scaned_but_redirect";
+  status: QrStatus;
   bot_token?: string;
   ilink_bot_id?: string;
   baseurl?: string;
@@ -53,7 +70,7 @@ function isLoginFresh(login: ActiveLogin): boolean {
 function purgeExpiredLogins(): void {
   for (const [id, login] of activeLogins) {
     if (!isLoginFresh(login)) {
-      activeLogins.delete(id);
+      cancelWeixinQrLogin(id);
     }
   }
 }
@@ -73,17 +90,19 @@ async function pollQRStatus(
   apiBaseUrl: string,
   qrcode: string,
   routeTag?: string,
+  signal?: AbortSignal,
+  verifyCode?: string,
 ): Promise<StatusResponse> {
   logger.debug(`Long-poll QR status from: ${apiBaseUrl} qrcode=***`);
   try {
     const rawText = await apiGetFetch({
       baseUrl: apiBaseUrl,
-      endpoint: `ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`,
+      endpoint: `ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}${verifyCode ? `&verify_code=${encodeURIComponent(verifyCode)}` : ''}`,
       timeoutMs: QR_LONG_POLL_TIMEOUT_MS,
       label: "pollQRStatus",
       routeTag,
+      abortSignal: signal,
     });
-    logger.debug(`pollQRStatus: body=${rawText.substring(0, 200)}`);
     return JSON.parse(rawText) as StatusResponse;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
@@ -116,10 +135,11 @@ export async function startWeixinLoginWithQr(opts: {
   timeoutMs?: number;
   force?: boolean;
   accountId?: string;
+  freshSession?: boolean;
   botType?: string;
   routeTag?: string;
 }): Promise<WeixinQrStartResult> {
-  const conversationId = opts.accountId || randomUUID();
+  const conversationId = opts.freshSession ? randomUUID() : opts.accountId || randomUUID();
 
   purgeExpiredLogins();
 
@@ -140,7 +160,6 @@ export async function startWeixinLoginWithQr(opts: {
     logger.info(
       `QR code received, qrcode=${redactToken(qrResponse.qrcode)} imgContentLen=${qrResponse.qrcode_img_content?.length ?? 0}`,
     );
-    logger.info(`二维码链接: ${qrResponse.qrcode_img_content}`);
 
     const login: ActiveLogin = {
       conversationId,
@@ -148,6 +167,7 @@ export async function startWeixinLoginWithQr(opts: {
       qrcode: qrResponse.qrcode,
       qrcodeUrl: qrResponse.qrcode_img_content,
       startedAt: Date.now(),
+      controller: new AbortController(),
     };
 
     activeLogins.set(conversationId, login);
@@ -217,10 +237,28 @@ export async function waitForWeixinLogin(opts: {
 
   logger.info("Starting to poll QR code status...");
 
-  while (Date.now() < deadline) {
+  const signal = activeLogin.controller.signal;
+  while (Date.now() < deadline && !signal.aborted) {
     try {
+      let verifyCode = activeLogin.verifyCode;
+      if (activeLogin.status?.includes('need_verifycode') && !verifyCode) {
+        if (silent) {
+          await delay(400, undefined, { signal });
+          continue;
+        }
+        const { createInterface } = await import('node:readline/promises');
+        const reader = createInterface({ input: process.stdin, output: process.stdout });
+        try {
+          verifyCode = (await reader.question('请输入微信显示的验证码：', { signal })).trim();
+        } finally {
+          reader.close();
+        }
+        if (!/^\d{4,8}$/.test(verifyCode)) continue;
+      }
+      activeLogin.verifyCode = undefined;
       const currentBaseUrl = activeLogin.currentApiBaseUrl ?? FIXED_BASE_URL;
-      const statusResponse = await pollQRStatus(currentBaseUrl, activeLogin.qrcode, opts.routeTag);
+      const statusResponse = await pollQRStatus(currentBaseUrl, activeLogin.qrcode, opts.routeTag, signal, verifyCode);
+      if (signal.aborted) break;
       logger.debug(
         `pollQRStatus: status=${statusResponse.status} hasBotToken=${Boolean(statusResponse.bot_token)} hasBotId=${Boolean(statusResponse.ilink_bot_id)}`,
       );
@@ -303,6 +341,9 @@ export async function waitForWeixinLogin(opts: {
           }
           break;
         }
+        case "need_verifycode":
+        case "confirmed_but_need_verifycode":
+          break;
         case "confirmed": {
           if (!statusResponse.ilink_bot_id) {
             activeLogins.delete(opts.conversationId);
@@ -331,11 +372,12 @@ export async function waitForWeixinLogin(opts: {
         }
       }
     } catch (err) {
-      logger.error(`Error polling QR status: ${String(err)}`);
+      if (signal.aborted) break;
+      logger.error({ errorType: err instanceof Error ? err.name : typeof err }, 'Weixin QR status request failed');
       activeLogins.delete(opts.conversationId);
       return {
         connected: false,
-        message: `Login failed: ${String(err)}`,
+        message: "Login failed. Please retry.",
       };
     }
 

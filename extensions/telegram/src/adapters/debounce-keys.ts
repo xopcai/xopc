@@ -17,12 +17,12 @@ export function telegramDebouncerKeyPolicy() {
       const chatId = item.ctx.chat?.id?.toString();
       const userId = item.ctx.from?.id?.toString();
       if (!chatId || !userId) return undefined;
-      return `telegram:${item.accountId}:${chatId}:${userId}`;
+      return JSON.stringify([item.accountId, chatId, item.message.message_thread_id, userId]);
     },
     shouldDebounce: (item: TelegramMessageEvent) => {
       const text = item.message.text ?? item.message.caption ?? '';
       if (text.startsWith('/')) return false;
-      if (item.message.photo || item.message.document || item.message.video) return false;
+      if (!item.message.text || item.message.photo || item.message.document || item.message.video) return false;
       return text.length < 100;
     },
   };
