@@ -3,6 +3,7 @@
  * Activation is manifest-driven; `extensions.enabled` / `extensions.disabled` are merged in {@link mergeActivationContext}.
  */
 
+import { isBundledChannelExtension } from '../channels/bundled-channel-extensions.js';
 import type { Config as SurfaceConfig } from '../config/config-surface.js';
 import type { Config as SchemaConfig } from '../config/schema.js';
 import { mergeActivationContext } from './activation-context.js';
@@ -61,6 +62,9 @@ export function computeExtensionActivationPatch(
   extensionId: string,
   wanted: boolean,
 ): { ok: true; extensions: Record<string, unknown> } | { ok: false; error: string } {
+  if (isBundledChannelExtension(extensionId)) {
+    return { ok: false, error: 'Manage this built-in channel in Channels settings.' };
+  }
   const discovered = loader.discoverExtensions();
   const hit = discovered.find((e) => e.id === extensionId);
   if (!hit) {
