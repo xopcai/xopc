@@ -181,7 +181,7 @@ describe('MessageList history identity', () => {
   });
 
   it('adds time separators only for the first message and long gaps', () => {
-    const start = Date.now() - 2 * 60 * 60_000;
+    const start = new Date(2024, 0, 15, 12).getTime();
     store().setCommittedSnapshot(conversationId, {
       messages: [
         message(start),
