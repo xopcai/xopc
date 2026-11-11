@@ -10,7 +10,7 @@ describe('memory provider plugins', () => {
   const previousBundledRoot = process.env.XOPC_BUNDLED_EXTENSIONS_ROOT;
 
   beforeEach(() => {
-    process.env.XOPC_BUNDLED_EXTENSIONS_ROOT = resolve('extensions');
+    process.env.XOPC_BUNDLED_EXTENSIONS_ROOT = resolve(import.meta.dirname, 'fixtures');
   });
 
   afterEach(() => {
@@ -19,6 +19,12 @@ describe('memory provider plugins', () => {
     } else {
       process.env.XOPC_BUNDLED_EXTENSIONS_ROOT = previousBundledRoot;
     }
+  });
+
+  it('excludes the demo provider from the bundled extensions', async () => {
+    process.env.XOPC_BUNDLED_EXTENSIONS_ROOT = resolve('extensions');
+    const plugins = await discoverMemoryPlugins();
+    expect(plugins.map((plugin) => plugin.name)).not.toContain('demo-memory');
   });
 
   it('discovers and loads the demo memory provider', async () => {

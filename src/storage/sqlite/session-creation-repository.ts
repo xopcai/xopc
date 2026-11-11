@@ -87,13 +87,20 @@ export function acceptSessionCommand(input: {
       session = createConversation({
         agentId: creation.agentId, sourceChannel: input.sourceChannel ?? 'webchat', sourceChatId: conversationId,
         sessionType: 'chat', hiddenFromSessionList: !input.preparedInput,
+        ...(creation.agentSetup ? { customData: { agentSetup: true } } : {}),
         routing: { agentId: creation.agentId, source: input.sourceChannel ?? 'webchat', accountId: 'default', peerKind: 'direct', peerId: conversationId },
       }, '', conversationId);
-      setSessionConfig(conversationId, input.config ?? {
+      const config = input.config ?? {
         modelOverride: creation.model, fixedModel: true,
         thinkingLevel: creation.thinkingLevel as SessionAgentConfig['thinkingLevel'],
         userContextMode: creation.temporary ? 'temporary' : 'enabled',
         ...(creation.workingDirectory ? { workingDirectoryOverride: creation.workingDirectory } : {}),
+      };
+      setSessionConfig(conversationId, {
+        ...config,
+        ...(creation.agentSetup && creation.agentSetupLanguage && !config.responseLanguage
+          ? { responseLanguage: creation.agentSetupLanguage }
+          : {}),
       }, '');
       if (creation.projectId) {
         if (!input.attachProject) throw new Error('Project attachment is required');

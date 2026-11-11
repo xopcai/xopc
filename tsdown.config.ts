@@ -19,8 +19,6 @@ export default defineConfig({
     '!./extensions/weixin/src/**/__tests__/**/*.ts',
     './extensions/feishu/src/**/*.ts',
     '!./extensions/feishu/src/**/__tests__/**/*.ts',
-    './extensions/demo-memory/src/**/*.ts',
-    '!./extensions/demo-memory/src/**/__tests__/**/*.ts',
   ],
   outDir: 'dist',
   root: '.',

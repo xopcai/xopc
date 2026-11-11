@@ -72,3 +72,8 @@ export function newChatHrefForProject(projectId: string | null | undefined): str
     ? `/chat/new?projectId=${encodeURIComponent(normalized)}`
     : '/chat/new?projectScope=none';
 }
+
+export function newAgentSetupHref(draft: string): string {
+  const params = new URLSearchParams({ agentSetup: '1', projectScope: 'none', draft });
+  return `/chat/new?${params.toString()}`;
+}

@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { newAgentSetupHref } from '@/features/chat/session/composer-handoff-params';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { AgentEditor } from '@/features/settings/agents/agent-editor';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
@@ -83,12 +84,7 @@ export function AgentsSettingsPanel({
     if (!data) return;
     setActionError(null);
     rememberSelectedAgent(data.defaultId);
-    const search = new URLSearchParams({
-      agentSetup: '1',
-      projectScope: 'none',
-      draft: agentsMessages.setupDraftPrefix,
-    });
-    navigate(`/chat/new?${search.toString()}`, {
+    navigate(newAgentSetupHref(agentsMessages.setupDraftPrefix), {
       state: { forceNewChat: true, agentId: data.defaultId },
     });
   }, [agentsMessages.setupDraftPrefix, data, navigate]);

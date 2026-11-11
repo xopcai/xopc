@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { SessionInputCommand } from '@xopcai/gateway-contract';
 
+import { SystemPromptBuilder } from '../../../agent/prompt/service-prompt-builder.js';
+import { applyUserProfilePatch } from '../../../user-model/profile.js';
 import { openXopcDatabase, closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../connection.js';
 import { acceptSessionCommand, getSessionInputReceipt, claimSessionPreparation, finishSessionPreparation, getSessionPreparation, retrySessionPreparation } from '../session-creation-repository.js';
 import { getSqliteDatabase } from '../transaction.js';
@@ -32,6 +34,23 @@ describe('durable session creation', () => {
   it('keeps the selected draft folder when accepting the first input', () => {
     accept({ ...command, creation: { ...command.creation, workingDirectory: dir } });
     expect(getSessionConfig(conversationId)?.workingDirectoryOverride).toBe(dir);
+  });
+
+  it('preserves the agent setup marker and response language when the chat materializes', () => {
+    accept({ ...command, creation: { ...command.creation, agentSetup: true, agentSetupLanguage: 'zh-CN' } });
+    expect(getSessionMetadata(conversationId)?.customData?.agentSetup).toBe(true);
+    expect(getSessionConfig(conversationId)?.responseLanguage).toBe('zh-CN');
+  });
+
+  it('uses the saved interface language for older setup chats with an English host profile', () => {
+    applyUserProfilePatch({ locale: 'zh-CN' });
+    accept({ ...command, creation: { ...command.creation, agentSetup: true } });
+    const builder = new SystemPromptBuilder({
+      workspace: dir, config: {} as never, skillManager: { getPromptForSkillAllowlist: () => '' } as never,
+    });
+    const prompt = builder.build([], { conversationId, agentProfile: { name: 'Smart Assistant', language: 'en' } });
+    expect(prompt).toContain('Write all user-facing prose in Simplified Chinese.');
+    expect(prompt).toContain('A language requested for the new Agent configures that Agent only.');
   });
 
   it('atomically receives once and survives reopening the database', () => {

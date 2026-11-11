@@ -146,7 +146,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
 
   const sessionRoutePending = Boolean(decodedKey !== undefined && focusedConversationId !== decodedKey);
   const sessionContentLoading = Boolean(
-    decodedKey && sessionSlice?.historyStatus === 'loading' && !sessionRoutePending,
+    token && decodedKey && !shellError && sessionSlice?.historyStatus !== 'ready' && !sessionRoutePending,
   );
   const showSessionLoading = useMemo(
     () => initLoading && (focusedConversationId == null || decodedKey === undefined),

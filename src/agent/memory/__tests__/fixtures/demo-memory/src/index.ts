@@ -1,4 +1,4 @@
-import type { MemoryProvider, MemoryProviderInitOptions } from '../../../src/agent/memory/provider.js';
+import type { MemoryProvider, MemoryProviderInitOptions } from '../../../../provider.js';
 import type {
   MemoryCapabilities,
   MemoryListRequest,
@@ -12,7 +12,7 @@ import type {
   MemorySyncEvent,
   MemoryWriteRequest,
   MemoryWriteResult,
-} from '../../../src/agent/memory/types.js';
+} from '../../../../types.js';
 
 export const manifest: MemoryProviderManifest = {
   type: 'memory-provider',

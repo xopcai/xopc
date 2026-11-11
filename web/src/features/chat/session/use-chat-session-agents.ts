@@ -17,7 +17,7 @@ import {
   rememberLastChatScope,
   rememberSelectedAgent,
 } from '@/features/chat/session/new-session-preferences';
-import { resolveChatSessionAgentContext } from '@/features/chat/session/chat-session-agent-context';
+import { useChatSessionAgentContext } from '@/features/chat/session/chat-session-agent-context';
 import { isSkillsOnlyConfigReload } from '@/features/gateway/config-reload-event';
 import { useGatewayStore } from '@/stores/gateway-store';
 
@@ -32,7 +32,6 @@ export function useChatSessionAgents(opts: {
 }) {
   const { navigate, conversationIdRef, conversationId, isNewRoute, locationState, locationSearch, personal = false } = opts;
   const token = useGatewayStore((s) => s.conversationId);
-  const sessionAgentKey = conversationId?.trim() ?? '';
 
   const { data: chatAgentsData, mutate: mutateChatAgents } = useSWR(
     token ? ['gateway-chat-agents', token] : null,
@@ -40,11 +39,7 @@ export function useChatSessionAgents(opts: {
     { revalidateOnFocus: false },
   );
 
-  const { data: currentSessionContext } = useSWR(
-    token && sessionAgentKey ? ['gateway-chat-session-agent', token, sessionAgentKey] : null,
-    () => resolveChatSessionAgentContext(sessionAgentKey),
-    { revalidateOnFocus: false },
-  );
+  const { data: currentSessionContext } = useChatSessionAgentContext(conversationId);
   const currentSessionAgentId = currentSessionContext?.agentId ?? '';
 
   useEffect(() => {

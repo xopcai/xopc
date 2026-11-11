@@ -10,10 +10,10 @@ function collectVerticalScrollChain(
   outerScrollRegion: HTMLElement,
 ): HTMLElement[] {
   const chain: HTMLElement[] = [];
-  let element: HTMLElement | null = target instanceof HTMLElement ? target : scrollRegion;
+  let element: Element | null = target instanceof Element ? target : scrollRegion;
 
   while (element && element !== scrollRegion) {
-    if (isVerticalScrollContainer(element)) chain.push(element);
+    if (element instanceof HTMLElement && isVerticalScrollContainer(element)) chain.push(element);
     element = element.parentElement;
   }
 
@@ -39,18 +39,20 @@ function distributeVerticalScroll(deltaY: number, chain: HTMLElement[]) {
 export function routeWheelThroughVerticalScrollChain(
   event: WheelEvent,
   scrollRegion: HTMLElement,
+  outerScrollRegion: HTMLElement | null,
+  { handoffOnly = false } = {},
 ) {
   if (
-    event.defaultPrevented
+    !outerScrollRegion
+    || !event.cancelable
+    || event.defaultPrevented
     || event.ctrlKey
+    || event.shiftKey
     || event.deltaY === 0
     || Math.abs(event.deltaY) <= Math.abs(event.deltaX)
   ) {
     return;
   }
-
-  const outerScrollRegion = scrollRegion.closest<HTMLElement>('.chat-messages');
-  if (!outerScrollRegion) return;
 
   const pageHeight = scrollRegion.clientHeight || outerScrollRegion.clientHeight;
   const deltaMultiplier = event.deltaMode === WheelEvent.DOM_DELTA_LINE
@@ -59,7 +61,15 @@ export function routeWheelThroughVerticalScrollChain(
       ? pageHeight
       : 1;
   const chain = collectVerticalScrollChain(event.target, scrollRegion, outerScrollRegion);
+  const delta = event.deltaY * deltaMultiplier;
+  if (handoffOnly) {
+    const inner = chain[0];
+    if (!inner || inner === outerScrollRegion) return;
+    const available = delta > 0 ? inner.scrollHeight - inner.clientHeight - inner.scrollTop : inner.scrollTop;
+    // Let the browser animate ordinary scrolling and only split a delta at an inner boundary.
+    if (Math.abs(delta) <= available) return;
+  }
 
   event.preventDefault();
-  distributeVerticalScroll(event.deltaY * deltaMultiplier, chain);
+  distributeVerticalScroll(delta, chain);
 }

@@ -121,6 +121,7 @@ export function HomeAdvisorStatusControl({
   if (!status) return null;
   const canRefresh = advisor.state !== 'refreshing';
   const refreshLabel = advisor.state === 'ready' ? copy.findAnother : copy.retry;
+  const statusLabel = `${copy.label}：${status.label}`;
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -128,16 +129,18 @@ export function HomeAdvisorStatusControl({
         <Button
           type="button"
           variant="ghost"
-          className="h-9 max-w-56 rounded-lg px-2.5"
-          aria-label={`${copy.label}：${status.label}`}
+          className="relative size-9 rounded-lg p-0 data-[state=open]:bg-surface-hover data-[state=open]:text-fg"
+          aria-label={statusLabel}
+          title={statusLabel}
         >
           {status.refreshing ? (
-            <RefreshCw className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden />
+            <RefreshCw className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
           ) : (
-            <Sparkles className="size-3.5 shrink-0" aria-hidden />
+            <Sparkles className="size-4" aria-hidden />
           )}
-          <span className={cn('size-1.5 shrink-0 rounded-full', toneClass[status.tone])} aria-hidden />
-          <span className="truncate">{copy.label} · {status.label}</span>
+          {status.tone !== 'neutral' && !status.refreshing ? (
+            <span className={cn('absolute right-1.5 top-1.5 size-1.5 rounded-full', toneClass[status.tone])} aria-hidden />
+          ) : null}
         </Button>
       </Popover.Trigger>
       <Popover.Portal>

@@ -16,6 +16,7 @@ import {
   PinOff,
   Plus,
   Trash2,
+  UsersRound,
 } from 'lucide-react';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -28,6 +29,8 @@ import { automationApi } from '@/features/automations/automation-api';
 import { allProjectOptions } from '@/features/sessions/session-filter-projects';
 import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
 
+import { SidebarExpertList } from '@/components/shell/sidebar-expert-list';
+import { SidebarCreateSectionHeader, sidebarSectionLabelClass } from '@/components/shell/sidebar-create-section-header';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { ProjectUnderstandingAction, ProjectUnderstandingCheckbox } from '@/features/projects/project-understanding';
 import { shouldRefreshSidebarForTranscriptUpdate } from '@/components/shell/sidebar-session-refresh';
@@ -110,13 +113,29 @@ const PROJECT_PREVIEW_LIMIT = 5;
 const SIDEBAR_STALE_DAYS = 60;
 const SIDEBAR_DRAG_MIME = 'application/x-xopc-sidebar-item';
 
-type SessionView = 'recent' | 'projects';
+const SESSION_VIEWS = ['recent', 'projects', 'experts'] as const;
+type SessionView = (typeof SESSION_VIEWS)[number];
 
 const SESSION_VIEW_STORAGE_KEY = 'xopc-web-sidebar-session-view';
+const SESSION_VIEW_ORDER_STORAGE_KEY = 'xopc-web-sidebar-session-view-order';
+
+function readSessionViewOrder(): SessionView[] {
+  try {
+    const saved: unknown = JSON.parse(globalThis.localStorage?.getItem(SESSION_VIEW_ORDER_STORAGE_KEY) ?? 'null');
+    if (Array.isArray(saved)) {
+      const known = [...new Set(saved)].filter((value): value is SessionView => SESSION_VIEWS.some(view => view === value));
+      return [...known, ...SESSION_VIEWS.filter(view => !known.includes(view))];
+    }
+  } catch {
+    // An invalid or unavailable preference falls back to the default order.
+  }
+  return [...SESSION_VIEWS];
+}
 
 function readSessionView(): SessionView {
   try {
-    return globalThis.localStorage?.getItem(SESSION_VIEW_STORAGE_KEY) === 'projects' ? 'projects' : 'recent';
+    const saved = globalThis.localStorage?.getItem(SESSION_VIEW_STORAGE_KEY);
+    return saved === 'projects' || saved === 'experts' ? saved : 'recent';
   } catch {
     return 'recent';
   }
@@ -274,8 +293,6 @@ function rowShellClass(isActive: boolean): string {
   );
 }
 
-const sidebarSectionLabelClass =
-  'text-xs font-normal leading-5 text-fg-subtle';
 const sidebarSectionButtonClass = cn(
   sidebarSectionLabelClass,
   'transition-colors hover:text-fg-muted',
@@ -1099,7 +1116,7 @@ function SidebarTaskListContent({
   const token = useGatewayStore((s) => s.conversationId);
   const openTokenDialog = useGatewayStore((s) => s.openTokenDialog);
 
-  const { data: chatAgents, mutate: mutateChatAgents } = useSWR(
+  const { data: chatAgents, error: chatAgentsError, mutate: mutateChatAgents } = useSWR(
     token ? (['gateway-chat-agents', token] as const) : null,
     fetchChatAgents,
     { revalidateOnFocus: false },
@@ -1133,6 +1150,7 @@ function SidebarTaskListContent({
   const [autoUnderstand, setAutoUnderstand] = useState(false);
   const [includedConversationId, setIncludedConversationId] = useState<string | undefined>(() => activeConversationId);
   const [view, setView] = useState<SessionView>(readSessionView);
+  const [viewOrder, setViewOrder] = useState(readSessionViewOrder);
   const [showOlder, setShowOlder] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
@@ -1673,6 +1691,20 @@ function SidebarTaskListContent({
     defaultUnnamedTitle: m.chat.newSession,
   };
 
+  const reorderViews = (order: SessionView[]) => {
+    setViewOrder(order);
+    try {
+      globalThis.localStorage?.setItem(SESSION_VIEW_ORDER_STORAGE_KEY, JSON.stringify(order));
+    } catch {
+      // The new order still applies to this window.
+    }
+  };
+  const viewOptions = {
+    recent: { label: sb.sessionViewRecent, icon: Clock3 },
+    projects: { label: sb.sessionViewProjects, icon: Folder },
+    experts: { label: sb.sessionViewExperts, icon: UsersRound },
+  };
+
   const changeView = (next: SessionView) => {
     setView(next);
     try {
@@ -1754,15 +1786,13 @@ function SidebarTaskListContent({
             aria-label={sb.sessionViewLabel}
             value={view}
             onChange={changeView}
+            onReorder={reorderViews}
             flush
-            buttonClassName="h-8"
-            options={[
-              { value: 'recent', label: sb.sessionViewRecent, icon: Clock3 },
-              { value: 'projects', label: sb.sessionViewProjects, icon: Folder },
-            ]}
+            buttonClassName="h-8 min-w-0 px-1"
+            options={viewOrder.map(value => ({ value, ...viewOptions[value] }))}
           />
         </div>
-        <div className="px-2">
+        {view !== 'experts' ? <div className="px-2">
           <SidebarPinnedSection
             sessions={pinnedSessions}
             projectNames={view === 'recent' ? projectNames : undefined}
@@ -1770,8 +1800,19 @@ function SidebarTaskListContent({
             {...sessionRowProps}
             onReorder={reorderSidebar}
           />
-        </div>
-        {view === 'recent' ? (
+        </div> : null}
+        {view === 'experts' ? (
+          <div className="px-2">
+            {chatAgentsError && !chatAgents ? (
+              <div role="alert" className="space-y-2 p-2 text-xs text-fg-muted">
+                <p>{sb.expertsLoadError}</p>
+                <Button variant="secondary" onClick={() => void mutateChatAgents()}>{sb.sessionFilters.retry}</Button>
+              </div>
+            ) : chatAgents ? (
+              <SidebarExpertList agents={chatAgents.items} activeConversationId={activeConversationId} onNavigate={onNavigate} />
+            ) : <SidebarTaskListSkeleton />}
+          </div>
+        ) : view === 'recent' ? (
           <div className="flex flex-col gap-2 px-2">
             {!recentPages && !recentError ? <SidebarTaskListSkeleton /> : null}
             {recentError ? (
@@ -1815,19 +1856,11 @@ function SidebarTaskListContent({
           </div>
         ) : (
           <div>
-          <div className="flex items-center justify-between px-4 pb-0.5">
-            <h2 className={sidebarSectionLabelClass}>{sb.sessionViewProjects}</h2>
-            <Button
-              type="button"
-              variant="ghost"
-              className="size-7 shrink-0 rounded-md p-0 text-fg-muted"
-              onClick={() => setCreateProjectOpen(true)}
-              aria-label={projectsText.createTitle}
-              title={projectsText.createTitle}
-            >
-              <Plus className="size-3.5" strokeWidth={2} aria-hidden />
-            </Button>
-          </div>
+          <SidebarCreateSectionHeader
+            label={sb.sessionViewProjects}
+            createLabel={projectsText.createTitle}
+            onCreate={() => setCreateProjectOpen(true)}
+          />
           {loadingFirst ? (
             <SidebarTaskListSkeleton />
           ) : hasGroupedItems ? (

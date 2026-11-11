@@ -21,7 +21,7 @@ import type {
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { knownPartRenderKey } from '@/features/chat/rendering/part-identity';
 import { useChatContentPart } from '@/features/chat/rendering/use-chat-render-state';
-import { routeWheelThroughVerticalScrollChain } from '@/features/chat/scroll/wheel-scroll-chain';
+import { routeWheelThroughVerticalScrollChain } from '@/lib/wheel-scroll-chain';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import {
   getPublicToolExecutionTitle,
@@ -199,7 +199,8 @@ export function AssistantStepsBlock({
   useEffect(() => {
     const element = processRef.current;
     if (!expanded || !element) return;
-    const onWheel = (event: WheelEvent) => routeWheelThroughVerticalScrollChain(event, element);
+    const outerScrollRegion = element.closest<HTMLElement>('.chat-messages');
+    const onWheel = (event: WheelEvent) => routeWheelThroughVerticalScrollChain(event, element, outerScrollRegion);
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
   }, [expanded]);
