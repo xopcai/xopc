@@ -1,5 +1,13 @@
 import { EventEmitter } from 'events';
-import { InboundMessage, OutboundMessage } from '../../channels/transport-types.js';
+import { persistInboundAttachments } from '../../channels/attachments/inbound-persist.js';
+import { ChannelMessageJournal } from '../../channels/message-journal.js';
+import { createLogger } from '../../utils/logger.js';
+import type { InboundMessage, OutboundMessage } from '../../channels/transport-types.js';
+
+const log = createLogger('ChannelInbox');
+
+export type InboundDelivery = { scope: string; id: string };
+type InboundJournal = ChannelMessageJournal<InboundMessage, never>;
 
 interface MessageBusEvents {
   inbound: (msg: InboundMessage) => void;
@@ -22,10 +30,58 @@ class MessageBus extends EventEmitter {
   private inboundConsumers: ((msg: InboundMessage | Error) => void)[] = [];
   private outboundConsumers: ((msg: OutboundMessage | Error) => void)[] = [];
   private isShutdown = false;
+  private readonly durableInboundJournals = new Map<string, InboundJournal>();
+  private readonly inboundReceipts = new WeakMap<InboundMessage, InboundDelivery & { journal: InboundJournal }>();
+  private persistOutboundReply?: (msg: OutboundMessage, delivery: InboundDelivery) => boolean;
 
-  async publishInbound(msg: InboundMessage): Promise<void> {
-    if (this.isShutdown) return; // Ignore if shut down
+  async publishInbound(msg: InboundMessage, delivery?: InboundDelivery, verify?: (msg: InboundMessage) => void): Promise<void> {
+    if (!delivery) {
+      if (!this.isShutdown) this.enqueueInbound(msg);
+      return;
+    }
 
+    const journal = this.durableInboundJournal(msg.channel, delivery.scope);
+    const attachments = await persistInboundAttachments(msg.attachments);
+    const payload: InboundMessage = attachments ? { ...msg, attachments } : msg;
+    if (!journal.accept([{ id: delivery.id, payload }]).length) return;
+    verify?.(payload);
+    this.inboundReceipts.set(payload, { journal, ...delivery });
+    if (!this.isShutdown) this.enqueueInbound(payload);
+  }
+
+  restoreDurableInbound(channel: string, scope: string, verify?: (msg: InboundMessage, acceptedAt: number) => void): void {
+    const key = JSON.stringify([channel, scope]);
+    if (this.durableInboundJournals.has(key)) return;
+    const journal = this.durableInboundJournal(channel, scope);
+    const interrupted = journal.recoverInterrupted();
+    if (interrupted) log.warn({ channel, interrupted }, 'Channel inputs interrupted during execution');
+    for (const { id, payload, enqueuedAt } of journal.pending(500)) {
+      verify?.(payload, enqueuedAt);
+      this.inboundReceipts.set(payload, { journal, id, scope });
+      if (!this.isShutdown) this.enqueueInbound(payload);
+    }
+  }
+
+  beginInboundProcessing(msg: InboundMessage): boolean {
+    const receipt = this.inboundReceipts.get(msg);
+    return !receipt || receipt.journal.begin(receipt.id);
+  }
+
+  finishInboundProcessing(msg: InboundMessage, completed: boolean): void {
+    const receipt = this.inboundReceipts.get(msg);
+    receipt?.journal.finish(receipt.id, completed ? 'completed' : 'interrupted');
+  }
+
+  private durableInboundJournal(channel: string, scope: string): InboundJournal {
+    const key = JSON.stringify([channel, scope]);
+    const existing = this.durableInboundJournals.get(key);
+    if (existing) return existing;
+    const journal = new ChannelMessageJournal<InboundMessage, never>(`${channel}:agent`, scope);
+    this.durableInboundJournals.set(key, journal);
+    return journal;
+  }
+
+  private enqueueInbound(msg: InboundMessage): void {
     // Emit event for listeners
     this.emit('inbound', msg);
 
@@ -38,8 +94,14 @@ class MessageBus extends EventEmitter {
     }
   }
 
-  async publishOutbound(msg: OutboundMessage): Promise<void> {
-    if (this.isShutdown) return; // Ignore if shut down
+  setOutboundReplyPersistence(persist: (msg: OutboundMessage, delivery: InboundDelivery) => boolean): void {
+    this.persistOutboundReply = persist;
+  }
+
+  async publishOutbound(msg: OutboundMessage, replyingTo?: InboundMessage): Promise<void> {
+    const receipt = replyingTo && this.inboundReceipts.get(replyingTo);
+    if (receipt && this.persistOutboundReply && !this.persistOutboundReply(msg, receipt)) return;
+    if (this.isShutdown) return;
 
     // Emit event for listeners
     this.emit('outbound', msg);
@@ -132,6 +194,7 @@ class MessageBus extends EventEmitter {
    */
   reset(): void {
     this.isShutdown = false;
+    this.durableInboundJournals.clear();
     this.clear();
   }
 

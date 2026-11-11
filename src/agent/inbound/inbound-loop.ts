@@ -111,9 +111,8 @@ export class InboundLoop {
     // Errors fall into two buckets:
     //   1. `bus.consumeInbound()` itself threw → infrastructure problem; back off
     //      exponentially so a flapping bus does not pin the CPU at 100%.
-    //   2. `handleInboundMessage(msg)` threw → per-message handler bug. The
-    //      message is already lost; do NOT sleep, just log and move on so
-    //      legitimate traffic is not held hostage.
+    //   2. `handleInboundMessage(msg)` threw → record interruption for durable
+    //      messages and continue processing the independent next message.
     // Shutdown (`MessageBusShutdownError`) is the only signal that breaks the loop.
     let consecutiveConsumeFailures = 0;
 
@@ -146,8 +145,13 @@ export class InboundLoop {
         continue;
       }
 
+      let began = false;
+      let completed = false;
       try {
+        began = this.cfg.bus.beginInboundProcessing?.(msg) ?? true;
+        if (!began) continue;
         await this.handleInboundMessage(msg);
+        completed = true;
       } catch (error) {
         const em = error instanceof Error ? error.message : String(error);
         this.log.error(
@@ -160,7 +164,14 @@ export class InboundLoop {
           },
           `Inbound message handler failed: ${em}`,
         );
-        // Per-message failure: keep consuming. The next message is independent.
+      } finally {
+        if (began) {
+          try {
+            this.cfg.bus.finishInboundProcessing?.(msg, completed);
+          } catch (err) {
+            this.log.error({ err, channel: msg.channel }, 'Could not record inbound processing outcome');
+          }
+        }
       }
     }
 

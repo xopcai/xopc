@@ -216,7 +216,6 @@
     "@earendil-works/pi-coding-agent": "1.5.2",
     "@earendil-works/pi-mcp": "1.5.2",
     "@earendil-works/pi-tui": "1.5.2",
-    "@grammyjs/runner": "^2.0.3",
     "@hono/node-server": "^2.0.4",
     "@inquirer/prompts": "^8.5.0",
     "@modelcontextprotocol/sdk": "1.32.1",
@@ -240,7 +239,7 @@
     "cron-parser": "^5.10.2",
     "dotenv": "^17.4.2",
     "glob": "^13.0.6",
-    "grammy": "^1.43.0",
+    "grammy": "^1.46.0",
     "hono": "^4.12.25",
     "js-yaml": "^4.3.2",
     "linkedom": "0.18.13",
@@ -264,7 +263,7 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@larksuiteoapi/node-sdk": "^1.66.0",
+    "@larksuiteoapi/node-sdk": "1.76.0",
     "playwright-core": "^1.60.0"
   },
   "peerDependenciesMeta": {
@@ -276,7 +275,7 @@
     }
   },
   "devDependencies": {
-    "@larksuiteoapi/node-sdk": "^1.66.0",
+    "@larksuiteoapi/node-sdk": "1.76.0",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/adm-zip": "^0.5.8",

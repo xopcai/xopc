@@ -9,6 +9,15 @@ import { resolveFeishuAccount } from '../state/accounts.js';
 import { loadMediaForFeishu } from './media-load.js';
 import { getFeishuBindingByMessageId, recordFeishuMessageBinding } from '../state/message-bindings.js';
 
+function messageIdFromResponse(response: { code?: number; data?: { message_id?: string }; message_id?: string } | undefined): string {
+  return response?.code === 0 ? response.data?.message_id ?? response.message_id ?? '' : '';
+}
+
+function feishuRejectedRequest(error: unknown): boolean {
+  const response = (error as { response?: { status?: number } } | null)?.response;
+  return response?.status === 400 || response?.status === 403;
+}
+
 export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
   return {
     deliveryMode: 'direct',
@@ -63,11 +72,13 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
         }),
       };
 
+      const sourceMessage = ctx.outboundMetadata?.inboundMessageId;
+      const replyToId = ctx.replyToId ?? (ctx.threadId && typeof sourceMessage === 'string' ? sourceMessage : undefined);
       const send = async (useCard: boolean) => {
         const p = useCard ? payloadCard : payloadText;
-        return ctx.replyToId
+        return replyToId
           ? await (api as any).im.message.reply({
-              path: { message_id: ctx.replyToId },
+              path: { message_id: replyToId },
               data: {
                 ...p,
                 ...(ctx.threadId ? { reply_in_thread: true } : {}),
@@ -82,13 +93,26 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
             });
       };
 
-      const res = preferCard
-        ? await send(true).catch(async () => await send(false))
-        : await send(false);
+      let response;
+      if (preferCard) {
+        try {
+          response = await send(true);
+        } catch (err) {
+          if (!feishuRejectedRequest(err)) throw err;
+          response = { code: -1 };
+        }
+        if (typeof response?.code === 'number' && response.code !== 0
+          && response.code !== 99991400 && response.code !== 99991403) {
+          response = await send(false);
+        }
+      } else {
+        response = await send(false);
+      }
 
-      const messageId = res?.data?.message_id ?? res?.message_id ?? '';
-      if (messageId && ctx.replyToId) {
-        const parent = getFeishuBindingByMessageId(ctx.replyToId);
+      const messageId = messageIdFromResponse(response);
+      if (!messageId) return { success: false, messageId, chatId: to, error: 'Feishu did not confirm message delivery' };
+      if (messageId && replyToId) {
+        const parent = getFeishuBindingByMessageId(replyToId);
         if (parent) {
           recordFeishuMessageBinding({
             ...parent,
@@ -147,14 +171,14 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
                 content: JSON.stringify({ image_key: imageKey }),
               },
             });
-        const messageId = res?.data?.message_id ?? res?.message_id ?? '';
+        const messageId = messageIdFromResponse(res);
         if (messageId && ctx.replyToId) {
           const parent = getFeishuBindingByMessageId(ctx.replyToId);
           if (parent) {
             recordFeishuMessageBinding({ ...parent, messageId });
           }
         }
-        return { success: true, messageId, chatId: ctx.to };
+        return { success: Boolean(messageId), messageId, chatId: ctx.to, ...(messageId ? {} : { error: 'Feishu did not confirm image delivery' }) };
       }
 
       const fileType = guessFileType(loaded.filename);
@@ -188,14 +212,14 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
             },
           });
 
-      const messageId = res?.data?.message_id ?? res?.message_id ?? '';
+      const messageId = messageIdFromResponse(res);
       if (messageId && ctx.replyToId) {
         const parent = getFeishuBindingByMessageId(ctx.replyToId);
         if (parent) {
           recordFeishuMessageBinding({ ...parent, messageId });
         }
       }
-      return { success: true, messageId, chatId: ctx.to };
+      return { success: Boolean(messageId), messageId, chatId: ctx.to, ...(messageId ? {} : { error: 'Feishu did not confirm file delivery' }) };
     },
   };
 }

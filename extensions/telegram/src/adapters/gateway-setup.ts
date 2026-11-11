@@ -1,5 +1,12 @@
+import { Bot } from 'grammy';
+
+import { cancelChannelConnectionProbe, confirmChannelConnectionProbe, getChannelConnectionClaimant, getChannelConnectionProbe, startChannelConnectionProbe } from '@xopcai/xopc/channels/connection-probe.js';
+import { mergeDistinctSenderIds } from '@xopcai/xopc/channels/pairing/index.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelRuntimeActionAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
+
+import { createProxyFetch } from '../proxy-fetch.js';
+import { createTimeoutAbortSignal } from '../timeout-abort.js';
 
 function isZh(locale: string | undefined): boolean {
   return locale?.toLowerCase().startsWith('zh') === true;
@@ -21,10 +28,10 @@ function pickDmPolicy(input: unknown): 'open' | 'pairing' | 'allowlist' | 'disab
     : 'pairing';
 }
 
-function existingDefaultAccount(config: Config): Record<string, unknown> {
+function existingAccount(config: Config, accountId: string): Record<string, unknown> {
   const telegram = config.channels?.telegram as Record<string, unknown> | undefined;
   const accounts = telegram?.accounts as Record<string, unknown> | undefined;
-  const account = accounts?.default;
+  const account = accounts && Object.hasOwn(accounts, accountId) ? accounts[accountId] : undefined;
   return account && typeof account === 'object' && !Array.isArray(account)
     ? (account as Record<string, unknown>)
     : {};
@@ -38,10 +45,10 @@ function existingDefaults(config: Config): Record<string, unknown> {
     : {};
 }
 
-function buildTelegramConfig(config: Config, input: Record<string, unknown>): Config {
+function buildTelegramConfig(config: Config, input: Record<string, unknown>, accountId: string): Config {
   const existing = (config.channels?.telegram as Record<string, unknown> | undefined) ?? {};
   const existingAccounts = (existing.accounts as Record<string, unknown> | undefined) ?? {};
-  const previousDefault = existingDefaultAccount(config);
+  const previousDefault = existingAccount(config, accountId);
   const previousDefaults = existingDefaults(config);
 
   const botToken = pickString(input.botToken) || pickString(previousDefault.botToken);
@@ -58,14 +65,13 @@ function buildTelegramConfig(config: Config, input: Record<string, unknown>): Co
     textChunkLimit: previousDefaults.textChunkLimit ?? 4000,
     streaming: previousDefaults.streaming ?? { mode: 'partial' },
   };
-  if (apiRoot) defaults.apiRoot = apiRoot;
-  if (proxy) defaults.proxy = proxy;
-
-  const defaultAccount: Record<string, unknown> = {
+  const configuredAccount: Record<string, unknown> = {
     ...previousDefault,
-    accountId: 'default',
+    accountId,
     enabled: true,
     botToken,
+    ...(apiRoot ? { apiRoot } : {}),
+    ...(proxy ? { proxy } : {}),
     dmPolicy,
     allowFrom: dmPolicy === 'open' ? ['*'] : (previousDefault.allowFrom ?? []),
   };
@@ -80,81 +86,97 @@ function buildTelegramConfig(config: Config, input: Record<string, unknown>): Co
         defaults,
         accounts: {
           ...existingAccounts,
-          default: defaultAccount,
+          [accountId]: configuredAccount,
         },
       },
     },
   };
 }
 
-function formPayload(config: Config, locale?: string) {
+function formPayload(locale?: string) {
   const zh = isZh(locale);
-  const account = existingDefaultAccount(config);
-  const defaults = existingDefaults(config);
   return {
     type: 'form' as const,
     submitAction: 'setup.save',
-    message: zh
-      ? '填写 Bot Token 后保存即可启用 Telegram。默认私聊策略为 pairing；允许列表在账号配置里维护。'
-      : 'Enter a Bot Token and save. The default DM policy is pairing; manage allow lists on the account configuration.',
+    message: zh ? '粘贴 BotFather 给你的 Bot Token。' : 'Paste the Bot Token provided by BotFather.',
     schema: {
       type: 'object',
       properties: {
-        botToken: { type: 'string', title: zh ? 'Bot Token' : 'Bot Token', format: 'password' },
-        dmPolicy: {
-          type: 'string',
-          title: zh ? '私聊访问' : 'Private chat access',
-          enum: ['open', 'pairing', 'allowlist', 'disabled'],
-          default: 'open',
-        },
-        apiRoot: {
-          type: 'string',
-          title: zh ? 'API Root（可选）' : 'API root (optional)',
-          placeholder: 'https://api.telegram.org',
-        },
-        proxy: {
-          type: 'string',
-          title: zh ? '代理（可选）' : 'Proxy (optional)',
-          placeholder: 'http://127.0.0.1:7897',
-        },
+        botToken: { type: 'string', title: 'Bot Token', format: 'password' },
       },
       required: ['botToken'],
     },
-    values: {
-      botToken: pickString(account.botToken),
-      dmPolicy: pickDmPolicy(account.dmPolicy ?? defaults.dmPolicy ?? 'pairing'),
-      apiRoot: pickString(account.apiRoot ?? defaults.apiRoot),
-      proxy: pickString(account.proxy ?? defaults.proxy),
-    },
+    values: {},
   };
 }
 
 export const telegramGatewaySetupActions: ChannelRuntimeActionAdapter = {
-  async runAction({ actionId, input, locale }) {
+  async runAction({ cfg, actionId, input, locale, accountId: requestedAccountId }) {
     const zh = isZh(locale);
-    if (actionId === 'setup.start') {
-      const { loadConfig } = await import('@xopcai/xopc/config/loader.js');
-      return { ok: true, payload: formPayload(loadConfig(), locale) };
+    const accountId = requestedAccountId || 'default';
+    const raw = readInput(input);
+    const conversationId = pickString(raw.conversationId);
+    if (actionId === 'setup.start') return { ok: true, payload: formPayload(locale) };
+
+    if (actionId === 'setup.verify.status') {
+      return { ok: true, payload: getChannelConnectionProbe('telegram', accountId, conversationId, zh) };
+    }
+    if (actionId === 'setup.verify.cancel') {
+      cancelChannelConnectionProbe('telegram', accountId, conversationId);
+      return { ok: true, payload: { type: 'ok' } };
+    }
+    if (actionId === 'setup.verify.confirm') {
+      const current = existingAccount(cfg, accountId);
+      const dmPolicy = pickDmPolicy(current.dmPolicy ?? existingDefaults(cfg).dmPolicy);
+      const botToken = pickString(current.botToken);
+      const senderId = getChannelConnectionClaimant('telegram', accountId, conversationId, botToken.split(':')[0]);
+      if (!senderId) return { ok: false, message: zh ? '验证已结束，请重新连接。' : 'Verification ended. Connect again.' };
+      const complete = () => {
+        confirmChannelConnectionProbe('telegram', accountId, conversationId);
+        return getChannelConnectionProbe('telegram', accountId, conversationId, zh);
+      };
+      if (dmPolicy !== 'pairing') return { ok: true, payload: complete() };
+      const section = cfg.channels?.telegram as Record<string, unknown>;
+      const accounts = section.accounts as Record<string, unknown>;
+      const allowFrom = mergeDistinctSenderIds(Array.isArray(current.allowFrom) ? current.allowFrom : [], [senderId]);
+      const nextConfig = {
+        ...cfg,
+        channels: {
+          ...cfg.channels,
+          telegram: { ...section, accounts: { ...accounts, [accountId]: { ...current, allowFrom } } },
+        },
+      };
+      return { ok: true, nextConfig, onConfigSaved: () => ({ ...complete(), configChanged: true }) };
     }
 
     if (actionId === 'setup.save') {
-      const raw = readInput(input);
       const botToken = pickString(raw.botToken);
-      if (!botToken) {
-        return { ok: false, message: zh ? 'Bot Token 为必填项。' : 'Bot Token is required.' };
+      if (!/^\d+:[a-zA-Z0-9_-]+$/.test(botToken)) {
+        return { ok: false, message: zh ? '请输入有效的 Bot Token。' : 'Enter a valid Bot Token.' };
       }
-      const { loadConfig, saveConfig } = await import('@xopcai/xopc/config/loader.js');
-      await saveConfig(buildTelegramConfig(loadConfig(), raw));
-      return {
-        ok: true,
-        payload: {
-          type: 'ok',
-          message: zh ? 'Telegram 配置已保存。私聊将按 pairing/允许列表策略放行。' : 'Telegram configuration saved. Private chat now follows the pairing/allow-list policy.',
-          configChanged: true,
-        },
-      };
+      const previous = existingAccount(cfg, accountId);
+      const defaults = existingDefaults(cfg);
+      const apiRoot = pickString(raw.apiRoot ?? previous.apiRoot ?? defaults.apiRoot);
+      const proxy = pickString(raw.proxy ?? previous.proxy ?? defaults.proxy);
+      const timeout = createTimeoutAbortSignal(10_000);
+      try {
+        const bot = new Bot(botToken, { client: {
+          ...(apiRoot ? { apiRoot } : {}),
+          ...(proxy ? { fetch: createProxyFetch(proxy) } : {}),
+        } });
+        const me = await bot.api.getMe(timeout.signal);
+        return {
+          ok: true,
+          nextConfig: buildTelegramConfig(cfg, raw, accountId),
+          onConfigSaved: () => startChannelConnectionProbe({ channel: 'telegram', accountId, identity: String(me.id), botUsername: me.username, confirmOwner: true, zh, configChanged: true }),
+        };
+      } catch {
+        return { ok: false, message: zh ? '无法验证 Bot Token。请检查 Token、网络和代理。' : 'Could not verify the Bot Token. Check the token, network and proxy.' };
+      } finally {
+        timeout.dispose();
+      }
     }
 
-    return { ok: false, message: `${zh ? '不支持的 Telegram 操作' : 'Unsupported Telegram action'}: ${actionId}` };
+    return { ok: false, message: zh ? '不支持的 Telegram 操作。' : 'Unsupported Telegram action.' };
   },
 };

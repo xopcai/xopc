@@ -4,14 +4,11 @@ Connect Weixin by scanning a login QR code from the Gateway console. The login c
 
 ## Connect
 
-1. Open **Channels → Weixin**.
-2. Choose **Login** or **Configure**.
-3. Scan the QR code with the intended Weixin account.
-4. Confirm the login in Weixin if prompted.
-5. Keep the direct-message policy set to **Pairing**.
-6. Save optional account and streaming settings.
+1. Open **Channels → Weixin** and select **Connect**.
+2. Scan with the intended Weixin account and confirm in Weixin. If Weixin displays a PIN, enter it in the setup screen.
+3. Send the verification code from the console in a private chat with the bot. The console confirms two-way delivery after the bot replies.
 
-After login, send a test message and approve the pairing request in xopc.
+New accounts restrict direct messages to the scanner. When Weixin does not return the scanner's identity, normal chats require pairing.
 
 ## Access policy
 

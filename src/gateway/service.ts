@@ -1958,7 +1958,7 @@ export class GatewayService {
     while (this.running) {
       try {
         const msg = await this.bus.consumeOutbound();
-        await this.channelManager.send(msg);
+        await this.channelManager.sendQueuedOutboundMessage(msg);
       } catch (error) {
         if (error instanceof MessageBusShutdownError) {
           break;

@@ -1,19 +1,13 @@
 import crypto from 'node:crypto';
 import * as http from 'node:http';
 
-import type { InboundMessage } from '@xopcai/xopc/channels/transport-types.js';
-
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelSecurityContext } from '@xopcai/xopc/channels/plugin-types.js';
-import { generateConversationId } from '@xopcai/xopc/chat-commands/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import type { ResolvedFeishuAccount } from '../../state/accounts.js';
-import { createFeishuDedupe } from '../reliability/dedupe.js';
+import { createFeishuMessageIngress } from '../reliability/message-ingress.js';
 import type { FeishuInboundWork } from '../reliability/inbound-pipeline.js';
-import { stripFeishuMentions } from '../text/mentions.js';
-import { recordFeishuMessageBinding } from '../../state/message-bindings.js';
-import { sendFeishuPairingPromptIfNeeded } from '../../pairing/feishu-pairing-prompt.js';
 import { loadFeishuLarkSdk } from '../client/lark-sdk.js';
 import { createFeishuLarkSdkPinoLogger } from '../client/lark-sdk-logger.js';
 
@@ -136,14 +130,15 @@ export interface FeishuWebhookMonitorDeps {
   enqueueInbound: (work: FeishuInboundWork) => Promise<void>;
   inboundDebounceDefaultMs: number;
   abortSignal: AbortSignal;
+  onState?: (state: 'connecting' | 'online' | 'error') => void;
   security: {
     checkAccess: (ctx: ChannelSecurityContext) => { allowed: boolean; reason?: string } | undefined;
   };
 }
 
 export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
-  const { account, abortSignal, security, enqueueInbound, inboundDebounceDefaultMs } = deps;
-  const dedupe = createFeishuDedupe();
+  const { account, abortSignal } = deps;
+  const ingress = createFeishuMessageIngress(deps);
 
   const encryptKey = (account.encryptKey ?? '').trim();
   const verificationToken = (account.verificationToken ?? '').trim();
@@ -156,109 +151,6 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
   const l = loadFeishuLarkSdk() as any;
   const sdkLogger = createFeishuLarkSdkPinoLogger(account.accountId);
 
-  function resolveTextDebounceMs(): number {
-    if (typeof account.inboundDebounceMs === 'number' && Number.isFinite(account.inboundDebounceMs)) {
-      return Math.max(0, Math.trunc(account.inboundDebounceMs));
-    }
-    return Math.max(0, Math.trunc(inboundDebounceDefaultMs));
-  }
-
-  async function pushText(inbound: InboundMessage): Promise<void> {
-    const debounceMs = resolveTextDebounceMs();
-    await enqueueInbound({
-      kind: 'text',
-      accountId: account.accountId,
-      chatId: inbound.chat_id,
-      debounceMs,
-      inbound,
-    });
-  }
-
-  async function handleMessageReceive(event: any): Promise<void> {
-    const msg = event?.event?.message ?? event?.message ?? event?.data?.message;
-    const sender = event?.event?.sender ?? event?.sender ?? event?.data?.sender;
-    const chatId = msg?.chat_id ?? msg?.chatId ?? '';
-    const messageId = msg?.message_id ?? msg?.messageId ?? '';
-    const chatType = msg?.chat_type ?? msg?.chatType ?? '';
-
-    const senderId =
-      sender?.sender_id?.open_id ??
-      sender?.sender_id?.user_id ??
-      sender?.open_id ??
-      sender?.user_id ??
-      '';
-    const senderName = sender?.sender_id?.name ?? sender?.sender_name ?? undefined;
-
-    if (!chatId || !messageId || !senderId) return;
-    if (!dedupe.claim(messageId)) return;
-
-    const isGroup = chatType === 'group' || chatType === 'chat';
-    const textRaw =
-      msg?.content && typeof msg.content === 'string'
-        ? safeJsonText(msg.content)
-        : safeJsonText(msg?.body?.content);
-    const normalizedText = stripFeishuMentions(textRaw ?? '').trim();
-    if (!normalizedText) return;
-
-    const threadId = msg?.thread_id ?? msg?.threadId ?? undefined;
-    const conversationId = generateConversationId({
-      source: 'feishu',
-      chatId,
-      senderId,
-      isGroup,
-      threadId: typeof threadId === 'string' && threadId.trim() ? threadId : undefined,
-      accountId: account.accountId,
-    });
-
-    recordFeishuMessageBinding({
-      messageId,
-      conversationId,
-      accountId: account.accountId,
-      chatId,
-      senderId,
-      isGroup,
-      threadId: typeof threadId === 'string' && threadId.trim() ? threadId : undefined,
-    });
-
-    const access = security.checkAccess({
-      accountId: account.accountId,
-      chatId,
-      senderId,
-      senderName,
-      isGroup,
-      threadId,
-    });
-    if (access && !access.allowed) {
-      if (!isGroup && access.reason === 'pairing-required') {
-        await sendFeishuPairingPromptIfNeeded({
-          account,
-          messageId,
-          threadId: typeof threadId === 'string' && threadId.trim() ? threadId : undefined,
-          senderId,
-          senderName,
-          isGroup,
-        });
-      }
-      return;
-    }
-
-    await pushText({
-      channel: 'feishu',
-      sender_id: senderId,
-      chat_id: chatId,
-      content: normalizedText,
-      metadata: {
-        conversationId,
-        accountId: account.accountId,
-        messageId,
-        threadId,
-        isGroup,
-        feishuEventType: 'im.message.receive_v1',
-        raw: event,
-      },
-    });
-  }
-
   const dispatcher = new l.EventDispatcher({
     verifyChallenge: false,
     encryptKey,
@@ -267,7 +159,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
     loggerLevel: l.LoggerLevel.info,
   } as any);
   dispatcher.register({
-    'im.message.receive_v1': async (data: any) => await handleMessageReceive(data),
+    'im.message.receive_v1': async (data: unknown) => ingress.accept(data),
   });
 
   const server = http.createServer();
@@ -309,6 +201,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
   }
 
   async function run(): Promise<void> {
+    ingress.start();
     await new Promise<void>((resolve, reject) => {
       server.on('request', (req, res) => {
         void handleRequest(req, res).catch((err) => {
@@ -320,41 +213,24 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
       server.listen(port, host, () => resolve());
     });
 
+    deps.onState?.('online');
     log.info({ accountId: account.accountId, host, port, path }, 'Feishu webhook server listening');
 
     await new Promise<void>((resolve) => {
       if (abortSignal.aborted) {
-        server.close();
-        return resolve();
+        server.close(() => resolve());
+        return;
       }
       abortSignal.addEventListener(
         'abort',
         () => {
-          server.close();
-          resolve();
+          server.close(() => resolve());
         },
         { once: true },
       );
     });
+    await ingress.settled();
   }
 
   return { run };
-}
-
-function safeJsonText(raw: unknown): string | undefined {
-  if (typeof raw !== 'string' || !raw.trim()) return undefined;
-  try {
-    const parsed = JSON.parse(raw);
-    const t =
-      typeof parsed?.text === 'string'
-        ? parsed.text
-        : typeof parsed?.content === 'string'
-          ? parsed.content
-          : typeof parsed?.title === 'string'
-            ? parsed.title
-            : undefined;
-    return typeof t === 'string' ? t : raw;
-  } catch {
-    return raw;
-  }
 }

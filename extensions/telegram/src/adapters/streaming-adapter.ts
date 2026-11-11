@@ -11,6 +11,7 @@ import type { TelegramAccountManager } from '../account-manager.js';
 import { createTelegramDraftStream } from '../draft-stream.js';
 import { renderTelegramHtmlText } from '../format.js';
 import { resolveTelegramStreamingMode } from '../config-schema.js';
+import { prefersTelegramRichMessage } from '../rich-message.js';
 import { telegramReplyTracker } from '../reply-params.js';
 
 const log = createLogger('TelegramStreaming');
@@ -74,7 +75,7 @@ export function createTelegramStreamingAdapter(
       const replyId = Number.isFinite(replyParsed) ? replyParsed : undefined;
       const isPrivate = isProbablyPrivateChat(chatId);
 
-      const previewTransport = isPrivate ? ('message' as const) : ('auto' as const);
+      const previewTransport = isPrivate ? ('auto' as const) : ('message' as const);
       const blockCoalesce = account?.streaming?.block?.coalesce;
       const throttleMs =
         streamMode === 'block'
@@ -118,6 +119,7 @@ export function createTelegramStreamingAdapter(
       };
 
       let skipFinalOutbound = false;
+      let lastText = '';
 
       const end = async () => {
         if (streamMode === 'block') {
@@ -131,14 +133,14 @@ export function createTelegramStreamingAdapter(
           await reasoningDraft.stop();
           reasoningDraft = null;
         }
-        if (draft.previewMode?.() === 'draft' && typeof draft.materialize === 'function') {
-          const mid = await draft.materialize();
-          skipFinalOutbound = typeof mid === 'number';
+        if (prefersTelegramRichMessage(lastText) || draft.previewMode?.() === 'draft') {
+          await draft.clear();
           return;
         }
         await draft.flush();
         await draft.stop();
-        skipFinalOutbound = typeof draft.messageId() === 'number';
+        skipFinalOutbound = typeof draft.messageId() === 'number' && draft.lastDeliveredText?.() === lastText.trimEnd();
+        if (!skipFinalOutbound) await draft.clear();
       };
 
       const abort = async () => {
@@ -156,6 +158,7 @@ export function createTelegramStreamingAdapter(
       };
 
       const update = (text: string) => {
+        lastText = text;
         if (streamMode === 'block') {
           pendingBlockBuffer = text;
           if (text.length >= blockMinChars) {

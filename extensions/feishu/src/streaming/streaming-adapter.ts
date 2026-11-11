@@ -5,6 +5,7 @@ import type {
   ChannelStreamingAdapter,
 } from '@xopcai/xopc/channels/plugin-types.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
+import { createRetryRunner } from '@xopcai/xopc/infra/retry.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { resolveFeishuAccount } from '../state/accounts.js';
@@ -35,13 +36,32 @@ function extractFeishuCardKitCreateCardId(raw: unknown): string | undefined {
   );
 }
 
-function feishuOpenApiOk(res: unknown): boolean {
-  if (res === null || res === undefined) return false;
-  if (typeof res !== 'object') return true;
-  const code = (res as Record<string, unknown>).code;
-  if (code === undefined || code === null) return true;
-  return Number(code) === 0;
+function feishuOpenApiOk(response: unknown): boolean {
+  return Boolean(response && typeof response === 'object' && Number((response as { code?: number }).code) === 0);
 }
+
+class FeishuUpdateError extends Error {
+  constructor(readonly code: number) {
+    super('Feishu rejected the stream update');
+  }
+}
+
+function checkUpdate(response: unknown): void {
+  if (!feishuOpenApiOk(response)) throw new FeishuUpdateError(Number((response as { code?: number } | undefined)?.code));
+}
+
+function isRateLimited(error: unknown): boolean {
+  const response = (error as { response?: { status?: number; data?: { code?: number } } } | null)?.response;
+  const code = error instanceof FeishuUpdateError ? error.code : response?.data?.code;
+  return code === 99991400 || code === 230020 || (response?.status === 429 && code !== 99991403);
+}
+
+const retryEdit = createRetryRunner({
+  attempts: 3,
+  minDelayMs: 500,
+  maxDelayMs: 2500,
+  shouldRetry: isRateLimited,
+});
 
 export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelStreamingAdapter {
   return {
@@ -71,12 +91,15 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
       let lastText = '';
       let timer: NodeJS.Timeout | null = null;
       let aborted = false;
-      let editedAtLeastOnce = false;
+      let ending = false;
+      let previewPending = false;
+      let deliveredText: string | undefined;
+      let finalDelivered = false;
+      let editQueue = Promise.resolve();
       let ready: Promise<void> | null = null;
       let cardId: string | undefined;
       let cardSeq = 0;
       const cardElementId = `md_${randomUUID().replace(/-/g, '')}`;
-      let fallbackSent = false;
 
       const renderMode = account.renderMode ?? 'auto';
       const preferCard = renderMode === 'card' || renderMode === 'auto';
@@ -108,7 +131,7 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         const outbound = await formatStreamText(text);
         if (cardId && preferCard) {
           cardSeq += 1;
-          await ((await getApi()) as any).cardkit.v1.cardElement.content({
+          const response = await ((await getApi()) as any).cardkit.v1.cardElement.content({
             path: { card_id: cardId, element_id: cardElementId },
             data: {
               content: outbound,
@@ -116,66 +139,55 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
               uuid: `${cardId}:${cardSeq}`,
             },
           });
+          checkUpdate(response);
         } else {
-          await ((await getApi()) as any).im.v1.message.update({
+          const response = await ((await getApi()) as any).im.v1.message.update({
             path: { message_id: messageId },
             data: { msg_type: 'text', content: JSON.stringify({ text: outbound }) },
           });
+          checkUpdate(response);
         }
-        editedAtLeastOnce = true;
+        deliveredText = text;
       };
 
-      const sendFallbackText = async (text: string) => {
-        if (fallbackSent) return;
-        fallbackSent = true;
-        const receive_id_type =
-          options.chatId.startsWith('ou_') || options.chatId.startsWith('on_') ? 'open_id' : 'chat_id';
+      const closeCard = async () => {
+        if (!cardId) return;
+        const id = cardId;
+        cardId = undefined;
         try {
-          const outbound = await formatStreamText(text);
-          const res = options.replyToMessageId
-            ? await ((await getApi()) as any).im.message.reply({
-                path: { message_id: options.replyToMessageId },
-                data: {
-                  msg_type: 'text',
-                  content: JSON.stringify({ text: outbound }),
-                  ...(options.threadId ? { reply_in_thread: true } : {}),
-                },
-              })
-            : await ((await getApi()) as any).im.message.create({
-                params: { receive_id_type },
-                data: {
-                  receive_id: options.chatId,
-                  msg_type: 'text',
-                  content: JSON.stringify({ text: outbound }),
-                },
-              });
-          const mid = res?.data?.message_id ?? res?.message_id ?? undefined;
-          if (mid) recordBindingIfReply(mid);
-          // Mark as delivered through the channel so the final outbound is skipped.
-          editedAtLeastOnce = true;
-          messageId = mid ?? messageId;
-          // If we were in card mode, stop trying to update the card.
-          cardId = undefined;
+          const api = (await getApi()) as any;
+          const sequence = ++cardSeq;
+          await retryEdit(async () => {
+            const result = await api.cardkit.v1.card.settings({
+              path: { card_id: id },
+              data: {
+                settings: JSON.stringify({ config: { streaming_mode: false } }),
+                sequence,
+                uuid: `${id}:close:${sequence}`,
+              },
+            });
+            checkUpdate(result);
+          }, 'closeFeishuStream');
         } catch (err) {
-          log.warn({ err, accountId: account.accountId }, 'Feishu streaming fallback send failed');
+          log.warn({ accountId: account.accountId, errorType: err instanceof Error ? err.name : typeof err }, 'Feishu streaming card could not be closed');
         }
       };
 
-      const flush = async () => {
-        if (aborted) return;
-        if (ready) await ready;
-        if (!messageId) return;
-        const text = lastText;
-        if (!text.trim()) return;
-        try {
-          await edit(text);
-        } catch (err) {
-          // Don't crash the agent loop. CardKit updates can fail (scopes, element conflicts); plain
-          // `im.message.update` can also fail for some message states — always fall back to a text
-          // reply so the user is not stuck on "Thinking…".
-          log.warn({ err, accountId: account.accountId, messageId, mode: preferCard ? 'card' : 'text' }, 'Feishu streaming edit failed');
-          await sendFallbackText(text);
-        }
+      const flush = (final = false) => {
+        editQueue = editQueue.then(async () => {
+          if (ready) await ready;
+          if (aborted || !lastText.trim()) return;
+          const text = lastText;
+          if (text !== deliveredText) {
+            try {
+              if (messageId) await retryEdit(() => edit(text), 'updateFeishuStream');
+            } catch (err) {
+              log.warn({ err, accountId: account.accountId, messageId }, 'Feishu streaming edit failed');
+            }
+          }
+          if (final && !aborted) finalDelivered = text === deliveredText;
+        });
+        return editQueue;
       };
 
       const start = async () => {
@@ -186,7 +198,7 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         if (preferCard) {
           const cardSpec = {
             schema: '2.0',
-            config: { update_multi: true },
+            config: { update_multi: true, streaming_mode: true },
             header: {
               title: { tag: 'plain_text', content: 'xopc' },
             },
@@ -248,13 +260,13 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
                     content: JSON.stringify({ type: 'card', data: { card_id: cardId } }),
                   },
                 });
-            messageId = res?.data?.message_id ?? res?.message_id ?? undefined;
+            messageId = feishuOpenApiOk(res) ? res?.data?.message_id ?? res?.message_id : undefined;
             if (messageId) recordBindingIfReply(messageId);
             log.info(
               { accountId: account.accountId, chatId: options.chatId, messageId, mode: 'card' },
               'Feishu streaming started',
             );
-            return;
+            if (messageId) return;
           }
 
           // Clear so downstream edits use im.message.update (text), not CardKit.
@@ -278,7 +290,7 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
                 content: JSON.stringify({ text: thinking }),
               },
             });
-        messageId = res?.data?.message_id ?? res?.message_id ?? undefined;
+        messageId = feishuOpenApiOk(res) ? res?.data?.message_id ?? res?.message_id : undefined;
         if (messageId) recordBindingIfReply(messageId);
         log.info(
           { accountId: account.accountId, chatId: options.chatId, messageId, mode: 'text' },
@@ -290,23 +302,35 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         log.warn({ err, accountId: account.accountId }, 'Feishu streaming start failed');
       });
 
+      const schedulePreview = () => {
+        if (timer || ending || aborted || previewPending) return;
+        timer = setTimeout(() => {
+          timer = null;
+          previewPending = true;
+          const queuedText = lastText;
+          void flush().catch(err => log.warn({ err }, 'Feishu streaming flush failed')).finally(() => {
+            previewPending = false;
+            if (queuedText !== lastText) schedulePreview();
+          });
+        }, 800);
+      };
+
       return {
         update: (text: string) => {
           lastText = text;
-          if (timer) clearTimeout(timer);
-          timer = setTimeout(() => {
-            void flush().catch((err) => log.warn({ err }, 'Feishu streaming flush failed'));
-          }, 800);
+          schedulePreview();
         },
         end: async () => {
+          ending = true;
           if (timer) clearTimeout(timer);
-          await flush();
+          await flush(true);
+          await closeCard();
           log.debug(
             {
               accountId: account.accountId,
               chatId: options.chatId,
               messageId,
-              editedAtLeastOnce,
+              finalDelivered,
               lastTextLen: lastText.length,
               mode: preferCard ? 'card' : 'text',
             },
@@ -316,9 +340,12 @@ export function createFeishuStreamingAdapter(getConfig: () => Config): ChannelSt
         abort: async () => {
           aborted = true;
           if (timer) clearTimeout(timer);
+          await ready;
+          await editQueue;
+          await closeCard();
         },
         messageId: () => undefined,
-        skipFinalOutbound: () => Boolean(messageId) && editedAtLeastOnce,
+        skipFinalOutbound: () => finalDelivered,
       };
     },
   };

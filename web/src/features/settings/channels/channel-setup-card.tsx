@@ -10,6 +10,7 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
 
+import { SelectField } from './select-field';
 import { choosePrimaryChannelAction } from './channel-primary-action';
 import type { ChannelCatalogEntry } from './use-channel-catalog';
 
@@ -20,7 +21,12 @@ export type ChannelActionPayload =
       conversationId: string;
       qrcodeUrl?: string;
       qrPayload?: string;
+      accountId?: string;
       statusAction?: string;
+      cancelAction?: string;
+      verificationCode?: string;
+      botName?: string;
+      setupHint?: string;
       pollIntervalMs?: number;
       expiresInSec?: number;
       message?: string;
@@ -35,6 +41,9 @@ export type ChannelActionPayload =
       qrcodeUrl?: string;
       qrPayload?: string;
       qrStatus?: string;
+      confirmAction?: string;
+      conversationId?: string;
+      pinAction?: string;
       configChanged?: boolean;
       [key: string]: unknown;
     }
@@ -47,9 +56,22 @@ export type ChannelActionPayload =
       message?: string;
     };
 
+type PollTarget = { actionId: string; conversationId: string; accountId?: string; intervalMs: number; cancelAction?: string };
+
+function pollTarget(payload: ChannelActionPayload): PollTarget | null {
+  if (payload.type !== 'qr' || !payload.statusAction) return null;
+  return {
+    actionId: payload.statusAction,
+    conversationId: payload.conversationId,
+    accountId: payload.accountId,
+    cancelAction: payload.cancelAction,
+    intervalMs: Math.max(1000, payload.pollIntervalMs ?? 2500),
+  };
+}
+
 type ActionState = {
   payload: ChannelActionPayload | null;
-  poll: { actionId: string; conversationId: string; intervalMs: number } | null;
+  poll: PollTarget | null;
   busy: boolean;
   error: string | null;
   formDraft: Record<string, unknown>;
@@ -82,7 +104,7 @@ async function runChannelAction(params: {
 }
 
 function isTerminalPoll(payload: ChannelActionPayload | null): boolean {
-  return payload?.type === 'poll' && payload.phase === 'done';
+  return payload?.type === 'poll' && payload.phase !== 'pending';
 }
 
 function payloadMessage(payload: ChannelActionPayload | null): string | null {
@@ -109,14 +131,19 @@ export function ChannelSetupCard({
   locale,
   messages: ch,
   onChanged,
+  onStarted,
   compact = false,
 }: {
   entry: ChannelCatalogEntry;
   locale: string;
   messages: ChannelsSettingsMessages;
   onChanged: () => Promise<void> | void;
+  onStarted?: () => void;
   compact?: boolean;
 }) {
+  const zh = locale.toLowerCase().startsWith('zh');
+  const [domain, setDomain] = useState<'feishu' | 'lark'>('feishu');
+  const [pin, setPin] = useState('');
   const primary = useMemo(() => choosePrimaryChannelAction(entry), [entry]);
   const schemaLabels = useMemo(() => ({
     defaultBooleanLabel: ch.schemaBooleanDefault,
@@ -146,21 +173,14 @@ export function ChannelSetupCard({
     });
   }, [entry.id]);
 
-  const runAction = useCallback(async (actionId: string, input?: unknown) => {
+  const runAction = useCallback(async (actionId: string, input?: unknown, accountId?: string) => {
     setState((prev) => ({ ...prev, busy: true, error: null }));
     try {
-      const payload = await runChannelAction({ channelId: entry.id, actionId, locale, input });
+      const payload = await runChannelAction({ channelId: entry.id, actionId, locale, input, accountId });
       setState((prev) => ({
         ...prev,
         payload,
-        poll:
-          payload.type === 'qr' && payload.statusAction && payload.conversationId
-            ? {
-                actionId: payload.statusAction,
-                conversationId: payload.conversationId,
-                intervalMs: Math.max(1000, payload.pollIntervalMs ?? 2500),
-              }
-            : null,
+        poll: pollTarget(payload) ?? (payload.type === 'poll' && payload.phase === 'pending' ? prev.poll : null),
         busy: false,
         formDraft: payload.type === 'form' ? payload.values ?? {} : prev.formDraft,
       }));
@@ -172,8 +192,9 @@ export function ChannelSetupCard({
     }
   }, [entry.id, locale, onChanged]);
 
+  const qrContent = payloadQrContent(state.payload, entry.id);
   useEffect(() => {
-    const content = payloadQrContent(state.payload, entry.id);
+    const content = qrContent;
     if (!content) {
       setState((prev) => (prev.generatedQr ? { ...prev, generatedQr: null } : prev));
       return;
@@ -186,57 +207,63 @@ export function ChannelSetupCard({
     return () => {
       cancelled = true;
     };
-  }, [entry.id, state.payload]);
+  }, [qrContent]);
 
   useEffect(() => {
     const poll = state.poll;
-    if (!poll) return;
+    if (!poll || state.busy) return;
     let cancelled = false;
-    const timer = window.setInterval(() => {
-      if (cancelled) return;
-      void runChannelAction({
-        channelId: entry.id,
-        actionId: poll.actionId,
-        locale,
-        input: { conversationId: poll.conversationId },
-      })
-        .then(async (next) => {
-          if (cancelled) return;
-          setState((prev) => ({
-            ...prev,
-            payload: next,
-            poll: isTerminalPoll(next) ? null : prev.poll,
-            error: null,
-          }));
-          if ('configChanged' in next && next.configChanged === true) {
-            await onChanged();
-          }
-          if (isTerminalPoll(next)) {
-            window.clearInterval(timer);
-          }
-        })
-        .catch((err) => {
-          if (!cancelled) {
-            setState((prev) => ({ ...prev, error: err instanceof Error ? err.message : String(err) }));
-          }
+    let timer: number | undefined;
+    const check = async () => {
+      try {
+        const next = await runChannelAction({
+          channelId: entry.id,
+          actionId: poll.actionId,
+          accountId: poll.accountId,
+          locale,
+          input: { conversationId: poll.conversationId },
         });
-    }, poll.intervalMs);
+        if (cancelled) return;
+        setState(prev => ({
+          ...prev,
+          payload: next.type === 'poll' && next.phase === 'pending' && prev.payload?.type === 'qr'
+            ? { ...prev.payload, ...next, pinAction: next.pinAction, type: 'qr' }
+            : next,
+          poll: pollTarget(next) ?? (isTerminalPoll(next) ? null : prev.poll),
+          error: null,
+        }));
+        if ('configChanged' in next && next.configChanged === true) await onChanged();
+        if (pollTarget(next) || isTerminalPoll(next)) return;
+      } catch (err) {
+        if (!cancelled) setState(prev => ({ ...prev, error: err instanceof Error ? err.message : String(err) }));
+      }
+      if (!cancelled) timer = window.setTimeout(() => void check(), poll.intervalMs);
+    };
+    timer = window.setTimeout(() => void check(), poll.intervalMs);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
-  }, [entry.id, locale, onChanged, state.poll]);
+  }, [entry.id, locale, onChanged, state.busy, state.poll]);
 
   const primaryLabel = primary?.[1].label ?? (entry.configured ? ch.reconnect : ch.connect);
   const doctorLabel = entry.actions?.['doctor.run']?.label ?? ch.diagnose;
   const message = payloadMessage(state.payload);
-  const qrContent = payloadQrContent(state.payload, entry.id);
   const qrImage = qrContent ? state.generatedQr : payloadQrImage(state.payload);
-  const qrStageActive = primary?.[1].result === 'qr' && (
-    state.busy ||
-    state.payload?.type === 'qr' ||
-    state.payload?.type === 'poll'
-  );
+  const verificationCode = state.payload?.type === 'qr' ? state.payload.verificationCode : undefined;
+  const botName = state.payload?.type === 'qr' ? state.payload.botName : undefined;
+  const setupHint = state.payload?.type === 'qr' ? state.payload.setupHint : undefined;
+  const confirmAction = state.payload?.type === 'poll' ? state.payload.confirmAction : undefined;
+  const pinAction = state.payload && 'pinAction' in state.payload && typeof state.payload.pinAction === 'string'
+    ? state.payload.pinAction
+    : undefined;
+  const qrStageActive = Boolean(!pinAction && (qrContent || qrImage));
+  const cancel = () => {
+    const poll = state.poll;
+    if (!poll?.cancelAction) return;
+    setPin('');
+    void runAction(poll.cancelAction, { conversationId: poll.conversationId }, poll.accountId);
+  };
   const formPayload = state.payload?.type === 'form' ? state.payload : null;
   const diagnostics = state.payload?.type === 'diagnostics' ? state.payload.checks : null;
 
@@ -251,19 +278,33 @@ export function ChannelSetupCard({
             </p>
           </div>
         ) : null}
-        <div className="flex flex-wrap gap-2">
-          {primary ? (
+        <div className="flex flex-wrap items-end gap-2">
+          {entry.id === 'feishu' && !state.poll ? (
+            <SelectField
+              label={zh ? '平台' : 'Platform'}
+              value={domain}
+              onChange={setDomain}
+              options={[{ value: 'feishu', label: zh ? '飞书' : 'Feishu' }, { value: 'lark', label: 'Lark' }]}
+            />
+          ) : null}
+          {primary && !state.poll ? (
             <Button
               type="button"
               variant="primary"
               disabled={state.busy}
-              onClick={() => void runAction(primary[0])}
+              onClick={() => {
+                onStarted?.();
+                void runAction(primary[0], entry.id === 'feishu' ? { domain } : undefined);
+              }}
             >
               {state.busy ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
               {primaryLabel}
             </Button>
           ) : null}
-          {entry.actions?.['doctor.run'] ? (
+          {state.poll?.cancelAction ? (
+            <Button type="button" variant="secondary" disabled={state.busy} onClick={cancel}>{zh ? '取消' : 'Cancel'}</Button>
+          ) : null}
+          {entry.actions?.['doctor.run'] && !state.poll ? (
             <Button
               type="button"
               variant="secondary"
@@ -277,7 +318,30 @@ export function ChannelSetupCard({
         </div>
       </div>
 
-      {message ? <p className="mt-3 text-sm text-fg-muted">{message}</p> : null}
+      {message && (!isTerminalPoll(state.payload) || confirmAction) ? <p className="mt-3 text-sm text-fg-muted">{message}</p> : null}
+      {botName ? <p className="mt-2 text-sm font-medium text-fg">{botName}</p> : null}
+      {verificationCode ? <code className="mt-2 block select-all break-all rounded-md bg-surface-base p-2 text-sm">{verificationCode}</code> : null}
+      {setupHint ? <p className="mt-2 text-sm text-fg-muted">{setupHint}</p> : null}
+      {pinAction && state.poll ? (
+        <form className="mt-3 flex items-end gap-2" onSubmit={event => {
+          event.preventDefault();
+          if (!state.poll) return;
+          void runAction(pinAction, { conversationId: state.poll.conversationId, code: pin }, state.poll.accountId);
+          setPin('');
+        }}>
+          <label className="flex flex-col gap-1 text-sm">
+            {zh ? '微信验证码' : 'WeChat verification code'}
+            <input className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2" inputMode="numeric" autoComplete="one-time-code" value={pin} onChange={event => setPin(event.target.value)} />
+          </label>
+          <Button type="submit" disabled={state.busy || !/^\d{4,8}$/.test(pin)}>{zh ? '提交' : 'Submit'}</Button>
+        </form>
+      ) : null}
+      {confirmAction && state.payload?.type === 'poll' ? (
+        <Button type="button" className="mt-3" disabled={state.busy} onClick={() => {
+          const payload = state.payload;
+          if (payload?.type === 'poll') void runAction(confirmAction, { conversationId: payload.conversationId }, payload.accountId);
+        }}>{zh ? '确认连接' : 'Confirm connection'}</Button>
+      ) : null}
       {state.error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{state.error}</p> : null}
 
       {qrStageActive ? (
@@ -320,7 +384,7 @@ export function ChannelSetupCard({
         </div>
       ) : null}
 
-      {state.payload?.type === 'poll' && state.payload.phase === 'done' ? (
+      {state.payload?.type === 'poll' && isTerminalPoll(state.payload) && !confirmAction ? (
         <div className="mt-4 flex items-center gap-2 rounded-lg bg-surface-base px-3 py-2 text-sm shadow-surface">
           <CheckCircle2 className={state.payload.ok ? 'size-4 text-green-600' : 'size-4 text-red-600'} />
           <span className={state.payload.ok ? 'text-fg' : 'text-red-600 dark:text-red-400'}>

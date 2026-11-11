@@ -107,8 +107,9 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     }
 
     if (plugin.runtimeActions) {
+      const currentConfig = service.currentConfig;
       const result = await plugin.runtimeActions.runAction({
-        cfg: service.currentConfig,
+        cfg: currentConfig,
         locale: localeFromRequest(c),
         actionId: action,
         accountId,
@@ -117,15 +118,21 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
       if (!result.ok) {
         return c.json({ ok: false, error: { code: 'CHANNEL_ACTION_FAILED', message: result.message ?? 'Channel action failed' } }, 400);
       }
+      let payload = result.payload;
       if (result.nextConfig) {
-        const saved = await service.saveConfig(result.nextConfig);
+        const saved = await service.saveConfig(result.nextConfig, currentConfig, result.beforeConfigSaved);
         if (!saved.saved) {
+          if (saved.conflict) {
+            return c.json({ ok: false, error: { code: 'CHANNEL_CONFIG_CHANGED', message: 'Channel settings changed. Reload and retry.' } }, 409);
+          }
           return c.json({ ok: false, error: { code: 'CHANNEL_ACTION_FAILED', message: saved.error ?? 'Failed to save channel config' } }, 500);
         }
+        const afterSave = await result.onConfigSaved?.();
+        if (afterSave) payload = afterSave;
       } else if (actionPayloadChangedConfig(result.payload)) {
         await service.reloadConfig();
       }
-      return c.json({ ok: true, payload: result.payload ?? {} });
+      return c.json({ ok: true, payload: payload ?? {} });
     }
 
     return c.json(

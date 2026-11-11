@@ -85,6 +85,10 @@ export class TelegramAccountManager {
     });
   }
 
+  hasPollingSession(accountId: string): boolean {
+    return this.pollingSessions.has(accountId);
+  }
+
   isStarting(accountId: string): boolean {
     return this.startingAccounts.has(accountId);
   }

@@ -145,7 +145,7 @@ export class OutboundCoordinator {
         sessionWebhook: msg.metadata?.sessionWebhook,
         conversationId: msg.metadata?.conversationId,
       },
-    });
+    }, msg);
   }
 
   /** Run extension completion hooks and independently review an attached Task. */

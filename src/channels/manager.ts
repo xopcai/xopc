@@ -46,7 +46,7 @@ export class ChannelManager {
   private readonly outbound: ChannelOutboundSender;
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
 
-  constructor(config: Config, bus: MessageBus) {
+  constructor(config: Config, private readonly bus: MessageBus) {
     this.config = config;
 
     this.heartbeat = new ChannelHeartbeatScheduler({
@@ -85,6 +85,7 @@ export class ChannelManager {
 
   enableOutboundPersistence(agentId: string): void {
     this.outbound.enablePersistence(agentId);
+    this.bus.setOutboundReplyPersistence?.((message, delivery) => this.outbound.persistReply(message, delivery));
   }
 
   // ── Plugin registry pass-throughs ──────────────────────────────────────
@@ -145,6 +146,10 @@ export class ChannelManager {
 
   send(msg: OutboundMessage, options?: { skipPersist?: boolean; requireDelivery?: boolean }): Promise<void> {
     return this.outbound.send(msg, options);
+  }
+
+  sendQueuedOutboundMessage(message: OutboundMessage): Promise<void> {
+    return this.outbound.sendQueued(message);
   }
 
   replayPendingOutboundMessages(): Promise<void> {

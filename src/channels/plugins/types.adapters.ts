@@ -131,6 +131,10 @@ export interface ChannelRuntimeActionResult {
   message?: string;
   /** Internal gateway-side config replacement; never returned to the browser. */
   nextConfig?: Config;
+  /** Called by the gateway only after the proposed config is saved. */
+  onConfigSaved?: () => ChannelRuntimeActionPayload | void | Promise<ChannelRuntimeActionPayload | void>;
+  /** Persist channel-owned credentials after the config compare-and-swap check. */
+  beforeConfigSaved?: () => void;
 }
 
 /** Gateway/CLI control-plane actions declared by extension manifests. */

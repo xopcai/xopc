@@ -11,6 +11,7 @@ export interface FeishuInboundWork {
   /** Effective debounce for this work item (0 = no coalescing). */
   debounceMs: number;
   inbound: InboundMessage;
+  delivery?: Parameters<MessageBus['publishInbound']>[1];
 }
 
 function mergeTextInbound(items: FeishuInboundWork[]): InboundMessage {
@@ -57,14 +58,15 @@ export function createFeishuInboundPipeline(options: FeishuInboundPipelineOption
 
   const debouncer = createInboundDebouncer<FeishuInboundWork>({
     debounceMs: defaultDebounceMs,
-    buildKey: (item) => `${item.accountId}:${item.chatId}`,
+    buildKey: (item) => JSON.stringify([item.accountId, item.chatId, item.inbound.metadata?.threadId, item.inbound.sender_id]),
     shouldDebounce: (item) =>
       item.kind === 'text' && item.debounceMs > 0 && !hasControlCommand(item.inbound.content ?? ''),
     resolveDebounceMs: (item) => (item.kind === 'text' ? item.debounceMs : 0),
     onFlush: async (items) => {
       const messages = worksToInboundMessages(items);
-      for (const msg of messages) {
-        await bus.publishInbound(msg);
+      for (const [index, message] of messages.entries()) {
+        const delivery = messages.length === 1 ? items.at(-1)?.delivery : items[index]?.delivery;
+        await bus.publishInbound(message, delivery);
       }
     },
     onError,
@@ -72,9 +74,9 @@ export function createFeishuInboundPipeline(options: FeishuInboundPipelineOption
 
   return {
     async enqueue(work: FeishuInboundWork): Promise<void> {
-      await debouncer.enqueue(work);
+      if (work.delivery) await debouncer.enqueueAndWait(work);
+      else await debouncer.enqueue(work);
     },
     flushAll: () => debouncer.flushAll(),
-    flushKey: (accountId: string, chatId: string) => debouncer.flushKey(`${accountId}:${chatId}`),
   };
 }
