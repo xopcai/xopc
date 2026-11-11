@@ -9,7 +9,6 @@
     { "name": "library_recent_results", "value": "Recent results" },
     { "name": "library_no_results", "value": "No matching recent results" },
     { "name": "progress_delivered", "value": "Delivered" },
-    { "name": "ask_assistant", "value": "Ask assistant" },
     { "name": "progress_history", "value": "History" },
     {"name":"voice_input_permission","value":"Allow microphone access in system settings to record a voice message."},
     {"name":"voice_input_too_short","value":"Recording was too short. Hold to speak and try again."},

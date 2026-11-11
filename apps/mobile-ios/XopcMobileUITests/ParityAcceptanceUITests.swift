@@ -925,8 +925,7 @@ final class ParityAcceptanceUITests: XCTestCase {
             app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "条消息")).firstMatch.waitForExistence(timeout: 8)
         )
         let quickInput = app.descendants(matching: .any)["home-quick-composer"]
-        XCTAssertTrue(app.buttons["问助手"].waitForExistence(timeout: 5))
-        XCTAssertFalse(quickInput.exists)
+        XCTAssertTrue(quickInput.waitForExistence(timeout: 5))
         let firstTab = app.buttons["home-tab-assistant"]
         let lastTab = app.buttons["home-tab-profile"]
         XCTAssertGreaterThan(firstTab.frame.minX, 0)
@@ -934,13 +933,12 @@ final class ParityAcceptanceUITests: XCTestCase {
         capture("40-home-dock-conversations")
 
         openTab("进展")
-        XCTAssertTrue(app.buttons["问助手"].exists)
-        XCTAssertFalse(quickInput.exists)
+        XCTAssertTrue(quickInput.waitForExistence(timeout: 5))
         capture("41-home-dock-progress")
 
         openTab("笔记")
         XCTAssertTrue(quickInput.waitForExistence(timeout: 5))
-        let quickMicFrame = app.buttons["语音对话"].frame
+        let quickMicFrame = app.buttons["语音输入"].frame
         let quickAddFrame = app.buttons["添加内容"].frame
         capture("42-home-dock-library")
         app.buttons["添加内容"].tap()
@@ -948,13 +946,16 @@ final class ParityAcceptanceUITests: XCTestCase {
         capture("43-home-dock-actions")
 
         app.buttons["关闭添加面板"].tap()
+        openTab("我的")
+        XCTAssertTrue(quickInput.waitForExistence(timeout: 5))
+
         openTab("助手")
         XCTAssertTrue(app.descendants(matching: .any)["assistant-chat-composer"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["语音对话"].exists)
+        XCTAssertTrue(app.buttons["语音输入"].exists)
         XCTAssertTrue(app.buttons["添加附件或引用"].exists)
-        XCTAssertEqual(app.buttons["语音对话"].frame.minX, quickMicFrame.minX, accuracy: 2)
+        XCTAssertEqual(app.buttons["语音输入"].frame.minX, quickMicFrame.minX, accuracy: 2)
         XCTAssertEqual(app.buttons["添加附件或引用"].frame.maxX, quickAddFrame.maxX, accuracy: 2)
-        XCTAssertLessThan(app.buttons["语音对话"].frame.maxY, app.buttons["home-tab-assistant"].frame.minY)
+        XCTAssertLessThan(app.buttons["语音输入"].frame.maxY, app.buttons["home-tab-assistant"].frame.minY)
         capture("45-home-dock-assistant")
     }
 
@@ -1945,6 +1946,17 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18791"
         app.launch()
         XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
+    }
+
+    func testQuickComposerAppearsAboveSecondaryTabs() {
+        for name in ["conversations", "progress", "notes", "profile"] {
+            tab(name)
+            let input = app.descendants(matching: .any)["home-quick-composer"]
+            XCTAssertTrue(input.waitForExistence(timeout: 5), "Missing input on \(name)")
+            XCTAssertTrue(app.buttons["语音输入"].exists)
+            XCTAssertTrue(app.buttons["添加内容"].exists)
+            XCTAssertLessThan(input.frame.maxY, app.buttons["home-tab-\(name)"].frame.minY)
+        }
     }
 
     func testLibraryResultMatchesProgressAndProjectAndReturnsToResults() {

@@ -73,7 +73,7 @@ it.each(['麦当劳', 'McDonald’s', 'New service'])('uses only actual search r
 });
 
 it('requires owner review even for the previously hardcoded publisher and endpoint', async () => {
-  const text = 'Official integration: https://mcp.mcd.cn Authorization: Bearer TOKEN';
+  const text = 'Official integration: https://mcp.mcd.cn Authorization: Bearer TOKEN. Generate a token in account settings.';
   research.search.mockResolvedValueOnce([{ title: 'Official guide', url: 'https://github.com/M-China/mcd-mcp-server' }]);
   research.read.mockResolvedValueOnce({ url: 'https://github.com/M-China/mcd-mcp-server', text });
   const found = await discovery.command('discover', { serviceName: '麦当劳', purpose: 'Connect only' }, context()) as any;
@@ -91,4 +91,15 @@ it('does not reuse a persisted trust flag from the removed service-specific rule
   record.candidates[0].trusted = true;
   records.set(record.id, record);
   expect(discovery.selected(selected.planId, selected.expectedPlanVersion, context()).trusted).toBe(false);
+});
+
+it('does not treat an OAuth access token example as a manually supplied Bearer key', async () => {
+  const text = 'Connect at https://service.example/mcp using OAuth 2.0. Send Authorization: Bearer <access_token>.';
+  research.read.mockResolvedValueOnce({ url: 'https://service.example/guide', text });
+  const found = await discover();
+  const args = { discoveryId: found.discoveryId, expectedVersion: found.version,
+    plan: { displayName: 'Service', url: 'https://service.example/mcp', authentication: 'bearer', objective: 'connect_only' },
+    evidence: [{ documentId: found.documents[0].id, quote: text }] };
+  await expect(discovery.command('propose', args, context())).rejects.toThrow('manually supplied credential');
+  await expect(discovery.command('propose', { ...args, plan: { ...args.plan, authentication: 'auto' } }, context())).resolves.toHaveProperty('candidates');
 });

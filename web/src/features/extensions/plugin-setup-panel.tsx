@@ -14,7 +14,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown): Promise
   if (!result.ok) throw new Error(result.error ?? 'Request failed');
   return result.payload;
 }
-export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalled, initialConnect = false }: { extension: ExtensionApiRow; zh: boolean; onChanged: () => Promise<unknown>; onStart?: () => void; onInstalled?: () => void; initialConnect?: boolean }) {
+export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalled, initialConnect = false, connectionFlow = false }: { extension: ExtensionApiRow; zh: boolean; onChanged: () => Promise<unknown>; onStart?: () => void; onInstalled?: () => void; initialConnect?: boolean; connectionFlow?: boolean }) {
   const base = `/api/extensions/agent-plugins/${encodeURIComponent(extension.pluginId!)}`;
   const [job, setJob] = useState<PluginSetupJob | null>();
   const [config, setConfig] = useState<Record<string, unknown>>({});
@@ -25,6 +25,7 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
   const [authServer, setAuthServer] = useState('');
   const [activeAccount, setActiveAccount] = useState<string | null>(null);
   const [editConfig, setEditConfig] = useState(false);
+  const checkedOnOpen = useRef(false);
   const automatic = useRef(new Set<string>());
   const openedAccounts = useRef(new Set<string>());
   const accountOpeningRevision = useRef<number | undefined>(undefined);
@@ -119,7 +120,14 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
   }
   useEffect(() => {
     if (!job || preparing || error || ['cancelled', 'running', 'failed'].includes(job.state)) return;
-    if (job.state === 'completed') return;
+    if (job.state === 'completed') {
+      if (connectionFlow && !checkedOnOpen.current) {
+        checkedOnOpen.current = true;
+        void act('prepare');
+      }
+      return;
+    }
+    checkedOnOpen.current = true;
     let action: string | undefined; let key = '';
     if (job.state === 'pending') { action = 'prepare'; key = `prepare:${base}:${job.revision}`; }
     else if (auth?.state === 'connected') { action = 'prepare'; key = `auth:${base}:${auth.id}`; }
@@ -128,7 +136,7 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
       key = `complete:${base}:${job.revision}`;
       if (!automatic.current.has(key)) { automatic.current.add(key); void act('complete'); }
     }
-  }, [job, auth, preparing, error, base]);
+  }, [job, auth, preparing, error, base, connectionFlow]);
   useEffect(() => {
     if (preparing || !job || job.state === 'cancelled') return;
     if (currentAccount && job.revision !== accountOpeningRevision.current && connected(currentAccount)) { setActiveAccount(null); setAuth(null); setAuthServer(''); }
@@ -184,7 +192,7 @@ export function PluginSetupPanel({ extension, zh, onChanged, onStart, onInstalle
       {installed && !permissionIssues.length && declared.some(account => account.methods.some(method => method.type === 'cli')) ? <Button variant="secondary" disabled={preparing} onClick={() => void act('prepare')}>{t('检查连接与权限', 'Check connection and permissions')}</Button> : null}
       {!preparing && (error || ['failed', 'interrupted'].includes(job.state) || job.connections.some(value => value.state === 'error')) ? <Button variant="secondary" onClick={() => void act('prepare')}>{t('重试检查', 'Retry checks')}</Button> : null}
       {!installed ? <Button variant="ghost" disabled={busy} onClick={() => void act('cancel')}>{t('取消安装', 'Cancel installation')}</Button> : null}
-      {installed && !unresolved.length && !job.missingConfig?.length ? extension.setup?.tasks?.map(task => <div key={task} className="space-y-3 rounded-lg bg-surface-inset p-4 text-sm"><p>{task}</p><Button asChild disabled={!extension.active}><Link to={`/chat/new?${new URLSearchParams({ draft: task, projectScope: 'none' })}`} state={{ forceNewChat: true }} onClick={event => { if (!extension.active) event.preventDefault(); else onStart?.(); }}>{t('开始这个任务', 'Start this task')}</Link></Button></div>) : null}
+      {!connectionFlow && installed && !unresolved.length && !job.missingConfig?.length ? extension.setup?.tasks?.map(task => <div key={task} className="space-y-3 rounded-lg bg-surface-inset p-4 text-sm"><p>{task}</p><Button asChild disabled={!extension.active}><Link to={`/chat/new?${new URLSearchParams({ draft: task, projectScope: 'none' })}`} state={{ forceNewChat: true }} onClick={event => { if (!extension.active) event.preventDefault(); else onStart?.(); }}>{t('开始这个任务', 'Start this task')}</Link></Button></div>) : null}
     </>}
     {preparing ? <p role="status" className="text-sm text-fg-muted">{t('正在准备，可关闭后继续。', 'Preparing. You can close this window and resume.')}</p> : null}
     {job?.error && !job.deferred && !job.missingConfig?.length ? <p className="text-sm text-fg-muted">{jobError}</p> : null}{error ? <p role="alert" className="text-sm text-fg-muted">{error}</p> : null}

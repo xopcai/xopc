@@ -8,6 +8,11 @@ const STORE_CONNECTOR_REPLACEMENTS: Readonly<Record<string, string>> = {
   'todoist-mcp': 'Store plugin "todoist"',
 };
 
+export function preferredStorePlugin(serviceName: string): string | undefined {
+  const slug = serviceName.trim().toLowerCase();
+  return Object.hasOwn(COMPOSIO_PLUGIN_REPLACEMENTS, slug) ? COMPOSIO_PLUGIN_REPLACEMENTS[slug] : undefined;
+}
+
 export function isExcludedComposioToolkit(toolkit: string): boolean {
   return Object.hasOwn(COMPOSIO_PLUGIN_REPLACEMENTS, toolkit.trim().toLowerCase());
 }

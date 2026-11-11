@@ -9,7 +9,6 @@
     { "name": "library_recent_results", "value": "近期成果" },
     { "name": "library_no_results", "value": "没有匹配的近期成果" },
     { "name": "progress_delivered", "value": "已交付" },
-    { "name": "ask_assistant", "value": "问助手" },
     { "name": "progress_history", "value": "历史" },
     {"name":"voice_input_permission","value":"请在系统设置中允许麦克风访问后，再录制语音。"},
     {"name":"voice_input_too_short","value":"录音时间太短，请按住说话后重试。"},

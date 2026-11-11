@@ -13,6 +13,8 @@ import type { NativeMcpConfig } from '../../../../agent/mcp/native-mcp.js';
 import { expect, it, vi } from 'vitest';
 
 import type { McpAuthorization } from '../../../../agent/mcp/connection-setup.js';
+import { McpConversationSetup } from '../../../../agent/mcp/conversation-setup.js';
+import { createConversation } from '../../../../storage/sqlite/conversation-repository.js';
 import { createNativeMcpCredentials } from '../../../../agent/mcp/credential-store.js';
 import { AgentPluginStore } from '../../../../extensions/agent-plugins/store.js';
 import { SkillManager } from '../../../../agent/skills/skill-manager.js';
@@ -125,7 +127,10 @@ it('detects authentication and completes native OAuth through authenticated Gate
     docs: { url: `${origin}/mcp`, xopcOAuthCredentialId: `mcp_draft_${'a'.repeat(32)}` }, local: { url: `${origin}/mcp` }, cancelled: { url: `${origin}/mcp` },
     public: { url: `${origin}/public` }, token: { url: `${origin}/token` }, relay: { url: `${origin}/mcp` },
   } } });
-  const service = { currentConfig: config, getResolvedAuth: () => auth, getEffectiveListenPort: () => 18790,
+  const mcpSetup = new McpConversationSetup({ readConfig: () => config, saveConfig: async () => ({ saved: true }),
+    withConfigLock: operation => operation(), resume: async () => false });
+  const conversationId = createConversation({ agentId: 'main', sourceChannel: 'webchat' }).key;
+  const service = { currentConfig: config, mcpSetup, getResolvedAuth: () => auth, getEffectiveListenPort: () => 18790,
     marketplace: { reloadSkills() {} }, getExtensionLoader: () => null,
     isGatewayReady: () => true, getHealth: () => ({ status: 'healthy' }),
   } as unknown as GatewayService;
@@ -153,6 +158,11 @@ it('detects authentication and completes native OAuth through authenticated Gate
     base = `http://127.0.0.1:${bound.port}/api/mcp`;
     expect((await fetch(`${base}/servers/docs/probe`, { method: 'POST' })).status).toBe(401);
     expect((await fetch(`${base}/servers/docs/auth`, { method: 'POST' })).status).toBe(401);
+    const pendingSetup = await mcpSetup.command('start', { serverId: 'pending', url: `${origin}/mcp`, purpose: 'Read notes' },
+      { conversationId, agentId: 'main', canConfigure: true }) as { setupId: string; version: number };
+    expect((await request(`/setup/conversations/${conversationId}`)).data.payload.setup).toMatchObject({ setupId: pendingSetup.setupId, version: pendingSetup.version });
+    expect((await request(`/setup/${pendingSetup.setupId}`, 'POST', { action: 'cancel', expectedVersion: pendingSetup.version })).data.payload.phase).toBe('cancelled');
+    expect((await request(`/setup/conversations/${conversationId}`)).data.payload.setup).toBeNull();
     expect((await request('/servers/public/probe', 'POST')).data.payload).toEqual({ state: 'connected', toolCount: 1 });
     expect((await request('/servers/docs/probe', 'POST')).data.payload).toMatchObject({ state: 'oauth_required', auth: { method: 'oauth', metadata: 'valid' } });
     // A generic 401 must not be classified as OAuth merely because the origin has metadata.
@@ -330,6 +340,7 @@ it('detects authentication and completes native OAuth through authenticated Gate
     for (const id of pending) await request(`/auth/${id}`, 'DELETE').catch(() => {});
     await new Promise<void>(resolve => gateway.close(() => resolve()));
     await new Promise<void>(resolve => mcp.close(() => resolve()));
+    mcpSetup.dispose();
     closeXopcDatabase(); buckets.resetAllForTests(); vi.unstubAllEnvs();
     await rm(root, { recursive: true, force: true });
   }

@@ -13,7 +13,11 @@ export type StoreConnectorConnectionTarget = {
   description: string;
 };
 
-export type ConnectionTarget = ConnectorConnectionTarget | StoreConnectorConnectionTarget;
+export type PluginConnectionTarget = {
+  type: 'plugin';
+} & ({ pluginId: string; revision: string } | { packageName: string; version: string });
+
+export type ConnectionTarget = ConnectorConnectionTarget | StoreConnectorConnectionTarget | PluginConnectionTarget;
 
 export type ConnectionNeed = {
   key: string;
@@ -68,6 +72,7 @@ export type ConnectionWait = {
 export type ConnectionNeedView = ConnectionNeed & {
   phase: 'install' | 'connect' | 'authorizing' | 'reconnect' | 'choose_account' | 'ready' | 'blocked';
   authorizationMode: 'browser' | 'desktop';
+  pluginId?: string;
   accounts: Array<{ id: string; label: string }>;
   alternatives?: Array<{ candidateRef: string; label: string }>;
   reason?: string;

@@ -23,6 +23,11 @@ vi.mock('@/features/connectors/components/install-connector-dialog', () => ({
   ),
 }));
 
+vi.mock('@/features/extensions/agent-plugin-dialog', () => ({
+  AgentPluginDialog: ({ initialSource, connectionFlow }: { initialSource?: string; connectionFlow?: boolean }) =>
+    <div role="dialog">{connectionFlow ? initialSource : 'Unexpected navigation'}</div>,
+}));
+
 describe('single connection action area', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
@@ -47,6 +52,21 @@ describe('single connection action area', () => {
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+  it('opens the reviewed Store plugin version in the current conversation', async () => {
+    mocked.state.wait!.needs = [{
+      key: 'store-plugin:notion-office', target: { type: 'plugin', packageName: 'notion-office', version: '1.2.3' },
+      label: 'Notion', capabilities: ['tools'], phase: 'install', authorizationMode: 'desktop', accounts: [],
+    }];
+    mocked.state.act.mockResolvedValueOnce(true);
+    await render();
+    await click('Install Notion');
+    expect(mocked.state.act).toHaveBeenCalledWith('connect', 'store-plugin:notion-office');
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(container.querySelector('[role="dialog"]')?.textContent).toBe('store:notion-office@1.2.3');
+    });
+  });
+
   it('keeps cancellation failure visible when execution has already removed the waiting bar', async () => {
     mocked.state.wait = null;
     mocked.state.cancellationError = 'Cancellation was not confirmed';

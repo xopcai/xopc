@@ -8,14 +8,17 @@ struct FileLibraryView: View {
     @State private var isLoading = true
     @State private var error: String?
 
+    init(configuration: GatewayConfiguration, recentFiles: [FileResource] = []) {
+        self.configuration = configuration
+        _recentFiles = State(initialValue: recentFiles)
+    }
+
     var body: some View {
         List {
-            if isLoading, spaces.isEmpty {
-                ProgressListSkeleton()
-            } else if let error, spaces.isEmpty {
+            if let error, spaces.isEmpty, recentFiles.isEmpty {
                 ContentUnavailableView("无法读取文件空间", systemImage: "exclamationmark.triangle", description: Text(error))
                 Button("重试") { Task { await load() } }
-            } else if spaces.isEmpty, recentFiles.isEmpty {
+            } else if !isLoading, spaces.isEmpty, recentFiles.isEmpty {
                 ContentUnavailableView("暂无文件空间", systemImage: "folder")
             } else {
                 if !recentFiles.isEmpty {
@@ -43,6 +46,9 @@ struct FileLibraryView: View {
                 }
             }
         }
+        .overlay {
+            if isLoading, spaces.isEmpty, recentFiles.isEmpty { ProgressView() }
+        }
         .navigationTitle("文件")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
@@ -56,8 +62,13 @@ struct FileLibraryView: View {
             let client = GatewayClient(configuration: configuration)
             async let spacesRequest = client.fetchFileSpaces()
             async let recentRequest = client.fetchRecentFiles()
-            spaces = try await spacesRequest
-            recentFiles = await (try? recentRequest) ?? []
+            if let refreshedFiles = try? await recentRequest {
+                try Task.checkCancellation()
+                recentFiles = refreshedFiles
+            }
+            let refreshedSpaces = try await spacesRequest
+            try Task.checkCancellation()
+            spaces = refreshedSpaces
             error = nil
         } catch is CancellationError {
         } catch {
@@ -87,23 +98,22 @@ struct FilesView: View {
     @State private var space: FileSpace?
     @State private var items: [FileResource] = []
     @State private var search = ""
-    @State private var isLoading = false
+    @State private var isLoading = true
     @State private var error: String?
 
     init(configuration: GatewayConfiguration, initialSpace: FileSpace? = nil) {
         self.configuration = configuration
         self.initialSpace = initialSpace
+        _space = State(initialValue: initialSpace)
     }
 
     var body: some View {
         List {
-            if isLoading, items.isEmpty {
-                ForEach(0 ..< 5, id: \.self) { _ in Label("文件名称", systemImage: "doc").redacted(reason: .placeholder) }
-            } else if let error, items.isEmpty {
+            if let error, items.isEmpty {
                 ContentUnavailableView("无法读取文件", systemImage: "exclamationmark.triangle", description: Text(error))
                     .listRowBackground(Color.clear)
                 Button("重试") { Task { await load() } }
-            } else if items.isEmpty {
+            } else if !isLoading, items.isEmpty {
                 ContentUnavailableView(emptyTitle, systemImage: "folder", description: Text("可在 Gateway 工作区中添加文件。"))
                     .listRowBackground(Color.clear)
             } else {
@@ -120,6 +130,9 @@ struct FilesView: View {
                     }
                 }
             }
+        }
+        .overlay {
+            if isLoading, items.isEmpty { ProgressView() }
         }
         .navigationTitle(space?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale))
         .toolbar {
@@ -184,13 +197,11 @@ private struct FileFolderView: View {
 
     var body: some View {
         List {
-            if isLoading, items.isEmpty {
-                ForEach(0 ..< 4, id: \.self) { _ in Label("文件名称", systemImage: "doc").redacted(reason: .placeholder) }
-            } else if let error, items.isEmpty {
+            if let error, items.isEmpty {
                 ContentUnavailableView("无法读取文件夹", systemImage: "exclamationmark.triangle", description: Text(error))
                     .listRowBackground(Color.clear)
                 Button("重试") { Task { await load() } }
-            } else if items.isEmpty {
+            } else if !isLoading, items.isEmpty {
                 ContentUnavailableView("空文件夹", systemImage: "folder", description: Text("这个文件夹中没有内容。"))
                     .listRowBackground(Color.clear)
             } else {
@@ -205,6 +216,9 @@ private struct FileFolderView: View {
                     } label: { FileRow(file: item) }
                 }
             }
+        }
+        .overlay {
+            if isLoading, items.isEmpty { ProgressView() }
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)

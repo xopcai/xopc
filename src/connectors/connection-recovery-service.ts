@@ -10,6 +10,7 @@ import { getSessionInputState } from '../storage/sqlite/session-input-repository
 import { cancelConnectionObjective, getActiveConnectionWait, getConnectionWait, hasPendingConnectionMessages, interruptedConnectionMessage, publishConnectionWait, queueConnectionResolution, updateConnectionWait, listConnectionWaitsToCheck, reconcileConnectionWaits } from '../storage/sqlite/connection-wait-repository.js';
 import { getConnectorConnection, getConnectorInstallation, listConnectorConnections, upsertConnectorInstallation } from '../storage/sqlite/connector-repository.js';
 import { capabilityActions, isToolInputSchema, missingConnectionCapabilities } from './connection-capabilities.js';
+import { readPluginConnection } from './plugin-connection.js';
 import { resolveConnectionCandidate } from './connection-candidates.js';
 import { getConnectorDefinition } from './catalog.js';
 import { installConnector } from './install.js';
@@ -73,6 +74,8 @@ export class ConnectionRecoveryService {
       for (const conversationId of reconcileConnectionWaits()) this.deps.drain(conversationId);
       for (const wait of listConnectionWaitsToCheck()) {
         if (this.busy.has(wait.conversationId) || interruptedConnectionMessage(wait)) continue;
+        // Plugin setup publishes its result to disk. Keep polling lightweight while it is incomplete.
+        if (wait.needs.some(need => need.target.type === 'plugin' && !readPluginConnection({ ...need, target: need.target }, wait.agentId).verified)) continue;
         await this.act(wait.conversationId, { waitId: wait.id, expectedTranscriptId: wait.transcriptId,
           expectedVersion: wait.version, idempotencyKey: randomUUID(), action: 'check',
         }).catch(() => { /* Preserve the wait; network failures never imply authorization loss. */ });
@@ -156,6 +159,7 @@ export class ConnectionRecoveryService {
 
   private view(wait: ConnectionWait, verifiedIds?: Set<string>): ConnectionWaitView {
     const needs: ConnectionNeedView[] = wait.needs.map(need => {
+      if (need.target.type === 'plugin') return readPluginConnection({ ...need, target: need.target }, wait.agentId).view;
       if (need.target.type === 'store-connector') {
         const target = need.target;
         const instance = listConnectorInstances(this.deps.getConfig()).find(item => item.connectorId === target.connectorId);
@@ -267,7 +271,7 @@ export class ConnectionRecoveryService {
   private async checkCapabilities(wait: ConnectionWait, verified: Set<string>): Promise<ConnectionWait['needs']> {
     const views = this.view({ ...wait, needs: wait.needs.map(need => ({ ...need, capabilityError: undefined })) }, verified).needs;
     return Promise.all(wait.needs.map(async need => {
-      if (need.target.type === 'store-connector') return need;
+      if (need.target.type !== 'connector') return need;
       if (views.find(view => view.key === need.key)?.phase !== 'ready') return { ...need, capabilityError: undefined };
       try {
         const id = need.target.connectorId;
@@ -340,7 +344,7 @@ export class ConnectionRecoveryService {
       if (getConnectionWait(wait.id)?.version !== wait.version) return false;
       wait = this.markChecking(wait, 'tools');
       const verified = new Set(fresh.filter(item => item.status === 'active').map(item => item.id));
-      wait.needs = wait.needs.map(need => ({ ...need, unavailable: !fresh.some(item => item.id === need.connectionId && item.status === 'active') }));
+      wait.needs = wait.needs.map(need => isConnectorNeed(need) ? { ...need, unavailable: !fresh.some(item => item.id === need.connectionId && item.status === 'active') } : need);
       wait.needs = await this.boundedCheck(wait.id, () => this.checkCapabilities(wait!, verified));
       const checkedNeeds = this.view(wait, verified).needs;
       const ready = checkedNeeds.every(need => need.phase === 'ready');
@@ -436,6 +440,15 @@ export class ConnectionRecoveryService {
       } else if (action.action === 'connect') {
         const need = wait.needs.find(need => need.key === action.needKey);
         if (!need) throw new Error('Unknown connection requirement.');
+        if (need.target.type === 'plugin') {
+          const plugin = readPluginConnection({ ...need, target: need.target }, wait.agentId);
+          if (plugin.view.phase === 'blocked') throw new Error('This plugin cannot be connected from the current objective.');
+          updateConnectionWait({ ...wait, needs: wait.needs.map(item => item.key === need.key
+            ? { ...item, attempt: { id: action.idempotencyKey, connectionId: plugin.revision, expiresAt: Date.now() + INTENT_TTL } }
+            : item), intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
+          publishConnectionWait(conversationId);
+          return { snapshot: this.snapshot(conversationId) };
+        }
         if (this.view(wait).needs.find(item => item.key === need.key)?.phase === 'blocked') throw new Error('Connector policy blocks this connection.');
         const id = need.target.connectorId;
         const instance = listConnectorInstances(this.deps.getConfig()).find(item => item.connectorId === id);
@@ -487,10 +500,10 @@ export class ConnectionRecoveryService {
         if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');
         const currentNeeds = this.view(wait).needs;
         let needs: ConnectionWait['needs'] = wait.needs.map(need => {
-          if (need.target.type === 'store-connector') {
+          if (need.target.type === 'plugin' || need.target.type === 'store-connector') {
             const selected = currentNeeds.find(item => item.key === need.key);
             return selected?.phase === 'ready'
-              ? { ...need, connectionId: selected.connectionId, unavailable: false, capabilityError: undefined }
+              ? { ...need, connectionId: selected.pluginId ?? selected.connectionId, unavailable: false, capabilityError: undefined }
               : need;
           }
           const id = need.target.connectorId;

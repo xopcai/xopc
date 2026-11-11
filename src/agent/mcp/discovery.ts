@@ -10,9 +10,10 @@ import { extractReadableText } from '../tools/web.js';
 import { SearchProviderRegistry } from '../tools/search/registry.js';
 import { resolveWebSearchConfig } from '../tools/search/resolve-config.js';
 import { checkUrlSafety } from '../tools/url-safety.js';
+import type { ManagedMatch } from './managed-discovery.js';
 import { connectionPlanSchema, type ConnectionPlan } from './setup-plan.js';
 
-type Context = { conversationId: string; agentId: string; authorizeResearch?: (tool: 'web_search' | 'web_fetch', args: Record<string, unknown>) => Promise<boolean>; signal?: AbortSignal };
+type Context = { managementOrigin?: string; conversationId: string; agentId: string; authorizeResearch?: (tool: 'web_search' | 'web_fetch', args: Record<string, unknown>) => Promise<boolean>; signal?: AbortSignal };
 type Document = { id: string; url: string; hash: string; text: string };
 type Candidate = { id: string; plan: ConnectionPlan; evidence: Array<{ documentId: string; quote: string }>; trusted: boolean };
 function lastUserEntry(conversationId: string) {
@@ -45,7 +46,7 @@ export function createMcpResearch(config: () => Config): McpResearch {
 /** Search results are evidence to inspect, never configuration authority. */
 export class McpDiscovery {
   private readonly records = new DurableState<RecordState>('mcp.discovery');
-  constructor(private readonly research: McpResearch) {}
+  constructor(private readonly research: McpResearch, private readonly findManaged?: (name: string, context: Context) => Promise<ManagedMatch[]>) {}
   private current(id: string, context: Context, revision?: number) {
     const record = this.records.get(id), session = getSessionMetadata(context.conversationId);
     if (!record || record.cancelled || record.expiresAt <= Date.now() || record.conversationId !== context.conversationId || record.agentId !== context.agentId || record.transcriptId !== session?.transcriptId || revision !== undefined && record.version !== revision) throw new Error('Discovery expired, changed or belongs to another conversation. Discover again.');
@@ -63,6 +64,17 @@ export class McpDiscovery {
       const record: RecordState = { id: randomUUID(), version: 1, conversationId: context.conversationId, transcriptId: session.transcriptId, agentId: context.agentId, name: args.serviceName, purpose: args.purpose, expiresAt: Date.now() + 900_000, documents: [], candidates: [] };
       record.originalUserEntry = lastUserEntry(context.conversationId);
       this.records.set(record.id, record);
+      const managed = await this.findManaged?.(args.serviceName, context);
+      this.current(record.id, context);
+      if (managed?.length) {
+        this.records.delete(record.id);
+        return {
+          managedIntegrations: managed.map(match => ({
+            ...match, managementPath: context.managementOrigin ? `${context.managementOrigin}/#${match.managementPath}` : match.managementPath,
+          })),
+          instruction: 'Use the matching xopc plugin or connector before custom MCP. Try its existing tools first. If it needs installation or authorization for an owner chat task, pass the exact candidateRef to xopc_require_connection so the original objective resumes after setup. Use managementPath when no candidateRef or recovery tool is available. Do not create a duplicate custom MCP connection.',
+        };
+      }
       const query = `${args.serviceName} official MCP integration authentication`;
       await this.authorized(context, 'web_search', { query });
       const searched = await this.research.search(query, context.signal);
@@ -92,9 +104,15 @@ export class McpDiscovery {
       const text = args.evidence.map(e => e.quote).join('\n');
       const values = [args.plan.url, args.plan.helpUrl, ...args.plan.secretFields.map(f => f.name), args.plan.execution?.command, args.plan.execution?.cwd, ...(args.plan.execution?.args ?? [])].filter((v): v is string => Boolean(v));
       if (values.some(value => !text.includes(value))) throw new Error('Every endpoint, credential field and execution argument needs exact document evidence');
-      if (args.plan.authentication === 'bearer' && !/bearer/i.test(text) || args.plan.transport === 'sse' && !/\bsse\b/i.test(text) || args.plan.transport === 'stdio' && !/stdio|command/i.test(text)) throw new Error('Authentication or transport lacks documented evidence');
+      if (args.plan.transport === 'sse' && !/\bsse\b/i.test(text) || args.plan.transport === 'stdio' && !/stdio|command/i.test(text)) throw new Error('Authentication or transport lacks documented evidence');
       if (args.plan.authentication === 'none' && !/no authentication|unauthenticated|无需认证|无需鉴权|公开服务/i.test(text)) throw new Error('No-authentication requires positive document evidence');
-      if (args.plan.secretFields.some(field => field.prefix === 'Bearer ' && !/bearer/i.test(text))) throw new Error('The credential prefix is not documented');
+      if (args.plan.authentication === 'bearer' || args.plan.secretFields.some(field => field.prefix === 'Bearer ')) {
+        const headerName = args.plan.secretFields.find(field => field.prefix === 'Bearer ')?.name ?? 'Authorization';
+        const header = new RegExp(`\\b${headerName}\\s*:\\s*Bearer\\b`, 'i');
+        if (!header.test(text) || !/personal access token|integration token|api[ -]?key|static token|(?:create|generate|copy|get) (?:an? |your )?(?:access )?token (?:from|in) |个人访问令牌|集成令牌|访问密钥|(?:创建|生成|复制|获取).{0,12}(?:密钥|令牌)/i.test(text)) {
+          throw new Error('A Bearer header does not establish a manually supplied credential. Document how to obtain the key manually, or use auto.');
+        }
+      }
       if (args.plan.execution && !documents.some(document => document.url === args.plan.execution!.sourceUrl)) throw new Error('The execution source must be one of the fetched documents');
       if (args.plan.url && !checkUrlSafety(args.plan.url).safe) throw new Error('Search-discovered endpoints must be public. Local endpoints require an explicit user-supplied address.');
       // Quoted configuration is not proof of publisher ownership. All discovered plans need review.

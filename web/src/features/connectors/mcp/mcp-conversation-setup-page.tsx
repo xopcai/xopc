@@ -20,7 +20,7 @@ type Setup = { setupId: string; serverId: string; conversationId: string; versio
   diagnosis?: { recovery?: { reason?: string } };
   planApproval?: { sources: Array<{ url: string }>; execution?: { command: string; args: string[]; cwd?: string; sourceUrl: string }; endpoint?: string; purpose: string };
   phase: string; expired: boolean; requiresRecheck?: boolean; authorizationUrl?: string; authState?: string;
-  errorCode?: string; replyDelivery?: string; reloadRequired?: boolean };
+  errorCode?: string; replyDelivery?: string; reloadRequired?: boolean; continuationQueued?: boolean; objective?: string };
 const copy = {
   zh: { title: '连接服务', secret: '访问密钥', hint: '仅保存到凭据服务，不进入聊天或模型。',
     invalidToken: '密钥未被接受，请核对后重新输入。',
@@ -101,8 +101,10 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
   const description = data?.expired ? t.expired : data?.phase === 'cancelled' ? t.cancelled : data?.reloadRequired ? t.reload
     : connected ? deliveryFailed ? t.deliveryFailed : data?.replyDelivery === 'delivered' ? t.delivered : t.continuing
       : needsApproval ? t.approval : waitingRetry ? (language === 'zh' ? `服务要求等待，将在 ${new Date(data!.nextRetryAt!).toLocaleTimeString()} 后有限重试。` : `Waiting until ${new Date(data!.nextRetryAt!).toLocaleTimeString()} before a bounded retry.`)
+      : busy ? t.checkingDescription
+      : data?.phase === 'auth_unknown' && !data.canProvideToken ? (language === 'zh' ? '无法确认服务的认证方式。请核对官方接入文档和服务地址后重新检查。' : 'Could not verify the authentication method. Check the official setup guide and service address, then recheck.')
       : data?.phase === 'auth_unknown' ? (language === 'zh' ? '认证方式尚未确定。若服务提供 Token，可在此输入；如需 OAuth，请核实接入资料后重新检查。' : 'Authentication is not yet determined. Enter a Token only if your service provides one; for OAuth, verify the integration guide and recheck.')
-      : tokenRequired ? data.canProvideToken ? t.accessDeniedToken : t.tokenDescription : authorizing ? t.waiting : error || blocked || actionError ? t.failed : t.checkingDescription;
+      : tokenRequired ? data.errorCode === 'credential_rejected' ? t.invalidToken : data.canProvideToken ? t.accessDeniedToken : t.tokenDescription : authorizing ? t.waiting : error || blocked || actionError ? t.failed : t.checkingDescription;
   const dismiss = () => { if (!busy) { setToken(''); setSecrets({}); onClose(data); } };
   const primaryClass = 'min-h-12 w-full rounded-xl text-[15px]';
   const Icon = connected ? Check : tokenRequired ? KeyRound : LockKeyhole;
@@ -120,7 +122,7 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
           {connected ? t.connected : data?.displayName || t.title}
         </Dialog.Title>
         {data ? <p className="mt-1 truncate text-[13px] text-fg-muted" title={data.endpointOrigin}>{data.endpointOrigin}</p> : null}
-        <Dialog.Description role={!tokenRequired && (error || actionError || blocked || data?.expired || data?.reloadRequired) ? 'alert' : undefined} className="mt-3 text-sm leading-relaxed text-fg-muted">{description}</Dialog.Description>
+        <Dialog.Description role={(data?.errorCode === 'credential_rejected' || !tokenRequired && (error || actionError || blocked || data?.expired || data?.reloadRequired)) ? 'alert' : undefined} className="mt-3 text-sm leading-relaxed text-fg-muted">{description}</Dialog.Description>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-4 sm:px-8" aria-busy={busy}>
         {!data && !error ? <div role="status" aria-label={t.loading} className="space-y-3"><Skeleton className="h-12 w-full rounded-xl" /><Skeleton className="h-4 w-3/4" /></div> : null}
@@ -143,7 +145,7 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
             inputClassName="min-h-12 rounded-xl pr-14 text-base" labels={messages(language).connectorsSettings.secretInputLabels} /></div>)}
           {data.helpUrl ? <a href={data.helpUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-accent-fg">{language === 'zh' ? '获取访问密钥' : 'Get an access key'}</a> : null}
           <p id="mcp-secret-hint" className="flex items-start gap-1.5 text-xs leading-relaxed text-fg-muted"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" aria-hidden />{t.hint}</p>
-          {data.errorCode === 'credential_rejected' || actionError || data.phase === 'blocked' && !data.canProvideToken ? <p role="alert" className="text-sm text-danger">{data.errorCode === 'credential_rejected' ? t.invalidToken : t.failed}</p> : null}
+          {actionError || data.phase === 'blocked' && !data.canProvideToken ? <p role="alert" className="text-sm text-danger">{t.failed}</p> : null}
         </form> : connected && data?.returnChannel === 'weixin' ? <p role="status" className="py-5 text-center text-sm text-fg-muted">{t.returnWeixin}</p>
           : error || actionError || blocked || data?.expired || data?.reloadRequired ? null
             : !terminal && !authorizing ? <div role="status" aria-label={t.checking} className="space-y-3"><Skeleton className="h-12 w-full rounded-xl" /><Skeleton className="h-4 w-2/3" /></div> : null}

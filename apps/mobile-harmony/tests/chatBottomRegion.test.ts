@@ -120,6 +120,9 @@ describe('chat bottom region composition', () => {
   });
 
   it('offers a stable quick composer on non-chat tabs and routes its message into chat', () => {
+    const secondaryDock = home.slice(home.indexOf("Column().id('secondary-dock-corner-mask')"),
+      home.indexOf(".id('secondary-bottom-surface')"));
+    expect(secondaryDock).toMatch(/if \(!this.capture.active\) \{\s*this.quickComposer\(\)/);
     expect(home).toContain(".id('home-quick-composer')");
     expect(home).toContain(".id('home-quick-send')");
     expect(home).toContain(".id('home-quick-voice').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");

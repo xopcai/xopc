@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
 import { serve } from '@hono/node-server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { seedTestDatabase } from '../../../test/sqlite-fixture.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
@@ -23,6 +24,8 @@ import { buckets } from '../../gateway/rate-limit/index.js';
 import { decideConnectorApproval, listConnectorApprovals, getConnectorInstallation, listConnectorConnections, upsertConnectorActionMetadata, upsertConnectorConnection, upsertConnectorInstallation } from '../../storage/sqlite/connector-repository.js';
 import { updateConnectorAccount } from '../../storage/sqlite/connector-account-repository.js';
 import { resumeApprovedConnectorAction } from '../approval-resume.js';
+import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
+import { PluginSetupService } from '../../extensions/agent-plugins/setup.js';
 import { ConnectionRecoveryService, type ConnectionAction } from '../connection-recovery-service.js';
 import { resolveConnectionCandidate } from '../connection-candidates.js';
 import { installConnectorDefinition } from '../install.js';
@@ -612,6 +615,59 @@ describe('durable connection recovery', () => {
     });
     expect(JSON.stringify(result)).toContain('already_connected');
     expect(getActiveConnectionWait(conversationId)).toBeUndefined();
+  });
+
+  it.each([false, true])('waits for fresh plugin setup and respects cancellation (cancel=%s)', async cancel => {
+    vi.stubEnv('XOPC_STATE_DIR', join(dir, 'state'));
+    vi.stubEnv('XOPC_SKIP_EXTENSIONS', 'false');
+    seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true, workspace: dir }] });
+    const source = join(dir, 'notes-plugin');
+    const skill = join(source, 'skills', 'notes');
+    mkdirSync(skill, { recursive: true });
+    writeFileSync(join(source, 'plugin.json'), JSON.stringify({
+      $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json', name: 'notes-plugin',
+    }));
+    writeFileSync(join(skill, 'SKILL.md'), '---\nname: notes\ndescription: Reads notes\n---\nRead notes.');
+    const store = new AgentPluginStore();
+    const installed = store.install(source, { reviewHash: store.inspect(source).reviewHash });
+    const setup = new PluginSetupService(store);
+    const owner = 'gateway-owner';
+    const prepare = (expectedRevision: number) => setup.act(installed.id, owner, { action: 'prepare', expectedRevision }, config, dir);
+    const complete = (expectedRevision: number) => setup.act(installed.id, owner, { action: 'complete', expectedRevision, allowPartial: false }, config, dir);
+    const first = await prepare(setup.create(installed.id, owner).revision);
+    const completed = await complete(first.revision);
+
+    const candidateRef = `agent-plugin:${installed.id}`;
+    const tool = createExternalToolGatewayTools([], () => ({ conversationId, channel: 'webchat', chatId: conversationId }))
+      .find(item => item.name === 'xopc_require_connection')!;
+    const result = await tool.execute('request-plugin', {
+      requirements: [{ candidateRef }], purpose: 'Read notes',
+      checkpoint: { completedSteps: [], pendingSteps: ['Read notes'] },
+    });
+    expect(JSON.stringify(result)).toContain('connection_required');
+    expect(recovery.snapshot(conversationId).wait?.needs[0]).toMatchObject({ phase: 'reconnect', pluginId: installed.id });
+    await recovery.act(conversationId, action('connect', { needKey: candidateRef }));
+    await recovery.poll();
+    expect(getActiveConnectionWait(conversationId)?.status).toBe('open');
+
+    const prepared = await prepare(completed.revision);
+    await recovery.poll();
+    expect(getActiveConnectionWait(conversationId)?.status).toBe('open');
+    if (cancel) await recovery.act(conversationId, action('cancel'));
+    const reconnected = await complete(prepared.revision);
+    await recovery.poll();
+    if (cancel) {
+      expect(getActiveConnectionWait(conversationId)).toBeUndefined();
+      expect(drain).not.toHaveBeenCalled();
+    } else {
+      const wait = getActiveConnectionWait(conversationId)!;
+      expect(wait).toMatchObject({ status: 'queued', needs: [expect.objectContaining({ connectionId: installed.id })] });
+      finishSessionInputRun(conversationId, 'run-original', 'suspended');
+      const input = claimNextSessionInput(conversationId, 'run-resume')!;
+      await prepare(reconnected.revision);
+      expect(await recovery.preflight(input)).toBe(true);
+      expect(consumeConnectionResume(input)).toBe(true);
+    }
   });
 
   it('finishes local setup after selecting an existing Gmail account without another OAuth flow', async () => {

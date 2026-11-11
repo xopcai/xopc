@@ -36,7 +36,8 @@ export function useConnectionWait(conversationId: string) {
     setBusy(true);
     setError(undefined);
     if (action === 'cancel') setCancellationError(undefined);
-    const popup = action === 'connect' ? reserveOAuthAuthorizationWindow() : null;
+    const need = wait.needs.find(item => item.key === needKey);
+    const popup = action === 'connect' && need?.target.type !== 'plugin' ? reserveOAuthAuthorizationWindow() : null;
     const signature = JSON.stringify([wait.id, wait.objectiveRevision, action, needKey, accountId, candidateRef, instanceId]);
     if (attempt.current?.signature !== signature) attempt.current = { signature, key: crypto.randomUUID() };
     const idempotencyKey = attempt.current.key;

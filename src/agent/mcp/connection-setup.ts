@@ -2,6 +2,7 @@ import { resolveMcpSetupConfig } from './effective-server.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns';
 import { Agent } from 'undici';
+import { buildAuthorizationServerDiscoveryUrls, parseWwwAuthenticate, selectResource } from '@earendil-works/pi-mcp/oauth';
 
 import type { Config } from '../../config/schema.js';
 import { isManagedConnectorServer } from '../../connectors/materialize.js';
@@ -51,7 +52,7 @@ async function metadata(url: URL, endpoint: URL, signal?: AbortSignal, publicOnl
   } catch (error) { signal?.throwIfAborted(); return { state: error instanceof SyntaxError ? 'invalid' : 'unreachable' }; }
   finally { await dispatcher.close(); }
 }
-async function authentication(config: Config, workspace: string, serverId: string, challenge: string | undefined, options?: McpSessionOptions) {
+async function authentication(config: Config, workspace: string, serverId: string, failure: McpObservation | undefined, options?: McpSessionOptions): Promise<{ method: 'oauth' | 'unknown'; metadata: McpMetadataState; retryAt?: number }> {
   const loaded = await prepareNativeMcpConfig(config, workspace);
   const entry = loaded.servers.find(s => s.name === serverId);
   if (!entry || !('url' in entry.config)) return { method: 'unknown' as const, metadata: 'not_checked' as McpMetadataState };
@@ -59,31 +60,58 @@ async function authentication(config: Config, workspace: string, serverId: strin
   const publicOnly = config.mcp?.servers?.[serverId]?.xopcPublicOnly === true;
   const allowedIssuer = (value: unknown) => {
     try { if (typeof value !== 'string') return false; const issuer = httpUrl(value);
-      return issuer.protocol === 'https:' && checkUrlSafety(issuer.href).safe || !publicOnly && issuer.origin === url.origin && ['localhost', '127.0.0.1', '[::1]'].includes(issuer.hostname);
+      return !issuer.hash && (issuer.protocol === 'https:' && checkUrlSafety(issuer.href).safe || !publicOnly && issuer.origin === url.origin && ['localhost', '127.0.0.1', '[::1]'].includes(issuer.hostname));
     } catch { return false; }
   };
-  challenge ??= '';
-  const reference = /resource_metadata\s*=\s*"([^"\s]+)"/i.exec(challenge)?.[1];
-  const candidates = [...(reference ? [httpUrl(reference)] : []), new URL(`/.well-known/oauth-protected-resource${url.pathname === '/' ? '' : url.pathname}`, url), new URL('/.well-known/oauth-protected-resource', url)];
+  const challenge = failure?.challenge;
+  const { resourceMetadataUrl } = parseWwwAuthenticate(challenge);
+  const suffix = url.pathname.replace(/\/$/, '');
+  const candidates = resourceMetadataUrl ? [resourceMetadataUrl] : [
+    new URL(`/.well-known/oauth-protected-resource${suffix}`, url),
+    new URL('/.well-known/oauth-protected-resource', url),
+  ];
   let state: McpMetadataState = 'absent';
-  for (const candidate of [...new Map(candidates.map(c => [c.href, c])).values()]) {
-    options?.signal?.throwIfAborted(); options?.diagnostics?.beforeRequest?.({ method: 'GET', stage: 'authorization_metadata' }); const result = await metadata(candidate, url, options?.signal, publicOnly);
-    if (result.retryAt) return { method: 'unknown' as const, metadata: result.state, retryAt: result.retryAt };
+  const unknown = (metadata: McpMetadataState, retryAt?: number) => ({ method: 'unknown' as const, metadata, retryAt });
+  const read = async (target: URL) => {
+    options?.signal?.throwIfAborted();
+    options?.diagnostics?.beforeRequest?.({ method: 'GET', stage: 'authorization_metadata' });
+    return metadata(target, url, options?.signal, publicOnly);
+  };
+  let issuer: string | undefined;
+  for (const candidate of new Map(candidates.map(c => [c.href, c])).values()) {
+    if (!allowedIssuer(candidate.href)) { state = 'invalid'; continue; }
+    const result = await read(candidate);
+    if (result.retryAt) return unknown(result.state, result.retryAt);
+    if (result.state !== 'absent') state = result.state;
+    if (!result.data) continue;
+    const { resource, authorization_servers: servers } = result.data;
+    const advertisedIssuer = Array.isArray(servers) ? servers[0] : undefined;
+    if (typeof resource === 'string' && typeof advertisedIssuer === 'string' && allowedIssuer(advertisedIssuer)) {
+      try {
+        selectResource(url, { resource });
+        issuer = advertisedIssuer; break;
+      } catch { /* Metadata describes a different resource. */ }
+    }
+    state = 'invalid';
+  }
+  // Only use legacy origin discovery when the server has not advertised resource metadata.
+  if (!issuer && failure?.status === 401 && !resourceMetadataUrl && state === 'absent' && /^\s*Bearer(?:\s|$)/i.test(challenge ?? '') && allowedIssuer(url.origin)) issuer = url.origin;
+  if (!issuer) return unknown(resourceMetadataUrl && state === 'absent' ? 'invalid' : state);
+  const fromResource = state === 'valid';
+  state = 'absent';
+  for (const { url: target } of buildAuthorizationServerDiscoveryUrls(issuer)) {
+    const result = await read(target);
+    if (result.retryAt) return unknown(result.state, result.retryAt);
     if (result.state !== 'absent') state = result.state;
     const data = result.data;
-    if (data && typeof data.resource === 'string' && data.resource === url.href && Array.isArray(data.authorization_servers)
-      && data.authorization_servers.some(allowedIssuer)) return { method: 'oauth' as const, metadata: 'valid' as McpMetadataState };
-    if (data) state = 'invalid';
+    if (data && typeof data.issuer === 'string' && data.issuer.replace(/\/$/, '') === issuer.replace(/\/$/, '')
+      && allowedIssuer(data.authorization_endpoint) && allowedIssuer(data.token_endpoint)
+      && (!Array.isArray(data.code_challenge_methods_supported) || data.code_challenge_methods_supported.includes('S256'))) {
+      return { method: 'oauth' as const, metadata: 'valid' as McpMetadataState };
+    }
+    if (data) return unknown('invalid');
   }
-  if (/\bBearer\b/i.test(challenge)) {
-    options?.diagnostics?.beforeRequest?.({ method: 'GET', stage: 'authorization_metadata' });
-    const result = await metadata(new URL('/.well-known/oauth-authorization-server', url), url, options?.signal, publicOnly);
-    if (result.retryAt) return { method: 'unknown' as const, metadata: result.state, retryAt: result.retryAt };
-    const data = result.data;
-    if (data && data.issuer === url.origin && allowedIssuer(data.issuer) && typeof data.authorization_endpoint === 'string' && typeof data.token_endpoint === 'string' && allowedIssuer(data.authorization_endpoint) && allowedIssuer(data.token_endpoint)) return { method: 'oauth' as const, metadata: 'valid' as McpMetadataState };
-    if (result.state !== 'absent') state = result.data ? 'invalid' : result.state;
-  }
-  return { method: 'unknown' as const, metadata: state };
+  return unknown(fromResource && state === 'absent' ? 'invalid' : state);
 }
 
 export async function probeMcpConnection(config: Config, workspace: string, serverId: string, options?: McpSessionOptions): Promise<McpConnectionProbe> {
@@ -111,7 +139,7 @@ export async function probeMcpConnection(config: Config, workspace: string, serv
           auth: { method: 'credential', metadata: 'not_checked', credential: rejected ? 'rejected' : 'unknown' }, recovery: { kind: 'enter_secret', reason: rejected ? 'credential_rejected' : 'credential_or_permission_refused' } };
       }
       try {
-        const auth = await authentication(config, workspace, serverId, last ? last.challenge ?? '' : undefined, options);
+        const auth = await authentication(config, workspace, serverId, failed, options);
         return { state: auth.method === 'oauth' ? 'oauth_required' : 'auth_unknown', auth: { method: auth.method, metadata: auth.metadata, credential: 'missing' }, observation,
           recovery: { kind: auth.retryAt ? 'wait' : auth.method === 'oauth' ? 'authorize' : 'choose_auth', ...(auth.retryAt ? { retryAt: auth.retryAt } : {}), reason: auth.metadata } };
       } catch { options?.signal?.throwIfAborted(); return { state: 'auth_unknown', auth: { method: 'unknown', metadata: 'unreachable', credential: 'missing' }, observation, recovery: { kind: 'choose_auth', reason: 'metadata_unreachable' } }; }

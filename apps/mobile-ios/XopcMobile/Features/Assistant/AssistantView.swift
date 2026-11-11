@@ -20,7 +20,6 @@ struct AssistantView<Dock: View>: View {
     var showsFloatingHeader = true
     var sessionActionsRequest = 0
     var messageSearchRequest = 0
-    var composerFocusRequest = 0
     var externalIntake: ExternalIntakeBatch?
     var onExternalIntakeFinished: (UUID, String?) -> Void = { _, _ in }
     let bottomDock: (AssistantComposer, Bool) -> Dock
@@ -64,6 +63,7 @@ struct AssistantView<Dock: View>: View {
     @State private var replyUserText: String?
     @State private var activityHeight: CGFloat = 0
     @State private var followingBottom = true
+    @State private var bottomJumpID: UUID?
     @State private var userScrollingMessages = false
     @State private var bottomScrollTask: Task<Void, Never>?
 
@@ -378,11 +378,11 @@ struct AssistantView<Dock: View>: View {
     }
 
     private func scheduleBottomScroll(_ scroller: ScrollViewProxy) {
-        guard followingBottom, !userScrollingMessages, bottomScrollTask == nil else { return }
+        guard followingBottom, !userScrollingMessages, bottomJumpID == nil, bottomScrollTask == nil else { return }
         bottomScrollTask = Task {
             do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
             bottomScrollTask = nil
-            guard followingBottom, !userScrollingMessages else { return }
+            guard followingBottom, !userScrollingMessages, bottomJumpID == nil else { return }
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { scroller.scrollTo("chat-bottom", anchor: .bottom) }
@@ -473,8 +473,14 @@ struct AssistantView<Dock: View>: View {
                 .contentMargins(.top, chatTopInset + 72, for: .scrollContent)
                 .contentMargins(.bottom, 24 + replySpace.remaining, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
-                .onDisappear { bottomScrollTask?.cancel(); bottomScrollTask = nil }
-                .onChange(of: conversation?.id) { bottomScrollTask?.cancel(); bottomScrollTask = nil }
+                .onDisappear {
+                    bottomJumpID = nil
+                    bottomScrollTask?.cancel(); bottomScrollTask = nil
+                }
+                .onChange(of: conversation?.id) {
+                    bottomJumpID = nil
+                    bottomScrollTask?.cancel(); bottomScrollTask = nil
+                }
                 .onChange(of: state.messages.last) {
                     updateReplySpace()
                     if followingBottom {
@@ -491,11 +497,12 @@ struct AssistantView<Dock: View>: View {
                 }
                 .onChange(of: viewport.size.height) {
                     updateReplySpace()
-                    if followingBottom, !userScrollingMessages {
+                    if followingBottom, !userScrollingMessages, bottomJumpID == nil {
                         scroller.scrollTo("chat-bottom", anchor: .bottom)
                     }
                 }
                 .modifier(ChatScrollInteraction(onStart: {
+                    bottomJumpID = nil
                     userScrollingMessages = true
                     followingBottom = false
                     bottomScrollTask?.cancel(); bottomScrollTask = nil
@@ -508,11 +515,19 @@ struct AssistantView<Dock: View>: View {
                 .overlay(alignment: .bottom) {
                     if state.isRunActive || !isAtBottom {
                         Button {
+                            guard bottomJumpID == nil else { return }
+                            bottomScrollTask?.cancel(); bottomScrollTask = nil
                             userScrollingMessages = false
                             followingBottom = true
                             updateReplySpace()
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+                            let jumpID = UUID()
+                            bottomJumpID = jumpID
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.42)) {
                                 scroller.scrollTo("chat-bottom", anchor: .bottom)
+                            } completion: {
+                                guard bottomJumpID == jumpID else { return }
+                                bottomJumpID = nil
+                                if !isAtBottom { scheduleBottomScroll(scroller) }
                             }
                         } label: {
                             Group {
@@ -689,7 +704,6 @@ struct AssistantView<Dock: View>: View {
         AssistantComposer(
             configuration: configuration,
             focusAllowed: !showingPhone && state.clarification?.kind != "approval",
-            focusRequest: composerFocusRequest,
             draft: $draft,
             attachments: $attachments,
             references: $references,

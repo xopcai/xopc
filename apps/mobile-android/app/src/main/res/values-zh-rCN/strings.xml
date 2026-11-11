@@ -564,7 +564,6 @@
     <string name="task_chat_return_conversation">返回会话</string>
     <string name="task_chat_return_task">返回任务详情</string>
     <string name="task_chat_return_history">返回对话</string>
-    <string name="ask_assistant">问助手</string>
     <string name="progress_delivered">已交付</string>
     <string name="progress_history">历史</string>
     <string name="progress_task_chat_error">无法打开任务对话，请重试。</string>

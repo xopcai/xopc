@@ -229,6 +229,7 @@ export struct XopcChatView {
   }
   @Local atBottom: boolean = true;
   @Local showJumpBottom: boolean = false;
+  private jumpingToBottom: boolean = false;
   @Local bottomRegionHeight: number = 0;
   @Local replySpaceHeight: number = 0;
   private replyAnchorId: string = '';
@@ -408,6 +409,7 @@ export struct XopcChatView {
   }
   private resetMessagePosition(): void {
     clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.messageScrollFromUser = false;
+    this.jumpingToBottom = false;
     this.initialScrollPending = true; this.initialScrollAttempts = 0;
     this.atBottom = true; this.showJumpBottom = false;
     // A pending prepend may still update rows, but must not restore an obsolete reading anchor.
@@ -458,6 +460,7 @@ export struct XopcChatView {
       || source === ScrollSource.OTHER_USER_INPUT || source === ScrollSource.SCROLL_BAR || source === ScrollSource.SCROLL_BAR_FLING;
   }
   private onMessageScroll(offset: number, state: ScrollState): void {
+    if (this.messageScrollFromUser) this.jumpingToBottom = false;
     if (this.messageScrollFromUser && offset < 0) {
       clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.initialScrollPending = false;
     }
@@ -1401,6 +1404,12 @@ export struct XopcChatView {
         this.onMessageScrollSource(source);
       })
       .onDidScroll((offset: number, state: ScrollState): void => { this.onMessageScroll(offset, state); })
+      .onScrollStop((): void => {
+        if (!this.jumpingToBottom) return;
+        this.jumpingToBottom = false;
+        this.atBottom = true; this.showJumpBottom = false;
+        this.updateReplySpace(); this.onMessageChange();
+      })
       .onTouch((event: TouchEvent): void => {
         if (event.type === TouchType.Down) {
           if (this.sendFlightRowId) this.clearSendFlight();
@@ -1418,7 +1427,18 @@ export struct XopcChatView {
         .responseRegion({ x: -4, y: -4, width: 44, height: 44 })
         .backgroundColor(this.colors.grouped).accessibilityText($r('app.string.chat_jump_bottom'))
         .onClick((): void => {
-          this.resetMessagePosition(); this.updateReplySpace(); this.onMessageChange();
+          if (this.jumpingToBottom) return;
+          const animate = !this.layout.reduceMotion && !this.messagesScroller.isAtEnd();
+          if (!animate) {
+            this.resetMessagePosition(); this.updateReplySpace(); this.onMessageChange();
+            return;
+          }
+          clearTimeout(this.scrollTimer); this.scrollTimer = -1;
+          this.initialScrollPending = false;
+          this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false;
+          this.jumpingToBottom = true;
+          const last = this.presentationRows.length + (this.chat.hasOlder ? 1 : 0);
+          this.messagesScroller.scrollToIndex(last, true, ScrollAlign.END);
         })
     }
     }.id('chat-message-viewport').layoutWeight(1).width('100%').backgroundColor(Color.Transparent)
