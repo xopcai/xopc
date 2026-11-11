@@ -180,10 +180,10 @@ describe('personal delivery benchmark v1', () => {
 
   it('H03-policy: concise default and artifact fallback preserve explicit detail requests', async () => {
     const instructions = personalInstructions();
-    expect(instructions).toContain('Be concise by default');
-    expect(instructions).toContain('answer narrow follow-ups narrowly');
+    expect(instructions).toContain('Let the question determine how much to say');
+    expect(instructions).toContain('Honor a numerical length limit when the user sets one');
     expect(instructions).toContain('Requests for detail, exact text, code, tables, reports, or complete lists take precedence');
-    expect(instructions).toContain('keep required facts and uncertainty');
+    expect(instructions).toContain('include the evidence and uncertainty that affect the reader’s understanding');
     const { main, coordinator, outcome } = execution();
     const file = await saveMediaBuffer(Buffer.from('# 完整报告'), { bucket: 'outbound', contentType: 'text/markdown' });
     outcome.deliverables = [{ artifactId: file.id, title: 'report.md', kind: 'document', availability: 'available',
