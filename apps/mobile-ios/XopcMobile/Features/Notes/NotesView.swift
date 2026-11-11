@@ -202,7 +202,7 @@ struct NotesView: View {
             .frame(minHeight: 48)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
             NavigationLink {
-                FileLibraryView(configuration: configuration)
+                FileLibraryView(configuration: configuration, recentFiles: recentFiles)
             } label: {
                 Image(systemName: "folder")
                     .frame(width: 48, height: 48)
@@ -220,7 +220,7 @@ struct NotesView: View {
 
     private var fileSection: some View {
         Section("文件") {
-            if isSearchingFiles {
+            if isSearchingFiles, visibleFiles.isEmpty {
                 ProgressListSkeleton()
             }
             if let fileSearchError {
@@ -236,7 +236,7 @@ struct NotesView: View {
                 .accessibilityIdentifier("note-file-result-\(file.id)")
             }
             if section == .files {
-                NavigationLink("浏览文件空间") { FileLibraryView(configuration: configuration) }
+                NavigationLink("浏览文件空间") { FileLibraryView(configuration: configuration, recentFiles: recentFiles) }
             }
         }
     }

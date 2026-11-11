@@ -1,19 +1,25 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import type { ConnectionNeedView } from '@xopcai/gateway-contract';
 import { Check, ChevronRight, Link2, Loader2, X } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { InstallConnectorDialog } from '@/features/connectors/components/install-connector-dialog';
 import { buildInitialDraft, type InstallDraft } from '@/features/connectors/components/install-connector-draft';
 import { fetchStoreConnectorInstallPlan } from '@/features/connectors/connectors-api';
+import type { ExtensionApiRow } from '@/features/extensions/types';
+import { fetchJson } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useConnectionWait } from './use-connection-wait';
 import { ConnectionAccountPrompt } from './connection-account-prompt';
 import { McpSetupActionBar } from './mcp-setup-action-bar';
 
+const AgentPluginDialog = lazy(() => import('@/features/extensions/agent-plugin-dialog').then(module => ({ default: module.AgentPluginDialog })));
+
 const copy = {
-  zh: { waiting: '等待连接', install: '安装', installing: '正在准备安装', connect: '连接', reconnect: '重新连接', details: '查看详情', skip: '跳过连接', cancel: '取消这个目标',
+  zh: { waiting: '等待连接', reconnectRequired: '需要重新授权', install: '安装', installing: '正在准备安装', connect: '连接', reconnect: '重新连接', details: '查看详情', skip: '跳过连接', cancel: '取消这个目标',
     ready: '已连接', check: '我已完成授权', authorizing: '等待完成授权', queued: '已连接，等待继续', queuedSkipped: '等待使用现有信息继续',
     checkingConnection: '正在检查连接', checkingTools: '已连接，正在验证工具', queueHint: '目标已保存，正在等待当前执行结束。',
     interruptedInputHint: '有条补充消息在重启时中断。请重新发送要求，或移除上方中断的消息后继续。',
@@ -22,7 +28,7 @@ const copy = {
     account: '选择账号', all: '查看全部连接', close: '关闭', intro: '完成连接后，将自动恢复当前目标。你也可以继续发送消息。',
     callbackHint: '远程 Gateway 无法接收本地回调时，粘贴浏览器地址栏中的完整回调 URL。', callbackPlaceholder: '完整回调 URL', callbackSubmit: '完成连接',
     replace: '更换应用', confirmReplace: '确认改用', apps: '个应用需要连接', preserved: '目标已保留', retry: '重试检查', toolsUnavailable: '应用工具暂不可用', toolsHint: '账号已连接，当前无法使用任务所需工具。可以重试检查，无需重新授权。' },
-  en: { waiting: 'Waiting for connection', install: 'Install', installing: 'Preparing installation', connect: 'Connect', reconnect: 'Reconnect', details: 'Details', skip: 'Skip connection', cancel: 'Cancel this objective',
+  en: { waiting: 'Waiting for connection', reconnectRequired: 'Reauthorization required', install: 'Install', installing: 'Preparing installation', connect: 'Connect', reconnect: 'Reconnect', details: 'Details', skip: 'Skip connection', cancel: 'Cancel this objective',
     ready: 'Connected', check: 'Check authorization', authorizing: 'Waiting for authorization', queued: 'Connected, waiting to continue', queuedSkipped: 'Waiting to continue with available information',
     checkingConnection: 'Checking connection', checkingTools: 'Connected, checking tools', queueHint: 'Your objective is saved. Waiting for the current execution to finish.',
     interruptedInputHint: 'A message was interrupted during restart. Resend the requirement or remove the interrupted message above before continuing.',
@@ -41,6 +47,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
   const [replacement, setReplacement] = useState<{ needKey: string; candidateRef: string; label: string }>();
   const [installDraft, setInstallDraft] = useState<InstallDraft>();
   const [installNeedKey, setInstallNeedKey] = useState<string>();
+  const [pluginDialog, setPluginDialog] = useState<{ waitId: string; extension?: ExtensionApiRow; source?: string }>();
   const [preparingInstall, setPreparingInstall] = useState(false);
   const [installError, setInstallError] = useState<string>();
   const language = useLocaleStore(state => state.language);
@@ -52,20 +59,21 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
   </div> : <McpSetupActionBar conversationId={conversationId} />;
   const first = wait.needs[0];
   const single = wait.needs.length === 1;
+  const reconnecting = single && first.phase === 'reconnect';
   const queued = wait.phase === 'queued';
   const checking = wait.recoveryStage === 'checking_connection' || wait.recoveryStage === 'checking_tools';
   const accountNeed = wait.needs.find(need => need.phase === 'choose_account');
   const capabilityFailed = wait.needs.some(need => need.capabilityError);
-  if (wait.phase === 'ready' && !checking && !wait.recoveryError) return <McpSetupActionBar conversationId={conversationId} />;
+  if (wait.phase === 'ready' && !checking && !wait.recoveryError && !wait.needs.some(need => need.target.type === 'plugin')) return <McpSetupActionBar conversationId={conversationId} />;
   const stateLabel = wait.recoveryStage === 'checking_connection' ? t.checkingConnection
     : wait.recoveryStage === 'checking_tools' ? t.checkingTools : queued ? wait.resolution === 'skipped' ? t.queuedSkipped : t.queued
       : wait.recoveryError === 'check_failed' ? t.checkFailed : wait.recoveryError ? t.interrupted
-        : capabilityFailed ? t.toolsUnavailable : accountNeed ? t.account
-          : single && first.phase === 'authorizing' ? t.authorizing : t.waiting;
+        : wait.phase === 'ready' ? t.ready : capabilityFailed ? t.toolsUnavailable : accountNeed ? t.account
+          : single && first.phase === 'authorizing' ? t.authorizing : reconnecting ? t.reconnectRequired : t.waiting;
   const mainLabel = queued || checking ? t.details : wait.recoveryError ? t.retry : wait.phase === 'review_scope' ? t.scope
     : single && first.phase === 'install' ? (preparingInstall ? t.installing : `${t.install} ${first.label}`)
     : single && first.phase === 'connect' ? (language === 'zh' ? `连接 ${first.label}` : `Connect ${first.label}`)
-      : single && first.phase === 'reconnect' ? t.reconnect : single && first.phase === 'authorizing' ? t.check : t.details;
+      : single && first.phase === 'reconnect' ? t.reconnect : single && first.phase === 'authorizing' && first.target.type !== 'plugin' ? t.check : t.details;
   async function prepareStoreInstall(need: ConnectionNeedView = first) {
     if (need.target.type !== 'store-connector') return;
     setPreparingInstall(true);
@@ -90,10 +98,30 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
       setPreparingInstall(false);
     }
   }
+  async function openPlugin(need: ConnectionNeedView) {
+    if (need.target.type !== 'plugin' || !wait) return;
+    setPreparingInstall(true);
+    setInstallError(undefined);
+    try {
+      const { target, pluginId } = need;
+      const extension = pluginId ? (await fetchJson<{ payload: ExtensionApiRow }>(apiUrl(
+        `/api/extensions/agent-plugins/${encodeURIComponent(pluginId)}`,
+      ))).payload : undefined;
+      const source = 'packageName' in target && !extension ? `store:${target.packageName}@${target.version}` : undefined;
+      if ((!extension && !source) || !await act('connect', need.key)) return;
+      setOpen(false);
+      setPluginDialog({ waitId: wait.id, extension, source });
+    } catch (error) {
+      setInstallError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPreparingInstall(false);
+    }
+  }
   function primaryAction() {
     if (queued || checking) setOpen(true);
     else if (wait?.recoveryError) void act('check');
     else if (wait?.phase === 'review_scope') setOpen(true);
+    else if (single && first.target.type === 'plugin' && ['install', 'connect', 'reconnect', 'authorizing'].includes(first.phase)) void openPlugin(first);
     else if (single && first.phase === 'install') void prepareStoreInstall();
     else if (single && ['connect', 'reconnect'].includes(first.phase)) void act('connect', first.key);
     else if (single && first.phase === 'authorizing') void act('check');
@@ -112,6 +140,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
       {!queued && !checking && <button type="button" className="text-xs text-fg-muted hover:text-fg" disabled={busy} onClick={() => void act('skip')}>{t.skip}</button>}
       <button type="button" className="min-h-11 px-2 text-xs text-fg-muted hover:text-fg" onClick={() => void act('cancel')}>{t.cancel}</button>
     </div>
+    {reconnecting && !checking && !queued ? <p className="mt-1 text-xs text-fg-muted">{t.intro}</p> : null}
     {wait.queueBlocked && <p className="mt-2 text-xs text-fg-muted">{wait.blockedInputId ? t.interruptedInputHint : t.queueHint}</p>}
     {wait.lastCheckedAt && <p className="mt-2 text-xs text-fg-muted">{t.lastChecked}: {new Date(wait.lastCheckedAt).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US')}</p>}
     {accountNeed && !queued && <p className="mt-2 line-clamp-2 break-words text-sm text-fg-muted">{wait.summary}</p>}
@@ -136,6 +165,10 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
               <div className="flex items-center justify-between gap-3"><span className="text-sm font-medium text-fg">{need.label}{need.accountSelector ? ` · ${need.accountSelector}` : ''}</span>
                 {need.capabilityError ? <button type="button" disabled={busy || queued} className={secondary} onClick={() => void act('check')}>{t.retry}</button>
                   : need.phase === 'ready' ? <span className="text-xs text-fg-muted"><Check className="mr-1 inline size-3" />{t.ready}</span>
+                  : need.target.type === 'plugin' && need.phase !== 'blocked' ?
+                    <button type="button" disabled={busy || queued || preparingInstall} className={primary} onClick={() => void openPlugin(need)}>
+                      {need.phase === 'install' ? t.install : need.phase === 'reconnect' ? t.reconnect : t.connect}
+                    </button>
                   : need.phase === 'authorizing' ? <button type="button" disabled={busy} className={secondary} onClick={() => void act('check')}>{t.check}</button>
                     : need.phase === 'install' ? <button type="button" disabled={busy || queued || preparingInstall} className={primary} onClick={() => void prepareStoreInstall(need)}>{t.install}</button>
                       : need.phase !== 'blocked' && need.phase !== 'choose_account' ? <button type="button" disabled={busy || queued} className={primary} onClick={() => void act('connect', need.key)}>{need.phase === 'reconnect' ? t.reconnect : t.connect}</button> : null}
@@ -150,7 +183,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
                   onClick={() => { void act('replace_source', need.key, undefined, replacement.candidateRef); setReplacement(undefined); }}>{t.confirmReplace} {replacement.label}</button>}
               </div> : null}
               {need.reason && <p className="text-xs text-fg-muted">{need.reason}</p>}
-              {need.phase === 'authorizing' && <div className="flex items-center justify-between text-xs text-fg-muted"><span>{t.authorizing}</span><button type="button" disabled={busy} className="text-accent" onClick={() => void act('connect', need.key)}>{t.reconnect}</button></div>}
+              {need.phase === 'authorizing' && need.target.type !== 'plugin' && <div className="flex items-center justify-between text-xs text-fg-muted"><span>{t.authorizing}</span><button type="button" disabled={busy} className="text-accent" onClick={() => void act('connect', need.key)}>{t.reconnect}</button></div>}
 
             </div>)}
             <a href="#/capabilities/connectors" className="text-sm text-accent" onClick={() => setOpen(false)}>{t.all}</a>
@@ -163,6 +196,9 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+    {pluginDialog?.waitId === wait.id ? <Suspense fallback={<Skeleton className="mt-2 h-10 w-full" />}>
+      <AgentPluginDialog extension={pluginDialog.extension} initialSource={pluginDialog.source} connectionFlow onClose={() => setPluginDialog(undefined)} />
+    </Suspense> : null}
     {installDraft ? <InstallConnectorDialog
       draft={installDraft}
       onChange={setInstallDraft}

@@ -1197,7 +1197,7 @@ class MainScreenTest {
     composeTestRule.runOnIdle { assertEquals(1, sends) }
   }
 
-  @Test fun assistantAndNotesVoiceEntriesStayLeftAndToggleTheSameRecordingPad() {
+  @Test fun allTabVoiceEntriesStayLeftAndToggleTheSameRecordingPad() {
     androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
       .grantRuntimePermission(composeTestRule.activity.packageName, android.Manifest.permission.RECORD_AUDIO)
     var tab by mutableStateOf(HomeTab.Assistant)
@@ -1217,7 +1217,7 @@ class MainScreenTest {
     val shell = composeTestRule.onNodeWithTag("assistant-composer-shell").fetchSemanticsNode().boundsInRoot
     assert(expandedVoice.left < shell.center.x)
     Espresso.closeSoftKeyboard()
-    for (next in listOf(HomeTab.Assistant, HomeTab.Notes)) {
+    for (next in HomeTab.entries) {
       composeTestRule.runOnIdle { tab = next }
       val tag = if (next == HomeTab.Assistant) "assistant-voice-toggle" else "quick-voice"
       if (next != HomeTab.Assistant) {

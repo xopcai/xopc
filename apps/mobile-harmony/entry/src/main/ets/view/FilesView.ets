@@ -1,7 +1,7 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcFile, XopcFileSpace } from '../model/files';
-import { XopcBrandLoading, XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcBrandLoading, XopcHubRow } from './MobileComponents';
 import { createManagedShare } from '../service/chatMediaShare';
 import { XopcShareResult } from '../model/share';
 import { XopcShareResultView } from './ShareResultView';
@@ -116,7 +116,10 @@ export struct XopcFilesView {
         TextInput({ text: this.search, placeholder: $r('app.string.search') }).layoutWeight(1).height(44)
           .backgroundColor(this.colors.input).borderRadius(14)
           .onChange((query: string): void => { this.search = query; }).onSubmit((): void => { this.model.load(this.search); })
-        Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary]) }
+        Button() {
+          if (this.model.busy) { XopcBrandLoading({ compact: true }) }
+          else { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary]) }
+        }
           .width(44).height(44).padding(0).backgroundColor(this.colors.input).borderRadius(14).enabled(!this.model.busy)
           .accessibilityText($r('app.string.refresh')).onClick((): void => { this.model.load(this.search); })
       }.width('100%').padding({ left: 20, right: 20, top: 6, bottom: 16 })
@@ -131,9 +134,6 @@ export struct XopcFilesView {
       }.width('100%').padding({ left: 20, right: 20, bottom: 10 })
 
       List({ space: 0 }) {
-        if (this.model.busy && !this.model.items.length) {
-          ListItem() { XopcListSkeleton() }
-        }
         if (!this.model.space && !this.search.trim()) {
           ForEach(this.model.spaces, (space: XopcFileSpace) => {
             ListItem() {

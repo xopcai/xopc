@@ -198,6 +198,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 
 /** The five top-level destinations mirror the current HarmonyOS home screen. */
 enum class HomeTab(@field:StringRes val label: Int, val icon: Int) {
@@ -1468,7 +1470,6 @@ internal fun MainContent(
         val attentionCount = connection.progress.needsUser.size.takeIf {
           connection.progress.gatewayId == gatewayId
         } ?: 0
-        val showQuick = selectedTab == HomeTab.Notes
         if (selectedTab == HomeTab.Assistant) {
           MainBottomSurface("assistant-bottom-surface") {
             AssistantComposer(connection, assistantComposerValue, { value ->
@@ -1519,7 +1520,7 @@ internal fun MainContent(
                 personalAgent = connection.personal.takeIf { it.agent?.conversationId == conversationId })
             }
           }
-        } else if (showQuick) {
+        } else {
           MainBottomSurface("secondary-bottom-surface") {
             QuickComposer(connection, selectedTab, { text ->
               inputVoiceNotice.clear()
@@ -1566,19 +1567,6 @@ internal fun MainContent(
             }
             if (!quickActionsOpen && !imeVisible) XopcTabDock(selectedTab, onSelectTab,
               grouped = true, attentionCount = attentionCount,
-              personalAgent = connection.personal.takeIf {
-                it.agent?.conversationId == conversationId })
-          }
-        } else if (!imeVisible) {
-          MainBottomSurface("secondary-bottom-surface") {
-            if (selectedTab == HomeTab.Conversations || selectedTab == HomeTab.Progress) {
-              androidx.compose.material3.TextButton(onClick = {
-                assistantFocusRevision++
-                onSelectTab(HomeTab.Assistant)
-              }) { Text(stringResource(R.string.ask_assistant)) }
-            }
-            XopcTabDock(selectedTab, onSelectTab, grouped = true,
-              attentionCount = attentionCount,
               personalAgent = connection.personal.takeIf {
                 it.agent?.conversationId == conversationId })
           }
@@ -2705,8 +2693,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     }
   }
   var olderAnchor by remember(connection.selectedConversationId) { mutableStateOf<Pair<String, Int>?>(null) }
+  val jumpScope = rememberCoroutineScope()
+  var jumpJob by remember(messageListState) { mutableStateOf<Job?>(null) }
+  DisposableEffect(messageListState) {
+    onDispose { jumpJob?.cancel() }
+  }
   fun scrollMessagesToBottom() {
-    if (messageDragged || olderAnchor != null || (positionedAtLatest && !followBottom)) return
+    if (jumpJob != null || messageDragged || olderAnchor != null || (positionedAtLatest && !followBottom)) return
     if (messageListState.layoutInfo.totalItemsCount == 0) return
     // Schedule the bottom anchor for the next measure instead of forcing a reentrant layout.
     if (messageListState.firstVisibleItemIndex != 0 || messageListState.firstVisibleItemScrollOffset != 0) {
@@ -2718,7 +2711,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   LaunchedEffect(messageListState, connection.historyLoadingOlder) {
     snapshotFlow { messageListState.isScrollInProgress to messageListState.canScrollBackward }
       .collect { (scrolling, canScrollToLatest) ->
-        if (scrolling && positionedAtLatest &&
+        if (scrolling && jumpJob == null && positionedAtLatest &&
           !connection.historyLoadingOlder && olderAnchor == null) followBottom = !canScrollToLatest
       }
   }
@@ -2974,8 +2967,20 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   if (positionedAtLatest && !followBottom && messageListState.canScrollBackward) {
     val jumpLabel = stringResource(R.string.assistant_jump_bottom)
     IconButton(onClick = {
-      followBottom = true
-      scrollMessagesToBottom()
+      if (jumpJob == null && !messageDragged) {
+        olderAnchor = null
+        val job = jumpScope.launch(start = CoroutineStart.LAZY) {
+          try {
+            messageListState.animateScrollToItem(0)
+            followBottom = true
+          } finally {
+            jumpJob = null
+          }
+          scrollMessagesToBottom()
+        }
+        jumpJob = job
+        job.start()
+      }
     }, modifier = Modifier.align(Alignment.BottomCenter)
       .padding(bottom = bottomChromeHeight + if (showConnectionWait) 108.dp else 4.dp)
       .size(44.dp)

@@ -10,9 +10,14 @@ describe('workspace list loading layout', () => {
     expect(workspace.indexOf("placeholder: $r('app.string.search')")).toBeLessThan(
       workspace.indexOf('if (this.model.busy && !this.model.items.length)'),
     );
-    expect(files.indexOf("placeholder: $r('app.string.search')")).toBeLessThan(
-      files.indexOf('if (this.model.busy && !this.model.items.length)'),
-    );
+  });
+
+  it('shows file refresh progress in the toolbar without adding a loading row', () => {
+    const listStart = files.indexOf('List({ space: 0 })');
+    const progress = files.indexOf('if (this.model.busy) { XopcBrandLoading({ compact: true }) }');
+    expect(progress).toBeGreaterThan(files.indexOf("placeholder: $r('app.string.search')"));
+    expect(progress).toBeLessThan(listStart);
+    expect(files.slice(listStart)).not.toContain('XopcListSkeleton');
   });
 
   it('uses icon-only refresh controls with accessible labels', () => {

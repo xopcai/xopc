@@ -9,7 +9,6 @@ struct AppRootView: View {
     @State private var personalAgent = PersonalAgentState()
     @State private var settingsPresented = false
     @State private var quickDraft = ""
-    @State private var composerFocusRequest = 0
     @State private var keyboardVisible = false
     @State private var secondaryDockHeight: CGFloat = 0
     @State private var messageLinks = ChatMessageLinkRouter()
@@ -130,7 +129,6 @@ struct AppRootView: View {
                     onPersonalAgentUpdated: personalAgent.applyProfile,
                     onOpenSettings: { settingsPresented = true },
                     onInputFocusChanged: { _ in },
-                    composerFocusRequest: composerFocusRequest,
                     externalIntake: appState.externalIntake,
                     onExternalIntakeFinished: appState.externalIntakeFinished
                 ) { composer, isActionPanelExpanded in
@@ -238,17 +236,7 @@ struct AppRootView: View {
                         .ignoresSafeArea(edges: .bottom)
                         .allowsHitTesting(false)
                 }
-            bottomDock {
-                if appState.selectedTab == .conversations || appState.selectedTab == .progress {
-                    Button("问助手", systemImage: "bubble.left") {
-                        appState.selectedTab = .assistant
-                        composerFocusRequest += 1
-                    }
-                    .frame(minHeight: 44)
-                } else if appState.selectedTab == .notes {
-                    quickComposer
-                }
-            }
+            bottomDock { quickComposer }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { secondaryDockHeight = $0 }
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())

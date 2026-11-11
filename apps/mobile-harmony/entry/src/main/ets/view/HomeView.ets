@@ -704,10 +704,7 @@ export struct XopcHomeView {
         Column().id('secondary-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)
         Column() {
           Column() {
-            if (!this.capture.active && (this.tab === 1 || this.tab === 2)) {
-              Button($r('app.string.ask_assistant')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-                .onClick((): void => { this.activateTab(0); this.chatFocusRevision++; })
-            } else if (!this.capture.active && this.tab === 3) {
+            if (!this.capture.active) {
               this.quickComposer()
               XopcChatActionPanel({ open: this.quickPanelOpen, idPrefix: 'home-quick-action',
                 disabledIds: this.disabledQuickActionIds(),

@@ -252,7 +252,7 @@ export struct XopcNotesTabView {
           if (this.showsFiles && (this.visibleFiles.length || this.files.busy || this.files.error || this.category === 'files')) {
             ListItem() { Text($r('app.string.files')).fontSize(15).fontWeight(FontWeight.Bold)
               .fontColor(this.colors.secondary).padding({ top: 14, bottom: 6 }).width('100%') }
-            if (this.files.busy) { ListItem() { XopcListSkeleton() } }
+            if (this.files.busy && !this.visibleFiles.length) { ListItem() { XopcListSkeleton() } }
             if (this.files.error) {
               ListItem() {
                 Button($r('app.string.retry')).height(44).onClick((): void => { void this.files.load(this.submittedQuery, true); })

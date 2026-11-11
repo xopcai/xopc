@@ -460,3 +460,48 @@ it('invalidates an old objective when a channel account label is logged into a d
   expect(await service.interact(goal.setupId, 'get')).toMatchObject({ phase: 'cancelled' });
   expect(native.probeMcpConnection).not.toHaveBeenCalled();
 });
+
+it('returns the Notion Store plugin without starting web research or a custom setup', async () => {
+  const authorizeResearch = vi.fn(async () => true);
+  const result = await service.command('discover', { serviceName: 'Notion', purpose: 'Read my notes' }, { ...context, authorizeResearch });
+  expect(result).toMatchObject({ managedIntegrations: [{ kind: 'plugin', managementPath: '/capabilities/extensions?tab=marketplace&q=notion-office' }] });
+  expect(authorizeResearch).not.toHaveBeenCalled();
+  expect(service.currentForConversation(context.conversationId)).toEqual({ setup: null });
+});
+
+it.each([
+  [{ state: 'oauth_required' }, 'oauth_required'],
+  [{ state: 'auth_unknown', auth: { metadata: 'invalid' }, observation: { status: 401, contentType: 'application/json' } }, 'auth_unknown'],
+  [{ state: 'auth_unknown', auth: { metadata: 'absent' }, observation: { status: 401, contentType: 'application/json' } }, 'token_required'],
+] as const)('checks a discovered Bearer plan before showing credentials (%j)', async (probe, phase) => {
+  vi.spyOn(McpDiscovery.prototype, 'selected').mockReturnValue({
+    id: 'candidate', trusted: false, evidence: [], sources: [], purpose: 'Read',
+    plan: { displayName: 'Docs', url: 'https://data.example.com/mcp', transport: 'streamable-http', authentication: 'bearer', secretFields: [], objective: 'complete_task' },
+  });
+  native.probeMcpConnection.mockResolvedValueOnce(probe);
+  const goal = await service.command('start', { planId: '00000000-0000-4000-8000-000000000000', expectedPlanVersion: 1, serverId: 'docs', purpose: 'Read' }, context) as any;
+  expect(await service.interact(goal.setupId, 'approve', undefined, goal.version)).toMatchObject({ phase, canProvideToken: false });
+  expect(native.probeMcpConnection).toHaveBeenCalledTimes(1);
+  expect(config.mcp?.servers?.docs).toBeUndefined();
+});
+
+it('uses an exact catalog match and ignores unrelated Store search results', async () => {
+  const authorizeResearch = vi.fn(async () => false);
+  const storeFetch = vi.fn(async (input: string) => {
+    const type = new URL(input).searchParams.get('type');
+    return Response.json({ items: type === 'connector'
+      ? [{ type, name: 'archive-service', connectorManifest: { displayName: 'Archive Service' }, latestVersion: '1.2.3' }]
+      : [{ type, name: 'unrelated', latestVersion: '1.0.0' }] });
+  });
+  vi.stubGlobal('fetch', storeFetch);
+  try {
+    const result = await service.command('discover', { serviceName: 'Archive Service', purpose: 'Read my archive' }, { ...context, authorizeResearch });
+    expect(result).toMatchObject({ managedIntegrations: [{
+      kind: 'connector', candidateRef: 'store-connector:archive-service:1.2.3',
+      managementPath: '/capabilities/connectors?tab=discover&storeConnector=archive-service',
+    }] });
+    expect((result as { managedIntegrations: unknown[] }).managedIntegrations).toHaveLength(1);
+    expect(storeFetch).toHaveBeenCalledTimes(2);
+    expect(authorizeResearch).not.toHaveBeenCalled();
+  } finally { vi.unstubAllGlobals(); }
+});

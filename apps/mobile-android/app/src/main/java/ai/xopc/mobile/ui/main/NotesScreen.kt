@@ -93,6 +93,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -191,12 +192,18 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   var selectedFile by remember(state.gatewayId) { mutableStateOf<ManagedFile?>(null) }
   var fileRefreshRevision by rememberSaveable(state.gatewayId) { mutableStateOf(0) }
   var fileSpaces by remember(state.gatewayId) { mutableStateOf<List<ManagedFileSpace>>(emptyList()) }
-  var fileItems by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>>(emptyList()) }
+  var recentFileItems by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>?>(null) }
+  var folderItems by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf<List<ManagedFile>>(emptyList()) }
   val libraryFilesRevision = remember(state.gatewayId) { mutableStateOf(0) }
   val libraryFiles = rememberLibraryFiles(state.gatewayId, query, libraryFilesRevision.value, onNoteFiles)
-  var fileContent by remember(state.gatewayId) { mutableStateOf<ByteArray?>(null) }
-  var filesLoading by remember(state.gatewayId) { mutableStateOf(false) }
-  var filesError by remember(state.gatewayId) { mutableStateOf(false) }
+  var fileContent by remember(state.gatewayId, selectedFile?.id) { mutableStateOf<ByteArray?>(null) }
+  var fileContentLoading by remember(state.gatewayId, selectedFile?.id) {
+    mutableStateOf(selectedFile?.let {
+      previewFileKind(it.name, it.mimeType) != PreviewFileKind.BINARY || isBitmapPreview(it.name, it.mimeType)
+    } == true)
+  }
+  var filesLoading by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf(true) }
+  var filesError by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf(false) }
   LaunchedEffect(selectedId, editorOpen, fileBrowserOpen) {
     onTopLevelChange(selectedId == null && !editorOpen && !fileBrowserOpen)
   }
@@ -204,18 +211,36 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     if (!fileBrowserOpen) return@LaunchedEffect
     filesLoading = true
     filesError = false
-    runCatching {
-      fileSpaces = onNoteFileSpaces()
-      fileItems = onNoteFiles(fileSpaceId, filePath, "")
-    }.onFailure { filesError = true }
-    filesLoading = false
+    try {
+      if (fileSpaceId == null) {
+        val spaces = onNoteFileSpaces()
+        coroutineContext.ensureActive()
+        fileSpaces = spaces
+      }
+      val files = onNoteFiles(fileSpaceId, filePath, "")
+      coroutineContext.ensureActive()
+      if (fileSpaceId == null) recentFileItems = files else folderItems = files
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      filesError = true
+    } finally {
+      filesLoading = false
+    }
   }
-  LaunchedEffect(selectedFile?.id) {
-    fileContent = null
+  LaunchedEffect(state.gatewayId, selectedFile?.id) {
     val file = selectedFile ?: return@LaunchedEffect
-    if (previewFileKind(file.name, file.mimeType) != PreviewFileKind.BINARY ||
-      isBitmapPreview(file.name, file.mimeType)) {
-      fileContent = runCatching { onNoteFileContent(file.id) }.getOrNull()
+    if (!fileContentLoading) return@LaunchedEffect
+    try {
+      val bytes = onNoteFileContent(file.id)
+      coroutineContext.ensureActive()
+      fileContent = bytes
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      fileContent = null
+    } finally {
+      fileContentLoading = false
     }
   }
   var moreOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -325,8 +350,12 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
         }
       }
     }
-    if (fileBrowserOpen) NotesFilesContent(fileSpaces, fileItems, selectedFile, fileContent,
-      filesLoading, filesError, { fileRefreshRevision++ }, { space ->
+    val visibleFileSpaces = if (fileSpaceId == null) fileSpaces else emptyList()
+    val visibleFileItems = if (fileSpaceId != null) folderItems else
+      recentFileItems ?: if (query.isBlank()) libraryFiles.items else emptyList()
+    if (fileBrowserOpen) NotesFilesContent(visibleFileSpaces, visibleFileItems, selectedFile, fileContent,
+      if (selectedFile != null) fileContentLoading else filesLoading,
+      selectedFile == null && filesError, { fileRefreshRevision++ }, { space ->
         selectedFile = null; filePath = ""; fileSpaceId = space.id
       }, { file ->
         if (file.kind == "directory") { fileSpaceId = file.spaceId; filePath = file.relativePath }
@@ -1078,7 +1107,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
       }
       if (showFiles && (visibleFiles.isNotEmpty() || filesLoading || filesError || category == "files")) {
         item { Text(stringResource(R.string.notes_files), style = MaterialTheme.typography.titleSmall) }
-        if (filesLoading) item { BrandLoadingPanel() }
+        if (filesLoading && visibleFiles.isEmpty()) item { BrandLoadingPanel() }
         if (filesError) item { OutlinedButton(onClick = onRefreshFiles) { Text(stringResource(R.string.assistant_context_retry)) } }
         items(visibleFiles, key = { "file-${it.id}" }) { file -> ManagedFileCard(file, onOpenSearchFile) }
         if (category == "files" && onOpenFiles != null) item {
@@ -1115,7 +1144,6 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
     if (error) OutlinedButton(onClick = onRetry, modifier = Modifier.testTag("notes-files-retry")) {
       Text(stringResource(R.string.progress_load_failed))
     }
-    if (loading) BrandLoadingPanel(modifier = Modifier.testTag("notes-files-loading"))
     if (selected != null) {
       Text(selected.name, style = MaterialTheme.typography.titleLarge,
         modifier = Modifier.testTag("notes-file-title"))
@@ -1135,8 +1163,15 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
         contentScale = ContentScale.Fit)
       else if (content != null) FilePreviewContent(selected.name, selected.mimeType, content,
         modifier = Modifier.fillMaxWidth().weight(1f).testTag("notes-file-preview"))
+      else if (loading) Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+        BrandLoadingIndicator(extent = 28.dp, modifier = Modifier.testTag("notes-files-loading"))
+      }
       else Text(stringResource(R.string.notes_file_preview_unavailable),
         color = MaterialTheme.colorScheme.onSurfaceVariant)
+    } else if (loading && spaces.isEmpty() && items.isEmpty()) {
+      Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+        BrandLoadingIndicator(extent = 28.dp, modifier = Modifier.testTag("notes-files-loading"))
+      }
     } else LazyColumn(modifier = Modifier.weight(1f),
       verticalArrangement = Arrangement.spacedBy(10.dp)) {
       if (spaces.isNotEmpty()) {

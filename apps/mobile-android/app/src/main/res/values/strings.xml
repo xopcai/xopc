@@ -564,7 +564,6 @@
     <string name="task_chat_return_conversation">Back to conversation</string>
     <string name="task_chat_return_task">Back to task details</string>
     <string name="task_chat_return_history">Back to conversations</string>
-    <string name="ask_assistant">Ask assistant</string>
     <string name="progress_delivered">Delivered</string>
     <string name="progress_history">History</string>
     <string name="progress_task_chat_error">Could not open task conversation. Try again.</string>

@@ -203,20 +203,25 @@ export async function listSkillCategories(
   return response.items;
 }
 
-/** Public connector catalog exposed by xopc-store. */
-export async function listConnectorPackages(
+/** Public integration catalog exposed by xopc-store. */
+export function listConnectorPackages(storeBaseUrl: string, params: SkillsStoreListParams) {
+  return listIntegrationPackages(storeBaseUrl, params);
+}
+
+export async function listIntegrationPackages(
   storeBaseUrl: string,
   params: SkillsStoreListParams,
+  options?: { type?: 'connector' | 'plugin'; signal?: AbortSignal },
 ): Promise<SkillsStoreListResponse> {
   const base = normalizeBaseUrl(storeBaseUrl);
   const sp = new URLSearchParams();
-  sp.set('type', 'connector');
+  sp.set('type', options?.type ?? 'connector');
   if (params.q?.trim()) sp.set('q', params.q.trim());
   if (params.page != null) sp.set('page', String(params.page));
   if (params.pageSize != null) sp.set('pageSize', String(params.pageSize));
   if (params.sort) sp.set('sort', params.sort);
   if (params.category?.trim()) sp.set('category', params.category.trim());
-  return fetchJson<SkillsStoreListResponse>(`${base}/api/v1/packages?${sp.toString()}`);
+  return fetchJson<SkillsStoreListResponse>(`${base}/api/v1/packages?${sp.toString()}`, { signal: options?.signal });
 }
 
 /** GET /api/v1/packages/:name — published skill package (public). */
@@ -287,10 +292,11 @@ export async function fetchStoreConnectorPackageDetail(
 export async function fetchMarketplacePackageDetail(
   storeBaseUrl: string,
   packageName: string,
+  signal?: AbortSignal,
 ): Promise<MarketplacePackageDetail> {
   const base = normalizeBaseUrl(storeBaseUrl);
   const enc = encodeURIComponent(packageName.trim());
-  return fetchJson<MarketplacePackageDetail>(`${base}/api/v1/packages/${enc}`);
+  return fetchJson<MarketplacePackageDetail>(`${base}/api/v1/packages/${enc}`, { signal });
 }
 
 export async function resolveSkillZipDownloadUrl(

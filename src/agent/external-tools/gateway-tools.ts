@@ -14,6 +14,7 @@ import { createPersonalRequestExecutionAuthorizer } from '../../personal-agent/r
 import { personalRequestForExecution } from '../../personal-agent/request-repository.js';
 import { parseExternalToolRef } from './refs.js';
 import { listConnectorInstances } from '../../connectors/instances.js';
+import { resolvePluginConnectionCandidate } from '../../connectors/plugin-connection.js';
 import { resolveConnectionCandidate } from '../../connectors/connection-candidates.js';
 import { connectorPrincipalForSession } from '../../connectors/principal.js';
 import { connectionBindings, requireSessionConnection, publishConnectionWait, reviseCurrentConnectionObjective } from '../../storage/sqlite/connection-wait-repository.js';
@@ -171,7 +172,7 @@ export function createExternalToolGatewayTools(
   });
   const requireTool: AgentTool<typeof requireSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.requireConnection, label: 'Connect app', parameters: requireSchema,
-    description: 'Use only when a requested read cannot proceed because authorization, installation or account selection is required. Available authorized tools should be executed directly without asking the user to confirm the read. Request an exact connectionCandidates or installCandidates entry returned by tool_search. Explain the verified need once before calling. This saves and pauses the objective, displays one action area above the input, and lets the host resume automatically after the required user action. Stop this turn after connection_required; never ask the user to reply continue after authorization. Never invent a candidate reference, return OAuth URLs, or repeat a skipped request. If another objective is waiting, do not create a duplicate objective.',
+    description: 'Use when the user asks to connect a specific integration, or a requested read cannot proceed because authorization, installation or account selection is required. Available authorized tools should be executed directly without asking the user to confirm the read. Request an exact connectionCandidates or installCandidates entry returned by tool_search, or an exact managedIntegrations entry returned by mcp_setup discover. Explain the verified need once before calling. This saves and pauses the objective, displays one action area above the input, and lets the host resume automatically after the required user action. Stop this turn after connection_required; never ask the user to reply continue after authorization. Never invent a candidate reference, return OAuth URLs, or repeat a skipped request. If another objective is waiting, do not create a duplicate objective.',
     async execute(_id, params: Static<typeof requireSchema>) {
       const context = getContext?.();
       if (!context) throw new Error('No active conversation.');
@@ -190,6 +191,7 @@ export function createExternalToolGatewayTools(
               && listConnectorConnections({ principalId: principal.principalId, connectorId: need.target.connectorId })
                 .some(connection => connection.id === need.connectionId && connection.status === 'active');
           }
+          if (need.target.type === 'plugin') return need.key === item.candidateRef && Boolean(need.connectionId);
           const storeTarget = parseStoreConnectorCandidateRef(item.candidateRef);
           return Boolean(storeTarget && need.target.packageName === storeTarget.packageName
             && need.target.version === storeTarget.version && need.connectionId);
@@ -203,6 +205,11 @@ export function createExternalToolGatewayTools(
         needs: await Promise.all(params.requirements.map(async item => {
           const storeRef = parseStoreConnectorCandidateRef(item.candidateRef);
           const config = getConfig?.();
+          const plugin = await resolvePluginConnectionCandidate(item.candidateRef, config);
+          if (plugin) {
+            if (item.accountId || item.accountSelector) throw new Error('Choose the plugin account in its connection form.');
+            return plugin;
+          }
           const plan = storeRef && config
             ? await getStoreConnectorInstallPlan(config, storeRef.packageName, storeRef.version)
             : undefined;

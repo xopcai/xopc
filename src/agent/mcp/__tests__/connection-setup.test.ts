@@ -25,15 +25,17 @@ it.each(['unreachable', 'invalid'] as const)('keeps %s authentication metadata u
 
 it('discovers verified OAuth metadata from a 403 challenge', async () => {
   native.discover.mockImplementationOnce(async (_config, _workspace, _server, options) => { options.diagnostics.observe({ method: 'POST', stage: 'initialize', status: 403, contentType: 'application/json', challenge: 'Bearer resource_metadata="https://fixture.example/metadata"' }); throw new Error('HTTP 403'); });
-  fetcher.mockResolvedValueOnce(Response.json({ resource: 'https://fixture.example/', authorization_servers: ['https://login.example/'] }));
+  fetcher.mockResolvedValueOnce(Response.json({ resource: 'https://fixture.example/', authorization_servers: ['https://login.example/'] }))
+    .mockResolvedValueOnce(Response.json({ issuer: 'https://login.example/', authorization_endpoint: 'https://login.example/authorize', token_endpoint: 'https://login.example/token' }));
   expect(await probeMcpConnection(config, '/fixture', 'docs')).toMatchObject({ state: 'oauth_required', auth: { method: 'oauth', metadata: 'valid' }, observation: { status: 403 } });
 });
 
 it('recognizes advertised OAuth after a native transport reports a generic HTTP 401', async () => {
   native.discover.mockImplementationOnce(async (_config, _workspace, _server, options) => { options.diagnostics.observe({ method: 'POST', stage: 'initialize', status: 401, contentType: 'application/json', challenge: 'Bearer resource_metadata="https://fixture.example/.well-known/oauth-protected-resource"' }); throw new Error('HTTP 401'); });
-  fetcher.mockResolvedValueOnce(Response.json({ resource: 'https://fixture.example/', authorization_servers: ['https://login.example/'] }));
+  fetcher.mockResolvedValueOnce(Response.json({ resource: 'https://fixture.example/', authorization_servers: ['https://login.example/'] }))
+    .mockResolvedValueOnce(Response.json({ issuer: 'https://login.example/', authorization_endpoint: 'https://login.example/authorize', token_endpoint: 'https://login.example/token' }));
   expect(await probeMcpConnection(config, '/fixture', 'docs')).toMatchObject({ state: 'oauth_required', auth: { metadata: 'valid', method: 'oauth' } });
-  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
 it('requires positive metadata evidence before interpreting HTTP 401 as OAuth', async () => {
@@ -108,4 +110,15 @@ it('honors metadata Retry-After and stops discovery instead of probing another e
   expect(result).toMatchObject({ state: 'auth_unknown', auth: { metadata: 'unreachable' }, recovery: { kind: 'wait' } });
   expect(result.recovery!.retryAt).toBeGreaterThanOrEqual(now + 120000);
   expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it('keeps a Bearer challenge uncertain when the advertised OAuth issuer cannot be verified', async () => {
+  native.discover.mockImplementationOnce(async (_config, _workspace, _server, options) => {
+    options.diagnostics.observe({ method: 'POST', stage: 'initialize', status: 401, contentType: 'application/json', challenge: 'Bearer resource_metadata="https://fixture.example/metadata"' });
+    throw new Error('HTTP 401');
+  });
+  fetcher.mockResolvedValueOnce(Response.json({ resource: 'https://fixture.example/', authorization_servers: ['https://login.example/tenant'] }))
+    .mockResolvedValueOnce(Response.json({ issuer: 'https://login.example/other', authorization_endpoint: 'https://login.example/authorize', token_endpoint: 'https://login.example/token' }));
+  expect(await probeMcpConnection(config, '/fixture', 'docs')).toMatchObject({ state: 'auth_unknown', auth: { metadata: 'invalid' } });
+  expect(fetcher.mock.calls[1][0].href).toBe('https://login.example/.well-known/oauth-authorization-server/tenant');
 });
