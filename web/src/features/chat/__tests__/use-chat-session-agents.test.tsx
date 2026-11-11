@@ -5,20 +5,24 @@ import { SWRConfig } from 'swr';
 import { expect, it, vi } from 'vitest';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
-import { resolveChatSessionAgentContext } from '@/features/chat/session/chat-session-agent-context';
 import { readNewSessionPreferences, rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { useChatSessionAgents } from '@/features/chat/session/use-chat-session-agents';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 vi.mock('@/features/chat/agent-selection/chat-agents-api', () => ({ fetchChatAgents: vi.fn() }));
-vi.mock('@/features/chat/session/chat-session-agent-context', () => ({ resolveChatSessionAgentContext: vi.fn() }));
+vi.mock('@/features/chat/session/chat-session-agent-context', () => ({
+  useChatSessionAgentContext: vi.fn((conversationId: string | null) => ({
+    data: conversationId === 'personal-conversation'
+      ? { agentId: 'personal-owner', projectId: null }
+      : undefined,
+  })),
+}));
 
 it.each([undefined, 'coder'])('does not inherit the personal agent when starting a new chat (previous=%s)', async (previousAgent) => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   localStorage.clear();
   if (previousAgent) rememberSelectedAgent(previousAgent);
   vi.mocked(fetchChatAgents).mockResolvedValue({ defaultId: 'main', items: [{ id: 'main' }, { id: 'coder' }] });
-  vi.mocked(resolveChatSessionAgentContext).mockResolvedValue({ agentId: 'personal-owner', projectId: null });
   const previousToken = useGatewayStore.getState().conversationId;
   useGatewayStore.setState({ conversationId: 'token' });
   const root = createRoot(document.createElement('div'));
