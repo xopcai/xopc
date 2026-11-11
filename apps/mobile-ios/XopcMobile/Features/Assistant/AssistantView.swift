@@ -527,7 +527,9 @@ struct AssistantView<Dock: View>: View {
                             } completion: {
                                 guard bottomJumpID == jumpID else { return }
                                 bottomJumpID = nil
-                                if !isAtBottom { scheduleBottomScroll(scroller) }
+                                if !isAtBottom {
+                                    scheduleBottomScroll(scroller)
+                                }
                             }
                         } label: {
                             Group {

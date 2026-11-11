@@ -47,7 +47,9 @@ struct FileLibraryView: View {
             }
         }
         .overlay {
-            if isLoading, spaces.isEmpty, recentFiles.isEmpty { ProgressView() }
+            if isLoading, spaces.isEmpty, recentFiles.isEmpty {
+                ProgressView()
+            }
         }
         .navigationTitle("文件")
         .navigationBarTitleDisplayMode(.inline)
@@ -132,7 +134,9 @@ struct FilesView: View {
             }
         }
         .overlay {
-            if isLoading, items.isEmpty { ProgressView() }
+            if isLoading, items.isEmpty {
+                ProgressView()
+            }
         }
         .navigationTitle(space?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale))
         .toolbar {
@@ -218,7 +222,9 @@ private struct FileFolderView: View {
             }
         }
         .overlay {
-            if isLoading, items.isEmpty { ProgressView() }
+            if isLoading, items.isEmpty {
+                ProgressView()
+            }
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
