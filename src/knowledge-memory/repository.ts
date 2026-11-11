@@ -264,6 +264,29 @@ export function listKnowledgeItems(input: {
   return rows.map(fromRow);
 }
 
+export function listManagedWorkMemory(input: {
+  query: string;
+  kind?: string;
+  before?: { updatedAt: number; id: string };
+  limit: number;
+}): KnowledgeItem[] {
+  const { query, kind, before, limit } = input;
+  const rows = getSqliteDatabase().prepare(`SELECT * FROM knowledge_items
+    WHERE principal_id = ? AND record_class = 'memory'
+      AND status IN ('active', 'candidate', 'needs_review', 'stale')
+      ${query ? 'AND instr(lower(content), lower(?)) > 0' : ''}
+      ${kind ? 'AND kind = ?' : ''}
+      ${before ? 'AND (updated_at, knowledge_id) < (?, ?)' : ''}
+    ORDER BY updated_at DESC, knowledge_id DESC LIMIT ?`).all(
+      USER_MODEL_PRINCIPAL_ID,
+      ...(query ? [query] : []),
+      ...(kind ? [kind] : []),
+      ...(before ? [before.updatedAt, before.id] : []),
+      limit,
+    ) as KnowledgeRow[];
+  return rows.map(fromRow);
+}
+
 export function transitionKnowledgeStatus(input: {
   id: string;
   status: KnowledgeStatus;

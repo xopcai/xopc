@@ -15,6 +15,7 @@ import {
   deleteKnowledgeItem,
   KnowledgeReviewConflictError,
   listKnowledgeItems,
+  listManagedWorkMemory,
   reviewKnowledgeItem,
   setKnowledgeScope,
   searchKnowledgeItems,
@@ -207,15 +208,15 @@ function matchesMobileSearch(item: MobileUnderstandingItem, query: string): bool
   ].join(' ')).includes(query);
 }
 
-function encodeMobileCursor(item: Pick<MobileUnderstandingItem, 'recordedAt' | 'id'>): string {
-  return Buffer.from(JSON.stringify([item.recordedAt, item.id])).toString('base64url');
+function encodeTimeCursor(timestamp: number, id: string): string {
+  return Buffer.from(JSON.stringify([timestamp, id])).toString('base64url');
 }
 
-function decodeMobileCursor(value: string | undefined): [number, string] | undefined {
+function decodeTimeCursor(value: string | undefined): [number, string] | undefined {
   if (!value) return undefined;
   try {
     const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown;
-    return Array.isArray(parsed) && typeof parsed[0] === 'number' && typeof parsed[1] === 'string'
+    return Array.isArray(parsed) && typeof parsed[0] === 'number' && Number.isSafeInteger(parsed[0]) && typeof parsed[1] === 'string'
       ? [parsed[0], parsed[1]] : undefined;
   } catch {
     return undefined;
@@ -236,7 +237,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       sensitiveWritePolicy: userContext.userModel.sensitiveWritePolicy,
     };
   };
-  const snapshot = () => {
+  const snapshot = (aboutOnly = false) => {
     const rawAssertions = listUserAssertions({
       statuses: ['active', 'candidate', 'needs_review', 'conflicted', 'stale'],
       limit: 1_000,
@@ -245,7 +246,6 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
     const assertions = rawAssertions.map((item) => assertionView(item, assertionSources.get(item.id) ?? []));
     const goals = listUserGoals();
     const priorities = listPriorityWindows();
-    const knowledge = listKnowledgeItems({ recordClass: 'memory', limit: 1_000 });
     const profile = getUserProfileSnapshot();
     const sources = listUnderstandingSourceGrants().map((source) => ({
       id: source.id,
@@ -260,20 +260,26 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       ...(source.lastCollectedAt ? { lastCollectedAt: source.lastCollectedAt } : {}),
       consent: getActiveUnderstandingConsent(source.id),
     }));
-    return {
+    const about = {
       assertions,
-      assertionEdges: listUserAssertionEdges(assertions.map((item) => item.id)),
-      observations: listUserModelObservations({ limit: 500 }),
       goals,
       priorities,
       rules: listCollaborationRules(),
       ruleSuggestions: listActionRuleSuggestions(),
-      knowledge: knowledge.map(item => ({ ...item, version: memoryVersion(item) })),
-      maintenance: { lastRun: listMemoryMaintenanceRuns(1)[0] ?? null },
       profile,
       sources,
       suggestedCallName: profile.callName || machineCallName(),
       settings: memorySettings(),
+    };
+    if (aboutOnly) return about;
+
+    const knowledge = listKnowledgeItems({ recordClass: 'memory', limit: 1_000 });
+    return {
+      ...about,
+      assertionEdges: listUserAssertionEdges(assertions.map((item) => item.id)),
+      observations: listUserModelObservations({ limit: 500 }),
+      knowledge: knowledge.map(item => ({ ...item, version: memoryVersion(item) })),
+      maintenance: { lastRun: listMemoryMaintenanceRuns(1)[0] ?? null },
       counts: {
         activeAssertions: assertions.filter((item) => item.status === 'active').length,
         reviewAssertions: assertions.filter((item) => item.status === 'needs_review' || item.status === 'conflicted').length,
@@ -284,7 +290,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
     };
   };
 
-  authenticated.get('/api/user-model', (c) => c.json(snapshot()));
+  authenticated.get('/api/user-model', (c) => c.json(snapshot(c.req.query('view') === 'about')));
 
   authenticated.patch('/api/user-model/settings', write, async (c) => {
     const input = await body(c);
@@ -449,7 +455,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(50, Math.trunc(requestedLimit))) : 20;
       const query = normalizeMobileSearch(c.req.query('q'), 100);
       const cursorValue = c.req.query('cursor');
-      const cursor = decodeMobileCursor(cursorValue);
+      const cursor = decodeTimeCursor(cursorValue);
       if (cursorValue && !cursor) return c.json({ error: 'Invalid cursor' }, 400);
       const assertions = listUserAssertions({
         statuses: ['active', 'candidate', 'needs_review', 'conflicted', 'stale'],
@@ -466,7 +472,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       const items = filtered.slice(0, limit);
       const result: MobileUnderstandingPage = {
         items,
-        ...(filtered.length > limit && items.length ? { nextCursor: encodeMobileCursor(items[items.length - 1]!) } : {}),
+        ...(filtered.length > limit && items.length ? { nextCursor: encodeTimeCursor(items[items.length - 1]!.recordedAt, items[items.length - 1]!.id) } : {}),
       };
       return c.json(result);
     }
@@ -777,6 +783,26 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
 
   authenticated.get('/api/knowledge-memory', (c) => {
     const query = c.req.query('q')?.trim();
+    if (c.req.query('view') === 'manage') {
+      const cursor = c.req.query('cursor');
+      const before = cursor ? decodeTimeCursor(cursor) : undefined;
+      if (cursor && !before) return c.json({ error: 'Invalid memory cursor' }, 400);
+      const limit = 24;
+      const records = listManagedWorkMemory({
+        query: query ?? '',
+        kind: c.req.query('kind'),
+        before: before && { updatedAt: before[0], id: before[1] },
+        limit: limit + 1,
+      });
+      const items = records.slice(0, limit);
+      const last = items.at(-1);
+      return c.json({
+        items: items.map((item) => ({ ...item, version: memoryVersion(item) })),
+        ...(last && records.length > limit
+          ? { nextCursor: encodeTimeCursor(last.updatedAt, last.id) }
+          : {}),
+      });
+    }
     if (!query) return c.json({ items: listKnowledgeItems({ recordClass: 'memory', limit: 500 }) });
     return c.json({ items: searchKnowledgeItems({
       query,

@@ -27,7 +27,7 @@ describe('understanding refresh client', () => {
     await useUnderstandingRefreshStore.getState().poll();
     expect(collect).toHaveBeenCalledExactlyOnceWith(['apple-notes']);
     expect(useUnderstandingRefreshStore.getState().sources[0].status).toBe('completed');
-    expect(mutate).toHaveBeenCalledWith('/api/user-model');
+    expect(mutate).toHaveBeenCalledWith('/api/user-model?view=about');
   });
 
   it('sends a specific grant and suppresses repeated clicks while starting', async () => {

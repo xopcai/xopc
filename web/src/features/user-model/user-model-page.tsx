@@ -1,9 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import {
+  ArrowLeft,
   BookOpen,
   Brain,
-  BriefcaseBusiness,
-  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
@@ -12,11 +11,8 @@ import {
   Compass,
   Database,
   Handshake,
-  Languages,
   Loader2,
   LockKeyhole,
-  MapPin,
-  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -31,12 +27,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
+import { useDebounce } from 'use-debounce';
 
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { Loopi } from '@/components/brand/loopi';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
-import { PageTabs } from '@/components/ui/page-tabs';
 import { PopoverSelect, Select, SelectOption, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -48,6 +44,8 @@ import { KnowledgeEvidence } from './knowledge-evidence';
 import { MemoryActions } from './memory-actions';
 import { UnderstandingRow } from './understanding-row';
 import {
+  ABOUT_USER_MODEL_KEY,
+  addCollaborationPreference,
   correctAssertion,
   createRuleFromSuggestion,
   createPriority,
@@ -55,28 +53,27 @@ import {
   deleteKnowledge,
   detectBrowserTimezone,
   downloadUserModelExport,
-  fetchUserModel,
+  fetchAboutUserModel,
+  fetchWorkMemoryPage,
   reviewKnowledgeItem,
   setAssertionScope,
   setKnowledgeScope,
-  setAssertionStatus,
   setRuleStatus,
   updateMemorySettings,
   updateUserProfile,
   updatePriority,
+  type AboutUserModelResponse,
   type CollaborationRule,
   type ActionRuleSuggestion,
   type KnowledgeItem,
   type PriorityWindow,
   type UserAssertion,
   type UserGoal,
-  type UserModelResponse,
   type UserProfile,
 } from './user-model-api';
 
 type Language = 'en' | 'zh';
-type PrimaryView = 'overview' | 'understanding' | 'work' | 'privacy';
-type View = PrimaryView;
+type View = 'overview' | 'understanding' | 'work' | 'privacy';
 type UnderstandingFilter = 'all' | 'explicit' | 'learned';
 type KnowledgeKindFilter = 'all' | KnowledgeItem['kind'];
 type RefreshFeedback = 'idle' | 'refreshing' | 'success' | 'error';
@@ -90,8 +87,6 @@ function viewFromSearchParams(searchParams: URLSearchParams): View {
 const copy = {
   en: {
     pageTitle: 'About you',
-    overview: 'Overview',
-    understanding: 'What xopc knows',
     privacy: 'Data & privacy',
     knowledge: 'Work memory',
     editProfile: 'Edit basics',
@@ -111,14 +106,9 @@ const copy = {
     saveProfile: 'Save',
     saving: 'Saving…',
     explicit: 'You told me',
-    explicitHint: 'Facts and preferences you stated directly',
     learned: 'Learned together',
-    learnedHint: 'Patterns formed from our work',
     allUnderstanding: 'All understanding',
     understandingFilterHint: 'Filter this view by how each item was formed.',
-    importantNow: 'What matters now',
-    prioritySourceGoal: 'From a goal you confirmed',
-    prioritySourceWork: 'From your current work',
     editPriority: 'Edit focus',
     addPriority: 'Set current focus',
     priorityTitle: 'Current focus',
@@ -130,12 +120,7 @@ const copy = {
     endPriority: 'End focus',
     endingPriority: 'Ending…',
     priorityHint: 'This is used to keep xopc aligned with what deserves attention now.',
-    otherGoals: 'Other active outcomes',
     howWeWork: 'How we work together',
-    noRules: 'No collaboration preferences yet.',
-    seeAll: 'See all',
-    workMemory: 'What I remember from the work',
-    items: 'items',
     refresh: 'Refresh',
     refreshing: 'Refreshing…',
     refreshComplete: 'Refreshed',
@@ -148,17 +133,14 @@ const copy = {
     currentState: 'Current context',
     insights: 'My current read',
     emptyGroup: 'No usable personal understanding yet. Ongoing preferences will build through collaboration; project facts and progress are in Work memory.',
-    correct: 'Correct',
     save: 'Save correction',
     cancel: 'Cancel',
     correctionPlaceholder: 'Write the accurate version…',
     searchPlaceholder: 'Search work memory…',
     allMemory: 'All work memory',
     memoryFilterHint: 'Filter by memory type',
-    memoryLibraryHint: 'Only distilled facts, decisions, lessons, commitments, and open questions appear here. Source records stay with their connector.',
     noKnowledge: 'No work memory has formed yet.',
     noKnowledgeMatch: 'No work memory matches this search.',
-    showMore: 'Show more',
     expand: 'Show details',
     collapse: 'Hide details',
     disable: 'Disable',
@@ -170,8 +152,6 @@ const copy = {
   },
   zh: {
     pageTitle: '关于你',
-    overview: '总览',
-    understanding: '对我的了解',
     privacy: '数据与隐私',
     knowledge: '工作记忆',
     editProfile: '编辑基本信息',
@@ -191,14 +171,9 @@ const copy = {
     saveProfile: '保存',
     saving: '正在保存…',
     explicit: '你告诉我的',
-    explicitHint: '你明确表达的事实与偏好',
     learned: '协作中学到的',
-    learnedHint: '从实际协作中形成的认识',
     allUnderstanding: '全部来源',
     understandingFilterHint: '按内容来源筛选这份理解。',
-    importantNow: '你最近在关注什么',
-    prioritySourceGoal: '来自你确认的当前目标',
-    prioritySourceWork: '来自当前工作上下文',
     editPriority: '编辑',
     addPriority: '设置当前关注',
     priorityTitle: '当前关注',
@@ -210,12 +185,7 @@ const copy = {
     endPriority: '结束关注',
     endingPriority: '正在结束…',
     priorityHint: '这项内容会帮助 xopc 在协作中优先关注当前最重要的事情。',
-    otherGoals: '其他进行中的目标',
     howWeWork: '我们怎样协作',
-    noRules: '还没有形成协作偏好。',
-    seeAll: '查看全部',
-    workMemory: '我在工作中记住的',
-    items: '条',
     refresh: '刷新',
     refreshing: '正在刷新…',
     refreshComplete: '已刷新',
@@ -228,17 +198,14 @@ const copy = {
     currentState: '最近的状态',
     insights: '其他观察',
     emptyGroup: '还没有记住关于你的信息。你可以在聊天中告诉 xopc 你的背景或偏好，例如「回答时先给结论」。',
-    correct: '修正',
     save: '保存修正',
     cancel: '取消',
     correctionPlaceholder: '写下更准确的说法…',
     searchPlaceholder: '搜索工作记忆…',
     allMemory: '全部工作记忆',
     memoryFilterHint: '按记忆类型筛选',
-    memoryLibraryHint: '这里只显示提炼后的事实、决定、经验、承诺和待解问题；邮件、日历与文档原文保留在对应来源中。',
     noKnowledge: '还没有形成工作记忆。',
     noKnowledgeMatch: '没有符合搜索条件的工作记忆。',
-    showMore: '显示更多',
     expand: '查看详情',
     collapse: '收起详情',
     disable: '停用',
@@ -314,7 +281,7 @@ function profileText(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function profileFromResponse(data: UserModelResponse): UserProfile {
+function profileFromResponse(data: AboutUserModelResponse): UserProfile {
   return {
     callName: profileText(data.profile.callName) ?? '',
     role: profileText(data.profile.role) ?? '',
@@ -656,6 +623,52 @@ function PriorityDialog({
   );
 }
 
+function NotesDialog({
+  open,
+  title,
+  children,
+  closeLabel,
+  busy,
+  error,
+  onOpenChange,
+  onSubmit,
+  submitLabel,
+  submitDisabled,
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  closeLabel: string;
+  busy?: boolean;
+  error?: string;
+  onOpenChange: (open: boolean) => void;
+  onSubmit?: () => void;
+  submitLabel?: string;
+  submitDisabled?: boolean;
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim" />
+        <Dialog.Content aria-describedby={undefined}
+          className="fixed left-1/2 top-1/2 z-[90] flex h-[min(24rem,calc(100dvh-2rem))] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
+          <Dialog.Title className="shrink-0 border-b border-edge-subtle px-5 py-4 text-base font-semibold text-fg">{title}</Dialog.Title>
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => { event.preventDefault(); onSubmit?.(); }}>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {children}
+              {error ? <p role="alert" className="mt-2 text-sm text-danger">{error}</p> : null}
+            </div>
+            <footer className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-5 py-3">
+              <Dialog.Close asChild><Button type="button" variant="ghost" disabled={busy}>{closeLabel}</Button></Dialog.Close>
+              {onSubmit ? <Button type="submit" variant="primary" disabled={busy || submitDisabled}>{submitLabel}</Button> : null}
+            </footer>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function RuleRow({
   rule,
   language,
@@ -736,7 +749,6 @@ function KnowledgeRow({
 }) {
   const t = copy[language];
   const date = formatDate(item.updatedAt ?? item.createdAt, language);
-  const canExpand = item.content.length > 96 || item.content.includes('\n') || Boolean(item.claimMode);
   return (
     <article className="group border-t border-edge-subtle px-5 py-4 first:border-t-0 sm:px-6">
       {editing ? (
@@ -759,6 +771,7 @@ function KnowledgeRow({
         <div className="min-w-0 flex-1">
           <p className={`whitespace-pre-wrap break-words text-base leading-7 text-fg ${expanded ? '' : 'line-clamp-2'}`}>{item.content}</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-subtle">
+            <span>{knowledgeKindLabel(item.kind, language)}</span>
             <span>{scopeLabel(item.scope, language)}</span>
             {item.claimMode === 'reported' ? <span>{language === 'zh' ? '来源报告' : 'Source report'}</span> : null}
             {item.verification === 'tentative' ? <span>{language === 'zh' ? '证据待补充' : 'Evidence pending'}</span> : null}
@@ -767,11 +780,9 @@ function KnowledgeRow({
           {expanded ? <KnowledgeEvidence id={item.id} language={language} /> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {canExpand ? (
-            <Button variant="ghost" className="size-11 p-0" aria-expanded={expanded} aria-label={expanded ? t.collapse : t.expand} onClick={onToggle}>
+          <Button variant="ghost" className="size-11 p-0" aria-expanded={expanded} aria-label={expanded ? t.collapse : t.expand} onClick={onToggle}>
               <ChevronDown className={`size-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-            </Button>
-          ) : null}
+          </Button>
           <MemoryActions language={language} busy={busy} statement={item.content} scope={item.scope} onScopeChange={onScopeChange} onEdit={onEdit} onDelete={onDelete} />
         </div>
       </div>
@@ -786,15 +797,28 @@ export function UserModelPage() {
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data, error, isLoading, isValidating, mutate } = useSWR<UserModelResponse>('/api/user-model', fetchUserModel);
+  const { data, error, isLoading, isValidating: isModelValidating, mutate } = useSWR(ABOUT_USER_MODEL_KEY, fetchAboutUserModel);
   const view = viewFromSearchParams(searchParams);
+  const zh = language === 'zh';
+  const query = searchParams.get('q') ?? '';
+  const [debouncedQuery] = useDebounce(query, 250);
+  const cursor = searchParams.get('cursor') ?? '';
+  const kind = searchParams.get('kind');
+  const knowledgeKindFilter: KnowledgeKindFilter = knowledgeKindOrder.find((value) => value === kind) ?? 'all';
+  const workParams = new URLSearchParams({ view: 'manage' });
+  if (debouncedQuery.trim()) workParams.set('q', debouncedQuery.trim());
+  if (knowledgeKindFilter !== 'all') workParams.set('kind', knowledgeKindFilter);
+  if (cursor) workParams.set('cursor', cursor);
+  const workKey = view === 'work' && debouncedQuery === query ? `/api/knowledge-memory?${workParams}` : null;
+  const workMemory = useSWR(workKey, fetchWorkMemoryPage);
+  const isValidating = view === 'work' ? workMemory.isValidating : isModelValidating;
+  const [preferenceDraft, setPreferenceDraft] = useState<string>();
+  const [markdownOpen, setMarkdownOpen] = useState(false);
   const [busy, setBusy] = useState<string>();
   const [actionError, setActionError] = useState<string>();
   const [actionMessage, setActionMessage] = useState('');
   const [editingId, setEditingId] = useState<string>();
   const [draft, setDraft] = useState('');
-  const [query, setQuery] = useState('');
-  const [knowledgeLimit, setKnowledgeLimit] = useState(24);
   const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string>();
   const [profileOpen, setProfileOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
@@ -802,7 +826,6 @@ export function UserModelPage() {
   const understandingFilter: UnderstandingFilter = sourceFilter === 'explicit' || sourceFilter === 'learned' ? sourceFilter : 'all';
   const personalQuery = searchParams.get('search') ?? '';
   const understandingCategory = searchParams.get('category') ?? 'all';
-  const [knowledgeKindFilter, setKnowledgeKindFilter] = useState<KnowledgeKindFilter>('all');
   const [refreshFeedback, setRefreshFeedback] = useState<RefreshFeedback>('idle');
   const refreshResetTimer = useRef<number | undefined>(undefined);
 
@@ -812,7 +835,7 @@ export function UserModelPage() {
     if (typeof main?.scrollTo === 'function') main.scrollTo({ top: 0, behavior: 'auto' });
     setSearchParams((previous) => {
       const next = new URLSearchParams(previous);
-      next.delete('section');
+      for (const key of ['section', 'source', 'search', 'category', 'q', 'kind', 'cursor']) next.delete(key);
       if (nextView === 'overview') next.delete('tab');
       else next.set('tab', nextView);
       return next;
@@ -828,14 +851,26 @@ export function UserModelPage() {
     }, { replace });
   };
 
+  const setWorkParam = (key: 'q' | 'kind' | 'cursor', value: string) => {
+    setExpandedKnowledgeId(undefined);
+    setEditingId(undefined);
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete('cursor');
+      if (value && (key !== 'kind' || value !== 'all')) next.set(key, value);
+      else next.delete(key);
+      return next;
+    }, { replace: key === 'q' });
+  };
+
   const refreshUserModel = useCallback(async () => {
-    if (refreshFeedback === 'refreshing' || isValidating) return;
+    if (refreshFeedback === 'refreshing' || isValidating || (view === 'work' && !workKey)) return;
     if (refreshResetTimer.current) window.clearTimeout(refreshResetTimer.current);
     setRefreshFeedback('refreshing');
     setActionError(undefined);
     setActionMessage(t.refreshing);
     try {
-      await mutate();
+      await (view === 'work' ? workMemory.mutate() : mutate());
       setRefreshFeedback('success');
       setActionMessage(t.refreshComplete);
     } catch {
@@ -845,13 +880,13 @@ export function UserModelPage() {
     } finally {
       refreshResetTimer.current = window.setTimeout(() => setRefreshFeedback('idle'), 1600);
     }
-  }, [isValidating, mutate, refreshFeedback, t]);
+  }, [isValidating, mutate, refreshFeedback, t, view, workKey, workMemory.mutate]);
 
   useEffect(() => () => {
     if (refreshResetTimer.current) window.clearTimeout(refreshResetTimer.current);
   }, []);
 
-  const refreshBusy = isValidating || refreshFeedback === 'refreshing';
+  const refreshBusy = (view === 'work' && !workKey) || isValidating || refreshFeedback === 'refreshing';
   const refreshLabel = refreshBusy
     ? t.refreshing
     : refreshFeedback === 'success'
@@ -892,7 +927,7 @@ export function UserModelPage() {
     setActionMessage('');
     try {
       await operation();
-      await mutate();
+      await (view === 'work' ? workMemory.mutate() : mutate());
       setActionMessage(language === 'zh' ? '已更新' : 'Updated');
     } catch {
       setActionError(t.actionFailed);
@@ -977,10 +1012,10 @@ export function UserModelPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-7xl space-y-5 px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4">
-        <Skeleton className="h-10 w-72 rounded-xl" />
-        <Skeleton className="h-72 rounded-xl" />
-        <div className="grid gap-5 lg:grid-cols-2"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-80 rounded-xl" /></div>
+      <div className="mx-auto w-full max-w-5xl space-y-5 px-4 pb-7 pt-6 sm:px-6 lg:px-8">
+        <Skeleton className="h-12 w-44 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
       </div>
     );
   }
@@ -1002,9 +1037,6 @@ export function UserModelPage() {
     const importanceB = b.declaredImportance ?? b.inferredImportance;
     return importanceB - importanceA || b.recordedAt - a.recordedAt;
   });
-  const reviewAssertions = data.assertions
-    .filter((item) => ['candidate', 'needs_review', 'conflicted'].includes(item.status))
-    .sort((a, b) => b.recordedAt - a.recordedAt);
   const profile = profileFromResponse(data);
   const displayName = profile.callName || (language === 'zh' ? '你' : 'You');
   const assertionCategories = [
@@ -1026,45 +1058,42 @@ export function UserModelPage() {
     if (understandingFilter === 'learned') return item.authority !== 'user_explicit';
     return true;
   });
-  const activePriorities = data.priorities.filter((item) => item.status === 'active' && item.validTo > Date.now());
+  const now = Date.now();
+  const activePriorities = data.priorities.filter((item) => item.status === 'active' && item.validFrom <= now && item.validTo > now);
   const primaryPriority = activePriorities.find((item) => item.rank === 'primary') ?? activePriorities[0];
   const primaryTitle = goalTitle(primaryPriority, data.goals, language);
   const primaryGoal = primaryPriority?.targetType === 'goal'
     ? data.goals.find((goal) => goal.id === primaryPriority.targetId)
     : undefined;
-  const activeGoals = data.goals.filter((goal) => goal.status === 'active' || goal.status === 'paused');
-  const otherGoals = activeGoals.filter((goal) => primaryPriority?.targetType !== 'goal' || goal.id !== primaryPriority.targetId);
   const collaborationRules = data.rules.filter((rule) => rule.status !== 'archived');
   const ruleSuggestions = data.ruleSuggestions ?? [];
-  const visibleKnowledge = data.knowledge.filter((item) => item.status !== 'archived' && item.status !== 'rejected');
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const kindFilteredKnowledge = visibleKnowledge.filter((item) => (
-    knowledgeKindFilter === 'all' || item.kind === knowledgeKindFilter
-  ));
-  const searchedKnowledge = kindFilteredKnowledge.filter((item) => !normalizedQuery
-    || item.content.toLocaleLowerCase().includes(normalizedQuery)
-    || knowledgeKindLabel(item.kind, language).toLocaleLowerCase().includes(normalizedQuery));
   const visibleAssertionGroups = assertionCategories
     .map((group) => ({ ...group, items: filteredAssertions.filter((item) => group.kinds.includes(item.kind)) }))
     .filter((group) => group.items.length > 0);
-  const overviewAssertionGroups = assertionCategories
-    .map((group) => ({ ...group, items: assertions.filter((item) => group.kinds.includes(item.kind)) }))
-    .filter((group) => group.items.length > 0);
-  const memoryCounts = knowledgeKindOrder
-    .map((kind) => ({ kind, count: visibleKnowledge.filter((item) => item.kind === kind).length }))
-    .filter((entry) => entry.count > 0);
-  const overviewMemoryCounts = memoryCounts.slice(0, 4);
-  const memoryGridClass = overviewMemoryCounts.length === 1
-    ? 'grid-cols-1'
-    : 'sm:grid-cols-2';
-  const limitedKnowledge = searchedKnowledge.slice(0, knowledgeLimit);
-  const knowledgeGroups = knowledgeKindOrder
-    .map((kind) => ({
-      kind,
-      items: limitedKnowledge.filter((item) => item.kind === kind),
-      totalCount: searchedKnowledge.filter((item) => item.kind === kind).length,
-    }))
-    .filter((group) => group.items.length > 0);
+  const globalPreferences = assertions.filter((item) =>
+    item.kind === 'preference' && item.scope.type === 'global' && item.sensitivity === 'normal');
+  const explicitPreferences = globalPreferences
+    .filter((item) => item.authority === 'user_explicit')
+    .sort((a, b) => b.recordedAt - a.recordedAt)
+    .slice(0, 3);
+  const overviewRules = collaborationRules
+    .filter((rule) => rule.status === 'active' && rule.scope.type === 'global' && !Object.keys(rule.conditions ?? {}).length)
+    .slice(0, 3 - explicitPreferences.length);
+  const learnedPreferences = globalPreferences
+    .filter((item) => item.authority !== 'user_explicit')
+    .slice(0, 3 - explicitPreferences.length - overviewRules.length);
+  const overviewPreferences = [...explicitPreferences, ...learnedPreferences];
+  const hasOverviewPreferences = overviewRules.length > 0 || overviewPreferences.length > 0;
+  const meaningfulConflicts = data.assertions.filter((item) => item.status === 'conflicted'
+    && (item.consequence === 'high' || item.consequence === 'critical') && item.sensitivity === 'normal');
+  const previewMarkdown = [
+    `# ${zh ? '协作说明' : 'Collaboration notes'}`,
+    ...(primaryTitle ? ['', `## ${zh ? '当前关注' : 'Current focus'}`, primaryTitle.replace(/\s+/g, ' '),
+      ...(primaryPriority ? [validUntil(primaryPriority.validTo, language)] : [])] : []),
+    ...(hasOverviewPreferences ? ['', `## ${zh ? '协作偏好' : 'Preferences'}`,
+      ...overviewRules.map((rule) => `- ${rule.statement.replace(/\s+/g, ' ')}`),
+      ...overviewPreferences.map((item) => `- ${item.statement.replace(/\s+/g, ' ')}${item.authority === 'user_explicit' ? '' : zh ? '（xopc 推断）' : ' (learned by xopc)'}`)] : []),
+  ].join('\n');
   const understandingFilterOptions: Array<{ id: UnderstandingFilter; label: string; count: number }> = [
     { id: 'all', label: t.allUnderstanding, count: matchingAssertions.length },
     { id: 'explicit', label: t.explicit, count: explicitCount },
@@ -1082,13 +1111,6 @@ export function UserModelPage() {
       else next.set('category', category);
       return next;
     });
-  };
-
-  const openKnowledge = (kind: KnowledgeKindFilter) => {
-    setKnowledgeKindFilter(kind);
-    setQuery('');
-    setKnowledgeLimit(24);
-    setView('work');
   };
 
   const assertionRow = (item: UserAssertion) => (
@@ -1109,37 +1131,20 @@ export function UserModelPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-4 pt-3 sm:space-y-8 sm:px-6 sm:pb-7 lg:px-8 lg:pb-10 lg:pt-4">
-      <div className="hidden px-1 sm:block">
-        <p className="text-sm leading-6 text-fg-muted">{language === 'zh' ? '让 xopc 按你的习惯与你协作。记错了，随时改。' : 'Help xopc work your way. You can correct what it remembers at any time.'}</p>
-      </div>
-      <PageTabs<PrimaryView>
-        items={[
-          { id: 'overview', label: t.overview, icon: Sparkles },
-          {
-            id: 'understanding',
-            label: <><span className="sm:hidden">{language === 'zh' ? '记住的你' : 'Memories'}</span><span className="hidden sm:inline">{t.understanding}</span></>,
-            icon: UserRound,
-            count: assertions.length,
-          },
-          { id: 'work', label: <><span className="sm:hidden">{language === 'zh' ? '工作记忆' : 'Work'}</span><span className="hidden sm:inline">{t.knowledge}</span></>, title: t.knowledge, icon: BriefcaseBusiness, count: visibleKnowledge.length },
-          {
-            id: 'privacy',
-            label: <><span className="sm:hidden">{language === 'zh' ? '隐私' : 'Privacy'}</span><span className="hidden sm:inline">{t.privacy}</span></>,
-            icon: ShieldCheck,
-          },
-        ]}
-        activeTab={view}
-        onChange={setView}
-        ariaLabel={t.pageTitle}
-        tabIdPrefix="understanding-tab"
-        panelIdPrefix="understanding-panel"
-        className="w-full max-w-full gap-1 rounded-full bg-surface-panel p-1 shadow-surface sm:w-fit"
-        buttonClassName="min-h-11 min-w-0 flex-1 justify-center whitespace-nowrap rounded-full px-2 py-2 sm:min-h-9 sm:flex-none sm:px-3.5 [&_svg]:hidden sm:[&_svg]:block"
-        countClassName="hidden sm:inline-flex"
-        selectedClassName="bg-surface-active text-fg"
-        unselectedClassName="text-fg-muted hover:bg-surface-hover hover:text-fg"
-      />
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 pb-4 pt-3 sm:space-y-8 sm:px-6 sm:pb-7 lg:px-8 lg:pb-10 lg:pt-4">
+      <nav aria-label={t.pageTitle} className="flex flex-wrap items-center justify-between gap-2">
+        {view !== 'overview' ? (
+          <Button variant="ghost" onClick={() => setView(view === 'work' ? 'privacy' : 'overview')}>
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            {view === 'work' ? t.privacy : t.pageTitle}
+          </Button>
+        ) : <span />}
+        {view === 'overview' ? (
+          <Button variant="ghost" onClick={() => setView('privacy')}>
+            <ShieldCheck className="size-4" aria-hidden="true" />{t.privacy}
+          </Button>
+        ) : null}
+      </nav>
 
       <p role="status" className="sr-only">{actionMessage}</p>
       {actionError ? (
@@ -1150,184 +1155,72 @@ export function UserModelPage() {
       ) : null}
 
       {view === 'overview' ? (
-        <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="grid grid-cols-1 items-start gap-6 sm:gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
-          <section data-testid="overview-hero" className="min-w-0 lg:col-start-1 lg:row-start-1">
-            <div className="min-w-0 px-1 sm:py-2">
-              <div className="flex items-center gap-3 sm:flex-wrap sm:gap-5">
-                <Loopi
-                  className="size-16 sm:size-20"
-                  mood={actionError ? 'care' : refreshBusy || busy ? 'work' : 'listen'}
-                />
-                <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
-                  <p className="mt-1 break-words text-sm text-fg-muted">{profile.role || (language === 'zh' ? '从你的背景和偏好开始了解你' : 'Your background and preferences, in one place')}</p>
-                </div>
-                <Button variant="ghost" className="size-11 shrink-0 px-0 sm:h-9 sm:w-auto sm:px-3" onClick={() => setProfileOpen(true)}>
-                  <UserRoundPen className="size-4" aria-hidden="true" />
-                  <span className="sr-only sm:not-sr-only">{t.editProfile}</span>
-                </Button>
-              </div>
-              <dl className="mt-6 hidden gap-x-8 gap-y-5 sm:grid sm:grid-cols-3">
-                {[
-                  { icon: Languages, label: t.locale, value: profile.locale ? localeLabel(profile.locale, language) : '' },
-                  { icon: MapPin, label: t.timezone, value: profile.timezone },
-                  { icon: UserRound, label: t.pronouns, value: profile.pronouns },
-                ].filter(({ value }) => value).map(({ icon: Icon, label, value }) => (
-                  <div key={label} className="min-w-0">
-                    <dt className="flex items-center gap-1.5 text-xs text-fg-subtle"><Icon className="size-3.5" aria-hidden="true" />{label}</dt>
-                    <dd className="mt-1.5 truncate text-sm font-medium text-fg">{value}</dd>
-                  </div>
-                ))}
-              </dl>
+        <div className="space-y-6">
+          <section data-testid="overview-hero" className="flex items-center gap-3 sm:gap-4">
+            <Loopi className="size-12 shrink-0" mood={actionError ? 'care' : busy ? 'work' : 'listen'} />
+            <div className="min-w-0 flex-1">
+              <h2 className="break-words text-xl font-semibold tracking-tight text-fg">{displayName}</h2>
+              <p className="break-words text-sm text-fg-muted">
+                {[profile.locale && localeLabel(profile.locale, language), profile.timezone].filter(Boolean).join(' · ')}
+              </p>
             </div>
-
+            <Button variant="ghost" className="min-h-11 shrink-0" onClick={() => setProfileOpen(true)}>
+              <UserRoundPen className="size-4" aria-hidden="true" />{t.editProfile}
+            </Button>
           </section>
 
-          {reviewAssertions.length ? (
-            <section className="overflow-hidden rounded-2xl bg-accent-soft/70 shadow-surface lg:col-span-2" aria-label={language === 'zh' ? '需要你确认' : 'Needs your review'}>
-              <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-panel text-accent-fg"><Sparkles className="size-4" aria-hidden="true" /></span>
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '这条理解准确吗？' : 'Needs your review'}</h2>
-                    <p className="mt-1 text-sm text-fg-muted">{language === 'zh' ? 'xopc 还不确定，想请你确认。' : 'xopc is unsure and would like your confirmation.'}</p>
-                  </div>
-                </div>
-                <span className="rounded-full bg-surface-panel px-2.5 py-1 text-xs font-medium tabular-nums text-accent-fg">{reviewAssertions.length}</span>
-              </div>
-              <div className="border-t border-accent/10 bg-surface-panel px-5 py-4 sm:flex sm:items-center sm:gap-4 sm:px-6">
-                <p className="min-w-0 flex-1 text-sm leading-6 text-fg">{reviewAssertions[0].statement}</p>
-                <div className="mt-3 flex shrink-0 gap-2 sm:mt-0">
-                  <Button variant="ghost" className="min-h-11 flex-1 sm:flex-none" disabled={busy === reviewAssertions[0].id} onClick={() => void act(reviewAssertions[0].id, () => setAssertionStatus(reviewAssertions[0].id, 'rejected'))}>{language === 'zh' ? '不是' : 'No'}</Button>
-                  <Button variant="primary" className="min-h-11 flex-1 sm:flex-none" disabled={busy === reviewAssertions[0].id} onClick={() => void act(reviewAssertions[0].id, () => setAssertionStatus(reviewAssertions[0].id, 'active'))}>{language === 'zh' ? '是的' : 'That’s right'}</Button>
-                </div>
-              </div>
-            </section>
+          <section data-testid="priority-panel" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-edge-subtle bg-surface-inset p-4 sm:p-5">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-fg">{zh ? '当前关注' : 'Current focus'}</h2>
+              <p className="mt-1 break-words text-sm text-fg">
+                {primaryTitle ?? (zh ? '最近最重要的一件事是什么？' : 'What matters most right now?')}
+              </p>
+              {primaryGoal?.desiredOutcome ? <p className="mt-1 break-words text-sm text-fg-muted">{primaryGoal.desiredOutcome}</p> : null}
+              {primaryPriority ? <p className="mt-1 text-xs text-fg-muted">{validUntil(primaryPriority.validTo, language)}</p> : null}
+            </div>
+            <Button variant={primaryPriority ? 'ghost' : 'primary'} className="min-h-11" onClick={() => setPriorityOpen(true)}>
+              {primaryPriority ? t.editPriority : t.addPriority}
+            </Button>
+          </section>
+
+          {meaningfulConflicts.length ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-edge-subtle px-4 py-2">
+              <p className="text-sm text-fg">{zh ? 'xopc 对你有相互冲突的理解。' : 'xopc found conflicting information about you.'}</p>
+              <Button variant="ghost" onClick={() => openUnderstanding()}>{zh ? '查看冲突' : 'Review conflicts'}</Button>
+            </div>
           ) : null}
 
-          <section aria-label={t.aboutYouTitle} className="space-y-3 sm:space-y-4 lg:col-span-2">
-            <header className="flex items-start justify-between gap-3 px-1">
-              <div>
-                <h2 className="text-base font-semibold text-fg">{language === 'zh' ? t.aboutYouTitle : 'What xopc knows about me'}</h2>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted"><span className="sm:hidden">{language === 'zh' ? '记错了，随时改。' : 'You can correct anything.'}</span><span className="hidden sm:inline">{language === 'zh' ? '这些内容会帮助 xopc 更好地回应你。推测会单独标注。' : 'These details help shape xopc’s responses. Inferences are labeled.'}</span></p>
-              </div>
-              <Button variant="ghost" className="min-h-11 shrink-0" onClick={() => openUnderstanding()}>{t.seeAll}</Button>
+          <section aria-labelledby="collaboration-preferences">
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-edge-subtle pb-2">
+              <h2 id="collaboration-preferences" className="text-base font-semibold text-fg">{zh ? '协作偏好' : 'Collaboration preferences'}</h2>
+              <Button variant="ghost" className="min-h-11" onClick={() => { setActionError(undefined); setPreferenceDraft(''); }}>
+                <Plus className="size-4" aria-hidden="true" />{zh ? '添加偏好' : 'Add preference'}
+              </Button>
             </header>
-            {overviewAssertionGroups.length ? (
-              <div className="grid items-start gap-5 lg:grid-cols-2">
-                {overviewAssertionGroups.map(({ key, title, icon: Icon, items }) => (
-                  <section key={key} className="min-w-0 overflow-hidden rounded-2xl bg-surface-panel">
-                    <header className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
-                      <h3 className="flex items-center gap-2 text-sm font-medium text-fg-muted"><Icon className="size-4" aria-hidden="true" />{title}</h3>
-                      <Button variant="ghost" className="min-h-11 shrink-0 px-2 text-fg-muted" aria-label={`${title}: ${items.length}`} onClick={() => openUnderstanding(key)}>
-                        <span className="sm:hidden">{language === 'zh' ? `${items.length} 条` : items.length}</span><span className="hidden sm:inline">{language === 'zh' ? `查看全部 ${items.length} 条` : `View all ${items.length}`}</span><ChevronRight className="size-4" aria-hidden="true" />
-                      </Button>
-                    </header>
-                    {items.slice(0, 2).map(assertionRow)}
-                  </section>
+            {hasOverviewPreferences ? (
+              <div className="[&>article]:px-0 [&>div]:px-0 [&>article:not(:first-child)]:border-t">
+                {explicitPreferences.map(assertionRow)}
+                {overviewRules.map((rule) => (
+                  <RuleRow key={rule.id} rule={rule} language={language} busy={Boolean(busy)}
+                    onToggle={() => void act(rule.id, () => setRuleStatus(rule.id, 'disabled'))} />
                 ))}
+                {learnedPreferences.map(assertionRow)}
               </div>
             ) : (
-              <div className="rounded-2xl bg-surface-panel px-5 py-6">
-                <p className="max-w-xl text-sm leading-7 text-fg-muted">{t.emptyGroup}</p>
-                <Button variant="secondary" className="mt-4" onClick={() => setProfileOpen(true)}>{t.editProfile}</Button>
-              </div>
+              <p className="py-3 text-sm text-fg-muted">{zh ? '还没有保存偏好。你可以添加一条，比如「回答先给结论」。' : 'Add a preference such as “Lead with the conclusion.”'}</p>
             )}
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
+              <Button variant="ghost" onClick={() => openUnderstanding()}>{zh ? '查看个人理解' : 'View personal understanding'}</Button>
+              {hasOverviewPreferences || primaryTitle ? (
+                <Button variant="ghost" onClick={() => setMarkdownOpen(true)}>{zh ? '查看 Markdown' : 'View Markdown'}</Button>
+              ) : null}
+            </div>
           </section>
-
-                      <aside data-testid="priority-panel" className="flex min-h-0 flex-col rounded-[1.4rem] bg-surface-panel p-5 shadow-surface sm:p-6 lg:col-start-2 lg:row-start-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-fg">{t.importantNow}</p>
-                    {primaryPriority ? (
-                      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-fg-muted">
-                        <BriefcaseBusiness className="size-3.5" aria-hidden="true" />
-                        {primaryPriority.targetType === 'goal' ? t.prioritySourceGoal : t.prioritySourceWork}
-                      </p>
-                    ) : null}
-                  </div>
-                  {primaryPriority && primaryTitle ? (
-                    <Button variant="ghost" className="h-8 shrink-0 px-2.5" onClick={() => setPriorityOpen(true)}>
-                      <Pencil className="size-3.5" aria-hidden="true" />{t.editPriority}
-                    </Button>
-                  ) : null}
-                </div>
-                {primaryTitle ? (
-                  <>
-                    <p className="mt-3 text-lg font-semibold leading-7 tracking-tight text-fg">{primaryTitle}</p>
-                    {primaryGoal?.desiredOutcome ? <p className="mt-2 text-sm leading-6 text-fg-muted">{primaryGoal.desiredOutcome}</p> : null}
-                    {primaryPriority ? <p className="mt-auto flex items-center gap-1.5 pt-4 text-xs text-fg-subtle"><CalendarDays className="size-3.5" aria-hidden="true" />{validUntil(primaryPriority.validTo, language)}</p> : null}
-                  </>
-                ) : (
-                  <div className="mt-2 space-y-4 text-sm leading-6 text-fg-muted">
-                    <p>{language === 'zh' ? '告诉 xopc 当前最重要的事，让协作更贴近你的目标。' : 'Tell xopc what matters most so it can keep your goals in mind.'}</p>
-                    <Button variant="primary" onClick={() => setPriorityOpen(true)}>
-                      <Plus className="size-4" aria-hidden="true" />{t.addPriority}
-                    </Button>
-                  </div>
-                )}
-                {otherGoals.length ? (
-                  <div className="mt-5 border-t border-edge-subtle pt-4">
-                    <p className="text-xs text-fg-subtle">{t.otherGoals}</p>
-                    <div className="mt-2 space-y-2">{otherGoals.slice(0, 3).map((goal) => <p key={goal.id} className="text-sm text-fg">{goal.title}</p>)}</div>
-                  </div>
-                ) : null}
-            </aside>
-
-          <div className="grid items-start gap-6 sm:gap-8 lg:col-span-2 lg:grid-cols-2">
-            <Section title={t.howWeWork} className="min-w-0">
-              {collaborationRules.length || ruleSuggestions.length ? <>
-                {collaborationRules.slice(0, 3).map((rule) => (
-                <RuleRow
-                  key={rule.id}
-                  rule={rule}
-                  language={language}
-                  busy={busy === rule.id}
-                  onToggle={() => void act(rule.id, () => setRuleStatus(rule.id, rule.status === 'active' ? 'disabled' : 'active'))}
-                />
-                ))}
-                {ruleSuggestions.slice(0, 2).map((suggestion) => (
-                  <RuleSuggestionRow
-                    key={suggestion.id}
-                    suggestion={suggestion}
-                    language={language}
-                    busy={busy === suggestion.id}
-                    onConfirm={() => void act(suggestion.id, () => createRuleFromSuggestion(suggestion))}
-                  />
-                ))}
-              </> : <Empty icon={<Handshake className="size-5" />}>{t.noRules}</Empty>}
-            </Section>
-            <Section
-              title={t.workMemory}
-              className="min-w-0"
-              action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => openKnowledge('all')}>{t.seeAll}</Button>}
-            >
-              {memoryCounts.length ? (
-                <div data-testid="memory-summary-grid" className={`grid gap-3 bg-surface-base ${memoryGridClass}`}>
-                  {overviewMemoryCounts.map(({ kind, count }) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      className="group flex min-h-28 cursor-pointer items-start justify-between rounded-2xl bg-surface-panel px-5 py-5 text-left transition-colors hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                      onClick={() => openKnowledge(kind)}
-                      aria-label={`${knowledgeKindLabel(kind, language)}: ${count}`}
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-xs font-medium text-fg-muted">{knowledgeKindLabel(kind, language)} · {count} {t.items}</span>
-                        <span className="mt-2 block line-clamp-3 break-words text-sm leading-6 text-fg">{visibleKnowledge.find((item) => item.kind === kind)?.content}</span>
-                      </span>
-                      <ChevronRight className="mt-1 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted motion-reduce:transform-none" aria-hidden="true" />
-                    </button>
-                  ))}
-                </div>
-              ) : <Empty icon={<Database className="size-5" />}>{t.noKnowledge}</Empty>}
-            </Section>
-          </div>
         </div>
       ) : null}
 
       {view === 'understanding' ? (
-        <div id="understanding-panel-understanding" role="tabpanel" aria-labelledby="understanding-tab-understanding" className="mx-auto max-w-3xl space-y-7">
+        <div className="space-y-7">
           <div className="px-1 pt-1">
             <div className="flex items-start gap-3">
               <Brain className="mt-0.5 size-5 shrink-0 text-accent-fg" aria-hidden="true" />
@@ -1360,6 +1253,11 @@ export function UserModelPage() {
               ))}
             </SlidingTabList>
           </div>
+          {meaningfulConflicts.length && !personalQuery && understandingFilter === 'all' && !selectedCategory ? (
+            <Section title={zh ? '需要纠正的冲突' : 'Conflicting information'}>
+              {meaningfulConflicts.map(assertionRow)}
+            </Section>
+          ) : null}
           {visibleAssertionGroups.length ? visibleAssertionGroups.map(({ key, title, icon: Icon, items }) => (
             <Section key={key} title={title} action={<Icon className="size-4 text-fg-subtle" aria-hidden="true" />}>
               <div>{items.map(assertionRow)}</div>
@@ -1370,98 +1268,76 @@ export function UserModelPage() {
               {assertions.length ? <Button variant="ghost" className="mb-4 ml-4" onClick={() => openUnderstanding()}>{language === 'zh' ? '清除筛选' : 'Clear filters'}</Button> : null}
             </div>
           )}
+          {collaborationRules.length || ruleSuggestions.length ? (
+            <Section title={t.howWeWork}>
+              {collaborationRules.map((rule) => (
+                <RuleRow key={rule.id} rule={rule} language={language} busy={Boolean(busy)}
+                  onToggle={() => void act(rule.id, () => setRuleStatus(rule.id, rule.status === 'active' ? 'disabled' : 'active'))} />
+              ))}
+              {ruleSuggestions.map((suggestion) => (
+                <RuleSuggestionRow key={suggestion.id} suggestion={suggestion} language={language} busy={Boolean(busy)}
+                  onConfirm={() => void act(suggestion.id, () => createRuleFromSuggestion(suggestion))} />
+              ))}
+            </Section>
+          ) : null}
         </div>
       ) : null}
       {view === 'work' ? (
-        <div id="understanding-panel-work" role="tabpanel" aria-labelledby="understanding-tab-work" className="space-y-8">
-          <LearningStatus language={language} />
-          <div className="px-1 pt-1">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="max-w-2xl">
-                <h2 className="font-semibold text-fg">{knowledgeKindFilter === 'all' ? t.allMemory : knowledgeKindLabel(knowledgeKindFilter, language)}</h2>
-                <p className="mt-1 text-sm leading-6 text-fg-muted">{kindFilteredKnowledge.length} {t.items} · {language === 'zh' ? '当前筛选的工作资料记录数，包含未启用或待核验项；不同于顶部已启用且有依据的记忆数。' : 'Work records matching this filter, including inactive or unverified items; separate from active, supported memories above.'} · {t.memoryLibraryHint}</p>
-              </div>
-              <label className="relative block sm:w-80">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" />
-                <span className="sr-only">{t.searchPlaceholder}</span>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => { setQuery(event.target.value); setKnowledgeLimit(24); }}
-                  placeholder={t.searchPlaceholder}
-                  className="h-10 w-full rounded-xl border border-edge bg-surface-base pl-9 pr-3 text-sm text-fg outline-none transition placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-                />
-              </label>
-            </div>
-            <SlidingTabList className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t.memoryFilterHint} indicatorClassName="rounded-full bg-surface-active">
-              <button
-                type="button"
-                aria-pressed={knowledgeKindFilter === 'all'}
-                className={`touch-target inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${knowledgeKindFilter === 'all' ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`}
-                onClick={() => setKnowledgeKindFilter('all')}
-              >
-                {t.allMemory}<span className="tabular-nums text-fg-subtle">{visibleKnowledge.length}</span>
-              </button>
-              {memoryCounts.map(({ kind, count }) => (
-                <button
-                  key={kind}
-                  type="button"
-                  aria-pressed={knowledgeKindFilter === kind}
-                  className={`touch-target inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${knowledgeKindFilter === kind ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`}
-                  onClick={() => setKnowledgeKindFilter(kind)}
-                >
-                  {knowledgeKindLabel(kind, language)}<span className="tabular-nums text-fg-subtle">{count}</span>
-                </button>
-              ))}
-            </SlidingTabList>
+        <div className="space-y-5">
+          <h2 className="text-lg font-semibold text-fg">{zh ? '管理工作记忆' : 'Manage work memory'}</h2>
+          <div className="flex flex-wrap gap-3">
+            <label className="relative min-w-48 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-3.5 size-4 text-fg-muted" aria-hidden="true" />
+              <span className="sr-only">{t.searchPlaceholder}</span>
+              <input type="search" value={query} onChange={(event) => setWorkParam('q', event.target.value)}
+                placeholder={t.searchPlaceholder}
+                className="h-11 w-full rounded-xl border border-edge bg-surface-panel pl-9 pr-3 text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:text-sm" />
+            </label>
+            <Select aria-label={t.memoryFilterHint} value={knowledgeKindFilter}
+              onChange={(event) => setWorkParam('kind', event.target.value)} triggerClassName="min-h-11">
+              <SelectOption value="all">{t.allMemory}</SelectOption>
+              {knowledgeKindOrder.map((option) => <SelectOption key={option} value={option}>{knowledgeKindLabel(option, language)}</SelectOption>)}
+            </Select>
           </div>
-          {searchedKnowledge.length ? (
-            <>
-              <div className="space-y-8">
-                {knowledgeGroups.map(({ kind, items, totalCount }) => (
-                  <section key={kind} className="overflow-hidden rounded-2xl bg-surface-panel">
-                    <header className="flex items-center justify-between px-5 pb-1 pt-4 sm:px-6">
-                      <h3 className="text-sm font-semibold text-fg">{knowledgeKindLabel(kind, language)}</h3>
-                      <span className="text-xs tabular-nums text-fg-subtle">{totalCount}</span>
-                    </header>
-                    <div>{items.map((item) => (
-                      <KnowledgeRow
-                        key={item.id}
-                        item={item}
-                        language={language}
-                        busy={Boolean(busy)}
-                        expanded={expandedKnowledgeId === item.id}
-                        onToggle={() => setExpandedKnowledgeId((current) => current === item.id ? undefined : item.id)}
-                        editing={editingId === `knowledge:${item.id}`}
-                        draft={draft}
-                        onDraftChange={setDraft}
-                        onEdit={() => { setEditingId(`knowledge:${item.id}`); setDraft(item.content); }}
-                        onCancel={() => { setEditingId(undefined); setDraft(''); }}
-                        onDelete={() => void act(item.id, () => deleteKnowledge(item.id))}
-                        onScopeChange={(scope) => void act(item.id, () => setKnowledgeScope(item, scope))}
-                    onReview={(action, content) => void act(item.id, async () => {
-                          await reviewKnowledgeItem(item, action, content);
-                          setEditingId(undefined);
-                          setDraft('');
-                        })}
-                      />
-                    ))}</div>
-                  </section>
-                ))}
-              </div>
-              {searchedKnowledge.length > knowledgeLimit ? (
-                <div className="flex justify-center pt-2"><Button onClick={() => setKnowledgeLimit((value) => value + 24)}>{t.showMore}</Button></div>
-              ) : null}
-            </>
-          ) : (
-            <div className="rounded-2xl bg-surface-panel">
-              <Empty icon={<Search className="size-5" />}>{query.trim() ? t.noKnowledgeMatch : t.noKnowledge}</Empty>
+          {workMemory.error ? (
+            <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-danger">
+              {t.loadFailed}<Button onClick={() => void workMemory.mutate()}>{t.tryAgain}</Button>
+              {cursor ? <Button variant="ghost" onClick={() => setWorkParam('cursor', '')}>{zh ? '返回第一页' : 'First page'}</Button> : null}
             </div>
-          )}
+          ) : !workKey || workMemory.isLoading ? (
+            <Skeleton className="h-32 rounded-xl" />
+          ) : workMemory.data?.items.length ? (
+            <section aria-label={t.knowledge} className="overflow-hidden rounded-2xl bg-surface-panel">
+              {workMemory.data.items.map((item) => (
+                <KnowledgeRow key={item.id} item={item} language={language} busy={Boolean(busy)}
+                  expanded={expandedKnowledgeId === item.id}
+                  onToggle={() => setExpandedKnowledgeId((current) => current === item.id ? undefined : item.id)}
+                  editing={editingId === `knowledge:${item.id}`} draft={draft} onDraftChange={setDraft}
+                  onEdit={() => { setEditingId(`knowledge:${item.id}`); setDraft(item.content); }}
+                  onCancel={() => { setEditingId(undefined); setDraft(''); }}
+                  onDelete={() => void act(item.id, () => deleteKnowledge(item.id))}
+                  onScopeChange={(scope) => void act(item.id, () => setKnowledgeScope(item, scope))}
+                  onReview={(action, content) => void act(item.id, async () => {
+                    await reviewKnowledgeItem(item, action, content);
+                    setEditingId(undefined);
+                    setDraft('');
+                  })}
+                />
+              ))}
+            </section>
+          ) : <Empty icon={<Search className="size-5" />}>{query.trim() ? t.noKnowledgeMatch : t.noKnowledge}</Empty>}
+          {cursor || workMemory.data?.nextCursor ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              {cursor ? <Button variant="ghost" onClick={() => setWorkParam('cursor', '')}>{zh ? '返回第一页' : 'First page'}</Button> : null}
+              {workMemory.data?.nextCursor ? (
+                <Button onClick={() => setWorkParam('cursor', workMemory.data?.nextCursor ?? '')}>{zh ? '下一页' : 'Next page'}</Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {view === 'privacy' ? (
-        <div id="understanding-panel-privacy" role="tabpanel" aria-labelledby="understanding-tab-privacy" className="space-y-8">
+        <div className="space-y-6">
           <div className="px-1 pt-1">
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-0.5 size-5 shrink-0 text-accent-fg" aria-hidden="true" />
@@ -1487,7 +1363,7 @@ export function UserModelPage() {
               <div className="flex min-h-20 items-center gap-4 px-5 py-4 sm:px-6">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><LockKeyhole className="size-4.5" aria-hidden="true" /></span>
                 <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{language === 'zh' ? '敏感信息' : 'Sensitive information'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{language === 'zh' ? '控制健康、财务等信息是否可以保存。' : 'Control whether health, financial, and similar information can be saved.'}</span></span>
-                <Select aria-label={language === 'zh' ? '敏感信息策略' : 'Sensitive information policy'} value={data.settings.sensitiveWritePolicy} disabled={Boolean(busy)} onChange={(event) => void act('setting:sensitive', () => updateMemorySettings({ sensitiveWritePolicy: event.target.value as UserModelResponse['settings']['sensitiveWritePolicy'] }))}>
+                <Select aria-label={language === 'zh' ? '敏感信息策略' : 'Sensitive information policy'} value={data.settings.sensitiveWritePolicy} disabled={Boolean(busy)} onChange={(event) => void act('setting:sensitive', () => updateMemorySettings({ sensitiveWritePolicy: event.target.value as AboutUserModelResponse['settings']['sensitiveWritePolicy'] }))}>
                   <SelectOption value="confirm">{language === 'zh' ? '先询问' : 'Ask first'}</SelectOption>
                   <SelectOption value="deny">{language === 'zh' ? '不保存' : 'Never save'}</SelectOption>
                   <SelectOption value="allow">{language === 'zh' ? '允许' : 'Allow'}</SelectOption>
@@ -1498,6 +1374,11 @@ export function UserModelPage() {
 
           <Section title={language === 'zh' ? '数据管理' : 'Data management'}>
             <div className="divide-y divide-edge-subtle">
+              <button type="button" className="flex min-h-20 w-full items-center gap-4 px-5 py-4 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-6" onClick={() => setView('work')}>
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><Database className="size-4" aria-hidden="true" /></span>
+                <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{zh ? '管理工作记忆' : 'Manage work memory'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{zh ? '搜索、纠正或删除已保存的工作记录。' : 'Search, correct or delete saved work records.'}</span></span>
+                <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden="true" />
+              </button>
               <Link to="/settings/imports" className="flex min-h-20 items-center gap-4 px-5 py-4 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:px-6">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted"><Upload className="size-4.5" aria-hidden="true" /></span>
                 <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-fg">{language === 'zh' ? '从其他 AI 导入' : 'Import from another AI'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{language === 'zh' ? '导入前预览新增、重复和冲突内容。' : 'Preview new, duplicate, and conflicting items before import.'}</span></span>
@@ -1511,13 +1392,33 @@ export function UserModelPage() {
             </div>
           </Section>
 
-          <section className="rounded-2xl bg-surface-panel px-5 py-5 sm:px-6">
-            <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '纠正与忘记' : 'Correct and forget'}</h2>
-            <p className="mt-1 text-xs leading-5 text-fg-muted">{language === 'zh' ? '在“记忆”中打开任意一条内容的菜单，即可修改、调整作用范围或彻底删除。' : 'Open any item in Memory to edit it, change where it applies, or delete it permanently.'}</p>
-            <Button variant="ghost" className="mt-3" onClick={() => { setView('understanding'); }}>{language === 'zh' ? '管理记忆' : 'Manage memory'}</Button>
-          </section>
+          <LearningStatus language={language} />
         </div>
       ) : null}
+      <NotesDialog open={preferenceDraft !== undefined} title={zh ? '添加偏好' : 'Add preference'}
+        onOpenChange={(open) => { if (!open && !busy) setPreferenceDraft(undefined); }}
+        closeLabel={t.cancel} busy={busy === 'preference'} error={actionError}
+        onSubmit={() => {
+          const statement = preferenceDraft?.trim();
+          if (!statement) return;
+          void act('preference', async () => {
+            await addCollaborationPreference(statement);
+            setPreferenceDraft(undefined);
+          });
+        }}
+        submitLabel={zh ? '保存' : 'Save'} submitDisabled={!preferenceDraft?.trim()}>
+        <label className="block space-y-2 text-sm text-fg">
+          <span>{zh ? '希望 xopc 怎么与你协作？' : 'How should xopc work with you?'}</span>
+          <textarea value={preferenceDraft ?? ''} onChange={(event) => setPreferenceDraft(event.target.value)}
+            maxLength={240} rows={4} disabled={Boolean(busy)} required
+            className="w-full rounded-xl border border-edge bg-surface-base p-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+        </label>
+      </NotesDialog>
+      <NotesDialog open={markdownOpen} title={zh ? '协作说明' : 'Collaboration notes'} closeLabel={zh ? '关闭' : 'Close'}
+        onOpenChange={setMarkdownOpen}>
+        <textarea aria-label="Markdown" readOnly value={previewMarkdown}
+          className="h-full min-h-40 w-full resize-none rounded-xl border border-edge bg-surface-base p-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+      </NotesDialog>
       <ProfileDialog
         open={profileOpen}
         profile={profile}

@@ -8,8 +8,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-const { mutate, model } = vi.hoisted(() => ({
+const { mutate, model, useSWR } = vi.hoisted(() => ({
   mutate: vi.fn(),
+  useSWR: vi.fn(),
   model: {
     profile: { callName: 'Mic', role: 'Builder', timezone: 'Asia/Shanghai', locale: 'en-US' },
     assertions: [
@@ -44,7 +45,7 @@ const { mutate, model } = vi.hoisted(() => ({
 }));
 
 vi.mock('swr', () => ({
-  default: () => ({ data: model, error: undefined, isLoading: false, isValidating: false, mutate }),
+  default: useSWR,
 }));
 vi.mock('@/features/work-discovery/understanding-status-button', () => ({
   UnderstandingStatusButton: () => null,
@@ -85,6 +86,10 @@ describe('UserModelPage summary navigation', () => {
   beforeEach(async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     useLocaleStore.setState({ language: 'en' });
+    useSWR.mockImplementation((key: string | null) => ({
+      data: key?.startsWith('/api/knowledge-memory') ? { items: model.knowledge } : key ? model : undefined,
+      isLoading: false, isValidating: false, mutate,
+    }));
     usePageHeaderStore.getState().clearPageHeader();
     container = document.createElement('div');
     document.body.append(container);
@@ -105,57 +110,34 @@ describe('UserModelPage summary navigation', () => {
     vi.clearAllMocks();
   });
 
-  it('opens a filtered understanding view from each summary count', async () => {
-    const understandingTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('What xopc knows'));
-    expect(understandingTab).toBeDefined();
+  function click(label: string) {
+    const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((candidate) => candidate.textContent?.trim() === label);
+    expect(button).toBeDefined();
+    return act(async () => button?.click());
+  }
 
-    await act(async () => understandingTab?.click());
-
-    const learned = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
-      .find((button) => button.textContent?.includes('Learned together'));
-    expect(learned).toBeDefined();
-
-    await act(async () => learned?.click());
-
-    const selected = Array.from(container.querySelectorAll<HTMLButtonElement>('[aria-pressed="true"]'))
-      .find((button) => button.textContent?.includes('Learned together'));
-    expect(selected).toBeDefined();
+  it('shows only collaboration preferences and actionable controls in the overview', () => {
+    expect(container.textContent).toContain('Set current focus');
+    expect(container.textContent).toContain('Add preference');
     expect(container.textContent).toContain('Prefers visual summaries.');
+    expect(container.textContent).toContain('Inferred by xopc');
     expect(container.textContent).not.toContain('Builds developer tools.');
     expect(container.textContent).not.toContain('May be preparing a launch.');
+    expect(container.textContent).not.toContain('Project uses React.');
+    expect(useSWR.mock.calls.some(([key]) => key?.startsWith('/api/knowledge-memory'))).toBe(false);
   });
 
-  it('opens a filtered work-memory view from a category count', async () => {
-    const projectFacts = container.querySelector<HTMLButtonElement>('[aria-label="Project facts: 1"]');
-    expect(projectFacts).not.toBeNull();
-
-    await act(async () => projectFacts?.click());
-
-    const selected = Array.from(container.querySelectorAll<HTMLButtonElement>('[aria-pressed="true"]'))
-      .find((button) => button.textContent?.includes('Project facts'));
-    expect(selected).toBeDefined();
-    expect(container.textContent).toContain('Project uses React.');
-    expect(container.textContent).not.toContain('Workspace uses pnpm.');
-  });
-
-  it('shows remembered content on the overview and opens its actual category', async () => {
-    const summary = container.querySelector('section[aria-label="What xopc remembers about you"]');
-    expect(summary?.textContent).toContain('Prefers visual summaries.');
-    expect(summary?.textContent).toContain('Inferred by xopc');
-    expect(summary?.querySelector('details')?.open).toBe(false);
-    const category = summary?.querySelector<HTMLButtonElement>('[aria-label="Preferences and working rhythm: 1"]');
-    expect(category).not.toBeNull();
-    await act(async () => category?.click());
-    expect(container.querySelector('[data-testid="router-location"]')?.textContent)
-      .toBe('/user-model?tab=understanding&category=preferences');
-    expect(container.querySelector('[role="tabpanel"]')?.textContent).toContain('Prefers visual summaries.');
-    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="router-back"]')?.click());
-    expect(container.querySelector('#understanding-tab-overview')?.getAttribute('aria-selected')).toBe('true');
+  it('provides a Markdown view of the collaboration notes', async () => {
+    await click('View Markdown');
+    const markdown = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Markdown"]');
+    expect(markdown?.value).toContain('- Prefers visual summaries. (learned by xopc)');
+    expect(markdown?.value).not.toContain('Project uses React.');
+    expect(markdown?.readOnly).toBe(true);
   });
 
   it('searches personal details and lets the user recover from an empty result', async () => {
-    await act(async () => container.querySelector<HTMLButtonElement>('#understanding-tab-understanding')?.click());
+    await click('View personal understanding');
     const input = container.querySelector<HTMLInputElement>('input[placeholder="Search memories"]');
     expect(input).not.toBeNull();
     await act(async () => {
@@ -163,68 +145,29 @@ describe('UserModelPage summary navigation', () => {
       input?.dispatchEvent(new Event('input', { bubbles: true }));
     });
     expect(container.querySelector('[data-testid="router-location"]')?.textContent).toContain('search=unmatched');
-    expect(container.querySelector('[role="tabpanel"]')?.textContent).toContain('No matching details.');
-    const clear = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent === 'Clear filters');
-    await act(async () => clear?.click());
-    expect(container.querySelector('[role="tabpanel"]')?.textContent).toContain('Prefers visual summaries.');
+    expect(container.textContent).toContain('No matching details.');
+    await click('Clear filters');
+    expect(container.textContent).toContain('Prefers visual summaries.');
     expect(container.querySelector('[data-testid="router-location"]')?.textContent).not.toContain('search=');
   });
 
-
-  it('keeps personal understanding and work memory in independent primary views with browser history', async () => {
-    const personal = container.querySelector<HTMLButtonElement>('#understanding-tab-understanding');
-    const work = container.querySelector<HTMLButtonElement>('#understanding-tab-work');
-    expect(personal?.textContent).toContain('1');
-    expect(work?.textContent).toContain('Work memory');
-    await act(async () => personal?.click());
-    expect(container.textContent).toContain('Prefers visual summaries.');
-    expect(container.textContent).not.toContain('Project uses React.');
-    await act(async () => work?.click());
+  it('loads work memory on demand from data and privacy', async () => {
+    await click('Data & privacy');
+    expect(useSWR.mock.calls.some(([key]) => key?.startsWith('/api/knowledge-memory'))).toBe(false);
+    const manage = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Manage work memory'));
+    await act(async () => manage?.click());
     expect(container.querySelector('[data-testid="router-location"]')?.textContent).toBe('/user-model?tab=work');
+    expect(useSWR.mock.calls.some(([key]) => key === '/api/knowledge-memory?view=manage')).toBe(true);
     expect(container.textContent).toContain('Project uses React.');
     expect(container.textContent).not.toContain('Prefers visual summaries.');
     await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="router-back"]')?.click());
-    expect(container.querySelector('#understanding-tab-understanding')?.getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('[data-testid="router-location"]')?.textContent).toBe('/user-model?tab=privacy');
   });
 
-  it('uses all available width when only two memory categories have content', () => {
-    const grid = container.querySelector('[data-testid="memory-summary-grid"]');
-    expect(grid?.className).toContain('sm:grid-cols-2');
-    expect(grid?.className).not.toContain('lg:grid-cols-4');
-  });
-
-  it('uses whitespace and surface contrast instead of bordered overview containers', () => {
-    const hero = container.querySelector('[data-testid="overview-hero"]');
-    const priority = container.querySelector('[data-testid="priority-panel"]');
-
-    expect(hero?.className).not.toContain('border');
-    expect(priority?.className).not.toContain('border');
-    expect(priority?.className).toContain('bg-surface-panel');
-  });
-
-  it('keeps the overview focused on identity, actions, and summaries', () => {
-    expect(container.textContent).not.toContain('Getting to know you. Helping in your own way.');
-    expect(container.textContent).not.toContain('Your explicit profile stays clear and editable.');
-    expect(container.textContent).not.toContain('Recently formed understanding');
-    expect(container.textContent).not.toContain('No current priority has been set.');
-    expect(container.textContent).toContain('Set current focus');
-    expect(container.textContent).toContain('Needs your review');
-    expect(container.textContent).toContain('What xopc knows about me');
-  });
-
-  it('uses the animated Loopi brand mark for the profile identity', () => {
+  it('keeps the Loopi brand mark for the profile identity', () => {
     const mark = container.querySelector('[data-testid="overview-hero"] [data-loopi="ceramic-v4"]');
-    expect(mark).not.toBeNull();
     expect(mark?.getAttribute('data-mood')).toBe('listen');
-    expect(container.textContent).not.toContain('MI');
-  });
-
-  it('renders the primary tabs as a capsule control', () => {
-    const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    expect(tabs).toHaveLength(4);
-    expect(tabs.every((tab) => tab.className.includes('rounded-full'))).toBe(true);
-    expect(tabs.find((tab) => tab.getAttribute('aria-selected') === 'true')?.className)
-      .toContain('bg-surface-active');
   });
 
   it('lets the user set a current focus from the empty state', async () => {
@@ -285,31 +228,17 @@ describe('UserModelPage summary navigation', () => {
     expect(refreshed?.querySelector('.lucide-check')).not.toBeNull();
   });
 
-  it('pushes tab changes into browser history and restores the previous tab on back', async () => {
-    const understandingTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('What xopc knows'));
-    expect(understandingTab).toBeDefined();
-
-    await act(async () => understandingTab?.click());
+  it('returns to the overview through browser history', async () => {
+    await click('View personal understanding');
     expect(container.querySelector('[data-testid="router-location"]')?.textContent)
       .toBe('/user-model?tab=understanding');
-    expect(understandingTab?.getAttribute('aria-selected')).toBe('true');
-
-    const back = container.querySelector<HTMLButtonElement>('[data-testid="router-back"]');
-    await act(async () => back?.click());
-
+    await act(async () => container.querySelector<HTMLButtonElement>('[data-testid="router-back"]')?.click());
     expect(container.querySelector('[data-testid="router-location"]')?.textContent).toBe('/user-model');
-    const overviewTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('Overview'));
-    expect(overviewTab?.getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('[data-testid="overview-hero"]')).not.toBeNull();
   });
 
-  it('shows data and privacy as an independent primary view', async () => {
-    const privacyTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-      .find((button) => button.textContent?.includes('Data & privacy'));
-
-    await act(async () => privacyTab?.click());
-
+  it('keeps the memory settings and import/export in data and privacy', async () => {
+    await click('Data & privacy');
     expect(container.textContent).toContain('Your information, under your control');
     expect(container.textContent).toContain('Import from another AI');
     expect(container.textContent).toContain('Download my memory');

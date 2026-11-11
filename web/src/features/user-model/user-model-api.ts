@@ -69,6 +69,7 @@ export type CollaborationRule = {
   statement: string;
   category: string;
   status: 'active' | 'disabled' | 'archived';
+  conditions?: Record<string, unknown>;
   priority: number;
   scope: Scope;
 };
@@ -145,6 +146,34 @@ export type UserProfile = {
 
 export function fetchUserModel(): Promise<UserModelResponse> {
   return fetchJson(apiUrl('/api/user-model'));
+}
+
+export const ABOUT_USER_MODEL_KEY = '/api/user-model?view=about';
+
+export type AboutUserModelResponse = Omit<UserModelResponse, 'knowledge' | 'maintenance' | 'counts'>;
+
+export function fetchAboutUserModel(): Promise<AboutUserModelResponse> {
+  return fetchJson(apiUrl(ABOUT_USER_MODEL_KEY));
+}
+
+export type WorkMemoryPage = { items: KnowledgeItem[]; nextCursor?: string };
+
+export function fetchWorkMemoryPage(path: string): Promise<WorkMemoryPage> {
+  return fetchJson(apiUrl(path));
+}
+
+export function addCollaborationPreference(statement: string): Promise<unknown> {
+  return fetchJson(apiUrl('/api/user-model/assertions'), {
+    method: 'POST',
+    body: JSON.stringify({
+      scope: { type: 'global' },
+      predicate: 'preference.collaboration',
+      cardinality: 'multiple',
+      kind: 'preference',
+      statement,
+      value: statement,
+    }),
+  });
 }
 
 export async function fetchUserProfile(): Promise<{ profile: UserProfile; suggestedCallName?: string }> {
