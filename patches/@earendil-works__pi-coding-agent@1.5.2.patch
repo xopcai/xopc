@@ -1,0 +1,51 @@
+diff --git a/dist/core/mcp-servers.d.ts b/dist/core/mcp-servers.d.ts
+index b200fc9..6df02dc 100644
+--- a/dist/core/mcp-servers.d.ts
++++ b/dist/core/mcp-servers.d.ts
+@@ -55,6 +55,8 @@ export interface McpStdioServerConfig extends McpStdioServerFields, McpServerCon
+ }
+ /** OAuth client settings for servers that do not support dynamic client registration. */
+ export interface McpOAuthConfig extends McpOAuthFields {
++    /** Trusted host relay URI; the native listener remains loopback. */
++    callbackRelayUrl?: string;
+     /** May reference environment variables (`${NAME}`) or commands (`!cmd`). */
+     clientSecret?: string;
+     /**
+diff --git a/dist/extensions/mcp/oauth.d.ts b/dist/extensions/mcp/oauth.d.ts
+index 49020c2..1b64741 100644
+--- a/dist/extensions/mcp/oauth.d.ts
++++ b/dist/extensions/mcp/oauth.d.ts
+@@ -56,7 +56,7 @@ export interface McpSignInPrompt {
+ export declare function signInMcpServer(options: {
+     serverUrl: string;
+     store: McpOAuthServerStore;
+-    settings: McpOAuthSettings;
++    settings: McpOAuthSettings & { callbackRelayUrl?: string };
+     challenge?: OAuthChallenge;
+     prompt: McpSignInPrompt;
+     signal?: AbortSignal;
+diff --git a/dist/extensions/mcp/oauth.js b/dist/extensions/mcp/oauth.js
+index 1b0ce1a..078df8e 100644
+--- a/dist/extensions/mcp/oauth.js
++++ b/dist/extensions/mcp/oauth.js
+@@ -168,7 +168,7 @@ export async function signInMcpServer(options) {
+         renderPage: renderCallbackPage,
+     });
+     try {
+-        const signIn = { serverUrl, store, settings, redirectUrl, challenge, signal, ...PI_CLIENT };
++        const signIn = { serverUrl, store, settings, redirectUrl: settings.callbackRelayUrl ?? redirectUrl, challenge, signal, ...PI_CLIENT };
+         const authorization = await startMcpSignIn(signIn);
+         if (authorization.kind === "authorized")
+             return;
+diff --git a/dist/extensions/mcp/runtime.js b/dist/extensions/mcp/runtime.js
+index bad9188..d636f64 100644
+--- a/dist/extensions/mcp/runtime.js
++++ b/dist/extensions/mcp/runtime.js
+@@ -159,6 +159,7 @@ export class McpServerConnection {
+                 : resolveConfigValueOrThrow(oauth.clientSecret, `MCP server "${this.entry.name}" oauth.clientSecret`),
+             callbackPort: oauth.callbackPort,
+             callbackUrl: oauth.callbackUrl,
++            callbackRelayUrl: oauth.callbackRelayUrl,
+             scope: oauth.scope,
+             clientName: oauth.clientName,
+             clientRegistration: oauth.clientRegistration,

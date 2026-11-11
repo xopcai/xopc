@@ -45,6 +45,7 @@ export interface BlockEditorProps {
   /** Placeholder text shown when the editor is empty. */
   placeholder?: string;
   className?: string;
+  autoFocus?: boolean;
   /** Note ID for image upload endpoint. */
   noteId?: string;
   onTextSelection?: (selection: EditorTextSelection | null) => void;
@@ -70,6 +71,7 @@ export function BlockEditor({
   onChange,
   placeholder = 'Start writing, or type "/" for commands…',
   className,
+  autoFocus = false,
   noteId,
   onTextSelection,
 }: BlockEditorProps) {
@@ -265,6 +267,14 @@ export function BlockEditor({
       }
     };
   }, [editor, initialContent]);
+
+  useEffect(() => {
+    if (!editor || !autoFocus) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (!editor.isDestroyed) editor.commands.focus('end');
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editor, autoFocus]);
 
   if (!editor) return null;
 

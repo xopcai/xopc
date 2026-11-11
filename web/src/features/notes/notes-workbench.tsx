@@ -19,6 +19,7 @@ import useSWR from 'swr';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { openDiscussionCapture } from '@/features/discussions/discussion-events';
+import { MeetingImportButton } from '@/features/discussions/meeting-import-button';
 import { htmlLangAttribute } from '@/lib/locale-default';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { messages } from '@/i18n/messages';
@@ -664,6 +665,7 @@ export function NotesWorkbench({
                 <PanelLeft className="size-4" strokeWidth={1.5} aria-hidden />
               </button>
               <button type="button" onClick={() => openDiscussionCapture(projectId)} aria-label={language === 'zh' ? '开始录音' : 'Start recording'} className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"><Mic className="size-4" aria-hidden /></button>
+              <MeetingImportButton projectId={projectId} compact />
               <button
                 type="button"
                 onClick={handleCreateBlankNote}

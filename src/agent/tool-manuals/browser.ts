@@ -16,6 +16,8 @@ Available actions:
 - \`sequence\`: run a short list of same-document ref actions.
 - \`close\`: close the task-owned browser session.
 
-The tool does not accept CSS, XPath, JavaScript, cookie, storage, or network-inspection commands. Re-observe after navigation or a stale-observation response. Browser actions execute directly under the configured allow/deny policy. Sensitive fields expose only their semantic identity and values are redacted.
+For a delayed UI transition, pass an expectation when the action supports it, or use \`wait\` for a known result before acting on the next screen. Re-observe after navigation or a stale-observation response.
+
+The tool does not accept CSS, XPath, JavaScript, cookie, storage, or network-inspection commands. Browser actions execute directly under the configured allow/deny policy. Sensitive fields expose only their semantic identity and values are redacted.
 
 `;

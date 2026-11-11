@@ -19,6 +19,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { createNote, deleteNote, listNoteProjects, listNotes, updateNote, type NoteIndexEntry } from './notes-api';
 import { openDiscussionCapture } from '@/features/discussions/discussion-events';
+import { MeetingImportButton } from '@/features/discussions/meeting-import-button';
 import { NotesHomeComposer } from './notes-home-composer';
 import { noteHomePreview, noteHomeTitle, notesHomeQuery, NOTES_HOME_PAGE_SIZE } from './notes-home-model';
 import { formatRelativeTime, type NoteTimeLabels } from './note-time';
@@ -230,7 +231,7 @@ export function NotesHomePage() {
           </div>
           {actionError ? <p className="mb-4 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
           <section aria-label={h.startAction}>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <button type="button" onClick={() => void createBlank()} disabled={creatingBlank}
                 className="touch-target flex min-h-20 items-center gap-3 rounded-xl border border-edge bg-surface-panel p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
                 {creatingBlank ? <Loader2 className="size-5 shrink-0 animate-spin text-fg-muted" aria-hidden /> : <Plus className="size-5 shrink-0 text-fg-muted" aria-hidden />}
@@ -241,6 +242,7 @@ export function NotesHomePage() {
                 <Mic className="size-5 shrink-0 text-accent-fg" aria-hidden />
                 <span><span className="block text-sm font-semibold text-fg">{h.recordAction}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{h.recordActionHint}</span></span>
               </button>
+              <MeetingImportButton projectId={projectId || undefined} />
             </div>
             <button type="button" onClick={() => {
               setComposerOpen((open) => !open);

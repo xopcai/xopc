@@ -240,6 +240,32 @@ describe('discussion note document', () => {
     expect((await notes.getNote(created.note.id))!.attachments).toHaveLength(0);
   });
 
+  it('preserves an imported MP3 and aligns transcript ranges to the decoded playback audio', async () => {
+    const { discussion, note } = await create('import-mp3');
+    const path = join(stateDir, 'import.mp3');
+    const generated = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3.25', '-c:a', 'libmp3lame', path]);
+    expect(generated.status, String(generated.stderr)).toBe(0);
+    const original = await readFile(path);
+    await service.uploadRecordingChunk(discussion.id, 0, createHash('sha256').update(original).digest('hex'), new Blob([original]).stream());
+    await service.sealRecording(discussion.id, {
+      chunkCount: 1, mimeType: 'audio/mpeg', fileName: 'import.mp3', lastSequence: -1,
+      epochs: [{ firstChunk: 0, mimeType: 'audio/mpeg', startedAt: discussion.recordingStartedAt }],
+    });
+    await service.processRecordingJob();
+    expect(service.recordingJob(discussion.id)?.state).toBe('completed');
+    const detail = (await service.get(discussion.id))!;
+    expect(detail.discussion).toMatchObject({ mimeType: 'audio/wav', durationMs: 3250 });
+    const originalAttachment = detail.note.attachments.find(attachment => attachment.fileName.startsWith('recording-part-'))!;
+    expect(originalAttachment.mimeType).toBe('audio/mpeg');
+    expect(await readFile((await notes.getAttachmentPath(note.id, originalAttachment.id))!.filePath)).toEqual(original);
+    await new DiscussionSealer({ notes, getConfig: () => ({}) as never,
+      transcribeSegment: async () => ({ text: 'A later sentence', segments: [{ text: 'A later sentence', startMs: 1200, endMs: 2100 }] }),
+    }).tick();
+    const transcript = service.transcript(discussion.id)!;
+    const evidence = await service.evidence(discussion.id, transcript.revision, [transcript.segments[0]!.sequence]);
+    expect(evidence).toMatchObject({ timingVerified: true, segments: [{ playback: [{ startedAtMs: 1200, endedAtMs: 2100 }] }] });
+  });
+
   it('assembles independent mobile WAV chunks and produces a meeting summary', async () => {
     const consentPolicyVersion = service.settings().consentPolicyVersion;
     service.acknowledgeConsent(consentPolicyVersion);

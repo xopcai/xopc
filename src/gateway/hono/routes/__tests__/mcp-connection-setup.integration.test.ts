@@ -18,6 +18,7 @@ import { AgentPluginStore } from '../../../../extensions/agent-plugins/store.js'
 import { SkillManager } from '../../../../agent/skills/skill-manager.js';
 import { prepareNativeMcpConfig } from '../../../../agent/mcp/native-mcp.js';
 import { getMcpAuthorization } from '../../../../agent/mcp/connection-setup.js';
+import { signInNativeMcp } from '../../../../agent/mcp/tool-catalog.js';
 import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../../../storage/sqlite/connection.js';
@@ -122,7 +123,7 @@ it('detects authentication and completes native OAuth through authenticated Gate
   const auth = { mode: 'token' as const, token: 'setup-gateway-token' };
   const config = ConfigSchema.parse({ gateway: { auth }, mcp: { servers: {
     docs: { url: `${origin}/mcp`, xopcOAuthCredentialId: `mcp_draft_${'a'.repeat(32)}` }, local: { url: `${origin}/mcp` }, cancelled: { url: `${origin}/mcp` },
-    public: { url: `${origin}/public` }, token: { url: `${origin}/token` },
+    public: { url: `${origin}/public` }, token: { url: `${origin}/token` }, relay: { url: `${origin}/mcp` },
   } } });
   const service = { currentConfig: config, getResolvedAuth: () => auth, getEffectiveListenPort: () => 18790,
     marketplace: { reloadSkills() {} }, getExtensionLoader: () => null,
@@ -202,6 +203,24 @@ it('detects authentication and completes native OAuth through authenticated Gate
     expect((await request(`/auth/${declined}`)).data.payload).toMatchObject({ state: 'error', acceptsRedirect: false });
     expect(tokenRequests).toHaveLength(2);
     expect(calls).not.toContain('tools/call');
+
+    const callbackRelayUrl = 'https://setup.example.invalid/mcp-setup/callback/fixture';
+    let relayResponse: string | undefined;
+    const relayTools = await signInNativeMcp(config, root, 'relay', {
+      signal: AbortSignal.timeout(5000),
+      onAuthorizationUrl(url) {
+        const authorization = new URL(url);
+        expect(authorization.searchParams.get('redirect_uri')).toBe(callbackRelayUrl);
+        const response = new URL(callbackRelayUrl);
+        response.searchParams.set('code', 'relay-code');
+        response.searchParams.set('state', authorization.searchParams.get('state')!);
+        relayResponse = response.href;
+      },
+      requestRedirectUrl: async () => relayResponse,
+    }, { callbackRelayUrl });
+    expect(relayTools).toHaveLength(1);
+    expect(tokenRequests[2].get('redirect_uri')).toBe(callbackRelayUrl);
+
     // Exercise plugin installation, resource preparation, native OAuth and agent isolation over real HTTP.
     const pluginRequest = async (path: string, method = 'GET', body?: unknown): Promise<any> => {
       const response = await fetch(`${base.replace('/api/mcp', '')}${path}`, { method, headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
