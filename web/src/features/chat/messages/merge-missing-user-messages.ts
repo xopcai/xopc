@@ -1,4 +1,5 @@
-import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
+import { assistantTurnVisuallyEquivalent, mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
+import { assistantAnswerContent } from '@/features/chat/messages/assistant-turn-content';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
 
@@ -8,6 +9,30 @@ function hasSameTurnBoundaries(local: Message[], canonical: Message[]): boolean 
     if (!expected || message.role !== expected.role) return false;
     return !message.turnId || !expected.turnId || message.turnId === expected.turnId;
   });
+}
+
+function hasAssistantAnswer(message: Message): boolean {
+  return message.role === 'assistant' && assistantAnswerContent(message.content, { includePending: true }).some(part => {
+    if (part.type === 'review') return true;
+    const text = part.type === 'text' && part.text.trim();
+    return Boolean(text && text !== 'NO_REPLY');
+  });
+}
+
+/** A live page can contain extra user rows and still omit already displayed replies. */
+function retainsAssistantAnswers(local: Message[], canonical: Message[]): boolean {
+  const replies = local.filter(hasAssistantAnswer);
+  let matched = 0;
+  for (const incoming of canonical) {
+    const previous = replies[matched];
+    if (!previous) return true;
+    if (!hasAssistantAnswer(incoming)) continue;
+    if (previous.turnId && incoming.turnId
+      ? previous.turnId === incoming.turnId && Boolean(previous.startsNewBubble) === Boolean(incoming.startsNewBubble)
+      : (previous.timestamp !== undefined && previous.timestamp === incoming.timestamp)
+        || assistantTurnVisuallyEquivalent(previous, incoming)) matched++;
+  }
+  return matched === replies.length;
 }
 
 /**
@@ -34,6 +59,7 @@ export function mergeMissingUserMessagesFromServer(
       // snapshot must not shrink displayed history even before that echo arrives.
       if (canonicalPrefix.length < local.length) return local;
       if (!hasSameTurnBoundaries(local, canonicalPrefix)) {
+        if (!retainsAssistantAnswers(local, canonicalPrefix)) return local;
         return mergeConsecutiveAssistantMessages(canonicalPrefix);
       }
       return local;
