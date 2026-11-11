@@ -763,9 +763,14 @@ export struct XopcChatView {
     if (this.executionTimer !== -1) { clearInterval(this.executionTimer); this.executionTimer = -1; }
   }
 
+  private navigateChatRoute(route: XopcMobileRoute): void {
+    if (route.page === 'tasks' && route.itemId) this.onNavigate({ page: 'task-chat', itemId: route.itemId });
+    else this.onNavigate(route);
+  }
+
   private navigateFromMessageDetail(route: XopcMobileRoute): void {
     this.messageDetailOpen = false;
-    this.onNavigate(route);
+    this.navigateChatRoute(route);
   }
 
   private fillDraftFromMessageDetail(text: string): void {
@@ -1313,7 +1318,7 @@ export struct XopcChatView {
                   XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
                     previewEligible: item.item.id !== this.latestMessageId,
                     onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
-                    reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: this.onNavigate,
+                    reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
                     onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
                 }.id('chat-user-bubble-' + item.item.id).width(this.userBubbleWidth(item.item))
                   .constraintSize({ minWidth: 44, maxWidth: item.item.sendState === 'sending' || item.item.sendState === 'failed' ? '78%' : '84%' })
@@ -1345,7 +1350,7 @@ export struct XopcChatView {
                   onShowExecution: (row: XopcChatRow): void => { this.openExecutionDetail(row); },
                   runStartedAtMs: this.chat.runStartedAtMs, connection: this.chat.connection, showWaiting: false,
                   showFailure: this.personalConversation,
-                  reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: this.onNavigate,
+                  reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
                   onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
               }.id('chat-assistant-card-' + item.item.id).width(this.assistantBubbleWidth(item.item))
                 .constraintSize({ minWidth: 64, maxWidth: '90%' })
@@ -1371,7 +1376,7 @@ export struct XopcChatView {
           } else {
             Column({ space: 2 }) {
               XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
-                reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: this.onNavigate,
+                reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
                 onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
             }.width('100%').alignItems(HorizontalAlign.Start)
           }

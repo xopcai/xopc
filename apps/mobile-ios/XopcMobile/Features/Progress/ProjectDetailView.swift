@@ -6,9 +6,11 @@ struct ProjectDetailView: View {
     let onOpenConversation: (String, String, String) -> Void
     let onStartProjectConversation: (ProjectRecord) -> Void
 
+    @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var project: ProjectRecord?
     @State private var sessions: [ConversationSummary] = []
+    @State private var deliveries: [HomeDelivery] = []
     @State private var tasks: [TaskListItem] = []
     @State private var notes: [NoteSummary] = []
     @State private var automations: [AutomationRecord] = []
@@ -47,6 +49,14 @@ struct ProjectDetailView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .padding(.vertical, 8)
+                        }
+                    }
+                    if selection == .overview && !deliveries.isEmpty {
+                        Section("近期成果") {
+                            ForEach(deliveries.prefix(5)) { item in
+                                HomeDeliveryLink(item: item, configuration: configuration,
+                                                 onOpenConversation: onOpenConversation)
+                            }
                         }
                     }
                     if selection == .overview || selection == .conversations {
@@ -155,7 +165,7 @@ struct ProjectDetailView: View {
             } else {
                 ForEach(visible(tasks)) { item in
                     NavigationLink {
-                        TaskDetailView(configuration: configuration, taskID: item.task.id, onOpenConversation: onOpenConversation)
+                        TaskDetailView(configuration: configuration, taskID: item.task.id)
                     } label: {
                         ProgressRow(title: item.task.title, subtitle: item.task.contract?.objective ?? item.task.body,
                                     state: item.operationalState, date: item.task.updatedAt.millisecondsDate, symbol: "checklist")
@@ -228,6 +238,7 @@ struct ProjectDetailView: View {
     @MainActor private func load() async {
         isLoading = true
         defer { isLoading = false }
+        async let home = try? GatewayClient(configuration: configuration).fetchHome(locale: locale.identifier)
         do {
             async let projectRequest = GatewayClient(configuration: configuration).fetchProject(id: projectID)
             async let sessionsRequest = GatewayClient(configuration: configuration).fetchProjectSessions(id: projectID)
@@ -241,6 +252,9 @@ struct ProjectDetailView: View {
             notes = result.3.items
             automations = result.4
             error = nil
+            if let home = await home {
+                deliveries = (home.recentDeliveries ?? []).filter { $0.projectId == projectID && $0.destination != nil }
+            }
         } catch { self.error = error.localizedDescription }
     }
 }

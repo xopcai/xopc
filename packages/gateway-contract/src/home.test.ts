@@ -36,6 +36,19 @@ describe('home contract', () => {
       .toEqual({ state: 'quiet', reason: 'generation_failed' });
   });
 
+  it('preserves a delivery’s project without requiring it on older records', () => {
+    const delivery = {
+      id: 'task:run-1', kind: 'task', subjectId: 'task-1', title: 'Release notes',
+      summary: 'Reviewed', completedAt: 1, read: false, href: '/tasks/task-1',
+    };
+    const parsed = HomeResponseSchema.parse({
+      needsUser: [], background: [], backgroundCount: 0, decisions: [],
+      advisor: { state: 'quiet', reason: 'no_change' },
+      recentDeliveries: [{ ...delivery, projectId: 'release' }, { ...delivery, id: 'task:run-2' }],
+    });
+    expect(parsed.recentDeliveries.map((item) => item.projectId)).toEqual(['release', undefined]);
+  });
+
   it('rejects an ungrounded ready recommendation', () => {
     expect(() => HomeAdvisorSchema.parse({
       state: 'ready',

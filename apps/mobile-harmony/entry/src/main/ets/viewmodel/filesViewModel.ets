@@ -17,6 +17,7 @@ export class XopcFilesViewModel {
   private transfer: XopcFileTransfer = new XopcFileTransfer();
   private generation: number = 0;
   private contextId: string = '';
+  private lastLibrarySearch: string = '';
 
   dispose(): void { this.generation++; }
   async start(initialId: string, conversationId: string = ''): Promise<void> {
@@ -43,8 +44,10 @@ export class XopcFilesViewModel {
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.busy = false; }
   }
-  async load(search: string = ''): Promise<void> {
-    if (this.busy) return;
+  async load(search: string = '', replace: boolean = false): Promise<void> {
+    const differentSearch = replace && this.lastLibrarySearch !== search.trim();
+    if (this.busy && !differentSearch) return;
+    if (differentSearch) { this.lastLibrarySearch = search.trim(); this.items = []; }
     this.busy = true; this.error = ''; const generation = ++this.generation;
     try {
       if (!this.spaces.length) {

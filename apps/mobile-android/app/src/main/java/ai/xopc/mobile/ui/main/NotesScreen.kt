@@ -1,6 +1,7 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.ProgressDelivery
 import ai.xopc.mobile.gateway.NoteDetail
 import ai.xopc.mobile.gateway.NoteDraft
 import ai.xopc.mobile.gateway.NoteMetadataPatch
@@ -47,6 +48,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -126,7 +128,10 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   onNoteFileText: suspend (String) -> String = { "" },
   onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
   onTopLevelChange: (Boolean) -> Unit = {},
-  bottomChromeHeight: Dp = 0.dp) {
+  bottomChromeHeight: Dp = 0.dp,
+  deliveries: List<ProgressDelivery> = emptyList(),
+  deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
+  onRefreshDeliveries: () -> Unit = {}, onOpenDelivery: (ProgressDelivery) -> Unit = {}) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
   val scope = rememberCoroutineScope()
@@ -182,23 +187,18 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var fileSpaceId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var filePath by rememberSaveable(state.gatewayId) { mutableStateOf("") }
+  val previewFromLibrary = remember(state.gatewayId) { mutableStateOf(false) }
   var selectedFile by remember(state.gatewayId) { mutableStateOf<ManagedFile?>(null) }
   var fileRefreshRevision by rememberSaveable(state.gatewayId) { mutableStateOf(0) }
   var fileSpaces by remember(state.gatewayId) { mutableStateOf<List<ManagedFileSpace>>(emptyList()) }
   var fileItems by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>>(emptyList()) }
-  var searchFiles by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>>(emptyList()) }
+  val libraryFilesRevision = remember(state.gatewayId) { mutableStateOf(0) }
+  val libraryFiles = rememberLibraryFiles(state.gatewayId, query, libraryFilesRevision.value, onNoteFiles)
   var fileContent by remember(state.gatewayId) { mutableStateOf<ByteArray?>(null) }
   var filesLoading by remember(state.gatewayId) { mutableStateOf(false) }
   var filesError by remember(state.gatewayId) { mutableStateOf(false) }
   LaunchedEffect(selectedId, editorOpen, fileBrowserOpen) {
     onTopLevelChange(selectedId == null && !editorOpen && !fileBrowserOpen)
-  }
-  LaunchedEffect(query, state.gatewayId) {
-    if (query.isBlank()) searchFiles = emptyList()
-    else {
-      delay(350)
-      searchFiles = runCatching { onNoteFiles(null, "", query.trim()) }.getOrDefault(emptyList())
-    }
   }
   LaunchedEffect(fileBrowserOpen, fileSpaceId, filePath, fileRefreshRevision, state.gatewayId) {
     if (!fileBrowserOpen) return@LaunchedEffect
@@ -244,6 +244,11 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   BackHandler(enabled = fileBrowserOpen) {
     when {
+      previewFromLibrary.value -> {
+        previewFromLibrary.value = false
+        selectedFile = null
+        fileBrowserOpen = false
+      }
       selectedFile != null -> selectedFile = null
       filePath.isNotEmpty() -> filePath = filePath.substringBeforeLast('/', "")
       fileSpaceId != null -> fileSpaceId = null
@@ -311,7 +316,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.width(72.dp), maxLines = 1)
       } else {
-        Text(stringResource(R.string.tab_notes), style = MaterialTheme.typography.headlineSmall,
+        Text(stringResource(R.string.library_title), style = MaterialTheme.typography.headlineSmall,
           fontWeight = FontWeight.SemiBold)
         IconButton(onClick = { creationSheetOpen = true },
           enabled = !state.draftLoading && !state.draftSaving,
@@ -334,9 +339,23 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       NotesListContent(state, query, { query = it },
       { onSearch(query.trim(), state.status) }, { status -> onSearch(query.trim(), status) },
       { id -> selectedId = id; onOpen(id) }, onLoadMore, Modifier.weight(1f),
-      { id -> editorOpen = true; onOpenDraft(id) }, { fileBrowserOpen = true }, searchFiles,
-      { file -> fileBrowserOpen = true; selectedFile = file },
-      bottomChromeHeight = bottomChromeHeight)
+      { id -> editorOpen = true; onOpenDraft(id) }, { fileBrowserOpen = true }, libraryFiles.items,
+      { file ->
+        fileBrowserOpen = true
+        if (file.kind == "directory") {
+          selectedFile = null
+          fileSpaceId = file.spaceId
+          filePath = file.relativePath
+        } else {
+          previewFromLibrary.value = true
+          selectedFile = file
+        }
+      },
+      bottomChromeHeight = bottomChromeHeight,
+      deliveries = deliveries, deliveriesLoading = deliveriesLoading, deliveryError = deliveryError,
+      onRefreshDeliveries = onRefreshDeliveries, onOpenDelivery = onOpenDelivery,
+      filesLoading = libraryFiles.loading, filesError = libraryFiles.error,
+      onRefreshFiles = { libraryFilesRevision.value++ })
     } else NotesDetailContent(state, selectedId!!, { onOpen(selectedId!!) }, Modifier.weight(1f),
       { editorOpen = true; onEditNote() }, { moreOpen = true }, {
         historyTimestamp = null
@@ -925,12 +944,49 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
   }
 }
 
+private data class LibraryFiles(val items: List<ManagedFile> = emptyList(), val loading: Boolean = true,
+  val error: Boolean = false)
+
+@Composable
+private fun rememberLibraryFiles(gatewayId: String?, query: String, refresh: Int,
+  load: suspend (String?, String, String) -> List<ManagedFile>): LibraryFiles {
+  val result = remember(gatewayId, query) { mutableStateOf(LibraryFiles()) }
+  LaunchedEffect(gatewayId, query, refresh) {
+    result.value = result.value.copy(loading = true, error = false)
+    try {
+      if (query.isNotBlank()) delay(350)
+      result.value = LibraryFiles(items = load(null, "", query.trim()), loading = false)
+    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      result.value = result.value.copy(loading = false, error = true)
+    }
+  }
+  return result.value
+}
+
 @Composable
 internal fun NotesListContent(state: NotesUiState, search: String, onSearchChange: (String) -> Unit,
   onSubmit: () -> Unit, onStatus: (String) -> Unit, onOpen: (String) -> Unit,
   onLoadMore: () -> Unit, modifier: Modifier = Modifier, onOpenDraft: (String) -> Unit = {},
   onOpenFiles: (() -> Unit)? = null, searchFiles: List<ManagedFile> = emptyList(),
-  onOpenSearchFile: (ManagedFile) -> Unit = {}, bottomChromeHeight: Dp = 0.dp) {
+  onOpenSearchFile: (ManagedFile) -> Unit = {}, bottomChromeHeight: Dp = 0.dp,
+  deliveries: List<ProgressDelivery> = emptyList(),
+  deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
+  onRefreshDeliveries: () -> Unit = {}, onOpenDelivery: (ProgressDelivery) -> Unit = {},
+  filesLoading: Boolean = false, filesError: Boolean = false, onRefreshFiles: () -> Unit = {}) {
+  var category by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
+  val showNotes = category == "all" || category == "notes"
+  val showFiles = category == "all" || category == "files"
+  val showDeliveries = category == "all" || category == "deliveries"
+  val query = search.trim()
+  val preview = category == "all" && query.isEmpty()
+  val visibleFiles = if (preview) searchFiles.take(3) else searchFiles
+  val matchingDeliveries = deliveries.filter {
+    query.isEmpty() || it.title.contains(query, ignoreCase = true) || it.summary.contains(query, ignoreCase = true)
+  }
+  val visibleDeliveries = if (preview) matchingDeliveries.take(3) else matchingDeliveries
+  val libraryListState = rememberLazyListState()
   var filtersOpen by rememberSaveable { mutableStateOf(false) }
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -945,13 +1001,13 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
           keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
           keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
           decorationBox = { inner -> Box {
-            if (search.isEmpty()) Text(stringResource(R.string.notes_search),
+            if (search.isEmpty()) Text(stringResource(R.string.library_search),
               color = MaterialTheme.colorScheme.onSurfaceVariant)
             inner()
           } })
         IconButton(onClick = onSubmit, enabled = !state.loading,
           modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
-          Icon(painterResource(R.drawable.action_search), stringResource(R.string.notes_search))
+          Icon(painterResource(R.drawable.action_search), stringResource(R.string.library_search))
         }
       }
       IconButton(onClick = { onOpenFiles?.invoke() }, enabled = onOpenFiles != null,
@@ -960,7 +1016,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
           .testTag("notes-files")) {
         Icon(painterResource(R.drawable.action_folder), stringResource(R.string.notes_files))
       }
-      IconButton(onClick = { filtersOpen = !filtersOpen },
+      IconButton(onClick = { filtersOpen = !filtersOpen }, enabled = showNotes,
         modifier = Modifier.size(48.dp)
           .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
           .testTag("notes-filter-menu")) {
@@ -969,7 +1025,16 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
             else MaterialTheme.colorScheme.onSurfaceVariant)
       }
     }
-    if (filtersOpen) Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+      listOf("all" to R.string.notes_all, "notes" to R.string.tab_notes,
+        "files" to R.string.notes_files, "deliveries" to R.string.library_results).forEach { (id, label) ->
+        FilterChip(selected = category == id, onClick = {
+          category = id
+          if (id != "notes" && state.status.isNotEmpty()) onStatus("")
+        }, label = { Text(stringResource(label)) }, modifier = Modifier.testTag("library-category-$id"))
+      }
+    }
+    if (showNotes && filtersOpen) Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       listOf("" to R.string.notes_all, "inbox" to R.string.notes_inbox,
         "processed" to R.string.notes_processed, "archived" to R.string.notes_archived).forEach { (status, label) ->
@@ -977,40 +1042,66 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
           label = { Text(stringResource(label)) }, modifier = Modifier.testTag("notes-filter-${status.ifEmpty { "all" }}"))
       }
     }
-    LazyColumn(modifier = Modifier.weight(1f).testTag("notes-list"),
+    LazyColumn(state = libraryListState, modifier = Modifier.weight(1f).testTag("notes-list"),
       verticalArrangement = Arrangement.spacedBy(10.dp),
       contentPadding = PaddingValues(bottom = bottomChromeHeight + 20.dp)) {
-      if (state.loading && state.items.isEmpty()) item {
-        BrandLoadingPanel(modifier = Modifier.testTag("notes-loading"))
+      if (category == "all" && !state.loading && !filesLoading && !deliveriesLoading &&
+        !state.listError && !filesError && !deliveryError && state.items.isEmpty() && state.drafts.isEmpty() &&
+        visibleFiles.isEmpty() && visibleDeliveries.isEmpty()) {
+        item { Text(stringResource(R.string.library_empty), modifier = Modifier.testTag("notes-empty")) }
       }
-      if (state.listError) item { OutlinedButton(onClick = onSubmit,
-        modifier = Modifier.testTag("notes-retry")) {
-        Text(stringResource(R.string.progress_load_failed))
-      } }
-      if (!state.loading && !state.listError && state.items.isEmpty() && searchFiles.isEmpty()) item {
-        if (state.drafts.isEmpty()) Text(stringResource(R.string.notes_empty),
-          modifier = Modifier.testTag("notes-empty"))
+      if (showNotes) {
+        if (state.loading && state.items.isEmpty()) item {
+          BrandLoadingPanel(modifier = Modifier.testTag("notes-loading"))
+        }
+        if (state.listError) item { OutlinedButton(onClick = onSubmit,
+          modifier = Modifier.testTag("notes-retry")) {
+          Text(stringResource(R.string.progress_load_failed))
+        } }
+        if (category == "notes" && !state.loading && !state.listError && state.items.isEmpty()) item {
+          if (state.drafts.isEmpty()) Text(stringResource(R.string.notes_empty),
+            modifier = Modifier.testTag("notes-empty"))
+        }
+        items(state.drafts, key = { "draft-${it.id}" }) { draft ->
+          NoteDraftCard(draft, onOpenDraft)
+        }
+        items(if (preview) state.items.take(3) else state.items, key = { it.id }) { note -> NoteCard(note, onOpen) }
+        if (state.hasMore) item {
+          OutlinedButton(onClick = { if (preview) category = "notes"; onLoadMore() }, enabled = !state.loadingMore,
+            modifier = Modifier.fillMaxWidth().testTag("notes-load-more")) {
+            if (state.loadingMore) BrandLoadingIndicator(extent = 20.dp)
+            Text(stringResource(R.string.notes_load_more))
+          }
+        }
+        if (state.moreError) item { Text(stringResource(R.string.notes_more_error),
+          color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("notes-more-error")) }
       }
-      items(state.drafts, key = { "draft-${it.id}" }) { draft ->
-        NoteDraftCard(draft, onOpenDraft)
-      }
-      items(state.items, key = { it.id }) { note -> NoteCard(note, onOpen) }
-      if (search.isNotBlank() && searchFiles.isNotEmpty()) item {
-        Text(stringResource(R.string.notes_files), style = MaterialTheme.typography.titleSmall,
-          modifier = Modifier.padding(top = 8.dp))
-      }
-      if (search.isNotBlank()) items(searchFiles, key = { "file-${it.id}" }) { file ->
-        ManagedFileCard(file, onOpenSearchFile)
-      }
-      if (state.hasMore) item {
-        OutlinedButton(onClick = onLoadMore, enabled = !state.loadingMore,
-          modifier = Modifier.fillMaxWidth().testTag("notes-load-more")) {
-          if (state.loadingMore) BrandLoadingIndicator(extent = 20.dp)
-          Text(stringResource(R.string.notes_load_more))
+      if (showFiles && (visibleFiles.isNotEmpty() || filesLoading || filesError || category == "files")) {
+        item { Text(stringResource(R.string.notes_files), style = MaterialTheme.typography.titleSmall) }
+        if (filesLoading) item { BrandLoadingPanel() }
+        if (filesError) item { OutlinedButton(onClick = onRefreshFiles) { Text(stringResource(R.string.assistant_context_retry)) } }
+        items(visibleFiles, key = { "file-${it.id}" }) { file -> ManagedFileCard(file, onOpenSearchFile) }
+        if (category == "files" && onOpenFiles != null) item {
+          OutlinedButton(onClick = onOpenFiles) { Text(stringResource(R.string.library_browse_files)) }
         }
       }
-      if (state.moreError) item { Text(stringResource(R.string.notes_more_error),
-        color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("notes-more-error")) }
+      if (showDeliveries && (visibleDeliveries.isNotEmpty() || deliveriesLoading || deliveryError || category == "deliveries")) {
+        item { Text(stringResource(R.string.library_recent_results), style = MaterialTheme.typography.titleSmall) }
+        if (deliveriesLoading && visibleDeliveries.isEmpty()) item { BrandLoadingPanel() }
+        if (deliveryError) item { OutlinedButton(onClick = onRefreshDeliveries) { Text(stringResource(R.string.assistant_context_retry)) } }
+        if (category == "deliveries" && !deliveriesLoading && !deliveryError && visibleDeliveries.isEmpty()) item {
+          Text(stringResource(R.string.library_no_results))
+        }
+        items(visibleDeliveries, key = { "delivery-${it.id}" }) { delivery ->
+          Card(onClick = { onOpenDelivery(delivery) }, modifier = Modifier.fillMaxWidth()
+            .testTag("library-delivery-${delivery.id}")) {
+            Column(Modifier.padding(12.dp)) {
+              Text(delivery.title, style = MaterialTheme.typography.titleSmall)
+              if (delivery.summary.isNotBlank()) Text(delivery.summary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+          }
+        }
+      }
     }
   }
 }

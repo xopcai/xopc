@@ -6,6 +6,7 @@ import SwiftUI
 struct AssistantComposer: View {
     let configuration: GatewayConfiguration
     var focusAllowed = true
+    var focusRequest = 0
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -83,6 +84,9 @@ struct AssistantComposer: View {
         }
         .padding(.horizontal, 8)
         .padding(.top, 8)
+        .onChange(of: focusRequest) {
+            if focusAllowed { isComposerFocused = true }
+        }
         .onChange(of: focusAllowed) {
             if !focusAllowed {
                 isComposerFocused = false; isActionPanelExpanded = false

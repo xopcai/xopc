@@ -1,15 +1,20 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcMobileRoute } from '../model/home';
+import { XopcHomeDelivery, XopcMobileRoute } from '../model/home';
+import { mobileRoute } from '../common/homeProtocol';
 import { XopcNoteIndexEntry } from '../model/note';
 import { XopcWorkspaceItem } from '../model/workspace';
 import { XopcSessionItem } from '../model/chat';
 import { XopcProjectSpaceViewModel } from '../viewmodel/projectSpaceViewModel';
-import { XopcListSkeleton } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 
 @ComponentV2
 export struct XopcProjectSpaceView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param projectId: string = '';
+  @Param deliveries: XopcHomeDelivery[] = [];
+  @Computed get projectDeliveries(): XopcHomeDelivery[] {
+    return this.deliveries.filter((item: XopcHomeDelivery): boolean => item.projectId === this.projectId).slice(0, 5);
+  }
   @Event onExit: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local model: XopcProjectSpaceViewModel = new XopcProjectSpaceViewModel();
@@ -182,6 +187,18 @@ export struct XopcProjectSpaceView {
           }
           if (this.model.loading && !this.model.project) {
             ListItem() { XopcListSkeleton() }
+          }
+          if (this.tab === 'overview' && this.projectDeliveries.length) {
+            ListItem() { Text($r('app.string.library_recent_results')).fontSize(15).fontWeight(FontWeight.Bold).fontColor(this.colors.secondary) }
+            ForEach(this.projectDeliveries, (item: XopcHomeDelivery) => {
+              ListItem() {
+                XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.checkmark_circle'),
+                  onOpen: (): void => {
+                    const route = mobileRoute(item.href);
+                    if (route) this.onNavigate(route);
+                  } })
+              }
+            }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
           }
           if (this.tab === 'overview' || this.tab === 'sessions') {
             ListItem() { this.sectionHeader($r('app.string.conversations'), this.model.sessions.length, 'project-new-chat') }

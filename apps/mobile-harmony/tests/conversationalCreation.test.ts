@@ -23,7 +23,7 @@ describe('conversational creation entry points', () => {
     expect(home).toContain('activePage: this.creationSheetOpen, embedded: true');
     expect(home).toContain("}.layoutWeight(1).width('100%')");
     expect(chat).toContain('@Param embedded: boolean = false;');
-    expect(chat).toContain('if (!this.embedded)');
+    expect(chat).toContain('if (!this.embedded && !this.taskId)');
   });
 
 

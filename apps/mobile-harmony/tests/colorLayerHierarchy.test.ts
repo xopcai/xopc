@@ -20,7 +20,7 @@ describe('color-based visual hierarchy', () => {
       let source = readFileSync(file, 'utf8');
       if (file.endsWith('/ChatView.ets')) {
         // Capsule outlines distinguish header controls; application regions still use color layers.
-        const start = source.lastIndexOf('      if (!this.embedded) {');
+        const start = source.lastIndexOf('      if (!this.embedded && !this.taskId) {');
         const end = source.indexOf('    if (this.sendFlightActive)', start);
         const header = source.slice(start, end);
         expect(header.match(/\.border\s*\(/g)).toHaveLength(2);

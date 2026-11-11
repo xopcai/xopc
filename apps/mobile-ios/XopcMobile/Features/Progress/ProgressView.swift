@@ -37,6 +37,12 @@ struct ProgressHubView: View {
                         Text("需要你处理").mobileTextStyle(.rowTitle).padding(.top, 12).id("progress-section-needs-user")
                         ForEach(home.needsUser) { item in homeRow(item, showsActions: true) }
                     }
+                    if !deliveries.isEmpty {
+                        Text("已交付").mobileTextStyle(.rowTitle).padding(.top, 12)
+                        ForEach(deliveries.prefix(5)) { item in
+                            HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation)
+                        }
+                    }
                     if !runningItems.isEmpty {
                         Text("正在进行").mobileTextStyle(.rowTitle).padding(.top, 12).id("progress-section-running")
                         ForEach(runningItems.prefix(5)) { item in homeRow(item, showsActions: false) }
@@ -55,12 +61,12 @@ struct ProgressHubView: View {
                         }.buttonStyle(.plain)
                     }
                     if !recentClosed.isEmpty {
-                        Text("最近完成").mobileTextStyle(.rowTitle).padding(.top, 12)
+                        Text("历史").mobileTextStyle(.rowTitle).padding(.top, 12)
                         ForEach(recentClosed.prefix(2)) { item in
                             NavigationLink {
-                                TaskDetailView(configuration: configuration, taskID: item.id, onOpenConversation: onOpenConversation)
+                                TaskDetailView(configuration: configuration, taskID: item.id)
                             } label: {
-                                compactRow(title: item.task.title, subtitle: item.task.resolution ?? "已完成", symbol: "checkmark.circle")
+                                compactRow(title: item.task.title, subtitle: item.task.resolution ?? "", symbol: "checkmark.circle")
                             }.buttonStyle(.plain)
                         }
                     }
@@ -89,7 +95,19 @@ struct ProgressHubView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
-                    TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("全部工作")
+                    List {
+                        NavigationLink("任务") {
+                            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("任务")
+                        }
+                        NavigationLink("项目") {
+                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation,
+                                         onStartProjectConversation: onStartProjectConversation).navigationTitle("项目")
+                        }
+                        NavigationLink("自动化") {
+                            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("自动化")
+                        }
+                    }
+                    .navigationTitle("全部工作")
                 } label: { Image(systemName: "square.grid.2x2").frame(width: 44, height: 44) }
                     .accessibilityLabel("全部工作")
             }
@@ -142,6 +160,10 @@ struct ProgressHubView: View {
 
     private var scheduledItems: [HomeItem] {
         home?.background.filter { $0.kind == "scheduled" } ?? []
+    }
+
+    private var deliveries: [HomeDelivery] {
+        home?.recentDeliveries?.filter { $0.destination != nil } ?? []
     }
 
     private var recentClosed: [TaskListItem] {
@@ -217,7 +239,7 @@ struct ProgressHubView: View {
         case .tasks:
             TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("任务")
         case let .task(id):
-            TaskDetailView(configuration: configuration, taskID: id, onOpenConversation: onOpenConversation)
+            TaskDetailView(configuration: configuration, taskID: id)
         case .projects:
             ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation,
                          onStartProjectConversation: onStartProjectConversation).navigationTitle("项目")
@@ -230,6 +252,9 @@ struct ProgressHubView: View {
         case let .automation(id):
             AutomationDetailView(configuration: configuration, automationID: id,
                                  onOpenConversation: onOpenConversation)
+        case let .automationRun(id):
+            AutomationRunDetailView(configuration: configuration, runID: id, initialRun: nil,
+                                    onOpenConversation: onOpenConversation)
         case .notes:
             NotesView(configuration: configuration, onOpenConversation: onOpenConversation)
         case let .note(id):
@@ -309,8 +334,48 @@ private extension ProgressHubView {
     }
 }
 
+extension HomeDelivery {
+    var destination: HomeOpenRoute? {
+        let route = HomeOpenRoute(href: href)
+        switch route {
+        case .task, .automationRun: return route
+        default: return nil
+        }
+    }
+}
+
+struct HomeDeliveryLink: View {
+    let item: HomeDelivery
+    let configuration: GatewayConfiguration
+    let onOpenConversation: (String, String, String) -> Void
+
+    var body: some View {
+        if let route = item.destination {
+            NavigationLink {
+                switch route {
+                case let .task(id):
+                    TaskDetailView(configuration: configuration, taskID: id)
+                case let .automationRun(id):
+                    AutomationRunDetailView(configuration: configuration, runID: id, initialRun: nil,
+                                            onOpenConversation: onOpenConversation)
+                default:
+                    EmptyView()
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.title).mobileTextStyle(.rowTitle)
+                    if !item.summary.isEmpty {
+                        Text(item.summary).mobileTextStyle(.secondary).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                }
+            }
+            .accessibilityIdentifier("delivery-\(item.id)")
+        }
+    }
+}
+
 enum HomeOpenRoute: Equatable {
-    case tasks, task(String), projects, project(String), automations, automation(String)
+    case tasks, task(String), projects, project(String), automations, automation(String), automationRun(String)
     case notes, note(String), files, chat(String)
 
     // swiftlint:disable:next cyclomatic_complexity
@@ -330,8 +395,11 @@ enum HomeOpenRoute: Equatable {
         case "tasks": self = id.map(HomeOpenRoute.task) ?? .tasks
         case "projects": self = id.map(HomeOpenRoute.project) ?? .projects
         case "automations":
-            guard query["run"] == nil else { return nil }
-            self = (id ?? query["automation"]).map(HomeOpenRoute.automation) ?? .automations
+            if let run = query["run"], !run.isEmpty {
+                self = .automationRun(run)
+            } else {
+                self = (id ?? query["automation"]).map(HomeOpenRoute.automation) ?? .automations
+            }
         case "notes", "inbox": self = (id ?? query["item"]).map(HomeOpenRoute.note) ?? .notes
         case "files" where id == nil: self = .files
         case "chat":
@@ -367,7 +435,7 @@ private struct TasksView: View {
             } else {
                 ForEach(visibleItems) { item in
                     NavigationLink {
-                        TaskDetailView(configuration: configuration, taskID: item.task.id, onOpenConversation: onOpenConversation)
+                        TaskDetailView(configuration: configuration, taskID: item.task.id)
                     } label: {
                         ProgressRow(
                             title: item.task.title,

@@ -6,10 +6,10 @@ function source(path: string): string {
 }
 
 describe('HarmonyOS voice note surface', () => {
-  it('keeps the composer on Notes alongside creation actions and recording status', () => {
+  it('keeps the composer in Library alongside note creation and recording status', () => {
     const home = source('../entry/src/main/ets/view/HomeView.ets');
     const notes = source('../entry/src/main/ets/view/NotesTabView.ets');
-    expect(home).toContain("this.tabItem(3, $r('app.string.notes')");
+    expect(home).toContain("this.tabItem(3, $r('app.string.library_title')");
     expect(home).not.toContain(".id('note-capture-start')");
     expect(home).not.toContain('if (this.tab !== 3) {');
     expect(home).toContain('this.quickComposer()');

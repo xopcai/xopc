@@ -1197,7 +1197,7 @@ class MainScreenTest {
     composeTestRule.runOnIdle { assertEquals(1, sends) }
   }
 
-  @Test fun allTabVoiceEntriesStayLeftAndToggleTheSameRecordingPad() {
+  @Test fun assistantAndNotesVoiceEntriesStayLeftAndToggleTheSameRecordingPad() {
     androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
       .grantRuntimePermission(composeTestRule.activity.packageName, android.Manifest.permission.RECORD_AUDIO)
     var tab by mutableStateOf(HomeTab.Assistant)
@@ -1217,7 +1217,7 @@ class MainScreenTest {
     val shell = composeTestRule.onNodeWithTag("assistant-composer-shell").fetchSemanticsNode().boundsInRoot
     assert(expandedVoice.left < shell.center.x)
     Espresso.closeSoftKeyboard()
-    for (next in HomeTab.entries) {
+    for (next in listOf(HomeTab.Assistant, HomeTab.Notes)) {
       composeTestRule.runOnIdle { tab = next }
       val tag = if (next == HomeTab.Assistant) "assistant-voice-toggle" else "quick-voice"
       if (next != HomeTab.Assistant) {
@@ -1366,6 +1366,32 @@ class MainScreenTest {
     assert(loads == 1)
   }
 
+  @Test fun libraryDeliveryOpensTaskDetailAndReturnsToTheSelectedFilter() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val task = ProgressTask("task-library", "Review the handoff", "", "closed", "done", 10, 10, null)
+    val delivery = ai.xopc.mobile.gateway.ProgressDelivery(
+      "task:run-1", "task", task.id, "Library delivery", "Ready to review")
+    var connection by mutableStateOf(ConnectionUiState(profile = profile,
+      progress = ProgressUiState(gatewayId = "gateway", deliveries = listOf(delivery))))
+    var requestedTask = ""
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Notes, onSelectTab = {}, connection = connection,
+          onOpenProgressTask = { id ->
+            requestedTask = id
+            connection = connection.copy(progress = connection.progress.copy(detailTaskId = id, detailTask = task))
+          })
+      }
+    }
+    composeTestRule.onNodeWithTag("library-category-deliveries").performClick()
+    composeTestRule.onNodeWithTag("library-delivery-${delivery.id}").performClick()
+    composeTestRule.onNodeWithTag("progress-task-detail").assertExists()
+    assertEquals(task.id, requestedTask)
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("library-category-deliveries").assertIsSelected()
+    composeTestRule.onNodeWithTag("library-delivery-${delivery.id}").assertExists()
+  }
+
   @Test fun progressSecondaryPagesHideComposerAndDockUntilReturningToOverview() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     composeTestRule.setContent {
@@ -1375,9 +1401,12 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-back").assertExists()
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("progress-work-tasks").assertExists()
     Espresso.pressBack()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertExists()
     composeTestRule.onNodeWithTag("progress-projects").performClick()
@@ -1447,6 +1476,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Review release").performClick()
     assert(openedChat == "chat-1")
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-1").performClick()
     assert(openedTask == "task-1")
     composeTestRule.onNodeWithText("Verify build").assertExists()
@@ -1548,6 +1578,7 @@ class MainScreenTest {
         {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-workflows").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-back").assertExists()
     composeTestRule.onNodeWithTag("progress-create-task-chat").assertIsDisplayed()
@@ -1598,6 +1629,7 @@ class MainScreenTest {
         {}, {}, {}, {}, { prepared++ }, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-create-task-chat").assertIsEnabled().performClick()
     assert(prepared == 1)
     state.value = state.value.copy(creatingTaskChat = true)
@@ -1680,6 +1712,7 @@ class MainScreenTest {
         {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-ready").performClick()
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-phase-closed").performScrollTo().performClick()
@@ -1701,6 +1734,7 @@ class MainScreenTest {
         {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-start").performClick()
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-command-start").performScrollTo().assertIsNotEnabled()
@@ -1727,6 +1761,7 @@ class MainScreenTest {
         { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-chat").performClick()
     composeTestRule.onNodeWithTag("progress-task-chat").performClick()
     assert(opened == "task-chat")
@@ -1769,6 +1804,7 @@ class MainScreenTest {
       }, {}, {}, { command = it }, { started = true }, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-phase-active").performScrollTo().performClick()
@@ -1796,6 +1832,7 @@ class MainScreenTest {
       }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-fields").performClick()
     composeTestRule.onNodeWithTag("progress-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-edit-project").performScrollTo().performClick()
@@ -1826,6 +1863,7 @@ class MainScreenTest {
       }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-edit-title").performTextClearance()
@@ -1853,6 +1891,7 @@ class MainScreenTest {
       }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-discard").performClick()
     composeTestRule.onNodeWithTag("progress-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-edit-title").performTextInput(" changed")
@@ -2064,7 +2103,7 @@ class MainScreenTest {
     var quickSubmits = 0
     var assistantSends = 0
     composeTestRule.setContent {
-      MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {},
+      MainContent(selectedTab = HomeTab.Notes, onSelectTab = {},
         connection = ConnectionUiState(profile = profile, realtimeStatus = "connected",
           selectedConversationId = "11111111-2222-3333-4444-555555555555", quickDraftText = quick.value),
         onQuickDraftChange = { quick.value = it }, onQuickSubmit = { quickSubmits++ },
@@ -2082,7 +2121,7 @@ class MainScreenTest {
   @Test fun quickComposerCannotSendWhileDisconnected() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     composeTestRule.setContent {
-      MainContent(selectedTab = HomeTab.Progress, onSelectTab = {},
+      MainContent(selectedTab = HomeTab.Notes, onSelectTab = {},
         connection = ConnectionUiState(profile = profile, quickDraftText = "Saved text"))
     }
     composeTestRule.onNodeWithTag("quick-send").assertIsNotEnabled()
@@ -2096,7 +2135,7 @@ class MainScreenTest {
     var removed = ""
     var sent = 0
     composeTestRule.setContent {
-      MainContent(selectedTab = HomeTab.Progress, onSelectTab = {},
+      MainContent(selectedTab = HomeTab.Notes, onSelectTab = {},
         connection = ConnectionUiState(profile = profile, realtimeStatus = "connected",
           quickAttachments = listOf(item)),
         onPickQuickAttachment = { picked = it }, onRemoveQuickAttachment = { removed = it },
@@ -2120,11 +2159,11 @@ class MainScreenTest {
     var newChats = 0
     var destination: HomeTab? = null
     composeTestRule.setContent {
-      MainContent(selectedTab = HomeTab.Progress, onSelectTab = { destination = it },
+      MainContent(selectedTab = HomeTab.Notes, onSelectTab = { destination = it },
         connection = ConnectionUiState(profile = profile, realtimeStatus = "connected"),
         onCreateConversation = { newChats++ })
     }
-    composeTestRule.onNodeWithText("Ask about progress or move work forward").assertExists()
+    composeTestRule.onNodeWithText("Find, organize, or reference your library").assertExists()
     composeTestRule.onNodeWithTag("quick-actions-toggle").performClick()
     composeTestRule.onNodeWithTag("quick-action-panel").assertExists()
     composeTestRule.onNodeWithTag("tab-Progress").assertDoesNotExist()
@@ -2139,7 +2178,7 @@ class MainScreenTest {
     val oldId = "11111111-2222-3333-4444-555555555555"
     val newId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
-    val tab = mutableStateOf(HomeTab.Progress)
+    val tab = mutableStateOf(HomeTab.Notes)
     val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = oldId))
     var createdKind = ""
     var handled = ""
@@ -2155,10 +2194,10 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("quick-actions-toggle").performClick()
     composeTestRule.onNodeWithTag("quick-action-reference-task").assertIsEnabled().performClick()
-    composeTestRule.runOnIdle { assert(createdKind == "task" && tab.value == HomeTab.Progress) }
+    composeTestRule.runOnIdle { assert(createdKind == "task" && tab.value == HomeTab.Notes) }
     composeTestRule.onNodeWithTag("assistant-reference-search").assertDoesNotExist()
     composeTestRule.runOnIdle { state.value = state.value.copy(chatError = true) }
-    composeTestRule.runOnIdle { assert(tab.value == HomeTab.Progress) }
+    composeTestRule.runOnIdle { assert(tab.value == HomeTab.Notes) }
     composeTestRule.runOnIdle {
       state.value = state.value.copy(selectedConversationId = newId, historyLoading = true,
         requestedReferenceConversationId = newId, requestedReferenceKind = "task")

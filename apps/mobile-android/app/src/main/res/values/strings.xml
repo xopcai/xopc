@@ -5,6 +5,13 @@
     <string name="tab_conversations">Chats</string>
     <string name="tab_progress">Progress</string>
     <string name="progress_attention_count">%1$d items need attention</string>
+    <string name="library_title">Library</string>
+    <string name="library_search">Search library</string>
+    <string name="library_results">Results</string>
+    <string name="library_browse_files">Browse file spaces</string>
+    <string name="library_recent_results">Recent results</string>
+    <string name="library_empty">No matching library items</string>
+    <string name="library_no_results">No matching recent results</string>
     <string name="tab_notes">Notes</string>
     <string name="tab_me">Me</string>
     <string name="settings_title">Settings</string>
@@ -554,6 +561,12 @@
     <string name="progress_project_session_messages">Messages: %1$d</string>
     <string name="progress_create_error">Could not create task. Your form is still here; check the project and retry.</string>
     <string name="progress_task_chat">Open task conversation</string>
+    <string name="task_chat_return_conversation">Back to conversation</string>
+    <string name="task_chat_return_task">Back to task details</string>
+    <string name="task_chat_return_history">Back to conversations</string>
+    <string name="ask_assistant">Ask assistant</string>
+    <string name="progress_delivered">Delivered</string>
+    <string name="progress_history">History</string>
     <string name="progress_task_chat_error">Could not open task conversation. Try again.</string>
     <string name="assistant_task_scope_loading">Checking conversation scope before sending…</string>
     <string name="assistant_task_scope_error">Could not verify conversation scope. Retry before sending.</string>

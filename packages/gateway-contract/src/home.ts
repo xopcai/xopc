@@ -303,6 +303,7 @@ export const HomeResponseSchema = z.object({
     id: z.string(),
     kind: z.enum(['task', 'automation']),
     subjectId: z.string(),
+    projectId: z.string().optional(),
     title: z.string(),
     summary: z.string(),
     completedAt: z.number(),

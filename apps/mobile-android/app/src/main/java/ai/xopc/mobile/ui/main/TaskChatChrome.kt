@@ -41,35 +41,41 @@ internal fun isTaskChat(connection: ConnectionUiState): Boolean = connection.tas
 
 @Stable
 internal class TaskChatNavigation {
-  private var returnIds by mutableStateOf(listOf<String>())
-  private var returnTab = HomeTab.Conversations
-  var pendingSource by mutableStateOf<String?>(null)
-    private set
-  val canReturn: Boolean get() = returnIds.isNotEmpty()
+  private data class Source(val tab: HomeTab, val conversationId: String?)
 
-  fun open(taskId: String, connection: ConnectionUiState, onOpen: (String) -> Unit) {
-    if (connection.progress.taskChatBusy || taskId == connection.taskConversationTaskId) return
-    val source = connection.selectedConversationId
-    if (source != null) { returnIds = returnIds + source; pendingSource = source }
+  private var sources by mutableStateOf(listOf<Source>())
+  private var pendingSource by mutableStateOf<Source?>(null)
+  val canReturn: Boolean get() = sources.isNotEmpty()
+  val returnTab: HomeTab get() = sources.lastOrNull()?.tab ?: HomeTab.Conversations
+
+  fun open(taskId: String, connection: ConnectionUiState,
+    sourceTab: HomeTab = HomeTab.Assistant, waitsForResult: Boolean = true, onOpen: (String) -> Unit) {
+    if (connection.progress.taskChatBusy || pendingSource != null ||
+      taskId == connection.taskConversationTaskId && sourceTab == HomeTab.Assistant) return
+    val source = Source(sourceTab, connection.selectedConversationId)
+    sources = sources + source
+    if (waitsForResult) pendingSource = source
     onOpen(taskId)
   }
-  fun openFromProgress(taskId: String, onOpen: (String) -> Unit) {
-    returnTab = HomeTab.Progress; returnIds = emptyList(); pendingSource = null
-    onOpen(taskId)
-  }
+
   fun close(onConversation: (String) -> Unit, onTab: (HomeTab) -> Unit) {
-    val id = returnIds.lastOrNull()
-    returnIds = returnIds.dropLast(1)
-    if (id != null) onConversation(id) else onTab(returnTab)
+    val source = sources.lastOrNull()
+    sources = sources.dropLast(1)
+    pendingSource = null
+    source?.conversationId?.let(onConversation)
+    val tab = source?.tab ?: HomeTab.Conversations
+    if (tab != HomeTab.Assistant || source?.conversationId == null) onTab(tab)
   }
+
   fun settle(connection: ConnectionUiState): Boolean {
     val source = pendingSource ?: return false
     if (connection.progress.taskChatError) {
-      if (returnIds.lastOrNull() == source) returnIds = returnIds.dropLast(1)
+      if (sources.lastOrNull() == source) sources = sources.dropLast(1)
       pendingSource = null
       return true
     }
-    if (connection.selectedConversationId != source) pendingSource = null
+    if (connection.selectedConversationId != source.conversationId ||
+      connection.quickOpenedConversationId != null) pendingSource = null
     return false
   }
 }
@@ -78,7 +84,7 @@ internal class TaskChatNavigation {
 internal fun rememberTaskChatNavigation(connection: ConnectionUiState): TaskChatNavigation {
   val navigation = remember(connection.profile?.gatewayId) { TaskChatNavigation() }
   val context = androidx.compose.ui.platform.LocalContext.current
-  LaunchedEffect(connection.progress.taskChatError, connection.selectedConversationId) {
+  LaunchedEffect(connection.progress.taskChatError, connection.selectedConversationId, connection.quickOpenedConversationId) {
     if (navigation.settle(connection)) android.widget.Toast.makeText(context,
       R.string.progress_task_chat_error, android.widget.Toast.LENGTH_SHORT).show()
   }
@@ -104,7 +110,8 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
   onClose: () -> Unit, onReload: () -> Unit, onCommand: (String) -> Unit,
   onStart: (String) -> Unit, onSave: (String, Int, ProgressTaskEdit) -> Unit,
   onLoadProjects: () -> Unit, onSearch: () -> Unit, onOptions: () -> Unit,
-  bottomClearance: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+  bottomClearance: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier,
+  returnTab: HomeTab = HomeTab.Conversations) {
   var expanded by rememberSaveable(taskId) { mutableStateOf(false) }
   var menuOpen by remember(taskId) { mutableStateOf(false) }
   var editOpen by rememberSaveable(taskId) { mutableStateOf(false) }
@@ -131,7 +138,11 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
       Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp).testTag("task-chat-header"),
         verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose, modifier = Modifier.testTag("task-chat-close")) {
-          Icon(painterResource(R.drawable.action_close), stringResource(R.string.assistant_close))
+          Icon(painterResource(R.drawable.action_close), stringResource(when (returnTab) {
+            HomeTab.Assistant -> R.string.task_chat_return_conversation
+            HomeTab.Progress, HomeTab.Notes -> R.string.task_chat_return_task
+            else -> R.string.task_chat_return_history
+          }))
         }
         Row(Modifier.weight(1f).clickable { focus.clearFocus(); expanded = !expanded }
           .padding(horizontal = 8.dp).testTag("task-chat-summary-toggle"), verticalAlignment = Alignment.CenterVertically) {

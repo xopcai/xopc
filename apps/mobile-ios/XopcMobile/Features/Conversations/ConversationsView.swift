@@ -230,11 +230,8 @@ struct ConversationsView: View {
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
             if expandedConversations.contains(conversation.id), let group = state.childrenByConversationID[conversation.id] {
                 ForEach(group.items) { child in
-                    Button {
-                        guard let id = child.activeConversationId else { return }
-                        onSelect(ConversationSummary(key: id, agentId: conversation.agentId,
-                                                     name: child.title, status: "active", updatedAt: conversation.updatedAt,
-                                                     messageCount: 1, projectId: conversation.projectId, transcriptId: nil))
+                    NavigationLink {
+                        TaskConversationView(configuration: configuration, taskID: child.taskId)
                     } label: {
                         HStack(spacing: 10) {
                             Circle().stroke(.secondary, lineWidth: 1.2).frame(width: 10, height: 10)
@@ -246,7 +243,7 @@ struct ConversationsView: View {
                         .padding(.horizontal, 24).frame(minHeight: 52)
                         .background(Color(uiColor: .tertiarySystemGroupedBackground), in: .rect(cornerRadius: 16))
                     }
-                    .buttonStyle(.plain).disabled(child.activeConversationId == nil)
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("conversation-child-\(child.id)")
                 }
             }
