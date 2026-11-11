@@ -1,5 +1,4 @@
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
-import { MeetingImportButton } from '@/features/discussions/meeting-import-button';
 import { ArrowUp, AudioLines, CalendarDays, ChevronDown, FileText, Folder, Loader2, Paperclip, ScanSearch, Sparkles, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -151,7 +150,6 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
           </button>;
         })}
         <button type="button" className="text-xs text-fg-muted" onClick={() => window.dispatchEvent(new CustomEvent('open-recording-recoveries'))}>{labels.discussionCapture.recoveredTitle}</button>
-        <MeetingImportButton />
       </SlidingTabList>
     </section>
   );

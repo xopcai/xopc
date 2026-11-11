@@ -31,10 +31,13 @@ interface RuntimeSession {
   taskKey: string;
   observation?: BrowserObservation;
   lastUsedAt: number;
+  closing?: Promise<void>;
 }
 
 export class BrowserRuntime {
   private driver: BrowserDriver | null = null;
+  private connecting?: Promise<BrowserDriver>;
+  private readonly opening = new Map<string, Promise<RuntimeSession>>();
   private sessionsByTask = new Map<string, RuntimeSession>();
 
   constructor(private readonly options: BrowserRuntimeOptions) {}
@@ -49,7 +52,7 @@ export class BrowserRuntime {
     let driver: BrowserDriver;
     try {
       session = await this.resolveSession(taskKey, effectiveInput.sessionId);
-      if (!session) return failure('SESSION_NOT_FOUND', 'The browser session does not belong to this task.');
+      if (!session || session.closing) return failure('SESSION_NOT_FOUND', 'The browser session is unavailable for this task.');
       driver = await this.getDriver();
     } catch (error) {
       return failure('DRIVER_UNAVAILABLE', error instanceof Error ? error.message : String(error));
@@ -59,7 +62,9 @@ export class BrowserRuntime {
     this.options.emit?.('browser.action.started', { sessionId: session.id, action: input.action });
     let result: BrowserControlResult;
     try {
-      result = await this.dispatch(driver, session, effectiveInput, signal);
+      result = driver.abortClosesSession && signal && input.action !== 'close'
+        ? await this.dispatchCancellable(driver, session, effectiveInput, signal)
+        : await this.dispatch(driver, session, effectiveInput, signal);
       result = this.constrainResult(result);
     } catch (error) {
       result = failure('DRIVER_UNAVAILABLE', error instanceof Error ? error.message : String(error));
@@ -81,17 +86,58 @@ export class BrowserRuntime {
   hasSessions(): boolean { return this.sessionsByTask.size > 0; }
 
   async shutdown(): Promise<void> {
+    await Promise.allSettled(this.opening.values());
+    await this.connecting?.catch(() => {});
     await this.driver?.disconnect();
     this.driver = null;
     this.sessionsByTask.clear();
   }
 
   async closeTaskSession(taskKey: string, target?: BrowserTarget): Promise<void> {
+    await this.opening.get(taskKey)?.catch(() => {});
     const session = this.sessionsByTask.get(taskKey);
     if (!session) return;
-    await this.driver?.closeSession(session.id, target);
-    this.sessionsByTask.delete(taskKey);
-    this.options.emit?.('browser.session.closed', { sessionId: session.id });
+    await this.closeSession(session, target);
+  }
+
+  private closeSession(session: RuntimeSession, target?: BrowserTarget): Promise<void> {
+    return session.closing ??= Promise.resolve().then(async () => {
+      await this.driver?.closeSession(session.id, target);
+      if (this.sessionsByTask.get(session.taskKey) === session) this.sessionsByTask.delete(session.taskKey);
+      this.options.emit?.('browser.session.closed', { sessionId: session.id });
+    }).catch((error: unknown) => {
+      session.closing = undefined;
+      throw error;
+    });
+  }
+
+  private async dispatchCancellable(
+    driver: BrowserDriver, session: RuntimeSession, input: BrowserActionInput, signal: AbortSignal,
+  ): Promise<BrowserControlResult> {
+    const cancel = async () => {
+      try {
+        await this.closeSession(session, input.target);
+        return failure('ABORTED', 'Operation was aborted and its browser session was closed.');
+      } catch {
+        return failure('DRIVER_UNAVAILABLE', 'Browser cancellation cleanup could not be confirmed.');
+      }
+    };
+    if (signal.aborted) return cancel();
+    let removeAbortListener: (() => void) | undefined;
+    const cancelled = new Promise<BrowserControlResult>((resolve) => {
+      const onAbort = () => { void cancel().then(resolve); };
+      signal.addEventListener('abort', onAbort, { once: true });
+      removeAbortListener = () => signal.removeEventListener('abort', onAbort);
+    });
+    try {
+      const result = await Promise.race([this.dispatch(driver, session, input, signal), cancelled]);
+      return signal.aborted ? await cancelled : result;
+    } catch (error) {
+      if (signal.aborted) return await cancelled;
+      throw error;
+    } finally {
+      removeAbortListener?.();
+    }
   }
 
   private async dispatch(
@@ -171,6 +217,7 @@ export class BrowserRuntime {
 
     for (const step of input.steps) {
       const primitive = { ...step, sessionId: session.id, revision } as BrowserPrimitiveInput;
+      if (signal?.aborted) return failure('ABORTED', 'Operation was aborted.');
       last = await driver.perform(session.id, primitive, signal);
       if (!last.ok) return last;
       const observation = last.receipt.observation;
@@ -258,11 +305,24 @@ export class BrowserRuntime {
     const existing = this.sessionsByTask.get(taskKey);
     if (existing) return !requestedId || requestedId === existing.id ? existing : null;
     if (requestedId) {
+      if (this.opening.has(taskKey)) return null;
       if (!this.options.canRestoreSetupSession?.(taskKey, requestedId)) return null;
       const restored = { id: requestedId, taskKey, lastUsedAt: Date.now() };
       this.sessionsByTask.set(taskKey, restored);
       return restored;
     }
+    const pending = this.opening.get(taskKey);
+    if (pending) return pending;
+    const opening = this.openSession(taskKey);
+    this.opening.set(taskKey, opening);
+    try {
+      return await opening;
+    } finally {
+      this.opening.delete(taskKey);
+    }
+  }
+
+  private async openSession(taskKey: string): Promise<RuntimeSession> {
     const session = { id: randomUUID(), taskKey, lastUsedAt: Date.now() };
     const driver = await this.getDriver();
     await driver.createSession(session.id);
@@ -273,9 +333,17 @@ export class BrowserRuntime {
 
   private async getDriver(): Promise<BrowserDriver> {
     if (this.driver) return this.driver;
-    this.driver = await this.options.createDriver();
-    await this.driver.connect();
-    return this.driver;
+    if (this.connecting) return this.connecting;
+    this.connecting = this.options.createDriver().then(async (driver) => {
+      await driver.connect();
+      this.driver = driver;
+      return driver;
+    });
+    try {
+      return await this.connecting;
+    } finally {
+      this.connecting = undefined;
+    }
   }
 
   private constrainResult(result: BrowserControlResult): BrowserControlResult {
@@ -310,7 +378,7 @@ export class BrowserRuntime {
     if (this.options.retainSessionsUntilStopped) return;
     const expiresBefore = Date.now() - this.options.getConfig().limits.sessionTimeoutMs;
     for (const [taskKey, session] of this.sessionsByTask) {
-      if (session.lastUsedAt >= expiresBefore) continue;
+      if (session.closing || session.lastUsedAt >= expiresBefore) continue;
       void this.driver?.closeSession(session.id).catch(() => {});
       this.sessionsByTask.delete(taskKey);
     }

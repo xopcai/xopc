@@ -1,5 +1,6 @@
 import { browserDom } from '@xopcai/browser-control-contract';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
 import type {
   BrowserActionInput,
@@ -19,12 +20,13 @@ import type { BrowserDriver, BrowserPrimitiveInput } from './browser-driver.js';
 
 export interface PlaywrightConnection {
   browser: Browser;
-  context: BrowserContext;
+  context?: BrowserContext;
   release?: () => Promise<void>;
 }
 
 export interface PlaywrightDriverOptions {
   connect: () => Promise<PlaywrightConnection>;
+  isolateSessions?: boolean;
   maxNodes: number;
   maxCharacters: number;
   visualFallback: boolean;
@@ -42,6 +44,7 @@ interface PageState {
 }
 
 interface SessionState {
+  context: BrowserContext;
   activeTabId: string;
   tabs: Map<string, PageState>;
 }
@@ -75,6 +78,9 @@ const INTERACTIVE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
+const EXPECTATION_SETTLE_MS = 1_000;
+const EXPECTATION_POLL_MS = 50;
+
 export class PlaywrightDriver implements BrowserDriver {
   readonly kind = 'playwright' as const;
 
@@ -83,18 +89,18 @@ export class PlaywrightDriver implements BrowserDriver {
 
   constructor(private readonly options: PlaywrightDriverOptions) {}
 
+  get abortClosesSession(): boolean { return this.options.isolateSessions === true; }
+
   async connect(): Promise<void> {
     if (this.connection?.browser.isConnected()) return;
     this.connection = await this.options.connect();
   }
 
   async disconnect(): Promise<void> {
-    for (const session of this.sessions.values()) {
-      for (const state of session.tabs.values()) await state.page.close().catch(() => {});
-    }
+    await Promise.allSettled([...this.sessions.keys()].map((id) => this.closeSession(id)));
     this.sessions.clear();
     await this.connection?.release?.().catch(() => {});
-    await this.connection?.context.close().catch(() => {});
+    await this.connection?.context?.close().catch(() => {});
     await this.connection?.browser.close().catch(() => {});
     this.connection = null;
   }
@@ -102,25 +108,36 @@ export class PlaywrightDriver implements BrowserDriver {
   async createSession(sessionId: string): Promise<void> {
     if (this.sessions.has(sessionId)) return;
     await this.connect();
-    const page = await this.context().newPage();
-    const state = this.createPageState(page);
-    this.sessions.set(sessionId, { activeTabId: state.id, tabs: new Map([[state.id, state]]) });
+    const connection = this.connection;
+    if (!connection) throw new Error('Playwright driver is not connected');
+    const context = this.options.isolateSessions
+      ? await connection.browser.newContext({ viewport: { width: 1280, height: 720 } })
+      : connection.context;
+    if (!context) throw new Error('Playwright browser context is unavailable');
+    try {
+      const state = this.createPageState(await context.newPage());
+      this.sessions.set(sessionId, { context, activeTabId: state.id, tabs: new Map([[state.id, state]]) });
+    } catch (error) {
+      if (this.options.isolateSessions) await context.close();
+      throw error;
+    }
   }
 
   async closeSession(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    for (const state of session.tabs.values()) await state.page.close().catch(() => {});
+    if (this.options.isolateSessions) await session.context.close();
+    else for (const state of session.tabs.values()) await state.page.close().catch(() => {});
     this.sessions.delete(sessionId);
   }
 
   async navigate(sessionId: string, input: BrowserNavigateInput, signal?: AbortSignal): Promise<BrowserControlResult> {
     const startedAt = Date.now();
-    const state = await this.activeState(sessionId);
     try {
+      const state = await this.activeState(sessionId);
       throwIfAborted(signal);
       await state.page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: this.options.actionTimeoutMs });
-      const observation = await this.observe(sessionId, { action: 'observe', visual: 'auto' }, signal);
+      const observation = await this.observeAfterAction(sessionId, state, input, signal);
       return this.verifiedResult(input, observation, startedAt, 'read');
     } catch (error) {
       return failureFrom(error);
@@ -130,6 +147,13 @@ export class PlaywrightDriver implements BrowserDriver {
   async observe(sessionId: string, input: BrowserObserveInput, signal?: AbortSignal): Promise<BrowserObservation> {
     throwIfAborted(signal);
     const state = await this.activeState(sessionId);
+    return this.observePage(sessionId, state, input.visual, signal);
+  }
+
+  private async observePage(
+    sessionId: string, state: PageState, visualMode: BrowserObserveInput['visual'], signal?: AbortSignal,
+  ): Promise<BrowserObservation> {
+    throwIfAborted(signal);
     const marker = await state.page.evaluate(() => {
       const root = globalThis as any;
       return `${root.location.href}|${root.performance.timeOrigin}`;
@@ -221,7 +245,7 @@ export class PlaywrightDriver implements BrowserDriver {
     const changes = diffNodes(state.lastNodes, nodes);
     state.lastNodes = nodes;
     const focused = nodes.find((node) => node.states.includes('focused'))?.ref;
-    const visual = await this.captureVisual(state.page, input.visual ?? 'auto', nodes.length);
+    const visual = await this.captureVisual(state.page, visualMode ?? 'auto', nodes.length);
     return {
       sessionId,
       tabId: state.id,
@@ -241,6 +265,7 @@ export class PlaywrightDriver implements BrowserDriver {
     try {
       throwIfAborted(signal);
       const state = await this.activeState(sessionId);
+      throwIfAborted(signal);
       if (input.action === 'resolve') {
         const resolved = await state.page.evaluate(browserDom, { operation: 'resolve', target: input.semanticTarget });
         if (resolved.matches !== 1) return { ok: false, error: { code: 'TARGET_NOT_FOUND', message: `Semantic target must match exactly one element; matched ${resolved.matches}.` } };
@@ -254,7 +279,7 @@ export class PlaywrightDriver implements BrowserDriver {
         return { ok: true, receipt: { action: 'resolve', risk: 'read', durationMs: Date.now() - startedAt, verified: true, observation } };
       }
       if ('revision' in input && input.revision !== state.revision) {
-        return stale(await this.observe(sessionId, { action: 'observe', visual: 'never' }, signal));
+        return stale(await this.observePage(sessionId, state, 'never', signal));
       }
       const handle = 'ref' in input && input.ref ? state.refs.get(input.ref) : undefined;
       if ('ref' in input && input.ref && !handle) return targetNotFound(input.ref);
@@ -265,7 +290,10 @@ export class PlaywrightDriver implements BrowserDriver {
           break;
         case 'fill':
           await handle!.fill(input.value, { timeout: this.options.actionTimeoutMs });
-          if (input.submit) await handle!.press('Enter');
+          if (input.submit) {
+            throwIfAborted(signal);
+            await handle!.press('Enter');
+          }
           break;
         case 'check':
           await handle!.setChecked(input.checked, { timeout: this.options.actionTimeoutMs });
@@ -289,8 +317,8 @@ export class PlaywrightDriver implements BrowserDriver {
           break;
       }
 
-      await state.page.waitForTimeout(200);
-      const observation = await this.observe(sessionId, { action: 'observe', visual: 'auto' }, signal);
+      if (!this.options.isolateSessions) await state.page.waitForTimeout(200);
+      const observation = await this.observeAfterAction(sessionId, state, input, signal);
       return this.verifiedResult(input, observation, startedAt, 'draft');
     } catch (error) {
       return failureFrom(error);
@@ -302,11 +330,13 @@ export class PlaywrightDriver implements BrowserDriver {
     try {
       throwIfAborted(signal);
       const session = await this.session(sessionId);
+      throwIfAborted(signal);
       if (input.operation === 'create') {
-        const page = await this.context().newPage();
+        const page = await session.context.newPage();
         const state = this.createPageState(page);
         session.tabs.set(state.id, state);
         session.activeTabId = state.id;
+        throwIfAborted(signal);
         if (input.url) await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: this.options.actionTimeoutMs });
       } else if (input.operation === 'activate') {
         if (!input.tabId || !session.tabs.has(input.tabId)) return targetNotFound(input.tabId ?? '');
@@ -318,7 +348,8 @@ export class PlaywrightDriver implements BrowserDriver {
         await target.page.close();
         session.tabs.delete(input.tabId);
         if (session.tabs.size === 0) {
-          const next = this.createPageState(await this.context().newPage());
+          throwIfAborted(signal);
+          const next = this.createPageState(await session.context.newPage());
           session.tabs.set(next.id, next);
         }
         session.activeTabId = session.tabs.keys().next().value as string;
@@ -338,8 +369,18 @@ export class PlaywrightDriver implements BrowserDriver {
     }
     if (input.condition === 'text') {
       if (!input.value) throw new Error('wait text requires value');
-      await state.page.getByText(input.value, { exact: false }).first().waitFor({ state: 'visible', timeout });
-      return;
+      const text = state.page.getByText(input.value, { exact: false }).first();
+      if (!this.options.isolateSessions) {
+        await text.waitFor({ state: 'visible', timeout });
+        return;
+      }
+      const deadline = Date.now() + timeout;
+      do {
+        throwIfAborted(signal);
+        if (await text.isVisible()) return;
+        await delay(Math.min(EXPECTATION_POLL_MS, Math.max(0, deadline - Date.now())), undefined, { signal });
+      } while (Date.now() < deadline);
+      throw new Error('Timed out waiting for the requested text');
     }
     if (!input.ref) throw new Error(`wait ${input.condition} requires ref`);
     const handle = state.refs.get(input.ref);
@@ -370,6 +411,25 @@ export class PlaywrightDriver implements BrowserDriver {
     };
   }
 
+  private async observeAfterAction(
+    sessionId: string, state: PageState, input: BrowserActionInput, signal?: AbortSignal,
+  ): Promise<BrowserObservation> {
+    const expectation = 'expect' in input ? input.expect : undefined;
+    if (!this.options.isolateSessions || !expectation) return this.observePage(sessionId, state, 'auto', signal);
+    const { lastNodes, documentId } = state;
+    const deadline = Date.now() + Math.min(EXPECTATION_SETTLE_MS, this.options.actionTimeoutMs);
+    let observation = await this.observePage(sessionId, state, 'never', signal);
+    while (verifyBrowserExpectation(expectation, observation) && Date.now() < deadline) {
+      await delay(Math.min(EXPECTATION_POLL_MS, Math.max(0, deadline - Date.now())), undefined, { signal });
+      observation = await this.observePage(sessionId, state, 'never', signal);
+    }
+    return {
+      ...observation,
+      changes: diffNodes(observation.documentId === documentId ? lastNodes : [], observation.nodes),
+      visual: await this.captureVisual(state.page, 'auto', observation.nodes.length),
+    };
+  }
+
   private async captureVisual(page: Page, mode: BrowserObserveInput['visual'], nodeCount: number) {
     if (mode === 'never') return undefined;
     const visualPage = mode === 'always' || (this.options.visualFallback && (
@@ -395,8 +455,10 @@ export class PlaywrightDriver implements BrowserDriver {
   }
 
   private async session(sessionId: string): Promise<SessionState> {
-    await this.createSession(sessionId);
-    return this.sessions.get(sessionId)!;
+    if (!this.options.isolateSessions) await this.createSession(sessionId);
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new Error('The Playwright session is closed');
+    return session;
   }
 
   private createPageState(page: Page): PageState {
@@ -409,11 +471,6 @@ export class PlaywrightDriver implements BrowserDriver {
       refs: new Map(),
       lastNodes: [],
     };
-  }
-
-  private context(): BrowserContext {
-    if (!this.connection) throw new Error('Playwright driver is not connected');
-    return this.connection.context;
   }
 
   private async listTabs(session: SessionState): Promise<BrowserTab[]> {

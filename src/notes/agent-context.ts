@@ -260,7 +260,8 @@ export async function buildNoteAgentContextArtifact(params: {
   let truncated = markdown.truncated;
   const attachmentContexts: NoteAgentAttachmentContext[] = [];
   for (const att of note.attachments ?? []) {
-    if (meeting && att.id === meeting.discussion.audioAttachmentId) {
+    if (meeting && (att.id === meeting.discussion.audioAttachmentId
+      || (att.retainWithoutReference && att.fileName.startsWith(`recording-part-${meeting.discussion.id}-`)))) {
       attachmentContexts.push({ attachmentId: att.id, type: att.type, fileName: att.fileName, mimeType: att.mimeType,
         size: att.size, status: meeting.transcript.text ? 'ready' : 'unsupported',
         summary: 'Meeting audio. Use the versioned meeting transcript below; do not transcribe this attachment again.' });

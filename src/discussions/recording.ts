@@ -71,12 +71,12 @@ export function validateRecordingManifest(capture: DiscussionCapture, input: Dis
   if (input.containerMode !== undefined && (input.containerMode !== 'independent_wav' || input.mimeType !== 'audio/wav')) throw invalid('Unsupported recording container');
   if (input.events !== undefined && (!Array.isArray(input.events) || input.events.length > 1000 || input.events.some(event => !event || !Number.isSafeInteger(event.recordedAt) || event.recordedAt < 0 || !Number.isSafeInteger(event.savedMs) || event.savedMs < 0 || event.savedMs > DISCUSSION_MAX_SAVED_DURATION_MS || !['start', 'resume', 'interrupted', 'seal'].includes(event.kind)))) throw invalid('Invalid recording events');
   if (input.epochs !== undefined) {
-    if (input.containerMode || !Array.isArray(input.epochs) || input.epochs.length < 2 || input.epochs.length > 100
+    if (input.containerMode || !Array.isArray(input.epochs) || input.epochs.length < 1 || input.epochs.length > 100
       || input.epochs.some((epoch, index) => !epoch || !Number.isSafeInteger(epoch.firstChunk)
         || (index === 0 ? epoch.firstChunk !== 0 : epoch.firstChunk <= input.epochs![index - 1]!.firstChunk)
         || epoch.firstChunk >= input.chunkCount || !Number.isSafeInteger(epoch.startedAt) || epoch.startedAt < 0
         || (epoch.previousEndedAt !== undefined && (!Number.isSafeInteger(epoch.previousEndedAt) || epoch.previousEndedAt < 0))
-        || typeof epoch.mimeType !== 'string' || !['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav'].includes(epoch.mimeType.split(';')[0]!))) throw invalid('Invalid recording epochs');
+        || typeof epoch.mimeType !== 'string' || !['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg'].includes(epoch.mimeType.split(';')[0]!))) throw invalid('Invalid recording epochs');
   }
   const mimeType = input.mimeType.split(';')[0];
   if (!['audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4'].includes(mimeType!)) throw invalid('Unsupported audio type');
@@ -144,10 +144,12 @@ export async function completeRecording(capture: DiscussionCapture, input: Discu
     await file.sync();
   } finally { await file.close(); }
     // Decode all media before accepting it, with bounded memory and duration.
-    let durationMs = 0;
-    await forEachNormalizedAudioSegment({ filePath: target, segmentSeconds: 30, maxDurationSeconds: DISCUSSION_MAX_SAVED_DURATION_MS / 1_000, signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]) }, async (buffer) => {
-      durationMs += decodeWavToMonoFloat32(buffer).durationSeconds * 1_000;
-    });
+    let durationMs = epochs?.reduce((total, epoch) => total + epoch.durationMs, 0) ?? 0;
+    if (!epochs) {
+      await forEachNormalizedAudioSegment({ filePath: target, segmentSeconds: 30, maxDurationSeconds: DISCUSSION_MAX_SAVED_DURATION_MS / 1_000, signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]) }, async buffer => {
+        durationMs += decodeWavToMonoFloat32(buffer).durationSeconds * 1_000;
+      });
+    }
     if (durationMs < 1_000) throw invalid('Recording must contain at least one second of audio');
     const latest = getDiscussionCapture(capture.id);
     if (!latest || latest.status === 'cancelled' || latest.audioDeletedAt) throw new DiscussionServiceError('conflict', 'Recording was deleted or cancelled');
@@ -167,7 +169,7 @@ export async function completeRecording(capture: DiscussionCapture, input: Discu
       try { await durable.sync(); } finally { await durable.close(); }
     }
     const attachment = await notes.addAttachment(capture.noteId, {
-      name: input.epochs ? 'meeting-resumed.wav' : input.fileName.trim().slice(0, 200) || 'meeting.webm', buffer: { filePath: target }, mimeType: outputMime,
+      name: input.epochs ? (input.epochs.length === 1 ? 'meeting-import.wav' : 'meeting-resumed.wav') : input.fileName.trim().slice(0, 200) || 'meeting.webm', buffer: { filePath: target }, mimeType: outputMime,
       duration: Math.round(durationMs / 1_000), retainWithoutReference: true,
     }, `meeting-recording:${capture.id}`);
     if (!attachment) throw new DiscussionServiceError('not_found', 'Discussion note not found');
@@ -242,11 +244,13 @@ async function assembleEpochs(capture: DiscussionCapture, input: DiscussionRecor
         await output.writeFile(pcm);
       });
       if (!epochSamples) throw invalid('Recording epoch has no decodable audio');
+      if (input.epochs!.length === 1 && epochSamples < 16000) throw invalid('Recording must contain at least one second of audio');
       const epochDuration = epochSamples / 16;
       epochs.push(epoch.mimeType.includes('wav') ? pcmEpoch(epochDuration, (samples - epochSamples) / 16) : await probeMediaEpoch(path, epochDuration, (samples - epochSamples) / 16, signal));
       assertLease(); signal.throwIfAborted();
       const sha256 = await hashFile(path, signal);
-      const extension = epoch.mimeType.includes('mp4') ? 'm4a' : epoch.mimeType.includes('ogg') ? 'ogg' : epoch.mimeType.includes('wav') ? 'wav' : 'webm';
+      const extensions: Record<string, string> = { 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/mpeg': 'mp3' };
+      const extension = extensions[epoch.mimeType.split(';')[0]!] ?? 'webm';
       const attachment = await notes.addAttachment(capture.noteId, { name: `recording-part-${capture.id}-${index + 1}.${extension}`,
         buffer: { filePath: path }, mimeType: epoch.mimeType, retainWithoutReference: true }, `meeting-source:${capture.id}:${index}:${sha256}`);
       if (!attachment) throw new Error('Discussion note is missing');

@@ -29,7 +29,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 const render = async () => { await act(async () => root.render(<MemoryRouter><DiscussionNoteSections noteId="note" /></MemoryRouter>)); };
-const button = (text: string) => [...container.querySelectorAll('button')].find(button => button.textContent === text)!;
+const button = (text: string) => [...container.querySelectorAll('button')].find(button => button.textContent === text || button.getAttribute('aria-label')?.startsWith(`${text} · `))!;
 it('opens separately versioned evidence ranges and pauses at the selected source boundary', async () => {
   await render(); const player = container.querySelector('audio')!; Object.defineProperty(player,'readyState',{ value: 1 });
   await act(async () => button('原话').click());
@@ -88,7 +88,7 @@ it('does not reopen a closed evidence panel when its request completes late', as
   expect(container.querySelector('[aria-label="原话证据"]')).toBeNull();
 });
 it('automatically updates transcript rows while retaining the viewport and audio player', async () => {
-  await render(); await act(async () => button('原文').click());
+  await render(); await act(async () => button('转写').click());
   const viewport = container.querySelector('main')!; viewport.scrollTop = 360;
   const player = container.querySelector('audio');
   const segment = container.querySelector('#discussion-segment-0');
@@ -150,4 +150,21 @@ it('publishes follow-up results in place after processing completes', async () =
   expect(container.textContent).not.toContain('查看最新');
   expect(container.textContent).not.toContain('当前阅读位置已保留');
   expect(container.querySelector<HTMLButtonElement>('[aria-label="编辑概要"]')!.disabled).toBe(false);
+});
+
+it('seeks to the verified audio range when clicking the transcript text', async () => {
+  await render();
+  await act(async () => button('转写').click());
+  const player = container.querySelector('audio')!;
+  Object.defineProperties(player, { readyState: { value: 1 }, duration: { value: 29.75 } });
+  await act(async () => player.dispatchEvent(new Event('durationchange')));
+  expect(container.querySelector('header')?.textContent).toContain('00:29');
+  mocks.fetch.mockResolvedValue({ ...evidence, segments: [{ ...evidence.segments[0], playback: [{ startedAtMs: 3750, endedAtMs: 4750 }] }] });
+  const row = container.querySelector('#discussion-segment-0')!;
+  const text = [...row.querySelectorAll('button')].find(control => control.textContent?.includes('Current segment 0'))!;
+  await act(async () => text.click());
+  expect(mocks.fetch).toHaveBeenCalledWith(expect.stringContaining('/evidence?revision=7&segments=0'));
+  expect(player.currentTime).toBe(3.75);
+  expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+  expect(container.querySelector('[aria-label="原话证据"]')).toBeNull();
 });

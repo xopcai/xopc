@@ -731,10 +731,11 @@ function NoteDetailPanelInner({
         if (snapshot) {
           stopNoteReading();
           setPreviewSnapshot(snapshot);
+          if (meeting) setShowMeeting(false);
         }
       });
     },
-    [noteId, stopNoteReading],
+    [meeting, noteId, stopNoteReading],
   );
 
   const handleHistoryClose = useCallback(() => {
@@ -814,9 +815,24 @@ function NoteDetailPanelInner({
     />
   ) : null;
 
+  const voiceTitle = /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(title) ? '' : title;
+  const voiceTitleLabel = language === 'zh' ? '语音笔记' : 'Voice note';
+  const voiceTitleEditor = !showMeeting && !isPreviewingSnapshot ? (
+    <input
+      ref={titleInputRef}
+      aria-label={n.titlePlaceholder}
+      value={voiceTitle}
+      placeholder={voiceTitleLabel}
+      onChange={event => handleTitleChange(event.target.value)}
+      onCompositionStart={() => { titleComposingRef.current = true; }}
+      onCompositionEnd={() => { titleComposingRef.current = false; }}
+      className="w-full rounded-md bg-transparent text-2xl font-semibold leading-snug tracking-tight placeholder:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    />
+  ) : null;
+
   const personalEditor = (
     <div className="flex h-full min-h-0 flex-col">
-      {meeting ? <div className="flex shrink-0 items-center justify-end px-4 py-1"><NoteDetailModeSwitcher mode={mode} onModeChange={handleModeChange} labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }} /></div> : null}
+      {meeting ? <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-2 border-b border-edge-subtle px-4 py-1"><h3 className="text-sm font-medium">{language === 'zh' ? '我的笔记' : 'My notes'}</h3><NoteDetailModeSwitcher mode={mode} onModeChange={handleModeChange} labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }} /></div> : null}
           <div className="h-full min-h-0 min-w-0 flex-1">
             {isPreviewingSnapshot ? (
               <div className="h-full overflow-y-auto px-4 py-4 sm:px-6">
@@ -837,7 +853,7 @@ function NoteDetailPanelInner({
               <>
                 {mode === 'wysiwyg' && (
                   <div className="flex h-full flex-col">
-                    <div className="flex shrink-0 items-start px-6 pt-4">
+                    {!meeting ? <div className="flex shrink-0 items-start px-6 pt-4">
                       <input
                         ref={titleInputRef}
                         type="text"
@@ -861,11 +877,13 @@ function NoteDetailPanelInner({
                         className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
                       />
                       {titleAutomationSuggestion}
-                    </div>
+                    </div> : null}
                     <div className="min-h-0 flex-1">
                       <Suspense fallback={<EditorFallback />}>
                         <BlockEditor
                           key={`wysiwyg-${noteId}`}
+                          autoFocus={!!meeting && !showMeeting}
+                          placeholder={meeting ? (language === 'zh' ? '写点什么…' : 'Write a note…') : undefined}
                           initialContent={note.markdown ?? ''}
                           onChange={handleSave}
                           noteId={noteId}
@@ -877,7 +895,7 @@ function NoteDetailPanelInner({
                 )}
                 {mode === 'source' && (
                   <div className="flex h-full flex-col">
-                    <div className="flex shrink-0 items-start px-6 pt-4">
+                    {!meeting ? <div className="flex shrink-0 items-start px-6 pt-4">
                       <input
                         ref={titleInputRef}
                         type="text"
@@ -887,7 +905,7 @@ function NoteDetailPanelInner({
                         className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
                       />
                       {titleAutomationSuggestion}
-                    </div>
+                    </div> : null}
                     <div className="min-h-0 flex-1">
                       <Suspense fallback={<EditorFallback />}>
                         <MarkdownEditor
@@ -910,7 +928,7 @@ function NoteDetailPanelInner({
                       openImage(target.currentSrc || target.src, target.alt);
                     }}
                   >
-                    {title && !note.markdown.trimStart().startsWith(`# ${title.trim()}\n`) && note.markdown.trim() !== `# ${title.trim()}` && (
+                    {!meeting && title && !note.markdown.trimStart().startsWith(`# ${title.trim()}\n`) && note.markdown.trim() !== `# ${title.trim()}` && (
                       <h1 className="mb-4 text-2xl font-bold text-fg">{title}</h1>
                     )}
                     {note.markdown ? (
@@ -920,7 +938,7 @@ function NoteDetailPanelInner({
                         className="[&_img]:cursor-zoom-in"
                       />
                     ) : (
-                      <p className="italic text-fg-muted">{n.emptyPreview}</p>
+                      meeting ? <button type="button" className="min-h-11 rounded-lg px-2 text-sm text-accent-fg hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={() => handleModeChange('wysiwyg')}>{language === 'zh' ? '写笔记' : 'Write notes'}</button> : <p className="italic text-fg-muted">{n.emptyPreview}</p>
                     )}
                   </div>
                 )}
@@ -962,14 +980,48 @@ function NoteDetailPanelInner({
           }}
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel xl:flex-row"
         >
-          {meeting ? <DiscussionNoteSections personalNotes={personalEditor} personalNotesActive={!showMeeting} onMeetingContent={() => setShowMeeting(true)} noteId={noteId} noteActions={{ onAnalyze: handleBreakdownClick,chatOpen: assistantOpen,onChat: () => { if (assistantOpen) setAssistantOpen(false); else void handleOpenNoteChat(false); },onShare: () => { void handleShare(); },onHistory: () => { setAssistantOpen(false); setActiveSidePanel(activeSidePanel === 'history' ? null : 'history'); },onDelete: () => setDeleteConfirmOpen(true),busy: deleting || saving || catalyzing || openingChat }} onPersonalNotes={() => { setShowMeeting(false); window.setTimeout(() => titleInputRef.current?.focus(),0); }} /> : null}
+          {meeting ? <DiscussionNoteSections
+            noteId={noteId}
+            noteTitle={voiceTitleEditor}
+            personalNotes={personalEditor}
+            personalNotesActive={!showMeeting}
+            onMeetingContent={() => {
+              if (isPreviewingSnapshot) handleHistoryClose();
+              setShowMeeting(true);
+            }}
+            onPersonalNotes={() => {
+              handleHistoryClose();
+              handleModeChange('wysiwyg');
+              setShowMeeting(false);
+            }}
+            noteActions={{
+              onAnalyze: handleBreakdownClick,
+              chatOpen: assistantOpen,
+              onChat: () => { if (assistantOpen) setAssistantOpen(false); else void handleOpenNoteChat(false); },
+              onShare: () => { void handleShare(); },
+              onHistory: () => {
+                setAssistantOpen(false);
+                if (activeSidePanel === 'history') handleHistoryClose();
+                else setActiveSidePanel('history');
+              },
+              onDelete: () => setDeleteConfirmOpen(true),
+              busy: deleting || saving || catalyzing || openingChat,
+            }}
+          /> : null}
           {!meeting ? personalEditor : null}
         </div>
       </div>
 
       {assistantOpen || assistantConversationId ? <aside id={`note-assistant-${noteId}`} aria-label={language === 'zh' ? '笔记 AI 对话' : 'Note AI chat'} className={cn('min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel', assistantOpen ? 'flex w-full @min-[56rem]/note:w-[22rem] @min-[76rem]/note:w-[24rem]' : 'hidden')}>
-        <header className="flex shrink-0 items-center gap-2 border-b border-edge-subtle px-4 py-2"><MessageCircle className="size-4 text-accent-fg" aria-hidden /><h2 className="flex-1 text-sm font-medium">{language === 'zh' ? 'AI 对话' : 'AI chat'}</h2><button type="button" className="inline-flex size-11 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={language === 'zh' ? '收起 AI 对话' : 'Close AI chat'} onClick={() => { setAssistantOpen(false); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[aria-controls="note-assistant-${noteId}"]`)?.focus({ preventScroll: true })); }}><X className="size-4" /></button></header>
-        <p className="shrink-0 border-b border-edge-subtle px-4 py-3 text-xs leading-5 text-fg-muted">{language === 'zh' ? '已关联当前笔记。可提问、改写我的笔记，也可将回答保存回笔记。' : 'Linked to this note. Ask questions, edit My notes, or save an answer to the note.'}</p>
+        <header className="flex shrink-0 items-center gap-2 border-b border-edge-subtle px-4 py-2"><MessageCircle className="size-4 text-accent-fg" aria-hidden /><h2 className="flex-1 text-sm font-medium">{meeting ? (language === 'zh' ? '问这段录音' : 'Ask about this recording') : (language === 'zh' ? 'AI 对话' : 'AI chat')}</h2><button type="button" className="inline-flex size-11 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" aria-label={language === 'zh' ? '收起 AI 对话' : 'Close AI chat'} onClick={() => { setAssistantOpen(false); window.requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[aria-controls="note-assistant-${noteId}"]`)?.focus({ preventScroll: true })); }}><X className="size-4" /></button></header>
+        {meeting && assistantOpen && assistantConversationId && meeting.transcript?.text?.trim() ? (
+          <div className="flex shrink-0 flex-wrap gap-1 border-b border-edge-subtle px-4 py-1">
+            {(language === 'zh' ? ['最后决定了什么？', '有哪些待跟进事项？'] : ['What was decided?', 'What needs follow-up?']).map(question => (
+              <button key={question} type="button" className="min-h-11 rounded-lg px-2 text-xs text-fg-muted hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
+                onClick={() => setAssistantDraft({ id: Date.now(), text: question })}>{question}</button>
+            ))}
+          </div>
+        ) : null}
         {actionError && assistantConversationId ? <p role="alert" className="shrink-0 px-4 py-2 text-xs text-danger">{actionError}</p> : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {assistantConversationId ? <Suspense fallback={<EditorFallback />}><NoteAssistantChat key={`${noteId}:${assistantConversationId}`} embedded sourceNoteInView conversationId={assistantConversationId} draftSeed={assistantDraft} beforeSend={beforeAssistantSend} /></Suspense> : openingChat ? <EditorFallback /> : <div className="space-y-3 p-4 text-sm"><p className="text-fg-muted">{actionError || (language === 'zh' ? '对话尚未打开，请重试。' : 'Chat could not be opened. Try again.')}</p><button type="button" className="min-h-11 rounded-lg px-3 text-accent-fg hover:bg-surface-hover" onClick={() => void handleOpenNoteChat()}>{language === 'zh' ? '重新打开' : 'Try again'}</button></div>}

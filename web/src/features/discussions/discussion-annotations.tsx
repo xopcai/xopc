@@ -39,7 +39,7 @@ export function DiscussionAnnotations({ recordingId,discussionId,zh,onEvidence,o
   };
   return <section className="space-y-4" aria-label={zh ? '我的标记' : 'My highlights'}>
     {error ? <p role="alert" className="text-sm text-danger">{error}<Button onClick={() => void sync()}>{zh ? '重试同步' : 'Retry sync'}</Button></p> : null}
-    {!all.size ? <p className="text-sm text-fg-muted">{zh ? '录音时标重点，或在原文中标记整段。标记先保存在本机。' : 'Highlight while recording or mark a transcript segment. Highlights save locally first.'}</p> : null}
+    {!all.size ? <p className="text-sm text-fg-muted">{zh ? '暂无标记' : 'No highlights yet'}</p> : null}
     {[...all.values()].sort((left,right) => left.annotation.anchor.capturedAt - right.annotation.anchor.capturedAt).filter(row => !row.annotation.deleted || row.localState === 'conflict').map(row => <article key={row.annotation.id} className="space-y-2 rounded-lg border border-edge p-3">
       <p className="text-xs text-fg-muted">{row.annotation.kind === 'highlight' ? (zh ? '重点' : 'Highlight') : row.annotation.kind === 'question' ? (zh ? '问题' : 'Question') : (zh ? '我的补充' : 'My note')} · {new Date(row.annotation.anchor.capturedAt).toLocaleString()} · {row.localState === 'synced' ? (zh ? '已同步' : 'Synced') : row.localState === 'conflict' ? (zh ? '同步冲突，保留了本机修改' : 'Conflict; local edits retained') : (zh ? '本机已保存，待同步' : 'Saved locally; sync pending')}</p>
       {row.evidence?.segments.map(segment => <blockquote key={segment.sequence} className="text-sm">{segment.text}</blockquote>)}

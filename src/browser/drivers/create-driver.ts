@@ -1,5 +1,3 @@
-import type { Browser, BrowserContext } from 'playwright-core';
-
 import type { Config } from '../../config/schema.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import { createLogger } from '../../utils/logger.js';
@@ -29,6 +27,7 @@ export async function createBrowserDriver(
 
   return new PlaywrightDriver({
     connect: () => connectPlaywright(driver),
+    isolateSessions: driver.kind === 'playwright',
     maxNodes: config.observation.maxNodes,
     maxCharacters: config.observation.maxCharacters,
     visualFallback: config.observation.visualFallback,
@@ -63,11 +62,6 @@ async function connectPlaywright(
     executablePath: driver.executablePath,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
-  const context = await createContext(browser);
   log.info({ kind: driver.kind, headless: driver.headless }, 'Browser driver connected');
-  return { browser, context };
-}
-
-async function createContext(browser: Browser): Promise<BrowserContext> {
-  return browser.newContext({ viewport: { width: 1280, height: 720 } });
+  return { browser };
 }

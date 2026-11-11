@@ -49,7 +49,7 @@ export async function uploadDraftRecording(draft: DiscussionDraft, id: string, o
   if (complete) {
     onStage?.('verifying');
     await saveDiscussionDraft({ ...draft, serverDiscussionId: id, sealRequested: true });
-    const job = await sealRecording(id, { lastSequence: draft.lastSequence, chunkCount: draft.chunkCount, ...(draft.epochs && draft.epochs.length > 1 ? { epochs: draft.epochs } : {}), mimeType: draft.mimeType, fileName: draft.fileName ?? `meeting-${draft.startedAt}.${draft.mimeType.includes('mp4') ? 'm4a' : draft.mimeType.includes('ogg') ? 'ogg' : 'webm'}` });
+    const job = await sealRecording(id, { lastSequence: draft.lastSequence, chunkCount: draft.chunkCount, ...(draft.epochs && (draft.epochs.length > 1 || draft.fileName) ? { epochs: draft.epochs } : {}), mimeType: draft.mimeType, fileName: draft.fileName ?? `meeting-${draft.startedAt}.${draft.mimeType.includes('mp4') ? 'm4a' : draft.mimeType.includes('ogg') ? 'ogg' : 'webm'}` });
     const result = await waitForRecording(id, job);
     if (!result.discussion.audioAttachmentId || result.discussion.audioDeletedAt) throw new Error('Original audio attachment is not confirmed');
     onStage?.('available'); return result;
@@ -60,15 +60,23 @@ export async function uploadDraftRecording(draft: DiscussionDraft, id: string, o
 export async function persistMeetingImport(file: File, id: string): Promise<DiscussionDraft> {
   const estimate = await navigator.storage?.estimate?.();
   if (estimate?.quota && estimate.usage !== undefined && estimate.quota - estimate.usage < file.size * 1.1) throw new Error('Not enough local storage to safely import this recording');
-  const mimeType = file.type || (/\.mp3$/i.test(file.name) ? 'audio/mpeg' : /\.wav$/i.test(file.name) ? 'audio/wav' : /\.(m4a|mp4)$/i.test(file.name) ? 'audio/mp4' : /\.ogg$/i.test(file.name) ? 'audio/ogg' : 'audio/webm');
-  const draft: DiscussionDraft = { id, mimeType, fileName: file.name, startedAt: Date.now(), updatedAt: Date.now(), durationMs: 1_000, chunkCount: 0, lastSequence: -1, state: 'stopped' };
+  const mimeTypes: Record<string, string> = { mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', mp4: 'audio/mp4', ogg: 'audio/ogg', webm: 'audio/webm' };
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  const reportedType = file.type.toLowerCase().split(';')[0];
+  const mimeType = mimeTypes[extension] ?? (reportedType === 'audio/x-wav' ? 'audio/wav' : reportedType);
+  if (!Object.values(mimeTypes).includes(mimeType)) throw new Error('Unsupported audio format');
+  const startedAt = Date.now();
+  const draft: DiscussionDraft = {
+    id, mimeType, fileName: file.name, startedAt, updatedAt: startedAt, durationMs: 0,
+    epochs: [{ firstChunk: 0, startedAt, mimeType }], chunkCount: 0, lastSequence: -1, state: 'stopped',
+  };
   try {
-  for (let start = 0; start < file.size; start += DISCUSSION_CHUNK_MAX_BYTES) {
-    await saveDiscussionDraftChunk({ draftId: id, index: draft.chunkCount, blob: file.slice(start, start + DISCUSSION_CHUNK_MAX_BYTES), createdAt: Date.now() });
-    draft.chunkCount += 1;
-  }
-  await saveDiscussionDraft(draft);
-  return draft;
+    for (let start = 0; start < file.size; start += DISCUSSION_CHUNK_MAX_BYTES) {
+      await saveDiscussionDraftChunk({ draftId: id, index: draft.chunkCount, blob: file.slice(start, start + DISCUSSION_CHUNK_MAX_BYTES), createdAt: Date.now() });
+      draft.chunkCount += 1;
+    }
+    await saveDiscussionDraft(draft);
+    return draft;
   } catch (error) {
     await deleteDiscussionDraft(id);
     throw error;

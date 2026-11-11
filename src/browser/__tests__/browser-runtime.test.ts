@@ -38,6 +38,37 @@ function setup(crossDomainNavigation: 'allow' | 'ask' | 'deny') {
 }
 
 describe('BrowserRuntime', () => {
+  it('coalesces concurrent driver startup and opens one session per task', async () => {
+    const { runtime, driver } = setup('allow');
+    const [first, second, peer] = await Promise.all([
+      runtime.execute('task-a', { action: 'observe' }),
+      runtime.execute('task-a', { action: 'observe' }),
+      runtime.execute('task-b', { action: 'observe' }),
+    ]);
+    expect([first.ok, second.ok, peer.ok]).toEqual([true, true, true]);
+    expect(driver.connect).toHaveBeenCalledTimes(1);
+    expect(driver.createSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('retires a cancelled local browser session before its in-flight action settles', async () => {
+    const { runtime, driver } = setup('allow');
+    Object.assign(driver, { abortClosesSession: true });
+    const controller = new AbortController();
+    vi.mocked(driver.navigate).mockImplementationOnce(async () => {
+      controller.abort();
+      return new Promise<BrowserControlResult>(() => {});
+    });
+    await runtime.execute('task-a', { action: 'observe' });
+    await runtime.execute('task-b', { action: 'observe' });
+    const [[first], [second]] = vi.mocked(driver.createSession).mock.calls;
+    expect(await runtime.execute('task-a', { action: 'navigate', url: 'https://example.com' }, controller.signal))
+      .toMatchObject({ ok: false, error: { code: 'ABORTED' } });
+    expect(driver.closeSession).toHaveBeenCalledExactlyOnceWith(first, undefined);
+    expect(await runtime.execute('task-a', { action: 'observe', sessionId: first }))
+      .toMatchObject({ ok: false, error: { code: 'SESSION_NOT_FOUND' } });
+    expect((await runtime.execute('task-b', { action: 'observe', sessionId: second })).ok).toBe(true);
+  });
+
   it('keeps one task-bound session and blocks foreign session ids', async () => {
     const { runtime } = setup('allow');
     expect((await runtime.execute('task-a', { action: 'observe' })).ok).toBe(true);
