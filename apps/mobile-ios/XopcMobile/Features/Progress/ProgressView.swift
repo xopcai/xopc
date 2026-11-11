@@ -1,5 +1,7 @@
+// swiftlint:disable file_length
 import SwiftUI
 
+// swiftlint:disable:next type_body_length
 struct ProgressHubView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
@@ -234,6 +236,7 @@ struct ProgressHubView: View {
     }
 
     @ViewBuilder
+    // swiftlint:disable:next cyclomatic_complexity
     private func destination(for route: HomeOpenRoute) -> some View {
         switch route {
         case .tasks:

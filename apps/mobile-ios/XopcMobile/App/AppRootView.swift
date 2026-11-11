@@ -249,7 +249,7 @@ struct AppRootView: View {
                     quickComposer
                 }
             }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { secondaryDockHeight = $0 }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { secondaryDockHeight = $0 }
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
     }

@@ -87,7 +87,11 @@ struct AttachmentPickerModifier: ViewModifier {
     private func importPhotos(_ items: [PhotosPickerItem], generation: Int) async {
         guard !Task.isCancelled, generation == photoImportGeneration else { return }
         errorMessage = nil
-        defer { if generation == photoImportGeneration { photoItems = [] } }
+        defer {
+            if generation == photoImportGeneration {
+                photoItems = []
+            }
+        }
         for (index, item) in items.enumerated() {
             guard !Task.isCancelled, generation == photoImportGeneration else { return }
             guard attachments.count < AttachmentPolicy.maximumCount else {

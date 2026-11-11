@@ -296,7 +296,9 @@ private struct UserUnderstandingView: View {
         }
         .refreshable {
             await refreshSummary()
-            if section == 1 { await loadAssertions() }
+            if section == 1 {
+                await loadAssertions()
+            }
         }
         .sheet(isPresented: $editingProfile) {
             ProfileEditorView(configuration: configuration, profile: summary.profile) {
@@ -310,7 +312,9 @@ private struct UserUnderstandingView: View {
             UserAssertionDetailView(configuration: configuration, id: item.id) {
                 Task {
                     await refreshSummary()
-                    if section == 1 { await loadAssertions() }
+                    if section == 1 {
+                        await loadAssertions()
+                    }
                 }
             }
         } label: {
@@ -560,7 +564,9 @@ private struct UserAssertionDetailView: View {
 }
 
 private func userMemorySource(_ item: MobileUserAssertion) -> LocalizedStringKey {
-    if ["candidate", "needs_review", "conflicted"].contains(item.status) { return "待你确认" }
+    if ["candidate", "needs_review", "conflicted"].contains(item.status) {
+        return "待你确认"
+    }
     switch item.authority {
     case "user_explicit": return "你说过的"
     case "system_inferred": return "xopc 的推测"
@@ -572,12 +578,12 @@ private func userMemorySource(_ item: MobileUserAssertion) -> LocalizedStringKey
 
 private func userMemoryScope(_ scope: String?) -> LocalizedStringKey {
     switch scope {
-    case "global": return "所有对话"
-    case "agent": return "当前助手"
-    case "project": return "当前项目"
-    case "workspace": return "当前工作区"
-    case "session": return "当前对话"
-    default: return "指定范围"
+    case "global": "所有对话"
+    case "agent": "当前助手"
+    case "project": "当前项目"
+    case "workspace": "当前工作区"
+    case "session": "当前对话"
+    default: "指定范围"
     }
 }
 

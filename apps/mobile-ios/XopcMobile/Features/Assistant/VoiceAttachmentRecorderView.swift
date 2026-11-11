@@ -314,7 +314,9 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         )
     }
 
-    func dismissError() { errorMessage = nil }
+    func dismissError() {
+        errorMessage = nil
+    }
 
     func cancel() {
         generation += 1

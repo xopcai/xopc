@@ -85,7 +85,9 @@ struct AssistantComposer: View {
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .onChange(of: focusRequest) {
-            if focusAllowed { isComposerFocused = true }
+            if focusAllowed {
+                isComposerFocused = true
+            }
         }
         .onChange(of: focusAllowed) {
             if !focusAllowed {
