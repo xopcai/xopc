@@ -43,7 +43,12 @@ describe('session context panel', () => {
     useGatewayStore.setState({ conversationId: undefined });
     vi.mocked(fetchJson).mockReset().mockImplementation(async (url) => ({ summary: summary(String(url).includes('/two/') ? 'two' : 'one') }));
   });
-  afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
+  afterEach(async () => {
+    act(() => root.unmount());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    container.remove();
+    vi.restoreAllMocks();
+  });
 
   it('merges the same Note while keeping its durable relation and pending state', () => {
     expect(mergeContextSources(summary('one').sources, [{ kind: 'note', sourceId: 'note-a', title: 'Draft', expectedVersion: 'v2' }])).toEqual([
