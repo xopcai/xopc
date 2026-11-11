@@ -1090,6 +1090,9 @@ internal fun MainContent(
   onLanguageChange: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
+  val gatewayId = connection.profile?.gatewayId
+  val isPaired = gatewayId != null
+  val conversationId = connection.selectedConversationId
   val inputVoicePermissionDeniedText = stringResource(R.string.voice_permission_denied)
   val voiceRecordError = stringResource(R.string.voice_record_error)
   val voiceContext = LocalContext.current
@@ -1100,7 +1103,7 @@ internal fun MainContent(
   val currentVoiceClarification by rememberUpdatedState(onVoiceClarification)
   val currentPendingVoiceApproval by rememberUpdatedState(onPendingVoiceApproval)
   val currentRespondVoiceApproval by rememberUpdatedState(onRespondVoiceApproval)
-  val voiceCall = remember(connection.profile?.gatewayId) {
+  val voiceCall = remember(gatewayId) {
     RealtimeVoiceController(voiceContext, voiceScope,
       { id, mode, callId, recovery -> currentVoiceCreate(id, mode, callId, recovery) }, { call -> currentVoiceCancel(call) },
       { id, version, action, answer -> currentVoiceClarification(id, version, action, answer) },
@@ -1112,14 +1115,14 @@ internal fun MainContent(
     try { awaitCancellation() }
     finally { withContext(NonCancellable) { voiceCall.stop() } }
   }
-  val voiceMemo = remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+  val voiceMemo = remember(gatewayId, conversationId) {
     VoiceMemoRecorder(voiceContext)
   }
   DisposableEffect(voiceMemo) { onDispose { voiceMemo.cancel() } }
-  val inputVoice = remember(connection.profile?.gatewayId, connection.selectedConversationId, selectedTab) {
+  val inputVoice = remember(gatewayId, conversationId, selectedTab) {
     VoiceMemoRecorder(voiceContext)
   }
-  var inputVoiceMode by remember(connection.profile?.gatewayId, connection.selectedConversationId, selectedTab) {
+  var inputVoiceMode by remember(gatewayId, conversationId, selectedTab) {
     mutableStateOf(false)
   }
   var inputVoiceHeld by remember(inputVoice) { mutableStateOf(false) }
@@ -1150,8 +1153,8 @@ internal fun MainContent(
     val observer = LifecycleEventObserver { _, event ->
       if (event == Lifecycle.Event.ON_STOP) {
         permissionTarget = null; inputVoiceNotice.clear()
-        onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, false)
-        onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, true)
+        onDismissComposerErrors(gatewayId, conversationId, false)
+        onDismissComposerErrors(gatewayId, conversationId, true)
         if (voiceMemo.phase == "recording" || voiceMemo.phase == "paused")
           voiceMemo.stopRecording()
         if (voiceCall.phase != "idle") voiceCall.onBackground()
@@ -1174,13 +1177,13 @@ internal fun MainContent(
       delay(500)
     }
   }
-  var pendingVoiceMode by remember(connection.profile?.gatewayId) { mutableStateOf<String?>(null) }
-  var activeVoiceConversationId by remember(connection.profile?.gatewayId) { mutableStateOf<String?>(null) }
-  var voicePermissionDenied by remember(connection.profile?.gatewayId) { mutableStateOf(false) }
+  var pendingVoiceMode by remember(gatewayId) { mutableStateOf<String?>(null) }
+  var activeVoiceConversationId by remember(gatewayId) { mutableStateOf<String?>(null) }
+  var voicePermissionDenied by remember(gatewayId) { mutableStateOf(false) }
   val voicePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
     if (granted) {
       pendingVoiceMode = pendingVoiceMode ?: "auto"
-      if (connection.selectedConversationId == null) onCreateConversation()
+      if (conversationId == null) onCreateConversation()
     }
     else { pendingVoiceMode = null; voicePermissionDenied = true }
   }
@@ -1189,11 +1192,11 @@ internal fun MainContent(
     voicePermissionDenied = false
     if (ContextCompat.checkSelfPermission(voiceContext, Manifest.permission.RECORD_AUDIO) !=
       PackageManager.PERMISSION_GRANTED) voicePermission.launch(Manifest.permission.RECORD_AUDIO)
-    else if (connection.selectedConversationId == null) onCreateConversation()
+    else if (conversationId == null) onCreateConversation()
   }
-  LaunchedEffect(pendingVoiceMode, connection.selectedConversationId) {
+  LaunchedEffect(pendingVoiceMode, conversationId) {
     val mode = pendingVoiceMode ?: return@LaunchedEffect
-    val id = connection.selectedConversationId ?: return@LaunchedEffect
+    val id = conversationId ?: return@LaunchedEffect
     if (ContextCompat.checkSelfPermission(voiceContext, Manifest.permission.RECORD_AUDIO) !=
       PackageManager.PERMISSION_GRANTED) return@LaunchedEffect
     pendingVoiceMode = null
@@ -1202,25 +1205,24 @@ internal fun MainContent(
       voiceCall.start(id, mode)
     }
   }
-  var personalPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
+  var personalPage by rememberSaveable(gatewayId) { mutableStateOf("home") }
   val taskNavigation = rememberTaskChatNavigation(connection)
-  var progressAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
-  val libraryDelivery = rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
+  var progressAtRoot by rememberSaveable(gatewayId) { mutableStateOf(true) }
+  val libraryDelivery = rememberSaveable(gatewayId) { mutableStateOf("") }
   val deliveryRoute = libraryDelivery.value
   val libraryDeliveryKind = deliveryRoute.substringBefore(':')
   val libraryDeliveryId = deliveryRoute.substringAfter(':', "")
-  var notesAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
-  var personalReturnPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
-  var personalStartSection by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("overview") }
-  var personalDetailId by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
-  var previousGatewayId by remember { mutableStateOf(connection.profile?.gatewayId) }
-  LaunchedEffect(connection.profile?.gatewayId) {
-    val currentId = connection.profile?.gatewayId
-    if (previousGatewayId != null && currentId != null && previousGatewayId != currentId) {
+  var notesAtRoot by rememberSaveable(gatewayId) { mutableStateOf(true) }
+  var personalReturnPage by rememberSaveable(gatewayId) { mutableStateOf("home") }
+  var personalStartSection by rememberSaveable(gatewayId) { mutableStateOf("overview") }
+  var personalDetailId by rememberSaveable(gatewayId) { mutableStateOf("") }
+  var previousGatewayId by remember { mutableStateOf(gatewayId) }
+  LaunchedEffect(gatewayId) {
+    if (previousGatewayId != null && gatewayId != null && previousGatewayId != gatewayId) {
       personalPage = "home"
       onSelectTab(HomeTab.Assistant)
     }
-    previousGatewayId = currentId
+    previousGatewayId = gatewayId
   }
   fun leavePersonalPage() {
     if (personalPage == "detail") {
@@ -1238,8 +1240,8 @@ internal fun MainContent(
     if (personalPage == "detail" && connection.personal.assertionDeletedRevision > 0 &&
       connection.personal.selectedAssertionId == null) personalPage = personalReturnPage
   }
-  LaunchedEffect(connection.profile?.gatewayId) {
-    if (connection.profile != null) {
+  LaunchedEffect(gatewayId) {
+    if (isPaired) {
       while (true) {
         onRefreshProgressHome()
         delay(30_000)
@@ -1247,33 +1249,33 @@ internal fun MainContent(
     }
   }
   LaunchedEffect(connection.requestedReferenceConversationId,
-    connection.requestedReferenceKind, connection.selectedConversationId) {
+    connection.requestedReferenceKind, conversationId) {
     if (connection.requestedReferenceKind != null &&
-      connection.requestedReferenceConversationId == connection.selectedConversationId &&
-      connection.selectedConversationId != null) onSelectTab(HomeTab.Assistant)
+      connection.requestedReferenceConversationId == conversationId &&
+      conversationId != null) onSelectTab(HomeTab.Assistant)
   }
-  LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
-    if (selectedTab == HomeTab.Progress && connection.profile != null) onRefreshProgressTasks()
+  LaunchedEffect(selectedTab, gatewayId) {
+    if (selectedTab == HomeTab.Progress && isPaired) onRefreshProgressTasks()
   }
-  LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
-    if (selectedTab == HomeTab.Notes && connection.profile != null) {
+  LaunchedEffect(selectedTab, gatewayId) {
+    if (selectedTab == HomeTab.Notes && isPaired) {
       onRefreshProgressHome()
       onLoadNotes(connection.notes.search, connection.notes.status)
     }
   }
-  LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
-    if (selectedTab == HomeTab.Me && connection.profile != null) {
+  LaunchedEffect(selectedTab, gatewayId) {
+    if (selectedTab == HomeTab.Me && isPaired) {
       onLoadPersonal()
     }
   }
-  LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
-    if (connection.profile != null && selectedTab in setOf(HomeTab.Me, HomeTab.Conversations)) onLoadPersonalAgent()
+  LaunchedEffect(selectedTab, gatewayId) {
+    if (isPaired && selectedTab in setOf(HomeTab.Me, HomeTab.Conversations)) onLoadPersonalAgent()
   }
   val latestClarificationRefresh by rememberUpdatedState(onRefreshClarification)
   val latestConnectionWaitRefresh by rememberUpdatedState(onRefreshConnectionWait)
-  LaunchedEffect(selectedTab, connection.profile?.gatewayId, connection.selectedConversationId) {
-    if (selectedTab == HomeTab.Assistant && connection.profile != null &&
-      connection.selectedConversationId != null) {
+  LaunchedEffect(selectedTab, gatewayId, conversationId) {
+    if (selectedTab == HomeTab.Assistant && isPaired &&
+      conversationId != null) {
       while (true) {
         latestConnectionWaitRefresh()
         latestClarificationRefresh()
@@ -1281,22 +1283,22 @@ internal fun MainContent(
       }
     }
   }
-  LaunchedEffect(personalPage, connection.profile?.gatewayId) {
+  LaunchedEffect(personalPage, gatewayId) {
     if (personalPage == "settings-gateways") onOpenGatewayProfiles()
-    if (personalPage == "settings-sharing" && connection.profile != null) onLoadShares()
+    if (personalPage == "settings-sharing" && isPaired) onLoadShares()
   }
-  var assistantActionsOpen by remember(selectedTab, connection.selectedConversationId) { mutableStateOf(false) }
-  var quickActionsOpen by remember(selectedTab, connection.profile?.gatewayId) { mutableStateOf(false) }
-  var assistantComposerValue by remember(connection.selectedConversationId) {
+  var assistantActionsOpen by remember(selectedTab, conversationId) { mutableStateOf(false) }
+  var quickActionsOpen by remember(selectedTab, gatewayId) { mutableStateOf(false) }
+  var assistantComposerValue by remember(conversationId) {
     mutableStateOf(TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length)))
   }
-  val assistantComposerFocus = remember(connection.selectedConversationId) { FocusRequester() }
+  val assistantComposerFocus = remember(conversationId) { FocusRequester() }
   var personalModelRequestRevision by remember { mutableIntStateOf(0) }
-  var assistantFocusRevision by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
-  var assistantReferenceKind by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+  var assistantFocusRevision by remember(conversationId) { mutableIntStateOf(0) }
+  var assistantReferenceKind by remember(gatewayId, conversationId) {
     mutableStateOf<String?>(null)
   }
-  var assistantReferenceQuery by remember(connection.profile?.gatewayId, connection.selectedConversationId) {
+  var assistantReferenceQuery by remember(gatewayId, conversationId) {
     mutableStateOf("")
   }
   val quickComposerFocus = remember { FocusRequester() }
@@ -1336,8 +1338,6 @@ internal fun MainContent(
   fun deliverInputVoice(destination: String) {
     if (inputVoiceBusy || inputVoice.phase != "ready") return
     val targetTab = selectedTab
-    val targetGatewayId = connection.profile?.gatewayId
-    val targetConversationId = connection.selectedConversationId
     inputVoiceRetryDestination = destination
     inputVoiceNotice.clear()
     inputVoiceBusy = true
@@ -1347,8 +1347,7 @@ internal fun MainContent(
         if (destination == "text") {
           val lang = when { language.startsWith("zh") -> "zh"; language.startsWith("en") -> "en"; else -> "" }
           val transcript = onTranscribeAudio(bytes, lang)
-          if (inputVoice.phase != "ready" || currentComposerConnection.profile?.gatewayId != targetGatewayId ||
-            currentComposerConnection.selectedConversationId != targetConversationId || currentTab != targetTab) return@launch
+          if (inputVoice.phase != "ready" || !currentComposerConnection.matchesComposer(gatewayId, conversationId) || currentTab != targetTab) return@launch
           if (targetTab == HomeTab.Assistant) {
             val next = if (assistantComposerValue.text.isBlank()) transcript
               else assistantComposerValue.text + "\n" + transcript
@@ -1361,8 +1360,7 @@ internal fun MainContent(
           restoreInputKeyboard = true
           inputVoiceMode = false
         } else {
-          if (inputVoice.phase != "ready" || currentComposerConnection.profile?.gatewayId != targetGatewayId ||
-            currentComposerConnection.selectedConversationId != targetConversationId || currentTab != targetTab) return@launch
+          if (inputVoice.phase != "ready" || !currentComposerConnection.matchesComposer(gatewayId, conversationId) || currentTab != targetTab) return@launch
           if (targetTab == HomeTab.Assistant) onSendVoiceRecording(bytes, seconds)
           else onSendQuickVoiceRecording(bytes, seconds)
         }
@@ -1407,11 +1405,11 @@ internal fun MainContent(
     if (inputVoiceHeld && inputVoiceElapsed >= 120) finishInputVoice(inputVoiceDestination)
   }
   val focusManager = LocalFocusManager.current
-  var phonePage by remember(connection.profile?.gatewayId, connection.selectedConversationId) { mutableStateOf(false) }
-  val phoneController = rememberPhoneWorkspace(phoneRepository, connection.selectedConversationId,
-    connection.profile?.gatewayId, selectedTab == HomeTab.Assistant, phonePage)
+  var phonePage by remember(gatewayId, conversationId) { mutableStateOf(false) }
+  val phoneController = rememberPhoneWorkspace(phoneRepository, conversationId,
+    gatewayId, selectedTab == HomeTab.Assistant, phonePage)
   val phoneUi = phoneWorkspaceState(phoneController)
-  val showBottomChrome = !(selectedTab == HomeTab.Assistant && phonePage) && connection.profile != null && when (selectedTab) {
+  val showBottomChrome = !(selectedTab == HomeTab.Assistant && phonePage) && isPaired && when (selectedTab) {
     HomeTab.Progress -> progressAtRoot
     HomeTab.Notes -> notesAtRoot && libraryDeliveryId.isEmpty()
     HomeTab.Me -> personalPage == "home"
@@ -1426,28 +1424,28 @@ internal fun MainContent(
       keyboardController?.hide()
     }
   }
-  LaunchedEffect(connection.selectedConversationId, connection.draftText) {
+  LaunchedEffect(conversationId, connection.draftText) {
     if (assistantComposerValue.text != connection.draftText) assistantComposerValue =
       TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length))
   }
-  LaunchedEffect(connection.selectedConversationId, assistantFocusRevision) {
+  LaunchedEffect(conversationId, assistantFocusRevision) {
     if (assistantFocusRevision > 0 && selectedTab == HomeTab.Assistant) {
       assistantComposerFocus.requestFocus()
       keyboardController?.show()
     }
   }
   LaunchedEffect(connection.requestedReferenceConversationId, connection.requestedReferenceKind,
-    connection.selectedConversationId, connection.historyLoading) {
+    conversationId, connection.historyLoading) {
     val id = connection.requestedReferenceConversationId ?: return@LaunchedEffect
     val kind = connection.requestedReferenceKind ?: return@LaunchedEffect
-    if (id == connection.selectedConversationId && !connection.historyLoading) {
+    if (id == conversationId && !connection.historyLoading) {
       assistantReferenceQuery = ""
       assistantReferenceKind = kind
       onReferenceRequestHandled(id, kind)
     }
   }
-  LaunchedEffect(assistantReferenceKind, assistantReferenceQuery, connection.profile?.gatewayId,
-    connection.selectedConversationId) {
+  LaunchedEffect(assistantReferenceKind, assistantReferenceQuery, gatewayId,
+    conversationId) {
     val kind = assistantReferenceKind ?: return@LaunchedEffect
     if (kind == "file") return@LaunchedEffect
     if (assistantReferenceQuery.isNotEmpty()) delay(250)
@@ -1468,14 +1466,14 @@ internal fun MainContent(
     bottomBar = {
       if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
         val attentionCount = connection.progress.needsUser.size.takeIf {
-          connection.progress.gatewayId == connection.profile.gatewayId
+          connection.progress.gatewayId == gatewayId
         } ?: 0
         val showQuick = selectedTab == HomeTab.Notes
         if (selectedTab == HomeTab.Assistant) {
           MainBottomSurface("assistant-bottom-surface") {
             AssistantComposer(connection, assistantComposerValue, { value ->
               inputVoiceNotice.clear()
-              onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, false)
+              onDismissComposerErrors(gatewayId, conversationId, false)
               assistantComposerValue = value
               onDraftChange(value.text)
             }, assistantComposerFocus, assistantActionsOpen, { assistantActionsOpen = it },
@@ -1489,7 +1487,7 @@ internal fun MainContent(
                 inputVoice.cancel(); inputVoiceNotice.clear(); inputVoiceHeld = false
               }, onVoiceRetry = { deliverInputVoice(inputVoiceRetryDestination) },
               onDismissVoiceError = inputVoiceNotice::clear,
-              onDismissError = { onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, false) })
+              onDismissError = { onDismissComposerErrors(gatewayId, conversationId, false) })
             AnimatedVisibility(visible = assistantActionsOpen,
               enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
                 fadeIn(animationSpec = tween(220)),
@@ -1497,7 +1495,7 @@ internal fun MainContent(
                 fadeOut(animationSpec = tween(180)), label = "assistant-actions") {
               AssistantActionPanel(
                 canCreate = !connection.creatingConversation && !connection.sending,
-                canCall = !connection.creatingConversation && (connection.selectedConversationId != null || !connection.sending),
+                canCall = !connection.creatingConversation && (conversationId != null || !connection.sending),
                 canReference = !connection.sending && connection.pendingInput == null,
                 canPick = !connection.sending && !connection.attachmentLoading &&
                   connection.pendingInput == null && connection.draftAttachments.size < 10,
@@ -1518,21 +1516,21 @@ internal fun MainContent(
             }
             if (!assistantActionsOpen && !isTaskChat(connection)) ChatImeDock {
               XopcTabDock(selectedTab, onSelectTab, grouped = true, attentionCount = attentionCount,
-                personalAgent = connection.personal.takeIf { it.agent?.conversationId == connection.selectedConversationId })
+                personalAgent = connection.personal.takeIf { it.agent?.conversationId == conversationId })
             }
           }
         } else if (showQuick) {
           MainBottomSurface("secondary-bottom-surface") {
             QuickComposer(connection, selectedTab, { text ->
               inputVoiceNotice.clear()
-              onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, true)
+              onDismissComposerErrors(gatewayId, conversationId, true)
               onQuickDraftChange(text)
             }, onQuickSubmit,
               quickActionsOpen, { quickActionsOpen = it }, onRemoveQuickAttachment,
               onPreviewQuickImage, onPreviewQuickFile, quickComposerFocus,
               inputVoiceMode, inputVoiceBusy || inputVoiceHeld, inputVoice.phase, inputVoiceError,
               ::toggleInputVoice, inputVoiceNotice::clear,
-              { onDismissComposerErrors(connection.profile?.gatewayId, connection.selectedConversationId, true) }, voicePad = { modifier ->
+              { onDismissComposerErrors(gatewayId, conversationId, true) }, voicePad = { modifier ->
                 VoiceInputPad(modifier, inputVoiceHeld, inputVoiceBusy, inputVoice.phase,
                   inputVoiceDestination, inputVoiceElapsed, ::startInputVoice,
                   { dx, dy -> inputVoiceDestination = voiceRecordingDestination(dx, dy, inputVoiceDestination) },
@@ -1569,7 +1567,7 @@ internal fun MainContent(
             if (!quickActionsOpen && !imeVisible) XopcTabDock(selectedTab, onSelectTab,
               grouped = true, attentionCount = attentionCount,
               personalAgent = connection.personal.takeIf {
-                it.agent?.conversationId == connection.selectedConversationId })
+                it.agent?.conversationId == conversationId })
           }
         } else if (!imeVisible) {
           MainBottomSurface("secondary-bottom-surface") {
@@ -1582,7 +1580,7 @@ internal fun MainContent(
             XopcTabDock(selectedTab, onSelectTab, grouped = true,
               attentionCount = attentionCount,
               personalAgent = connection.personal.takeIf {
-                it.agent?.conversationId == connection.selectedConversationId })
+                it.agent?.conversationId == conversationId })
           }
         }
         Spacer(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
@@ -1595,7 +1593,7 @@ internal fun MainContent(
       start = insets.calculateLeftPadding(layoutDirection),
       top = if (selectedTab == HomeTab.Assistant) 0.dp else insets.calculateTopPadding(),
       end = insets.calculateRightPadding(layoutDirection)) else insets
-    if (connection.profile == null && personalPage == "home") {
+    if (!isPaired && personalPage == "home") {
       PairingScreen(stringResource(R.string.pairing_title), connection, onPair, onCancelPairing,
         onScanPairing, pairingScanning, pairingScanError, insets,
         onSettings = {
@@ -1606,15 +1604,15 @@ internal fun MainContent(
     val showLibraryDelivery = selectedTab == HomeTab.Notes && libraryDeliveryId.isNotEmpty()
     val contentTab = if (showLibraryDelivery) HomeTab.Progress else selectedTab
     val tabStateKey = when {
-      showLibraryDelivery -> "library-delivery-${connection.profile?.gatewayId}-$libraryDeliveryKind-$libraryDeliveryId"
-      selectedTab == HomeTab.Notes -> "library-root-${connection.profile?.gatewayId}"
+      showLibraryDelivery -> "library-delivery-${gatewayId}-$libraryDeliveryKind-$libraryDeliveryId"
+      selectedTab == HomeTab.Notes -> "library-root-${gatewayId}"
       else -> selectedTab.name
     }
     tabStateHolder.SaveableStateProvider(tabStateKey) {
     when (contentTab) {
       HomeTab.Assistant, HomeTab.Conversations -> {
         val title = stringResource(selectedTab.label)
-        if (connection.profile == null) PairingScreen(title, connection, onPair, onCancelPairing,
+        if (!isPaired) PairingScreen(title, connection, onPair, onCancelPairing,
           onScanPairing,
           pairingScanning, pairingScanError, insets)
         else if (selectedTab == HomeTab.Assistant) PhoneConversationPager(phoneController, phonePage, { phonePage = it }) {
@@ -1678,11 +1676,10 @@ internal fun MainContent(
           onBeginConversationShare, onConfirmConversationShare,
           onDismissConversationShare, onScheduleDelete, onUndoDelete, onOpenPersonalAgent)
       }
-      HomeTab.Progress -> if (connection.profile == null) PairingScreen(
+      HomeTab.Progress -> if (!isPaired) PairingScreen(
         stringResource(R.string.tab_progress), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
       else {
-        val gatewayId = connection.profile.gatewayId
         ProgressScreen(connection.progress.takeIf { it.gatewayId == gatewayId }
           ?: ProgressUiState(gatewayId = gatewayId, loading = true),
           rootInsets, onRefreshProgressHome, onRefreshProgressTasks, onLoadMoreProgressTasks,
@@ -1718,13 +1715,13 @@ internal fun MainContent(
           },
         )
       }
-      HomeTab.Notes -> if (connection.profile == null) PairingScreen(
+      HomeTab.Notes -> if (!isPaired) PairingScreen(
         stringResource(R.string.library_title), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
       else {
-        val libraryProgress = connection.progress.takeIf { it.gatewayId == connection.profile.gatewayId }
-        NotesScreen(connection.notes.takeIf { it.gatewayId == connection.profile.gatewayId }
-        ?: NotesUiState(gatewayId = connection.profile.gatewayId), rootInsets,
+        val libraryProgress = connection.progress.takeIf { it.gatewayId == gatewayId }
+        NotesScreen(connection.notes.takeIf { it.gatewayId == gatewayId }
+        ?: NotesUiState(gatewayId = gatewayId), rootInsets,
         onLoadNotes, onLoadMoreNotes, onOpenNote, onNewNote,
         onNoteDraftChange, onSaveNoteDraft, onCreatedNoteHandled, onOpenNoteDraft,
         onEditNote, onResolveNoteConflict, onNoteMetadataChange,
@@ -1994,6 +1991,9 @@ internal fun MainContent(
       Text(stringResource(R.string.progress_cancel))
     } })
 }
+
+private fun ConnectionUiState.matchesComposer(gatewayId: String?, conversationId: String?): Boolean =
+  profile?.gatewayId == gatewayId && selectedConversationId == conversationId
 
 @Composable
 private fun MainBottomSurface(tag: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
