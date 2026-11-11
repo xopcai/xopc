@@ -118,6 +118,7 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [commands, setCommands] = useState<ComposerCommand[]>([]);
   const [commandsLoading, setCommandsLoading] = useState(false);
+  const [commandsFailed, setCommandsFailed] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
   const commandRange = commandsOpen ? findCommand(draft, cursor) : undefined;
   const commandItems = commandRange ? commands.filter(item => matchesCommandQuery(item, commandRange.query)).slice(0, 12) : [];
@@ -304,9 +305,11 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
   useEffect(() => {
     if (!commandsOpen) return;
     let active = true;
+    setCommands([]);
     setCommandsLoading(true);
+    setCommandsFailed(false);
     void loadComposerCommands(snapshot.conversationId).then(items => { if (active) setCommands(items); })
-      .catch(cause => { if (active) { setCommands([]); setError(String(cause)); } })
+      .catch(() => { if (active) setCommandsFailed(true); })
       .finally(() => { if (active) setCommandsLoading(false); });
     return () => { active = false; };
   }, [commandsOpen, snapshot.conversationId]);
@@ -763,7 +766,7 @@ export function ChatPanel({ gatewayId, deviceId }: { gatewayId: string; deviceId
         ) : null}
         {commandRange ? <div className="tab-mention-menu" role="listbox" aria-label={t('commandsAndSkills')}>
           {commandsLoading ? <div className="message-skeleton" aria-label={t('loadingCommands')}><span /><span /><span /></div> : commandItems.map((item, index) => <button key={item.id} type="button" role="option" aria-selected={index === commandIndex} disabled={item.disabled} title={item.disabled ? t('skillUnavailable') : item.description} className={index === commandIndex ? 'selected' : ''} onMouseDown={event => { event.preventDefault(); chooseCommand(item); }}><span>{item.name}</span><small>{item.description}{item.disabled ? ` · ${t('skillUnavailable')}` : ''}</small></button>)}
-          {!commandsLoading && !commandItems.length ? <div className="tab-mention-empty">{t('noMatchingCommands')}</div> : null}
+          {!commandsLoading && !commandItems.length ? <div className="tab-mention-empty">{t(commandsFailed ? 'commandsLoadFailed' : 'noMatchingCommands')}</div> : null}
         </div> : null}
         <div className="composer-input-row">
           <textarea

@@ -18,10 +18,12 @@ import { t } from './i18n';
 import { createLogger } from './logger';
 import { fitBrowserControlResultToFrame } from './result-budget';
 import {
+  autoConnectLocalGateway,
   createBrowserEndpointHello,
   createBrowserRequestProof,
   gatewayFetch,
   getAccessProfile,
+  isAutoConnectEnabled,
   readProfile,
   registerBrowserEndpoint,
 } from './sidepanel/auth';
@@ -30,7 +32,7 @@ import { captureContextMenuSelection, PENDING_CONTEXT_KEY } from './sidepanel/pa
 const log = createLogger('Background');
 const BACKGROUND_CLIENT_ID_KEY = 'xopc.browser.background-client-id';
 const RECONNECT_ALARM = 'xopc.browser.reconnect';
-const RECONNECT_DELAY_MINUTES = 1;
+const RECONNECT_DELAY_MINUTES = 0.5;
 let realtime: RealtimeClient | undefined;
 let endpointClaim: { endpointId: string; token: string } | undefined;
 let lastConnectionError: string | undefined;
@@ -57,8 +59,15 @@ function clearReconnectAlarm(): void {
 }
 
 function scheduleReconnectAlarm(): void {
-  if (endpointClaim) return;
-  chrome.alarms.create(RECONNECT_ALARM, { delayInMinutes: RECONNECT_DELAY_MINUTES });
+  // Keep a persistent watchdog even while connected: MV3 can terminate the
+  // worker without running socket disconnect callbacks.
+  void chrome.alarms.get(RECONNECT_ALARM).then((alarm) => {
+    if (alarm?.periodInMinutes === RECONNECT_DELAY_MINUTES) return;
+    return chrome.alarms.create(RECONNECT_ALARM, {
+      delayInMinutes: RECONNECT_DELAY_MINUTES,
+      periodInMinutes: RECONNECT_DELAY_MINUTES,
+    });
+  }).catch((error) => log.warn('Could not schedule browser reconnect', { error: String(error) }));
 }
 
 const browserToolRegistry = new EndpointToolRegistry([{
@@ -95,7 +104,13 @@ async function backgroundClientId(): Promise<string> {
 }
 
 async function connect(generation: number): Promise<void> {
-  if (realtime || !await readProfile()) return;
+  if (realtime) return;
+  // Arm the watchdog before discovery/network work so suspension cannot strand
+  // an extension that started before the local Gateway.
+  if (await readProfile() || await isAutoConnectEnabled()) scheduleReconnectAlarm();
+  else { clearReconnectAlarm(); return; }
+  if (!await autoConnectLocalGateway()) return;
+  if (generation !== connectionGeneration) return;
   await registerBrowserEndpoint();
   const profile = await getAccessProfile();
   const compatibility = await gatewayFetch('/api/endpoint-tools/compatibility', {}, profile);
@@ -141,7 +156,6 @@ async function connect(generation: number): Promise<void> {
       endpointClaim = { endpointId, token: turnToken };
       if (environmentSupported) contextPublisher.start(endpointClaim);
       lastConnectionError = undefined;
-      clearReconnectAlarm();
       endpointHost.connect((message) => client.sendEndpointMessage(message));
       void chrome.runtime.sendMessage({ type: 'browser/endpoint-ready', claim: endpointClaim }).catch(() => undefined);
       log.info('Browser control connected through Gateway Realtime', { endpointId });
@@ -246,25 +260,22 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(connectWithLogging);
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== RECONNECT_ALARM) return;
-  void readProfile().then((profile) => {
-    if (!profile) {
-      clearReconnectAlarm();
-      return;
-    }
-    if (endpointClaim) {
-      clearReconnectAlarm();
-      return;
-    }
-    disconnect();
-    connectWithLogging();
-  });
+  if (endpointClaim || connectTask) return;
+  disconnect();
+  connectWithLogging();
 });
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes['xopc.browser.profile']) {
+    const { oldValue, newValue } = changes['xopc.browser.profile'];
+    // Token rotation does not change the endpoint identity or socket route.
+    if (oldValue && newValue && oldValue.gatewayId === newValue.gatewayId
+      && oldValue.deviceId === newValue.deviceId && oldValue.gatewayPublicKey === newValue.gatewayPublicKey
+      && oldValue.gatewayUrl === newValue.gatewayUrl) return;
     disconnect();
-    if (changes['xopc.browser.profile'].newValue) connectWithLogging();
+    if (newValue) connectWithLogging();
     else clearReconnectAlarm();
   }
+  if (area === 'local' && changes['xopc.browser.auto-connect']) connectWithLogging();
 });
 void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 connectWithLogging();

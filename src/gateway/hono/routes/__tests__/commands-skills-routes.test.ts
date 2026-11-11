@@ -1,9 +1,20 @@
+import { generateKeyPairSync } from 'node:crypto';
+import { once } from 'node:events';
+
+import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { seedTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
+import { BROWSER_EXTENSION_ID } from '../../../../browser/extension-identity.js';
+import { ConfigSchema } from '../../../../config/schema.js';
 import { createConversation } from '../../../../storage/sqlite/conversation-repository.js';
+import { createDevice, issueDeviceTokenPair } from '../../../../storage/sqlite/device-access-repository.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
+import { signedDeviceHeaders } from '../../../security/__tests__/signed-device-headers.js';
+import { DEFAULT_BROWSER_EXTENSION_SCOPES } from '../../../security/gateway-scopes.js';
 import type { GatewayService } from '../../../service.js';
+import { createHonoApp } from '../../app.js';
 import { registerCommandsSkillsRoutes } from '../commands-skills.js';
 
 function createApp() {
@@ -28,8 +39,13 @@ function createApp() {
     trusted,
   }));
   const fetchSkillsPackageDetail = vi.fn(async (name: string) => ({ id: name }));
+  const auth = { mode: 'token' as const, token: 'commands-skills-http-test-token' };
   const service = {
     getConfig: () => ({ agents: { default: 'main' } }),
+    currentConfig: ConfigSchema.parse({ gateway: { bind: 'loopback', auth } }),
+    getResolvedAuth: () => auth,
+    isGatewayReady: () => true,
+    getExtensionLoader: () => null,
     marketplace: {
       fetchSkillsPackageDetail,
       getAgentSkillsApi,
@@ -41,6 +57,7 @@ function createApp() {
   registerCommandsSkillsRoutes(app, { service } as Parameters<typeof registerCommandsSkillsRoutes>[1]);
   return {
     app,
+    service,
     fetchSkillsPackageDetail,
     getAgentSkillsApi,
     getSessionSkillsApi,
@@ -61,6 +78,43 @@ describe('commands and skills routes', () => {
   afterEach(() => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
+  });
+
+  it('serves composer discovery through the Gateway using an existing Chrome device grant', async () => {
+    const { service } = createApp();
+    seedTestAgentCatalog({ agents: [{ id: 'main', enabled: true, workspace: '/project' }] });
+    const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const jwk = publicKey.export({ format: 'jwk' });
+    const device = createDevice({
+      displayName: 'Test Chrome',
+      platform: 'chrome',
+      extensionId: BROWSER_EXTENSION_ID,
+      publicKeyJwk: { kty: 'EC', crv: 'P-256', x: jwk.x!, y: jwk.y! },
+      scopes: DEFAULT_BROWSER_EXTENSION_SCOPES,
+    });
+    const { accessToken } = issueDeviceTokenPair(device.id);
+    const gateway = serve({ fetch: createHonoApp({ service }).fetch, hostname: '127.0.0.1', port: 0 });
+    try {
+      if (!gateway.listening) await once(gateway, 'listening');
+      const address = gateway.address();
+      if (!address || typeof address === 'string') throw new Error('Missing Gateway listener');
+      const base = `http://127.0.0.1:${address.port}`;
+      const request = (path: string, method = 'GET') => fetch(`${base}${path}`, {
+        method,
+        headers: signedDeviceHeaders(privateKey, accessToken, path, method, '', { Origin: `chrome-extension://${BROWSER_EXTENSION_ID}` }),
+      });
+      const path = `/api/chat/skills?conversationId=${conversationId}`;
+      expect((await fetch(`${base}${path}`)).status).toBe(401);
+      expect((await request('/api/commands')).status).toBe(200);
+      const response = await request(path);
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({ ok: true, payload: { skills: [{ name: 'project-skill' }] } });
+      expect((await request(path, 'POST')).status).toBe(403);
+      expect((await request(`/api/chat/workspace-trust?conversationId=${conversationId}`)).status).toBe(403);
+    } finally {
+      gateway.closeAllConnections();
+      await new Promise<void>(resolve => gateway.close(() => resolve()));
+    }
   });
 
   it('passes the publisher-qualified ClawHub reference to the detail service', async () => {

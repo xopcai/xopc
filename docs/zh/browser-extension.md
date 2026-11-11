@@ -117,12 +117,14 @@ pnpm run dev -- browser extension install
 
 ## 本机自动连接
 
-在受支持的本机安装中，打开侧栏通常无需配对码或 Gateway 审批即可连接：
+在受支持的本机安装中，扩展会在后台自动连接，无需打开侧栏、输入配对码或进行 Gateway 审批：
 
 1. Gateway 启动时安装或修复固定扩展目录与 `ai.xopc.browser` Native Messaging manifest。
 2. 扩展生成不可导出的 P-256 设备密钥。
 3. native host 只发现 loopback Gateway，并申请绑定固定扩展 ID 与公钥指纹的短时、一次性 enrollment。
 4. 扩展验证 Gateway 签名，保存 scope 受限的设备凭据，并建立已认证 Realtime 连接。
+
+连接每 15 秒交换心跳，并保留一个每 30 秒触发的后台恢复闹钟。当 Chrome 回收后台 worker、Gateway 晚于 Chrome 启动或连接失败时，扩展会自动重试。电脑休眠期间 Chrome 可能延迟闹钟，唤醒后恢复连接；Chrome 和 Gateway 需要保持运行。
 
 Native Messaging 只用于本机发现和 enrollment，不承载聊天正文、页面内容、owner token 或长期凭据，也不会常驻充当消息代理。
 
@@ -217,7 +219,7 @@ xopc browser doctor
 
 1. 浏览器控制已启用，driver 选择的是 **Chrome 扩展**。
 2. 扩展文件与 native host 都是当前版本。
-3. xopc 侧栏已打开，并连接到预期 Gateway。
+3. 扩展已启用，并连接到预期 Gateway。打开侧栏可以查看连接详情，但保持浏览器控制连接不需要侧栏常开。
 4. Chrome 与 Gateway 报告的扩展协议/版本一致；提示时重新加载扩展。
 5. 如果操作需要读取或控制网页，目标站点权限已经授予。
 

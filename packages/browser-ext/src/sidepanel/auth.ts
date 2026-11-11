@@ -434,6 +434,46 @@ export async function pairGateway(
   onApproval: (confirmationCode: string) => void,
   requestedOrigin?: string,
 ): Promise<BrowserGatewayProfile> {
+  const originalProfile = await readProfile();
+  return withPairingLock(async () => {
+    const current = await readProfile();
+    // Another extension realm may have completed this enrollment while we waited.
+    if (!originalProfile && current?.gatewayId === parseBrowserPairingInvitation(invitation, true).gatewayId) return current;
+    return completeGatewayPairing(invitation, onApproval, requestedOrigin);
+  });
+}
+
+function withPairingLock<T>(operation: () => Promise<T>): Promise<T> {
+  const locks = globalThis.navigator?.locks;
+  if (!locks) return operation();
+  return new Promise<T>((resolve, reject) => {
+    void locks.request('xopc.browser.pairing', () => operation().then(resolve, reject)).catch(reject);
+  });
+}
+
+export async function autoConnectLocalGateway(): Promise<BrowserGatewayProfile | undefined> {
+  return withPairingLock(async () => {
+    const profile = await readProfile();
+    if (profile) return profile;
+    if (!await isAutoConnectEnabled()) return undefined;
+    const pending = await readPendingBrowserPairing();
+    if (pending) {
+      const payload = parseBrowserPairingInvitation(pending.invitation, true);
+      // Leave remote pairing and route selection to the side panel.
+      if (pending.nextOrigin || !payload.routes.every(route => route.kind === 'local-browser')) return undefined;
+      return completeGatewayPairing(pending.invitation, () => undefined);
+    }
+    const local = await discoverLocalGateway();
+    if (!local) return undefined;
+    return completeGatewayPairing(local.invitation, () => undefined, new URL(local.gatewayUrl).origin);
+  });
+}
+
+async function completeGatewayPairing(
+  invitation: string,
+  onApproval: (confirmationCode: string) => void,
+  requestedOrigin?: string,
+): Promise<BrowserGatewayProfile> {
   const payload = parseBrowserPairingInvitation(invitation, true);
   const origins = [...new Set(payload.routes.map(route => new URL(route.url).origin))];
   const selectedOrigin = requestedOrigin && origins.includes(requestedOrigin) ? requestedOrigin : origins[0]!;
