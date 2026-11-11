@@ -236,6 +236,7 @@
   "noMatchingModels": {"message": "No matching models"},
   "commandsAndSkills": {"message": "Commands and skills"},
   "loadingCommands": {"message": "Loading commands"},
+  "commandsLoadFailed": {"message": "Could not load commands and skills. Close and reopen the menu to retry."},
   "noMatchingCommands": {"message": "No matching commands or skills"},
   "skillUnavailable": {"message": "Unavailable for this agent"},
   "voiceInput": {"message": "Voice input"},

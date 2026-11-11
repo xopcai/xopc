@@ -106,12 +106,14 @@ Open `chrome://extensions`, find xopc, and select **Reload**. Refresh any page t
 
 ## Local automatic connection
 
-On a supported local installation, opening the side panel normally connects without a pairing code or Gateway approval:
+On a supported local installation, the background extension connects automatically without opening the side panel, entering a pairing code, or approving the Gateway:
 
 1. Gateway startup installs or repairs the fixed extension directory and the `ai.xopc.browser` Native Messaging manifest.
 2. The extension generates a non-exportable P-256 device key.
 3. The native host discovers only the local loopback Gateway and requests a short-lived, one-time enrollment bound to the fixed extension ID and key fingerprint.
 4. The extension verifies the Gateway signature, stores a scope-limited device credential, and opens an authenticated Realtime connection.
+
+The connection exchanges a heartbeat every 15 seconds. A persistent 30-second alarm restores the background connection if Chrome stops the service worker, the Gateway starts later, or a connection attempt fails. Chrome may delay alarms while the computer sleeps; recovery resumes after waking. Chrome and the Gateway must remain running.
 
 Native Messaging is used only for local discovery and enrollment. It does not carry chat messages, page contents, owner tokens, or long-lived credentials, and it does not remain running as a proxy.
 
@@ -206,7 +208,7 @@ Then open **Settings → Browser** and run the connection test. Check, in order:
 
 1. Browser control is enabled and the selected driver is **Chrome extension**.
 2. Extension files and the native host are current.
-3. The xopc side panel has been opened and shows the expected Gateway.
+3. The extension is enabled and has connected to the expected Gateway. Opening the side panel shows connection details but is not required to keep browser control connected.
 4. Chrome and the Gateway report the same extension protocol/version; reload Chrome when requested.
 5. The target site permission has been granted if the operation reads or controls a page.
 

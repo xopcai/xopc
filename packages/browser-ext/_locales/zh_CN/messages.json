@@ -236,6 +236,7 @@
   "noMatchingModels": {"message": "没有匹配的模型"},
   "commandsAndSkills": {"message": "命令与技能"},
   "loadingCommands": {"message": "正在加载命令"},
+  "commandsLoadFailed": {"message": "无法加载命令和技能，请关闭菜单后重试。"},
   "noMatchingCommands": {"message": "没有匹配的命令或技能"},
   "skillUnavailable": {"message": "当前 Agent 不可用"},
   "voiceInput": {"message": "语音输入"},

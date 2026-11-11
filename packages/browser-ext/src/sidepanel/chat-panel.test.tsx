@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   bind: vi.fn(), send: vi.fn(), listener: undefined as undefined | ((value: any) => void), snapshot: {} as any,
   capture: vi.fn(), activeTab: vi.fn(), screenshot: vi.fn(), store: undefined as any,
+  loadCommands: vi.fn(),
   storageChanged: undefined as undefined | ((changes: Record<string, any>, area: string) => void),
 }));
 vi.mock('./chat-client', () => ({ BrowserChatClient: class {
@@ -15,6 +16,10 @@ vi.mock('./chat-client', () => ({ BrowserChatClient: class {
 } }));
 vi.mock('./page-context', async importOriginal => ({ ...await importOriginal<object>(), captureTabWithPermission: mocks.capture, activeTabId: mocks.activeTab }));
 vi.mock('./voice-input', () => ({ VoiceInput: () => null }));
+vi.mock('./composer-commands', async importOriginal => ({
+  ...await importOriginal<typeof import('./composer-commands')>(),
+  loadComposerCommands: mocks.loadCommands,
+}));
 vi.mock('./markdown-content', () => ({ MarkdownContent: ({ children }: any) => <div>{children}</div> }));
 vi.mock('./attachments', async importOriginal => ({ ...await importOriginal<object>(), captureVisibleScreenshot: mocks.screenshot }));
 vi.mock('./composer-drafts', async importOriginal => {
@@ -44,6 +49,7 @@ beforeEach(async () => {
   mocks.send.mockReset().mockResolvedValue('sent');
   mocks.bind.mockReset().mockResolvedValue(undefined);
   mocks.screenshot.mockReset();
+  mocks.loadCommands.mockReset().mockResolvedValue([]);
   mocks.capture.mockReset(); mocks.activeTab.mockReset();
   mocks.store = new ComposerDrafts(vi.fn(), vi.fn().mockResolvedValue(undefined));
   mocks.snapshot = { connection: 'connected', endpointReady: true, sessionLoading: false, submitting: false, stopping: false, pendingDelivery: false, conversationId: 'a', sessions: [], messages: [], models: [] };
@@ -56,6 +62,19 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 
 describe('browser composer interactions', () => {
+  it('reports a failed command load in the picker and retries when reopened', async () => {
+    mocks.loadCommands.mockRejectedValueOnce(new Error('Gateway returned 403')).mockResolvedValueOnce([
+      { id: 'command:new', name: '/new', description: 'New chat', searchTerms: [], wire: '/new ' },
+    ]);
+    await act(async () => text('/'));
+    const picker = () => container.querySelector('[aria-label="commandsAndSkills"]');
+    expect(picker()?.textContent).toBe('commandsLoadFailed');
+    expect(container.textContent).not.toContain('Gateway returned 403');
+    await act(async () => text(''));
+    await act(async () => text('/'));
+    expect(picker()?.querySelector('[role="option"]')?.textContent).toContain('/new');
+  });
+
   it.each([undefined, { id: 'old-read', mode: 'read' }])('offers one tab action that enables control, including old read bindings', async (tabBinding) => {
     await act(async () => emit({ tabBinding }));
     await act(async () => button('addContext').click());

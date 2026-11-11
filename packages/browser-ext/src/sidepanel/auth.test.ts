@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatBrowserPairingInvitation } from '@xopcai/gateway-contract';
 
-import { gatewayFetch, parseBrowserPairingInvitation, readProfile } from './auth';
+import { autoConnectLocalGateway, gatewayFetch, parseBrowserPairingInvitation, readProfile } from './auth';
 
 let deviceKeys: CryptoKeyPair;
 beforeEach(async () => {
@@ -56,6 +56,38 @@ describe('parseBrowserPairingInvitation', () => {
   it('rejects invitations created for phones', () => {
     expect(() => parseBrowserPairingInvitation(invitation({ targetKind: 'mobile' })))
       .toThrow('Pairing invitation version is not supported');
+  });
+});
+
+describe('background local auto-connect', () => {
+  it('respects an explicit opt-out without contacting the native host', async () => {
+    const sendNativeMessage = vi.fn();
+    vi.stubGlobal('chrome', {
+      storage: { local: { get: vi.fn().mockResolvedValue({ 'xopc.browser.auto-connect': false }) } },
+      runtime: { sendNativeMessage },
+    });
+    expect(await autoConnectLocalGateway()).toBeUndefined();
+    expect(sendNativeMessage).not.toHaveBeenCalled();
+  });
+
+  it('tries native discovery without a side panel and tolerates an offline Gateway', async () => {
+    const sendNativeMessage = vi.fn().mockResolvedValue({ ok: false, error: 'Gateway offline' });
+    vi.stubGlobal('chrome', {
+      storage: { local: { get: vi.fn().mockResolvedValue({}) } },
+      runtime: { id: 'extension', sendNativeMessage },
+    });
+    expect(await autoConnectLocalGateway()).toBeUndefined();
+    expect(sendNativeMessage).toHaveBeenCalledWith('ai.xopc.browser', expect.objectContaining({ type: 'bootstrap', extensionId: 'extension' }));
+  });
+
+  it('preserves a pending remote invitation for the side panel', async () => {
+    const sendNativeMessage = vi.fn();
+    vi.stubGlobal('chrome', {
+      storage: { local: { get: vi.fn().mockResolvedValue({ 'xopc.browser.pairing': { invitation: invitation() } }) } },
+      runtime: { sendNativeMessage },
+    });
+    expect(await autoConnectLocalGateway()).toBeUndefined();
+    expect(sendNativeMessage).not.toHaveBeenCalled();
   });
 });
 
