@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
+import { isBundledChannelExtension } from '../../../channels/bundled-channel-extensions.js';
 import type { Config as SurfaceConfig } from '../../../config/config-surface.js';
 import type { GatewayService } from '../../service.js';
 import { validateExtensionConfig } from '../../../extensions/config-validation.js';
@@ -253,7 +254,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     }
 
     const registry = loader.getRegistry();
-    const discovered = loader.discoverExtensions();
+    const discovered = loader.discoverExtensions().filter((ext) => !isBundledChannelExtension(ext.id));
     const activeIds = new Set<string>();
     for (const [id] of registry.extensions) {
       activeIds.add(id);

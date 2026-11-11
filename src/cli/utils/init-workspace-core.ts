@@ -54,7 +54,7 @@ async function readDiskConfig(
   const snapshot = readConfigFileSnapshot(configPath);
   const cfg = snapshot.config;
   await assertChannelPluginsIfNeeded(cfg, assertChannelPlugins);
-  snapshot.discardRetiredFields();
+  snapshot.persistMigrations();
   return cfg;
 }
 
