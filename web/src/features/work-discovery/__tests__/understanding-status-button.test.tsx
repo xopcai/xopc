@@ -10,7 +10,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 const { fetchUserModel, deleteAssertion } = vi.hoisted(() => ({ fetchUserModel: vi.fn(), deleteAssertion: vi.fn() }));
 
 vi.mock('@/features/user-model/user-model-api', () => ({
-  fetchUserModel,
+  ABOUT_USER_MODEL_KEY: '/api/user-model?view=about',
+  fetchAboutUserModel: fetchUserModel,
   correctAssertion: vi.fn(),
   deleteAssertion,
 }));

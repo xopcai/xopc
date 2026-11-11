@@ -69,6 +69,31 @@ describe('memory management through authenticated Gateway HTTP', () => {
     expect((await request('/api/knowledge-memory-other')).status).toBe(404);
   });
 
+  it('keeps work records out of the about view and searches beyond the first management page', async () => {
+    for (let index = 0; index < 26; index++) {
+      writeKnowledgeItem({
+        kind: 'decision', scope: { type: 'project', id: 'atlas' },
+        content: index === 0 ? '保留已下载的 H3 文件' : `Atlas decision ${index}`,
+        canonicalKey: `decision-${index}`, confidence: 1, importance: 0.7, originClass: 'owner',
+        now: 1_000 + index,
+      });
+    }
+    const about = await (await request('/api/user-model?view=about')).json();
+    expect(about).not.toHaveProperty('knowledge');
+    expect(about).not.toHaveProperty('observations');
+    const path = '/api/knowledge-memory?view=manage';
+    expect((await fetch(origin + path)).status).toBe(401);
+    const first = await (await request(path)).json();
+    expect(first.items).toHaveLength(24);
+    expect(first.items[0].content).toBe('Atlas decision 25');
+    expect(first.items[0].version).toEqual(expect.any(String));
+    const second = await (await request(path + '&cursor=' + encodeURIComponent(first.nextCursor))).json();
+    expect(second.items.map((item: { content: string }) => item.content)).toEqual(['Atlas decision 1', '保留已下载的 H3 文件']);
+    expect(second.nextCursor).toBeUndefined();
+    const search = await request(path + '&kind=decision&q=' + encodeURIComponent('h3 文件'));
+    await expect(search.json()).resolves.toMatchObject({ items: [{ content: '保留已下载的 H3 文件' }] });
+  });
+
   it('authenticates scope changes and rejects stale knowledge revisions through lazy routing', async () => {
     const original = writeKnowledgeItem({ kind: 'decision', scope: { type: 'global' }, content: 'Use pnpm',
       canonicalKey: 'scope-http', confidence: 1, importance: 0.7, originClass: 'owner' }).item!;

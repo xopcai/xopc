@@ -9,10 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   correctAssertion,
-  fetchUserModel,
+  ABOUT_USER_MODEL_KEY,
+  fetchAboutUserModel,
   deleteAssertion,
   type UserAssertion,
-  type UserModelResponse,
 } from '@/features/user-model/user-model-api';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -29,9 +29,9 @@ export function UnderstandingStatusButton() {
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const onUserModelPage = pathname === '/user-model';
-  const { data: userModel, mutate: mutateUserModel } = useSWR<UserModelResponse>(
-    onUserModelPage ? '/api/user-model' : null,
-    fetchUserModel,
+  const { data: userModel, mutate: mutateUserModel } = useSWR(
+    onUserModelPage ? ABOUT_USER_MODEL_KEY : null,
+    fetchAboutUserModel,
   );
   const refreshError = useUnderstandingRefreshStore((state) => state.error);
   const refreshRunning = useUnderstandingRefreshStore((state) => state.sources.some((run) => run.status === 'running' || run.status === 'queued'));

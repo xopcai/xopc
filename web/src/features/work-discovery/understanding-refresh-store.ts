@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { mutate } from 'swr';
 
+import { ABOUT_USER_MODEL_KEY } from '@/features/user-model/user-model-api';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -46,7 +47,7 @@ export const useUnderstandingRefreshStore = create<{
         const prior = new Map(get().sources.map((run) => [run.id, run.status]));
         set({ sources: snapshot.sources, error: undefined });
         if (snapshot.sources.some((run) => !active(run) && prior.get(run.id) !== run.status)) {
-          void mutate('/api/user-model');
+          void mutate(ABOUT_USER_MODEL_KEY);
         }
         for (const run of snapshot.sources) {
           if (active(run) && run.metadata.phase === 'waiting_desktop') void collect(run);
