@@ -86,9 +86,9 @@ struct XopcSessionManagerRow {
         .padding({ left: 56, right: 16, top: 8, bottom: 8 })
         .backgroundColor(this.colors.panel).borderRadius(12).margin({ bottom: 6 })
         .id('sessions-task-' + this.entry.task.taskId)
-        .enabled(!this.locked && !!this.entry.task.activeConversationId)
+        .enabled(!this.locked)
         .onClick((): void => {
-          if (this.entry.task?.activeConversationId) this.onOpenTask(this.entry.task.activeConversationId);
+          if (this.entry.task) this.onOpenTask(this.entry.task.taskId);
         })
     } else if (this.entry.session) {
       Row({ space: 12 }) {
@@ -140,6 +140,7 @@ export struct XopcSessionsView {
   @Param personalBusy: boolean = false;
   @Event onExit: () => void = (): void => {};
   @Event onOpen: (id: string) => void = (_id: string): void => {};
+  @Event onTask: (id: string) => void = (_id: string): void => {};
   @Event onNew: (id: string) => void = (_id: string): void => {};
   @Event onDelete: (id: string) => void = (_id: string): void => {};
   @Event onUndoDelete: (id: string) => void = (_id: string): void => {};
@@ -202,9 +203,8 @@ export struct XopcSessionsView {
   }
   private openTask(id: string): void {
     if (!this.opening && !this.sessions.selecting) {
-      this.opening = true;
       this.getUIContext().getFocusController().clearFocus();
-      this.onOpen(id);
+      this.onTask(id);
     }
   }
   private toggleTasks(id: string): void {

@@ -231,7 +231,7 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain('if (this.hasConnectionIssue())');
     expect(chat).not.toContain("if (this.chat.connection !== 'connected')");
     expect(chat).toContain("this.chat.connection === 'gateway_update_required' || this.chat.connection.startsWith('error:')");
-    const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.sendFlightActive)'));
+    const header = chat.slice(chat.indexOf('if (!this.embedded && !this.taskId)'), chat.indexOf('if (this.sendFlightActive)'));
     expect(header).toContain("$r('sys.symbol.gearshape')");
     expect(header).toContain("$r('sys.symbol.magnifyingglass')");
     expect(header).toContain(".id('chat-header-actions')");
@@ -241,7 +241,7 @@ describe('chat bottom region composition', () => {
   });
 
   it('shows only the agent logo in the header and keeps model selection in the actions sheet', () => {
-    const header = chat.slice(chat.indexOf('if (!this.embedded)'), chat.indexOf('if (this.sendFlightActive)'));
+    const header = chat.slice(chat.indexOf('if (!this.embedded && !this.taskId)'), chat.indexOf('if (this.sendFlightActive)'));
     expect(header).toContain('XopcPersonalAgentAvatar({ extent: 36');
     expect(header).toContain('.width(48).height(48).padding(6)');
     expect(header).not.toMatch(/\bText\(/);

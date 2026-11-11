@@ -15,7 +15,10 @@ data class ProgressItem(val id: String, val title: String, val summary: String,
   val statusLabel: String?, val recommendation: String?, val openAction: ProgressAction?,
   val reviewDetail: String? = null, val primaryAction: ProgressHomeAction? = null,
   val secondaryActions: List<ProgressHomeAction> = emptyList(), val kind: String = "")
-data class ProgressHome(val needsUser: List<ProgressItem>, val background: List<ProgressItem>)
+data class ProgressDelivery(val id: String, val kind: String, val subjectId: String, val title: String, val summary: String,
+  val projectId: String? = null)
+data class ProgressHome(val needsUser: List<ProgressItem>, val background: List<ProgressItem>,
+  val deliveries: List<ProgressDelivery> = emptyList())
 data class ProgressTask(val id: String, val title: String, val body: String, val phase: String,
   val resolution: String?, val updatedAt: Long, val closedAt: Long?, val projectId: String?,
   val priority: String? = null, val version: Int = 0,
@@ -283,7 +286,20 @@ class ProgressRepository(private val gateway: GatewaySession) {
             reviewDetail, primary, secondary, row.optString("kind").take(80))
         }
       }
-      return ProgressHome(items("needsUser"), items("background"))
+      val deliveryRows = root.optJSONArray("recentDeliveries")
+      val deliveries = if (deliveryRows == null) emptyList() else (0 until minOf(deliveryRows.length(), 100))
+        .mapNotNull { index ->
+          val row = deliveryRows.optJSONObject(index) ?: return@mapNotNull null
+          val id = row.optString("id")
+          val kind = row.optString("kind")
+          val subjectId = row.optString("subjectId")
+          val title = row.optString("title")
+          if (id.isBlank() || kind !in setOf("task", "automation") || title.isBlank() ||
+            !subjectId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) return@mapNotNull null
+          ProgressDelivery(id, kind, subjectId, title.take(160), row.optString("summary").take(500),
+            row.optString("projectId").takeIf(String::isNotBlank))
+        }
+      return ProgressHome(items("needsUser"), items("background"), deliveries)
     }
 
     fun parseTasks(raw: String): ProgressTaskPage {

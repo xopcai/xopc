@@ -40,6 +40,7 @@ import ai.xopc.mobile.gateway.ConnectionWaitSnapshot
 import ai.xopc.mobile.gateway.TaskWelcomeInfo
 import ai.xopc.mobile.gateway.ProjectWelcomeInfo
 import ai.xopc.mobile.gateway.ProgressRepository
+import ai.xopc.mobile.gateway.ProgressDelivery
 import ai.xopc.mobile.gateway.ProgressItem
 import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressTask
@@ -105,6 +106,7 @@ data class ProgressUiState(
   val gatewayId: String? = null,
   val needsUser: List<ProgressItem> = emptyList(),
   val background: List<ProgressItem> = emptyList(),
+  val deliveries: List<ProgressDelivery> = emptyList(),
   val tasks: List<ProgressTask> = emptyList(),
   val recentClosedTasks: List<ProgressTask> = emptyList(),
   val taskTotal: Int = 0,
@@ -1781,7 +1783,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
       try {
         val home = runInterruptible(Dispatchers.IO) { progressRepository.home(language) }
         if (revision == progressHomeRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(needsUser = home.needsUser, background = home.background))
+          it.copy(progress = it.progress.copy(needsUser = home.needsUser, background = home.background, deliveries = home.deliveries))
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {

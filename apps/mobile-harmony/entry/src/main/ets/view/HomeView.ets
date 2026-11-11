@@ -36,7 +36,7 @@ import { quickChatIntake } from '../service/quickChatIntake';
 import { pickChatAttachment } from '../service/chatAttachmentPicker';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
 import { MAX_ATTACHMENTS } from '../common/attachments';
-import { XopcBrandLoading } from './MobileComponents';
+import { XopcBrandLoading, XopcHubRow } from './MobileComponents';
 import { common } from '@kit.AbilityKit';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
 import { XopcDiscussionRecordingPanel } from '../viewmodel/discussionRecordingPanel';
@@ -105,8 +105,10 @@ export struct XopcHomeView {
     } catch (_) { layoutState.reduceMotion = true; }
     notificationNavigation.onTarget = (route: XopcNotificationRoute): void => {
       if (route.target.kind === 'home') { this.returnToConversations = false; this.pathStack.clear(); this.tab = 0; }
-      else if (route.target.conversationId) this.navigate({ page: 'chat', itemId: route.target.conversationId });
-      else if (route.target.taskId) this.navigate({ page: 'tasks', itemId: route.target.taskId });
+      else if (route.target.kind === 'task' && route.target.taskId) {
+        this.navigate({ page: 'progress', itemId: '' });
+        this.navigate({ page: 'tasks', itemId: route.target.taskId });
+      } else if (route.target.conversationId) this.navigate({ page: 'chat', itemId: route.target.conversationId });
       else if (route.target.automationId) this.navigate({ page: 'automations', itemId: route.target.automationId });
     };
     notificationNavigation.consume();
@@ -124,7 +126,7 @@ export struct XopcHomeView {
   }
   private navigate(route: XopcMobileRoute): void {
     if (route.page === 'project-new-chat') { void this.openProjectChat(route.projectId ?? ''); return; }
-    if (route.page === 'task-chat' || (route.page === 'tasks' && !!route.itemId)) { void this.openTaskChat(route); return; }
+    if (route.page === 'task-chat') { void this.openTaskChat(route); return; }
     if (route.page === 'understanding-chat') {
       void this.openUnderstandingChat(route);
       return;
@@ -153,9 +155,18 @@ export struct XopcHomeView {
   private async openTaskChat(route: XopcMobileRoute): Promise<void> {
     const taskId = route.itemId;
     if (!taskId || this.taskOpening) return;
+    const sourceTab = this.tab;
+    const sourceChat = this.activeChatId;
+    const sourceDepth = this.pathStack.size();
+    const sourceDestination: XopcMobileRoute | undefined = sourceDepth > 0
+      ? this.pathStack.getParamByIndex(sourceDepth - 1) as XopcMobileRoute : undefined;
+    if (sourceDestination && sourceDestination.page === 'task-conversation'
+      && sourceDestination.itemId === taskId) return;
     this.taskOpening = true;
     try {
       const id = await this.chatRepository.ensureTaskConversation(taskId);
+      if (this.tab !== sourceTab || this.activeChatId !== sourceChat || this.pathStack.size() !== sourceDepth
+        || (sourceDepth > 0 && this.pathStack.getParamByIndex(sourceDepth - 1) !== sourceDestination)) return;
       const target: XopcMobileRoute = {
         page: 'task-conversation', itemId: taskId, title: route.title, prompt: id, projectId: route.projectId
       };
@@ -420,6 +431,7 @@ export struct XopcHomeView {
     if (page === 'sessions') {
       XopcSessionsView({ onExit: (): void => { this.pathStack.pop(); },
         onOpen: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); },
+        onTask: (id: string): void => { this.navigate({ page: 'task-chat', itemId: id }); },
         onNew: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } })
     } else if (page === 'notes' || page === 'inbox' || page === 'note-create') {
       XopcNotesView({ initialId: (param as XopcMobileRoute).itemId, initialStatus: page === 'inbox' ? 'inbox' : '',
@@ -427,9 +439,20 @@ export struct XopcHomeView {
         onExit: (): void => { this.pathStack.pop(); },
         onOpenConversation: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } })
     } else if (page === 'project-detail' || (page === 'projects' && !!(param as XopcMobileRoute).itemId)) {
-      XopcProjectSpaceView({ projectId: (param as XopcMobileRoute).itemId,
+      XopcProjectSpaceView({ projectId: (param as XopcMobileRoute).itemId, deliveries: this.attention.deliveries,
         onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+    } else if (page === 'all-work') {
+      NavDestination() {
+        Column({ space: 12 }) {
+          XopcHubRow({ heading: $r('app.string.tasks'), symbol: $r('sys.symbol.checkmark_circle'),
+            onOpen: (): void => { this.navigate({ page: 'tasks', itemId: '' }); } })
+          XopcHubRow({ heading: $r('app.string.projects'), symbol: $r('sys.symbol.folder'),
+            onOpen: (): void => { this.navigate({ page: 'projects', itemId: '' }); } })
+          XopcHubRow({ heading: $r('app.string.automations'), symbol: $r('sys.symbol.clock'),
+            onOpen: (): void => { this.navigate({ page: 'automations', itemId: '' }); } })
+        }.width('100%').padding(20)
+      }.title($r('app.string.all_work')).backgroundColor(this.colors.surface)
     } else if (page === 'task-conversation') {
       NavDestination() {
         XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
@@ -521,7 +544,7 @@ export struct XopcHomeView {
         ? this.personalAgent.record.displayName : $r('app.string.assistant'), $r('sys.symbol.ellipsis_bubble'))
       this.tabItem(1, $r('app.string.conversations'), $r('sys.symbol.message'))
       this.tabItem(2, $r('app.string.progress'), $r('sys.symbol.checkmark_circle'))
-      this.tabItem(3, $r('app.string.notes'), $r('sys.symbol.doc'))
+      this.tabItem(3, $r('app.string.library_title'), $r('sys.symbol.folder'))
       this.tabItem(4, $r('app.string.personal'), $r('sys.symbol.person'))
     }.width('100%').height(52).padding(4)
   }
@@ -648,6 +671,7 @@ export struct XopcHomeView {
           currentId: this.activeChatId, personalAgent: this.personalAgent.record, personalBusy: this.personalAgent.creating,
           onOpenPersonal: (): void => { void this.openPersonalChat(); },
           onOpen: (id: string): void => { this.openConversationFromList(id, false); },
+          onTask: (id: string): void => { this.navigate({ page: 'task-chat', itemId: id }); },
           onNew: (id: string): void => { this.openConversationFromList(id, true); },
           onDelete: (id: string): void => { void this.replaceDeletedChat(id); },
           onUndoDelete: (id: string): void => {
@@ -656,7 +680,8 @@ export struct XopcHomeView {
           } }) }
         TabContent() { XopcProgressView({ bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 2 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
         TabContent() { XopcNotesTabView({ activePage: this.tab === 3 && !this.detailVisible,
-          bottomInset: this.secondaryBottomRegionHeight,
+          deliveries: this.attention.deliveries, deliveriesLoading: this.attention.loading, deliveryError: this.attention.homeError,
+          onRefreshDeliveries: (): void => { void this.attention.refresh(); }, bottomInset: this.secondaryBottomRegionHeight,
           onStartVoice: (): void => { void this.startNoteCapture(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
         TabContent() { XopcPersonalView({ activePage: this.tab === 4 && !this.detailVisible,
@@ -679,7 +704,10 @@ export struct XopcHomeView {
         Column().id('secondary-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)
         Column() {
           Column() {
-            if (!this.capture.active) {
+            if (!this.capture.active && (this.tab === 1 || this.tab === 2)) {
+              Button($r('app.string.ask_assistant')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+                .onClick((): void => { this.activateTab(0); this.chatFocusRevision++; })
+            } else if (!this.capture.active && this.tab === 3) {
               this.quickComposer()
               XopcChatActionPanel({ open: this.quickPanelOpen, idPrefix: 'home-quick-action',
                 disabledIds: this.disabledQuickActionIds(),

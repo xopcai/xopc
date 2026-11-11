@@ -1,8 +1,8 @@
 import { gatewaySession } from '../service/gatewaySession';
 import { appSettings } from '../service/settings';
-import { XopcHomeAction, XopcHomeItem } from '../model/home';
+import { XopcHomeAction, XopcHomeDelivery, XopcHomeItem } from '../model/home';
 import { XopcTask, XopcTaskList, XopcAutomationMetrics } from '../model/workspace';
-import { parseHome, recentClosed, homeCommand } from '../common/homeProtocol';
+import { mobileRoute, parseHome, recentClosed, homeCommand } from '../common/homeProtocol';
 import { XopcUnderstandingItem, XopcUnderstandingRule, XopcUnderstandingSummary, XopcUserGoal } from '../model/userUnderstanding';
 
 interface XopcGoalPatchRequest {
@@ -24,6 +24,7 @@ interface XopcGoalCreateRequest {
 export class XopcProgressViewModel {
   @Trace needsUser: XopcHomeItem[] = [];
   @Trace background: XopcHomeItem[] = [];
+  @Trace deliveries: XopcHomeDelivery[] = [];
   @Trace closed: XopcTask[] = [];
   @Trace automationMetrics?: XopcAutomationMetrics;
   @Trace loading: boolean = true;
@@ -48,7 +49,11 @@ export class XopcProgressViewModel {
     try {
       const home = parseHome(await gatewaySession.request('/api/home?locale=' + encodeURIComponent(appSettings.effectiveLanguage())));
       if (generation !== this.generation) return;
-      this.needsUser = home.needsUser; this.background = home.background; this.homeError = '';
+      this.needsUser = home.needsUser; this.background = home.background;
+      this.deliveries = Array.isArray(home.recentDeliveries) ? home.recentDeliveries.filter((item: XopcHomeDelivery): boolean =>
+        !!item && typeof item.id === 'string' && typeof item.title === 'string' && typeof item.summary === 'string'
+          && typeof item.href === 'string' && !!mobileRoute(item.href)) : [];
+      this.homeError = '';
     } catch (error) { if (generation === this.generation) this.homeError = (error as Error).message; }
   }
   private async loadTasks(generation: number): Promise<void> {

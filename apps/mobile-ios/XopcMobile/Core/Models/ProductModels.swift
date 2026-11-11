@@ -147,6 +147,15 @@ struct HomeSnapshot: Decodable, Sendable {
     let needsUser: [HomeItem]
     let background: [HomeItem]
     let backgroundCount: Int
+    let recentDeliveries: [HomeDelivery]?
+}
+
+struct HomeDelivery: Decodable, Identifiable, Sendable {
+    let id: String
+    let projectId: String?
+    let title: String
+    let summary: String
+    let href: String
 }
 
 struct HomeItem: Decodable, Identifiable, Sendable {

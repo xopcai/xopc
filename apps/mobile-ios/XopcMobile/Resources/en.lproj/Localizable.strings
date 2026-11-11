@@ -1046,3 +1046,27 @@
 "当前工作区" = "This workspace";
 "当前对话" = "This conversation";
 "指定范围" = "Assigned context";
+
+"问助手" = "Ask assistant";
+
+"返回会话" = "Back to conversation";
+
+"已交付" = "Delivered";
+
+"历史" = "History";
+
+"资料" = "Library";
+
+"资料类型" = "Library category";
+
+"搜索资料" = "Search library";
+
+"浏览文件空间" = "Browse file spaces";
+
+"近期成果" = "Recent results";
+
+"成果" = "Results";
+
+"没有匹配的近期成果" = "No matching recent results";
+
+"没有匹配的资料" = "No matching library items";

@@ -35,12 +35,15 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
   onOpenChat: (String) -> Unit, onOpenTaskList: () -> Unit, onOpenProjects: () -> Unit,
   onOpenAutomations: () -> Unit, onOpenAutomation: (String) -> Unit,
   onOpenTask: (String) -> Unit, onRequestAction: (ProgressHomeAction) -> Unit,
-  bottomChromeHeight: Dp) {
+  bottomChromeHeight: Dp, onOpenRun: (String) -> Unit) {
   val (scheduled, running) = remember(state.background) {
     state.background.partition { it.kind == "scheduled" }
   }
   val pendingCount = state.needsUser.size
   val runningCount = running.size
+  val deliveries = state.deliveries.take(5)
+  val runningIndex = 1 + (if (pendingCount > 0) pendingCount + 1 else 0) +
+    (if (deliveries.isNotEmpty()) deliveries.size + 1 else 0)
   val initialLoading = state.homeLoading && state.needsUser.isEmpty() && state.background.isEmpty()
   val largeText = LocalDensity.current.fontScale > 1.3f
   val listState = rememberLazyListState()
@@ -67,7 +70,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
               scope.launch { listState.animateScrollToItem(1) }
             }
             ProgressCount(runningCount, R.string.progress_ongoing, "progress-running-count", Modifier.fillMaxWidth()) {
-              scope.launch { listState.animateScrollToItem(1 + if (pendingCount > 0) pendingCount + 1 else 0) }
+              scope.launch { listState.animateScrollToItem(runningIndex) }
             }
           }
         } else {
@@ -76,7 +79,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
               scope.launch { listState.animateScrollToItem(1) }
             }
             ProgressCount(runningCount, R.string.progress_ongoing, "progress-running-count", Modifier.weight(1f)) {
-              scope.launch { listState.animateScrollToItem(1 + if (pendingCount > 0) pendingCount + 1 else 0) }
+              scope.launch { listState.animateScrollToItem(runningIndex) }
             }
           }
         }
@@ -103,6 +106,14 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
           item(key = "needs-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_action_required) }
           items(state.needsUser, key = { "needs-${it.id}" }, contentType = { "attention" }) { item ->
             ProgressAttentionRow(item, state.homeActionBusy, { open(item) }, onRequestAction)
+          }
+        }
+        if (deliveries.isNotEmpty()) {
+          item(key = "delivery-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_delivered) }
+          items(deliveries, key = { "delivery-${it.id}" }, contentType = { "work" }) { item ->
+            ProgressHubRow(item.title, item.summary, R.drawable.tab_progress, "progress-delivery-${item.id}") {
+              if (item.kind == "task") onOpenTask(item.subjectId) else onOpenRun(item.subjectId)
+            }
           }
         }
         if (running.isNotEmpty()) {
@@ -135,7 +146,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
         if (state.tasksError) item(key = "tasks-error", contentType = "error") {
           Text(stringResource(R.string.progress_tasks_error), color = MaterialTheme.colorScheme.error)
         } else if (state.recentClosedTasks.isNotEmpty()) {
-          item(key = "closed-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_recent_closed) }
+          item(key = "closed-heading", contentType = "heading") { ProgressOverviewSection(R.string.progress_history) }
           items(state.recentClosedTasks.take(2), key = { "closed-${it.id}" }, contentType = { "work" }) { task ->
             ProgressHubRow(task.title, task.resolution?.let { taskResolutionLabel(it) }.orEmpty(),
               R.drawable.tab_progress, "progress-closed-${task.id}") { onOpenTask(task.id) }

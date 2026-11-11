@@ -34,6 +34,7 @@ class ProgressMarkdownTest {
       }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
     composeTestRule.onNodeWithTag("progress-all-work").performClick()
+    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-1").performClick()
     composeTestRule.onNodeWithTag("progress-task-body").assertExists()
     composeTestRule.onNodeWithTag("markdown-heading").assertTextEquals("Summary")

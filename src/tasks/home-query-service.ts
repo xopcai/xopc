@@ -520,7 +520,7 @@ export class HomeQueryService {
       background: [...runningAutomations, ...workbench.background],
       backgroundCount: runningAutomations.length + workbench.backgroundCount,
       runningConversations,
-      recentDeliveries: this.recentDeliveries(visibleRuns),
+      recentDeliveries: this.recentDeliveries(visibleRuns, automationsById),
       resumable: this.resumableWork(models, decisionCandidates, projectsById, activeRuns, nowMs),
       decisions,
       advisor: this.getAdvisor(locale),
@@ -528,7 +528,7 @@ export class HomeQueryService {
     };
   }
 
-  private recentDeliveries(automationRuns: AutomationRun[]): HomeDelivery[] {
+  private recentDeliveries(automationRuns: AutomationRun[], automations: ReadonlyMap<string, Automation>): HomeDelivery[] {
     const deliveries: HomeDelivery[] = [];
     for (const task of this.#tasks.list({ phase: 'closed', limit: 100 })) {
       if (task.resolution !== 'done') continue;
@@ -537,7 +537,7 @@ export class HomeQueryService {
       const receipt = this.#runs.getReceipt(run.id);
       if (!receipt || receipt.status !== 'succeeded' || (!receipt.summary.trim() && !receipt.evidence.length)) continue;
       deliveries.push({
-        id: `task:${run.id}`, kind: 'task', subjectId: task.id, title: task.title,
+        id: `task:${run.id}`, kind: 'task', subjectId: task.id, projectId: task.projectId ?? undefined, title: task.title,
         summary: deliverySummary(receipt.summary), completedAt: receipt.finalizedAt, read: task.contract?.acceptancePolicy === 'manual',
         href: `/tasks/${encodeURIComponent(task.id)}`,
       });
@@ -545,7 +545,8 @@ export class HomeQueryService {
     for (const run of automationRuns) {
       if (run.status !== 'succeeded' || !run.endedAtMs || (!run.summary?.trim() && !run.conversationId)) continue;
       deliveries.push({
-        id: `automation:${run.id}`, kind: 'automation', subjectId: run.id, title: run.automationName || run.automationId,
+        id: `automation:${run.id}`, kind: 'automation', subjectId: run.id, projectId: automations.get(run.automationId)?.projectId,
+        title: run.automationName || run.automationId,
         summary: deliverySummary(run.summary ?? ''), completedAt: run.endedAtMs, read: run.readAtMs !== undefined,
         href: automationRunHref(run),
       });

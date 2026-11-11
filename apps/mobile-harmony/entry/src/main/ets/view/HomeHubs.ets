@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { XopcPageHeader, XopcHubRow, XopcSectionLabel, XopcListSkeleton } from './MobileComponents';
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
-import { XopcHomeAction, XopcHomeItem, XopcMobileRoute } from '../model/home';
+import { XopcHomeAction, XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { XopcTask } from '../model/workspace';
 import { dispatchHomeAction } from '../common/homeProtocol';
 
@@ -35,7 +35,8 @@ export struct XopcProgressView {
   private stopTimer(): void { if (this.refreshTimer >= 0) clearInterval(this.refreshTimer); this.refreshTimer = -1; }
   private jumpToNeedsUser(): void { this.contentScroller.scrollToIndex(1, true, ScrollAlign.START); }
   private jumpToRunning(): void {
-    this.contentScroller.scrollToIndex(1 + (this.pendingCount > 0 ? this.pendingCount + 1 : 0),
+    const deliveryRows = this.model.deliveries.length > 0 ? Math.min(5, this.model.deliveries.length) + 1 : 0;
+    this.contentScroller.scrollToIndex(1 + (this.pendingCount > 0 ? this.pendingCount + 1 : 0) + deliveryRows,
       true, ScrollAlign.START);
   }
   private openPage(page: string, itemId: string = ''): void { this.onNavigate({ page, itemId }); }
@@ -131,7 +132,7 @@ export struct XopcProgressView {
   build() {
     Column() {
       XopcPageHeader({ heading: $r('app.string.progress'), actionLabel: $r('app.string.all_work'), actionIcon: $r('sys.symbol.checkmark_circle'),
-        onAction: (): void => { this.openPage('tasks'); } })
+        onAction: (): void => { this.openPage('all-work'); } })
       if (this.model.actionError) {
         Text(this.model.actionError === 'UNSUPPORTED_ROUTE' ? $r('app.string.unsupported_route')
           : userErrorMessage(this.model.actionError, 'save')).fontColor(this.colors.danger).fontSize(14).lineHeight(20)
@@ -190,6 +191,15 @@ export struct XopcProgressView {
                     ListItem() { this.attention(item) }
                   }, (item: XopcHomeItem): string => item.id + JSON.stringify(item))
                 }
+                if (this.model.deliveries.length) {
+                  ListItem() { XopcSectionLabel({ heading: $r('app.string.progress_delivered') }) }
+                  ForEach(this.model.deliveries.slice(0, 5), (item: XopcHomeDelivery) => {
+                    ListItem() {
+                      XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.checkmark_circle'),
+                        onOpen: (): void => { this.runAction({ type: 'open', label: item.title, href: item.href }); } })
+                    }
+                  }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
+                }
                 if (this.runningItems.length) {
                   ListItem() { XopcSectionLabel({ heading: $r('app.string.ongoing') }) }
                   ForEach(this.runningItems.slice(0, 5), (item: XopcHomeItem) => {
@@ -225,7 +235,7 @@ export struct XopcProgressView {
                   XopcHubRow({ heading: $r('app.string.load_failed'), summary: this.model.tasksError, symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => { this.model.refresh(); } })
                 }
               } else if (this.model.closed.length) {
-                ListItem() { XopcSectionLabel({ heading: $r('app.string.recent_closed') }) }
+                ListItem() { XopcSectionLabel({ heading: $r('app.string.progress_history') }) }
                 ForEach(this.model.closed.slice(0, 2), (task: XopcTask) => {
                   ListItem() {
                     XopcHubRow({ heading: task.title, summary: this.resolutionLabel(task.resolution ?? ''), symbol: $r('sys.symbol.checkmark_circle'),

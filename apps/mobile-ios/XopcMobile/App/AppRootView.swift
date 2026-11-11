@@ -9,6 +9,7 @@ struct AppRootView: View {
     @State private var personalAgent = PersonalAgentState()
     @State private var settingsPresented = false
     @State private var quickDraft = ""
+    @State private var composerFocusRequest = 0
     @State private var keyboardVisible = false
     @State private var secondaryDockHeight: CGFloat = 0
     @State private var messageLinks = ChatMessageLinkRouter()
@@ -129,11 +130,13 @@ struct AppRootView: View {
                     onPersonalAgentUpdated: personalAgent.applyProfile,
                     onOpenSettings: { settingsPresented = true },
                     onInputFocusChanged: { _ in },
+                    composerFocusRequest: composerFocusRequest,
                     externalIntake: appState.externalIntake,
                     onExternalIntakeFinished: appState.externalIntakeFinished
                 ) { composer, isActionPanelExpanded in
                     bottomDock(showTabs: !isActionPanelExpanded) { composer }
                 }
+                .toolbar(.hidden, for: .navigationBar)
             }
             .tabItem { Label("助手", systemImage: "sparkles") }
             .tag(AppTab.assistant)
@@ -168,6 +171,7 @@ struct AppRootView: View {
                     )
                 }
             }
+            .id("progress-\(appState.activeGatewayProfileID ?? "")")
             .tabItem { Label("进展", systemImage: "chart.line.uptrend.xyaxis") }
             .tag(AppTab.progress)
             .toolbar(.hidden, for: .tabBar)
@@ -181,7 +185,8 @@ struct AppRootView: View {
                     )
                 }
             }
-            .tabItem { Label("笔记", systemImage: "note.text") }
+            .id("library-\(appState.activeGatewayProfileID ?? "")")
+            .tabItem { Label("资料", systemImage: "folder") }
             .tag(AppTab.notes)
             .toolbar(.hidden, for: .tabBar)
 
@@ -233,7 +238,17 @@ struct AppRootView: View {
                         .ignoresSafeArea(edges: .bottom)
                         .allowsHitTesting(false)
                 }
-            bottomDock { quickComposer }
+            bottomDock {
+                if appState.selectedTab == .conversations || appState.selectedTab == .progress {
+                    Button("问助手", systemImage: "bubble.left") {
+                        appState.selectedTab = .assistant
+                        composerFocusRequest += 1
+                    }
+                    .frame(minHeight: 44)
+                } else if appState.selectedTab == .notes {
+                    quickComposer
+                }
+            }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { secondaryDockHeight = $0 }
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
@@ -250,7 +265,7 @@ struct AppRootView: View {
                     dockTab(.assistant, "助手", icon: "bubble.left")
                     dockTab(.conversations, "对话", icon: "bubble.left.and.bubble.right")
                     dockTab(.progress, "进展", icon: "checkmark.circle")
-                    dockTab(.notes, "笔记", icon: "note.text")
+                    dockTab(.notes, "资料", icon: "folder")
                     dockTab(.profile, "我的", icon: "person")
                 }
                 .padding(.horizontal, 4)

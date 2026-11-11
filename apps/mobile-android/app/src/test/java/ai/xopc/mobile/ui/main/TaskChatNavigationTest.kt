@@ -21,6 +21,22 @@ class TaskChatNavigationTest {
     assertFalse(navigation.canReturn)
   }
 
+  @Test fun returnsToTheSourceTabAndRestoresTheAssistantConversation() {
+    for (tab in listOf(HomeTab.Conversations, HomeTab.Progress)) {
+      val navigation = TaskChatNavigation()
+      val origin = ConnectionUiState(selectedConversationId = "assistant")
+      navigation.open("task", origin, sourceTab = tab) {}
+      navigation.settle(origin.copy(selectedConversationId = "task-chat", taskConversationTaskId = "task"))
+
+      val returned = mutableListOf<String>()
+      assertTrue(navigation.canReturn)
+      navigation.close(returned::add) { returned.add(it.name) }
+
+      assertEquals(listOf("assistant", tab.name), returned)
+      assertFalse(navigation.canReturn)
+    }
+  }
+
   @Test fun failedTaskOpeningPreservesTheOriginAndRemovesItsPendingReturn() {
     val navigation = TaskChatNavigation()
     val origin = ConnectionUiState(selectedConversationId = "origin")

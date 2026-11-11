@@ -20,6 +20,7 @@ struct AssistantView<Dock: View>: View {
     var showsFloatingHeader = true
     var sessionActionsRequest = 0
     var messageSearchRequest = 0
+    var composerFocusRequest = 0
     var externalIntake: ExternalIntakeBatch?
     var onExternalIntakeFinished: (UUID, String?) -> Void = { _, _ in }
     let bottomDock: (AssistantComposer, Bool) -> Dock
@@ -110,9 +111,6 @@ struct AssistantView<Dock: View>: View {
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { messageViewportHeight = $0 }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { chatTopInset = $0 }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .top) {
             Color(uiColor: .systemGroupedBackground)
                 .frame(height: chatTopInset)
@@ -691,6 +689,7 @@ struct AssistantView<Dock: View>: View {
         AssistantComposer(
             configuration: configuration,
             focusAllowed: !showingPhone && state.clarification?.kind != "approval",
+            focusRequest: composerFocusRequest,
             draft: $draft,
             attachments: $attachments,
             references: $references,

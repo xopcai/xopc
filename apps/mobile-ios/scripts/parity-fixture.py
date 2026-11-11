@@ -20,6 +20,7 @@ record={'agentId':'personal','conversationId':personal,'state':'ready','displayN
 model={'id':'test/model','name':'Fixture Model','provider':'test','reasoning':True,'vision':False,'thinking':{'options':['off','low','medium','high'],'initialValue':'medium'}}
 outreach={'revision':1,'mode':'balanced','timezone':'Asia/Shanghai','quietStart':22,'quietEnd':8,'dailyMessages':2,'dailyModelCalls':12}
 config={'model':'test/model','thinkingLevel':'medium','configVersion':1}
+project={'id':'fixture-project','name':'资料测试项目','status':'active','updatedAt':now}
 task={'id':'task-header','version':1,'title':'任务顶部栏检查','body':'验证任务对话入口','phase':'ready','delegateAgentId':'main','createdAt':now,'updatedAt':now}
 w=io.BytesIO()
 with wave.open(w,'wb') as audio:
@@ -67,11 +68,20 @@ class Handler(BaseHTTPRequestHandler):
   elif path.endswith('/run'): data=envelope({'active':child in path,'runId':'fixture-live' if child in path else None})
   elif path.endswith('/execution-detail'): data={'detail':{'turnId':query.get('turnId',['turn-1'])[0],'steps':[]}}
   elif path=='/api/home':
-   data={'needsUser':[{'id':'attention','kind':'task','title':'需要验收','summary':'执行已完成，等待确认。','statusLabel':'待验收','recommendation':'查看结果后验收。','openAction':{'type':'open','label':'查看任务','href':'/tasks'},'primaryAction':{'type':'task_review','label':'查看结果并验收','taskId':'task-header'}}], 'background':[{'id':'running','kind':'task','title':'进行中的工作','summary':'正在处理。'},{'id':'scheduled','kind':'scheduled','title':'明日计划','summary':'明天上午执行。'}],'backgroundCount':2}
+   data={'needsUser':[{'id':'attention','kind':'task','title':'需要验收','summary':'执行已完成，等待确认。','statusLabel':'待验收','recommendation':'查看结果后验收。','openAction':{'type':'open','label':'查看任务','href':'/tasks'},'primaryAction':{'type':'task_review','label':'查看结果并验收','taskId':'task-header'}}], 'background':[{'id':'running','kind':'task','title':'进行中的工作','summary':'正在处理。'},{'id':'scheduled','kind':'scheduled','title':'明日计划','summary':'明天上午执行。'}],'backgroundCount':2,
+    'recentDeliveries':[{'id':'task:fixture-delivery','kind':'task','subjectId':'task-header','projectId':'fixture-project','title':'交付纪要','summary':'测试用成果摘要','completedAt':now,'read':False,'href':'/tasks/task-header'}]}
+  elif path=='/api/projects': data={'ok':True,'items':[project],'total':1,'hasMore':False}
+  elif path=='/api/projects/fixture-project': data={'ok':True,'project':project}
+  elif path=='/api/projects/fixture-project/sessions': data={'ok':True,'sessions':[]}
+  elif path=='/api/automations': data={'automations':[]}
   elif path=='/api/tasks': data={'ok':True,'items':[{'task':task,'operationalState':'idle'}],'total':1,'hasMore':False}
-  elif path=='/api/tasks/task-header': data={'ok':True,'task':task,'operationalState':'idle','allowedCommands':['move','close'],'runs':[],'waits':[],'criterionReviews':[]}
-  elif path=='/api/tasks/task-header/conversation': data={'ok':True,'conversationId':child}
+  elif path in ('/api/tasks/task-header','/api/tasks/task-child'):
+   selected_task = task if path.endswith('task-header') else dict(task,id='task-child',title='移动端子任务')
+   data={'ok':True,'task':selected_task,'operationalState':'idle','allowedCommands':['move','close'],'runs':[],'waits':[],'criterionReviews':[]}
+  elif path in ('/api/tasks/task-header/conversation','/api/tasks/task-child/conversation'):
+   data={'ok':True,'conversationId':child}
   elif path=='/api/automations/metrics': data={'nextRun':{'automationId':'auto','name':'不应重复显示的计划','runAtMs':now+100000}}
+  elif path in ('/api/files/recent','/api/files/search'): data={'items':[]}
   elif path=='/api/notes': data={'items':[{'id':'note-1','title':'布局检查笔记','kind':'note','status':'active','createdAt':now,'updatedAt':now,'snippet':'用于模拟器验证。'}],'total':1,'hasMore':False}
   elif path=='/api/user-model/mobile-summary': data={'profile':{'callName':'Tester','role':'工程师'},'settings':{'memoryEnabled':True,'showMemoryReferences':True,'sensitiveWritePolicy':'ask'},'counts':{'total':0,'explicit':0,'learned':0,'review':0,'workMemory':0},'goals':[],'recent':[]}
   elif 'media' in path or path.endswith('voice.wav'):

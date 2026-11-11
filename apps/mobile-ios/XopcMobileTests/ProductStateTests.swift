@@ -237,6 +237,7 @@ struct ProductStateTests {
     @Test func homeRoutesRejectExternalLinksAndResolveKnownDetails() {
         #expect(HomeOpenRoute(href: "/tasks/task-1") == .task("task-1"))
         #expect(HomeOpenRoute(href: "/automations?automation=automation-1") == .automation("automation-1"))
+        #expect(HomeOpenRoute(href: "/automations?automation=automation-1&view=run&run=run-1") == .automationRun("run-1"))
         #expect(HomeOpenRoute(href: "/notes?item=note-1") == .note("note-1"))
         #expect(HomeOpenRoute(href: "https://example.com/tasks/1") == nil)
         #expect(HomeOpenRoute(href: "//example.com/tasks/1") == nil)

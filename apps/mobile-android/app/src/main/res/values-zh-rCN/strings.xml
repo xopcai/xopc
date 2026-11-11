@@ -5,6 +5,13 @@
     <string name="tab_conversations">对话</string>
     <string name="tab_progress">进展</string>
     <string name="progress_attention_count">%1$d 项待处理</string>
+    <string name="library_title">资料</string>
+    <string name="library_search">搜索资料</string>
+    <string name="library_results">成果</string>
+    <string name="library_browse_files">浏览文件空间</string>
+    <string name="library_recent_results">近期成果</string>
+    <string name="library_empty">没有匹配的资料</string>
+    <string name="library_no_results">没有匹配的近期成果</string>
     <string name="tab_notes">笔记</string>
     <string name="tab_me">我的</string>
     <string name="settings_title">设置</string>
@@ -554,6 +561,12 @@
     <string name="progress_project_session_messages">消息 %1$d 条</string>
     <string name="progress_create_error">创建任务未能确认，表单已保留。请检查项目后重试。</string>
     <string name="progress_task_chat">打开任务对话</string>
+    <string name="task_chat_return_conversation">返回会话</string>
+    <string name="task_chat_return_task">返回任务详情</string>
+    <string name="task_chat_return_history">返回对话</string>
+    <string name="ask_assistant">问助手</string>
+    <string name="progress_delivered">已交付</string>
+    <string name="progress_history">历史</string>
     <string name="progress_task_chat_error">无法打开任务对话，请重试。</string>
     <string name="assistant_task_scope_loading">发送前正在核对对话作用域…</string>
     <string name="assistant_task_scope_error">无法核对对话作用域，请重试后发送。</string>

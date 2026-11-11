@@ -3,12 +3,85 @@ import SwiftUI
 struct TaskDetailView: View {
     let configuration: GatewayConfiguration
     let taskID: String
-    let onOpenConversation: (String, String, String) -> Void
+
+    @State private var detail: TaskDetailEnvelope?
+    @State private var error: String?
+    @State private var showingConversation = false
+
+    var body: some View {
+        Group {
+            if let detail {
+                List {
+                    Section {
+                        Text(detail.task.title).mobileTextStyle(.rowTitle)
+                        LabeledContent("运行状态") { Text(LocalizedStringKey(detail.operationalState)) }
+                    }
+                    if let attention = detail.attention, !attention.isEmpty {
+                        Section("需要你处理") {
+                            ForEach(Array(attention.enumerated()), id: \.offset) { entry in
+                                Text(entry.element.summary)
+                            }
+                        }
+                    }
+                    if let receipt = detail.receipts?.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) }),
+                       let summary = receipt.summary, !summary.isEmpty {
+                        Section("执行结果") { Text(summary).textSelection(.enabled) }
+                    }
+                    if let objective = detail.task.contract?.objective ?? detail.task.body, !objective.isEmpty {
+                        Section("目标") { Text(objective).textSelection(.enabled) }
+                    }
+                    if let criteria = detail.task.contract?.acceptanceCriteria, !criteria.isEmpty {
+                        Section("验收标准") {
+                            ForEach(Array(criteria.enumerated()), id: \.offset) { entry in Text(entry.element) }
+                        }
+                    }
+                }
+                .safeAreaInset(edge: .bottom) {
+                    Button("继续任务") { showingConversation = true }
+                        .buttonStyle(.borderedProminent).frame(minHeight: 44)
+                        .accessibilityIdentifier("task-detail-continue")
+                }
+                .refreshable { await load() }
+            } else if let error {
+                ContentUnavailableView {
+                    Label("无法读取任务", systemImage: "exclamationmark.triangle")
+                } description: { Text(error) } actions: {
+                    Button("重试") { Task { await load() } }
+                }
+            } else {
+                ProgressListSkeleton()
+            }
+        }
+        .navigationTitle("任务详情")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showingConversation) {
+            TaskConversationView(configuration: configuration, taskID: taskID)
+        }
+        .task(id: taskID) { await load() }
+        .onChange(of: showingConversation) { _, showing in
+            if !showing { Task { await load() } }
+        }
+    }
+
+    private func load() async {
+        do {
+            detail = try await GatewayClient(configuration: configuration).fetchTask(id: taskID)
+            error = nil
+        } catch is CancellationError {} catch { self.error = error.localizedDescription }
+    }
+}
+
+struct TaskConversationView: View {
+    let configuration: GatewayConfiguration
+    let taskID: String
+    var returnLabel: LocalizedStringKey?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var detail: TaskDetailEnvelope?
     @State private var conversation: ConversationSelection?
+    @State private var nestedTaskID: String?
     @State private var voiceCall = RealtimeVoiceCall()
     @State private var error: String?
     @State private var overviewExpanded = false
@@ -71,8 +144,20 @@ struct TaskDetailView: View {
                 }
             }
         }
-        .navigationBarBackButtonHidden()
-        .toolbar(.hidden, for: .navigationBar)
+        .environment(\.openURL, OpenURLAction { url in
+            if case let .route("tasks", id) = ChatMessageLink.resolve(url.absoluteString) {
+                if id != taskID { nestedTaskID = id }
+            } else {
+                openURL(url)
+            }
+            return .handled
+        })
+        .navigationDestination(item: $nestedTaskID) { id in
+            TaskConversationView(configuration: configuration, taskID: id)
+        }
+        .navigationTitle("任务对话")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(returnLabel == nil ? .visible : .hidden, for: .navigationBar)
         .task(id: taskID) { await load() }
         .task(id: conversation?.id) {
             while !Task.isCancelled {
@@ -111,8 +196,10 @@ struct TaskDetailView: View {
 
     private var taskHeader: some View {
         HStack(spacing: 4) {
-            Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44).contentShape(.rect) }
-                .accessibilityLabel("关闭").accessibilityIdentifier("task-chat-close")
+            if let returnLabel {
+                Button { dismiss() } label: { Image(systemName: "chevron.backward").frame(width: 44, height: 44).contentShape(.rect) }
+                    .accessibilityLabel(Text(returnLabel)).accessibilityIdentifier("task-chat-close")
+            }
             Button { setExpanded(!overviewExpanded) } label: {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {

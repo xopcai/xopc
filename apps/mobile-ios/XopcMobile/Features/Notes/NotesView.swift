@@ -7,7 +7,13 @@ struct NotesView: View {
     var bottomInset: CGFloat = 0
 
     @State private var notes: [NoteSummary] = []
+    @Environment(\.locale) private var locale
+    @State private var section = LibrarySection.all
     @State private var search = ""
+    @State private var recentFiles: [FileResource] = []
+    @State private var deliveries: [HomeDelivery] = []
+    @State private var deliveryError: String?
+    @State private var deliveriesLoading = true
     @State private var status = ""
     @State private var isLoading = false
     @State private var error: String?
@@ -26,9 +32,17 @@ struct NotesView: View {
             notesSearchField
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
-                .padding(.bottom, 12)
+                .padding(.bottom, 8)
+            Picker("资料类型", selection: $section) {
+                ForEach(LibrarySection.allCases) { item in
+                    Text(item.title).tag(item)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("library-category")
+            .padding(.horizontal, 20)
             List {
-                if pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
+                if section.showsNotes && (pendingVoiceNote != nil || pendingVoiceNoteLoadFailed) {
                     Button {
                         presentedSheet = .voice
                     } label: {
@@ -44,62 +58,50 @@ struct NotesView: View {
                     }
                     .accessibilityHint("打开本地待上传录音")
                 }
-                statusPicker
-                if isLoading || isSearchingFiles, notes.isEmpty, matchedFiles.isEmpty {
-                    loadingRows
-                } else if notes.isEmpty, matchedFiles.isEmpty {
-                    ContentUnavailableView(
-                        emptyTitle,
-                        systemImage: "note.text",
-                        description: Text("新建一条文字笔记，或调整筛选条件。")
-                    )
-                    .listRowBackground(Color.clear)
-                } else {
-                    ForEach(notes) { note in
-                        Button {
-                            presentedSheet = .detail(note.id)
-                        } label: {
-                            NoteRow(note: note)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("note-row-\(note.id)")
-                    }
+                if section == .all && !isLoading && !isSearchingFiles && !deliveriesLoading
+                    && error == nil && fileSearchError == nil && deliveryError == nil && notes.isEmpty
+                    && visibleFiles.isEmpty && visibleDeliveries.isEmpty && pendingVoiceNote == nil {
+                    ContentUnavailableView("没有匹配的资料", systemImage: "folder")
                 }
-                if isSearchingFiles {
-                    ProgressView("正在搜索文件…")
-                        .listRowSeparator(.hidden)
-                }
-                if let fileSearchError {
-                    HStack {
-                        Text(fileSearchError).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("重试") { Task { await loadMatchingFiles() } }
-                    }
-                }
-                if !matchedFiles.isEmpty {
-                    Section("文件") {
-                        ForEach(matchedFiles) { file in
-                            NavigationLink {
-                                FileDestinationView(configuration: configuration, file: file)
-                            } label: {
-                                Label(file.name, systemImage: file.kind == "directory" ? "folder" : "doc.text")
+                if section == .notes { statusPicker }
+                if section.showsNotes {
+                    if isLoading, notes.isEmpty {
+                        loadingRows
+                    } else if notes.isEmpty, section == .notes {
+                        ContentUnavailableView(emptyTitle, systemImage: "note.text")
+                            .listRowBackground(Color.clear)
+                    } else if !notes.isEmpty {
+                        Section("笔记") {
+                            ForEach(section == .all && search.isEmpty ? Array(notes.prefix(3)) : notes) { note in
+                                Button {
+                                    presentedSheet = .detail(note.id)
+                                } label: {
+                                    NoteRow(note: note)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("note-row-\(note.id)")
                             }
-                            .accessibilityIdentifier("note-file-result-\(file.id)")
                         }
                     }
+                }
+                if section.showsFiles && (section == .files || !visibleFiles.isEmpty || isSearchingFiles || fileSearchError != nil) {
+                    fileSection
+                }
+                if section.showsDeliveries && (section == .deliveries || !visibleDeliveries.isEmpty || deliveriesLoading || deliveryError != nil) {
+                    deliverySection
                 }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .contentMargins(.top, 0, for: .scrollContent)
             .contentMargins(.bottom, bottomInset, for: .scrollContent)
-            .refreshable { await load() }
+            .refreshable { await refreshLibrary() }
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("笔记")
+        .navigationTitle("资料")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("新建笔记", systemImage: "plus") { presentedSheet = .choice }
             }
         }
@@ -157,16 +159,20 @@ struct NotesView: View {
                 )
             }
         }
-        .task {
-            await load()
+        .task(id: configuration) {
             await refreshPendingVoiceNote()
+            await loadDeliveries()
         }
-        .onChange(of: status) { Task { await load() } }
-        .onChange(of: search) {
-            fileSearchRevision += 1
-            isSearchingFiles = false
-            matchedFiles = []
-            fileSearchError = nil
+        .task(id: LibrarySearch(query: search, status: status, configuration: configuration)) {
+            if !search.isEmpty {
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            }
+            async let notes: Void = load()
+            async let files: Void = loadMatchingFiles()
+            _ = await (notes, files)
+        }
+        .onChange(of: section) {
+            if section != .notes { status = "" }
         }
         .alert("无法读取笔记", isPresented: errorBinding) {
             Button("重试") { Task { await load() } }
@@ -180,10 +186,10 @@ struct NotesView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                TextField("搜索笔记", text: $search)
+                TextField("搜索资料", text: $search)
                     .textFieldStyle(.plain)
                     .submitLabel(.search)
-                    .onSubmit { Task { await load(); await loadMatchingFiles() } }
+                    .onSubmit { Task { await searchLibrary() } }
                     .accessibilityIdentifier("notes-search-field")
             }
             .padding(.horizontal, 16)
@@ -198,6 +204,83 @@ struct NotesView: View {
             }
             .accessibilityLabel("文件")
             .accessibilityIdentifier("notes-files-button")
+        }
+    }
+
+    private var visibleFiles: [FileResource] {
+        guard search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return matchedFiles }
+        return Array(recentFiles.prefix(section == .all ? 3 : 50))
+    }
+
+    private var fileSection: some View {
+        Section("文件") {
+            if isSearchingFiles { ProgressListSkeleton() }
+            if let fileSearchError {
+                Text(fileSearchError).foregroundStyle(.secondary)
+                Button("重试") { Task { await loadMatchingFiles() } }
+            }
+            ForEach(visibleFiles) { file in
+                NavigationLink {
+                    FileDestinationView(configuration: configuration, file: file)
+                } label: {
+                    Label(file.name, systemImage: file.kind == "directory" ? "folder" : "doc.text")
+                }
+                .accessibilityIdentifier("note-file-result-\(file.id)")
+            }
+            if section == .files {
+                NavigationLink("浏览文件空间") { FileLibraryView(configuration: configuration) }
+            }
+        }
+    }
+
+    private var deliverySection: some View {
+        Section("近期成果") {
+            if deliveriesLoading && deliveries.isEmpty { ProgressListSkeleton() }
+            if let deliveryError {
+                Text(deliveryError).foregroundStyle(.secondary)
+                Button("重试") { Task { await loadDeliveries() } }
+            }
+            ForEach(visibleDeliveries.prefix(section == .all && search.isEmpty ? 3 : deliveries.count)) { item in
+                HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation)
+            }
+            if section == .deliveries && visibleDeliveries.isEmpty && !deliveriesLoading && deliveryError == nil {
+                Text("没有匹配的近期成果").foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var visibleDeliveries: [HomeDelivery] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return deliveries.filter {
+            $0.destination != nil && (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)
+                || $0.summary.localizedCaseInsensitiveContains(query))
+        }
+    }
+
+    private func searchLibrary() async {
+        async let notes: Void = load()
+        async let files: Void = loadMatchingFiles()
+        _ = await (notes, files)
+    }
+
+    private func refreshLibrary() async {
+        async let search: Void = searchLibrary()
+        async let deliveries: Void = loadDeliveries()
+        await refreshPendingVoiceNote()
+        _ = await (search, deliveries)
+    }
+
+    @MainActor private func loadDeliveries() async {
+        deliveriesLoading = true
+        defer { deliveriesLoading = false }
+        do {
+            let home = try await GatewayClient(configuration: configuration).fetchHome(locale: locale.identifier)
+            try Task.checkCancellation()
+            deliveries = home.recentDeliveries ?? []
+            deliveryError = nil
+        } catch is CancellationError {
+        } catch {
+            deliveryError = error.localizedDescription
         }
     }
 
@@ -277,12 +360,8 @@ struct NotesView: View {
 
     @MainActor
     private func loadMatchingFiles() async {
+        matchedFiles = []
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            matchedFiles = []
-            fileSearchError = nil
-            return
-        }
         fileSearchRevision += 1
         let revision = fileSearchRevision
         isSearchingFiles = true
@@ -292,10 +371,11 @@ struct NotesView: View {
             }
         }
         do {
-            let files = try await GatewayClient(configuration: configuration).searchFiles(query: query)
+            let client = GatewayClient(configuration: configuration)
+            let files = try await query.isEmpty ? client.fetchRecentFiles() : client.searchFiles(query: query)
             guard revision == fileSearchRevision,
                   search.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
-            matchedFiles = files
+            if query.isEmpty { recentFiles = files } else { matchedFiles = files }
             fileSearchError = nil
         } catch is CancellationError {
         } catch {
@@ -385,4 +465,28 @@ struct NoteRow: View {
             Text(duration, format: .number.precision(.fractionLength(0))) + Text(" 秒")
         }
     }
+}
+
+private enum LibrarySection: String, CaseIterable, Identifiable {
+    case all, notes, files, deliveries
+
+    var id: Self { self }
+    var showsNotes: Bool { self == .all || self == .notes }
+    var showsFiles: Bool { self == .all || self == .files }
+    var showsDeliveries: Bool { self == .all || self == .deliveries }
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .all: "全部"
+        case .notes: "笔记"
+        case .files: "文件"
+        case .deliveries: "成果"
+        }
+    }
+}
+
+private struct LibrarySearch: Equatable {
+    let query: String
+    let status: String
+    let configuration: GatewayConfiguration
 }

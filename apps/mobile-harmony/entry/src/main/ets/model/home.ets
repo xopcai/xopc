@@ -9,6 +9,7 @@ export interface XopcHomeItem {
 }
 export interface XopcHomeDecision { detail?: string; response?: XopcHomeDecisionResponse; }
 export interface XopcHomeDecisionResponse { approvalId?: string; }
-export interface XopcHomeResponse { needsUser: XopcHomeItem[]; background: XopcHomeItem[]; backgroundCount: number; decisions?: XopcHomeDecision[]; }
+export interface XopcHomeDelivery { id: string; projectId?: string; title: string; summary: string; href: string; }
+export interface XopcHomeResponse { needsUser: XopcHomeItem[]; background: XopcHomeItem[]; backgroundCount: number; decisions?: XopcHomeDecision[]; recentDeliveries?: XopcHomeDelivery[]; }
 export interface XopcMobileRoute { page: string; itemId: string; projectId?: string; prompt?: string; title?: string; version?: string; }
 export interface XopcHomeCommand { kind: string; runId?: string; approvalId?: string; decision?: string; }

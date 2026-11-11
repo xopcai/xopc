@@ -176,9 +176,9 @@ export struct XopcTaskChatHeader {
       Column() {
         Row({ space: 4 }) {
           Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([this.colors.foreground])
+            SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(18).fontColor([this.colors.foreground])
           }.id('task-chat-close').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-            .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
+            .accessibilityText($r('app.string.back')).onClick((): void => { this.onClose(); })
           Button({ type: ButtonType.Normal }) {
             Row({ space: 8 }) {
               Column({ space: 2 }) {

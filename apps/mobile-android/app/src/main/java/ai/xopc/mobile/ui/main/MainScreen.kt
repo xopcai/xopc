@@ -204,7 +204,7 @@ enum class HomeTab(@field:StringRes val label: Int, val icon: Int) {
   Assistant(R.string.tab_assistant, R.drawable.tab_assistant),
   Conversations(R.string.tab_conversations, R.drawable.tab_conversations),
   Progress(R.string.tab_progress, R.drawable.tab_progress),
-  Notes(R.string.tab_notes, R.drawable.tab_notes),
+  Notes(R.string.library_title, R.drawable.action_folder),
   Me(R.string.tab_me, R.drawable.tab_me),
 }
 
@@ -1205,6 +1205,10 @@ internal fun MainContent(
   var personalPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
   val taskNavigation = rememberTaskChatNavigation(connection)
   var progressAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
+  val libraryDelivery = rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
+  val deliveryRoute = libraryDelivery.value
+  val libraryDeliveryKind = deliveryRoute.substringBefore(':')
+  val libraryDeliveryId = deliveryRoute.substringAfter(':', "")
   var notesAtRoot by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(true) }
   var personalReturnPage by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("home") }
   var personalStartSection by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("overview") }
@@ -1253,6 +1257,7 @@ internal fun MainContent(
   }
   LaunchedEffect(selectedTab, connection.profile?.gatewayId) {
     if (selectedTab == HomeTab.Notes && connection.profile != null) {
+      onRefreshProgressHome()
       onLoadNotes(connection.notes.search, connection.notes.status)
     }
   }
@@ -1408,7 +1413,7 @@ internal fun MainContent(
   val phoneUi = phoneWorkspaceState(phoneController)
   val showBottomChrome = !(selectedTab == HomeTab.Assistant && phonePage) && connection.profile != null && when (selectedTab) {
     HomeTab.Progress -> progressAtRoot
-    HomeTab.Notes -> notesAtRoot
+    HomeTab.Notes -> notesAtRoot && libraryDeliveryId.isEmpty()
     HomeTab.Me -> personalPage == "home"
     else -> true
   }
@@ -1451,7 +1456,7 @@ internal fun MainContent(
   val imeVisible = WindowInsets.isImeVisible
   val layoutDirection = LocalLayoutDirection.current
   val tabStateHolder = rememberSaveableStateHolder()
-  BackHandler(enabled = selectedTab == HomeTab.Assistant && isTaskChat(connection) && taskNavigation.canReturn) {
+  BackHandler(enabled = selectedTab == HomeTab.Assistant && isTaskChat(connection) && !imeVisible) {
     taskNavigation.close(onSelectConversation, onSelectTab)
   }
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
@@ -1465,7 +1470,7 @@ internal fun MainContent(
         val attentionCount = connection.progress.needsUser.size.takeIf {
           connection.progress.gatewayId == connection.profile.gatewayId
         } ?: 0
-        val showQuick = selectedTab != HomeTab.Assistant
+        val showQuick = selectedTab == HomeTab.Notes
         if (selectedTab == HomeTab.Assistant) {
           MainBottomSurface("assistant-bottom-surface") {
             AssistantComposer(connection, assistantComposerValue, { value ->
@@ -1511,7 +1516,7 @@ internal fun MainContent(
                   onCreateConversation()
                 })
             }
-            if (!assistantActionsOpen) ChatImeDock {
+            if (!assistantActionsOpen && !isTaskChat(connection)) ChatImeDock {
               XopcTabDock(selectedTab, onSelectTab, grouped = true, attentionCount = attentionCount,
                 personalAgent = connection.personal.takeIf { it.agent?.conversationId == connection.selectedConversationId })
             }
@@ -1568,6 +1573,12 @@ internal fun MainContent(
           }
         } else if (!imeVisible) {
           MainBottomSurface("secondary-bottom-surface") {
+            if (selectedTab == HomeTab.Conversations || selectedTab == HomeTab.Progress) {
+              androidx.compose.material3.TextButton(onClick = {
+                assistantFocusRevision++
+                onSelectTab(HomeTab.Assistant)
+              }) { Text(stringResource(R.string.ask_assistant)) }
+            }
             XopcTabDock(selectedTab, onSelectTab, grouped = true,
               attentionCount = attentionCount,
               personalAgent = connection.personal.takeIf {
@@ -1592,8 +1603,15 @@ internal fun MainContent(
           onSelectTab(HomeTab.Me)
         })
     } else {
-    tabStateHolder.SaveableStateProvider(selectedTab.name) {
-    when (selectedTab) {
+    val showLibraryDelivery = selectedTab == HomeTab.Notes && libraryDeliveryId.isNotEmpty()
+    val contentTab = if (showLibraryDelivery) HomeTab.Progress else selectedTab
+    val tabStateKey = when {
+      showLibraryDelivery -> "library-delivery-${connection.profile?.gatewayId}-$libraryDeliveryKind-$libraryDeliveryId"
+      selectedTab == HomeTab.Notes -> "library-root-${connection.profile?.gatewayId}"
+      else -> selectedTab.name
+    }
+    tabStateHolder.SaveableStateProvider(tabStateKey) {
+    when (contentTab) {
       HomeTab.Assistant, HomeTab.Conversations -> {
         val title = stringResource(selectedTab.label)
         if (connection.profile == null) PairingScreen(title, connection, onPair, onCancelPairing,
@@ -1615,7 +1633,7 @@ internal fun MainContent(
           onLoadMessageMedia, onSpeechChunk, onOpenMessageTarget = { target ->
             when (target.kind) {
               "note" -> { onOpenNote(target.id); onSelectTab(HomeTab.Notes) }
-              "task" -> taskNavigation.open(target.id, connection, onOpenTaskChat)
+              "task" -> taskNavigation.open(target.id, connection, onOpen = onOpenTaskChat)
               "project" -> { onOpenProgressProject(target.id); onSelectTab(HomeTab.Progress) }
               "automation" -> { onOpenAutomation(target.id); onSelectTab(HomeTab.Progress) }
               "session" -> { onSelectConversation(target.id); onSelectTab(HomeTab.Assistant) }
@@ -1651,8 +1669,10 @@ internal fun MainContent(
           onSelectConversation(id)
           onSelectTab(HomeTab.Assistant)
         }, { taskId, id ->
-          onSelectTaskChildConversation(taskId, id)
-          onSelectTab(HomeTab.Assistant)
+          taskNavigation.open(taskId, connection, sourceTab = HomeTab.Conversations, waitsForResult = false) {
+            onSelectTaskChildConversation(taskId, id)
+            onSelectTab(HomeTab.Assistant)
+          }
         }, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
           onTogglePin, onToggleArchive, onBatchConversations,
           onBeginConversationShare, onConfirmConversationShare,
@@ -1661,38 +1681,49 @@ internal fun MainContent(
       HomeTab.Progress -> if (connection.profile == null) PairingScreen(
         stringResource(R.string.tab_progress), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
-      else ProgressScreen(connection.progress.takeIf { it.gatewayId == connection.profile.gatewayId }
-        ?: ProgressUiState(gatewayId = connection.profile.gatewayId, loading = true),
-        rootInsets, onRefreshProgressHome, onRefreshProgressTasks, onLoadMoreProgressTasks,
-        onOpenProgressTask, onProgressTaskSearchChange, onSubmitProgressTaskSearch,
-        onProgressTaskCommand, onStartProgressTask, onCreateTaskWithChat,
-        onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
-        { taskId -> taskNavigation.openFromProgress(taskId, onOpenTaskChat) },
-        onSaveProgressTask, onHomeAction = onProgressHomeAction,
-        onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
-        onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
-        onCreateAutomation = onCreateAutomation,
-        onUpdateAutomation = onUpdateAutomation,
-        onDeleteAutomation = onDeleteAutomation,
-        onAutomationRunAction = onAutomationRunAction,
-        onTopLevelChange = { progressAtRoot = it },
-        onOpenChat = { id ->
-        onSelectConversation(id)
-        onSelectTab(HomeTab.Assistant)
-      }, onOpenNote = { id ->
-        onOpenNote(id)
-        onSelectTab(HomeTab.Notes)
-      }, onCreateProjectChat = { projectId ->
-        if (!connection.creatingConversation && connection.progress.project?.id == projectId) {
-          onCreateProjectConversation(projectId)
+      else {
+        val gatewayId = connection.profile.gatewayId
+        ProgressScreen(connection.progress.takeIf { it.gatewayId == gatewayId }
+          ?: ProgressUiState(gatewayId = gatewayId, loading = true),
+          rootInsets, onRefreshProgressHome, onRefreshProgressTasks, onLoadMoreProgressTasks,
+          onOpenProgressTask, onProgressTaskSearchChange, onSubmitProgressTaskSearch,
+          onProgressTaskCommand, onStartProgressTask, onCreateTaskWithChat,
+          onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
+          { taskId -> taskNavigation.open(taskId, connection, sourceTab = selectedTab, onOpen = onOpenTaskChat) },
+          onSaveProgressTask, onHomeAction = onProgressHomeAction,
+          onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
+          onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
+          onCreateAutomation = onCreateAutomation,
+          onUpdateAutomation = onUpdateAutomation,
+          onDeleteAutomation = onDeleteAutomation,
+          onAutomationRunAction = onAutomationRunAction,
+          onTopLevelChange = { if (!showLibraryDelivery) progressAtRoot = it },
+          onOpenChat = { id ->
+          onSelectConversation(id)
           onSelectTab(HomeTab.Assistant)
-        }
-      }, chatBusy = connection.creatingConversation, bottomChromeHeight = bottomChromeHeight,
-      )
+        }, onOpenNote = { id ->
+          onOpenNote(id)
+          onSelectTab(HomeTab.Notes)
+        }, onCreateProjectChat = { projectId ->
+          if (!connection.creatingConversation && connection.progress.project?.id == projectId) {
+            onCreateProjectConversation(projectId)
+            onSelectTab(HomeTab.Assistant)
+          }
+        }, chatBusy = connection.creatingConversation, bottomChromeHeight = bottomChromeHeight,
+          initialDeliveryKind = libraryDeliveryKind.takeIf { showLibraryDelivery },
+          initialDeliveryId = libraryDeliveryId.takeIf { showLibraryDelivery },
+          onCloseDelivery = {
+            tabStateHolder.removeState(tabStateKey)
+            libraryDelivery.value = ""
+          },
+        )
+      }
       HomeTab.Notes -> if (connection.profile == null) PairingScreen(
-        stringResource(R.string.tab_notes), connection, onPair, onCancelPairing, onScanPairing,
+        stringResource(R.string.library_title), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
-      else NotesScreen(connection.notes.takeIf { it.gatewayId == connection.profile.gatewayId }
+      else {
+        val libraryProgress = connection.progress.takeIf { it.gatewayId == connection.profile.gatewayId }
+        NotesScreen(connection.notes.takeIf { it.gatewayId == connection.profile.gatewayId }
         ?: NotesUiState(gatewayId = connection.profile.gatewayId), rootInsets,
         onLoadNotes, onLoadMoreNotes, onOpenNote, onNewNote,
         onNoteDraftChange, onSaveNoteDraft, onCreatedNoteHandled, onOpenNoteDraft,
@@ -1709,7 +1740,13 @@ internal fun MainContent(
         onNoteFileSpaces = onNoteFileSpaces,
         onNoteFiles = onNoteFiles, onNoteFileText = onNoteFileText,
         onNoteFileContent = onNoteFileContent,
-        onTopLevelChange = { notesAtRoot = it }, bottomChromeHeight = bottomChromeHeight)
+        onTopLevelChange = { notesAtRoot = it }, bottomChromeHeight = bottomChromeHeight,
+        deliveries = libraryProgress?.deliveries.orEmpty(), deliveriesLoading = libraryProgress?.homeLoading != false,
+        deliveryError = libraryProgress?.homeError == true, onRefreshDeliveries = onRefreshProgressHome,
+        onOpenDelivery = { delivery ->
+          libraryDelivery.value = "${delivery.kind}:${delivery.subjectId}"
+        })
+      }
       HomeTab.Me -> {
         val profile = connection.profile
         val personal = if (profile == null) PersonalUiState(gatewayId = "")
