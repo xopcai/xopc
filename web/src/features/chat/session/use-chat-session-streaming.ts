@@ -92,7 +92,7 @@ export function useChatSessionStreaming(deps: {
     chatId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string },
     request?: SessionSnapshotRequest,
-  ) => void;
+  ) => boolean | void;
   loadSessionById: (key: string, offset?: number) => Promise<Message[] | undefined>;
   resetCurrentSession: () => Promise<void>;
   pollSessionNameAfterTurn: () => void;
@@ -170,7 +170,7 @@ export function useChatSessionStreaming(deps: {
 
   const tryResumeAgentRun = useCallback(
     async (chatId: string, loadedMessages?: Message[]) => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
+      if (!shouldApplyStreamUpdate(chatId) || chatRunManager.isSubmittingFor(chatId)) return;
 
       const browserScope = useGatewayStore.getState().conversationId;
       const sameBrowserScope = () => useGatewayStore.getState().conversationId === browserScope;
@@ -178,7 +178,7 @@ export function useChatSessionStreaming(deps: {
       const responseAtLookup = store().sessions[chatId]?.streamingMsg;
       const inputAtLookup = store().sessions[chatId]?.messages.findLast(message => message.role === 'user')?.clientSubmissionId;
       const runId = await resolveResumeRunId(chatId);
-      if (!sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration) return;
+      if (!sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration || chatRunManager.isSubmittingFor(chatId)) return;
       if (!runId) {
         const currentResponse = store().sessions[chatId]?.streamingMsg;
         if (
@@ -195,7 +195,7 @@ export function useChatSessionStreaming(deps: {
       const resumeSuperseded = () => {
         const currentResponse = store().sessions[chatId]?.streamingMsg;
         const currentInput = store().sessions[chatId]?.messages.findLast(message => message.role === 'user')?.clientSubmissionId;
-        return !sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration
+        return !sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration || chatRunManager.isSubmittingFor(chatId)
           || Boolean(currentInput && currentInput !== inputAtLookup)
           || Boolean(readPendingAgentRunId(chatId) && readPendingAgentRunId(chatId) !== runId)
           || Boolean(currentResponse?.turnId && currentResponse.turnId !== runId && currentResponse.turnId !== responseAtLookup?.turnId)

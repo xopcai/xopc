@@ -1159,15 +1159,6 @@ export function ProjectDetailPage() {
     }
   }, [blockerDraft.reason, blockerDraft.title, project, refreshProjectState]);
 
-  const headerStart = useMemo(
-    () => (
-      <Link to={backPath} className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={backPath === '/projects' ? pm.backToProjects : msg.sidebar.back}>
-        <ArrowLeft className="size-4" aria-hidden />
-      </Link>
-    ),
-    [backPath, msg.sidebar.back, pm.backToProjects],
-  );
-
   const headerEnd = useMemo(
     () => project ? (
       <>
@@ -1190,7 +1181,7 @@ export function ProjectDetailPage() {
 
   useLayoutEffect(() => {
     setPageHeader({
-      startExtra: headerStart,
+      startExtra: null,
       main: (
         project ? (
           <ProjectSwitcher currentProject={project} pm={pm} projectsText={projectsText} wd={wd} />
@@ -1204,7 +1195,7 @@ export function ProjectDetailPage() {
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, headerStart, pm, project, projectsText, setPageHeader, wd]);
+  }, [clearPageHeader, headerEnd, pm, project, projectsText, setPageHeader, wd]);
 
   function applyProjectUpdate(updated: Project) {
     setProject((current) => current ? { ...current, ...updated } : null);

@@ -19,6 +19,12 @@ export class TaskOriginRepository {
       WHERE task_id = ? AND conversation_id = ?`).get(taskId, conversationId));
   }
 
+  getConversationId(taskId: string): string | undefined {
+    const row = getSqliteDatabase().prepare('SELECT conversation_id FROM task_origin_links WHERE task_id = ?')
+      .get(taskId) as { conversation_id: string } | undefined;
+    return row?.conversation_id;
+  }
+
   list(conversationId: string, limit = 20, options: { offset?: number; order?: 'active-first' | 'recent' } = {}): { items: DelegatedTaskSummary[]; total: number } {
     const db = getSqliteDatabase();
     const total = (db.prepare(`SELECT count(*) AS count FROM task_origin_links

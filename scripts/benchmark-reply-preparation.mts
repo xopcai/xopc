@@ -12,18 +12,20 @@ import { RunVerification } from '../src/agent/coding/run-verification.js';
 const exec = promisify(execFile);
 const directory = await mkdtemp(join(tmpdir(), 'xopc-reply-preparation-'));
 const iterations = 20;
+const startupCheckpoint = process.argv.includes('--startup-checkpoint');
 const distribution = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
   return { count: sorted.length, p50Ms: sorted[Math.ceil(sorted.length * .5) - 1]!,
-    p95Ms: sorted[Math.ceil(sorted.length * .95) - 1]! };
+    p75Ms: sorted[Math.ceil(sorted.length * .75) - 1]!, p95Ms: sorted[Math.ceil(sorted.length * .95) - 1]! };
 };
 
-async function exercise(trackWorkspace: boolean, withTool: boolean): Promise<{ totalMs: number; preparationMs: number }> {
+async function exercise(baseline: boolean, withTool: boolean): Promise<{ totalMs: number; preparationMs: number }> {
+  const trackWorkspace = startupCheckpoint || baseline;
   const started = performance.now();
   const run = await RunVerification.open(directory, {
     required: false, trackWorkspace, toolNames: ['personal_task', 'read_file'],
   });
-  const initial = await run.summary();
+  const initial = startupCheckpoint && !baseline ? run.capturedSummary() : await run.summary();
   assert.equal(typeof initial.revision, trackWorkspace ? 'string' : 'undefined');
   const preparationMs = performance.now() - started;
   if (withTool) {
@@ -31,6 +33,7 @@ async function exercise(trackWorkspace: boolean, withTool: boolean): Promise<{ t
     await run.afterTool({ toolCall: { id: 'submit', name: 'personal_task' }, args: {}, isError: false,
       result: { content: [], details: {} } } as unknown as AfterToolCallContext);
   }
+  if (startupCheckpoint && baseline) await run.summary(); // Legacy optional pendingContext refreshed the revision.
   assert.equal(await run.pendingContext(), '');
   assert.equal((await run.summary()).changed, false);
   return { totalMs: performance.now() - started, preparationMs };
@@ -38,6 +41,11 @@ async function exercise(trackWorkspace: boolean, withTool: boolean): Promise<{ t
 
 try {
   await exec('git', ['init', '--quiet', directory]);
+  if (startupCheckpoint) {
+    await writeFile(join(directory, 'tracked.txt'), 'Tracked baseline.\n');
+    await exec('git', ['add', '--', 'tracked.txt'], { cwd: directory });
+    await exec('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@xopc.local', 'commit', '-qm', 'fixture'], { cwd: directory });
+  }
   for (let index = 0; index < 32; index++) {
     await writeFile(join(directory, `fixture-${index}.txt`), 'Synthetic reply preparation fixture.\n'.repeat(32));
   }
@@ -63,7 +71,8 @@ try {
   }
   const report = { generatedAt: new Date().toISOString(),
     scope: 'Real Git/filesystem work in an isolated synthetic repository; verification stage only, not end-to-end response latency.',
-    fixture: { untrackedFiles: 32, iterations, order: 'alternating' }, scenarios };
+    comparison: startupCheckpoint ? 'fresh checkpoint vs captured checkpoint with workspace tracking enabled' : 'workspace tracking vs Personal surface bypass',
+    fixture: { committedBaseline: startupCheckpoint, untrackedFiles: 32, iterations, order: 'alternating' }, scenarios };
   const outputIndex = process.argv.indexOf('--output');
   if (outputIndex !== -1) {
     assert.ok(process.argv[outputIndex + 1], '--output requires a path');

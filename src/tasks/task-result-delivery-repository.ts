@@ -74,7 +74,7 @@ export class TaskResultDeliveryRepository {
   }
 
   /** Called inside the run completion transaction, after stale receipts are rejected. */
-  enqueue(runId: string, summary: string, status: 'succeeded' | 'failed', resultText?: string): boolean {
+  enqueue(runId: string, summary: string, status: 'succeeded' | 'failed', resultText?: string, hostArtifact?: { id: string; sha256?: string }): boolean {
     const db = getSqliteDatabase();
     const run = new TaskRunRepository().get(runId);
     if (!run || run.parentRunId) return false;
@@ -92,12 +92,12 @@ export class TaskResultDeliveryRepository {
     const outcomes = rows.map(row => TurnOutcomeSchema.parse(JSON.parse(row.outcome_json)));
     const latest = outcomes.at(-1);
     if (!latest) return false;
-    const research = [...outcomes].reverse().find(outcome => outcome.research)?.research;
+    const research = hostArtifact?.sha256 ? undefined : [...outcomes].reverse().find(outcome => outcome.research)?.research;
     const task = new TaskRepository().require(run.taskId);
     const validResearch = research && research.contractVersion === task.latestContractVersion
       && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
     const selectionRequired = !personalRequestForTask(task.id) && Boolean(task.body?.includes('finalArtifactIds'));
-    const researchGap = selectionRequired && !research || Boolean(research && (!validResearch || !validResearch.checks.length
+    const researchGap = selectionRequired && !research && !hostArtifact?.sha256 || Boolean(research && (!validResearch || !validResearch.checks.length
       || validResearch.checks.length !== task.contract?.acceptanceCriteria.length
       || validResearch.checks.some(check => check.status !== 'passed')
       || validResearch.instructionChecks?.some(check => check.status !== 'passed')
@@ -107,9 +107,12 @@ export class TaskResultDeliveryRepository {
       artifacts.set(item.sourceFileId ?? item.artifactId, item);
     }
     const allArtifacts = outcomes.flatMap(outcome => outcome.deliverables);
-    const deliverables = research?.finalArtifactIds !== undefined
-      ? research.finalArtifactIds.map(id => allArtifacts.findLast(item => item.artifactId === id)).filter((item): item is TurnOutcome['deliverables'][number] => Boolean(item))
+    const finalArtifactIds = research?.finalArtifactIds ?? (hostArtifact ? [hostArtifact.id] : undefined);
+    const deliverables = finalArtifactIds
+      ? finalArtifactIds.map(id => allArtifacts.findLast(item => item.artifactId === id)).filter((item): item is TurnOutcome['deliverables'][number] => Boolean(item))
       : selectionRequired ? [] : [...artifacts.values()].slice(-50);
+    const verifiedArtifact = hostArtifact?.sha256 && deliverables.find(item => item.artifactId === hostArtifact.id);
+    if (verifiedArtifact) verifiedArtifact.sha256 = hostArtifact.sha256;
     const selectedManifest = validResearch?.finalArtifactIds !== undefined;
     const selectedMissing = selectedManifest && deliverables.length !== validResearch!.finalArtifactIds!.length;
     const finalText = validResearch?.finalText;
@@ -130,7 +133,7 @@ export class TaskResultDeliveryRepository {
       status: selectedManifest
         ? status === 'failed' || researchGap || selectedMissing || unpublishedFile || replyTooLong || deliverables.some(item => item.availability !== 'available') ? 'partial' : 'succeeded'
         : latest.status === 'failed' ? 'failed'
-        : status === 'failed' || latest.status === 'partial' || unpublishedFile || replyTooLong || researchGap || deliverables.some(item => item.availability !== 'available')
+        : status === 'failed' || latest.status === 'partial' || (hostArtifact && !verifiedArtifact) || unpublishedFile || replyTooLong || researchGap || deliverables.some(item => item.availability !== 'available')
           ? 'partial' : 'succeeded' };
     const now = Date.now();
     const previous = db.prepare(`SELECT delivery_id, payload_json FROM task_result_deliveries WHERE task_run_id IN

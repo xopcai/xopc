@@ -84,12 +84,12 @@ export function startChatRunStateBridge(): () => void {
     return true;
   };
 
-  const recordInactive = ({ conversationId, runId }: SessionRun) => {
+  const recordInactive = ({ conversationId, runId }: SessionRun, recoverTerminal = true) => {
     if (preserveSuccessor(conversationId, runId)) return;
-    const handled = chatRunManager.reconcileInactive(conversationId, runId);
+    const handled = chatRunManager.reconcileInactive(conversationId, runId, recoverTerminal);
     const cleared = clearPendingAgentRunIfMatches(conversationId, runId);
-    if (!handled && cleared) useChatSessionStore.getState().clearStreamingState(conversationId);
-    if (handled || cleared) {
+    if (!handled && cleared && !chatRunManager.isSubmittingFor(conversationId)) useChatSessionStore.getState().clearStreamingState(conversationId);
+    if (handled || (cleared && !chatRunManager.isSubmittingFor(conversationId))) {
       clearChatRunPresence(conversationId);
       dispatchTranscriptRefresh(conversationId);
     }
@@ -100,7 +100,7 @@ export function startChatRunStateBridge(): () => void {
     if (preserveSuccessor(conversationId, runId)) return;
     const handled = chatRunManager.reconcileTerminal(conversationId, runId, status);
     const cleared = clearPendingAgentRunIfMatches(conversationId, runId);
-    if (!handled && cleared) {
+    if (!handled && cleared && !chatRunManager.isSubmittingFor(conversationId)) {
       useChatSessionStore.getState().clearStreamingState(conversationId);
       const visible = useChatSessionStore.getState().focusedConversationId === conversationId;
       if (status === 'error') markChatRunFailed(conversationId, !visible);
@@ -181,7 +181,7 @@ export function startChatRunStateBridge(): () => void {
     eventRevision++;
     // Detach presentation immediately; the server cooperatively cancels execution separately.
     terminalRuns.set(runKey(run), Date.now());
-    recordInactive(run);
+    recordInactive(run, false);
   };
   const onConnected = () => void reconcile();
 

@@ -60,6 +60,7 @@ export type RunXopcEmbeddedTurnParams = {
   toolPolicyConversationId?: string;
   runId: string;
   gatewayRunStartedMonotonic?: number;
+  preparationTimings?: Record<string, number>;
   userMessage: AgentMessage;
   model: Model<Api>;
   modelRef: string;

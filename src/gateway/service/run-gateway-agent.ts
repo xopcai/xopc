@@ -51,6 +51,16 @@ const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = ChatStreamEvent;
 
+export type RunGatewayAgentOptions = {
+  inputReceivedAtMs?: number;
+  inputIdentity?: { inputId: string; clientMessageId: string };
+  signal?: AbortSignal;
+  runId?: string;
+  taskRunId?: string;
+  sourceContexts?: AgentSourceContext[];
+  presentation?: 'voice';
+};
+
 export type RunGatewayAgentDeps = {
   config: Config;
   agentService: AgentService;
@@ -75,7 +85,7 @@ export async function *runGatewayAgent(
   origin: TurnOrigin,
   attachments?: UserTurnAttachment[],
   thinking?: string,
-  runOptions?: { inputReceivedAtMs?: number; signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
+  runOptions?: RunGatewayAgentOptions,
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
   const runStartedAtMs = Date.now();
   const runStartedMonotonic = performance.now();
@@ -242,7 +252,7 @@ export async function *runGatewayAgent(
           taskRunId: runOptions?.taskRunId,
         }));
         registeredActiveWebchatRun = true;
-        publishRealtime('sessions', 'run.started', { conversationId, runId });
+        publishRealtime('sessions', 'run.started', { conversationId, runId, ...runOptions?.inputIdentity });
       }
       let streamError: string | undefined;
       let embeddedAborted = false;
@@ -340,7 +350,7 @@ export async function *runGatewayAgent(
         if (registeredActiveWebchatRun && activeWebchatRunBySession.get(conversationId) === runId) {
           activeWebchatRunBySession.delete(conversationId);
           activeExecutionBySession.delete(conversationId);
-          publishRealtime('sessions', 'run.completed', { conversationId, runId, status: terminalStatus });
+          publishRealtime('sessions', 'run.completed', { conversationId, runId, status: terminalStatus, ...runOptions?.inputIdentity });
         }
         runAbortControllers.delete(runId);
         const assistantPlainText = agentService.getLastAssistantPlainText(conversationId);

@@ -44,7 +44,9 @@ import {
   type ProductReference,
 } from '@xopcai/gateway-contract';
 
-import { parseTaskHandoffReferences } from '../../tasks/task-handoff.js';
+import { isTaskNotificationPreference, taskNotificationContext } from '../../tasks/task-notification-preference.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
+import { parseTaskHandoffReferences, parseTaskConversationExcerpts } from '../../tasks/task-handoff.js';
 import { resolveResponseLanguageForSession } from '../prompt/response-language.js';
 import { hasUnlocalizedTaskText, resolveTaskLocale } from '../../tasks/task-language.js';
 import { runWithActivityContext } from '../../activity/index.js';
@@ -1037,6 +1039,16 @@ async function handleTask(
       : explicitAgentId ?? (config ? getDefaultAgentId() : deps.getCurrentAgentId?.() ?? 'main');
     const sourceRefs = parseTaskHandoffReferences(args.sourceRefs);
     if (!sourceRefs || sourceRefs.some(ref => !['result', 'note', 'task', 'file'].includes(ref.kind))) return { ok: false, error: 'Invalid selected task sourceRefs' };
+    if (args.conversationExcerpts !== undefined && (createMode !== 'allocate' || !originConversationId || !isPersonalConversation(originConversationId))) {
+      return { ok: false, error: 'Selected conversation excerpts require a Personal Task submission' };
+    }
+    const notificationPreference = args.notificationPreference;
+    if (notificationPreference !== undefined && (!isTaskNotificationPreference(notificationPreference)
+      || createMode !== 'allocate' || !originConversationId || !isPersonalConversation(originConversationId))) {
+      return { ok: false, error: 'Notification preferences require a Personal Task submission' };
+    }
+    const conversationExcerpts = parseTaskConversationExcerpts(originConversationId, args.conversationExcerpts, config);
+    if (!conversationExcerpts) return { ok: false, error: 'Use exact visible passages and entry IDs from this conversation for selected excerpts' };
     const input = {
       idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID(),
       title: trimString(args.title) ?? objective,
@@ -1062,7 +1074,12 @@ async function handleTask(
         metadata: {},
       }] : []), ...sourceRefs.map(ref => ({ targetKind: 'source' as const, targetId: `${ref.kind}:${ref.sourceId}`,
         role: 'input' as const, pinned: true, retrievalPolicy: { currentAuthorizationRequired: true },
-        metadata: { kind: 'task_reference_request', ref } }))],
+        metadata: { kind: 'task_reference_request', ref } })),
+      ...(originConversationId && isTaskNotificationPreference(notificationPreference)
+        ? [taskNotificationContext(originConversationId, notificationPreference)] : []),
+      ...conversationExcerpts.map(excerpt => ({ targetKind: 'source' as const, targetId: `conversation-excerpt:${excerpt.entryId}`,
+        role: 'input' as const, pinned: true, retrievalPolicy: { currentAuthorizationRequired: true },
+        metadata: { kind: 'task_conversation_excerpt', excerpt } }))],
       authorityGrants: [],
       activation: createMode === 'allocate'
         ? { mode: 'allocate' as const, requirements: normalizeSpecialistRequirements(args.requirements) }

@@ -65,20 +65,45 @@ describe('SessionInputCoordinator', () => {
     await vi.waitFor(() => expect(coordinator.snapshot(conversationId).activeRunId).toBeUndefined());
   });
 
-  it('coalesces a burst of personal text without dropping its durable inputs', async () => {
-    const execute = vi.fn(async (_input: unknown) => ({ status: 'ok', summary: '' }));
+  it('starts idle Personal priority input without waiting for its coalescing window', async () => {
+    const execute = vi.fn(async () => ({ status: 'ok', summary: '' }));
+    const interrupt = vi.fn(async () => {});
     const coordinator = new SessionInputCoordinator({
-      prioritizeInput: () => true, coalesceWindowMs: 20,
+      prioritizeInput: () => true, interrupt, coalesceWindowMs: 200,
       sessionExists: async () => true, execute, emit: () => {},
       prepareAttachments: async (_key, attachments) => attachments,
       prepareContexts: async () => [], steer: async () => false,
     });
+    const accepted = await coordinator.submit({
+      conversationId, clientMessageId: 'idle', delivery: 'next', content: 'Explain', origin,
+    });
+    expect(accepted.ok).toBe(true);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(interrupt).not.toHaveBeenCalled();
+    await coordinator.waitForCompletion(conversationId, 'idle');
+  });
+
+  it('coalesces a burst after interrupting a Personal run without dropping its durable inputs', async () => {
+    let finish!: (result: { status: string; summary: string }) => void;
+    const execute = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }))
+      .mockResolvedValue({ status: 'ok', summary: '' });
+    const interrupt = vi.fn(async () => { finish({ status: 'aborted', summary: '' }); });
+    const coordinator = new SessionInputCoordinator({
+      prioritizeInput: () => true, interrupt, coalesceWindowMs: 200,
+      sessionExists: async () => true, execute, emit: () => {},
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => [], steer: async () => false,
+    });
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'Initial reply', origin });
     await coordinator.submit({ conversationId, clientMessageId: 'first', delivery: 'next', content: 'Plan a trip', origin });
     const second = await coordinator.submit({ conversationId, clientMessageId: 'second', delivery: 'next', content: 'Under 500', origin });
     const secondId = second.ok ? second.state.inputs.find(input => input.clientMessageId === 'second')!.id : '';
-    await coordinator.waitForCompletion(conversationId, 'second');
+    expect(interrupt).toHaveBeenCalled();
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(execute.mock.calls[0]![0]).toMatchObject({ content: 'Plan a trip\n\nUnder 500' });
+    await coordinator.waitForCompletion(conversationId, 'second');
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls[1]![0]).toMatchObject({ content: 'Plan a trip\n\nUnder 500' });
     expect(getSessionInputById(conversationId, secondId)).toMatchObject({ content: 'Under 500', status: 'completed' });
   });
 

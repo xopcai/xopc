@@ -386,6 +386,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
 async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {
   const preparationStartedAt = performance.now();
+  const preparationTimings: Record<string, number> = { ...params.preparationTimings };
   let firstModelRequestAt: number | undefined;
   let currentModelRequestAt: number | undefined;
   let modelRequestNumber = 0;
@@ -444,8 +445,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       transcriptId: transcriptRuntime.transcriptId,
       runId,
     });
+    const instructionsStartedAt = performance.now();
     const instructions = await RepositoryInstructions.open(workspaceDir, { isWorkspaceTrusted: params.isWorkspaceTrusted });
     const rootInstructions = await instructions.load('.', true);
+    preparationTimings.workspaceInstructionsMs = performance.now() - instructionsStartedAt;
+    const runnerStartedAt = performance.now();
     runner = await acquireEmbeddedSessionRunner({
       runtimeId: transcriptRuntime.runtimeId,
       transcriptId: transcriptRuntime.transcriptId,
@@ -461,6 +465,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       transcriptRuntime,
     });
 
+    preparationTimings.runnerAcquireMs = performance.now() - runnerStartedAt;
     const { session, reused } = runner;
     const configurationTurnStart = session.agent.state.messages.length;
     await runLease.attach(session, async () => session.abort());
@@ -472,7 +477,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       await session.abort();
       return { ok: false, terminationReason: resolveAgentAbortReason(runAbortSignal.reason), errorMessage: 'aborted' };
     }
+    const transcriptStartedAt = performance.now();
     session.agent.state.messages = stripTrailingErrorAssistantMessages(await transcriptRuntime.loadMessages());
+    preparationTimings.transcriptLoadMs = performance.now() - transcriptStartedAt;
     runner.piSm.setActiveTurnId?.(runId);
     const recoveryState = { interruptedAttempts: 0 };
     const requestRetryBudget = { continues: 0 };
@@ -577,6 +584,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       if (session.agent.transformContext === transformWorkEvidence) session.agent.transformContext = baseTransformContext;
     };
     const loggingStreamFn: typeof session.agent.streamFunction = (streamModel, context, options) => {
+      const payloadStartedAt = firstModelRequestAt === undefined ? performance.now() : undefined;
       bindComputerAgentTurn(conversationId, runId, streamModel);
       const releaseComputerFrames = computerRequestFrameCleanup(conversationId, runId);
       instructions.acknowledge();
@@ -734,9 +742,11 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         const gatewayTiming = params.gatewayRunStartedMonotonic === undefined ? {} : {
           gatewayRunToFirstModelRequestMs: firstModelRequestAt - params.gatewayRunStartedMonotonic,
         };
-        recordTraceLatency({ embeddedPreparationMs: firstModelRequestAt - preparationStartedAt, ...gatewayTiming });
+        if (payloadStartedAt !== undefined) preparationTimings.modelPayloadPreparationMs = firstModelRequestAt - payloadStartedAt;
+        recordTraceLatency({ embeddedPreparationMs: firstModelRequestAt - preparationStartedAt, ...gatewayTiming, ...preparationTimings });
         log.info({ conversationId, runId, modelRef: latencyModelRef, thinking: latencyReasoning ?? 'off',
           phase: 'first_model_request', ...gatewayTiming, preparationMs: firstModelRequestAt - preparationStartedAt,
+          preparationTimings, runnerReused: reused, workspaceVerificationDeferred: !verification.workspaceSnapshotStarted,
           messageCount: effectiveContext.messages.length, systemPromptLength: effectiveSystemPrompt.length,
           toolCount: effectiveTools.length, toolSchemaChars: JSON.stringify(effectiveTools).length,
           estimatedContextTokens: assessed.evaluation.estimatedTokens }, 'Embedded first model request ready');
@@ -751,20 +761,32 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       return stream;
     };
     session.agent.streamFunction = loggingStreamFn;
-    const verification = await RunVerification.open(workspaceDir, {
-      required: params.verifyChanges === true, toolNames: tools.map(tool => tool.name),
-      // The persisted personal-main policy filters out workspace mutation tools.
-      trackWorkspace: executionToolPolicy.surface !== 'personal_main',
-    });
+    const verificationStartedAt = performance.now();
     const checkpoints = runner.piSm.getBranch?.() ?? [];
     const recoveryTurn = params.resumeLastUserMessage === true || Boolean(params.recoveryMessage);
     const lastStart = checkpoints.findLastIndex(entry => entry.type === 'custom' && entry.customType === 'coding_run_started');
     const lastSummary = checkpoints.findLastIndex(entry => entry.type === 'custom' && entry.customType === 'coding_verification');
     const checkpoint = checkpoints[recoveryTurn && lastSummary >= lastStart ? lastSummary : lastStart];
-    if (checkpoint?.type === 'custom' && (recoveryTurn || lastStart > lastSummary)) {
+    // Older checkpoints always attempted to capture a revision.
+    const restoreBaseline = checkpoint?.type === 'custom' && (recoveryTurn || lastStart > lastSummary)
+      && (checkpoint.data as { workspaceSnapshotStarted?: boolean } | undefined)?.workspaceSnapshotStarted !== false;
+    // The persisted personal-main policy filters out workspace mutation tools.
+    const trackWorkspace = executionToolPolicy.surface !== 'personal_main';
+    const verification = await RunVerification.open(workspaceDir, {
+      required: params.verifyChanges === true, toolNames: tools.map(tool => tool.name),
+      trackWorkspace,
+      deferWorkspaceSnapshot: (trackWorkspace || params.verifyChanges === true) && !restoreBaseline,
+    });
+    if (restoreBaseline) {
       verification.restore(checkpoint.data, recoveryTurn && lastSummary >= lastStart);
     }
-    runner.piSm.appendCustomEntry('coding_run_started', { runId, workspace: workspaceDir, required: params.verifyChanges ?? false, ...await verification.summary() });
+    const recordVerificationStart = (snapshot: ReturnType<RunVerification['capturedSummary']>, workspaceSnapshotStarted: boolean) => {
+      runner.piSm.appendCustomEntry('coding_run_started', {
+        runId, workspace: workspaceDir, required: params.verifyChanges ?? false, workspaceSnapshotStarted, ...snapshot,
+      });
+    };
+    recordVerificationStart(verification.capturedSummary(), verification.workspaceSnapshotStarted);
+    preparationTimings.workspaceVerificationMs = performance.now() - verificationStartedAt;
     let policyStopped = false;
     let policyCompleted = false;
     let recoveringModel = params.resumeLastUserMessage === true || Boolean(params.recoveryMessage);
@@ -837,7 +859,9 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
         const scoped = await instructions.forTool(context.toolCall.name, context.args);
         if (scoped) return { block: true, reason: `${scoped}\n\nApply these instructions, then retry the operation.` };
       }
-      await verification.beforeTool(context.toolCall.id, context.toolCall.name);
+      await verification.beforeTool(context.toolCall.id, context.toolCall.name, snapshot => {
+        recordVerificationStart(snapshot, true);
+      });
       if (context.toolCall.name === 'computer_use' && !(context as unknown as Record<symbol, unknown>)[computerProgramOperation]) {
         let operationNumber = 0;
         const nestedContext = (operation: string, args: unknown) => ({ ...context,
@@ -1172,7 +1196,10 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       if (connectionStopped) runner.piSm.appendCustomEntry('connection_required', { runId, conversationId });
       if (clarificationStopped) runner.piSm.appendCustomEntry('clarification_required', { runId, conversationId });
-      runner.piSm.appendCustomEntry('coding_verification', { runId, workspace: workspaceDir, required: params.verifyChanges ?? false, ...await verification.summary() });
+      runner.piSm.appendCustomEntry('coding_verification', {
+        runId, workspace: workspaceDir, required: params.verifyChanges ?? false,
+        workspaceSnapshotStarted: verification.workspaceSnapshotStarted, ...await verification.summary(),
+      });
 
       if (runAbortSignal.aborted) {
         return { ok: false, retryable: false, terminationReason: resolveAgentAbortReason(runAbortSignal.reason), errorMessage: 'aborted' };

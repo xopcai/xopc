@@ -534,6 +534,89 @@ describe('MessageSender terminal state', () => {
     expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: 'suspended' }));
   });
 
+  it.each(['started', 'completed', 'terminal-before-replay', 'inactive-before-replay'] as const)('uses a matching run %s event received before the POST receipt', async kind => {
+    const bus = new EventTarget();
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:3000' },
+      dispatchEvent: vi.fn(bus.dispatchEvent.bind(bus)),
+      addEventListener: bus.addEventListener.bind(bus),
+      removeEventListener: bus.removeEventListener.bind(bus),
+    });
+    const sender = new MessageSender();
+    const onReplayGap = vi.fn(async () => {});
+    const onResult = vi.fn();
+    let clientMessageId = '';
+    vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+      if (String(url).includes('/input-receipts/')) return Response.json({ payload: {
+        receipt: { conversationId, clientMessageId, inputId: 'own-input', transcriptId: 'transcript' },
+        session: { transcriptId: 'transcript' }, execution: { runId: 'own-run', status: 'completed' },
+      } });
+      clientMessageId = JSON.parse(String(init?.body)).clientMessageId;
+      const detail = { conversationId, inputId: 'own-input', clientMessageId, runId: 'own-run' };
+      bus.dispatchEvent(new CustomEvent('run-started', { detail: { ...detail, clientMessageId: 'other-client', runId: 'other-run' } }));
+      bus.dispatchEvent(new CustomEvent(kind === 'completed' ? 'run-completed' : 'run-started', { detail: { ...detail, ...(kind === 'completed' ? { status: 'success' } : {}) } }));
+      return acceptedInput(conversationId, clientMessageId, { inputs: [{ id: 'own-input', clientMessageId }] });
+    });
+    const pending = sender.send('hello', conversationId, undefined, 'off', {
+      onStreamStart: vi.fn(), onToken: vi.fn(), onThinking: vi.fn(), onThinkingEnd: vi.fn(),
+      onToolStart: vi.fn(), onToolEnd: vi.fn(), onProgress: vi.fn(), onReplayGap, onResult, onError: vi.fn(),
+    });
+    if (kind !== 'completed') {
+      await vi.waitFor(() => expect(sender.trackedRunId).toBe('own-run'));
+      if (kind === 'terminal-before-replay') expect(sender.reconcileTerminal(conversationId, 'own-run', 'success')).toBe(true);
+      else if (kind === 'inactive-before-replay') expect(sender.reconcileInactive(conversationId, 'own-run', true)).toBe(true);
+      else realtimeState.listener?.onEvent({ topic: 'run:own-run', seq: 1, event: 'run_end',
+        data: { runId: 'own-run', conversationId, payload: { status: 'success' } } });
+    }
+    await pending;
+    expect(apiFetch).toHaveBeenCalledTimes(kind === 'inactive-before-replay' ? 2 : 1);
+    expect(onResult).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ runId: 'own-run', status: 'success' }));
+    if (kind !== 'started') expect(onReplayGap).toHaveBeenCalledExactlyOnceWith({ runId: 'own-run', terminal: true, signal: expect.any(AbortSignal) });
+    else expect(onReplayGap).not.toHaveBeenCalled();
+  });
+
+  it.each(['headers', 'body'] as const)('cancels a fallback waiting for %s when the matching announcement arrives', async stage => {
+    const bus = new EventTarget();
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:3000' },
+      dispatchEvent: vi.fn(bus.dispatchEvent.bind(bus)),
+      addEventListener: bus.addEventListener.bind(bus),
+      removeEventListener: bus.removeEventListener.bind(bus),
+    });
+    const sender = new MessageSender();
+    let clientMessageId = '';
+    let pollSignal: AbortSignal | undefined;
+    let reading = false;
+    vi.mocked(apiFetch).mockImplementation(async (url, init) => {
+      if (String(url).endsWith('/input-state')) {
+        pollSignal = init?.signal as AbortSignal;
+        const waitForAbort = () => {
+          reading = true;
+          return new Promise<never>((_resolve, reject) => pollSignal!.addEventListener('abort', () => reject(pollSignal!.reason), { once: true }));
+        };
+        if (stage === 'headers') return waitForAbort();
+        const response = Response.json({});
+        response.json = waitForAbort;
+        return response;
+      }
+      clientMessageId = JSON.parse(String(init?.body)).clientMessageId;
+      return acceptedInput(conversationId, clientMessageId, { inputs: [{ id: 'own-input', clientMessageId }] });
+    });
+    const pending = sender.send('hello', conversationId);
+    await vi.waitFor(() => expect(reading).toBe(true));
+    const announce = (inputId: string) => bus.dispatchEvent(new CustomEvent('run-started', {
+      detail: { conversationId, inputId, clientMessageId, runId: 'own-run' },
+    }));
+    announce('unrelated-input');
+    expect(pollSignal?.aborted).toBe(false);
+    announce('own-input');
+    await vi.waitFor(() => expect(sender.trackedRunId).toBe('own-run'));
+    expect(pollSignal?.aborted).toBe(true);
+    realtimeState.listener?.onEvent({ topic: 'run:own-run', seq: 1, event: 'run_end',
+      data: { runId: 'own-run', conversationId, payload: { status: 'success' } } });
+    await pending;
+  });
+
   it('follows an accepted queued first input until it finishes', async () => {
     const sender = new MessageSender();
     const onReplayGap = vi.fn(async () => {});
@@ -545,11 +628,16 @@ describe('MessageSender terminal state', () => {
       }
       return true;
     });
+    let clientMessageId = '';
     vi.mocked(apiFetch).mockImplementation(async (url, init) => {
       if (String(url).endsWith('/input-state')) {
         return new Response(JSON.stringify({ payload: { inputs: [] } }), { status: 200 });
       }
-      const clientMessageId = JSON.parse(String(init?.body)).clientMessageId;
+      if (String(url).includes('/input-receipts/')) {
+        return Response.json({ payload: { receipt: { conversationId, inputId: 'input-queued', transcriptId: 'transcript', clientMessageId },
+          session: { transcriptId: 'transcript' }, execution: { runId: 'finished-run', status: 'completed' } } });
+      }
+      clientMessageId = JSON.parse(String(init?.body)).clientMessageId;
       return acceptedInput(conversationId, clientMessageId, {
         inputs: [{ id: 'input-queued', clientMessageId }],
       });
@@ -564,8 +652,8 @@ describe('MessageSender terminal state', () => {
     expect(apiFetch).toHaveBeenCalledWith(
       expect.stringContaining('/input-state'), expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    expect(onReplayGap).toHaveBeenCalledOnce();
-    expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: 'success' }));
+    expect(onReplayGap).toHaveBeenCalledExactlyOnceWith({ runId: 'finished-run', terminal: true, signal: expect.any(AbortSignal) });
+    expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ runId: 'finished-run', status: 'success' }));
     expect(streamingStatesAtNotification.at(-1)).toBe(false);
   });
 

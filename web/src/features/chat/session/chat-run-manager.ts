@@ -38,6 +38,11 @@ class ChatRunManager {
     return this.senders.get(conversationId)?.isStreamingFor(conversationId) ?? false;
   }
 
+  isSubmittingFor(conversationId: string): boolean {
+    const sender = this.senders.get(conversationId);
+    return Boolean(sender?.isStreamingFor(conversationId) && !sender.trackedRunId);
+  }
+
   isTrackingRun(conversationId: string, runId: string): boolean {
     return this.senders.get(conversationId)?.isTrackingRun(conversationId, runId) ?? false;
   }
@@ -86,8 +91,8 @@ class ChatRunManager {
     return handled;
   }
 
-  reconcileInactive(conversationId: string, runId: string): boolean {
-    const handled = this.senders.get(conversationId)?.reconcileInactive(conversationId, runId) ?? false;
+  reconcileInactive(conversationId: string, runId: string, recoverTerminal = false): boolean {
+    const handled = this.senders.get(conversationId)?.reconcileInactive(conversationId, runId, recoverTerminal) ?? false;
     if (this.resumeRunIds.get(conversationId) === runId) this.resumeRunIds.delete(conversationId);
     return handled;
   }

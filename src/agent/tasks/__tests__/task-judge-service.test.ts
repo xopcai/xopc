@@ -60,6 +60,14 @@ describe('parseTaskJudgeDecision', () => {
 
 
 describe('coding completion evidence', () => {
+  it('requires a terminal checkpoint even when a turn never needed a workspace snapshot', () => {
+    const data = { required: true, workspaceSnapshotStarted: false, changed: false, workspace: '/workspace' };
+    const start = { type: 'custom', customType: 'coding_run_started', data };
+    const final = { type: 'custom', customType: 'coding_verification', data };
+    expect(codingCompletionEvidence([start] as any)).toEqual({ allowed: false });
+    expect(codingCompletionEvidence([start, final] as any)).toEqual({ allowed: true });
+  });
+
   it('cannot approve an unfinished run or a stale check based on assistant text', () => {
     const start = { type: 'custom', customType: 'coding_run_started', data: { required: true } };
     expect(codingCompletionEvidence([start] as any).allowed).toBe(false);

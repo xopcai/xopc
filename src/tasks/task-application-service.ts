@@ -523,6 +523,7 @@ export class TaskApplicationService {
     terminalMessage?: string;
     suppressAttention?: boolean;
     resultText?: string;
+    hostArtifact?: { id: string; sha256?: string };
   }): TaskApplicationResult {
     return runSqliteWriteTransaction((db) => {
       const run = this.#runs.get(input.runId);
@@ -565,7 +566,7 @@ export class TaskApplicationService {
         idempotencyKey: `task-run-receipt:${run.id}`,
       });
       if (input.receipt.status === 'succeeded' || input.receipt.status === 'failed') {
-        new TaskResultDeliveryRepository().enqueue(run.id, input.receipt.summary, input.receipt.status, input.resultText);
+        new TaskResultDeliveryRepository().enqueue(run.id, input.receipt.summary, input.receipt.status, input.resultText, input.hostArtifact);
       }
       if (!this.#tasks.runPhaseUnchanged(task.id, run.id) || task.phase === 'closed') {
         enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: task.version,

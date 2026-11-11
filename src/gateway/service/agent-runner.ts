@@ -27,7 +27,7 @@ import {
 import type { ClarifyRequestPayload, ClarifyRequestResult } from '../../agent/tools/clarify-tool.js';
 import type { GatewayPrincipal } from '../security/gateway-principal.js';
 import { currentDeviceExecutionActor, deviceExecutionPrincipalId } from '../../endpoint-tools/execution-actor.js';
-import { runGatewayAgent } from './run-gateway-agent.js';
+import { runGatewayAgent, type RunGatewayAgentOptions } from './run-gateway-agent.js';
 import { NextTurnSuggestionService } from '../next-turn-suggestions/service.js';
 import { describeActiveExecution, type ActiveExecution, type ActiveExecutionKind } from './active-execution.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
@@ -136,7 +136,7 @@ export class GatewayAgentRunner {
           input.origin,
           input.attachments,
           input.thinking,
-          { inputReceivedAtMs: input.inputReceivedAtMs, runId: input.runId, taskRunId: input.taskRunId, sourceContexts: input.sourceContexts,
+          { inputReceivedAtMs: input.inputReceivedAtMs, inputIdentity: input.inputIdentity, runId: input.runId, taskRunId: input.taskRunId, sourceContexts: input.sourceContexts,
             ...(input.origin.type === 'channel' && input.origin.channel === 'voice' ? { presentation: 'voice' as const } : {}) },
         );
         let result: { status: string; summary: string } | undefined;
@@ -279,7 +279,7 @@ export class GatewayAgentRunner {
     origin: TurnOrigin,
     attachments?: UserTurnAttachment[],
     thinking?: string,
-    runOptions?: { inputReceivedAtMs?: number; signal?: AbortSignal; runId?: string; taskRunId?: string; sourceContexts?: AgentSourceContext[]; presentation?: 'voice' },
+    runOptions?: RunGatewayAgentOptions,
   ): AsyncGenerator<
     { type: string; [key: string]: unknown },
     { status: string; summary: string },

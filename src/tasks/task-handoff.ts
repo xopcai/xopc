@@ -15,9 +15,15 @@ import { fileSpaceId, parseFileResourceId } from '../files/file-service.js';
 import { resolveMediaReference } from '../media/media-reference.js';
 import { NotesStore } from '../notes/store.js';
 import { getProjectForSession } from '../projects/workspace.js';
+import { forgottenHistoryEntries, projectUnadmittedForgottenFields } from '../memory-learning/forgotten-history.js';
+import { canRecallHistoryEntry } from '../session/history-recall-policy.js';
 import { effectiveWorkspacePathForSession } from '../session/session-workspace.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { getBrowserTabBindingById } from '../storage/sqlite/browser-tab-binding-repository.js';
+import { stripRuntimeContextFromUserMessage } from '../session/user-message-display.js';
+import { isVoiceConversationMessage } from '../session/voice-transcript.js';
+import type { TranscriptStoredRow } from '../session/session-context-for-llm.js';
+import { extractFtsContent } from '../storage/sqlite/row-mappers.js';
 import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { TaskRepository } from './task-repository.js';
 import { readPersonalResult, resolvePersonalResultReference, assertPersonalResultDelegateAccess, type PersonalResultInput } from '../personal-agent/result-reader.js';
@@ -27,12 +33,20 @@ import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { TaskContextRepository } from './task-context-repository.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
+interface ConversationExcerpt {
+  entryId: string;
+  start: number;
+  length: number;
+  contentHash: string;
+}
+
 export interface TaskHandoff {
   version: 1;
   conversationId: string;
   transcriptId: string;
   inputId?: string;
   originalRequest?: string;
+  conversationExcerpts?: ConversationExcerpt[];
   interpretation: string;
   baseline: { contractVersion: number; assignmentEpoch: number; instructionSequence: number };
   sources: Array<{ kind: string; sourceId: string; version: string; title: string; text: string;
@@ -60,6 +74,61 @@ export function parseTaskHandoffReferences(raw: unknown): TurnContextRef[] | nul
   return parseTurnContextRefs(refs);
 }
 
+function conversationExcerptSource(conversationId: string, entryId: string, config?: Config) {
+  if (config?.userContext.enabled === false || (getSessionConfig(conversationId)?.userContextMode ?? 'enabled') !== 'enabled') return undefined;
+  const row = getSqliteDatabase().prepare(`SELECT e.payload_json, e.role, t.cwd, s.agent_id, s.project_id
+    FROM sessions s JOIN transcripts t ON t.transcript_id = s.active_transcript_id
+    JOIN transcript_entries e ON e.transcript_id = t.transcript_id
+    WHERE s.conversation_id = ? AND e.entry_id = ? AND e.role IN ('user', 'assistant')
+      AND json_extract(e.payload_json, '$.type') IS NULL
+      AND json_extract(e.payload_json, '$.customType') IS NULL
+      AND COALESCE(json_extract(e.payload_json, '$.metadata.hiddenFromClient'), 0) != 1
+      AND COALESCE(json_extract(e.payload_json, '$.droppable'), 0) != 1`).get(conversationId, entryId) as
+    { payload_json: string; role: 'user' | 'assistant'; cwd: string; agent_id: string; project_id: string | null } | undefined;
+  if (!row) return undefined;
+  const message = JSON.parse(row.payload_json) as TranscriptStoredRow;
+  if (isVoiceConversationMessage(message)) return undefined;
+  const raw = extractFtsContent(message);
+  const content = row.role === 'user' ? stripRuntimeContextFromUserMessage(raw) : raw;
+  if (!content.trim() || content.trim() === 'NO_REPLY'
+    || /(?:only|just).{0,20}this (?:chat|conversation|session)/iu.test(content)) return undefined;
+  const context = { conversationId, agentId: row.agent_id, workspaceId: row.cwd, projectId: row.project_id ?? undefined };
+  const forgotten = forgottenHistoryEntries(context);
+  if (forgotten.has(`${conversationId}:*`) || forgotten.has(`${conversationId}:${entryId}`)
+    || !canRecallHistoryEntry({ conversationId: '', agentId: '', workspaceId: '' }, conversationId, entryId, content)
+    || projectUnadmittedForgottenFields(content, context) !== content) return undefined;
+  return { content, role: row.role };
+}
+
+/** Pin an exact, visible passage without copying the rest of its message into the Task. */
+export function parseTaskConversationExcerpts(conversationId: string | undefined, raw: unknown, config?: Config): ConversationExcerpt[] | null {
+  if (raw === undefined) return [];
+  if (!conversationId || !Array.isArray(raw) || raw.length > 3) return null;
+  const excerpts: ConversationExcerpt[] = [];
+  for (const value of raw) {
+    const { entryId, quote } = value as { entryId?: unknown; quote?: unknown } ?? {};
+    if (typeof entryId !== 'string' || !entryId || entryId.length > 100
+      || typeof quote !== 'string' || !quote.trim() || quote.length > 800
+      || excerpts.some(excerpt => excerpt.entryId === entryId)) return null;
+    const source = conversationExcerptSource(conversationId, entryId, config);
+    const start = source?.content.indexOf(quote) ?? -1;
+    if (start < 0) return null;
+    excerpts.push({ entryId, start, length: quote.length, contentHash: hash(quote) });
+  }
+  return excerpts;
+}
+
+export function readTaskConversationExcerpts(handoff: TaskHandoff, config?: Config) {
+  assertTaskHandoffAccess(handoff);
+  return (handoff.conversationExcerpts ?? []).map(excerpt => {
+    const source = conversationExcerptSource(handoff.conversationId, excerpt.entryId, config);
+    const text = source?.content.slice(excerpt.start, excerpt.start + excerpt.length);
+    return source && text && hash(text) === excerpt.contentHash
+      ? { entryId: excerpt.entryId, role: source.role, text }
+      : { entryId: excerpt.entryId, unavailable: true };
+  });
+}
+
 /** Called inside task.create's transaction; no discovery, parsing or remote IO. */
 export function captureTaskHandoff(taskId: string, conversationId: string, interpretation: string, references?: TurnContextRef[]): void {
   const db = getSqliteDatabase();
@@ -84,8 +153,15 @@ export function captureTaskHandoff(taskId: string, conversationId: string, inter
   }
   const requestedSources = references ?? new TaskContextRepository().list(taskId).filter(edge => edge.metadata.kind === 'task_reference_request')
     .flatMap(edge => parseTurnContextRefs([edge.metadata.ref]) ?? []);
+  const conversationExcerpts = new TaskContextRepository().list(taskId)
+    .filter(edge => edge.metadata.kind === 'task_conversation_excerpt').slice(0, 3)
+    .map(edge => edge.metadata.excerpt as Partial<ConversationExcerpt> | undefined)
+    .filter((excerpt): excerpt is ConversationExcerpt => Boolean(excerpt && typeof excerpt.entryId === 'string'
+      && Number.isSafeInteger(excerpt.start) && excerpt.start! >= 0 && Number.isSafeInteger(excerpt.length)
+      && excerpt.length! > 0 && excerpt.length! <= 800 && /^[a-f0-9]{64}$/.test(excerpt.contentHash ?? '')));
   const handoff: TaskHandoff = { version: 1, conversationId, transcriptId: origin.origin_transcript_id,
     inputId: input?.id, originalRequest: input?.content, interpretation, sources, requestedSources,
+    ...(conversationExcerpts.length ? { conversationExcerpts } : {}),
     baseline: { contractVersion: new TaskRepository().require(taskId).latestContractVersion, assignmentEpoch: Number(db.prepare('SELECT assignment_epoch FROM task_conversation_state WHERE task_id = ?').get(taskId)?.assignment_epoch ?? 0),
       instructionSequence: Number(db.prepare("SELECT COALESCE(MAX(sequence),0) AS n FROM task_collaboration_entries WHERE task_id = ? AND author_kind IN ('main_agent','user') AND kind IN ('instruction','answer')").get(taskId)?.n ?? 0) }, attachments: input?.attachments ?? [],
     completeness: { originalInput: input ? 'captured' : 'unavailable', omitted,

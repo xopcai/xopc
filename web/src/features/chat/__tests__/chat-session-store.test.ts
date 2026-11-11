@@ -393,6 +393,27 @@ describe('useChatSessionStore', () => {
     expect(getChatSessionSnapshot(conversationId)?.messages[0]).toMatchObject({ renderKey, clientSubmissionId: 'submission' });
   });
 
+  it('installs a completed reply over its waiting bubble without replacing a different live turn', () => {
+    const store = useChatSessionStore.getState();
+    const bubble: Message = { role: 'assistant', content: [], timestamp: 4,
+      pendingResponseStatus: 'waiting', renderKey: 'waiting-reply' };
+    const answer: Message = { role: 'assistant', turnId: 'finished', timestamp: 5,
+      content: [{ type: 'text', text: 'Saved reply' }] };
+    store.initSessionSnapshot(conversationId, { ...idleSlice, messages: [userMsg], sending: true, streamingMsg: bubble });
+    store.mergeCommittedFromServer(conversationId, [userMsg, answer], false);
+    expect(getChatSessionSnapshot(conversationId)?.streamingMsg?.renderKey).toBe('waiting-reply');
+    expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(1);
+    store.mergeCommittedFromServer(conversationId, [userMsg, answer], false, 'finished');
+    expect(getChatSessionSnapshot(conversationId)).toMatchObject({ sending: false, streamingMsg: null,
+      messages: [expect.objectContaining({ role: 'user' }), expect.objectContaining({ turnId: 'finished', renderKey: 'waiting-reply' })] });
+
+    store.initSessionSnapshot(conversationId, { ...idleSlice, messages: [userMsg], streaming: true,
+      streamingMsg: { ...bubble, turnId: 'successor' } });
+    store.mergeCommittedFromServer(conversationId, [userMsg, answer], false, 'finished');
+    expect(getChatSessionSnapshot(conversationId)?.streamingMsg?.turnId).toBe('successor');
+    expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(1);
+  });
+
   it('keeps expanded history when a background refresh returns only the latest page', () => {
     const store = useChatSessionStore.getState();
     const tail: Message = { role: 'user', turnId: 'tail', content: [{ type: 'text', text: 'latest' }], timestamp: 3 };

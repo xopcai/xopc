@@ -228,7 +228,7 @@ describe('personal Agent identity', () => {
     expect(direct).toContain('Answer directly when your capabilities suffice');
     expect(direct).toContain('ask one short question directly in your reply');
     expect(direct).toContain('Never use clarify');
-    expect(direct).toContain('Before tool discovery or delegation');
+    expect(direct).toContain('acknowledge once after confirmed persistence');
     expect(direct).toContain('Reuse the existing Task');
     expect(direct).toContain('For current news or other live facts');
   });

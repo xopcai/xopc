@@ -23,10 +23,13 @@ import { createHash } from 'node:crypto';
 import { resolveMediaReference } from '../../media/media-reference.js';
 import { TaskApplicationService } from '../task-application-service.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
+import { captureExecutionRequirements } from '../task-execution-capabilities.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { submitTaskResearchResult, type ResearchReviewer } from '../task-research-result.js';
 import { TaskResultDeliveryService } from '../task-result-delivery-service.js';
+import { enqueueTaskDelayNotices } from '../task-delay-notice.js';
+import { getTaskNotificationPreference } from '../task-notification-preference.js';
 import { TaskMainUpdateDelivery } from '../task-main-update-delivery.js';
 import { TaskResultDeliveryRepository } from '../task-result-delivery-repository.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
@@ -102,6 +105,119 @@ describe('background task result delivery', () => {
       .run(agentId, conversationId);
   }
 
+  it.each(['generate_image', 'web_research'] as const)('keeps artifact-only delivery proportionate for %s', async capability => {
+    const { main, coordinator, taskId, runId } = task(['Image matches the brief'], 'verified_auto');
+    markPersonal(main.key);
+    captureExecutionRequirements(new TaskRepository().require(taskId), { version: 1, summary: 'Draw sunset' }, [
+      { capability, source: 'background_inference', reason: 'Required operation' },
+    ]);
+    const outcome = await image(runId);
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Generated', assistantText: 'All requirements verified.' });
+    const runs = new TaskRunRepository();
+    if (capability === 'web_research') {
+      expect(runs.require(runId).policySnapshot.continuation?.reason).toBe('acceptance_repair');
+      expect(new TaskResultDeliveryRepository().hasForRun(runId)).toBe(false);
+      return;
+    }
+    expect(runs.getReceipt(runId)).toMatchObject({ status: 'succeeded', completionVerdict: 'partial', verification: { status: 'unverified' } });
+    expect(new TaskRepository().require(taskId).phase).toBe('review');
+    await new TaskResultDeliveryService().drain(vi.fn());
+    expect(new TaskResultDeliveryRepository().fileDeliveryState(taskId, main.key)).toMatchObject({ status: 'delivered', availableFileCount: 1 });
+    const result = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries WHERE task_run_id = ?').get(runId);
+    expect(JSON.parse(String(result?.payload_json))).toMatchObject({ outcome: { status: 'partial' }, text: '交付内容尚未逐项核验。' });
+    expect(String(result?.payload_json)).not.toContain('All requirements verified');
+  });
+
+  it('persists final-only on one task and still routes its blocking question', async () => {
+    const { main, taskId, runId } = task();
+    markPersonal(main.key);
+    const board = new TaskCollaborationRepository();
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => main.key,
+      getCurrentAgentId: () => personalAgentId('local-owner') });
+    await tool.execute('final-only', { command: 'notifications', taskId, notificationPreference: 'final_only' });
+    expect(getTaskNotificationPreference(taskId, main.key)).toBe('final_only');
+    board.append({ taskId, taskRunId: runId, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'progress', body: 'Routine progress', idempotencyKey: 'routine' });
+    board.append({ taskId, taskRunId: runId, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'question', body: 'Which version?', idempotencyKey: 'required' });
+    expect(enqueueTaskDelayNotices(Date.now() + 21 * 60_000)).toBe(0);
+    const decide = vi.fn();
+    const submitAndConfirm = vi.fn(async (_message: { conversationId: string; clientMessageId: string; content: string }) => true);
+    await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide, submitAndConfirm });
+    expect(submitAndConfirm).toHaveBeenCalledOnce();
+    expect(submitAndConfirm.mock.calls[0][0].content).toContain('Which version?');
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('queues one delay and rechecks it before speaking (finished: %s)', async finished => {
+    const { main, taskId, runId, coordinator } = task();
+    markPersonal(main.key);
+    getSqliteDatabase().prepare('UPDATE task_runs SET started_at = ? WHERE run_id = ?').run(Date.now() - 21 * 60_000, runId);
+    expect(enqueueTaskDelayNotices()).toBe(1);
+    expect(enqueueTaskDelayNotices()).toBe(0);
+    if (finished) coordinator.finalize({ status: 'succeeded', summary: 'Finished', assistantText: 'Ready' });
+    const decide = vi.fn(async () => ({ notify: false, reason: 'Test', userPreference: 'unspecified' as const }));
+    const submitAndConfirm = vi.fn(async (_message: { conversationId: string; clientMessageId: string; content: string }) => true);
+    await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide, submitAndConfirm });
+    if (finished) expect(submitAndConfirm).not.toHaveBeenCalled();
+    else {
+      expect(submitAndConfirm).toHaveBeenCalledOnce();
+      expect(submitAndConfirm.mock.calls[0][0].content).toContain('二十分钟没有新的进度');
+      expect(decide).not.toHaveBeenCalled();
+    }
+    expect(enqueueTaskDelayNotices()).toBe(0);
+    expect(new TaskCollaborationRepository().list(taskId).filter(entry => entry.authorId === 'task-delay-monitor')).toHaveLength(1);
+  });
+
+  it.each([
+    ['queued', -6, null, '执行队列'],
+    ['running', -1, -1, '已过任务截止时间'],
+    ['queued', 10, -1, null],
+  ] as const)('uses persisted queue times and deadlines for %s (%s minutes)', (status, minutes, deadline, expected) => {
+    const { main, taskId, runId } = task();
+    markPersonal(main.key);
+    const now = Date.now();
+    getSqliteDatabase().prepare('UPDATE task_runs SET status = ?, queued_at = ?, scheduled_at = ? WHERE run_id = ?')
+      .run(status, now - 6 * 60_000, status === 'queued' ? now + minutes * 60_000 : null, runId);
+    if (deadline !== null) getSqliteDatabase().prepare('UPDATE tasks SET due_at = ? WHERE task_id = ?')
+      .run(now + deadline * 60_000, taskId);
+    expect(enqueueTaskDelayNotices(now)).toBe(expected ? 1 : 0);
+    const notice = new TaskCollaborationRepository().latest(taskId);
+    if (expected) expect(notice?.body).toContain(expected);
+    else expect(notice).toBeUndefined();
+  });
+
+  it('uses visible prior updates and skips worker questions the user already answered', async () => {
+    const { main, taskId, runId } = task();
+    markPersonal(main.key);
+    const board = new TaskCollaborationRepository();
+    const progress = board.append({ taskId, taskRunId: runId, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'progress', body: 'Prepared a sketch', idempotencyKey: 'sketch-progress' });
+    insertSessionInput({ id: 'sketch-input', conversationId: main.key, clientMessageId: `task-main-update:${progress.id}`,
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Private task trigger',
+      origin: { type: 'system', source: 'task_update' } });
+    claimNextSessionInput(main.key, 'sketch-update');
+    appendTranscriptEntry(main.key, { role: 'assistant', turnId: 'sketch-update',
+      content: [{ type: 'text', text: 'The sketch is ready.' }], timestamp: Date.now() } as never);
+    finishSessionInputRun(main.key, 'sketch-update', 'completed');
+    board.markMainUpdateDelivered(progress.id);
+    const question = board.append({ taskId, taskRunId: runId, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'question', body: 'Which version?', idempotencyKey: 'sketch-question' });
+    board.append({ taskId, authorKind: 'main_agent', authorId: personalAgentId('local-owner'),
+      kind: 'answer', body: 'Version two', causationId: question.id, idempotencyKey: 'sketch-answer' });
+
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => main.key,
+      getCurrentAgentId: () => personalAgentId('local-owner') });
+    const status = await tool.execute('compact-status', { command: 'get', taskId, section: 'status' });
+    expect(JSON.parse(status.content[0].text).summary.lastDeliveredUpdate)
+      .toEqual({ entryId: progress.id, text: 'The sketch is ready.' });
+    const submitAndConfirm = vi.fn();
+    await new TaskMainUpdateDelivery().drain({ isAvailable: () => true, decide: vi.fn(), submitAndConfirm });
+    expect(submitAndConfirm).not.toHaveBeenCalled();
+    expect(board.pendingMainUpdates().some(item => item.entry.id === question.id)).toBe(false);
+  });
+
   it('confirms file delivery only after cards reach the originating current transcript', async () => {
     const { main, coordinator, runId, taskId } = task(); markPersonal(main.key);
     const results = new TaskResultDeliveryRepository();
@@ -116,10 +232,14 @@ describe('background task result delivery', () => {
     const board = new TaskCollaborationRepository();
     board.append({ taskId, taskRunId: runId, authorKind: 'worker_agent', authorId: 'worker', kind: 'progress',
       body: 'The image is published and attached to the chat.', idempotencyKey: 'published-progress' });
+    const status = await tool.execute('compact-status', { command: 'get', taskId, section: 'status' });
+    expect(JSON.parse(status.content[0].text)).toMatchObject({ summary: {
+      operationalState: 'running', fileDelivery: initial, workerProgress: { text: 'The image is published and attached to the chat.' },
+    } });
     const submitAndConfirm = vi.fn(async (_message: { conversationId: string; clientMessageId: string; content: string }) => true);
     await new TaskMainUpdateDelivery().drain({ isAvailable: () => true,
       decide: async () => ({ notify: true, userPreference: 'updates', reason: 'User requested progress' }), submitAndConfirm });
-    expect(submitAndConfirm.mock.calls[0]![0].content).toContain('Host file delivery state: {"status":"not_delivered","availableFileCount":0}');
+    expect(submitAndConfirm.mock.calls[0]![0].content).toContain('"fileDelivery":{"status":"not_delivered","availableFileCount":0}');
     expect(submitAndConfirm.mock.calls[0]![0].content).toContain('Worker publication and visual inspection do not confirm file delivery');
 
     coordinator.finalize({ status: 'succeeded', summary: 'Ready' });
@@ -324,7 +444,7 @@ describe('background task result delivery', () => {
 
   it('delivers deterministic retained text after five seconds while foreground is unavailable, exactly once', async () => {
     const { main, coordinator, runId } = task(); markPersonal(main.key);
-    const outcome = await image(runId); outcome.deliverables = [];
+    const outcome = await image(runId); outcome.deliverables = []; outcome.status = 'partial';
     coordinator.captureOutcome(outcome);
     coordinator.finalize({ status: 'succeeded', summary: 'Ready', assistantText: 'Full text with limitations: isolated example only.' });
     await new TaskResultDeliveryService().drain(vi.fn());
@@ -334,6 +454,8 @@ describe('background task result delivery', () => {
     await composer.drain(notify, () => false); await composer.drain(notify, () => false);
     expect(compose).not.toHaveBeenCalled(); expect(notify).toHaveBeenCalledOnce();
     expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('Only part of the request was completed.');
+    expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).not.toContain('部分完成 / Partial result');
     expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('isolated example only');
     const payload = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries').get() as { payload_json: string };
     expect(JSON.parse(payload.payload_json).text).toContain('Full text with limitations');
@@ -715,6 +837,32 @@ describe('background task result delivery', () => {
     expect(complete.mock.calls[0]![1].tools).toBeUndefined();
     expect(complete.mock.calls[0]![4]).toMatchObject({ operation: 'personal.reply_composition', conversationId: main.key });
     expect(JSON.stringify(loadTranscriptRowsForSession(main.key))).toContain('Grounded result.');
+  });
+
+  it('recomposes a reply that mentions an unrelated task without replaying recent chat', async () => {
+    const { main, coordinator, runId } = task();
+    const other = task();
+    markPersonal(main.key);
+    getSqliteDatabase().prepare('UPDATE tasks SET title = ? WHERE task_id = ?').run('Unrelated registration', other.taskId);
+    getSqliteDatabase().prepare('UPDATE task_origin_links SET conversation_id = ? WHERE task_id = ?').run(main.key, other.taskId);
+    appendTranscriptEntry(main.key, { role: 'user', content: 'Conversation preference example', timestamp: Date.now() });
+    const outcome = await image(runId); outcome.deliverables = [];
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: 'Report ready', assistantText: 'Grounded result.' });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    vi.spyOn(providers, 'resolveModel').mockReturnValue({ id: 'personal' } as ReturnType<typeof providers.resolveModel>);
+    const response = (text: string) => {
+      const value = { role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' };
+      return value as Awaited<ReturnType<typeof modelCalls.completeWithResolvedCredentials>>;
+    };
+    const complete = vi.spyOn(modelCalls, 'completeWithResolvedCredentials')
+      .mockResolvedValueOnce(response('Grounded result. Unrelated registration will come later.'))
+      .mockResolvedValueOnce(response('Grounded result.'));
+    await new PersonalReplyComposer().drain(vi.fn());
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete.mock.calls[0][1].messages[0].content).toContain('Conversation preference example');
+    expect(complete.mock.calls[1][1].messages[0].content).not.toContain('Conversation preference example');
+    expect(loadTranscriptRowsForSession(main.key).at(-1)).toMatchObject({ content: 'Grounded result.' });
   });
 
   it('regenerates instead of publishing old-context prose when reset happens during composition', async () => {

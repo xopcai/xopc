@@ -51,7 +51,7 @@ describe('Personal proactive participation', () => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-proactivity-'));
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(dir, 'xopc.db') });
     now = Date.now(); available = true;
-    patchProactivitySettings(ownerId, { ...getProactivitySettings(ownerId), timezone: 'Asia/Shanghai' });
+    patchProactivitySettings(ownerId, { ...getProactivitySettings(ownerId), timezone: 'Asia/Shanghai', quietStart: 0, quietEnd: 0 });
     const catalog = new AgentCatalogRepository(); catalog.ensureInitialized();
     catalog.create({ id: personalAgentId(ownerId), profile: { name: 'Ada' } }, { ready: true });
     createConversation({ agentId: personalAgentId(ownerId), sourceChannel: 'webchat', customData: { personalAgent: true } }, '', conversationId);
@@ -150,7 +150,7 @@ describe('Personal proactive participation', () => {
     expect(() => saveAttention({ conversationId, subject: '猜测', summary: '', kind: 'discussion', entryIds: [assistant], explicit: false, nextCheckAt: now + 60_000 }, now)).toThrow('source');
   });
   it('applies quiet hours and daily model-call limits', async () => {
-    const settings = getProactivitySettings(ownerId);
+    const settings = { ...getProactivitySettings(ownerId), quietStart: 22, quietEnd: 8 };
     expect(isQuiet(Date.parse('2026-10-09T23:00:00+08:00'), settings)).toBe(true);
     expect(isQuiet(Date.parse('2026-10-10T07:00:00+08:00'), settings)).toBe(true);
     patchProactivitySettings(ownerId, { ...settings, dailyModelCalls: 1 });

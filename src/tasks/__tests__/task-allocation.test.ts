@@ -1,6 +1,6 @@
 import { fileResourceId, fileSpaceId } from '../../files/file-service.js';
 import { NotesStore } from '../../notes/store.js';
-import { getTaskHandoff, readTaskHandoffSource, materializeTaskHandoffFile, parseTaskHandoffReferences } from '../task-handoff.js';
+import { getTaskHandoff, readTaskConversationExcerpts, readTaskHandoffSource, materializeTaskHandoffFile, parseTaskHandoffReferences } from '../task-handoff.js';
 import { assessTaskExecutor, assertTaskExecutorReady, savedExecutionRequirements } from '../task-execution-capabilities.js';
 import { createTaskCollaborationTool } from '../../agent/tools/task-collaboration-tool.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,6 +21,7 @@ import { TaskCollaborationDelivery } from '../task-collaboration-delivery.js';
 import { buildTaskExecutionDirective } from '../task-context-assembler.js';
 import { createXopcUseTool } from '../../agent/tools/xopc-use-tool.js';
 import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
+import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { closeXopcDatabase, getSqliteDatabase } from '../../storage/sqlite/index.js';
 import { claimNextSessionInput, insertSessionInput } from '../../storage/sqlite/session-input-repository.js';
@@ -33,12 +34,14 @@ import { TaskRepository } from '../task-repository.js';
 import { TaskRunRepository } from '../task-run-repository.js';
 import { TaskRunDispatcher } from '../task-run-dispatcher.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
+import { saveMediaBuffer } from '../../media/store.js';
 import { TaskResultDeliveryService } from '../task-result-delivery-service.js';
 import { defineTaskContract } from '../task-contract-definition.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { SessionStore } from '../../session/store.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
 import type { GatewayService } from '../../gateway/service.js';
+import { getTaskNotificationPreference } from '../task-notification-preference.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
 
 import { PersonalReplyComposer, buildPersonalReplyPrompt } from '../../personal-agent/reply-composer.js';
@@ -187,7 +190,7 @@ describe('background task allocation', () => {
     const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
       getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
     expect(tool.parameters.properties.command.enum).toEqual([
-      'revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel',
+      'revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel', 'notifications',
     ]);
     expect(tool.parameters.properties).not.toHaveProperty('agentId');
     expect(tool.parameters.properties).not.toHaveProperty('matchId');
@@ -235,6 +238,95 @@ describe('background task allocation', () => {
     await expect(readTaskHandoffSource(task.id, 0, { command: 'read' })).rejects.toThrow('revoked or changed');
     getSqliteDatabase().prepare('DELETE FROM session_inputs WHERE id = ?').run('original-input');
     await expect(readTaskHandoffSource(task.id, 0, { command: 'read' })).rejects.toThrow('no longer available');
+  });
+
+  it.each([
+    ['[{"id":1,"name":"one"},{"id":2,"name":"two"}]', true, false],
+    ['[{"id":1,"name":"one"},{"id":2,"name":"two"}]', true, true],
+    ['[{"id":1},{"id":2,"name":"two"}]', false, false],
+    ['[{"id":1,"name":"one"}]', false, false],
+    ['invalid JSON', false, false],
+  ] as const)('checks actual JSON artifact bytes without model review (%s, %s, %s)', async (content, accepted, changedAfterVerification) => {
+    const original = 'Create a JSON file named records.json containing exactly 2 objects, each with fields id, name.';
+    insertSessionInput({ id: 'json-input', conversationId, clientMessageId: 'json-original', requestedDelivery: 'next',
+      effectiveDelivery: 'next', status: 'queued', content: original, origin: { type: 'system', source: 'cli' } });
+    claimNextSessionInput(conversationId, 'json-origin');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
+      getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
+    const submitted = await tool.execute('json-submit', { command: 'submit', objective: 'Create records.json',
+      useOriginalRequest: true, notificationPreference: 'final_only', dueAt: Date.now() + 60_000 });
+    expect(submitted.content[0].text).toContain('"ok": true');
+    const task = new TaskRepository().list()[0]!;
+    expect(getTaskNotificationPreference(task.id, conversationId)).toBe('final_only');
+    expect(task.dueAt).toBeGreaterThan(Date.now());
+    const planner = { plan: vi.fn() };
+    await new TaskAllocationDispatcher({ context, decide, planner, wake: vi.fn() }).drain();
+    expect(planner.plan).not.toHaveBeenCalled();
+    const run = new TaskRunRepository().getLatestRoot(task.id)!;
+    const worker = createConversation({ agentId: 'analyst' });
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId: worker.key, agentId: 'analyst', runId: run.id });
+    const coordinator = TaskRunCoordinator.start({ runId: run.id, fallbackObjective: task.title,
+      context: { runId: run.id, conversationId: worker.key, agentId: 'analyst', taskId: task.id, channel: 'webchat', origin: 'task', triggerKind: 'user' } })!;
+    expect(buildTaskExecutionDirective(worker.key)).toContain('This check replaces publish_task_result');
+    const file = await saveMediaBuffer(Buffer.from(content), { bucket: 'outbound', contentType: 'application/json' });
+    coordinator.captureOutcome({ version: 1, outcomeId: 'json-publication', runId: run.id, turnId: run.id, status: 'succeeded',
+      evidence: [], deliverables: [{ artifactId: file.id, kind: 'document', title: 'records.json', availability: 'available',
+        location: 'artifact_store', uri: file.uri, capabilities: ['download'] }], createdAt: new Date().toISOString() });
+    coordinator.finalize({ status: 'succeeded', summary: 'File written', assistantText: 'Worker claimed verification.' });
+    const runs = new TaskRunRepository();
+    if (!accepted) {
+      expect(runs.require(run.id).policySnapshot.continuation).toMatchObject({ reason: 'acceptance_repair', message: expect.stringContaining('agreed JSON structure') });
+      expect(runs.getReceipt(run.id)).toBeUndefined();
+      return;
+    }
+    expect(runs.getReceipt(run.id)).toMatchObject({ verification: { status: 'passed',
+      checks: expect.arrayContaining([expect.objectContaining({ method: 'tool_verified', status: 'passed' })]) }, completionVerdict: 'achieved' });
+    expect(new TaskRepository().require(task.id).phase).toBe('closed');
+    const result = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries WHERE task_run_id = ?').get(run.id);
+    expect(JSON.parse(String(result?.payload_json))).toMatchObject({ outcome: { status: 'succeeded',
+      deliverables: [expect.objectContaining({ sha256: expect.stringMatching(/^[a-f0-9]{64}$/) })] } });
+    if (changedAfterVerification) writeFileSync(file.path, '[]');
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const delivered = getSqliteDatabase().prepare('SELECT payload_json FROM task_result_deliveries WHERE task_run_id = ?').get(run.id);
+    expect(JSON.parse(String(delivered?.payload_json))).toMatchObject({ outcome: {
+      status: changedAfterVerification ? 'failed' : 'succeeded',
+      deliverables: [expect.objectContaining({ availability: changedAfterVerification ? 'failed' : 'available' })],
+    } });
+  });
+
+  it('shares only an exact selected passage from the originating chat with the active worker', async () => {
+    const quote = 'Use the second version.';
+    const visible = appendTranscriptEntry(conversationId, { role: 'user', content: `${quote} Unrelated private detail.`, timestamp: Date.now() });
+    const other = createConversation({ agentId: personalAgentId('local-owner') });
+    const foreign = appendTranscriptEntry(other.key, { role: 'user', content: quote, timestamp: Date.now() });
+    const hidden = appendTranscriptEntry(conversationId, { role: 'user', content: quote, timestamp: Date.now(),
+      metadata: { hiddenFromClient: true } } as never);
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
+      getCurrentAgentId: () => personalAgentId('local-owner'), dispatchTaskRuns: vi.fn() });
+    const command = { command: 'submit' as const, objective: 'Update the report', description: 'Use the agreed version.' };
+    for (const [entryId, text] of [[foreign.entry_id, quote], [hidden.entry_id, quote], [visible.entry_id, 'Invented text']]) {
+      const result = await tool.execute(entryId, { ...command, conversationExcerpts: [{ entryId, quote: text }] });
+      expect(JSON.parse(result.content[0].text)).toMatchObject({ ok: false });
+    }
+    const result = await tool.execute('selected-excerpt', { ...command, conversationExcerpts: [{ entryId: visible.entry_id, quote }] });
+    expect(result.content[0].text).toContain('"ok": true');
+    const task = new TaskRepository().list()[0]!;
+    const handoff = getTaskHandoff(task.id)!;
+    expect(JSON.stringify(handoff)).not.toContain(quote);
+    expect(readTaskConversationExcerpts(handoff)).toEqual([{ entryId: visible.entry_id, role: 'user', text: quote }]);
+    const started = new TaskApplicationService().execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'start-excerpt',
+      actor: { kind: 'system', id: 'task-router' }, command: { type: 'start', executor: { kind: 'agent', agentId: 'analyst' } } });
+    if (!started.ok || !started.runId) throw new Error('Expected a TaskRun');
+    const worker = createConversation({ agentId: 'analyst' });
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId: worker.key, agentId: 'analyst', runId: started.runId });
+    const workerTool = createTaskCollaborationTool({ getCurrentConversationId: () => worker.key, getCurrentAgentId: () => 'analyst' });
+    const read = await workerTool.execute('read-excerpt', { command: 'get', section: 'handoff' });
+    expect(read.content[0].text).toContain(quote);
+    expect(read.content[0].text).not.toContain('Unrelated private detail');
+    const config = ConfigSchema.parse({ userContext: { enabled: false } });
+    expect(readTaskConversationExcerpts(handoff, config)).toEqual([{ entryId: visible.entry_id, unavailable: true }]);
+    getSqliteDatabase().prepare('DELETE FROM transcript_entries WHERE entry_id = ?').run(visible.entry_id);
+    expect(readTaskConversationExcerpts(handoff)).toEqual([{ entryId: visible.entry_id, unavailable: true }]);
   });
 
   it('persists model-selected history pointers without reading them before submit and resolves their version in the background', async () => {
@@ -708,9 +800,9 @@ describe('background task allocation', () => {
     await new PersonalReplyComposer(async packet => {
       const context = JSON.parse(buildPersonalReplyPrompt(packet).split('\n\n').at(-1)!);
       expect(context.collaboration).toContainEqual(expect.objectContaining({ id: instruction.id, body: instruction.body, deliveryStatus: 'pending' }));
-      expect(context.executionReceipt.verification.status).toBe('passed');
-      expect(context.executionReceipt.completionVerdict).toBe('achieved');
-      expect(context.taskState.phase).toBeDefined();
+      expect(context.task.receipt.verification).toBe('passed');
+      expect(context.task.receipt.verdict).toBe('achieved');
+      expect(context.task.phase).toBeDefined();
       return 'Monthly totals verified by analyst.';
     }).drain(vi.fn());
     const delivered = getSqliteDatabase().prepare(`SELECT e.payload_json FROM transcript_entries e

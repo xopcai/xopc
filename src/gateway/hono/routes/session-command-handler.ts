@@ -14,6 +14,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { parseSlashCommand, commandRegistry } from '../../../chat-commands/index.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
 import { createLogger } from '../../../utils/logger.js';
+import { getSessionInputById } from '../../../storage/sqlite/session-input-repository.js';
 import { recordDeviceExecutionActor } from '../../../endpoint-tools/execution-actor.js';
 
 const log = createLogger('Gateway:SessionCommand');
@@ -93,7 +94,11 @@ export async function handleSessionInputReceipt(c: Context, deps: AuthenticatedR
     const receipt = getSessionInputReceipt(id.data, c.req.param('clientMessageId'), getGatewayPrincipal(c).principalId);
     if (!receipt) return c.json({ ok: false, error: { code: 'NOT_RECEIVED', message: 'Input has not been received' } }, 404);
     if (isConversationDeleted(id.data)) return c.json({ ok: false, error: { code: 'SESSION_DELETED', message: 'Conversation was deleted' } }, 410);
-    return c.json({ ok: true, payload: await sessionCommandSnapshot(deps.service, receipt) });
+    const payload = await sessionCommandSnapshot(deps.service, receipt);
+    const input = receipt.inputId ? getSessionInputById(id.data, receipt.inputId) : undefined;
+    const execution = input?.clientMessageId === receipt.clientMessageId && input.expectedTranscriptId === receipt.transcriptId
+      ? { runId: input.runId, status: input.status } : undefined;
+    return c.json({ ok: true, payload: { ...payload, execution } });
   } catch (error) { return commandError(c, error); }
 }
 
