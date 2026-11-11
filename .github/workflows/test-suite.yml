@@ -52,13 +52,16 @@ jobs:
       - name: Install audio test dependencies
         run: |
           if ! command -v ffmpeg >/dev/null; then
-            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
-            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 update
-            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y --no-install-recommends ffmpeg
+            mkdir -p "$RUNNER_TEMP/xopc-ffmpeg"
+            npm pack @ffmpeg-installer/linux-x64@4.1.0 --pack-destination "$RUNNER_TEMP/xopc-ffmpeg" --silent
+            tar -xzf "$RUNNER_TEMP/xopc-ffmpeg/ffmpeg-installer-linux-x64-4.1.0.tgz" -C "$RUNNER_TEMP/xopc-ffmpeg" package/ffmpeg
+            chmod +x "$RUNNER_TEMP/xopc-ffmpeg/package/ffmpeg"
+            echo "$RUNNER_TEMP/xopc-ffmpeg/package" >> "$GITHUB_PATH"
+            export PATH="$RUNNER_TEMP/xopc-ffmpeg/package:$PATH"
           fi
           ffmpeg -version
       - name: Install pinned browser test runtime
-        run: pnpm exec playwright-core install --with-deps --no-shell chromium
+        run: pnpm exec playwright-core install --no-shell chromium
       - name: Run tests
         run: |
           mkdir -p test-results
