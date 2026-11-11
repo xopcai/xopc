@@ -192,6 +192,7 @@ export async function runDirectAgentTurn(
   deps: RunDirectAgentTurnDeps,
   input: RunDirectAgentTurnInput,
 ): Promise<RunDirectAgentTurnResult> {
+  const directStartedAt = performance.now();
   const turnId = input.runId ?? crypto.randomUUID();
   const isConnectionResume = Boolean(getConnectionResumeInput(input.conversationId, turnId));
   const isClarificationResume = Boolean(getClarificationResumeInput(input.conversationId, turnId));
@@ -200,10 +201,16 @@ export async function runDirectAgentTurn(
   const modelRef = deps.modelManager.getModelForSession(input.conversationId);
   // Media hydration does not depend on memory retrieval. Settle both before
   // returning an error so context preparation cannot outlive this turn.
-  const [contextResult, mediaResult] = await Promise.allSettled([
-    deps.agentManager.prepareUserTurnContext(input.userMessage, input.conversationId, turnId),
-    hydrateUserTurnForLlm({ message: input.userMessage as TranscriptUserMessage, modelRef }),
-  ]);
+  const preparationTimings: Record<string, number> = {};
+  const contextStartedAt = performance.now();
+  const context = Promise.resolve(deps.agentManager.prepareUserTurnContext(input.userMessage, input.conversationId, turnId)).finally(() => {
+    preparationTimings.userContextMs = performance.now() - contextStartedAt;
+  });
+  const mediaStartedAt = performance.now();
+  const media = Promise.resolve(hydrateUserTurnForLlm({ message: input.userMessage as TranscriptUserMessage, modelRef })).finally(() => {
+    preparationTimings.mediaHydrationMs = performance.now() - mediaStartedAt;
+  });
+  const [contextResult, mediaResult] = await Promise.allSettled([context, media]);
   if (contextResult.status === 'rejected') throw contextResult.reason;
   if (mediaResult.status === 'rejected') throw mediaResult.reason;
   const userContext = contextResult.value;
@@ -225,6 +232,7 @@ export async function runDirectAgentTurn(
     conversationId: input.conversationId,
     runId: turnId,
     gatewayRunStartedMonotonic: input.gatewayRunStartedMonotonic,
+    preparationTimings: { ...preparationTimings, directPreparationMs: performance.now() - directStartedAt },
     userMessage: sourceEnrichedMessage,
     dynamicSystemContext: [userContext.dynamicSystemContext, taskContext].filter(Boolean).join('\n\n'),
     llmImages,

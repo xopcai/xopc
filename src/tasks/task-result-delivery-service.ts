@@ -34,7 +34,9 @@ async function materializedArtifact(item: TurnOutcomeDeliverable): Promise<TurnO
     if (file?.isFile() && file.size <= MEDIA_ARTIFACT_MAX_BYTES) {
       const digest = createHash('sha256');
       for await (const chunk of createReadStream(resolveMediaBufferPath(media.id, media.bucket))) digest.update(chunk);
-      return { ...artifact, sha256: digest.digest('hex'), sizeBytes: file.size, shareUrl: undefined,
+      const sha256 = digest.digest('hex');
+      if (item.sha256 && item.sha256 !== sha256) return { ...artifact, availability: 'failed', uri: undefined, shareUrl: undefined, capabilities: [] };
+      return { ...artifact, sha256, sizeBytes: file.size, shareUrl: undefined,
         capabilities: item.capabilities.filter(capability => capability === 'preview' || capability === 'download') };
     }
     return { ...artifact, availability: 'missing', uri: undefined, shareUrl: undefined, capabilities: [] };

@@ -15,11 +15,32 @@ import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 import { currentTaskResearchResult, taskInstructionSequence } from './task-research-result.js';
 import { buildResearchRepair, inspectTaskPublications } from './task-research-repair.js';
+import { getTaskHandoff } from './task-handoff.js';
+import { currentTaskJsonAcceptance, verifyTaskJsonPublication } from './task-json-acceptance.js';
 import { isChatReplyOutput } from './task-final-reply.js';
+import { savedExecutionRequirements } from './task-execution-capabilities.js';
+import { TaskOriginRepository } from './task-origin-repository.js';
+import { isPersonalConversation } from '../personal-agent/repository.js';
 import { resolveTaskLocale } from './task-language.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
 import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
 import { isTransientProviderErrorMessage } from '../providers/model-response.js';
+
+/** A single usable file can be delivered with explicit unverified status after execution. */
+function unreviewedLocalPublication(task: ReturnType<TaskRepository['require']>, run: ReturnType<TaskRunRepository['require']>,
+  publications: ReturnType<typeof inspectTaskPublications>) {
+  const contract = task.contract;
+  if (contract?.acceptancePolicy !== 'verified_auto' || contract.risks.length || contract.approvalRequired.length
+    || contract.expectedOutputs.some(isChatReplyOutput) || task.priority === 'critical'
+    || publications.missing.length || publications.artifactIds.length !== 1 || publications.latestPublishedArtifacts.length !== 1) return;
+  const origin = new TaskOriginRepository().getConversationId(task.id);
+  if (!origin || !isPersonalConversation(origin) || new TaskContextRepository().listActiveGrants(task.id).length) return;
+  const plan = savedExecutionRequirements(task.id);
+  if (plan?.contractVersion !== run.contractVersion || plan.requirements.connector
+    || !plan.needs.some(need => need.capability === 'publish_files' || need.capability === 'generate_image')
+    || plan.needs.some(need => !['read_input', 'publish_files', 'generate_image'].includes(need.capability))) return;
+  return publications.latestPublishedArtifacts[0];
+}
 
 export class TaskRunCoordinator {
   readonly #evidence: TaskEvidence[] = [];
@@ -169,11 +190,28 @@ export class TaskRunCoordinator {
     const summary = emptySuccess ? (zh ? '助手执行未返回结果或证据' : 'Agent run returned no result or evidence')
       : zh ? systemSummaries[resultSummary] ?? resultSummary : resultSummary;
     const publications = inspectTaskPublications(run.id, currentResearch);
-    const repair = buildResearchRepair({ research: currentResearch, stale: Boolean(research && !currentResearch),
-      instructionSequence: taskInstructionSequence(task.id), publications, criteria: task.contract?.acceptanceCriteria ?? [],
+    const instructionSequence = taskInstructionSequence(task.id);
+    const jsonSpec = status === 'succeeded' && !personalSnapshot && !instructionSequence && task.contract?.expectedOutputs.length === 1
+      && /^[A-Za-z0-9_.-]+\.json$/i.test(task.contract.expectedOutputs[0] ?? '')
+      ? currentTaskJsonAcceptance(task, getTaskHandoff(task.id)) : undefined;
+    const publicationCandidate = status === 'succeeded' && (!research || jsonSpec) && !personalSnapshot && !instructionSequence
+      ? unreviewedLocalPublication(task, run, publications) : undefined;
+    const publication = publicationCandidate && run.conversationId
+      && canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId), recoveryOptions)
+      ? publicationCandidate : undefined;
+    const structuralCheck = publication && jsonSpec ? verifyTaskJsonPublication(jsonSpec, publication, zh) : undefined;
+    const hostArtifact = publication && (!jsonSpec || structuralCheck)
+      ? { id: publication.artifactId, sha256: structuralCheck?.sha256 } : undefined;
+    const publicationText = structuralCheck?.summary ?? (zh ? '交付内容尚未逐项核验。'
+      : 'The deliverable has not been verified against every requirement.');
+    const repair = hostArtifact ? undefined : buildResearchRepair({
+      publicationStructureGap: jsonSpec ? zh ? `发布符合全部约定结构的 ${jsonSpec.file}。宿主会直接检查文件名、JSON 格式及约定的对象数量和字段。`
+        : `Publish ${jsonSpec.file} with the agreed JSON structure. The host checks the actual file name, JSON syntax, and any required object count and fields.` : undefined,
+      research: currentResearch, stale: Boolean(research && !currentResearch),
+      instructionSequence, publications, criteria: task.contract?.acceptanceCriteria ?? [],
       resultFingerprint: personalSnapshot?.hash,
       requiresFinalText: !personalSnapshot && task.contract?.expectedOutputs.some(isChatReplyOutput),
-      requiresReview: task.contract?.acceptancePolicy === 'verified_auto' || (!personalSnapshot && Boolean(task.body?.includes('publish_task_result'))) });
+      requiresReview: !jsonSpec && (task.contract?.acceptancePolicy === 'verified_auto' || (!personalSnapshot && Boolean(task.body?.includes('publish_task_result')))) });
     const repairBlocked = Boolean(repair && run.conversationId && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId),
       { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS }));
     if (status === 'failed' && isTransientProviderErrorMessage(input.summary) && !unconfirmedEffects
@@ -182,34 +220,35 @@ export class TaskRunCoordinator {
           ...(repair ? [repair.message] : ['Finish only the remaining work.'])].join('\n') })) return;
     if (status === 'succeeded' && repair && !repairBlocked && this.#runs.scheduleContinuation({ runId: run.id,
       expectedVersion: run.version, reason: 'acceptance_repair', repairFingerprint: repair.fingerprint, message: repair.message })) return;
-    const researchEvidence: TaskEvidence[] = currentResearch?.claims.map(claim => ({ kind: 'source',
+    const researchEvidence: TaskEvidence[] = structuralCheck ? [] : currentResearch?.claims.map(claim => ({ kind: 'source',
       title: `Research claim: ${claim.id}`, summary: claim.statement,
       uri: currentResearch.sources.find(source => claim.sourceIds.includes(source.id))?.url,
       provenance: 'judge', strength: claim.support === 'supported' ? 'verified' : 'observed', observedAt: Date.now(),
       verifies: currentResearch.checks.filter(check => check.status === 'passed' && check.claimIds.includes(claim.id)).map(check => check.criterion),
     })) ?? [];
-    const checks = currentResearch?.checks.map(check => ({ criterion: check.criterion, status: check.status,
+    const checks = structuralCheck?.checks ?? currentResearch?.checks.map(check => ({ criterion: check.criterion, status: check.status,
       evidenceTitles: check.claimIds.map(id => `Research claim: ${id}`), note: check.note,
       method: currentResearch.review === 'model_reviewed' ? 'model_reviewed' as const : 'unverified' as const }))
       ?? (task.contract?.acceptanceCriteria ?? []).map(criterion => ({ criterion, status: 'unverified' as const, evidenceTitles: [],
         method: 'unverified' as const, note: zh ? '未提交有证据关联的核验结果。' : 'No evidence-linked verification result was submitted.' }));
-    const instructionChecks = (currentResearch?.instructionChecks ?? []).map(check => ({ criterion: check.instruction,
+    const instructionChecks = (structuralCheck ? [] : currentResearch?.instructionChecks ?? []).map(check => ({ criterion: check.instruction,
       status: check.status, evidenceTitles: check.claimIds.map(id => `Research claim: ${id}`), note: check.note, method: 'model_reviewed' as const }));
-    const achieved = status === 'succeeded' && checks.length > 0 && checks.length === task.contract?.acceptanceCriteria.length
+    const achieved = Boolean(structuralCheck) || (status === 'succeeded' && checks.length > 0 && checks.length === task.contract?.acceptanceCriteria.length
       && (!personalSnapshot || personalSnapshot.complete)
-      && [...checks, ...instructionChecks].every(check => check.status === 'passed') && !repair && currentResearch!.claims.every(claim => claim.support === 'supported');
+      && [...checks, ...instructionChecks].every(check => check.status === 'passed') && !repair && currentResearch?.claims.every(claim => claim.support === 'supported') === true);
     const acceptanceFailed = status === 'succeeded' && Boolean(repair)
       && task.contract?.acceptancePolicy === 'verified_auto' && !repairBlocked && !unconfirmedEffects;
     const finalStatus = acceptanceFailed ? 'failed' : status;
     this.#application.completeRun({
       runId: run.id,
       expectedRunVersion: run.version,
-      resultText: input.assistantText,
+      resultText: hostArtifact ? publicationText : input.assistantText,
+      hostArtifact,
       receipt: {
         status: finalStatus,
-        summary,
+        summary: hostArtifact ? publicationText : summary,
         changes: this.#evidence.filter((item) => item.kind === 'state'),
-        evidence: [...this.#evidence, ...researchEvidence],
+        evidence: [...this.#evidence, ...researchEvidence, ...(structuralCheck ? [structuralCheck.evidence] : [])],
         verification: { status: achieved ? 'passed' : [...checks, ...instructionChecks].some(check => check.status === 'failed') ? 'failed' : 'unverified', checks: [...checks, ...instructionChecks] },
         remainingWork: repair ? repair.gaps : emptySuccess ? [task.contract?.objective ?? (zh ? '完成任务' : 'Complete the task')]
           : achieved ? [] : status === 'succeeded' ? currentResearch

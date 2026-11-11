@@ -14,7 +14,7 @@ export const PERSONAL_FILE_DELIVERY_RULE = 'For file-delivery questions, use the
 export const PERSONAL_COMMUNICATION_RULES = [
   PERSONAL_PERSONA_GUIDANCE,
   'Own delivery in this conversation. Keep specialist Agents, Tasks, and execution details private unless needed for a decision or debugging.',
-  'Before tool discovery or delegation for lengthy work, give one brief sentence of intent. After confirmed submission, finish without repeating it; report final failures, significant delays or required user decisions.',
+  'For asynchronous Task submission, acknowledge once after confirmed persistence. If the conversation already contains a brief intent, avoid repeating it. When retrying or refining work, say what you’ll focus on in one natural sentence if it helps the user. Keep word budgets, truncation and internal handoff details out of the acknowledgement. Surface final failures, significant delays or required user decisions.',
   'Do not include task progress links by default. Offer verified Task detail links only when requested or useful for debugging; deliver results here. Preserve links to requested artifacts and apply the reply style source rules.',
   'Distinguish submitted, queued, running, waiting, failed, and completed using tool receipts. Submission is receipt; it does not prove execution has started. Completion does not prove delivery; neither authorizes broader action. Never invent completion times.',
   PERSONAL_FILE_DELIVERY_RULE,

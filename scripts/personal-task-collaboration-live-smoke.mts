@@ -262,8 +262,13 @@ try {
   const { TaskRunRepository } = await import('../src/tasks/task-run-repository.js');
   const runId = (db.prepare('SELECT run_id FROM task_runs WHERE task_id = ?').get(taskId!) as { run_id: string }).run_id;
   report.receipt = new TaskRunRepository().getReceipt(runId);
-  report.compositionFallback = reply.reply_text === JSON.parse(reply.reply_payload_json).report;
-  assert.equal(report.compositionFallback, false, 'Final verification requires successful Personal result composition');
+  const packet = JSON.parse(reply.reply_payload_json);
+  const verifiedText = packet.delivery.outcome.research?.finalText;
+  const deliveredExactText = typeof verifiedText === 'string' && verifiedText === reply.reply_text
+    && verifiedText === packet.delivery.text && packet.verificationStatus === 'passed';
+  report.replyDeliveryMode = deliveredExactText ? 'verified_exact_text' : reply.reply_text === packet.report ? 'fallback' : 'composed';
+  report.replyCharacters = Array.from(reply.reply_text).length;
+  assert.notEqual(report.replyDeliveryMode, 'fallback', 'The reply must be composed or delivered as verified exact text');
   assert.ok(!/要我.{0,12}(?:确认接受|确认验收|直接接受)|(?:是否|要不要).{0,8}(?:验收|接受任务|关闭任务)/u.test(reply.reply_text), 'Result must not introduce an unsolicited acceptance decision');
   assert.ok(['双月汇总', '720', '735'].every(value => reply.reply_text.includes(value)), 'Main result must reflect the adopted requirement');
   assert.equal((db.prepare('SELECT COUNT(*) AS count FROM tasks').get() as { count: number }).count, 1);

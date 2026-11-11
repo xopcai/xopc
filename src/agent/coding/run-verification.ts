@@ -15,7 +15,7 @@ export interface CodingVerificationEvidence {
   logPath?: string;
 }
 
-const READ_ONLY_TOOLS = new Set(['read_file', 'grep', 'find', 'list_dir', 'update_plan', 'session_status']);
+const READ_ONLY_TOOLS = new Set(['read_file', 'grep', 'find', 'list_dir', 'list_directory', 'update_plan', 'session_status']);
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -27,7 +27,20 @@ export function toolResultFailed(result: AgentToolResult<unknown>, isError = fal
     || details.timedOut === true || (typeof details.exitCode === 'number' && details.exitCode !== 0);
 }
 
-type VerificationOptions = { required?: boolean; toolNames?: string[]; workspace?: string; trackWorkspace?: boolean };
+type VerificationOptions = {
+  required?: boolean;
+  toolNames?: string[];
+  workspace?: string;
+  trackWorkspace?: boolean;
+  deferWorkspaceSnapshot?: boolean;
+};
+
+type VerificationSummary = {
+  changed: boolean;
+  proseOnly: boolean;
+  revision?: string;
+  evidence: CodingVerificationEvidence[];
+};
 
 function mutationPaths(name: string, args: Record<string, unknown>): string[] {
   return (name === 'write_file' ? [args.path]
@@ -43,6 +56,8 @@ function editsOnlyProse(name: string, args: Record<string, unknown>): boolean {
 /** One run owns its evidence; transcript tool results are the durable record. */
 export class RunVerification {
   private revision?: string;
+  private snapshotStarted: boolean;
+  private initialSnapshot?: Promise<string | undefined>;
   private changed = false;
   private proseOnly = true;
   private readonly before = new Map<string, string | undefined>();
@@ -51,14 +66,20 @@ export class RunVerification {
   private readonly editedProse = new Set<string>();
   private readonly inspectedProse = new Map<string, string>();
 
-  constructor(private readonly snapshot: () => Promise<string | undefined>, private readonly options: VerificationOptions = {}) {}
+  constructor(private readonly snapshot: () => Promise<string | undefined>, private readonly options: VerificationOptions = {}) {
+    this.snapshotStarted = options.deferWorkspaceSnapshot !== true;
+  }
+
+  get workspaceSnapshotStarted(): boolean {
+    return this.snapshotStarted;
+  }
 
   static async open(workspace: string, options: VerificationOptions = {}): Promise<RunVerification> {
     const snapshot = options.trackWorkspace === false && options.required === false
       ? async () => undefined
       : () => readWorkspaceRevision(workspace);
     const run = new RunVerification(snapshot, { ...options, workspace });
-    run.revision = await run.snapshot();
+    if (run.snapshotStarted) run.revision = await run.snapshot();
     return run;
   }
 
@@ -81,8 +102,26 @@ export class RunVerification {
     }
   }
 
-  async beforeTool(toolCallId: string, toolName?: string): Promise<void> {
-    const revision = toolName && READ_ONLY_TOOLS.has(toolName) ? this.revision : await this.snapshot();
+  async beforeTool(
+    toolCallId: string,
+    toolName?: string,
+    recordBaseline?: (summary: VerificationSummary) => void,
+  ): Promise<void> {
+    let revision = this.revision;
+    if (!toolName || !READ_ONLY_TOOLS.has(toolName)) {
+      if (this.snapshotStarted) {
+        revision = await this.snapshot();
+      } else {
+        // A tool batch must share the first snapshot and persist it before any tool can execute.
+        this.initialSnapshot ??= this.snapshot().then(initial => {
+          this.revision = initial;
+          recordBaseline?.(this.capturedSummary());
+          this.snapshotStarted = true;
+          return initial;
+        });
+        revision = await this.initialSnapshot;
+      }
+    }
     this.observeRevision(revision);
     this.before.set(toolCallId, revision);
   }
@@ -197,8 +236,9 @@ export class RunVerification {
   }
 
   async pendingContext(): Promise<string> {
+    if (this.options.required === false || !this.snapshotStarted) return '';
     this.observeRevision(await this.snapshot());
-    if (!this.changed || this.options.required === false) return '';
+    if (!this.changed) return '';
     const current = [...this.evidence.values()].filter((item) => item.revision && item.revision === this.revision);
     const checked = !this.pendingEvidence().includes('check');
     const reviewed = current.some((item) => item.kind === 'diff-review' && item.status === 'passed');
@@ -217,8 +257,8 @@ export class RunVerification {
     ].join('\n');
   }
 
-  async summary(): Promise<{ changed: boolean; proseOnly: boolean; revision?: string; evidence: CodingVerificationEvidence[] }> {
-    this.observeRevision(await this.snapshot());
+  /** Serialize verification state from the latest captured revision. */
+  capturedSummary(): VerificationSummary {
     return {
       changed: this.changed,
       proseOnly: this.proseOnly,
@@ -228,5 +268,10 @@ export class RunVerification {
         status: !item.revision || item.revision !== this.revision ? 'unverified' : item.status,
       })),
     };
+  }
+
+  async summary(): Promise<VerificationSummary> {
+    if (this.snapshotStarted) this.observeRevision(await this.snapshot());
+    return this.capturedSummary();
   }
 }

@@ -1,3 +1,4 @@
+import { recordResponseText } from './response-latency';
 import type { AgentStreamRunStatus } from '@xopcai/gateway-contract';
 
 import type { CompactionState, MessagingCallbacks } from '@/features/chat/messages/message-sender';
@@ -66,7 +67,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
     chatId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string },
     request?: SessionSnapshotRequest,
-  ) => void;
+  ) => boolean | void;
   finalizeMessage: (conversationId?: string, terminalStatus?: AgentStreamRunStatus) => void;
   fq: AgentStreamFqCallbacks;
 }): MessagingCallbacks {
@@ -91,11 +92,18 @@ export function createAgentStreamMessagingCallbacks(opts: {
     if (store().sessions[chatId]?.progress?.stage.startsWith('model_')) store().setSessionProgress(chatId, null);
   };
 
-  const reloadSessionSnapshot = () => {
-    const request = { messages: store().sessions[chatId]?.messages };
+  const reloadSessionSnapshot: NonNullable<MessagingCallbacks['onReplayGap']> = (recovery) => {
+    const runId = recovery?.runId;
+    const request = { messages: store().sessions[chatId]?.messages, completedRunId: recovery?.terminal ? runId : undefined };
     return sessionMgrRef.current
       .loadSession(chatId, 0, undefined, undefined, request.messages)
-      .then((data) => { if (isCurrentRun()) applyLoadedSessionSnapshot(chatId, data, request); })
+      .then(data => {
+        if (!isCurrentRun() || recovery?.signal.aborted || applyLoadedSessionSnapshot(chatId, data, request) === false) return;
+        if (runId && store().sessions[chatId]?.messages.some(message => message.role === 'assistant' && message.turnId === runId
+          && message.content.some(part => part.type === 'text' && part.text.trim() && part.text.trim() !== 'NO_REPLY'))) {
+          recordResponseText(runId, 'history');
+        }
+      })
       .catch(() => {});
   };
 

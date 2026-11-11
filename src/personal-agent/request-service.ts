@@ -62,6 +62,8 @@ export function assertPersonalRequestTimeRange(range: NonNullable<PersonalReques
 export function submitPersonalRequest(input: {
   conversationId: string; connectorId: string; objective: string; agentId?: string;
   acceptancePolicy?: 'verified_auto' | 'manual';
+  notificationPreference?: PersonalRequest['parameters']['notificationPreference'];
+  dueAt?: number;
   accountId?: string; description?: string; selectionReason?: string; timeRange?: PersonalRequest['parameters']['timeRange']; idempotencyKey: string;
 }): PersonalRequest {
   if (!isPersonalConversation(input.conversationId)) throw new Error('Personal conversation is required');
@@ -74,7 +76,7 @@ export function submitPersonalRequest(input: {
     const state = getSessionInputState(input.conversationId);
     if (!transcriptId || !state.activeInputId || !state.activeRunId) throw new Error('An active chat execution is required');
     const hash = createHash('sha256').update(JSON.stringify({ connectorId: input.connectorId, objective: input.objective,
-      agentId: input.agentId, accountId: input.accountId, description: input.description, timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy })).digest('hex');
+      agentId: input.agentId, accountId: input.accountId, description: input.description, timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy, notificationPreference: input.notificationPreference, dueAt: input.dueAt })).digest('hex');
     const previous = db.prepare(`SELECT request_id, request_hash FROM personal_requests
       WHERE conversation_id = ? AND transcript_id = ? AND idempotency_key = ?`)
       .get(input.conversationId, transcriptId, input.idempotencyKey) as { request_id: string; request_hash: string } | undefined;
@@ -108,7 +110,7 @@ export function submitPersonalRequest(input: {
       idempotency_key, request_hash, objective, connector_id, executor_agent_id, account_id, parameters_json,
       state, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'preflighting',?,?)`).run(requestId,
       input.conversationId, transcriptId, state.activeInputId, input.idempotencyKey, hash, input.objective,
-      input.connectorId, input.agentId ?? 'task-router', selected ?? null, JSON.stringify({ acceptancePolicy: input.acceptancePolicy, brief: input.description?.trim(), timeRange: range, ...(!input.agentId ? { allocate: true } : {}) }), now, now);
+      input.connectorId, input.agentId ?? 'task-router', selected ?? null, JSON.stringify({ acceptancePolicy: input.acceptancePolicy, brief: input.description?.trim(), timeRange: range, notificationPreference: input.notificationPreference, dueAt: input.dueAt, ...(!input.agentId ? { allocate: true } : {}) }), now, now);
     const request = getPersonalRequest(requestId)!;
     if (input.agentId) {
       const selection = requestAssessment(request, selected);
@@ -147,7 +149,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
     .find(item => item.connectorId === request.connectorId);
   if (capability?.status !== 'ready' || !capability.accounts.some(account => account.accountId === accountId
     && (request.parameters.allocate ? account.executorAgentIds.length > 0 : account.executorAgentIds.includes(request.executorAgentId)))) throw new Error('Account or Agent permission changed');
-  const { brief, ...queryParameters } = request.parameters;
+  const { brief, notificationPreference: _notificationPreference, dueAt: _dueAt, ...queryParameters } = request.parameters;
   const responseLanguage = resolveResponseLanguageForSession(undefined, request.conversationId);
   const locale = responseLanguage === 'auto' ? resolveTaskLocale({ title: request.objective })
     : responseLanguage === 'zh-CN' ? 'zh' : 'en';
@@ -168,6 +170,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
     const result = new TaskApplicationService().create(TaskCreateRequestSchema.parse({
       idempotencyKey: `personal-request:${request.requestId}`, title: request.objective.slice(0, 60), body,
       originConversationId: request.conversationId,
+      dueAt: request.parameters.dueAt,
       locale,
       contract: { ...contract, acceptancePolicy: request.parameters.acceptancePolicy ?? 'verified_auto', outputDestinations: [] },
       activation: { mode: 'allocate', requirements: { version: 1, summary: request.objective.slice(0, 300),
@@ -198,7 +201,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
   const deliveryBody = `${body}\n\n${PERSONAL_WORKER_RESULT_GUIDANCE}\n\nBefore finishing, call personal_request_result with the verified summary and, for mail, message items and coverage. The host composes the final explanation and preserves structured items in the main chat.`;
   const result = new TaskApplicationService().create(TaskCreateRequestSchema.parse({
     idempotencyKey: `personal-request:${request.requestId}`, title: request.objective.slice(0, 60), body: deliveryBody,
-    originConversationId: request.conversationId, delegateAgentId: request.executorAgentId,
+    originConversationId: request.conversationId, delegateAgentId: request.executorAgentId, dueAt: request.parameters.dueAt,
     locale,
     contract: { ...contract, acceptancePolicy: request.parameters.acceptancePolicy ?? 'verified_auto', outputDestinations: [] },
     activation: { mode: 'start', executor: { kind: 'agent', agentId: request.executorAgentId } },

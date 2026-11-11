@@ -10,6 +10,8 @@ export type ResponseLatencySnapshot = {
   gatewayInputReceiptMs?: number;
   inputAcceptedMs?: number;
   runBoundMs?: number;
+  runAssociation?: 'realtime' | 'receipt' | 'poll' | 'history';
+  firstTextSource?: 'realtime' | 'history';
   firstTextMs?: number;
   firstVisibleMs?: number;
   firstSentenceMs?: number;
@@ -46,20 +48,21 @@ export function discardPendingResponseLatency(conversationId: string, timing: Pe
   if (pending.get(conversationId) === timing) pending.delete(conversationId);
 }
 
-export function bindResponseLatency(conversationId: string, runId: string, expected: PendingTiming): void {
+export function bindResponseLatency(conversationId: string, runId: string, expected: PendingTiming, association?: ResponseLatencySnapshot['runAssociation']): void {
   if (timings.has(runId)) return;
   const timing = pending.get(conversationId);
   // Resuming history must not be measured as a fresh request.
   if (timing !== expected) return;
   pending.delete(conversationId);
-  timings.set(runId, { ...timing, runId, runBoundMs: performance.now() - timing.startedAt });
+  timings.set(runId, { ...timing, runId, runBoundMs: performance.now() - timing.startedAt, ...(association ? { runAssociation: association } : {}) });
   bound(timings);
 }
 
-export function recordResponseText(runId: string): void {
+export function recordResponseText(runId: string, source?: ResponseLatencySnapshot['firstTextSource']): void {
   const timing = timings.get(runId);
   if (!timing || timing.firstTextAt !== undefined) return;
   timing.firstTextAt = performance.now();
+  if (source) timing.firstTextSource = source;
   timing.firstTextMs = timing.firstTextAt - timing.startedAt;
 }
 

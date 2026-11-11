@@ -19,6 +19,8 @@ import { TaskApplicationService } from '../../tasks/task-application-service.js'
 import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
 import { cancelPersonalTask } from '../../personal-agent/task-cancel.js';
 import { boundedPersonalResult } from './personal-result-budget.js';
+import { taskConversationSummary } from '../../tasks/task-conversation-summary.js';
+import { isTaskNotificationPreference, setTaskNotificationPreference, TASK_NOTIFICATION_PREFERENCES } from '../../tasks/task-notification-preference.js';
 import { TaskReadModelProjector } from '../../tasks/task-read-model-projector.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
@@ -27,7 +29,7 @@ import { TaskResultDeliveryRepository } from '../../tasks/task-result-delivery-r
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
 const PersonalTaskSchema = Type.Object({
-  command: Type.Union([Type.Literal('revise'), Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('collaboration'), Type.Literal('entry'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel')]),
+  command: Type.Union([Type.Literal('revise'), Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('collaboration'), Type.Literal('entry'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel'), Type.Literal('notifications')]),
   requirements: Type.Optional(Type.Object({
     version: Type.Optional(Type.Literal(1)), summary: Type.String({ maxLength: 300 }),
     domain: Type.Optional(Type.String()), taskType: Type.Optional(Type.String()),
@@ -49,6 +51,10 @@ const PersonalTaskSchema = Type.Object({
   description: Type.Optional(Type.String({ minLength: 1, description: 'Complete Markdown brief preserving the user request, input references, and delivery expectations. Optional structured fields need not repeat it.' })),
   agentId: Type.Optional(Type.String({ description: 'Specialist Agent ID. Never use your own ID.' })),
   taskId: Type.Optional(Type.String()),
+  notificationPreference: Type.Optional(Type.Union(TASK_NOTIFICATION_PREFERENCES.map(value => Type.Literal(value)), {
+    description: 'For submit or notifications, only on explicit user request. final_only suppresses progress; updates enables meaningful milestones; default restores normal behavior. Results and required user decisions still arrive.',
+  })),
+  dueAt: Type.Optional(Type.Integer({ minimum: 0, description: 'Actual user-provided deadline in epoch milliseconds, only if explicit.' })),
   baselineResultId: Type.Optional(Type.String({ description: 'Exact latest result ID from personal_result directory or Task revisionBaseline.resultId.' })),
   baselineVersion: Type.Optional(Type.String({ description: 'Opaque baselineVersion token returned by the host, copied exactly. Never use the numeric resultRevision or task version here.' })),
   expectedVersion: Type.Optional(Type.Integer({ minimum: 1 })),
@@ -57,7 +63,7 @@ const PersonalTaskSchema = Type.Object({
   entryId: Type.Optional(Type.String({ description: 'Read one complete collaboration entry, including its question or instruction body.' })),
   afterSequence: Type.Optional(Type.Integer({ minimum: 0 })),
   bodyOffset: Type.Optional(Type.Integer({ minimum: 0, description: 'Character offset for an entry body; follow nextBodyOffset until absent.' })),
-  section: Type.Optional(Type.Union(['revision', 'task', 'waits', 'runs', 'receipts', 'context', 'conversation', 'sessions', 'authorityGrants', 'dependencies', 'dependents', 'criterionReviews'].map(value => Type.Literal(value)))),
+  section: Type.Optional(Type.Union(['status', 'revision', 'task', 'waits', 'runs', 'receipts', 'context', 'conversation', 'sessions', 'authorityGrants', 'dependencies', 'dependents', 'criterionReviews'].map(value => Type.Literal(value)))),
   questionId: Type.Optional(Type.String({ description: 'Collaboration question ID to answer.' })),
   expectedOutputs: Type.Optional(Type.Array(Type.String())),
   acceptancePolicy: Type.Optional(Type.Union([Type.Literal('verified_auto'), Type.Literal('manual')], { description: 'Defaults to automatic verification and completion. Use manual only when the user explicitly requests human acceptance.' })),
@@ -68,7 +74,7 @@ const PersonalTaskSchema = Type.Object({
   idempotencyKey: Type.Optional(Type.String()),
 });
 
-const PERSONAL_MODEL_COMMANDS = ['revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel'] as const;
+const PERSONAL_MODEL_COMMANDS = ['revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel', 'notifications'] as const;
 
 // Keep historical commands executable for internal replay callers, without advertising executor selection to the personal model.
 const PersonalTaskModelSchema = Type.Object({
@@ -80,6 +86,10 @@ const PersonalTaskModelSchema = Type.Object({
     { properties: { kind: { const: 'result' } }, required: ['resultId'] },
     { required: ['sourceId'] },
   ] }), { maxItems: 5 })),
+  conversationExcerpts: Type.Optional(Type.Array(Type.Object({
+    entryId: Type.String({ minLength: 1, maxLength: 100 }),
+    quote: Type.String({ minLength: 1, maxLength: 800 }),
+  }, { additionalProperties: false }), { maxItems: 3, description: 'Only for submit that depends on prior decisions. Exact visible quotes and entry IDs from session_recall in this chat. Select only task-relevant passages that can be shared with its executor.' })),
   ...Type.Omit(PersonalTaskSchema, ['command', 'agentId', 'selectionReason', 'selectionSource', 'previousSelectionId', 'matchId', 'cursor', 'requiredTools', 'acceptanceCriteria']).properties,
   requirements: Type.Optional(Type.Omit(PersonalTaskSchema.properties.requirements, ['requiredTools', 'requiredSkills'], { additionalProperties: false })),
 }, { additionalProperties: false, anyOf: [
@@ -88,6 +98,7 @@ const PersonalTaskModelSchema = Type.Object({
   { properties: { command: { const: 'submit' }, useOriginalRequest: { const: true } }, required: ['command', 'objective', 'useOriginalRequest'] },
   { properties: { command: { enum: ['list', 'selection'] } } },
   { properties: { command: { enum: ['get', 'collaboration', 'retry_allocation', 'cancel'] } }, required: ['taskId'] },
+  { properties: { command: { const: 'notifications' } }, required: ['taskId', 'notificationPreference'] },
   { properties: { command: { const: 'entry' } }, required: ['taskId', 'entryId'] },
   { properties: { command: { const: 'instruct' } }, required: ['taskId', 'instruction'] },
   { properties: { command: { const: 'answer' } }, required: ['taskId', 'instruction', 'questionId'] },
@@ -125,7 +136,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
   return {
     name: 'personal_task',
     label: 'Personal Task',
-    description: 'Coordinate ordinary Tasks. Always include command. New goal: submit objective plus useOriginalRequest=true for a self-contained active user message; the host preserves the complete original text. Otherwise supply a concise complete description. Include sourceRefs for required inputs without pre-reading files or planning the execution. Use requirements.requestedAgentId only for an explicitly named executor; preserve explicitly requested requiredSkills. The background Router chooses the executor. After successful persistence, give one short confirmation and finish; updates arrive automatically.\nRUNNING work: send {command:"instruct",taskId,instruction} for new direction, or {command:"answer",taskId,questionId,instruction} for an exact worker question. Reuse the SAME Task, without a baseline lookup. Never revise running work.\nCOMPLETED ordinary work only: get(section="revision"), then revise with instruction and exact returned revisionBaseline.resultId, baselineVersion and expectedVersion. If revisionBaseline is absent, use instruct/answer; never invent placeholders. This saves a revision and queues background allocation atomically. Reuse idempotencyKey for uncertain retries. supersedesEntryIds names only earlier instruction/answer entries to replace; all other requirements remain. Independent goals use submit with pinned old-result sources; connected-app side effects require a newly authorized Request.\nsourceRefs: workspace input {kind:"file",sourceId:"path"}; prior result {kind:"result",resultId:"exact result ID",sourceId:"exact artifact ID or unique file title"}, omitting sourceId only for retained body; other prior inputs use stable sourceId and optional expectedVersion. The host authorizes and pins exact versions; workspace inputs are not executor cwd. Do not invent composite IDs.\nget/list/selection inspect state; get(section,limit,offset) pages details. collaboration(afterSequence) returns previews; entry(entryId,bodyOffset) reads full bodies through nextBodyOffset. Read complete questions before answering. cancel only on explicit user instruction; report executionStopConfirmed accurately. retry_allocation retries selection, not arbitrary execution. Saved, delivered, executor-confirmed and verified completion are distinct; report only confirmed states.',
+    description: 'Coordinate ordinary Tasks. Always include command. New goal: submit objective plus useOriginalRequest=true for a self-contained active user message; the host preserves the complete original text. Otherwise supply a concise complete description. Include sourceRefs for required inputs without pre-reading files or planning the execution. Use requirements.requestedAgentId only for an explicitly named executor; preserve explicitly requested requiredSkills. The background Router chooses the executor. After successful persistence, give one short confirmation and finish; updates arrive automatically.\nRUNNING work: send {command:"instruct",taskId,instruction} for new direction, or {command:"answer",taskId,questionId,instruction} for an exact worker question. Reuse the SAME Task, without a baseline lookup. Never revise running work.\nCOMPLETED ordinary work only: get(section="revision"), then revise with instruction and exact returned revisionBaseline.resultId, baselineVersion and expectedVersion. If revisionBaseline is absent, use instruct/answer; never invent placeholders. This saves a revision and queues background allocation atomically. Reuse idempotencyKey for uncertain retries. supersedesEntryIds names only earlier instruction/answer entries to replace; all other requirements remain. Independent goals use submit with pinned old-result sources; connected-app side effects require a newly authorized Request.\nsourceRefs: workspace input {kind:"file",sourceId:"path"}; prior result {kind:"result",resultId:"exact result ID",sourceId:"exact artifact ID or unique file title"}, omitting sourceId only for retained body; other prior inputs use stable sourceId and optional expectedVersion. The host authorizes and pins exact versions; workspace inputs are not executor cwd. Do not invent composite IDs.\nUse notifications(taskId, notificationPreference) to change an existing Task only when the user asks. Use get(section="status") for a brief current status; list locates a Task and get(section,limit,offset) reads details. collaboration(afterSequence) returns previews; entry(entryId,bodyOffset) reads full bodies through nextBodyOffset. Read complete questions before answering. cancel only on explicit user instruction; report executionStopConfirmed accurately. retry_allocation retries selection, not arbitrary execution. Saved, delivered, executor-confirmed and verified completion are distinct; report only confirmed states.',
     parameters: PersonalTaskModelSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -133,7 +144,11 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
     finalGuardRelevant: true,
     async execute(toolCallId, modelInput: Static<typeof PersonalTaskModelSchema>, signal) {
       if (!PersonalTaskSchema.properties.command.anyOf.some(command => command.const === modelInput.command)) throw new Error('Unsupported personal_task command; completed work uses atomic revise, not manual start/reopen');
+      if (modelInput.conversationExcerpts?.length && modelInput.command !== 'submit') throw new Error('conversationExcerpts are supported only by submit; use instruct or answer for a running Task');
       const input = modelInput as Static<typeof PersonalTaskSchema>;
+      if (input.notificationPreference !== undefined && (!isTaskNotificationPreference(input.notificationPreference)
+        || !['submit', 'notifications'].includes(input.command))) throw new Error('Invalid Task notification preference');
+      if (input.dueAt !== undefined && input.command !== 'submit') throw new Error('dueAt is supported only by submit');
       if (modelInput.sourceRefs?.length && !['submit', 'revise'].includes(input.command)) throw new Error('sourceRefs is supported only by submit/revise; it cannot be silently ignored by a coordination command');
       const conversationId = deps.getCurrentConversationId?.();
       const ownAgentId = deps.getCurrentAgentId?.();
@@ -190,11 +205,12 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         if (input.agentId) throw new Error('Use requirements.requestedAgentId for an explicitly requested executor');
         const brief = buildPersonalTaskBrief({ title: input.title, objective, description });
         const submissionKey = input.idempotencyKey?.trim() || selectionRequestHash({
-          sourceInput: inputId ?? toolCallId, brief, requirements, sourceRefs: modelInput.sourceRefs,
-          expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy, constraints: input.constraints,
+          sourceInput: inputId ?? toolCallId, brief, requirements, sourceRefs: modelInput.sourceRefs, conversationExcerpts: modelInput.conversationExcerpts,
+          expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
+          notificationPreference: input.notificationPreference, dueAt: input.dueAt, constraints: input.constraints,
         });
         command = 'create';
-        args = { ...brief, createMode: 'allocate', requirements, sourceRefs: modelInput.sourceRefs, includeConversationContext: false,
+        args = { ...brief, createMode: 'allocate', requirements, dueAt: input.dueAt, notificationPreference: input.notificationPreference, sourceRefs: modelInput.sourceRefs, conversationExcerpts: modelInput.conversationExcerpts, includeConversationContext: false,
           expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
           constraints: input.constraints, idempotencyKey: `personal-submit:${conversationId}:${selectionRequestHash(submissionKey)}` };
         if (requirements.requiredSkills?.length) args.body = `${brief.body}\n\nRequired Skills: ${requirements.requiredSkills.join(', ')}. Read and follow these Skills before execution.`;
@@ -260,6 +276,15 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         if (!taskId) throw new Error('taskId is required');
         if (!new TaskOriginRepository().owns(taskId, conversationId)) {
           throw new Error('Task does not belong to this personal conversation');
+        }
+        if (command === 'notifications') {
+          if (!input.notificationPreference) throw new Error('notificationPreference is required');
+          setTaskNotificationPreference(taskId, conversationId, input.notificationPreference);
+          return { content: [{ type: 'text', text: JSON.stringify({ ok: true, taskId, notificationPreference: input.notificationPreference }) }], details: {} };
+        }
+        if (command === 'get' && input.section === 'status') {
+          const summary = taskConversationSummary(taskId, conversationId);
+          return { content: [{ type: 'text', text: JSON.stringify({ ok: Boolean(summary), summary }) }], details: {} };
         }
         if (command === 'get' && input.section === 'revision') {
           const model = new TaskReadModelProjector().get(taskId)!;
@@ -335,7 +360,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         if (payload?.ok === true && input.command === 'submit') {
           const task = payload.task as Record<string, unknown>;
           const confirmation = { ok: true, task: { id: task.id, title: task.title, phase: task.phase, version: task.version },
-            operationalState: payload.operationalState, allocation: payload.allocation, runId: payload.runId,
+            operationalState: payload.operationalState, allocation: payload.allocation, runId: payload.runId, notificationPreference: input.notificationPreference,
             coordination: 'Use instruct on this taskId for new direction while work is running. Do not revise until a completed result baseline exists. Confirm submission briefly and finish.' };
           return { content: [{ type: 'text', text: appendProductDeliveryText(JSON.stringify(confirmation, null, 2), result.details.delivery) }], details: {} };
         }

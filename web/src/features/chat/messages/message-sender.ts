@@ -13,6 +13,7 @@ import {
   sessionInputCommandSchema,
   canonicalSessionCommand,
   type AgentStreamRunEndPayload,
+  type AgentStreamRunStatus,
   type AgentStreamToolExecutionMetadata,
   type ToolActivity,
   type TurnOutcome,
@@ -39,6 +40,7 @@ import { readLocalSessionDraft, saveLocalSessionDraft, readSessionTranscript, re
 import { useGatewayStore } from '@/stores/gateway-store';
 import { patchSessionAgentConfigView } from '../session/patch-session-agent-config-view';
 import { SessionManager, type SessionAgentConfig } from '../session/session-manager';
+import { watchSubmittedRun } from './submitted-run-watch';
 import { beginResponseLatency, bindResponseLatency, discardPendingResponseLatency, markResponseSubmission, recordResponseText, finishResponseLatency } from './response-latency';
 
 async function retryDelay(ms: number, signal: AbortSignal): Promise<void> {
@@ -252,7 +254,7 @@ export type MessagingCallbacks = {
   /** The server durably accepted this input, before its run finishes. */
   onInputAccepted?: () => void;
   onStreamStart: (turnId: string, startsNewBubble?: boolean, taskTrigger?: Message['taskTrigger']) => void;
-  onReplayGap?: () => void | Promise<void>;
+  onReplayGap?: (recovery?: { runId?: string; signal: AbortSignal; terminal?: boolean }) => void | Promise<void>;
   onToken: (delta: string, messageId?: string, offset?: number) => void;
   onAssistantMessageEnd?: (
     messageId: string,
@@ -334,6 +336,7 @@ export class MessageSender {
   private _trackedRunId?: string;
   private _streamCleanup?: () => void;
   private _streamFinish?: (value: boolean) => void;
+  private _streamRecover?: (status?: AgentStreamRunStatus) => Promise<void>;
   private _terminalCallbacks?: MessagingCallbacks;
 
   get isSending() {
@@ -360,14 +363,22 @@ export class MessageSender {
   /** Settle a run from the low-volume sessions topic when its run topic terminal was lost. */
   reconcileTerminal(chatId: string, runId: string, status: AgentStreamRunEndPayload['status']): boolean {
     if (!this.isTrackingRun(chatId, runId) || !this._streamFinish) return false;
+    if (this._streamRecover) {
+      void this._streamRecover(status);
+      return true;
+    }
     this._terminalCallbacks?.onResult({ runId, conversationId: chatId, status });
     this._streamFinish(true);
     return true;
   }
 
   /** Stop tracking a run proven inactive by the authoritative REST snapshot. */
-  reconcileInactive(chatId: string, runId: string): boolean {
+  reconcileInactive(chatId: string, runId: string, recoverTerminal = false): boolean {
     if (!this.isTrackingRun(chatId, runId) || !this._streamFinish) return false;
+    if (recoverTerminal && this._streamRecover) {
+      void this._streamRecover();
+      return true;
+    }
     this._streamFinish(false);
     return true;
   }
@@ -398,6 +409,7 @@ export class MessageSender {
     this._chatId = chatId;
 
     const latency = beginResponseLatency(chatId, submittedAt);
+    let watch: ReturnType<typeof watchSubmittedRun> | undefined;
     const captureEnvironment = async () => {
       const startedAt = performance.now();
       const environment = await captureTurnEnvironment();
@@ -478,6 +490,7 @@ export class MessageSender {
         await savePendingSessionCommand(chatId, durable);
       }
       assertScope();
+      if (!taskId && !replaceTurnId) watch = watchSubmittedRun(chatId, clientMessageId, controller.signal);
       const res = await postSessionInput(
         apiUrl(taskId
           ? `/api/tasks/${encodeURIComponent(taskId)}/inputs`
@@ -513,7 +526,7 @@ export class MessageSender {
       const json = await res.json() as {
         payload?: {
           conversationId?: string;
-          receipt?: { conversationId: string; clientMessageId: string; transcriptId: string };
+          receipt?: { conversationId: string; clientMessageId: string; transcriptId: string; inputId?: string | null };
           session?: { transcriptId?: string };
           agentConfig?: SessionAgentConfig;
           inputState?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> };
@@ -537,58 +550,134 @@ export class MessageSender {
       if (replaceTurnId && state) window.dispatchEvent(new CustomEvent('session-input-state', { detail: { ...state, conversationId: chatId } }));
       const resolvedChatId = json.payload?.conversationId?.trim() || chatId;
       const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
-      if (state?.activeRunId && ownInput?.id === state.activeInputId) {
-        if (ownInput) bindResponseLatency(chatId, state.activeRunId, latency);
-        await this.resume(state.activeRunId, resolvedChatId, callbacks, { replayFromStart: true });
+      if (taskId || replaceTurnId) {
+        if (state?.activeRunId && ownInput?.id === state.activeInputId) {
+          if (ownInput) bindResponseLatency(chatId, state.activeRunId, latency, 'receipt');
+          await this.resume(state.activeRunId, resolvedChatId, callbacks, { replayFromStart: true });
+        }
         return;
       }
-      if (!taskId && !replaceTurnId) {
-        // A newly accepted input is often still queued when the 202 response is
-        // sent. Keep following that input so an early run does not leave the
-        // optimistic response bubble waiting forever.
-        while (ownInput) {
-          await retryDelay(400, controller.signal);
-          if (this._abort !== controller) return;
-          const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/input-state`), {
-            signal: controller.signal,
-          });
-          if (this._abort !== controller) return;
-          if (!response.ok) continue;
-          const snapshot = await response.json() as {
-            payload?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string }> };
-          };
-          controller.signal.throwIfAborted();
-          assertScope();
-          const current = snapshot.payload;
-          if (current?.activeRunId && current.activeInputId === ownInput.id) {
-            bindResponseLatency(chatId, current.activeRunId, latency);
-            await this.resume(current.activeRunId, resolvedChatId, callbacks, { replayFromStart: true });
-            return;
-          }
-          if (current?.inputs && !current.inputs.some((input) => input.id === ownInput.id)) {
-            break;
-          }
-        }
-        await callbacks?.onReplayGap?.();
-        // A fast run can suspend before the first input-state poll sees it.
-        // Recover the durable wait instead of reporting a synthetic success.
-        if (callbacks?.onClarifyRequest) try {
-          const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(resolvedChatId)}/clarification`), { signal: controller.signal });
+
+      const receipt = json.payload?.receipt;
+      const inputId = receipt?.inputId ?? ownInput?.id;
+      if (inputId) watch?.accept(inputId);
+      const lookupExecution = async (signal: AbortSignal) => {
+        if (!receipt || !inputId) return;
+        const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/input-receipts/${encodeURIComponent(clientMessageId)}`), { signal });
+        signal.throwIfAborted();
+        assertScope();
+        if (!response.ok) return;
+        const body = await response.json() as { payload?: {
+          receipt?: { inputId?: string; transcriptId?: string; clientMessageId?: string; conversationId?: string };
+          session?: { transcriptId?: string };
+          execution?: { runId?: string; status?: string };
+        } };
+        signal.throwIfAborted();
+        assertScope();
+        const returned = body.payload?.receipt;
+        if (returned?.inputId !== inputId || returned.clientMessageId !== clientMessageId || returned.conversationId !== chatId
+          || returned.transcriptId !== receipt.transcriptId || body.payload?.session?.transcriptId !== receipt.transcriptId) return;
+        return body.payload?.execution;
+      };
+      const terminalStatus = (status: string | undefined): AgentStreamRunStatus | undefined => {
+        if (status === 'completed') return 'success';
+        if (status === 'failed') return 'error';
+        if (status === 'cancelled' || status === 'suspended') return status;
+        return undefined;
+      };
+      const recover = async (runId: string | undefined, status: AgentStreamRunStatus | undefined, signal: AbortSignal) => {
+        await callbacks?.onReplayGap?.({ runId, signal, terminal: true });
+        signal.throwIfAborted();
+        assertScope();
+        // A short run may have persisted a clarification before the client saw its stream.
+        if ((!status || status === 'suspended') && callbacks?.onClarifyRequest) {
+          const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(resolvedChatId)}/clarification`), { signal }).catch(() => null);
           const snapshot = response?.ok ? await response.json() : null;
-          const wait = snapshot?.payload?.clarification;
+          signal.throwIfAborted();
           assertScope();
+          const wait = snapshot?.payload?.clarification;
           if (wait?.status === 'open' && typeof wait.id === 'string') {
-            callbacks?.onClarifyRequest?.({ ...readClarificationPresentation(wait), requestId: wait.id,
+            callbacks.onClarifyRequest({ ...readClarificationPresentation(wait), requestId: wait.id,
               question: wait.question, kind: wait.kind === 'approval' ? 'approval' : 'input', version: wait.version,
               createdAt: wait.createdAt, expiresAt: wait.expiresAt });
-            callbacks?.onResult({ runId: '', conversationId: resolvedChatId, status: 'suspended' });
-            return;
+            return 'suspended' as const;
           }
-        } catch (error) { if (controller.signal.aborted) throw error; }
-        callbacks?.onResult({ runId: '', conversationId: resolvedChatId, status: 'success' });
-        return;
+        }
+        return status ?? 'success';
+      };
+      const follow = async (runId: string, association: 'realtime' | 'receipt' | 'poll', status?: AgentStreamRunStatus) => {
+        controller.signal.throwIfAborted();
+        assertScope();
+        bindResponseLatency(chatId, runId, latency, association);
+        if (status) {
+          const recoveredStatus = await recover(runId, status, controller.signal);
+          finishResponseLatency(runId, recoveredStatus);
+          callbacks?.onResult({ runId, conversationId: resolvedChatId, status: recoveredStatus });
+          return;
+        }
+        await this.resume(runId, resolvedChatId, callbacks, {
+          replayFromStart: true,
+          recoverTerminal: async (completedStatus, signal) => {
+            let status = completedStatus;
+            if (!status) {
+              // A REST lookup can see a claimed run before its realtime topic exists.
+              let execution = await lookupExecution(signal);
+              while (execution?.runId === runId && execution.status === 'running') {
+                await retryDelay(400, signal);
+                execution = await lookupExecution(signal);
+              }
+              status = execution?.runId === runId ? terminalStatus(execution.status) : undefined;
+            }
+            return recover(runId, status, signal);
+          },
+        });
+      };
+
+      const announced = () => inputId ? watch?.current(inputId) : undefined;
+      const early = announced();
+      const receiptRunId = inputId && state?.activeInputId === inputId ? state.activeRunId : undefined;
+      if (early && (!receiptRunId || early.runId === receiptRunId)) return await follow(early.runId, 'realtime', early.status);
+      if (receiptRunId) return await follow(receiptRunId, 'receipt');
+
+      const fallbackSignal = watch?.fallbackSignal ?? controller.signal;
+      while (inputId && (ownInput || !state?.inputs)) {
+        await watch?.wait(inputId, 400);
+        const event = announced();
+        if (event) return await follow(event.runId, 'realtime', event.status);
+        const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(chatId)}/input-state`), {
+          signal: fallbackSignal,
+        }).catch(() => undefined);
+        controller.signal.throwIfAborted();
+        assertScope();
+        const duringPoll = announced();
+        if (duringPoll) return await follow(duringPoll.runId, 'realtime', duringPoll.status);
+        if (!response?.ok) continue;
+        const snapshot = await response.json().catch(() => undefined) as {
+          payload?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string }> };
+        } | undefined;
+        controller.signal.throwIfAborted();
+        assertScope();
+        const afterPoll = announced();
+        if (afterPoll) return await follow(afterPoll.runId, 'realtime', afterPoll.status);
+        const current = snapshot?.payload;
+        if (current?.activeRunId && current.activeInputId === inputId) return await follow(current.activeRunId, 'poll');
+        if (current?.inputs && !current.inputs.some(input => input.id === inputId)) break;
       }
+
+      const execution = await lookupExecution(fallbackSignal).catch(() => undefined);
+      controller.signal.throwIfAborted();
+      assertScope();
+      const late = announced();
+      if (late) return await follow(late.runId, 'realtime', late.status);
+      const runId = execution?.runId;
+      const status = terminalStatus(execution?.status);
+      if (runId && !status && execution?.status === 'running') return await follow(runId, 'poll');
+      if (runId) bindResponseLatency(chatId, runId, latency, 'history');
+      const recoveredStatus = await recover(runId, status, controller.signal);
+      if (runId) finishResponseLatency(runId, recoveredStatus);
+      callbacks?.onResult({ runId: runId ?? '', conversationId: resolvedChatId, status: recoveredStatus });
     } finally {
+      watch?.dispose();
       discardPendingResponseLatency(chatId, latency);
       if (this._abort === controller) {
         this._abort = undefined;
@@ -620,7 +709,7 @@ export class MessageSender {
     } catch { /* Cancellation remains best effort when the transport is unavailable. */ }
   }
 
-  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks, options?: { replayFromStart: boolean }): Promise<boolean> {
+  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks, options?: { replayFromStart: boolean; recoverTerminal?: (status: AgentStreamRunStatus | undefined, signal: AbortSignal) => Promise<AgentStreamRunStatus> }): Promise<boolean> {
     // A resumed successor owns its own controller and subscription. A predecessor's
     // completion must never dispose or clear the successor's recovery cursor.
     this._abort?.abort();
@@ -642,6 +731,21 @@ export class MessageSender {
         resolve(value);
       };
       this._streamFinish = finish;
+      let recovering = false;
+      const recover = options?.recoverTerminal;
+      this._streamRecover = recover ? async status => {
+        if (settled || recovering || this._abort !== controller) return;
+        recovering = true;
+        try {
+          const recoveredStatus = await recover(status, controller.signal);
+          if (settled || this._abort !== controller) return;
+          finishResponseLatency(runId, recoveredStatus);
+          terminal.wrapped?.onResult({ runId, conversationId: chatId, status: recoveredStatus });
+          finish(true);
+        } catch {
+          finish(false);
+        }
+      } : undefined;
       const afterSeq = readPendingAgentRunCursor(chatId, runId);
       cleanup = subscribeRealtimeTopic(`run:${runId}`, {
         onEvent: message => {
@@ -655,7 +759,8 @@ export class MessageSender {
         },
         onGap: gap => {
           if (this._abort !== controller) return;
-          if (gap.recoverable) return terminal.wrapped?.onReplayGap?.();
+          if (gap.recoverable) return terminal.wrapped?.onReplayGap?.({ runId, signal: controller.signal });
+          if (this._streamRecover) return this._streamRecover();
           finish(false);
         },
       }, afterSeq);
@@ -668,6 +773,7 @@ export class MessageSender {
     if (this._abort === controller) {
       this._abort = undefined;
       this._streamFinish = undefined;
+      this._streamRecover = undefined;
       this._terminalCallbacks = undefined;
       this._clearPendingRun();
     }
@@ -777,7 +883,7 @@ export class MessageSender {
         break;
       case 'assistant_delta':
         if (typeof payload.delta === 'string' && payload.delta) {
-          if (typeof parsed.runId === 'string' && payload.delta.trim()) recordResponseText(parsed.runId);
+          if (typeof parsed.runId === 'string' && payload.delta.trim()) recordResponseText(parsed.runId, 'realtime');
           cb?.onToken(
             payload.delta,
             typeof payload.messageId === 'string' ? payload.messageId : undefined,

@@ -21,6 +21,7 @@ import { hasUnlocalizedTaskText, resolveTaskLocale } from './task-language.js';
 import { defineTaskContract } from './task-contract-definition.js';
 import { ModelTaskContractPlanner, type TaskContractPlanner } from './task-contract-planner.js';
 
+import { taskJsonAcceptance } from './task-json-acceptance.js';
 import { getTaskHandoff, resolveTaskHandoffReferences } from './task-handoff.js';
 import { supersededTaskInstructionIds } from './task-research-result.js';
 import { assessTaskExecutor, taskExecutionRequirements, captureExecutionRequirements, type ExecutionCapability } from './task-execution-capabilities.js';
@@ -153,9 +154,14 @@ export class TaskAllocationDispatcher {
       return;
     }
     const fallback = defineTaskContract(task.contract?.objective ?? task.title, resolveTaskLocale(task));
-    if (task.contract && (this.deps.planner || !this.deps.decide) && !requirements.connector) {
+    const jsonAcceptance = !activeDirections.length && taskJsonAcceptance(task, handoff);
+    const useJsonAcceptance = jsonAcceptance && JSON.stringify(task.contract?.acceptanceCriteria) === JSON.stringify(fallback.acceptanceCriteria)
+      && JSON.stringify(task.contract?.expectedOutputs) === JSON.stringify(fallback.expectedOutputs);
+    if (task.contract && (useJsonAcceptance || this.deps.planner || !this.deps.decide) && !requirements.connector) {
       // Expand the built-in fallback off the foreground path. Preserve all authority and explicit constraints.
-      const planned = await (this.deps.planner ?? new ModelTaskContractPlanner()).plan({
+      const planned = useJsonAcceptance
+        ? { ...fallback, expectedOutputs: [jsonAcceptance.file], acceptanceCriteria: jsonAcceptance.criteria, requiredCapabilities: ['publish_files' as const] }
+        : await (this.deps.planner ?? new ModelTaskContractPlanner()).plan({
         objective: task.contract.objective, taskContext, locale: resolveTaskLocale(task), signal });
       if (planned.capabilityPlanning === 'unavailable') {
         this.finishFailure(row, zh ? '后台未能完成任务能力清单，请重试分配；尚未启动执行。' : 'Background capability planning is unavailable; retry allocation. Execution has not started.', 'capability_planning_unavailable');

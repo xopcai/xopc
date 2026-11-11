@@ -61,7 +61,7 @@ Startup phases use navigation-relative time and include credentials ready and th
 
 ## Send to visible text and streaming paragraph checks
 
-The browser records elapsed time from the composer send action to sender entry, first POST attempt, HTTP response, input acceptance, association with the accepted run, first realtime text, and the first frame with rendered Markdown text. Endpoint claim and environment capture are reported as individual durations. The regular session input command also reports Gateway validation and receipt time through `Server-Timing`. The model logs report Gateway run entry to the first model request, first model content delta, and first model text. The Gateway first text log reports persisted input queue time and run time to text. A model delta can contain reasoning or tool arguments before visible text. Runs that finish before the sender can associate them with a run ID and recover through history have no realtime first-text sample.
+The browser records elapsed time from the composer send action to sender entry, first POST attempt, HTTP response, input acceptance, association with the accepted run, first realtime text, and the first frame with rendered Markdown text. Endpoint claim and environment capture are reported as individual durations. The regular session input command also reports Gateway validation and receipt time through `Server-Timing`. The model logs report Gateway run entry to the first model request, first model content delta, and first model text. The Gateway first text log reports persisted input queue time and run time to text. A model delta can contain reasoning or tool arguments before visible text. For a reply recovered from history, the browser records when the matching saved text becomes available and labels the sample as history.
 
 Generic image links register with their Markdown renderer. Ordinary paragraphs do not participate in duplicate image detection. When a candidate is present, changes in the Markdown DOM can update the link when an adjacent image appears, changes, or is removed. The media source remains available when the image shows its retry state.
 
@@ -73,6 +73,71 @@ pnpm run test:web:activity:e2e
 The Chrome benchmark alternates the previous layout scan and the optimized renderer over the same 500 completed paragraphs and 180 measured tail updates per variant. The previous scan visited 90,180 paragraphs. The optimized path performed zero full scans. The final run measured synchronous React commit p75 at 0.8 → 0.7 ms and p95 at 1.2 → 1.0 ms.
 
 The activity browser test uses production Web, an authenticated Gateway, SQLite and realtime, with a controlled local model. One pure reply sample reached first visible text in 491.3 ms. The browser recorded POST start at 30.0 ms, input acceptance at 61.6 ms, run association at 464.3 ms and first realtime text at 470.3 ms. For the same run, the Gateway reported 4.8 ms to the input receipt, 3 ms in the input queue, 132.3 ms from Gateway run entry to the model request, and 16.0 ms from the model request to its first content delta. The browser waited 402.7 ms between input acceptance and run association, consistent with the 400 ms input-state polling interval. The final verification measured 486.7 ms to first visible text and 406.8 ms from acceptance to run association. Web regression passed all 3,336 tests, the selected backend suites passed all 69 tests, and the production build and both Chrome checks passed.
+
+## Realtime run association and completed replies
+
+The sender listens for run start and completion before POST. It matches the conversation and client message, then confirms the durable input ID from the receipt. The client can use a start event received before HTTP acceptance and can recover an already completed run from its completion event. A missed event falls back to the existing input-state poll and the authenticated receipt lookup. A matched realtime event cancels an in-flight fallback request.
+
+A terminal history snapshot installs the matching saved reply and removes its waiting bubble in the same state update. It preserves the placeholder's render key and leaves a different active run in place. Diagnostics label how the run was associated and whether the first available text came from realtime or history.
+
+```sh
+pnpm run build:ci
+pnpm exec tsx scripts/verify-assistant-activity-browser.mts --benchmark-association
+```
+
+The browser benchmark uses the same production Chrome and Gateway session with a controlled local model. It alternates polling and realtime order across pairs, discards the warmup pair and measures six samples per mode. The polling control removes input identity from the WebSocket lifecycle events, exercising the real fallback. The model holds each streamed reply open long enough for both paths to subscribe.
+
+| Browser metric | Polling p50 | Realtime p50 | Polling p75 | Realtime p75 |
+| --- | ---: | ---: | ---: | ---: |
+| Acceptance to run association | 402.9 ms | 2.9 ms | 403.5 ms | 5.2 ms |
+| Composer submission to first visible text | 461.8 ms | 129.0 ms | 462.2 ms | 146.7 ms |
+
+In the same run, a fast reply recovered on its realtime completion event was visible after 162.0 ms. With both lifecycle events dropped, the receipt fallback recovered the fast reply in 447.6 ms. From history availability to visible text, the two samples took 9.2 and 5.6 ms respectively.
+
+## Personal idle dispatch and model preparation
+
+The first priority input for an idle Personal conversation starts as soon as the durable submission can drain. An active run still opens the coalescing window, and later inputs in that interruption burst can extend it even after the previous run exits.
+
+```sh
+XOPC_LOG_LEVEL=fatal pnpm exec tsx scripts/benchmark-personal-idle-input.mts
+pnpm run build:ci
+pnpm exec tsx scripts/verify-assistant-activity-browser.mts --personal-idle
+```
+
+The SQLite coordinator benchmark uses the real priority branch, a fresh idle conversation for each sample, and synthetic execution. Over 20 measured samples after warmup, submission-to-execution p75 fell from 204.4 ms to 0.63 ms. In production Chrome with a real Gateway and controlled local inference, a newly provisioned Personal conversation recorded 3 ms of queue time and 346.8 ms from send to visible reply.
+
+The first model request log and trace now include durations for user context, media hydration, session preparation, workspace instructions, runner acquisition, transcript loading, workspace verification, and model payload preparation. The log also reports runner reuse. Parallel phase durations and enclosing totals can overlap.
+
+In the ordinary-chat fixture, two reused-runner requests took 69.0–71.6 ms from Gateway run entry to first model request. Workspace verification took 21.6–22.7 ms, workspace instructions 12.3–13.7 ms, and SQLite transcript loading about 0.5 ms. These observations come from a short-history fixture.
+
+## Reuse the opening workspace snapshot
+
+The run records its opening checkpoint from the Git revision it just captured. Optional verification skips the continuation check that always returned empty, and the terminal summary still reads the current workspace revision. Required verification, tool snapshots and recovery continue to validate evidence against the captured revision.
+
+```sh
+pnpm exec tsx scripts/benchmark-reply-preparation.mts --startup-checkpoint
+```
+
+For a text-only turn with workspace tracking enabled, this removes one snapshot before the model call and one before the final summary. The paired Git benchmark alternates the old and new sequences for 20 samples on a temporary repository with one tracked file and 32 untracked files. On the loaded development host, opening checkpoint p75 fell from 202.2 ms to 78.2 ms. The full verification sequence median fell from 318.4 ms to 142.7 ms. These are stage measurements on the fixture. The production Chrome regression verified ordinary and Personal replies, including fast history recovery.
+
+## Defer Git until a tool can change the workspace
+
+New turns record a lightweight start checkpoint. Text and allowlisted read-only tools skip workspace snapshots. The first tool that could modify the workspace captures and records a baseline before execution. Parallel tools entering that stage share the initial snapshot. Tool receipts and terminal verification still use current revisions, and recovery reopens the workspace when it has a recorded baseline to compare.
+
+```sh
+pnpm run build:ci
+pnpm exec tsx scripts/verify-assistant-activity-browser.mts --benchmark-workspace --expect-deferred-workspace
+```
+
+The benchmark sends text-only requests through production Chrome and a real Gateway using a controlled local model and a temporary Git repository with two tracked files and 32 untracked files. Each build contributes 12 measured requests after two warmups. The optimized run asserts that the Gateway reached the model without opening a workspace snapshot. The same script covers fast completion through realtime notification and receipt polling.
+
+| Metric | Eager p50 | Deferred p50 | Eager p75 | Deferred p75 |
+| --- | ---: | ---: | ---: | ---: |
+| Composer submission to first visible text | 173.9 ms | 128.4 ms | 177.2 ms | 140.5 ms |
+| Gateway run entry to first model request | 107.1 ms | 62.9 ms | 117.3 ms | 69.1 ms |
+| Workspace verification setup | 44.5 ms | 1.7 ms | 51.0 ms | 1.9 ms |
+
+On the final build, fast history recovery took 130.3 ms through realtime completion and 443.7 ms through the receipt fallback. These are single fixture samples for each recovery path.
 
 ## Remaining measurement work
 

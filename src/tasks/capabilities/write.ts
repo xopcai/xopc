@@ -12,6 +12,7 @@ import { TaskRepository } from '../task-repository.js';
 import { resolveResponseLanguageForSession } from '../../agent/prompt/response-language.js';
 import { resolveTaskLocale } from '../task-language.js';
 import { LocalAppTaskMutationSchema } from '../../local-apps/capabilities/projections.js';
+import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 
 const modelSchema = TaskDetailResponseSchema.pick({ task: true, operationalState: true, attention: true, allowedCommands: true, allocation: true });
@@ -49,6 +50,11 @@ export function registerTaskWriteCapabilities(dispatcher: CapabilityDispatcher, 
         throw new CapabilityError('FORBIDDEN', 'Task origin must be the active conversation');
       }
       const originConversationId = context.surface === 'agent' ? context.conversationId : input.originConversationId;
+      if (input.context.some(edge => ['task_conversation_excerpt', 'task_notification_preference'].includes(String(edge.metadata.kind)))
+        && (context.surface !== 'agent' || input.activation.mode !== 'allocate'
+          || !originConversationId || !isPersonalConversation(originConversationId))) {
+        throw new CapabilityError('FORBIDDEN', 'Personal Task preferences and conversation excerpts require an active Personal Task submission');
+      }
       const language = resolveResponseLanguageForSession(config, originConversationId);
       const locale = input.locale ?? (language === 'auto'
         ? resolveTaskLocale({ title: input.title, contract: input.contract })

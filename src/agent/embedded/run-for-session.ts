@@ -46,6 +46,7 @@ export type RunEmbeddedForSessionParams = {
   conversationId: string;
   runId?: string;
   gatewayRunStartedMonotonic?: number;
+  preparationTimings?: Record<string, number>;
   userMessage: AgentMessage;
   dynamicSystemContext?: string;
   llmImages?: import('@earendil-works/pi-ai').ImageContent[];
@@ -75,6 +76,7 @@ export async function runEmbeddedTurnForSession(
 }
 
 async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParams): Promise<RunXopcEmbeddedTurnResult> {
+  const sessionStartedAt = performance.now();
   const { conversationId, agentManager, modelManager, sessionStore, userMessage } = params;
   const personal = isPersonalConversation(conversationId);
   const idleScheduler = sessionStore.idleCompaction;
@@ -164,7 +166,9 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
     await params.beforeTurn?.();
     if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
 
+    const memoryStartedAt = performance.now();
     await agentManager.ensureMemoryReadyForSession?.(conversationId);
+    const memoryReadyMs = performance.now() - memoryStartedAt;
     if (supervisor.signal.aborted) return await finish({ ok: false, errorMessage: 'aborted' });
 
     if (config) {
@@ -388,6 +392,11 @@ async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParam
             verifyChanges: config ? resolveEffectiveAgentProfileForSession(conversationId).agentId === 'coder' : false,
             runId,
             gatewayRunStartedMonotonic: params.gatewayRunStartedMonotonic,
+            preparationTimings: {
+              ...params.preparationTimings,
+              memoryReadyMs,
+              sessionPreparationMs: performance.now() - sessionStartedAt,
+            },
             userMessage: userMessageForTurn,
             images: params.llmImages,
             model: candidateModel,

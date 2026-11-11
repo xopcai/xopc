@@ -34,6 +34,7 @@ import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repo
 import { TaskCollaborationDelivery } from '../../tasks/task-collaboration-delivery.js';
 import { buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
 import { createTaskCollaborationTool } from '../../agent/tools/task-collaboration-tool.js';
+import { getTaskNotificationPreference } from '../../tasks/task-notification-preference.js';
 import { TaskMainUpdateDelivery } from '../../tasks/task-main-update-delivery.js';
 import { createPersonalRequestTools } from '../../agent/tools/personal-request-tool.js';
 import { createPersonalRequestResultTool } from '../../agent/tools/personal-request-result-tool.js';
@@ -319,6 +320,10 @@ describe('Personal connected-app requests', () => {
 
   it('automatically resumes after OAuth polling, immediately shows feedback and dispatches the worker', async () => {
     const request = submit();
+    const requestTool = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const preference = await requestTool.execute('request-preference', { command: 'notifications',
+      requestId: request.requestId, notificationPreference: 'final_only' });
+    expect(JSON.parse(preference.content[0].text)).toMatchObject({ state: 'waiting_connection', notificationPreference: 'final_only' });
     const config = ConfigSchema.parse({ connectors: { instances: { 'composio-gmail': {
       xopcConnector: { managed: true, connectorId: 'composio-gmail', enabled: true },
       runtime: { type: 'composio', role: 'toolkit', toolkit: 'gmail' },
@@ -341,6 +346,10 @@ describe('Personal connected-app requests', () => {
     await recovery.poll();
     const resumed = getPersonalRequest(request.requestId)!;
     expect(resumed.state).toBe('queued');
+    expect(getTaskNotificationPreference(resumed.taskId!, conversationId)).toBe('final_only');
+    await requestTool.execute('request-preference-reset', { command: 'notifications',
+      requestId: request.requestId, notificationPreference: 'default' });
+    expect(getTaskNotificationPreference(resumed.taskId!, conversationId)).toBe('default');
     expect(recovery.snapshot(conversationId).wait).toBeNull();
     expect(notify).toHaveBeenCalledOnce();
     let rows = loadTranscriptRowsForSession(conversationId);

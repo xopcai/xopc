@@ -7,6 +7,8 @@ import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
+import { getTaskHandoff } from './task-handoff.js';
+import { currentTaskJsonAcceptance } from './task-json-acceptance.js';
 import { TaskOriginRepository } from './task-origin-repository.js';
 
 export interface TaskContextAllocation {
@@ -119,7 +121,7 @@ export function buildTaskExecutionDirective(conversationId: string): string {
   const contract = task.contract!;
   const contextEdges = new TaskContextRepository().list(task.id);
   const contextReferences = contextEdges
-    .filter((edge) => typeof edge.metadata.userAnswer !== 'string')
+    .filter((edge) => typeof edge.metadata.userAnswer !== 'string' && edge.metadata.kind !== 'task_notification_preference')
     .slice(0, 40)
     .map((edge) => {
       const title = edge.title?.trim() ? ` (${edge.title.trim()})` : '';
@@ -131,6 +133,9 @@ export function buildTaskExecutionDirective(conversationId: string): string {
   const superseded = new Set((getSqliteDatabase().prepare('SELECT supersedes_json FROM task_work_revisions WHERE task_id = ?').all(task.id) as Array<{ supersedes_json: string }>).flatMap(row => JSON.parse(row.supersedes_json) as string[]));
   const collaboration = [...new Map([...board.recent(task.id, undefined, 12), ...board.coordination(task.id).filter(entry => ['answer', 'instruction'].includes(entry.kind))]
     .map(entry => [entry.id, entry])).values()].sort((left, right) => left.sequence - right.sequence);
+  const verifyJson = !connected && !collaboration.some(entry => ['answer', 'instruction'].includes(entry.kind))
+    && contract.expectedOutputs.length === 1 && /^[A-Za-z0-9_.-]+\.json$/i.test(contract.expectedOutputs[0] ?? '')
+    && currentTaskJsonAcceptance(task, getTaskHandoff(task.id));
   return [
     '<xopc_task_execution>',
     'This conversation is executing a durable task.',
@@ -141,7 +146,9 @@ export function buildTaskExecutionDirective(conversationId: string): string {
     `Expected outputs: ${contract.expectedOutputs.join('; ')}`,
     `Remaining acceptance criteria: ${remainingCriteria.join('; ')}`,
     `Acceptance criterion indices: ${JSON.stringify(contract.acceptanceCriteria.map((criterion, criterionIndex) => ({ criterionIndex, criterion })))}`,
-    'For research or evidence-based conclusions, use publish_task_result before finishing when that tool is available. Cite exact excerpts from successful reads in this TaskRun, link each claim to source ids, and distinguish facts, inferences and recommendations. Publish required files first, then supply finalArtifactIds selecting only the final deliverables from their publication receipts; do not include intermediate or obsolete files. Read its per-criterion review; correct unsupported claims or explicitly disclose unmet/unverified criteria. Never replace missing evidence with a self-declared pass. Use task_collaboration get section evidence to recover real toolCallIds and exact excerpts. If the chat reply itself is a deliverable, include the exact reply in finalText, including any required limitations, links and formatting. The host will review that text and deliver it verbatim. Keep it within the requested limits and amend finalText if the review finds gaps. Do not cite it as a source or create a separate file to prove its wording. A source quote match proves provenance, not factual truth. Keep the final reply concise; full evidence belongs in the result and report.',
+    verifyJson ? 'For this exact JSON-only request, the host directly checks the published file against every criterion. Publish only the requested final JSON file, then finish. This check replaces publish_task_result for this request.' : '',
+    verifyJson ? '' : 'For research or evidence-based conclusions, use publish_task_result before finishing when that tool is available. Cite exact excerpts from successful reads in this TaskRun, link each claim to source ids, and distinguish facts, inferences and recommendations. Publish required files first, then supply finalArtifactIds selecting only the final deliverables from their publication receipts; do not include intermediate or obsolete files. Read its per-criterion review; correct unsupported claims or explicitly disclose unmet/unverified criteria. Never replace missing evidence with a self-declared pass. Use task_collaboration get section evidence to recover real toolCallIds and exact excerpts. If the chat reply itself is a deliverable, include the exact reply in finalText, including any required limitations, links and formatting. The host will review that text and deliver it verbatim. Keep it within the requested limits and amend finalText if the review finds gaps. Do not cite it as a source or create a separate file to prove its wording. A source quote match proves provenance, not factual truth. Keep the final reply concise; full evidence belongs in the result and report.',
+    'For chat delivery, lead with the result and keep the evidence, material changes, and limitations that affect use. Use the shortest form that covers what the user asked for. General brevity is an editorial preference. Apply numerical length limits only when requested. When files contain the full report, leave methodology and repeated detail there unless requested.',
     `Acceptance policy: ${contract.acceptancePolicy}. Automatic tasks close after verified completion. Request user input only for a real missing decision or authorization; do not ask for routine acceptance.`,
     contract.constraints.length ? `Constraints: ${contract.constraints.join('; ')}` : '',
     contract.assumptions.length ? `Assumptions: ${contract.assumptions.join('; ')}` : '',

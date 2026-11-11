@@ -108,10 +108,20 @@ it('runs a real AgentSession through edit, early completion, bounded repair and 
       return stream;
     });
     const events: string[] = [];
+    const applyPatch = createApplyPatchTool(root);
+    const executePatch = applyPatch.execute.bind(applyPatch);
+    applyPatch.execute = (...args) => {
+      const checkpoints = runtime.openSessionManager(root).getBranch()
+        .filter(entry => entry.type === 'custom' && entry.customType === 'coding_run_started');
+      expect(checkpoints).toHaveLength(2);
+      expect(checkpoints[0]).toMatchObject({ data: { workspaceSnapshotStarted: false } });
+      expect(checkpoints[1]).toMatchObject({ data: { workspaceSnapshotStarted: true, revision: expect.any(String) } });
+      return executePatch(...args);
+    };
     const result = await runXopcEmbeddedTurn({ verifyChanges: true,
       conversationId, runId: 'test-run', userMessage: { role: 'user', content: 'Fix answer.', timestamp: Date.now() },
       model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }, modelRef: 'openai/gpt-4.1', systemPrompt: 'Fix and verify the code.',
-      tools: [createApplyPatchTool(root), createExecCommandTool(root), createReviewWorkspaceTool(root)],
+      tools: [applyPatch, createExecCommandTool(root), createReviewWorkspaceTool(root)],
       workspaceDir: root, transcriptRuntime: runtime, timeoutMs: 10_000,
       turnPolicy: createAgentTurnPolicy({ maxTurns: 5 }), onAgentEvent: event => events.push(event.type),
     });

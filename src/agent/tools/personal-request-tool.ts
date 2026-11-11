@@ -10,6 +10,7 @@ import { getActiveConnectionWait, reviseCurrentConnectionObjective, updateConnec
 import { updatePersonalRequest, getPersonalRequest, listPersonalRequests } from '../../personal-agent/request-repository.js';
 import { assertPersonalRequestTimeRange, cancelPersonalRequest, personalRequestSnapshot, publishPersonalRequest, submitPersonalRequest, stopPersonalRequestExecution } from '../../personal-agent/request-service.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { getTaskNotificationPreference, isTaskNotificationPreference, setTaskNotificationPreference, TASK_NOTIFICATION_PREFERENCES } from '../../tasks/task-notification-preference.js';
 import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
 import { boundedPersonalResult } from './personal-result-budget.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
@@ -18,7 +19,12 @@ import type { XopcUseToolDeps } from './xopc-use-tool.js';
 
 const CapabilitySchema = Type.Object({ query: Type.String({ minLength: 1, maxLength: 500 }), accountId: Type.Optional(Type.String()) });
 const RequestSchema = Type.Object({
-  command: Type.Union(['submit', 'get', 'list', 'cancel', 'answer', 'instruct', 'collaboration', 'entry'].map(command => Type.Literal(command))),
+  command: Type.Union(['submit', 'get', 'list', 'cancel', 'answer', 'instruct', 'collaboration', 'entry', 'notifications'].map(command => Type.Literal(command))),
+  notificationPreference: Type.Optional(Type.Union(TASK_NOTIFICATION_PREFERENCES.map(value => Type.Literal(value)), {
+    description: 'Only for explicit user preferences on submit or notifications. final_only suppresses progress; updates enables meaningful milestones; default restores normal behavior.',
+  })),
+  dueAt: Type.Optional(Type.Integer({ minimum: 0, description: 'User-provided deadline in epoch milliseconds, only on submit.' })),
+  section: Type.Optional(Type.Literal('status')),
   instruction: Type.Optional(Type.String({ minLength: 1, maxLength: 8000 })),
   questionId: Type.Optional(Type.String({ minLength: 1 })),
   entryId: Type.Optional(Type.String({ minLength: 1 })),
@@ -38,6 +44,7 @@ const RequestSchema = Type.Object({
   { properties: { command: { const: 'submit' } }, required: ['objective', 'connectorId', 'description'] },
   { properties: { command: { const: 'list' } } },
   { properties: { command: { enum: ['get', 'cancel', 'collaboration'] } }, required: ['requestId'] },
+  { properties: { command: { const: 'notifications' } }, required: ['requestId', 'notificationPreference'] },
   { properties: { command: { const: 'entry' } }, required: ['requestId', 'entryId'] },
   { properties: { command: { const: 'instruct' } }, required: ['requestId', 'instruction'] },
   { properties: { command: { const: 'answer' } }, required: ['requestId', 'questionId', 'instruction'] },
@@ -57,6 +64,7 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
     const value = snapshot(request);
     return { requestId: value.requestId, taskId: value.taskId, state: value.state, version: value.version,
       connectorId: value.connectorId, accountId: value.accountId, executorAgentId: value.executorAgentId,
+      notificationPreference: value.taskId ? getTaskNotificationPreference(value.taskId, value.conversationId) : value.parameters.notificationPreference,
       ...('allocation' in value ? { allocation: value.allocation } : {}), parameters: { timeRange: value.parameters.timeRange } };
   };
   const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: {} });
@@ -67,9 +75,12 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
   };
   const requestTool: AgentTool<typeof RequestSchema> = {
     name: 'personal_request', label: 'Connected app request', parameters: RequestSchema,
-    description: 'Submit a read-only connected-app request with a short objective and complete description using the exact connectorId from personal_capability. The background Task Router chooses an executor after account authorization. Preserves the objective, displays connection or account selection in this main chat, and starts a specialist Task automatically once connected. Return quickly after submission. Never claim data was read until the Task result arrives. Resolve absolute query dates and include timeRange. If mail has no user-specified range, the host returns an explicit last-7-days default; state that range and proceed without asking for confirmation. get includes complete Task coordination state; collaboration/entry read the same board and full questions. answer forwards the exact questionId; instruct forwards new requirements to the existing Task. Answers and instructions cannot change the connector/account, grant access or allow writes; reconnection stays in the existing connection UI. Saved, delivered, executor-confirmed and verified are distinct states. Use get/list for status without polling; preserve idempotencyKey on uncertain retries; cancel only when the user requests it.',
+    description: 'Submit a read-only connected-app request with a short objective and complete description using the exact connectorId from personal_capability. The background Task Router chooses an executor after account authorization. Preserves the objective, displays connection or account selection in this main chat, and starts a specialist Task automatically once connected. Return quickly after submission. Never claim data was read until the Task result arrives. Resolve absolute query dates and include timeRange. If mail has no user-specified range, the host returns an explicit last-7-days default; state that range and proceed without asking for confirmation. notifications(requestId, notificationPreference) changes how this Request reports progress on explicit request. get(section="status") returns concise current status; get without a section includes complete Task coordination state; collaboration/entry read the same board and full questions. answer forwards the exact questionId; instruct forwards new requirements to the existing Task. Answers and instructions cannot change the connector/account, grant access or allow writes; reconnection stays in the existing connection UI. Saved, delivered, executor-confirmed and verified are distinct states. Use get/list for status without polling; preserve idempotencyKey on uncertain retries; cancel only when the user requests it.',
     async execute(toolCallId, input: Static<typeof RequestSchema>) {
       const conversationId = conversation();
+      if (input.notificationPreference !== undefined && (!isTaskNotificationPreference(input.notificationPreference)
+        || !['submit', 'notifications'].includes(input.command))) throw new Error('Invalid Request notification preference');
+      if (input.dueAt !== undefined && input.command !== 'submit') throw new Error('dueAt is supported only by submit');
       if (input.command === 'list') {
         const offset = input.offset ?? 0;
         const items = listPersonalRequests(conversationId, input.limit ?? 10, offset).map(request => {
@@ -83,8 +94,8 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
       if (input.command === 'submit') {
         if (!input.objective?.trim() || !input.connectorId ) throw new Error('objective and connectorId are required');
         const request = submitPersonalRequest({ conversationId, connectorId: input.connectorId,
-          accountId: input.accountId, objective: input.objective.trim(), description: input.description?.trim(), timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy,
-          idempotencyKey: input.idempotencyKey ?? `personal-request-submit:${selectionRequestHash({ inputId: getSessionInputState(conversationId).activeInputId ?? toolCallId, objective: input.objective.trim(), description: input.description?.trim(), connectorId: input.connectorId, accountId: input.accountId, timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy })}` });
+          accountId: input.accountId, objective: input.objective.trim(), description: input.description?.trim(), timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy, notificationPreference: input.notificationPreference, dueAt: input.dueAt,
+          idempotencyKey: input.idempotencyKey ?? `personal-request-submit:${selectionRequestHash({ inputId: getSessionInputState(conversationId).activeInputId ?? toolCallId, objective: input.objective.trim(), description: input.description?.trim(), connectorId: input.connectorId, accountId: input.accountId, timeRange: input.timeRange, acceptancePolicy: input.acceptancePolicy, notificationPreference: input.notificationPreference, dueAt: input.dueAt })}` });
         publishPersonalRequest(request);
         deps.dispatchTaskRuns?.();
         return result({ ...compactSnapshot(request), guidance: request.state === 'waiting_connection'
@@ -93,6 +104,17 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
       }
       const request = input.requestId ? getPersonalRequest(input.requestId) : undefined;
       if (!request || request.conversationId !== conversationId) throw new Error('Request does not belong to this conversation');
+      if (input.command === 'notifications') {
+        if (!input.notificationPreference) throw new Error('notificationPreference is required');
+        if (readCurrentTranscriptId(getSqliteDatabase(), conversationId) !== request.transcriptId) throw new Error('SESSION_CHANGED');
+        if (request.taskId) {
+          setTaskNotificationPreference(request.taskId, conversationId, input.notificationPreference);
+          return result(compactSnapshot(request));
+        }
+        return result(compactSnapshot(updatePersonalRequest(request, { parameters: {
+          ...request.parameters, notificationPreference: input.notificationPreference,
+        } })));
+      }
       if (input.command === 'cancel') {
         if (['completed', 'failed'].includes(personalRequestSnapshot(request).state)) return result(compactSnapshot(request));
         const cancelled = cancelPersonalRequest(request);
@@ -100,6 +122,7 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
         publishPersonalRequest(cancelled);
         return result({ ...compactSnapshot(cancelled), executionStopConfirmed: stop.executionStopConfirmed });
       }
+      if (input.command === 'get' && input.section === 'status' && !request.taskId) return result(compactSnapshot(request));
       const taskTool = createPersonalTaskTool({ ...deps,
         getCurrentAgentId: () => deps.getCurrentAgentId?.() ?? getSessionMetadata(conversationId)?.agentId });
       if (input.command === 'instruct' && input.timeRange) assertPersonalRequestTimeRange(input.timeRange);
@@ -135,7 +158,8 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
           });
         }
         if (input.command !== 'get') return coordinated;
-        return result({ ...snapshot(request), coordination: JSON.parse((coordinated.content[0] as { text: string }).text) });
+        const requestState = input.section === 'status' ? compactSnapshot(request) : snapshot(request);
+        return result({ ...requestState, coordination: JSON.parse((coordinated.content[0] as { text: string }).text) });
       }
       return result(snapshot(request));
     },

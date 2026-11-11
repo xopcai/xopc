@@ -1,5 +1,6 @@
+import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdtemp, rm, appendFile, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, appendFile, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -187,6 +188,25 @@ describe('task model recovery over the real execution chain', () => {
     expect(history.filter(row => 'role' in row && row.role === 'user')).toHaveLength(1);
     expect(history.some(row => 'type' in row && row.type === 'custom' && row.customType === 'coding_verification')).toBe(true);
     expect(requests.filter(request => request.messages.some(message => message.role === 'tool' && message.content.includes('effect-confirmed'))).length).toBeGreaterThan(1);
+  }, 30_000);
+
+  it('persists the workspace baseline before a mutating tool and keeps it through model recovery', async () => {
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    await writeFile(join(root, '.git', 'info', 'exclude'), '*\n!effects.log\n');
+    mode = 'transient';
+    const { result } = await run();
+    expect(result.status, result.summary).toBe('ok');
+    expect(effects).toBe(1);
+    const history = await store.loadTranscriptRows(conversationId);
+    const mutation = history.findIndex(row => 'role' in row && row.role === 'toolResult' && row.toolName === 'confirmed_effect');
+    const start = history.slice(0, mutation).filter(row => 'type' in row && row.type === 'custom' && row.customType === 'coding_run_started');
+    expect(mutation).toBeGreaterThan(0);
+    expect(start).toMatchObject([
+      { data: { workspaceSnapshotStarted: false } },
+      { data: { workspaceSnapshotStarted: true, revision: expect.any(String) } },
+    ]);
+    const summary = history.findLast(row => 'type' in row && row.type === 'custom' && row.customType === 'coding_verification');
+    expect(summary).toMatchObject({ data: { changed: true, workspaceSnapshotStarted: true, revision: expect.any(String) } });
   }, 30_000);
 
   it('reports a terminal authentication failure after partial execution as an error', async () => {

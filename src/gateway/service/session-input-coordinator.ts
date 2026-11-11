@@ -149,6 +149,7 @@ export class SessionInputCoordinator {
     sessionExists: (conversationId: string) => Promise<boolean>;
     execute: (input: {
       inputReceivedAtMs?: number;
+      inputIdentity: { inputId: string; clientMessageId: string };
       runId: string;
       taskRunId?: string;
       conversationId: string;
@@ -279,7 +280,12 @@ export class SessionInputCoordinator {
 
   private prioritizeAcceptedInput(row: SessionInput, runtime: SessionInputState): void {
     const conversationId = row.conversationId;
-    this.resumeAfter.set(conversationId, Date.now() + (this.deps.coalesceWindowMs ?? 200));
+    const now = Date.now();
+    // An idle conversation can start immediately. Once an interruption opens
+    // a window, retain it for the rest of the burst even if the old run ends.
+    if (runtime.activeRunId || (this.resumeAfter.get(conversationId) ?? 0) > now) {
+      this.resumeAfter.set(conversationId, now + (this.deps.coalesceWindowMs ?? 200));
+    }
     this.publish(conversationId);
     if (runtime.activeRunId && this.deps.interrupt) {
       this.deps.emit('session.input-interrupt', { conversationId, runId: runtime.activeRunId, inputId: row.id });
@@ -582,6 +588,7 @@ export class SessionInputCoordinator {
         try {
           result = input.payload?.connectionAction ? await this.executeConnectionControl(input) : await this.deps.execute({
             inputReceivedAtMs: input.createdAtMs,
+            inputIdentity: { inputId: input.id, clientMessageId: input.clientMessageId },
             runId,
             taskRunId: input.taskRunId,
             conversationId,

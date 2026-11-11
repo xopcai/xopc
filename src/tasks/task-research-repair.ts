@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { statSync } from 'node:fs';
 
-import { TurnOutcomeSchema, type TaskResearchResult } from '@xopcai/gateway-contract';
+import { TurnOutcomeSchema, type TaskResearchResult, type TurnOutcome } from '@xopcai/gateway-contract';
 
 import { MEDIA_ARTIFACT_MAX_BYTES, resolveMediaBufferPath } from '../media/store.js';
 import { tryParseMediaUri } from '../media/uri.js';
@@ -11,8 +11,10 @@ import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 export function inspectTaskPublications(runId: string, research?: TaskResearchResult) {
   const rows = getSqliteDatabase().prepare(`SELECT outcome_json FROM task_run_outcomes
     WHERE task_run_id = ? ORDER BY created_at, rowid`).all(runId) as Array<{ outcome_json: string }>;
+  const outcomes = rows.map(row => TurnOutcomeSchema.parse(JSON.parse(row.outcome_json)));
+  const latest = outcomes.at(-1);
   const artifacts = new Map<string, ReturnType<typeof TurnOutcomeSchema.parse>['deliverables'][number]>();
-  for (const row of rows) for (const item of TurnOutcomeSchema.parse(JSON.parse(row.outcome_json)).deliverables) {
+  for (const outcome of outcomes) for (const item of outcome.deliverables) {
     artifacts.set(research?.finalArtifactIds ? item.artifactId : item.sourceFileId ?? item.artifactId, item);
   }
   const missingSelections = research?.finalArtifactIds?.filter(id => !artifacts.has(id)) ?? [];
@@ -21,6 +23,7 @@ export function inspectTaskPublications(runId: string, research?: TaskResearchRe
   }
   const missing: string[] = missingSelections.map(id => `Selected artifact ${id}`);
   const unreviewed: string[] = [];
+  const latestPublishedArtifacts: Array<TurnOutcome['deliverables'][number]> = [];
   for (const item of artifacts.values()) {
     const media = item.uri && tryParseMediaUri(item.uri);
     if (item.location === 'artifact_store') {
@@ -30,17 +33,19 @@ export function inspectTaskPublications(runId: string, research?: TaskResearchRe
           available = file.isFile() && file.size <= MEDIA_ARTIFACT_MAX_BYTES; } catch { /* Missing bytes require republication. */ }
       }
       if (!available) missing.push(item.title);
+      else if (latest?.status === 'succeeded' && latest.deliverables.some(final => final.artifactId === item.artifactId)) latestPublishedArtifacts.push(item);
     }
     if (research?.inspectedArtifactIds && !research.inspectedArtifactIds.includes(item.artifactId)) unreviewed.push(item.title);
   }
-  return { missing, unreviewed, artifactIds: [...artifacts.values()].map(item => item.artifactId).sort() };
+  return { missing, unreviewed, latestPublishedArtifacts, artifactIds: [...artifacts.values()].map(item => item.artifactId).sort() };
 }
 
 export function buildResearchRepair(input: { research?: TaskResearchResult; stale: boolean; instructionSequence: number;
-  publications: ReturnType<typeof inspectTaskPublications>; criteria: string[]; resultFingerprint?: string;
-  requiresReview?: boolean; requiresFinalText?: boolean }) {
+  publications: Pick<ReturnType<typeof inspectTaskPublications>, 'missing' | 'unreviewed' | 'artifactIds'>; criteria: string[]; resultFingerprint?: string;
+  requiresReview?: boolean; requiresFinalText?: boolean; publicationStructureGap?: string }) {
   const { research, publications } = input;
   const gaps = [
+    ...(input.publicationStructureGap ? [input.publicationStructureGap] : []),
     ...(!research && input.requiresReview && !input.stale ? ['The required evidence-linked research result is missing. Submit actual sources and claims for review.'] : []),
     ...(input.requiresFinalText && !research?.finalText ? ['The requested chat reply is missing. Submit the exact user-facing text in finalText for review.'] : []),
     ...(input.stale ? ['Requirements changed after review. Adopt the latest task instructions and resubmit evidence.'] : []),
@@ -57,7 +62,9 @@ export function buildResearchRepair(input: { research?: TaskResearchResult; stal
   ];
   if (!gaps.length) return undefined;
   const fingerprint = createHash('sha256').update(JSON.stringify({ instructionSequence: input.instructionSequence,
-    criteria: input.criteria, stale: input.stale, resultFingerprint: input.resultFingerprint, publications,
+    criteria: input.criteria, stale: input.stale, resultFingerprint: input.resultFingerprint,
+    publications: { missing: publications.missing, unreviewed: publications.unreviewed, artifactIds: publications.artifactIds },
+    ...(input.publicationStructureGap ? { publicationStructureGap: input.publicationStructureGap } : {}),
     requiresFinalText: input.requiresFinalText, finalText: research?.finalText,
     sources: research?.sources.map(source => source.snapshotHash).sort(),
     claims: research?.claims.map(claim => [claim.statement, claim.support]),

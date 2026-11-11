@@ -138,6 +138,7 @@ export function codingCompletionEvidence(rows: readonly TranscriptStoredRow[]): 
   const checkpoint = entries[Math.max(start, final)]?.data;
   if (!checkpoint?.required) return { allowed: true };
   if (start > final) return { allowed: false };
+  if (checkpoint.workspaceSnapshotStarted === false && checkpoint.changed === false) return { allowed: true };
   const evidence = Array.isArray(checkpoint.evidence) ? checkpoint.evidence as Array<{ kind?: string; status?: string }> : [];
   const allowed = checkpoint.changed !== true || (evidence.some(item => item.kind === 'check' && item.status === 'passed')
     && evidence.some(item => item.kind === 'diff-review' && item.status === 'passed') && evidence.every(item => item.status === 'passed'));

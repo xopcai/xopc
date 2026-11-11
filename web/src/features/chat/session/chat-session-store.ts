@@ -29,7 +29,7 @@ import { assistantAnswerContent } from '@/features/chat/messages/assistant-turn-
 /** Per-session chat UI and agent config. @see docs/web/chat-session-semantics.md */
 export type SessionHistoryStatus = 'unknown' | 'loading' | 'ready';
 
-export type SessionSnapshotRequest = { messages: Message[] | undefined };
+export type SessionSnapshotRequest = { messages: Message[] | undefined; completedRunId?: string };
 
 export function shouldShowHistoryLoading(status: SessionHistoryStatus | undefined): boolean {
   return status !== 'ready';
@@ -139,6 +139,7 @@ type ChatSessionStoreActions = {
     conversationId: string,
     serverMessages: Message[],
     hasMore?: boolean,
+    completedRunId?: string,
   ) => void;
 };
 
@@ -812,7 +813,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    mergeCommittedFromServer: (conversationId, serverMessages, hasMore) => {
+    mergeCommittedFromServer: (conversationId, serverMessages, hasMore, completedRunId) => {
       const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
@@ -835,8 +836,16 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         }
         const retained = retainLoadedHistory(current.messages, serverMessages, nextHasMore);
         const mergedHasMore = retained !== serverMessages ? current.hasMore : nextHasMore;
-        if (!isSessionSliceLive(current)) {
-          const messages = reconcileMessages(current.messages, preserveOptimisticMessages(current.messages, retained));
+        const bubble = current.streamingMsg;
+        const recoveredIndex = completedRunId && bubble
+          && (bubble.turnId === completedRunId || (!bubble.turnId && bubble.pendingResponseStatus))
+          ? retained.findIndex(message => message.role === 'assistant' && message.turnId === completedRunId) : -1;
+        if (!isSessionSliceLive(current) || recoveredIndex >= 0) {
+          // Install the durable answer and retire its placeholder in the same store update.
+          const recovered = bubble?.renderKey && recoveredIndex >= 0
+            ? retained.map((message, index) => index === recoveredIndex ? { ...message, renderKey: bubble.renderKey } : message)
+            : retained;
+          const messages = reconcileMessages(current.messages, preserveOptimisticMessages(current.messages, recovered));
           return {
             sessions: {
               ...state.sessions,

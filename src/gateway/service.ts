@@ -164,6 +164,7 @@ import { TaskMainUpdateDelivery } from '../tasks/task-main-update-delivery.js';
 import { allowsPersonalTaskNotification, personalReplyNotification, personalRunDelegated } from '../personal-agent/notifications.js';
 import { getPersonalAgentByConversation } from '../personal-agent/repository.js';
 import { PersonalReplyComposer } from '../personal-agent/reply-composer.js';
+import { enqueueTaskDelayNotices } from '../tasks/task-delay-notice.js';
 import { TaskMainUpdateDecisionService } from '../tasks/task-main-update-decision-service.js';
 import { selectTaskMainUpdateAttempt, submitAndConfirmTaskMainUpdate } from '../tasks/task-main-update-input.js';
 import { TaskMainUpdateExhaustedError } from '../tasks/task-main-update-retry.js';
@@ -970,7 +971,14 @@ export class GatewayService {
     log.error({ err, errorMessage, phase: 'task_run_dispatch' }, `Task dispatch failed: ${errorMessage}`);
   });
 
+  private nextTaskDelayScanAt = 0;
+
   private readonly taskMainUpdateDispatch = createBackgroundTask(async () => {
+    const now = Date.now();
+    if (now >= this.nextTaskDelayScanAt) {
+      enqueueTaskDelayNotices(now);
+      this.nextTaskDelayScanAt = now + 30_000;
+    }
     await new TaskMainUpdateDelivery().drain({
       isAvailable: (conversationId) => {
         const state = this.agentRunner.inputs.snapshot(conversationId);

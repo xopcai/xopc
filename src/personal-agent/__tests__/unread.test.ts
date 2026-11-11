@@ -102,7 +102,8 @@ describe('Personal AI unread replies', () => {
     expect(await service.decide({ conversationId, entry })).toMatchObject({ notify });
     expect(complete).toHaveBeenCalledOnce();
     expect(complete.mock.calls[0][1].messages[0].content).toContain('significant delays supported by actual timing evidence');
-    expect(complete.mock.calls[0][1].messages[0].content).toContain('keep routine progress, milestones and recoverable internal failures private');
+    expect(complete.mock.calls[0][1].messages[0].content).toContain('Keep routine progress and recoverable internal failures private');
+    expect(complete.mock.calls[0][1].messages[0].content).toContain('meaningful new milestones the user explicitly asked to receive');
   });
 
   it('counts replies rather than tool activity or artifact cards', () => {

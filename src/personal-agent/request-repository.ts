@@ -1,5 +1,6 @@
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
+import type { TaskNotificationPreference } from '../tasks/task-notification-preference.js';
 import type { PersonalRequestResult } from './request-result.js';
 
 export type PersonalRequestState = 'preflighting' | 'waiting_connection' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -12,7 +13,7 @@ export interface PersonalRequest {
   connectorId: string;
   executorAgentId: string;
   accountId?: string;
-  parameters: { acceptancePolicy?: 'verified_auto' | 'manual'; brief?: string; allocate?: boolean; taskRunId?: string; cancellationCleanupCompleted?: boolean; timeRange?: { from: string; to: string; timezone: string; expression: string } };
+  parameters: { acceptancePolicy?: 'verified_auto' | 'manual'; brief?: string; allocate?: boolean; notificationPreference?: TaskNotificationPreference; dueAt?: number; taskRunId?: string; cancellationCleanupCompleted?: boolean; timeRange?: { from: string; to: string; timezone: string; expression: string } };
   state: PersonalRequestState;
   connectionWaitId?: string;
   taskId?: string;
