@@ -55,7 +55,10 @@ current.emit('input.speech_stopped',{utteranceId:'u1'});current.emit('response.c
 // Send one second of synthetic PCM through the real decoder and Web Audio player.
 const pcm=Buffer.alloc(48000);for(let i=0;i<24000;i++)pcm.writeInt16LE(Math.round(Math.sin(i/24000*440*Math.PI*2)*2000),i*2);
 for(let n=0;n<50;n++){const id=Buffer.from('r1');const frame=Buffer.alloc(32+id.length+960);frame.writeUInt32BE(0x584f5033,0);frame.writeUInt8(3,4);frame.writeUInt8(2,5);frame.writeUInt8(1,6);frame.writeUInt32BE(7,8);frame.writeUInt32BE(n+1,12);frame.writeDoubleBE(n*20,16);frame.writeUInt16BE(20,24);frame.writeUInt16BE(id.length,26);frame.writeUInt32BE(960,28);id.copy(frame,32);pcm.copy(frame,32+id.length,n*960,(n+1)*960);current.ws.send(frame)}
-// Raw VAD may reversibly duck playback, but cannot clear audio or cancel a reply.
+// Local microphone onset can soften playback before any gateway speech event.
+await page.waitForFunction(()=>window.__voiceGainChanges.some(gain=>Math.abs(gain-1.7*0.55)<0.00001),{},{timeout:3000});
+if(controls.some(c=>c.type==='response.stop_playback'))throw Error('Local onset stopped the reply');
+// Gateway speech events may duck playback, but only cancellation can clear it.
 for(let i=0;i<3;i++){current.emit('input.speech_started',{utteranceId:`echo-${i}`});current.emit('input.speech_stopped',{utteranceId:`echo-${i}`});}
 await page.waitForFunction(()=>window.__voiceGainChanges!==undefined);
 await new Promise(resolve=>setTimeout(resolve,1400));

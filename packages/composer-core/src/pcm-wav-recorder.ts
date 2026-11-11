@@ -16,6 +16,7 @@ export interface PcmWavRecorderOptions {
 
 export interface PcmFrameCaptureOptions extends PcmWavRecorderOptions {
   onSamples: (samples: Float32Array) => void;
+  frameDurationMs?: number;
 }
 
 export function calculateRmsLevel(samples: Float32Array): number {
@@ -191,7 +192,10 @@ export class PcmFrameCapture {
     try {
       await Promise.race([context.audioWorklet.addModule(pcmCaptureWorkletUrl), deadline]);
       const source = context.createMediaStreamSource(stream);
-      const node = new AudioWorkletNode(context, WORKLET_NAME);
+      const frameSamples = options.frameDurationMs === undefined
+        ? undefined
+        : Math.round(context.sampleRate * options.frameDurationMs / 1_000);
+      const node = new AudioWorkletNode(context, WORKLET_NAME, { processorOptions: { frameSamples } });
       const mutedOutput = context.createGain();
       mutedOutput.gain.value = 0;
       capture = new PcmFrameCapture(context, source, node, mutedOutput, options);

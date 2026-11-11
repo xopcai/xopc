@@ -46,6 +46,7 @@ import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import { resolveOmniRoute, selectedNaturalModel, type OmniRoute } from './omniRoute.js';
 import { createOmniVoiceEngine } from './omniEngine.js';
 import { applyVoiceOutputGain } from './pcm-output-gain.js';
+import { PcmPlaybackEcho } from './pcmPlaybackEcho.js';
 import type { ResolvedStreamingStt, ResolvedStreamingTts, VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
 
 export type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
@@ -57,6 +58,7 @@ const MAX_OUTSTANDING_TICKETS = 200;
 const MAX_CONNECTIONS = 50;
 const MAX_CONNECTIONS_PER_PRINCIPAL = 2;
 const MAX_CLOCK_SKEW_MS = 60_000;
+const SILENT_UPLINK_FRAME = new Uint8Array(640);
 
 export type VoiceSessionCreationErrorCode =
   | 'VOICE_DISABLED'
@@ -493,6 +495,7 @@ export class VoiceRealtimeRuntime {
     const clientIp = request.socket.remoteAddress;
     let claim: VoiceTicketClaim | undefined;
     let engine: VoiceEngine | undefined;
+    let playbackEcho: PcmPlaybackEcho | undefined;
     let ready = false;
     let seq = 0;
     let audioSeq = 0;
@@ -670,6 +673,7 @@ export class VoiceRealtimeRuntime {
           }
         }
         setupStage = 'engine';
+        if (!engineOmni && consumed.request.purpose === 'conversation') playbackEcho = new PcmPlaybackEcho();
         const sendAudio = (responseId: string, bytes: Uint8Array) => {
           if (socket.bufferedAmount > 1024 * 1024) throw new Error('Voice client audio backpressure limit exceeded');
           if (closed || socket.readyState !== WebSocketState.OPEN) return;
@@ -677,6 +681,7 @@ export class VoiceRealtimeRuntime {
           for (let offset = 0; offset < amplified.byteLength; offset += 960) {
             const audio = amplified.subarray(offset, offset + 960);
             if (audio.byteLength !== 960) throw new Error('Realtime output must align to 20 ms PCM frames');
+            playbackEcho?.remember(audio, performance.now());
             socket.send(encodeVoiceAudioFrame({ connectionEpoch: consumed.connectionEpoch, responseId, seq: ++audioSeq,
               mediaTimestampMs: outputMediaTimestampMs, durationMs: 20, audio }), { binary: true });
             outputMediaTimestampMs += 20;
@@ -783,7 +788,7 @@ export class VoiceRealtimeRuntime {
           return;
         }
         try {
-          engine.appendAudio(frame.audio);
+          engine.appendAudio(playbackEcho?.matches(frame.audio, performance.now()) ? SILENT_UPLINK_FRAME : frame.audio);
         } catch (error) {
           log.warn({ err: error, sessionId: claim.sessionId }, 'Realtime voice engine rejected audio');
           send('session.error', { code: 'AUDIO_BACKPRESSURE', message: 'Audio stream cannot keep up', recoverable: false });

@@ -605,7 +605,15 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       updatePhase('starting');
       let encoder: PcmStreamEncoder | undefined;
       const pendingSamples: Float32Array[] = [];
+      const localOnsetEnabled = purpose === 'conversation'
+        && stream.getAudioTracks()[0]?.getSettings?.().echoCancellation === true;
+      let noiseFloor = 0.005;
+      let loudFrames = 0;
+      let quietFrames = 0;
+      let onsetDetected = false;
+      let meterFrame = 0;
       const capture = await wait(PcmFrameCapture.start(stream, {
+        frameDurationMs: 20,
         onSamples: (samples) => {
           if (!isCurrent() || mutedRef.current) return;
           if (!encoder) {
@@ -617,10 +625,32 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         },
         onAudioLevel: ({ level }) => {
           if (!isCurrent()) return;
-          if (mutedRef.current) return;
-          setAudioLevel(Math.min(1, level * 8));
-          // Microphone energy also includes speaker echo. Playback changes only
-          // after the server confirms a non-echo interruption, or a user click.
+          if (mutedRef.current) {
+            loudFrames = quietFrames = 0;
+            onsetDetected = false;
+            return;
+          }
+          // Keep visual meter updates at 25 Hz while onset detection uses every frame.
+          if (meterFrame++ % 2 === 0) setAudioLevel(Math.min(1, level * 8));
+          if (!localOnsetEnabled || !client.session.bargeIn) return;
+          if (!activeResponseIdRef.current || !firstAudioRef.current || !playerRef.current?.hasPendingAudio) {
+            if (level < 0.02) noiseFloor += (level - noiseFloor) * 0.05;
+            loudFrames = quietFrames = 0;
+            onsetDetected = false;
+            return;
+          }
+          // Echo-cancelled microphone energy can still include speaker leakage.
+          // Its only effect is a brief, reversible reduction in playback gain.
+          if (level >= Math.max(0.022, noiseFloor * 3)) {
+            quietFrames = 0;
+            if (!onsetDetected && ++loudFrames >= 3) {
+              onsetDetected = true;
+              playerRef.current.duckForVoiceOnset();
+            }
+          } else {
+            loudFrames = 0;
+            if (++quietFrames >= 6) onsetDetected = false;
+          }
         },
       }), 15_000, (lateCapture) => lateCapture.cancel());
       if (!isCurrent() || !isCapturePending(phaseRef.current)) {

@@ -41,6 +41,17 @@ describe('TurnCoordinator', () => {
     expect(commit).toHaveBeenCalledOnce();
   });
 
+  it('keeps a request together when streaming recognition finalizes its introduction first', () => {
+    const { turn, commit } = setup();
+    turn.final('first', '请告诉我。');
+    vi.advanceTimersByTime(700);
+    expect(commit).not.toHaveBeenCalled();
+    turn.start('second');
+    turn.final('second', '一加一等于几？');
+    vi.advanceTimersByTime(40);
+    expect(commit).toHaveBeenCalledExactlyOnceWith('请告诉我。 一加一等于几？', expect.anything(), 'first');
+  });
+
   it('invalidates a pending asynchronous decision when speech resumes', async () => {
     let resolve!: (value: Awaited<ReturnType<TurnPolicy['decide']>>) => void;
     const policy: TurnPolicy = { decide: () => new Promise(done => { resolve = done; }) };

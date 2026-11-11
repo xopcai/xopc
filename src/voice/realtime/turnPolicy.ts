@@ -21,7 +21,7 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
 export function hasContinuationHint(text: string): boolean {
   const tail = text.trim().replace(/[\s，。！？、；：,.!?;:]+$/u, '');
   return /(?:…|\.\.\.)[\s，。！？,.!?]*$/u.test(text)
-    || /(?:因为|但是|然后|而且|如果|所以|比如|或者|还有|我想|我要|我觉得|帮我|帮我查一下|帮我查查|请帮我|就是说|那个|这个|呃|嗯)$/u.test(tail)
+    || /(?:因为|但是|然后|而且|如果|所以|比如|或者|还有|我想|我要|我觉得|帮我|帮我查一下|帮我查查|请帮我|请告诉我|就是说|那个|这个|呃|嗯)$/u.test(tail)
     || /\b(?:because|but|and|or|if|so|then|um|uh|i want to|i would like to|can you|could you|let me)\s*$/iu.test(tail);
 }
 

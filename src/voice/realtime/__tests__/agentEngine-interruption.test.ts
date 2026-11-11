@@ -13,7 +13,7 @@ import { createAgentVoiceEngine } from '../agentEngine.js';
 describe('Agent voice interruption cleanup', () => {
   let engine: VoiceEngine;
   const cleanups: Array<() => void> = [];
-  afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await engine?.close(); vi.clearAllMocks(); vi.restoreAllMocks(); });
+  afterEach(async () => { vi.useRealTimers(); for (const cleanup of cleanups.splice(0)) cleanup(); await engine?.close(); vi.clearAllMocks(); vi.restoreAllMocks(); });
 
   type RunAgent = (text: string, conversationId: string, signal: AbortSignal) => AsyncIterable<VoiceAgentEvent>;
 
@@ -211,6 +211,41 @@ describe('Agent voice interruption cleanup', () => {
     await vi.waitFor(() => expect(test.delegate).toHaveBeenCalledTimes(2));
   });
 
+  it('keeps the interruption deadline when recognition extends a stable partial', async () => {
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    test.final('first');
+    await vi.waitFor(() => expect(test.delegate).toHaveBeenCalledOnce());
+    vi.useFakeTimers();
+    test.emit({ type: 'speech_started', utteranceId: 'next' });
+    test.emit({ type: 'transcript_delta', utteranceId: 'next', revision: 1, text: '换个话题聊聊' });
+    await vi.advanceTimersByTimeAsync(100);
+    test.emit({ type: 'transcript_delta', utteranceId: 'next', revision: 2, text: '换个话题，聊聊明天' });
+    await vi.advanceTimersByTimeAsync(79);
+    expect(test.send).not.toHaveBeenCalledWith('response.cancelled', expect.anything());
+    await vi.advanceTimersByTimeAsync(1);
+    expect(test.send).toHaveBeenCalledWith('response.cancelled', expect.objectContaining({ reason: 'barge_in' }));
+    expect(test.delegate).toHaveBeenCalledOnce();
+  });
+
+  it('restarts the interruption deadline when recognition rewrites the prefix', async () => {
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    test.final('first');
+    await vi.waitFor(() => expect(test.delegate).toHaveBeenCalledOnce());
+    vi.useFakeTimers();
+    test.emit({ type: 'speech_started', utteranceId: 'next' });
+    test.emit({ type: 'transcript_delta', utteranceId: 'next', revision: 1, text: '换个话题聊聊' });
+    await vi.advanceTimersByTimeAsync(100);
+    test.emit({ type: 'transcript_delta', utteranceId: 'next', revision: 2, text: '还是继续刚才的话题' });
+    await vi.advanceTimersByTimeAsync(179);
+    expect(test.send).not.toHaveBeenCalledWith('response.cancelled', expect.anything());
+    await vi.advanceTimersByTimeAsync(1);
+    expect(test.send).toHaveBeenCalledWith('response.cancelled', expect.objectContaining({ reason: 'barge_in' }));
+  });
+
   it.each([true, false])('keeps partial playback echo from interrupting with bargeIn=%s', async enabled => {
     const test = await setup(async function* (_text, _conversationId, signal) {
       yield { type: 'assistant_delta', payload: { delta: '今天天气很晴朗。' } };
@@ -225,6 +260,53 @@ describe('Agent voice interruption cleanup', () => {
     await new Promise(resolve => setTimeout(resolve, 220));
     expect(test.send).not.toHaveBeenCalledWith('response.cancelled', expect.anything());
     expect(test.delegate).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { spoken: '我正在解释语音功能。', partial: '停一下', final: '停一下。', interrupts: true, submits: false },
+    { spoken: '你可以说停一下来打断我。', partial: '停一下', final: '停一下。', interrupts: false, submits: false },
+    { spoken: '我正在解释语音功能。', partial: '暂停', final: '暂停一下。', interrupts: true, submits: false },
+    { spoken: '你可以说暂停来打断我。', partial: '暂停', final: '暂停。', interrupts: false, submits: false },
+    { spoken: '我正在解释语音功能。', partial: '暂停', final: '暂停一下，换个话题吧。', interrupts: true, submits: true },
+  ])('checks a short spoken interruption against playback: $spoken / $final', async ({ spoken, partial, final, interrupts, submits }) => {
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      yield { type: 'assistant_delta', payload: { delta: spoken } };
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    mocks.speak.mockImplementation(async () => ({ outputFormat: 'pcm', release: vi.fn(async () => {}),
+      audioStream: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(960)); controller.close(); } }) }));
+    test.final('first');
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    vi.useFakeTimers();
+    test.emit({ type: 'speech_started', utteranceId: 'next' });
+    test.emit({ type: 'transcript_delta', utteranceId: 'next', revision: 1, text: partial });
+    await vi.advanceTimersByTimeAsync(180);
+    const cancellations = test.send.mock.calls.filter(([type]) => type === 'response.cancelled');
+    expect(cancellations).toHaveLength(interrupts ? 1 : 0);
+    expect(test.delegate).toHaveBeenCalledOnce();
+    test.emit({ type: 'transcript_final', utteranceId: 'next', revision: 2, text: final });
+    await vi.advanceTimersByTimeAsync(40);
+    expect(test.delegate).toHaveBeenCalledTimes(submits ? 2 : 1);
+    if (submits) expect(test.delegate).toHaveBeenLastCalledWith(expect.objectContaining({ text: final }));
+  });
+
+  it('keeps playback running on a short acknowledgement and accepts the following interruption', async () => {
+    const test = await setup(async function* (_text, _conversationId, signal) {
+      yield { type: 'assistant_delta', payload: { delta: '我正在解释语音功能。' } };
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    mocks.speak.mockImplementation(async () => ({ outputFormat: 'pcm', release: vi.fn(async () => {}),
+      audioStream: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(960)); controller.close(); } }) }));
+    test.final('first');
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    test.emit({ type: 'speech_started', utteranceId: 'ack' });
+    test.emit({ type: 'speech_stopped', utteranceId: 'ack' });
+    test.emit({ type: 'transcript_final', utteranceId: 'ack', revision: 1, text: '嗯嗯。' });
+    expect(test.send).not.toHaveBeenCalledWith('response.cancelled', expect.anything());
+    expect(test.delegate).toHaveBeenCalledOnce();
+    test.emit({ type: 'transcript_final', utteranceId: 'next', revision: 1, text: '换个话题吧' });
+    expect(test.send).toHaveBeenCalledWith('response.cancelled', expect.objectContaining({ reason: 'barge_in' }));
+    await vi.waitFor(() => expect(test.delegate).toHaveBeenCalledTimes(2));
   });
 
   it('cancels preparation immediately when a reply finishes without speech', async () => {
