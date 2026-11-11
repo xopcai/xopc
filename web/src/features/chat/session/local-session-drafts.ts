@@ -77,6 +77,19 @@ export async function readLocalSessionDraft(id: string): Promise<LocalSessionDra
   return transaction('readonly', store => store.get(storageKey));
 }
 
+export async function findLatestLocalExpertDraft(agentId: string, setupConversationIds: ReadonlySet<string>): Promise<LocalSessionDraft | undefined> {
+  const prefix = `${scope()}:`;
+  const range = IDBKeyRange.bound(prefix, `${prefix}\uffff`);
+  const drafts: LocalSessionDraft[] = await transaction('readonly', store => store.getAll(range));
+  let latest: LocalSessionDraft | undefined;
+  for (const draft of drafts) {
+    if (draft.creation.agentId !== agentId || draft.creation.projectId || draft.creation.temporary
+      || draft.creation.agentSetup || setupConversationIds.has(draft.conversationId)) continue;
+    if (!latest || draft.createdAt > latest.createdAt) latest = draft;
+  }
+  return latest;
+}
+
 export async function saveLocalSessionDraft(draft: LocalSessionDraft): Promise<void> {
   const storageKey = key(draft.conversationId);
   if (draft.creation.temporary) {

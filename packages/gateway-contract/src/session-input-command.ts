@@ -12,6 +12,8 @@ export const sessionCreationSchema = z.strictObject({
     baseRef: z.string().trim().min(1).optional(),
   }).nullable(),
   temporary: z.boolean(),
+  agentSetup: z.literal(true).optional(),
+  agentSetupLanguage: z.enum(['zh-CN', 'en']).optional(),
   model: z.string().trim().min(1),
   thinkingLevel: z.string().min(1),
   workingDirectory: z.string().trim().min(1).optional(),
@@ -19,6 +21,8 @@ export const sessionCreationSchema = z.strictObject({
   message: 'An execution environment requires a project', path: ['execution'],
 }).refine(value => !value.workingDirectory || value.projectId === null, {
   message: 'A project controls the working directory', path: ['workingDirectory'],
+}).refine(value => !value.agentSetupLanguage || value.agentSetup, {
+  message: 'A setup language requires an agent setup conversation', path: ['agentSetupLanguage'],
 });
 
 const attachmentSchema = z.strictObject({

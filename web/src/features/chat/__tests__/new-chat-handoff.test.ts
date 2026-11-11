@@ -5,6 +5,7 @@ import type { SessionInfo } from '@/features/chat/chat.types';
 import { openNewChatHandoff, resetNewChatHandoffInflightForTests } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useLocaleStore } from '@/stores/locale-store';
 
 const createdSession: SessionInfo = {
   key: 'agent:main:webchat:default:direct:chat_new',
@@ -16,6 +17,23 @@ const createdSession: SessionInfo = {
 };
 
 describe('openNewChatHandoff', () => {
+  it.each([['zh', 'zh-CN'], ['en', 'en']] as const)('uses the %s UI language for agent setup drafts only', async (language, setupLanguage) => {
+    const previousLanguage = useLocaleStore.getState().language;
+    useLocaleStore.setState({ language });
+    const sessionMgr = { createSession: vi.fn(async () => createdSession) } as unknown as SessionManager;
+    const opts = { sessionMgr, agentId: 'main', navigateToSession: vi.fn(), onOpened: vi.fn() };
+    try {
+      await openNewChatHandoff({ ...opts, search: '?agentSetup=1' });
+      await openNewChatHandoff(opts);
+      expect(sessionMgr.createSession).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        agentSetup: true, agentSetupLanguage: setupLanguage,
+      }));
+      expect(vi.mocked(sessionMgr.createSession).mock.calls[1]?.[0]).not.toHaveProperty('agentSetupLanguage');
+    } finally {
+      useLocaleStore.setState({ language: previousLanguage });
+    }
+  });
+
   it('uses the live caller callbacks when an initialization is replayed', async () => {
     let finish!: (session: SessionInfo) => void;
     const pending = new Promise<SessionInfo>((resolve) => { finish = resolve; });

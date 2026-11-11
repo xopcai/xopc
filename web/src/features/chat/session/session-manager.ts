@@ -6,6 +6,7 @@ import {
   parseSessionMessagePage,
   parseSessionResetResponse,
   type LocalSessionOptions,
+  type SessionCreation,
   type SessionForkAtTurnResponse,
   type SessionInitialAgentConfig,
   type SessionResetResponse,
@@ -419,6 +420,8 @@ export class SessionManager {
     agentId?: string;
     projectId?: string | null;
     temporary?: boolean;
+    agentSetup?: true;
+    agentSetupLanguage?: SessionCreation['agentSetupLanguage'];
     initialAgentConfig?: SessionInitialAgentConfig;
     executionMode?: LocalSessionOptions['executionMode'];
   }): Promise<SessionInfo> {
@@ -430,6 +433,7 @@ export class SessionManager {
       projectId: options?.projectId?.trim() || null,
       execution: options?.executionMode ? { mode: options.executionMode } : null,
       temporary: options?.temporary === true,
+      ...(options?.agentSetup ? { agentSetup: true as const, agentSetupLanguage: options.agentSetupLanguage } : {}),
       model: options?.initialAgentConfig?.model ?? '',
       thinkingLevel: options?.initialAgentConfig?.thinkingLevel ?? 'off',
     };

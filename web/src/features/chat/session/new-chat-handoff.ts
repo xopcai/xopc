@@ -3,6 +3,7 @@ import { newSessionCacheKey, type LocalSessionOptions, type SessionInitialAgentC
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useLocaleStore } from '@/stores/locale-store';
 
 export type NewChatHandoffNavigate = (
   key: string,
@@ -69,6 +70,10 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       currentConversationId: opts.currentConversationId,
       forceNew: opts.forceNew,
       temporary: opts.temporary,
+      ...(new URLSearchParams(opts.search).get('agentSetup') === '1' ? {
+        agentSetup: true as const,
+        agentSetupLanguage: useLocaleStore.getState().language === 'zh' ? 'zh-CN' : 'en',
+      } : {}),
       initialAgentConfig: opts.initialAgentConfig,
       executionMode: opts.executionMode,
     });

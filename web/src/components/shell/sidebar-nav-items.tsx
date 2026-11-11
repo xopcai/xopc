@@ -9,7 +9,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, matchPath, useLocation } from 'react-router-dom';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
@@ -77,7 +77,7 @@ export function SidebarNavItems({
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const copy = m.productNavigation;
-  const activeDomain = productDomainAtPath(pathname);
+  const activeDomain = matchPath('/chat/*', pathname) ? null : productDomainAtPath(pathname);
   const uiExtensions = useUiExtensions();
   const { profile, displayName } = usePersonalProfile();
   const personalUnreadCount = usePersonalUnread();

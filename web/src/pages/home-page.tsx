@@ -8,7 +8,7 @@ import type {
   HomeOpportunityFeedbackRequest,
   HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
-import { CalendarClock, Check, ChevronDown, ChevronRight, CirclePause, CircleAlert, Plus, Search, Sparkles, X } from 'lucide-react';
+import { ArrowRight, CalendarClock, Check, ChevronDown, ChevronRight, CircleAlert, CirclePause, ListTodo, MessageSquare, PanelsTopLeft, Plus, Search, Sparkles, X } from 'lucide-react';
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -20,7 +20,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 
 import { Button } from '@/components/ui/button';
@@ -52,6 +52,7 @@ import { modalizeTaskDetailHref } from '@/features/tasks/task-detail-route';
 import { HomeDeliveriesDialog, HomeDeliveryRow } from '@/features/tasks/home-deliveries';
 import { currentTaskReceipt } from '@/features/tasks/task-detail-summary';
 import { HomeTaskReview } from '@/features/tasks/home-task-review';
+import { HomeWorkbenchLayout, type WorkbenchCard } from '@/features/tasks/home-workbench-layout';
 import { retryHomeTask } from '@/features/tasks/home-task-actions';
 import { taskCopy } from '@/features/tasks/task-copy';
 import {
@@ -69,6 +70,9 @@ function interpolate(template: string, values: Record<string, string | number>):
 }
 
 const READ_DELIVERIES_KEY = 'xopc-home-read-deliveries';
+const workPanel = 'min-w-0 rounded-xl border border-edge bg-surface-panel shadow-surface';
+const sectionTitle = 'text-base font-semibold tracking-tight text-fg';
+const workColumns = '@min-[54rem]/workbench:grid-cols-[minmax(0,1fr)_minmax(19rem,0.57fr)]';
 
 function loadReadDeliveries(): string[] {
   try {
@@ -81,13 +85,15 @@ function loadReadDeliveries(): string[] {
 
 function HomeSkeleton() {
   return (
-    <div className="space-y-8" aria-busy>
-      <div className="space-y-3">
-        <Skeleton className="h-10 w-3/5 rounded-xl" />
-        <Skeleton className="h-5 w-4/5 rounded-lg" />
+    <div className={`grid items-start gap-6 ${workColumns}`} aria-busy>
+      <div className="space-y-6">
+        <Skeleton className="h-56 rounded-xl" />
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-28 rounded-md" />
+          <Skeleton className="h-24 rounded-xl" />
+        </div>
       </div>
-      <Skeleton className="h-64 rounded-2xl" />
-      <Skeleton className="h-32 rounded-xl" />
+      <Skeleton className="h-44 rounded-xl" />
     </div>
   );
 }
@@ -133,16 +139,16 @@ function DecisionCard({
   const subtitle = [item.projectName, authorization ? item.summary.split('\n')[0] : item.summary].filter(Boolean).join(' · ');
   const expandReview = Boolean(reviewTaskId && (item.primaryAction?.type === 'task_review' || item.primaryAction?.type === 'open'));
   return (
-    <article className="px-3 py-3 sm:px-4" aria-busy={busy}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <article className="px-4 py-3.5 sm:px-5 sm:py-4" aria-busy={busy}>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1 basis-52">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             {item.openAction ? (
-              <button type="button" className="break-words text-left text-sm font-semibold text-fg hover:underline" onClick={() => onAction(item.openAction!, item.id)}>{item.title}</button>
+              <button type="button" className="touch-target min-w-0 break-words rounded-sm text-left text-sm font-semibold text-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" onClick={() => onAction(item.openAction!, item.id)}>{item.title}</button>
             ) : <span className="break-words text-sm font-semibold text-fg">{item.title}</span>}
-            {due || item.kind === 'failure' ? <span className="rounded bg-warning/10 px-1.5 py-0.5 text-xs text-warning">{due ?? failureLabel}</span> : null}
+            {due || item.kind === 'failure' ? <span className="rounded-md bg-warning-soft px-1.5 py-0.5 text-xs text-fg-muted">{due ?? failureLabel}</span> : null}
           </div>
-          <p className="mt-0.5 line-clamp-2 break-words text-xs text-fg-muted">{subtitle}</p>
+          <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-fg-muted">{subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-1">
           {reviewTaskId && item.primaryAction?.type === 'retry_task' ? (
@@ -152,7 +158,7 @@ function DecisionCard({
             <Button
               type="button"
               variant={primary ? 'primary' : 'secondary'}
-              className="min-h-9 shrink-0 px-2.5 text-xs shadow-none"
+              className="min-h-9 shrink-0 rounded-lg px-3 text-xs sm:shadow-none"
               disabled={busy}
               aria-expanded={authorization ? scopeOpen : expandReview ? reviewOpen : undefined}
               onClick={() => {
@@ -199,18 +205,23 @@ function BackgroundRow({ item, onAction, language, onUpdated }: { item: HomeWork
     <div>
       <button
         type="button"
-        className="flex min-h-11 w-full items-center gap-2 rounded-md px-1 py-2 text-left hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
+        className="group flex min-h-12 w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left motion-safe:transition-colors enabled:hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
         disabled={!item.openAction}
         aria-expanded={taskId ? expanded : undefined}
         onClick={() => taskId ? setExpanded((value) => !value) : item.openAction && onAction(item.openAction, item.id)}
       >
-        <span className="flex size-5 shrink-0 items-center justify-center text-fg-muted">{icon}</span>
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-inset text-fg-muted">{icon}</span>
         <span className="min-w-0 flex-1">
           <span className="block line-clamp-2 break-words text-sm font-medium text-fg">{item.title}</span>
           {item.kind === 'scheduled' ? <time className="block text-xs text-fg-muted" dateTime={new Date(item.updatedAt).toISOString()}>{formatMediumDateTime(item.updatedAt, language)}</time>
             : <span className="block truncate text-xs text-fg-muted">{item.summary}</span>}
         </span>
-        {item.openAction ? <span className="flex shrink-0 items-center gap-0.5 text-xs text-accent-fg"><span>{item.openAction.label}</span><ChevronRight className="size-3.5" aria-hidden /></span> : null}
+        {item.openAction ? (
+          <span className="flex max-w-[35%] shrink-0 items-center gap-1 text-right text-xs leading-4 text-fg-muted group-hover:text-fg">
+            <span>{item.openAction.label}</span>
+            <ChevronRight className={expanded ? 'size-3.5 shrink-0 rotate-90' : 'size-3.5 shrink-0'} aria-hidden />
+          </span>
+        ) : null}
       </button>
       {taskId && expanded ? <HomeTaskReview taskId={taskId} language={language} onUpdated={onUpdated} onComplete={() => setExpanded(false)} /> : null}
     </div>
@@ -227,6 +238,7 @@ export function HomePage() {
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [showAllAttention, setShowAllAttention] = useState(false);
+  const [editingLayout, setEditingLayout] = useState(false);
   const { home, loading, loadError, setLoadError, load } = useHomeSnapshot(language, location.key, true);
   const work = t.home.workbench;
   const stageRef = useRef<HTMLDivElement>(null);
@@ -597,35 +609,6 @@ export function HomePage() {
     navigate(`/chat/new?${new URLSearchParams({ draft: `${question}\n\n${answer}` }).toString()}`);
   }, [navigate]);
 
-  const headerEnd = useMemo(() => (
-    <div className="flex items-center gap-1">
-      {home && !isIdle ? (
-        <HomeAdvisorStatusControl
-          advisor={home.advisor}
-          busy={advisorBusy}
-          copy={advisorStatusCopy}
-          onOpenHistory={() => setAdvisorHistoryOpen(true)}
-          onRefresh={refreshAdvisor}
-        />
-      ) : null}
-      {!isIdle ? (
-        <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={() => setConversationOpen(true)}>
-          <Plus className="size-4" aria-hidden />
-          {copy.newWork}
-        </Button>
-      ) : null}
-    </div>
-  ), [advisorBusy, advisorStatusCopy, copy.newWork, home, isIdle, refreshAdvisor]);
-
-  useLayoutEffect(() => {
-    setPageHeader({
-      startExtra: null,
-      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1>,
-      end: headerEnd,
-    });
-    return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, setPageHeader, t.title]);
-
   const openDelivery = (view: HomeDelivery | 'history') => {
     resultTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setDeliveryView(view);
@@ -654,11 +637,13 @@ export function HomePage() {
 
   const deliverySection = unreadDeliveries.length > 0 ? (
     <section className="space-y-2" aria-labelledby="home-delivery-title">
-      <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-3">
-        <h2 id="home-delivery-title" className="text-base font-semibold text-fg">{work.progress}</h2>
-        <Button variant="ghost" className="px-2 text-xs" onClick={() => openDelivery('history')}>{work.deliveryHistory}</Button>
+      <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-3 pl-1">
+        <h2 id="home-delivery-title" className={sectionTitle}>{work.progress}</h2>
+        <Button variant="ghost" className="rounded-lg px-2 text-xs" onClick={() => openDelivery('history')}>
+          {work.deliveryHistory}<ArrowRight className="size-3.5" aria-hidden />
+        </Button>
       </div>
-      <div className="divide-y divide-edge-subtle rounded-xl border border-edge-subtle bg-surface-panel">
+      <div className={`${workPanel} divide-y divide-edge-subtle`} data-workbench-fill data-workbench-panel>
         {unreadDeliveries.slice(0, mode === 'attention' ? 1 : 3).map((item, index) => (
           <HomeDeliveryRow key={item.id} item={item} language={language} showNew primary={mode === 'delivery' && index === 0} onOpen={() => openDelivery(item)} />
         ))}
@@ -673,31 +658,208 @@ export function HomePage() {
   ].filter((group) => group.items.length > 0);
   const backgroundLimit = mode === 'attention' ? 1 : 3;
   const backgroundSection = backgroundGroups.length ? (
-    <section className="min-w-0 space-y-2" aria-labelledby="home-background-title">
-      <div className="flex min-h-9 items-center">
-        <h2 id="home-background-title" className="text-base font-semibold text-fg">{work.background}</h2>
+    <section className={workPanel} aria-labelledby="home-background-title" data-workbench-panel>
+      <div className="flex items-center gap-3 px-4 pb-1 pt-4">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-inset text-fg-muted">
+          <ListTodo className="size-4" aria-hidden />
+        </span>
+        <h2 id="home-background-title" className={sectionTitle}>{work.background}</h2>
       </div>
-      <div className="divide-y divide-edge-subtle rounded-xl border border-edge-subtle bg-surface-panel">
+      <div className="px-3 pb-3">
         {backgroundGroups.map(({ title, items }) => (
-          <div key={title} className="px-3 py-2">
-            <h3 className="px-1 pt-1 text-xs font-medium text-fg-muted">{title}</h3>
+          <div key={title} className="pt-3">
+            <h3 className="mb-1 px-2 text-xs font-medium text-fg-muted">{title}</h3>
             <div className="divide-y divide-edge-subtle">
               {(showAllBackground ? items : items.slice(0, backgroundLimit)).map((item) => <BackgroundRow key={item.id} item={item} language={language} onAction={runAction} onUpdated={onTaskUpdated} />)}
             </div>
           </div>
         ))}
         {backgroundGroups.some(({ items }) => items.length > backgroundLimit) ? (
-          <Button variant="ghost" className="w-full justify-start rounded-t-none px-4 text-xs" aria-expanded={showAllBackground} onClick={() => setShowAllBackground((value) => !value)}>
+          <Button variant="ghost" className="mt-2 w-full justify-start rounded-lg px-2 text-xs" aria-expanded={showAllBackground} onClick={() => setShowAllBackground((value) => !value)}>
+            <ChevronDown className={showAllBackground ? 'size-3.5 rotate-180' : 'size-3.5'} aria-hidden />
             {language === 'zh' ? (showAllBackground ? '收起' : `查看全部 ${liveBackground.length + scheduled.length} 项`) : (showAllBackground ? 'Show less' : `View all ${liveBackground.length + scheduled.length} items`)}
           </Button>
         ) : null}
       </div>
     </section>
   ) : null;
-  const hasPrimary = needsUserCount > 0 || unreadDeliveries.length > 0 || resumable.length > 0 || advisorVisible || Boolean(home?.observation);
+  const hasAdvisor = !home?.observation && advisorVisible;
+  const attentionSection = needsUserCount > 0 ? (
+    <section className={workPanel} aria-labelledby="home-needs-user-title" data-workbench-panel>
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-edge-subtle px-4 py-4 sm:px-5">
+        <span className="mr-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-warning-soft text-fg">
+          <CircleAlert className="size-[18px]" aria-hidden />
+        </span>
+        <h2 id="home-needs-user-title" className="text-lg font-semibold tracking-tight text-fg sm:text-xl">{work.attention}</h2>
+        <span className="rounded-full bg-surface-inset px-2 py-0.5 text-xs font-semibold tabular-nums text-fg-muted" aria-live="polite" aria-label={interpolate(t.home.attentionTitle, { count: needsUserCount })}>{needsUserCount}</span>
+        {dueToday > 0 ? <span className="ml-auto rounded-md bg-warning-soft px-2 py-1 text-xs text-fg-muted">{interpolate(work.dueToday, { count: dueToday })}</span> : null}
+      </div>
+      <div className="divide-y divide-edge-subtle">
+        {attentionRows.map((item, index) => item === handled ? (
+          <div key={item.id} className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 text-sm text-fg-muted">
+            <span>{item.title}</span><Check className="size-4 shrink-0 text-success" aria-label={language === 'zh' ? '已处理' : 'Handled'} />
+          </div>
+        ) : (
+          <DecisionCard
+            key={item.id}
+            item={item}
+            primary={index === 0 || (index === 1 && attentionRows[0] === handled)}
+            busy={busyItemId !== null}
+            dueLabel={t.home.dueLabel}
+            failureLabel={copy.runAttention}
+            locale={language}
+            onAction={runAction}
+            onComplete={() => void load()}
+            onUpdated={(detail) => onTaskUpdated(detail, item)}
+          />
+        ))}
+        {showAllAttention || remainingAttention > 0 ? (
+          <div className="px-2 py-1.5 sm:px-3">
+            <Button variant="ghost" className="w-full justify-start rounded-lg px-2 text-xs" aria-expanded={showAllAttention} onClick={() => setShowAllAttention((value) => !value)}>
+              <ChevronDown className={showAllAttention ? 'size-3.5 rotate-180' : 'size-3.5'} aria-hidden />
+              {showAllAttention ? work.collapse : interpolate(work.remaining, { count: remainingAttention })}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  ) : null;
+  const resumeSection = home && (resumable.length > 0 || hasAdvisor) ? (
+    <section className="space-y-2" aria-labelledby="home-resume-title">
+      <h2 id="home-resume-title" className={`flex min-h-9 items-center pl-1 ${sectionTitle}`}>{work.resume}</h2>
+      {resumable.length > 0 ? (
+        <div className={`${workPanel} divide-y divide-edge-subtle p-2`} data-workbench-fill data-workbench-panel>
+          {resumable.slice(0, mode === 'attention' ? 1 : 3).map((item) => (
+            <Link
+              key={`${item.kind}:${item.id}`}
+              className="group flex w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-lg p-2 text-left motion-safe:transition-colors hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+              to={modalizeTaskDetailHref('/', item.href)}
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-inset text-fg-muted">
+                {item.kind === 'task' ? <ListTodo className="size-4" aria-hidden /> : <MessageSquare className="size-4" aria-hidden />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block break-words text-sm font-semibold text-fg">{item.title}</span>
+                <span className="mt-0.5 block truncate text-xs text-fg-muted">{[item.projectName, item.summary || interpolate(work.lastActive, { time: formatMediumDateTime(item.updatedAt, language) })].filter(Boolean).join(' · ')}</span>
+              </span>
+              <span className="flex max-w-[35%] shrink-0 items-center gap-1 text-right text-xs leading-4 text-fg-muted group-hover:text-fg">
+                {item.kind === 'task' ? work.continueTask : work.continueChat}<ChevronRight className="size-3.5 shrink-0" aria-hidden />
+              </span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
+      {!home.observation && advisorTitle && mode === 'attention' && !advisorReceipt ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-inset px-3 py-1">
+          <p className="flex min-w-0 flex-1 items-center gap-2 text-xs text-fg-muted"><Sparkles className="size-4 shrink-0 text-accent" aria-hidden /><span className="truncate">{t.home.advisorStatusLabel} · {advisorTitle}</span></p>
+          <Button variant="ghost" aria-expanded={suggestionExpanded} onClick={() => setSuggestionExpanded((value) => !value)}>{suggestionExpanded ? work.hideSuggestion : work.viewSuggestion}</Button>
+        </div>
+      ) : null}
+      {!home.observation && advisorVisible && !advisorCompact ? (
+        <HomeAdvisorCard
+          advisor={home.advisor}
+          busy={advisorBusy}
+          copy={{
+            aiLabel: t.home.advisorAiLabel,
+            why: t.home.advisorWhy,
+            evidence: t.home.advisorEvidence,
+            needsSetup: t.home.advisorNeedsSetup,
+            start: t.home.advisorStart,
+            discuss: t.home.advisorDiscuss,
+            refresh: t.home.advisorRefresh,
+            refreshing: t.home.advisorRefreshing,
+            history: t.home.advisorHistory,
+            viewProgress: t.home.advisorViewProgress,
+            alternatives: t.home.advisorAlternatives,
+            more: work.moreSuggestionActions,
+            feedback: t.home.advisorFeedback,
+            alreadyDone: t.home.advisorAlreadyDone,
+            irrelevant: t.home.advisorIrrelevant,
+            later: t.home.advisorLater,
+            lessLikeThis: t.home.advisorLessLikeThis,
+            sourceIncorrect: t.home.advisorSourceIncorrect,
+            minutes: t.home.advisorMinutes,
+            setupTitle: t.home.advisorSetupTitle,
+            setupHint: t.home.advisorSetupHint,
+            configure: t.home.advisorConfigure,
+            degradedStart: t.home.advisorDegradedStart,
+            automationHint: t.home.advisorAutomationHint,
+            automationAction: t.home.advisorAutomationAction,
+          }}
+          onRefresh={refreshAdvisor}
+          onAction={actOnAdvisor}
+          onFeedback={sendAdvisorFeedback}
+          onClarification={discussClarification}
+          onOpenHistory={() => setAdvisorHistoryOpen(true)}
+          preflight={advisorPreflight}
+          receipt={advisorReceipt}
+        />
+      ) : null}
+    </section>
+  ) : null;
+  const cards: WorkbenchCard[] = [
+    { id: 'attention', label: work.attention, lane: 'left', content: attentionSection },
+    { id: 'delivery', label: work.progress, lane: 'left', content: deliverySection },
+    { id: 'resume', label: work.resume, lane: 'left', content: resumeSection },
+    { id: 'background', label: work.background, lane: 'right', content: backgroundSection },
+    {
+      id: 'observation',
+      label: language === 'zh' ? '交给我' : 'Let me handle it',
+      lane: 'right',
+      content: home?.observation ? (
+        <HomeObservationCard observation={home.observation} advisor={home.advisor} language={language} emphasizeStart={mode !== 'attention' && mode !== 'delivery'} onUpdated={() => void load()} />
+      ) : null,
+    },
+  ];
+  const visibleCards = cards.filter((card) => card.content);
+  const canEditLayout = visibleCards.length > 0;
+  const layoutLabel = language === 'zh' ? '布局' : 'Layout';
+  const doneLabel = language === 'zh' ? '完成布局' : 'Done';
+  const headerEnd = useMemo(() => (
+    <div className="flex items-center gap-1">
+      {home && !isIdle ? (
+        <HomeAdvisorStatusControl
+          advisor={home.advisor}
+          busy={advisorBusy}
+          copy={advisorStatusCopy}
+          onOpenHistory={() => setAdvisorHistoryOpen(true)}
+          onRefresh={refreshAdvisor}
+        />
+      ) : null}
+      {canEditLayout ? (
+        <Button
+          type="button"
+          variant="ghost"
+          className={editingLayout ? 'h-9 w-9 gap-1.5 rounded-lg bg-accent-soft p-0 text-accent-fg sm:w-auto sm:px-2.5' : 'size-9 rounded-lg p-0'}
+          aria-label={editingLayout ? doneLabel : layoutLabel}
+          title={editingLayout ? doneLabel : layoutLabel}
+          onClick={() => setEditingLayout((value) => !value)}
+        >
+          {editingLayout ? <Check className="size-4 shrink-0" aria-hidden /> : <PanelsTopLeft className="size-4" aria-hidden />}
+          {editingLayout ? <span className="hidden whitespace-nowrap sm:inline">{doneLabel}</span> : null}
+        </Button>
+      ) : null}
+      {!isIdle ? (
+        <Button type="button" variant="primary" className="ml-1 h-9 gap-1.5 whitespace-nowrap rounded-lg px-2.5 sm:shadow-none" onClick={() => setConversationOpen(true)}>
+          <Plus className="size-4 shrink-0" aria-hidden />
+          {copy.newWork}
+        </Button>
+      ) : null}
+    </div>
+  ), [advisorBusy, advisorStatusCopy, canEditLayout, copy.newWork, doneLabel, editingLayout, home, isIdle, layoutLabel, refreshAdvisor]);
+
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: null,
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{t.title}</h1>,
+      end: headerEnd,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, headerEnd, setPageHeader, t.title]);
+
 
   return (
-    <div className="@container/workbench mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col px-4 pb-6 pt-3 sm:px-6 lg:px-8">
+    <div className="@container/workbench mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col px-4 pb-8 pt-5 sm:px-6 sm:pt-7 lg:px-8">
       <input
         ref={attachments.fileInputRef}
         type="file"
@@ -829,117 +991,7 @@ export function HomePage() {
             </section>
           ) : null}
 
-          <div className={hasPrimary && backgroundSection ? 'grid min-w-0 items-start gap-5 @min-[56rem]/workbench:grid-cols-[minmax(0,1fr)_minmax(17rem,0.57fr)]' : 'grid min-w-0 gap-4'}>
-            {hasPrimary ? <div className="min-w-0 space-y-4">
-              {needsUserCount > 0 ? (
-                <section className="space-y-2" aria-labelledby="home-needs-user-title">
-                  <div className="flex min-h-9 flex-wrap items-center gap-2">
-                    <CircleAlert className="size-4 text-warning" aria-hidden />
-                    <h2 id="home-needs-user-title" className="text-base font-semibold text-fg">{work.attention}</h2>
-                    <span className="rounded-md bg-surface-inset px-1.5 py-0.5 text-xs font-medium tabular-nums text-fg-muted" aria-live="polite" aria-label={interpolate(t.home.attentionTitle, { count: needsUserCount })}>{needsUserCount}</span>
-                    {dueToday > 0 ? <span className="text-xs text-warning">{interpolate(work.dueToday, { count: dueToday })}</span> : null}
-                  </div>
-                  <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel">
-                    {attentionRows.map((item, index) => item === handled ? (
-                      <div key={item.id} className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 text-sm text-fg-muted">
-                        <span>{item.title}</span><Check className="size-4 shrink-0 text-success" aria-label={language === 'zh' ? '已处理' : 'Handled'} />
-                      </div>
-                    ) : (
-                      <DecisionCard
-                        key={item.id}
-                        item={item}
-                        primary={index === 0 || (index === 1 && attentionRows[0] === handled)}
-                        busy={busyItemId !== null}
-                        dueLabel={t.home.dueLabel}
-                        failureLabel={copy.runAttention}
-                        locale={language}
-                        onAction={runAction}
-                        onComplete={() => void load()}
-                        onUpdated={(detail) => onTaskUpdated(detail, item)}
-                      />
-                    ))}
-                    {showAllAttention || remainingAttention > 0 ? (
-                      <Button variant="ghost" className="w-full justify-start rounded-t-none px-4 text-xs" aria-expanded={showAllAttention} onClick={() => setShowAllAttention((value) => !value)}>
-                        <ChevronDown className={showAllAttention ? 'size-4 rotate-180' : 'size-4'} aria-hidden />
-                        {showAllAttention ? work.collapse : interpolate(work.remaining, { count: remainingAttention })}
-                      </Button>
-                    ) : null}
-                  </div>
-                </section>
-              ) : null}
-
-              {deliverySection}
-
-
-              {resumable.length > 0 || advisorVisible || home.observation ? (
-                <section className="space-y-2" aria-labelledby="home-resume-title">
-                  <h2 id="home-resume-title" className="flex min-h-9 items-center text-base font-semibold text-fg">{work.resume}</h2>
-                  {resumable.length > 0 ? (
-                    <div className="divide-y divide-edge-subtle rounded-xl border border-edge-subtle bg-surface-panel">
-                      {resumable.slice(0, mode === 'attention' ? 1 : 3).map((item) => (
-                        <div key={`${item.kind}:${item.id}`} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                          <div className="min-w-0 flex-1 basis-48">
-                            <p className="break-words text-sm font-semibold text-fg">{item.title}</p>
-                            <p className="mt-0.5 truncate text-xs text-fg-muted">{[item.projectName, item.summary || interpolate(work.lastActive, { time: formatMediumDateTime(item.updatedAt, language) })].filter(Boolean).join(' · ')}</p>
-                          </div>
-                          <Button variant="secondary" onClick={() => navigate(modalizeTaskDetailHref('/', item.href))}>{item.kind === 'task' ? work.continueTask : work.continueChat}</Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  {home.observation ? <HomeObservationCard observation={home.observation} advisor={home.advisor} language={language} onUpdated={() => void load()} /> : null}
-                  {!home.observation && advisorTitle && mode === 'attention' && !advisorReceipt ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-inset px-3 py-1">
-                      <p className="flex min-w-0 flex-1 items-center gap-2 text-xs text-fg-muted"><Sparkles className="size-4 shrink-0 text-accent" aria-hidden /><span className="truncate">{t.home.advisorStatusLabel} · {advisorTitle}</span></p>
-                      <Button variant="ghost" aria-expanded={suggestionExpanded} onClick={() => setSuggestionExpanded((value) => !value)}>{suggestionExpanded ? work.hideSuggestion : work.viewSuggestion}</Button>
-                    </div>
-                  ) : null}
-                  {!home.observation && advisorVisible && !advisorCompact ? (
-                    <HomeAdvisorCard
-                      advisor={home.advisor}
-                      busy={advisorBusy}
-                      copy={{
-                        aiLabel: t.home.advisorAiLabel,
-                        why: t.home.advisorWhy,
-                        evidence: t.home.advisorEvidence,
-                        needsSetup: t.home.advisorNeedsSetup,
-                        start: t.home.advisorStart,
-                        discuss: t.home.advisorDiscuss,
-                        refresh: t.home.advisorRefresh,
-                        refreshing: t.home.advisorRefreshing,
-                        history: t.home.advisorHistory,
-                        viewProgress: t.home.advisorViewProgress,
-                        alternatives: t.home.advisorAlternatives,
-                        more: work.moreSuggestionActions,
-                        feedback: t.home.advisorFeedback,
-                        alreadyDone: t.home.advisorAlreadyDone,
-                        irrelevant: t.home.advisorIrrelevant,
-                        later: t.home.advisorLater,
-                        lessLikeThis: t.home.advisorLessLikeThis,
-                        sourceIncorrect: t.home.advisorSourceIncorrect,
-                        minutes: t.home.advisorMinutes,
-                        setupTitle: t.home.advisorSetupTitle,
-                        setupHint: t.home.advisorSetupHint,
-                        configure: t.home.advisorConfigure,
-                        degradedStart: t.home.advisorDegradedStart,
-                        automationHint: t.home.advisorAutomationHint,
-                        automationAction: t.home.advisorAutomationAction,
-                      }}
-                      onRefresh={refreshAdvisor}
-                      onAction={actOnAdvisor}
-                      onFeedback={sendAdvisorFeedback}
-                      onClarification={discussClarification}
-                      onOpenHistory={() => setAdvisorHistoryOpen(true)}
-                      preflight={advisorPreflight}
-                      receipt={advisorReceipt}
-                    />
-                  ) : null}
-                </section>
-              ) : null}
-
-            </div> : null}
-            {backgroundSection}
-          </div>
+          <HomeWorkbenchLayout cards={visibleCards} editing={editingLayout} language={language} />
           {!isIdle && !deliverySection && deliveries.length > 0 ? (
             <Button variant="ghost" className="self-start px-2 text-xs" onClick={() => openDelivery('history')}>{work.deliveryHistory}</Button>
           ) : null}

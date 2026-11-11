@@ -1,6 +1,6 @@
 # Demo Memory Provider Extension
 
-Minimal extension-backed memory provider.
+Test fixture for the memory provider discovery and routing suite.
 
 It is intentionally in-memory:
 

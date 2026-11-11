@@ -72,7 +72,9 @@ describe('HomeAdvisorStatusControl', () => {
     const view = renderControl({ state: 'quiet', reason: 'budget_exhausted' });
     const trigger = view.container.querySelector('button');
 
-    expect(trigger?.textContent).toContain('AI 建议 · 今日已用完');
+    expect(trigger?.textContent).toBe('');
+    expect(trigger?.getAttribute('aria-label')).toBe('AI 建议：今日已用完');
+    expect(trigger?.title).toBe('AI 建议：今日已用完');
 
     await act(async () => {
       trigger?.click();

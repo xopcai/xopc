@@ -8,6 +8,7 @@ import type { Config } from '../../config/schema.js';
 import type { AgentProfile } from '../../agent-config/index.js';
 import {
   getInteractionState,
+  getSessionMetadata,
   getUserTrustPolicy,
   isXopcDatabaseOpen,
 } from '../../storage/sqlite/index.js';
@@ -88,6 +89,8 @@ export class SystemPromptBuilder {
       textToSpeechTool: ttsMerged.enabled && reg.includes('text_to_speech'),
     });
     const responseLanguage = resolveResponseLanguageForSession(this.config, options.conversationId);
+    const agentSetup = options.conversationId && isXopcDatabaseOpen()
+      && getSessionMetadata(options.conversationId)?.customData?.agentSetup === true;
 
     const resolved = resolveSystemPromptBuildParams(this.config, {
       workspaceDir: ws,
@@ -100,6 +103,9 @@ export class SystemPromptBuilder {
       extraSystemPrompt: [
         options.extraSystemPrompt,
         getConversationalConfigurationGuide(reg),
+        agentSetup
+          ? 'In this agent setup conversation, follow Response Language for every question and reply. A language requested for the new Agent configures that Agent only. Keep the current conversation language unless the user asks to switch it.'
+          : undefined,
         interactionPrompt,
       ].filter(Boolean).join('\n\n'),
       activeProjectContext: options.activeProjectContext,

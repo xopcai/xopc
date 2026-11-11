@@ -8,6 +8,7 @@ export type ChatAgentOption = {
   description?: string;
   avatar?: string;
   role?: string;
+  purpose?: string;
   responsibilities?: string[];
   skills?: string[];
 };
@@ -39,6 +40,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
           name?: string;
           description?: string;
           avatar?: string;
+          override?: { purpose?: string };
           effective?: { skills?: { mode?: string; include?: string[] } };
         }>;
       };
@@ -51,6 +53,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
         )
         .map((a) => ({
           id: a.id.trim().toLowerCase(),
+          ...(a.override?.purpose ? { purpose: a.override.purpose } : {}),
           name: typeof a.name === 'string' && a.name.trim() ? a.name.trim() : undefined,
           description:
             typeof a.description === 'string' && a.description.trim() ? a.description.trim() : undefined,
@@ -68,7 +71,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const data = (await fetchGatewayConfigSwrResponse()) as {
     payload?: {
       config?: {
-        agents?: { defaultId?: string; list?: Array<{ id?: string }> };
+        agents?: { defaultId?: string; list?: Array<{ id?: string; purpose?: string; enabled?: boolean }> };
       };
     };
   };
@@ -76,11 +79,12 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const defaultId = (agents?.defaultId ?? 'main').trim().toLowerCase();
   const raw = Array.isArray(agents?.list) ? agents.list : [];
   const items: ChatAgentOption[] = raw
-    .filter((e): e is { id: string } =>
-      Boolean(e && typeof e.id === 'string' && e.id.trim()),
+    .filter((e): e is typeof e & { id: string } =>
+      Boolean(e && e.enabled !== false && typeof e.id === 'string' && e.id.trim()),
     )
     .map((e) => ({
       id: e.id.trim().toLowerCase(),
+      ...(e.purpose ? { purpose: e.purpose } : {}),
     }));
   if (items.length === 0) {
     return { defaultId, items: [{ id: defaultId }] };

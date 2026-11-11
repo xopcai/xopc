@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { HomeDelivery } from '@xopcai/gateway-contract';
-import { X } from 'lucide-react';
+import { ChevronRight, FileText, X } from 'lucide-react';
 import { lazy, Suspense, useRef, useState } from 'react';
 import useSWR from 'swr';
 
@@ -27,16 +27,25 @@ export function HomeDeliveryRow({ item, language, primary, showNew = false, onOp
 }) {
   const copy = messages(language).projectsPage.home.workbench;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4">
-      <div className="min-w-0 flex-1 basis-48">
-        <p className="break-words text-sm font-semibold text-fg">{item.title}</p>
-        <p className="mt-0.5 text-xs text-fg-muted">
-          {showNew ? <span className="mr-2 font-medium text-accent-fg">{copy.newDelivery}</span> : null}
-          <time dateTime={new Date(item.completedAt).toISOString()}>{formatMediumDateTime(new Date(item.completedAt), language)}</time>
-        </p>
-        {item.summary ? <p className="mt-1 line-clamp-1 break-words text-xs text-fg-muted">{item.summary}</p> : null}
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
+      <div className="flex min-w-0 flex-1 basis-48 items-start gap-3">
+        {showNew ? (
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-inset text-fg-muted">
+            <FileText className="size-4" aria-hidden />
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <p className="break-words text-sm font-semibold text-fg">{item.title}</p>
+          <p className="mt-0.5 text-xs text-fg-muted">
+            {showNew ? <span className="mr-2 font-medium text-accent-fg">{copy.newDelivery}</span> : null}
+            <time dateTime={new Date(item.completedAt).toISOString()}>{formatMediumDateTime(new Date(item.completedAt), language)}</time>
+          </p>
+          {item.summary ? <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-fg-muted">{item.summary}</p> : null}
+        </div>
       </div>
-      <Button variant={primary ? 'primary' : 'secondary'} className="min-h-9 shrink-0 px-2.5 text-xs shadow-none" onClick={onOpen}>{copy.openDelivery}</Button>
+      <Button variant={primary ? 'primary' : showNew ? 'ghost' : 'secondary'} className="min-h-9 shrink-0 gap-1 rounded-lg px-2.5 text-xs sm:shadow-none" onClick={onOpen}>
+        {copy.openDelivery}{showNew ? <ChevronRight className="size-3.5" aria-hidden /> : null}
+      </Button>
     </div>
   );
 }
