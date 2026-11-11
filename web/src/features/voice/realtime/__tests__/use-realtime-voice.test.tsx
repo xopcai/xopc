@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   playerEnqueue: vi.fn(),
   playerClear: vi.fn(),
   playerDuck: vi.fn(),
+  playerDuckForVoiceOnset: vi.fn(),
   playerSetMuted: vi.fn(),
   playerClose: vi.fn(async () => undefined),
   playerStartRingback: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock('@/features/voice/realtime/pcm-player', () => ({
     enqueue = mocks.playerEnqueue;
     clear = mocks.playerClear;
     duck = mocks.playerDuck;
+    duckForVoiceOnset = mocks.playerDuckForVoiceOnset;
     setMuted = mocks.playerSetMuted;
     close = mocks.playerClose;
     startRingback = mocks.playerStartRingback;
@@ -93,7 +95,7 @@ describe('useRealtimeVoice', () => {
   let onAudioLevel: (level: { level: number; speaking: boolean }) => void;
   let bargeIn = true;
   let onSamples: (samples: Float32Array) => void;
-  const track = { enabled: true, stop: vi.fn() };
+  const track = { enabled: true, stop: vi.fn(), getSettings: vi.fn<() => MediaTrackSettings>() };
   const cancelCapture = vi.fn();
   const stopCapture = vi.fn(async () => undefined);
 
@@ -107,6 +109,7 @@ describe('useRealtimeVoice', () => {
     mocks.transcribe.mockResolvedValue({ text: 'recorded words' });
     bargeIn = true;
     track.enabled = true;
+    track.getSettings.mockReturnValue({});
     const stream = { getTracks: () => [track], getAudioTracks: () => [track] } as unknown as MediaStream;
     Object.defineProperty(navigator, 'permissions', { configurable: true, value: undefined });
     Object.defineProperty(navigator, 'mediaDevices', {
@@ -594,6 +597,24 @@ describe('useRealtimeVoice', () => {
     else expect(mocks.playerDuck).not.toHaveBeenCalled();
     act(() => voice.interruptResponse());
     expect(cancelResponse).toHaveBeenCalledWith('r1');
+  });
+
+  it.each([true, false])('allows reversible local ducking only with active echo cancellation=%s', async (echoCancellation) => {
+    track.getSettings.mockReturnValue({ echoCancellation });
+    await startResponse();
+    expect(mocks.startCapture).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ frameDurationMs: 20 }));
+    act(() => {
+      onAudioLevel({ level: 0.05, speaking: true });
+      onAudioLevel({ level: 0.05, speaking: true });
+    });
+    expect(mocks.playerDuckForVoiceOnset).not.toHaveBeenCalled();
+    act(() => {
+      onAudioLevel({ level: 0.05, speaking: true });
+      onAudioLevel({ level: 0.05, speaking: true });
+    });
+    expect(mocks.playerDuckForVoiceOnset).toHaveBeenCalledTimes(echoCancellation ? 1 : 0);
+    expect(mocks.playerClear).not.toHaveBeenCalled();
+    expect(cancelResponse).not.toHaveBeenCalled();
   });
 
   it('finishes a response whose audio drained before the completion event', async () => {

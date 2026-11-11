@@ -12,6 +12,8 @@ export class PcmPlayer {
   private ringbackActive = false;
   private nextStartTime = 0;
   private hasStartedAudio = false;
+  private confirmedSpeech = false;
+  private tentativeDuckTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
     this.output.gain.value = REALTIME_VOICE_OUTPUT_GAIN;
@@ -117,10 +119,25 @@ export class PcmPlayer {
   }
 
   duck(active: boolean): void {
+    clearTimeout(this.tentativeDuckTimer);
+    this.tentativeDuckTimer = undefined;
+    this.confirmedSpeech = active;
+    this.setOutputGain(active ? 0.15 : 1);
+  }
+
+  duckForVoiceOnset(): void {
+    if (this.confirmedSpeech || this.tentativeDuckTimer !== undefined || !this.hasPendingAudio) return;
+    this.setOutputGain(0.55);
+    this.tentativeDuckTimer = setTimeout(() => {
+      this.tentativeDuckTimer = undefined;
+      this.setOutputGain(1);
+    }, 280);
+  }
+
+  private setOutputGain(scale: number): void {
     if (this.context.state === 'closed') return;
-    const gain = active ? REALTIME_VOICE_OUTPUT_GAIN * 0.15 : REALTIME_VOICE_OUTPUT_GAIN;
     this.output.gain.cancelScheduledValues(this.context.currentTime);
-    this.output.gain.setTargetAtTime(gain, this.context.currentTime, 0.015);
+    this.output.gain.setTargetAtTime(REALTIME_VOICE_OUTPUT_GAIN * scale, this.context.currentTime, 0.015);
   }
 
   clear(): void {

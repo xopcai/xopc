@@ -7,7 +7,7 @@ import type { SpeechStreamSession } from '../tts/speech-provider-types.js';
 import { PlatformVoiceError } from '../platform-streams.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { TurnCoordinator } from './turnPolicy.js';
-import { isLikelyPlaybackEcho, PlaybackEchoCandidates } from './playback-echo.js';
+import { isPlaybackStopPhrase, normalizeSpeech, PlaybackEchoCandidates } from './playback-echo.js';
 import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
 import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
@@ -103,7 +103,8 @@ export function createAgentVoiceEngine(options: {
   let preparedGreeting: { responseId: string; audio: SpeechOpening } | undefined;
   const greetingAbort = new AbortController();
   let inputSpeech: { abort: AbortController; ready: SpeechPreparation } | undefined;
-  let bargeInCandidate: { utteranceId: string; text: string; timer: ReturnType<typeof setTimeout> } | undefined;
+  let bargeInCandidate: { utteranceId: string; responseId: string; prefix: string; text: string; timer: ReturnType<typeof setTimeout> } | undefined;
+  let playbackInterruptedBy: string | undefined;
 
   function clearBargeInCandidate(): void {
     clearTimeout(bargeInCandidate?.timer);
@@ -113,21 +114,29 @@ export function createAgentVoiceEngine(options: {
   function considerPartialInterruption(utteranceId: string, text: string): void {
     const response = activeResponse;
     if (!response || response.awaitingClarification || !claim.config.voice?.realtime?.bargeIn) return;
-    const characters = text.replace(/[^\p{L}\p{N}]/gu, '');
-    if (characters.length < (/\p{Script=Han}/u.test(characters) ? 6 : 12)
-      || isLikelyPlaybackEcho(text, response.audibleText)) {
+    const characters = normalizeSpeech(text);
+    const candidate = bargeInCandidate;
+    const extendsCandidate = candidate?.utteranceId === utteranceId && candidate.responseId === response.id
+      && characters.startsWith(candidate.prefix);
+    const playbackStop = response.firstFrameSent && isPlaybackStopPhrase(characters);
+    if ((!extendsCandidate && !playbackStop && characters.length < (/\p{Script=Han}/u.test(characters) ? 6 : 12))
+      || echoCandidates.isEcho(utteranceId, text, response.audibleText)) {
       clearBargeInCandidate(); return;
     }
-    if (bargeInCandidate?.utteranceId === utteranceId && bargeInCandidate.text === text) return;
+    if (extendsCandidate) {
+      candidate.text = text;
+      return;
+    }
     clearBargeInCandidate();
-    bargeInCandidate = { utteranceId, text, timer: setTimeout(() => {
+    bargeInCandidate = { utteranceId, responseId: response.id, prefix: characters, text, timer: setTimeout(() => {
+      const latest = bargeInCandidate?.text;
       clearBargeInCandidate();
-      if (activeResponse !== response || muted || closed || response.awaitingClarification
-        || isLikelyPlaybackEcho(text, response.audibleText)) return;
+      if (!latest || activeResponse !== response || muted || closed || response.awaitingClarification
+        || echoCandidates.isEcho(utteranceId, latest, response.audibleText)) return;
       log.info({ sessionId: claim.sessionId, responseId: response.id, phase: 'partial_barge_in',
         stabilityMs: BARGE_IN_STABILITY_MS }, 'Stable non-echo speech interrupted voice playback');
-      cancelActiveResponse('barge_in');
-      prepareInputSpeech();
+      if (cancelActiveResponse('barge_in') && response.firstFrameSent) playbackInterruptedBy = utteranceId;
+      if (!isPlaybackStopPhrase(normalizeSpeech(latest))) prepareInputSpeech();
     }, BARGE_IN_STABILITY_MS) };
   }
 
@@ -671,6 +680,8 @@ export function createAgentVoiceEngine(options: {
     }
     if (event.type === 'transcript_final') {
       if (bargeInCandidate?.utteranceId === event.utteranceId) clearBargeInCandidate();
+      const interruptedPlayback = playbackInterruptedBy === event.utteranceId;
+      if (interruptedPlayback) playbackInterruptedBy = undefined;
       lastUserSpeechAt = Date.now();
       const text = event.text.trim();
       if (text) openingInputSeen = true;
@@ -699,6 +710,11 @@ export function createAgentVoiceEngine(options: {
         }, 'Ignored finalized transcription matching recent voice playback');
         return;
       }
+      if (claim.request.purpose === 'conversation' && activeResponse?.firstFrameSent
+        && !activeResponse.awaitingClarification && /^(?:嗯{1,2}|呃{1,2}|哦{1,2}|mm|mhm|uhhuh|uh|um)$/u.test(normalizeSpeech(text))) {
+        bufferFinal(event.utteranceId, '');
+        return;
+      }
       send('input.transcript.final', {
         utteranceId: event.utteranceId,
         revision: event.revision,
@@ -706,6 +722,12 @@ export function createAgentVoiceEngine(options: {
         ...(event.language === 'zh' || event.language === 'en' ? { language: event.language } : {}),
       });
       if (claim.request.purpose === 'conversation') {
+        if (isPlaybackStopPhrase(normalizeSpeech(text)) && (interruptedPlayback
+          || (claim.config.voice?.realtime?.bargeIn && activeResponse?.firstFrameSent && !activeResponse.awaitingClarification))) {
+          if (!interruptedPlayback) cancelActiveResponse('barge_in');
+          bufferFinal(event.utteranceId, '');
+          return;
+        }
         if (claim.request.conversationId) options.runtime.onConversationInput?.(claim.request.conversationId);
         if (activeResponse?.awaitingClarification) { turn.reset(); return; }
         // A final can also interrupt short utterances that did not qualify for
@@ -719,6 +741,7 @@ export function createAgentVoiceEngine(options: {
 
   function discardInput(): Promise<void> {
     clearBargeInCandidate();
+    playbackInterruptedBy = undefined;
     void releaseInputSpeech().catch(error => log.warn({ err: error, sessionId: claim.sessionId }, 'Unused voice preparation cleanup failed'));
     turn.reset();
     echoCandidates.clear();

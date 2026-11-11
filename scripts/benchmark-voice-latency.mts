@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import WebSocket from 'ws';
-import { decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame } from '@xopcai/realtime-protocol/voice';
+import { decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame, type CreateVoiceSessionResponse } from '@xopcai/realtime-protocol/voice';
 
 const [file, agentId = 'main', count = '5', existingConversation] = process.argv.slice(2);
 const rounds = Number(count);
@@ -14,6 +14,8 @@ const naturalBackend = process.env.XOPC_VOICE_BENCHMARK_BACKEND;
 const expectAction = process.env.XOPC_VOICE_BENCHMARK_ACTION === '1';
 const cancelAfterMs = Number(process.env.XOPC_VOICE_BENCHMARK_CANCEL_AFTER_MS);
 const interruptReply = process.env.XOPC_VOICE_BENCHMARK_INTERRUPT === '1';
+const normalizeTranscript = (text: string) => text.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+const expectedTranscript = normalizeTranscript(process.env.XOPC_VOICE_BENCHMARK_EXPECT_TRANSCRIPT ?? '');
 let cancelTimer: ReturnType<typeof setTimeout> | undefined;
 if (!['auto', 'assistant', 'natural'].includes(mode) || (naturalBackend && naturalBackend !== 'higgs')) throw new Error('Invalid benchmark mode/backend');
 if (!file || !Number.isInteger(rounds) || rounds < 1 || rounds > 30) {
@@ -41,12 +43,13 @@ async function request(path: string, method = 'GET', body?: object) {
 const conversationId = existingConversation ?? crypto.randomUUID();
 const samples: Array<Record<string, number>> = [];
 let socket: WebSocket | undefined;
-let session: { sessionId: string; ticket: string; websocketPath: string; mode?: string; route: { engine: string } } | undefined;
+let session: CreateVoiceSessionResponse | undefined;
 let epoch = 0, seq = 0, failure: Error | undefined;
 let taskId: string | undefined;
 let taskFinished = true;
 let interruptedReply = false;
-let active: { end: number; inputComplete?: boolean; stopped?: number; created?: number; text?: number; audio?: number; done?: number;
+let active: { end: number; inputComplete?: boolean; started?: number; stopped?: number; final?: number; transcripts: string[];
+  committed?: number; created?: number; text?: number; audio?: number; done?: number;
   submitted?: number; taskDone?: number; resultResponseId?: string; bytes: number } | undefined;
 const playedBytes = new Map<string, number>();
 const send = (type: string, payload: object) => socket!.send(JSON.stringify({ protocolVersion: 3,
@@ -121,7 +124,26 @@ try {
       taskFinished = true; active.taskDone = performance.now();
       console.log(JSON.stringify({ stage: 'task_done', status: event.payload.status, speechEndToTaskDoneMs: Math.round(active.taskDone - active.end) }));
     }
+    if (event.type === 'input.speech_started') active.started ??= performance.now();
     if (event.type === 'input.speech_stopped') active.stopped = performance.now();
+    if (event.type === 'input.transcript.final') {
+      active.final = performance.now();
+      active.transcripts.push(event.payload.text);
+    }
+    if (event.type === 'turn.committed') {
+      if (!active.inputComplete || active.committed !== undefined) {
+        failure = new Error('Diagnostic utterance was committed early or more than once');
+        return;
+      }
+      if (expectedTranscript && !normalizeTranscript(active.transcripts.join('')).includes(expectedTranscript)) {
+        failure = new Error('Finalized input did not contain the expected transcript');
+        return;
+      }
+      active.committed = performance.now();
+      console.log(JSON.stringify({ stage: 'input_committed', round: samples.length + 1,
+        speechEndToFinalMs: active.final === undefined ? null : Math.round(active.final - active.end),
+        speechEndToCommitMs: Math.round(active.committed - active.end), finalTranscripts: active.transcripts.length }));
+    }
     if (event.type === 'response.created') active.created ??= performance.now();
     if (event.type === 'response.text.delta') active.text ??= performance.now();
     if (event.type === 'response.audio.started' && active.taskDone) active.resultResponseId = event.payload.responseId;
@@ -134,12 +156,13 @@ try {
   await once(socket, 'open');
   send('session.start', { sessionId: session!.sessionId, ticket: session!.ticket });
   await waitFor(() => epoch !== 0, 40_000);
-  console.log(JSON.stringify({ stage: 'ready', mode, naturalBackend, expectAction, conversation: existingConversation ? 'existing' : 'disposable', fixtureMs: audio.length / 32 }));
+  console.log(JSON.stringify({ stage: 'ready', mode: session!.mode ?? mode, route: session!.route, naturalBackend,
+    expectAction, conversation: existingConversation ? 'existing' : 'disposable', fixtureMs: audio.length / 32 }));
   for (let round = 0; round < rounds; round++) {
     interruptedReply = false;
     seq = 0;
     const started = performance.now();
-    active = { end: started + audio.length / 32, bytes: 0 };
+    active = { end: started + audio.length / 32, bytes: 0, transcripts: [] };
     const utteranceId = crypto.randomUUID();
     // Keep feeding silence while waiting for ASR and the reply, as a live microphone does.
     for (let offset = 0; !active.done; offset += 640) {
@@ -152,11 +175,18 @@ try {
       if (offset + 640 === audio.length) { active.end = performance.now(); active.inputComplete = true; }
     }
     if (failure) throw failure;
+    if (active.final === undefined || active.committed === undefined || active.started === undefined) {
+      throw new Error('Reply completed without a confirmed input turn');
+    }
     const sample = { round: round + 1, speechEndToAudioMs: Math.round(active.audio! - active.end),
+      speechStartToDetectedMs: Math.round(active.started - started - Math.min(first, 3200) / 32),
       speechEndToTextMs: Math.round(active.text! - active.end),
       speechEndToAsrStopMs: Math.round(active.stopped! - active.end),
+      speechEndToFinalMs: Math.round(active.final - active.end),
+      finalToCommitMs: Math.round(active.committed - active.final),
+      commitToTextMs: Math.round(active.text! - active.committed),
       asrStopToResponseMs: Math.round(active.created! - active.stopped!),
-      responseToTextMs: Math.round(active.text! - active.created!),
+      responseToTextMs: Math.round(active.text! - active.created!), finalTranscripts: active.transcripts.length,
       textToAudioMs: Math.round(active.audio! - active.text!), audioBytes: active.bytes,
       ...(active.submitted ? { speechEndToTaskSubmittedMs: Math.round(active.submitted - active.end) } : {}),
       ...(active.taskDone ? { speechEndToTaskDoneMs: Math.round(active.taskDone - active.end) } : {}) };
@@ -167,9 +197,13 @@ try {
     await delay(400);
   }
   const values = samples.map(sample => sample.speechEndToAudioMs).sort((a, b) => a - b);
-  const percentile = (p: number) => values[Math.ceil(values.length * p) - 1];
+  const percentile = (sorted: number[], p: number) => sorted[Math.ceil(sorted.length * p) - 1];
+  const stages = Object.fromEntries(['speechStartToDetectedMs', 'speechEndToFinalMs', 'finalToCommitMs', 'commitToTextMs', 'textToAudioMs'].map((stage) => {
+    const sorted = samples.map(sample => sample[stage]!).sort((a, b) => a - b);
+    return [stage, { p50: percentile(sorted, 0.5), p75: percentile(sorted, 0.75), p95: percentile(sorted, 0.95) }];
+  }));
   console.log(JSON.stringify({ measurement: 'Last voiced PCM frame sent to first audio received; excludes physical playback.',
-    rounds: samples.length, p50Ms: percentile(0.5), p95Ms: percentile(0.95), maxMs: values.at(-1),
+    rounds: samples.length, p50Ms: percentile(values, 0.5), p75Ms: percentile(values, 0.75), p95Ms: percentile(values, 0.95), maxMs: values.at(-1), stages,
     targetMs: 1500, withinTarget: values.filter(value => value <= 1500).length }));
 } finally {
   clearTimeout(cancelTimer);

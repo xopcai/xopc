@@ -151,6 +151,23 @@ describe('PcmPlayer', () => {
     );
   });
 
+  it('restores unconfirmed local ducking and hands off to confirmed speech', () => {
+    vi.useFakeTimers();
+    const player = new PcmPlayer();
+    const gain = context.gains[0].gain;
+    player.enqueue(new ArrayBuffer(48_000), vi.fn());
+    player.duckForVoiceOnset();
+    expect(gain.setTargetAtTime).toHaveBeenLastCalledWith(REALTIME_VOICE_OUTPUT_GAIN * 0.55, 0, 0.015);
+    vi.advanceTimersByTime(280);
+    expect(gain.setTargetAtTime).toHaveBeenLastCalledWith(REALTIME_VOICE_OUTPUT_GAIN, 0, 0.015);
+    player.duckForVoiceOnset();
+    player.duck(true);
+    vi.advanceTimersByTime(280);
+    expect(gain.setTargetAtTime).toHaveBeenLastCalledWith(REALTIME_VOICE_OUTPUT_GAIN * 0.15, 0, 0.015);
+    player.clear();
+    expect(gain.setTargetAtTime).toHaveBeenLastCalledWith(REALTIME_VOICE_OUTPUT_GAIN, 0, 0.015);
+  });
+
   it('does not acknowledge audio discarded by clear or close', async () => {
     const player = new PcmPlayer();
     const played = vi.fn();

@@ -11,11 +11,14 @@ declare function registerProcessor(
 const WORKLET_NAME = 'xopc-pcm-capture';
 
 class XopcPcmCaptureProcessor extends AudioWorkletProcessor {
-  private readonly buffer = new Float32Array(2048);
+  private readonly buffer: Float32Array;
   private offset = 0;
 
-  constructor() {
+  constructor(options?: { processorOptions?: { frameSamples?: number } }) {
     super();
+    const frameSamples = options?.processorOptions?.frameSamples;
+    this.buffer = new Float32Array(frameSamples && Number.isInteger(frameSamples) && frameSamples > 0 && frameSamples <= 4096
+      ? frameSamples : 2048);
     this.port.onmessage = (event: MessageEvent<unknown>) => {
       if (event.data === 'flush') {
         this.flush();
