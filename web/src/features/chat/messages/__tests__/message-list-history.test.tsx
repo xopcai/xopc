@@ -143,10 +143,18 @@ describe('MessageList history identity', () => {
     act(() => store().mergeCommittedFromServer(conversationId, [history[0], history[2], active], true));
     expect(bubble(20)).toBe(first);
     expect(bubble(40)).toBe(second);
+    const incomplete = [history[0], history[2], message(32), message(36), active];
+    act(() => store().mergeCommittedFromServer(conversationId, incomplete, true));
+    expect(bubble(20)).toBe(first);
+    expect(bubble(40)).toBe(second);
     act(() => store().mergeCommittedFromServer(conversationId, [...history, active], false));
     expect(bubble(20)).toBe(first);
     expect(bubble(40)).toBe(second);
     expect(first.textContent).toBe('expanded');
+    act(() => store().finalizeStreamingTurn(conversationId, message(60, 'assistant')));
+    expect(bubble(20)).toBe(first);
+    expect(bubble(40)).toBe(second);
+    expect(bubble(60)).not.toBeNull();
   });
 
   it('assigns distinct identities even for matching or absent timestamps', () => {
