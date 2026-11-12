@@ -9,7 +9,7 @@ import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.j
 import { readVideoArtifact } from '../../../video-generation/artifact.js';
 import { getVideoDraft } from '../../../video-generation/drafts.js';
 import { enqueueVideoJob, getVideoJob, listVideoJobs } from '../../../video-generation/repository.js';
-import { getConfiguredVideoProviders, getVideoProvider } from '../../../video-generation/providers.js';
+import { getAvailableVideoModelRefs, getConfiguredVideoProviders, getVideoProvider } from '../../../video-generation/providers.js';
 import { getVideoDefaults, getVideoModel, setVideoDefaults, setVideoModel } from '../../../video-generation/settings.js';
 import { resolveScopedMediaReference } from '../../media-access.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -39,7 +39,7 @@ function imageMime(bytes: Buffer): string | undefined {
 async function videoSettings() {
   const configured = await getConfiguredVideoProviders();
   const modelRef = getVideoModel();
-  return { modelRef, defaults: getVideoDefaults(modelRef), configured };
+  return { modelRef, defaults: getVideoDefaults(modelRef), configured, modelRefs: [...new Set([...getAvailableVideoModelRefs(), modelRef])] };
 }
 
 export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
@@ -48,6 +48,9 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
   app.put(settingsPath, deps.strictRateLimitMiddleware, async c => {
     const parsed = z.object({ modelRef: modelSchema }).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: 'Unknown video generation model' }, 400);
+    if (!getAvailableVideoModelRefs().includes(parsed.data.modelRef)) {
+      return c.json({ error: 'XOPC Cloud video model is unavailable' }, 400);
+    }
     setVideoModel(parsed.data.modelRef);
     return c.json(await videoSettings());
   });
@@ -71,7 +74,7 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
     const session = await deps.service.sessionIndexInstance.getSessionMetadata(conversationId);
     if (!session?.transcriptId) return c.json({ error: 'Conversation not found' }, 404);
     const modelRef = getVideoModel();
-    const configured = Boolean(await getVideoProvider(modelRef).resolveKey().catch(() => undefined));
+    const configured = getAvailableVideoModelRefs().includes(modelRef) && Boolean(await getVideoProvider(modelRef).resolveKey().catch(() => undefined));
     const jobs = listVideoJobs(conversationId);
     const draft = getVideoDraft(conversationId, session.transcriptId);
     return c.json({ transcriptId: session.transcriptId, modelRef, configured, defaults: getVideoDefaults(modelRef), jobs,
@@ -130,7 +133,7 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
     }
     const mime = bytes && imageMime(bytes);
     if (bytes && !mime) return c.json({ error: 'Reference image must be PNG, JPEG or WebP' }, 400);
-    if (bytes && model.provider === 'volcengine-ark') {
+    if (bytes && (model.provider === 'volcengine-ark' || modelRef.startsWith('xopc-cloud/video-seedance'))) {
       const { default: sharp } = await import('sharp');
       const size = await sharp(bytes, { limitInputPixels: 36_000_000 }).metadata().catch(() => undefined);
       const width = size?.autoOrient.width ?? 0;
@@ -139,8 +142,9 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
         return c.json({ error: 'Seedance requires a readable image with sides of 300–6000 px and an aspect ratio of 0.4–2.5' }, 400);
       }
     }
+    if (!getAvailableVideoModelRefs().includes(modelRef)) return c.json({ error: 'XOPC Cloud video model is unavailable' }, 503);
     const provider = getVideoProvider(modelRef);
-    if (!(await provider.resolveKey().catch(() => undefined))) return c.json({ error: `Configure a ${provider.name} API key on the Gateway` }, 503);
+    if (!(await provider.resolveKey().catch(() => undefined))) return c.json({ error: `Connect ${provider.name} on the Gateway` }, 503);
     const hash = createHash('sha256').update(JSON.stringify({ ...request, imageName }));
     if (bytes) hash.update(bytes);
 

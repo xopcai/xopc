@@ -83,6 +83,7 @@ export class ModelCatalogStore {
   private cloneSource(source: CatalogSource): CatalogSource {
     return {
       ...source,
+      ...(source.mediaGeneration ? { mediaGeneration: structuredClone(source.mediaGeneration) } : {}),
       ...(source.search ? { search: structuredClone(source.search) } : {}),
       models: source.models.map((model) => ({
         ...model,

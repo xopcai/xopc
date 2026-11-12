@@ -1,4 +1,5 @@
 import { invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
+import { revalidateVideoModelSettings } from '@/features/video-generation/api';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { apiUrl } from '@/lib/url';
 import { mutate } from 'swr';
@@ -13,6 +14,8 @@ export async function revalidateModelsHubCaches(): Promise<void> {
   await Promise.all([
     revalidateGatewayConfig(),
     mutate(apiUrl('/api/providers/meta')),
+    mutate(apiUrl('/api/music-generation/settings')),
+    revalidateVideoModelSettings(),
     mutate(MODELS_JSON_SWR_KEY),
     mutate(MODEL_CATALOG_SWR_KEY),
     mutate(CAPABILITY_READINESS_SWR_KEY),

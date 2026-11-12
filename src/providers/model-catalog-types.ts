@@ -1,3 +1,4 @@
+import type { CloudMediaManifest } from './xopc-cloud-media-manifest.js';
 import type { ComputerProfile } from '@xopcai/computer-control-contract';
 import type { VoiceManifest } from '@xopcai/realtime-protocol/voice';
 export interface CatalogModel {
@@ -57,6 +58,7 @@ export interface CatalogSource {
   etag: string | null;
   recommendedModel: string | null;
   recommended?: Partial<Record<'vision' | 'image-generation' | 'stt' | 'tts', string>>;
+  mediaGeneration?: CloudMediaManifest;
   search?: {
     schemaVersion: 1;
     endpoint: string;

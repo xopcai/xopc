@@ -2,6 +2,7 @@ import { TENCENT_MPS_MUSIC_PROVIDER } from '@xopcai/gateway-contract';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
+import { getCloudMediaModels } from '../../../providers/xopc-cloud-media.js';
 import { readMusicArtifact } from '../../../music-generation/artifact.js';
 import { configuredMusicModel, hasMusicProvider, readMusicModelSettings, resolveMusicModel } from '../../../music-generation/providers.js';
 import { getMusicJob, listMusicJobs } from '../../../music-generation/repository.js';
@@ -18,6 +19,10 @@ export function registerMusicGenerationRoutes(app: Hono, deps: AuthenticatedRout
   app.put(settings, deps.strictRateLimitMiddleware, async c => {
     const input = z.object({ modelRef: z.string().max(200) }).safeParse(await c.req.json().catch(() => null));
     if (!input.success || !resolveMusicModel(input.data.modelRef)) return c.json({ error: 'Unknown music model' }, 400);
+    if (input.data.modelRef.startsWith('xopc-cloud/')
+      && !getCloudMediaModels('music').some(model => `xopc-cloud/${model.id}` === input.data.modelRef)) {
+      return c.json({ error: 'XOPC Cloud music model is unavailable' }, 400);
+    }
     saveMusicModel(input.data.modelRef);
     return c.json(await readMusicModelSettings());
   });

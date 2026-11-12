@@ -1,3 +1,5 @@
+import { saveMusicModel, storedMusicModel } from '../../music-generation/settings.js';
+import { setVideoModel, storedVideoModel } from '../../video-generation/settings.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 
@@ -90,6 +92,32 @@ beforeAll(() => initializeTestAgentCatalog());
 afterAll(() => closeXopcDatabase());
 
 describe('XOPC Cloud capability setup', () => {
+  it('fills published music and video defaults after OAuth and keeps manual selections on reconnect', async () => {
+    initializeTestAgentCatalog();
+    getModelCatalogStore().saveSource('xopc-cloud', {
+      ...completeCatalog,
+      mediaGeneration: {
+        schemaVersion: 1,
+        defaults: { music: 'music', video: 'video' },
+        models: [
+          { id: 'music', kind: 'music', name: 'mureka-9.5', sourceRef: 'mureka-cn/mureka-9.5', prices: { track: 500 } },
+          { id: 'video', kind: 'video', name: 'Wan 3.0', sourceRef: 'dashscope-cn/wan3.0-video', prices: { '720P': 100 } },
+        ],
+      },
+    });
+    const service = { currentConfig: ConfigSchema.parse({}), saveConfig: async () => ({ saved: true }) };
+    expect(await applyXopcCloudCapabilitySetup(service)).toMatchObject({
+      configured: true, selection: { musicGeneration: 'music', videoGeneration: 'video' },
+    });
+    expect(storedMusicModel()).toBe('xopc-cloud/music');
+    expect(storedVideoModel()).toBe('xopc-cloud/video');
+    saveMusicModel('mureka-global/mureka-9.5');
+    setVideoModel('volcengine-ark/doubao-seedance-2-5-260628');
+    await applyXopcCloudCapabilitySetup(service);
+    expect(storedMusicModel()).toBe('mureka-global/mureka-9.5');
+    expect(storedVideoModel()).toBe('volcengine-ark/doubao-seedance-2-5-260628');
+  });
+
   it('keeps an available API-key chat default and explicit media settings after OAuth', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-key');
     try {

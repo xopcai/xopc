@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  estimateVideoCostFen, isVideoDurationSupported, VIDEO_MODELS,
+  estimateVideoCostFen, VIDEO_AUTO_DURATION, isVideoDurationSupported, VIDEO_MODELS,
   type VideoGenerationDraft, type VideoRatio, type VideoResolution,
 } from '@xopcai/gateway-contract';
 
 import { getActiveTranscriptUserMedia, type TranscriptUserMessage } from '../agent/inbound/attachment-pipeline.js';
 import type { MediaRef } from '../media/types.js';
+import { getCloudMediaModels } from '../providers/xopc-cloud-media.js';
 import { DurableState } from '../storage/sqlite/durable-state.js';
 import { getCurrentTranscriptId } from '../storage/sqlite/session-repository.js';
 import { loadRecentUserTranscriptRows } from '../storage/sqlite/transcript-repository.js';
@@ -85,11 +86,14 @@ export function prepareVideoDraft(conversationId: string, input: {
     if ((imageUri && !model.imageRatios.includes(ratio)) || (!imageUri && ratio === 'adaptive')) {
       throw new Error(imageUri ? `${model.name} supports these first-frame ratios: ${model.imageRatios.join(', ')}.` : 'Choose 16:9 or 9:16 for a text-only video.');
     }
+    const price = getCloudMediaModels('video').find(item => `xopc-cloud/${item.id}` === modelRef)?.prices[resolution];
+    const estimatedCreditMicro = price && price * (duration === VIDEO_AUTO_DURATION ? model.maxDuration : duration);
     const updating = input.action === 'update';
     const draft: VideoGenerationDraft = {
       id: updating ? base!.id : randomUUID(), revision: updating ? base!.revision + 1 : 1,
       transcriptId, modelRef, prompt, summary, duration, resolution, ratio, imageUri, imageName,
       estimatedCostFen: estimateVideoCostFen(modelRef, duration, resolution),
+      ...(estimatedCreditMicro ? { estimatedCreditMicro } : {}),
       createdAt: updating ? base!.createdAt : Date.now(),
     };
     return { value: draft, result: draft };

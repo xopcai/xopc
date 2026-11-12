@@ -1,3 +1,4 @@
+import { VIDEO_MODEL_REFS } from '@xopcai/gateway-contract';
 import { voiceSupportsMode, type VoiceModeCapability } from '@xopcai/realtime-protocol/voice';
 
 import { phoneModelProfile } from '../phone/model-adapter.js';
@@ -9,6 +10,10 @@ import { AgentCatalogService } from '../agent-catalog/service.js';
 import type { CatalogModel, CatalogSource } from '../providers/model-catalog-store.js';
 import { getModelCatalogStore } from '../providers/model-catalog-store.js';
 import { compareCatalogModels } from '../providers/model-catalog-ranking.js';
+import { resolveMusicModel } from '../music-generation/providers.js';
+import { saveMusicModel, storedMusicModel } from '../music-generation/settings.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { setVideoModel, storedVideoModel } from '../video-generation/settings.js';
 import { prepareUpdateGlobalDefaults } from './global-defaults-admin.js';
 
 type CloudCapability = 'chat' | 'vision' | 'image-generation' | 'stt' | 'tts';
@@ -20,6 +25,8 @@ export interface XopcCloudCapabilitySelection {
   stt: string;
   tts: string;
   ttsVoice: string;
+  musicGeneration?: string;
+  videoGeneration?: string;
   realtimeStt?: string;
   realtimeTts?: { model: string; voice: string };
   realtimeOmni?: { model: string; voice: string };
@@ -270,6 +277,11 @@ export async function applyXopcCloudCapabilitySetup(service: {
     return { configured: false, error: 'XOPC Cloud model catalog is unavailable' };
   }
   const selection = selectXopcCloudCapabilities(source);
+  const media = source.mediaGeneration;
+  const musicGeneration = media?.models.find(model => model.kind === 'music' && model.id === media.defaults.music
+    && resolveMusicModel(`xopc-cloud/${model.id}`))?.id;
+  const videoGeneration = VIDEO_MODEL_REFS.find(ref => ref === `xopc-cloud/${media?.defaults.video}`
+    && media?.models.some(model => model.kind === 'video' && `xopc-cloud/${model.id}` === ref));
   const currentDefaults = new AgentCatalogRepository().getSettings().defaults;
   const nextDefaults = structuredClone(currentDefaults);
   const nextConfig = structuredClone(service.currentConfig);
@@ -335,7 +347,7 @@ export async function applyXopcCloudCapabilitySetup(service: {
     };
   }
 
-  if (!chat && !vision && !imageGeneration && !stt && !tts && !realtimeStt && !realtimeTts && !realtimeOmni) {
+  if (!chat && !vision && !imageGeneration && !stt && !tts && !realtimeStt && !realtimeTts && !realtimeOmni && !musicGeneration && !videoGeneration) {
     return { configured: false, error: 'XOPC Cloud published no usable models', missing: selection.missing };
   }
   nextDefaults.models = completeXopcCloudModelRoutes(nextDefaults.models, source);
@@ -346,10 +358,18 @@ export async function applyXopcCloudCapabilitySetup(service: {
     return { configured: false, error: saved.error ?? 'Failed to save XOPC Cloud capability configuration' };
   }
   new AgentCatalogService().updateDefaults(defaultsUpdate.data.defaults);
+  runSqliteWriteTransaction(() => {
+    if (musicGeneration && !storedMusicModel() && !process.env.XOPC_MUSIC_MODEL?.trim()) {
+      saveMusicModel(`xopc-cloud/${musicGeneration}`);
+    }
+    if (videoGeneration && !storedVideoModel()) setVideoModel(videoGeneration);
+  });
   return {
     configured: true,
     missing: selection.missing,
     selection: {
+      ...(musicGeneration ? { musicGeneration } : {}),
+      ...(videoGeneration ? { videoGeneration: videoGeneration.split('/')[1] } : {}),
       ...(chat ? { chat: chat.id } : {}),
       ...(vision ? { vision: vision.id } : {}),
       ...(imageGeneration ? { imageGeneration: imageGeneration.id } : {}),

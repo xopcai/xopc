@@ -1,5 +1,5 @@
 import { SpaceGeneratedMediaLink } from '@/features/space/space-artifact-link';
-import { VIDEO_AUTO_DURATION, VIDEO_MODELS, WAN_VIDEO_MODEL_REF, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
+import { creditDecimal, VIDEO_AUTO_DURATION, VIDEO_MODELS, WAN_VIDEO_MODEL_REF, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
 import { Download, Video } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
@@ -18,7 +18,7 @@ const labels = {
   zh: {
     title: '视频', draft: '视频草稿', original: '跟随原图', autoDuration: '自动时长', download: '下载视频',
     previous: '重置前生成的视频', generate: '确认生成', adjust: '修改草稿', submitting: '正在提交…',
-    noKey: '请在「模型与能力」为当前视频服务配置 API Key。',
+    noKey: '请在「模型与能力」连接当前视频服务。',
     details: '查看完整提示词和模型', estimate: '预计', reference: '参考图',
     status: { queued: '排队中', submitting: '正在提交', submitted: '供应商排队中', running: '生成中',
       saving: '正在保存', completed: '已完成', failed: '生成失败', submission_unknown: '提交结果待确认' },
@@ -26,7 +26,7 @@ const labels = {
   en: {
     title: 'Video', draft: 'Video draft', original: 'Match the image', autoDuration: 'Auto duration', download: 'Download video',
     previous: 'Videos from before the reset', generate: 'Confirm generation', adjust: 'Edit draft', submitting: 'Submitting…',
-    noKey: 'Configure the video provider API key in Models and capabilities.',
+    noKey: 'Connect the video provider in Models and capabilities.',
     details: 'View full prompt and model', estimate: 'Est.', reference: 'Reference image',
     status: { queued: 'Queued', submitting: 'Submitting', submitted: 'Queued at provider', running: 'Generating',
       saving: 'Saving', completed: 'Ready', failed: 'Generation failed', submission_unknown: 'Submission unconfirmed' },
@@ -163,7 +163,10 @@ function VideoDraftCard({ draft, conversationId, language, configured, modelChan
 }) {
   const m = labels[language];
   const zh = language === 'zh';
-  const price = `¥${(draft.estimatedCostFen / 100).toFixed(2)}`;
+  const cloud = draft.modelRef.startsWith('xopc-cloud/');
+  const price = cloud
+    ? draft.estimatedCreditMicro && `${creditDecimal(String(draft.estimatedCreditMicro))} Credits`
+    : `¥${(draft.estimatedCostFen / 100).toFixed(2)}`;
   const imageUrl = draft.imageUri
     ? apiUrl(`/api/media/read?${new URLSearchParams({ uri: draft.imageUri, conversationId })}`) : undefined;
   return <MediaGenerationCard>
@@ -174,10 +177,12 @@ function VideoDraftCard({ draft, conversationId, language, configured, modelChan
       <p className="line-clamp-3 min-w-0 wrap-anywhere text-sm leading-relaxed text-fg">{draft.summary || draft.prompt}</p>
     </div>
     <p className="text-xs leading-relaxed text-fg-muted">
-      {videoSpecs(draft, language)} · <span className="font-medium tabular-nums text-fg">{m.estimate} {price}</span>
+      {videoSpecs(draft, language)}{price ? <> · <span className="font-medium tabular-nums text-fg">{m.estimate} {price}</span></> : null}
     </p>
     <VideoPromptDetails video={draft} language={language}>
-      {zh ? '以供应商实际账单为准。' : 'Actual charges are set by the provider.'}
+      {cloud
+        ? (zh ? 'XOPC Cloud 在供应商接受任务后扣除 Credits。' : 'XOPC Cloud charges Credits when the provider accepts the task.')
+        : (zh ? '以供应商实际账单为准。' : 'Actual charges are set by the provider.')}
       {draft.duration === VIDEO_AUTO_DURATION && (zh ? '自动时长按最长时长估算。' : ' Auto duration is estimated at the model maximum.')}
     </VideoPromptDetails>
     {!configured && <p className="text-xs text-fg-muted">{modelChanged
