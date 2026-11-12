@@ -69,6 +69,16 @@ describe('Personal response realtime replay', () => {
     expect(readView().answerContent).toMatchObject([{ text: '我先核对数值。' }]);
     emit('assistant_message_end', { messageId: 'm1', presentation: 'narration' });
     expect(readView().workLog.items).toMatchObject([{ text: '我先核对数值。', presentation: 'narration' }]);
+    emit('tool_start', { messageId: 'm1', toolCallId: 'submit', toolName: 'personal_task', args: { command: 'submit' } });
+    const delivery = { version: 2, operation: 'created', primary: {
+      kind: 'task', id: 'task-1', title: '核对数值', capabilities: ['open'],
+    } };
+    emit('tool_end', { messageId: 'm1', toolCallId: 'submit', toolName: 'personal_task',
+      status: 'completed', result: { details: { delivery } } });
+    expect(readView().workLog.items).toContainEqual(expect.objectContaining({ text: '我先核对数值。', presentation: 'narration' }));
+    expect(readView().deliveries[0]?.delivery.primary).toMatchObject({ kind: 'task', id: 'task-1' });
+    emit('assistant_delta', { messageId: 'm2', offset: 0, delta: '任务已提交。', textSurface: 'conversation' });
+    expect(readView().answerContent).toMatchObject([{ text: '任务已提交。' }]);
     emit('run_end', { status: 'success' });
     expect(await resumed).toBe(true);
     expect(finalize).toHaveBeenCalledOnce();

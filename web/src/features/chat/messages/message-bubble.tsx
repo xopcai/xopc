@@ -12,6 +12,7 @@ import type {
   MessageAttachment,
   ProgressState,
   ReasoningLevel,
+  TextContent,
 } from '@/features/chat/messages/messages.types';
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
@@ -290,17 +291,31 @@ export const MessageBubble = memo(function MessageBubble({
         : null,
     [isAssistant, isStreaming, message, reasoningLevel, personal],
   );
+  const [visibleSegmentId, setVisibleSegmentId] = useState<string>();
+  const isConversationStreaming = isStreaming && isAssistant && usesConversationText(message, personal);
+  const currentText = isConversationStreaming
+    ? assistantTurnView?.answerContent.findLast((block): block is TextContent =>
+      block.type === 'text' && Boolean(block.segmentId && !block.hydrated && block.text.trim()))
+    : undefined;
+  // Keep previously displayed text in place while a tool runs and the next reply starts.
+  const retainedText = isConversationStreaming && !assistantTurnView?.answer.started && visibleSegmentId
+    ? message.content.findLast(block => block.type === 'text' && block.segmentId === visibleSegmentId)
+    : undefined;
+  const nextVisibleSegmentId = currentText?.segmentId ?? (retainedText ? visibleSegmentId : undefined);
+  if (nextVisibleSegmentId !== visibleSegmentId) setVisibleSegmentId(nextVisibleSegmentId);
+
   /** Images use AttachmentRenderer rather than rendering inline in the text column. */
   const displayForFlow = useMemo(
     () => {
       if (!assistantTurnView) return (message.content ?? []).filter(block => block.type !== 'image');
-      if (personal) return assistantTurnView.answerContent;
+      const answerContent = retainedText ? [retainedText] : assistantTurnView.answerContent;
+      if (personal) return answerContent;
       if (!reasoningHidden && showAssistantWorkLog) return (message.content ?? []).filter(block => block.type !== 'image');
-      const answer = new Set(assistantTurnView.answerContent);
+      const answer = new Set(answerContent);
       return (message.content ?? []).filter(block => answer.has(block) || (block.type === 'tool_use'
         && (block.status === 'error' || block.activity?.status === 'failed')));
     },
-    [assistantTurnView, message.content, personal, reasoningHidden, showAssistantWorkLog],
+    [assistantTurnView, message.content, personal, reasoningHidden, retainedText, showAssistantWorkLog],
   );
 
   const attachmentsForBubble = useMemo(() => {
@@ -335,7 +350,7 @@ export const MessageBubble = memo(function MessageBubble({
     ? Boolean(assistantTurnView?.answer.showStreamingCursor)
     : isStreaming;
   const showPersonalThinkingBubble = personal && isAssistant && isStreaming
-    && !assistantTurnView?.answer.started && !attachmentsForBubble?.length;
+    && !assistantTurnView?.answer.started && !retainedText && !attachmentsForBubble?.length;
 
   const showPendingThinking = isStreaming && !streamingThinking
     && (!isAssistant || (!hasAssistantActivity && !assistantAnswerStarted));

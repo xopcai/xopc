@@ -6,7 +6,13 @@ export function assistantVisibleMessage(message: Message, options?: { hideSilent
   if (message.role !== 'assistant' || !message.content?.length) return message;
 
   if (options?.hideSilentReply) {
-    const content = message.content.filter(block => block.type !== 'text' || block.text.trim() !== SILENT_REPLY_MARKER);
+    const lastText = options.streaming ? message.content.findLast(block => block.type === 'text') : undefined;
+    const content = message.content.filter(block => {
+      if (block.type !== 'text') return true;
+      const text = block.text.trim();
+      if (text === SILENT_REPLY_MARKER) return false;
+      return !(block === lastText && block.presentation === 'pending' && text && SILENT_REPLY_MARKER.startsWith(text));
+    });
     if (content.length !== message.content.length) return assistantVisibleMessage({ ...message, content }, options);
   }
 
