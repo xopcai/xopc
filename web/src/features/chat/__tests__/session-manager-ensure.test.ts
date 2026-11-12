@@ -408,16 +408,56 @@ describe('SessionManager materialization confirmation', () => {
     expect(draft).toBeUndefined();
   });
 
-  it.each(['preparing', 'preparation_failed'])('confirms persisted creation even while resources are %s', async lifecycle => {
+  it.each([true, false])('waits for the project workspace to be ready (local draft: %s)', async hasDraft => {
+    if (!hasDraft) draft = undefined;
     const manager = new SessionManager();
     vi.spyOn(manager, 'loadSessionAgentConfig').mockResolvedValue({} as never);
-    mockedApiFetch.mockImplementation(async (_url, init) => {
+    let finishPreparation!: () => void;
+    const readState = vi.fn(() => new Promise<Response>(resolve => {
+      finishPreparation = () => resolve(jsonResponse({ payload: { preparation: {
+        operationId: 'operation', revision: 1, state: 'ready', lastError: null,
+      } } }));
+    }));
+    const preparing = jsonResponse({ payload: { preparation: {
+      operationId: 'operation', revision: 1, state: 'preparing', lastError: null,
+    } } });
+    readState.mockResolvedValueOnce(preparing);
+    mockedApiFetch.mockImplementation(async (url, init) => {
+      if (String(url).endsWith('/input-state')) return readState();
+      expect(hasDraft).toBe(true);
+      expect(String(url)).toMatch(/\/materialize$/);
       const command = JSON.parse(String(init?.body));
-      return jsonResponse({ payload: { receipt: { conversationId, clientMessageId: command.commandId, transcriptId: 'transcript', lifecycle } } }, 202);
+      return jsonResponse({ payload: { receipt: { conversationId, clientMessageId: command.commandId, transcriptId: 'transcript', lifecycle: 'preparing' } } }, 202);
     });
-    await expect(manager.materialize(conversationId, 'session_resources')).rejects.toThrow('Conversation environment is not ready yet');
+    const pending = manager.materialize(conversationId, 'session_resources');
+    const settled = vi.fn();
+    void pending.then(settled, settled);
+    await vi.waitFor(() => expect(readState).toHaveBeenCalledOnce());
+    expect(settled).not.toHaveBeenCalled();
+    if (hasDraft) expect(confirmSessionCommand).toHaveBeenCalledWith(conversationId, 'transcript');
+    else expect(confirmSessionCommand).not.toHaveBeenCalled();
+    expect(draft).toBeUndefined();
+
+    await vi.waitFor(() => expect(readState).toHaveBeenCalledTimes(2), { timeout: 3_000 });
+    finishPreparation();
+    await pending;
+  });
+
+  it('keeps the persisted conversation and reports the actual preparation failure', async () => {
+    const manager = new SessionManager();
+    vi.spyOn(manager, 'loadSessionAgentConfig').mockResolvedValue({} as never);
+    mockedApiFetch.mockImplementation(async (url, init) => {
+      if (String(url).endsWith('/input-state')) return jsonResponse({ payload: { preparation: {
+        operationId: 'operation', revision: 1, state: 'preparation_failed', lastError: 'Project workspace is unavailable',
+      } } });
+      const command = JSON.parse(String(init?.body));
+      return jsonResponse({ payload: { receipt: { conversationId, clientMessageId: command.commandId, transcriptId: 'transcript', lifecycle: 'preparing' } } }, 202);
+    });
+    await expect(manager.materialize(conversationId, 'session_resources')).rejects.toThrow('Project workspace is unavailable');
     expect(confirmSessionCommand).toHaveBeenCalledWith(conversationId, 'transcript');
     expect(draft).toBeUndefined();
+    await expect(manager.materialize(conversationId, 'session_resources')).rejects.toThrow('Project workspace is unavailable');
+    expect(confirmSessionCommand).toHaveBeenCalledOnce();
   });
 
   it('does not clear a subsequent pending input when a materialization response arrives late', async () => {

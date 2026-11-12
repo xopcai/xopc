@@ -15,6 +15,8 @@ pnpm run eval:memory:acquisition
 
 This is a small acquisition-component ablation, not a Gateway answer-quality benchmark. Failures remain failures, and relevant source changes during a run invalidate it. See [the design and results note](../../docs/design/technical/memory-acquisition-2026-11-10.md).
 
+The acquisition run also includes `scope-cases.json`. It checks that preferences and rules learned in project chats reach a fresh conversation in the intended project, that a global preference or rule reaches a different project, and that work facts and quoted instructions stay within their respective boundaries. For historical records with tentative evidence, it checks the review suggestion separately from runtime recall. Set `XOPC_MEMORY_SCOPE_ONLY=1` to run just these cases. Use `XOPC_MEMORY_LIVE_MODEL=qwen-token-plan-cn/qwen3.8-flash` to reproduce the Flash run.
+
 ## Evidence review and lesson learning
 
 ```sh

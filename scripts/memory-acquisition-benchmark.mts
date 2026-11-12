@@ -34,7 +34,10 @@ const { claimLearningJob, enqueueConversationLearning } = await import('../src/m
 const { runPersistentLearningJob } = await import('../src/agent/background-review/run-background-review.js');
 const { listUserAssertions } = await import('../src/user-model/repository.js');
 const { getAssertionSlot } = await import('../src/user-model/repository.js');
-const { listKnowledgeItems, canUseKnowledge } = await import('../src/knowledge-memory/index.js');
+const { listCollaborationRules } = await import('../src/storage/sqlite/collaboration-rule-repository.js');
+const { listKnowledgeItems, canUseKnowledge, writeKnowledgeItem } = await import('../src/knowledge-memory/index.js');
+const { createContextEvidence } = await import('../src/storage/sqlite/context-evidence-repository.js');
+const { suggestWorkMemoryReview } = await import('../src/memory-learning/work-review.js');
 const { buildExecutionContext } = await import('../src/agent/context/execution-context.js');
 const { TaskRepository } = await import('../src/tasks/task-repository.js');
 const { TaskRunRepository } = await import('../src/tasks/task-run-repository.js');
@@ -45,11 +48,17 @@ const { grantUnderstandingConsent, revokeUnderstandingConsent } = await import('
 const { recoverSourceLearning, runSourceLearning } = await import('../src/memory-learning/source-learning.js');
 const casesPath = resolve('evals/memory/acquisition-cases.json');
 const cases = JSON.parse(readFileSync(casesPath, 'utf8')) as Array<{ id: string; turns: string[]; otherWorkspace?: boolean; expectedPattern: boolean; semanticTerms?: string[][] }>;
+const scopeCasesPath = resolve('evals/memory/scope-cases.json');
+const scopeCases = JSON.parse(readFileSync(scopeCasesPath, 'utf8')) as Array<{
+  id: string; turns: string[]; query: string; match: string; scope?: 'project' | 'global'; workMatch?: string; activeRule?: boolean;
+}>;
+const scopeOnly = process.env.XOPC_MEMORY_SCOPE_ONLY === '1';
 const files = ['src/memory-learning/choice-observations.ts', 'src/memory-learning/evidence-repair.ts', 'src/memory-learning/task-receipts.ts',
   'src/memory-learning/repository.ts', 'src/memory-learning/transcript-source.ts', 'src/memory-learning/source-learning.ts',
   'src/agent/background-review/run-background-review.ts', 'src/agent/background-review/prompts.ts',
   'src/user-model/capture/semantic.ts', 'src/user-model/capture/executor.ts', 'src/user-model/capture/evidence-policy.ts',
-  'scripts/memory-acquisition-benchmark.mts', casesPath];
+  'src/memory-learning/work-capture.ts', 'src/memory-learning/work-review.ts', 'src/agent/context/execution-context.ts',
+  'scripts/memory-acquisition-benchmark.mts', casesPath, scopeCasesPath];
 const fingerprint = () => createHash('sha256').update(files.map(f => readFileSync(f)).join('\n')).digest('hex');
 const initialFingerprint = fingerprint();
 const results: Array<Record<string, unknown>> = [];
@@ -95,9 +104,9 @@ function close() {
     FROM ai_usage_events ORDER BY started_at`).all().map(row => ({ case: activeLabel, ...row })));
   closeXopcDatabase();
 }
-function session(workspace: string) {
+function session(workspace: string, projectId?: string) {
   mkdirSync(workspace, { recursive: true }); const id = randomUUID();
-  ensureSessionRecord(id, workspace, { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' }); return id;
+  ensureSessionRecord(id, workspace, { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat', projectId }); return id;
 }
 async function learn(id: string, text: string, workspace: string) {
   const row = appendTranscriptEntry(id, { role: 'user', content: text, timestamp: Date.now() });
@@ -109,7 +118,7 @@ async function learn(id: string, text: string, workspace: string) {
   return row;
 }
 function save() { writeFileSync(reportPath, JSON.stringify({ model: modelRef, results, modelReplies, usage }, null, 2)); }
-try {
+async function runAcquisitionChecks() {
   for (const fixture of cases) for (const enabled of [false, true]) {
     config = configFor(enabled); open(`${fixture.id}-${enabled ? 'carry' : 'baseline'}`);
     const workspace = join(directory, 'workspace'); const first = session(workspace);
@@ -182,13 +191,85 @@ try {
   const afterRevoke = learnedSource.filter(item => canUseKnowledge(item, context));
   results.push({ id: 'authorized-source', pass: eligible.some(f => /SQLite/iu.test(f.content)) && afterRevoke.length === 0,
     learned: eligible.length, afterRevoke: afterRevoke.length }); close(); save();
+}
+
+try {
+  for (const fixture of scopeCases) {
+    config = configFor(true);
+    open(`scope-${fixture.id}`);
+    const workspace = join(directory, 'scope-workspace');
+    const otherWorkspace = join(directory, 'scope-other-workspace');
+    const projectId = 'atlas';
+    const otherProjectId = 'boreal';
+    const createProject = getSqliteDatabase().prepare('INSERT INTO projects (project_id, name, slug, created_at, updated_at) VALUES (?, ?, ?, 1, 1)');
+    for (const project of [projectId, otherProjectId]) createProject.run(project, project, project);
+    const source = session(workspace, projectId);
+    const evidence = [];
+    for (const turn of fixture.turns) evidence.push((await learn(source, turn, workspace)).entry_id);
+    const match = new RegExp(fixture.match, 'iu');
+    const workMatch = fixture.workMatch && new RegExp(fixture.workMatch, 'iu');
+    const stored = listUserAssertions().map(a => ({ ...a, scope: getAssertionSlot(a.slotId)?.scope }));
+    const assertions = stored.filter(a => match.test(a.statement));
+    const storedRules = listCollaborationRules();
+    const rules = storedRules.filter(rule => match.test(rule.statement));
+    const work = listKnowledgeItems({ recordClass: 'memory' });
+    const same = buildExecutionContext({ conversationId: session(workspace, projectId), workspaceId: workspace, projectId, agentId: 'main', query: fixture.query });
+    const other = buildExecutionContext({ conversationId: session(otherWorkspace, otherProjectId), workspaceId: otherWorkspace, projectId: otherProjectId, agentId: 'main', query: fixture.query });
+    const linked = (id: string) => getSqliteDatabase().prepare(`SELECT message_id FROM user_assertion_evidence JOIN context_evidence USING(evidence_id)
+      WHERE assertion_id=? AND conversation_id=?`).all(id, source).some(row => evidence.includes(String(row.message_id)));
+    const inScope = (scope?: { type: string; id?: string }) =>
+      scope?.type === fixture.scope && (fixture.scope !== 'project' || scope?.id === projectId);
+    const recalled = (context: ReturnType<typeof buildExecutionContext>) => ({
+      assertion: context.assertions.some(a => match.test(a.assertion.statement)),
+      rule: context.rules.some(rule => match.test(rule.statement)),
+      work: Boolean(workMatch && context.knowledge.some(item => workMatch.test(item.content))),
+    });
+    const sameRecall = recalled(same);
+    const otherRecall = recalled(other);
+    const acrossProjects = fixture.scope === 'global';
+    const personalPass = fixture.scope
+      ? assertions.every(a => inScope(a.scope) && a.authority === 'user_explicit' && linked(a.id))
+        && rules.every(rule => inScope(rule.scope))
+        && (fixture.activeRule || (sameRecall.assertion && otherRecall.assertion === acrossProjects))
+      : !stored.length && !storedRules.length;
+    const rulePass = !fixture.activeRule || (rules.some(rule => rule.category === 'execution')
+      && sameRecall.rule && otherRecall.rule === acrossProjects);
+    const workPass = !work.some(item => match.test(item.content)) && (workMatch
+      ? work.some(item => item.scope.type === 'project' && item.scope.id === projectId && workMatch.test(item.content))
+        && sameRecall.work && !otherRecall.work
+      : work.length === 0);
+    let legacySuggestion: ReturnType<typeof suggestWorkMemoryReview>;
+    let legacyPass = true;
+    if (fixture.activeRule || fixture.id === 'quoted-global-command') {
+      const content = fixture.turns[0];
+      const contentHash = createHash('sha256').update(content).digest('hex');
+      const link = createContextEvidence({ sourceType: 'conversation', sourceRef: `legacy:${source}`,
+        conversationId: source, messageId: evidence[0], observedAt: Date.now(), contentHash, trustLevel: 'trusted' });
+      const legacy = writeKnowledgeItem({ canonicalKey: 'legacy:tool-selection', content: 'Use the slacrawl CLI for Slack messages.',
+        scope: { type: 'project', id: projectId }, kind: 'decision', verification: 'tentative', status: 'candidate',
+        originClass: 'agent', sourceConversationId: source, confidence: 0.6, importance: 0.7,
+        evidence: [{ id: link.id, contentHash }] }).item;
+      assert(legacy);
+      const context = { conversationId: source, workspaceId: workspace, projectId, agentId: 'main' };
+      const policy = { scopes: ['project', 'global'] as const, contentSources: ['memory'] as const };
+      legacySuggestion = suggestWorkMemoryReview(legacy, context, policy);
+      const expected = fixture.activeRule ? acrossProjects ? 'global_collaboration_rule' : 'collaboration_rule' : undefined;
+      legacyPass = legacySuggestion === expected && !canUseKnowledge(legacy, context, policy)
+        && !suggestWorkMemoryReview(legacy, { ...context, projectId: otherProjectId }, policy);
+    }
+    results.push({ id: fixture.id, arm: 'scope', pass: personalPass && rulePass && workPass && legacyPass,
+      assertions: assertions.map(a => ({ statement: a.statement, scope: a.scope, authority: a.authority, linked: linked(a.id) })),
+      rules, work: work.map(item => ({ content: item.content, scope: item.scope })), sameRecall, otherRecall, legacySuggestion, legacyPass });
+    close(); save(); console.log(JSON.stringify(results.at(-1)));
+  }
+  if (!scopeOnly) await runAcquisitionChecks();
 } finally {
   Agent.prototype.prompt = originalPrompt; diagnostics.unsubscribe(observer);
   const unchanged = initialFingerprint === fingerprint();
   const summary = { positiveOpportunities: cases.filter(c => c.expectedPattern).length,
     baselinePatterns: results.filter(r => r.arm === 'baseline' && r.pattern && r.usable).length,
     carriedPatterns: results.filter(r => r.arm === 'carry' && r.pattern && r.usable).length, checks: results.length, passed: results.filter(r => r.pass).length,
-    sourceUnchanged: unchanged, expectedChecks: cases.length * 2 + 3 };
+    sourceUnchanged: unchanged, expectedChecks: scopeCases.length + (scopeOnly ? 0 : cases.length * 2 + 3) };
   const success = summary.checks === summary.expectedChecks && summary.passed === summary.checks && unchanged;
   writeFileSync(reportPath, JSON.stringify({ model: modelRef, syntheticOnly: true, faultInjection: 'one source ref deliberately replaced with source_999 after a real model response',
     benchmark: 'persisted-memory-acquisition-ablation-v1', fingerprint: initialFingerprint, summary, success, results, modelReplies, usage }, null, 2));

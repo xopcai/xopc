@@ -5,6 +5,7 @@ import { getSessionConfig } from '../../../storage/sqlite/config-repository.js';
 import { getKnowledgeItem, canUseKnowledge } from '../../../knowledge-memory/index.js';
 import { knowledgeExclusion } from '../../../knowledge-memory/usage-policy.js';
 import { enqueueConversationLearning, learningStatus } from '../../../memory-learning/repository.js';
+import { suggestWorkMemoryReview } from '../../../memory-learning/work-review.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { getSessionMetadata } from '../../../storage/sqlite/session-repository.js';
 import { bindOwnerIdentity } from '../../../user-context/identity-bindings.js';
@@ -53,14 +54,16 @@ export function registerMemoryLearningRoutes(app: Hono, deps: AuthenticatedRoute
       workspaceId: c.req.query('workspaceId') ?? (item?.scope.type === 'workspace' ? item.scope.id! : ''),
       conversationId: c.req.query('conversationId') ?? item?.sourceConversationId ?? '',
       projectId: c.req.query('projectId') ?? (item?.scope.type === 'project' ? item.scope.id : undefined) };
-    if (!item || !canUseKnowledge(item, context, resolveKnowledgeReadPolicy(deps.service.currentConfig.userContext.knowledgeMemory))) {
-      return c.json({ error: 'Knowledge evidence not available', reason: item
-        ? knowledgeExclusion(item, context, resolveKnowledgeReadPolicy(deps.service.currentConfig.userContext.knowledgeMemory))
-        : 'not_found' }, 404);
+    if (!item) return c.json({ error: 'Knowledge evidence not available', reason: 'not_found' }, 404);
+    const policy = resolveKnowledgeReadPolicy(deps.service.currentConfig.userContext.knowledgeMemory);
+    const reviewSuggestion = suggestWorkMemoryReview(item, context, policy);
+    if (!canUseKnowledge(item, context, policy)) {
+      if (reviewSuggestion) return c.json({ evidence: [], reviewSuggestion });
+      return c.json({ error: 'Knowledge evidence not available', reason: knowledgeExclusion(item, context, policy) }, 404);
     }
     const evidence = getSqliteDatabase().prepare(`SELECT e.source_type AS sourceType, e.source_ref AS sourceRef,
       e.observed_at AS observedAt, e.redacted_excerpt AS excerpt FROM knowledge_evidence_links l
       JOIN context_evidence e ON e.evidence_id = l.evidence_id WHERE l.knowledge_id = ?`).all(item.id);
-    return c.json({ evidence });
+    return c.json({ evidence, reviewSuggestion });
   });
 }

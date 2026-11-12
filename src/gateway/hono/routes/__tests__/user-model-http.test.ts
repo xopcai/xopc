@@ -1,10 +1,12 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ConfigSchema } from '../../../../config/schema.js';
-import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
+import { appendTranscriptEntry, closeXopcDatabase, createContextEvidence, ensureSessionRecord,
+  openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
 import { writeKnowledgeItem } from '../../../../knowledge-memory/index.js';
 import { auth } from '../../middleware/auth.js';
 import { registerAuthenticatedLazyRouteFallback, resetLazyRouteBundlesForTests, getLoadedLazyRouteBundleIdsForTests } from '../lazy-fallback.js';
@@ -108,6 +110,25 @@ describe('memory management through authenticated Gateway HTTP', () => {
     expect((await request(`${path}/scope`, 'PATCH', { scope: { type: 'global' }, version: item.version })).status).toBe(409);
     expect((await request(`${path}/scope`, 'PATCH', { scope: { type: 'project' }, version: item.version })).status).toBe(400);
     expect((await request('/api/knowledge-memory-other/id/scope', 'PATCH', {})).status).toBe(404);
+  });
+
+  it('shows a scope review suggestion without disclosing tentative evidence excerpts', async () => {
+    const conversationId = randomUUID();
+    const workspaceId = '/workspace';
+    ensureSessionRecord(conversationId, workspaceId, { agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' });
+    const content = '请记住，在所有项目里，查询 Slack 消息统一使用 slacrawl CLI。';
+    const row = appendTranscriptEntry(conversationId, { role: 'user', content, timestamp: Date.now() });
+    const contentHash = createHash('sha256').update(content).digest('hex');
+    const evidence = createContextEvidence({ sourceType: 'conversation', sourceRef: 'scope-review-http',
+      conversationId, messageId: row.entry_id, contentHash, trustLevel: 'trusted', redactedExcerpt: content, observedAt: Date.now() });
+    const item = writeKnowledgeItem({ kind: 'decision', scope: { type: 'workspace', id: workspaceId },
+      content: 'Use slacrawl for Slack queries.', canonicalKey: 'scope-review-http', confidence: 0.6, importance: 0.7,
+      verification: 'tentative', status: 'candidate', originClass: 'agent', sourceConversationId: conversationId,
+      evidence: [{ id: evidence.id, contentHash }] }).item!;
+    const path = `/api/knowledge-memory/${item.id}/evidence`;
+    expect((await fetch(origin + path)).status).toBe(401);
+    await expect((await request(path)).json()).resolves.toEqual({ evidence: [], reviewSuggestion: 'global_collaboration_rule' });
+    expect((await request(path + '?workspaceId=/other')).status).toBe(404);
   });
 
   it('creates and edits a recent goal through the mobile user-model routes', async () => {

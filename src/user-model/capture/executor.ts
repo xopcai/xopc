@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { observationCandidateIssue } from '../../memory-learning/evidence-repair.js';
 
-import { assessAssertionSupport, assessOwnerSupport, hasOwnerMemoryDirective, supportsResponseApplicability } from './evidence-policy.js';
+import { assessAssertionSupport, assessOwnerSupport, hasOwnerMemoryDirective, ownerExcludesGlobalScope, ownerMemoryScope, standingToolScope, supportsResponseApplicability } from './evidence-policy.js';
 
 import { createContextEvidence } from '../../storage/sqlite/context-evidence-repository.js';
 import {
@@ -19,7 +19,7 @@ import {
   reconcileAssertion,
   setAssertionStatus,
 } from '../repository.js';
-import type { AssertionCandidate, AssertionStatus, UserModelScopeType } from '../domain.js';
+import type { AssertionCandidate, AssertionStatus, UserModelScope, UserModelScopeType } from '../domain.js';
 import type { CaptureEvidence, UserModelInterpretation } from './semantic.js';
 
 export interface UserModelCapturePolicy {
@@ -69,14 +69,37 @@ export function emptyUserModelCaptureResult(): UserModelCaptureResult {
   };
 }
 
-function scopeAllowed(type: UserModelScopeType, id: string | undefined, context: CaptureScopeContext): boolean {
-  if (type === 'global') return id === undefined;
-  return id === ({
+function scopeId(type: UserModelScopeType, context: CaptureScopeContext): string | undefined {
+  if (type === 'global') return undefined;
+  return ({
     agent: context.agentId,
     workspace: context.workspaceId,
     project: context.projectId,
     session: context.conversationId,
   })[type];
+}
+
+function scopeAllowed(type: UserModelScopeType, id: string | undefined, context: CaptureScopeContext): boolean {
+  return (type === 'global' || Boolean(id)) && id === scopeId(type, context);
+}
+
+function resolveToolScope(scope: UserModelScope, sources: Array<{ text: string; quote: string }>, context: CaptureScopeContext): UserModelScope {
+  const types = new Set(sources.map(source => standingToolScope(source.text, source.quote, Boolean(context.projectId))));
+  // Only normalize when all cited clauses support the same tool scope.
+  const type = types.size === 1 ? types.values().next().value : undefined;
+  if (!type || scope.type === type) return scope;
+  const id = scopeId(type, context);
+  if (type === 'project' && !id && scope.type === 'session') return scope;
+  return { type, ...(id ? { id } : {}) };
+}
+
+function scopeConflictsWithOwnerEvidence(scope: UserModelScopeType, text: string, quote: string, context: CaptureScopeContext): boolean {
+  const declared = ownerMemoryScope(text, quote);
+  if (declared && declared !== 'global' && declared !== scope) {
+    return scope !== 'session' || declared !== 'project' || Boolean(context.projectId);
+  }
+  const toolScope = standingToolScope(text, quote, Boolean(context.projectId));
+  return scope === 'global' && ((toolScope !== undefined && toolScope !== 'global') || ownerExcludesGlobalScope(text, quote));
 }
 
 function candidateKey(predicate: string, scopeType: string, scopeId?: string): string {
@@ -188,20 +211,29 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: candidateKey(original.predicate, original.scope.type, original.scope.id), outcome: 'rejected', reasonCode: 'unsupported_applicability_operation' });
       continue;
     }
-    const support = assessAssertionSupport({ ...original, sources: original.evidenceRefs.flatMap(ref => {
+    const sources = original.evidenceRefs.flatMap(ref => {
       const evidence = evidenceByRef.get(ref);
       if (!evidence) return [];
       return [{ ...evidence, quote: original.evidenceQuotes?.find(claim => claim.ref === ref)?.quote ?? evidence.text }];
-    }) });
+    });
+    const support = assessAssertionSupport({ ...original, sources });
     if (!support.allowed) {
       result.proposed++; result.rejected++; result.outputs.push({ candidateKey: candidateKey(original.predicate, original.scope.type, original.scope.id), outcome: 'rejected', reasonCode: support.reasonCode });
       continue;
     }
-    const source = { ...original, authority: support.authority,
+    const scope = original.action === 'create' && original.kind === 'preference' && support.authority === 'user_explicit'
+      ? resolveToolScope(original.scope, sources, input.scopeContext) : original.scope;
+    const source = { ...original, scope, authority: support.authority,
       confidence: ['user_observed', 'system_inferred'].includes(support.authority) ? Math.min(0.85, original.confidence) : original.confidence };
 
     result.proposed += 1;
     const key = candidateKey(source.predicate, source.scope.type, source.scope.id);
+    if (sources.some(entry => scopeConflictsWithOwnerEvidence(source.scope.type, entry.text, entry.quote, input.scopeContext))
+      || (source.scope.type === 'global' && ['preference', 'routine'].includes(source.kind) && source.authority !== 'user_explicit')) {
+      result.rejected += 1;
+      result.outputs.push({ candidateKey: key, outcome: 'rejected', reasonCode: 'scope_not_supported' });
+      continue;
+    }
     const command = source.intent ?? input.interpretation.intent;
     const sourceExplicitCommand = (command === 'remember' || command === 'correct') && source.evidenceRefs.some(ref =>
       hasOwnerMemoryDirective(evidenceByRef.get(ref)?.text ?? '', command));
@@ -346,12 +378,20 @@ export function executeUserModelInterpretation(input: {
     result.outputs.push({ candidateKey: key, outcome: 'created' });
   }
 
-  for (const source of collaborationRules) {
+  for (const original of collaborationRules) {
+    const sources = original.evidenceRefs.flatMap(ref => {
+      const evidence = evidenceByRef.get(ref);
+      return evidence ? [{ text: evidence.text, quote: original.evidenceQuotes?.find(claim => claim.ref === ref)?.quote ?? evidence.text }] : [];
+    });
+    const source = { ...original, scope: resolveToolScope(original.scope, sources, input.scopeContext) };
     result.proposed += 1;
     const key = candidateKey(`rule:${source.category}:${source.statement.toLocaleLowerCase()}`, source.scope.type, source.scope.id);
+    const scopeSupported = sources.every(({ text, quote }) =>
+      !scopeConflictsWithOwnerEvidence(source.scope.type, text, quote, input.scopeContext)
+      && (source.scope.type !== 'global' || assessOwnerSupport({ text, quote, kind: 'preference' }).direct));
     if (input.policy.write === 'deny' || !structuredSupported(source, 'preference')
       || !scopeAllowed(source.scope.type, source.scope.id, input.scopeContext)
-      || source.scope.type === 'agent') {
+      || source.scope.type === 'agent' || !scopeSupported) {
       result.rejected += 1;
       result.outputs.push({ candidateKey: key, outcome: 'rejected' });
       continue;

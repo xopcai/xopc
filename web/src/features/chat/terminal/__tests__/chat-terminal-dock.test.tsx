@@ -120,10 +120,10 @@ describe('ChatTerminalDock', () => {
   });
 
   it('shows preparation failures without trying to resolve a missing session', async () => {
-    materialize.mockRejectedValueOnce(new Error('Conversation environment is not ready yet'));
+    materialize.mockRejectedValueOnce(new Error('Project workspace is unavailable'));
     await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Conversation environment is not ready yet');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Project workspace is unavailable');
     expect(resolveSession).not.toHaveBeenCalled();
     expect(api.create).not.toHaveBeenCalled();
   });
