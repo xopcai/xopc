@@ -892,4 +892,7 @@
     <string name="about_you_scope_other">指定范围</string>
     <string name="task_chat_outputs">预期产出</string>
     <string name="task_chat_attention">需要你处理</string>
+    <string name="progress_task_signoff">确认验收</string>
+    <string name="progress_task_mark_passed">标记通过</string>
+    <string name="progress_task_clear_review">撤销判定</string>
 </resources>

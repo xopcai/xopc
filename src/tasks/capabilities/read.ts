@@ -1,5 +1,6 @@
 import {
   ProductReadContracts,
+  taskCheckId,
 } from '@xopcai/gateway-contract';
 
 import { CapabilityError, defineReadCapability, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
@@ -12,6 +13,7 @@ import { TaskDependencyService } from '../task-dependency-service.js';
 import { TaskCriterionReviewRepository } from '../task-criterion-review-repository.js';
 import { TaskValueMetricsService } from '../task-value-metrics-service.js';
 import { listDeliverables } from '../task-deliverables.js';
+import { listTaskResultVersions } from '../task-result-versions.js';
 import { LocalAppTaskOutputSchema, LocalAppTaskListSchema } from '../../local-apps/capabilities/projections.js';
 
 export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): void {
@@ -68,6 +70,10 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
         waits: runs.listActiveWaits(id), runs: runs.listByTask(id), receipts: runs.listReceipts(id),
         deliverables: listDeliverables({ taskId: id }, 100).items,
         criterionReviews: criterionReviews.list(id, task.latestContractVersion),
+        acceptanceChecks: (task.contract?.acceptanceCriteria ?? []).map((criterion, index) =>
+          ({ id: taskCheckId(id, task.latestContractVersion, index), criterion })),
+        results: listTaskResultVersions(id),
+        criterionReviewHistory: criterionReviews.history(id, task.latestContractVersion, model.acceptanceTarget?.id),
         context: context.list(id), conversation: conversations.requireState(id), sessions: conversations.listSessions(id),
         authorityGrants: context.listActiveGrants(id),
         dependencies: dependencies.listDependencies(id), dependents: dependencies.listDependents(id),

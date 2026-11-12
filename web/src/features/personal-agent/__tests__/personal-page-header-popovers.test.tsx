@@ -182,15 +182,15 @@ describe('Personal AI header', () => {
       if (!String(url).includes('/activity')) return fetchPersonal(url, options);
       const task = { id: 'task-1', title: 'Research', updatedAt: Date.now() };
       return { ok: true, payload: finished
-        ? { current: [], items: [{ ...task, phase: 'closed', resolution: 'done' }], total: 1 }
-        : { current: [{ ...task, phase: 'active', operationalState: 'running' }], items: [], total: 0 } };
+        ? { current: [], items: [{ ...task, phase: 'closed', resolution: 'done', presentation: { status: 'completed' } }], total: 1 }
+        : { current: [{ ...task, phase: 'active', operationalState: 'running', presentation: { status: 'running' } }], items: [], total: 0 } };
     });
     await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><PersonalPage /><TaskPanelHost /></MemoryRouter></SWRConfig>));
     act(() => headerRoot.render(usePageHeaderStore.getState().main));
     expect(headerContainer.textContent).toContain('Working · Research');
     expect(container.querySelector('aside')).toBeNull();
     await act(async () => headerContainer.querySelector<HTMLButtonElement>('[data-personal-tasks-trigger]')!.click());
-    expect(container.querySelector('aside')?.textContent).toContain('Working');
+    expect(container.querySelector('aside')?.textContent).toContain('In progress');
 
     finished = true;
     await act(async () => {
@@ -198,7 +198,7 @@ describe('Personal AI header', () => {
       await new Promise(resolve => setTimeout(resolve, 180));
     });
     act(() => headerRoot.render(usePageHeaderStore.getState().main));
-    expect(container.querySelector('aside')?.textContent).toContain('Finished');
+    expect(container.querySelector('aside')?.textContent).toContain('Completed');
     expect([...container.querySelectorAll('aside h3')].map(node => node.textContent)).toEqual(['Scheduled tasks', 'Today']);
     const tabs = container.querySelectorAll('aside [aria-label="Tasks and deliverables"] [role="tab"]');
     expect([...tabs].map(tab => tab.textContent)).toEqual(['Tasks', 'Deliverables']);

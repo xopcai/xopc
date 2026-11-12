@@ -63,8 +63,8 @@ export function HomeTaskReview({ taskId, language, onComplete, onUpdated }: {
   }, [taskId]);
 
   const criteria = detail ? summarizeTaskCriteria(detail) : [];
-  const canAccept = detail?.task.phase === 'review' && detail.allowedCommands.includes('close')
-    && detail.waits.length === 0 && criteria.length > 0 && criteria.every((criterion) => criterion.status === 'passed');
+  const acceptanceTarget = detail?.acceptanceTarget;
+  const canAccept = acceptanceTarget?.canSignOff === true;
   const executor = detail ? homeTaskExecutor(detail) : undefined;
   const canContinue = detail?.allowedCommands.includes('start') && detail.waits.length === 0 && executor;
   const updated = (value: TaskDetail) => { requestVersion.current++; setDetail(value); onUpdated?.(value); };
@@ -131,7 +131,9 @@ export function HomeTaskReview({ taskId, language, onComplete, onUpdated }: {
               ? { passed: '已通过', failed: '未通过', unverified: '待判定' }[criterion.status]
               : { passed: 'Passed', failed: 'Failed', unverified: 'Not reviewed' }[criterion.status]}</p></div>
             {detail.task.phase === 'review' && !automatic ? <div className="flex gap-2">
-              {(['passed', 'failed'] as const).map((status) => <Button key={status} variant="secondary" disabled={busy || criterion.status === status} onClick={() => void operate(() => reviewTaskCriterion(taskId, index, status, detail.task.version, detail.task.latestContractVersion), zh ? '判定已保存。' : 'Review saved.')}>
+              {(['passed', 'failed'] as const).map((status) => <Button key={status} variant="secondary" disabled={busy || !acceptanceTarget || criterion.status === status} onClick={() => {
+                if (acceptanceTarget) void operate(() => reviewTaskCriterion(taskId, criterion.id, status, detail.task.version, detail.task.latestContractVersion, acceptanceTarget.id), zh ? '判定已保存。' : 'Review saved.');
+              }}>
                 {zh ? (status === 'passed' ? '确认通过' : '未通过') : (status === 'passed' ? 'Mark passed' : 'Mark failed')}
               </Button>)}
             </div> : null}
@@ -156,7 +158,9 @@ export function HomeTaskReview({ taskId, language, onComplete, onUpdated }: {
         ? `尚有 ${unverified} 项待判定、${failed} 项未通过、${detail.waits.length} 项等待处理。${automatic ? '此任务需要执行验证；请继续执行以补齐依据和未完成项。' : '查看依据后逐项判定；未通过时可继续执行修正。'}`
         : `${unverified} unreviewed, ${failed} failed, ${detail.waits.length} pending items. ${automatic ? 'This task requires execution verification. Continue execution to supply missing evidence.' : 'Review the evidence and mark each criterion; continue execution to fix failures.'}`}</p> : null}
       <div className="flex flex-wrap gap-2">
-        {detail.task.phase === 'review' ? <Button variant="primary" disabled={busy || !canAccept} onClick={() => void operate(() => commandTask(taskId, { type: 'close', resolution: 'done' }, detail.task.version), zh ? '任务已验收完成。' : 'Task accepted.', true)}>{zh ? '验收完成' : 'Accept task'}</Button> : null}
+        {detail.task.phase === 'review' ? <Button variant="primary" disabled={busy || !canAccept} onClick={() => {
+          if (acceptanceTarget) void operate(() => commandTask(taskId, { type: 'signoff', resultId: acceptanceTarget.id }, detail.task.version), zh ? '任务已验收完成。' : 'Task accepted.', true);
+        }}>{zh ? '确认验收' : 'Accept task'}</Button> : null}
         {canContinue ? <Button variant={canAccept ? 'secondary' : 'primary'} disabled={busy} onClick={() => void operate(() => commandTask(taskId, { type: 'start', executor }, detail.task.version), zh ? '已开始执行，结果将自动更新。' : 'Execution started. Results will update automatically.')}>
           {zh ? (receipt ? '继续执行并验证' : '开始执行') : (receipt ? 'Continue and verify' : 'Start execution')}
         </Button> : null}

@@ -15,7 +15,9 @@ import { LocalAppTaskMutationSchema } from '../../local-apps/capabilities/projec
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 
-const modelSchema = TaskDetailResponseSchema.pick({ task: true, operationalState: true, attention: true, allowedCommands: true, allocation: true });
+const modelSchema = TaskDetailResponseSchema.pick({
+  task: true, operationalState: true, presentation: true, acceptanceTarget: true, attention: true, allowedCommands: true, allocation: true,
+});
 export const TaskMutationOutputSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), model: modelSchema, runId: z.string().optional() }),
   z.object({ ok: z.literal(false), reason: z.enum(['not_found', 'conflict', 'invalid_transition', 'blocked']), model: modelSchema.optional() }),

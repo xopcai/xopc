@@ -5,7 +5,7 @@ import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { resolveTaskLocale } from './task-language.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
-import { canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
+import { findUnconfirmedToolEffect, RECOVERY_READ_TOOLS } from '../agent/orchestration/turn-recovery.js';
 import { runInIndependentAgentExecution } from '../agent/independent-execution.js';
 
 const log = createLogger('TaskRunDispatcher');
@@ -55,13 +55,17 @@ export class TaskRunDispatcher {
     for (const run of this.#runs.listExpiredLeasedRunning()) {
       if (this.#activeRunIds.has(run.id)) continue;
       try {
-        if (run.conversationId && canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId))
+        const unconfirmedEffect = run.conversationId
+          ? findUnconfirmedToolEffect(loadTranscriptRowsForSession(run.conversationId), { allowMissingReadTools: RECOVERY_READ_TOOLS })
+          : undefined;
+        if (run.conversationId && !unconfirmedEffect
           && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version, reason: 'process_restart',
             message: 'Execution was interrupted by a process restart. Continue this same task from confirmed tool results. Do not repeat completed operations. If any external effect cannot be confirmed, ask for verification instead of replaying it.' })) continue;
         const task = this.#tasks.require(run.taskId);
         const zh = resolveTaskLocale(task) === 'zh';
         this.#application.completeRun({
           runId: run.id, expectedRunVersion: run.version,
+          unconfirmedEffect,
           terminalCode: 'execution_interrupted',
           terminalMessage: zh ? '任务执行已停止，结果尚未确认' : 'Task execution stopped before its result could be confirmed',
           receipt: {
@@ -103,8 +107,20 @@ export class TaskRunDispatcher {
             : run;
           if (!executableRun) continue;
           const agentId = typeof run.executorRef.agentId === 'string' ? run.executorRef.agentId : undefined;
-          const conversationId = await this.deps.ensureSession(task.id, run.id, agentId);
+          const conversationId = task.latestContractVersion === run.contractVersion
+            ? await this.deps.ensureSession(task.id, run.id, agentId) : undefined;
           if (this.#stopped) return;
+          if (!conversationId || this.#tasks.get(task.id)?.latestContractVersion !== run.contractVersion) {
+            const summary = resolveTaskLocale(task) === 'zh' ? '任务要求已更新，本次执行未启动。' : 'Task requirements changed before execution.';
+            const current = this.#runs.get(run.id);
+            if (!current) continue;
+            this.#application.completeRun({
+              runId: current.id, expectedRunVersion: current.version, terminalCode: 'spec_superseded',
+              receipt: { status: 'cancelled', summary, changes: [], evidence: [],
+                verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false },
+            });
+            continue;
+          }
           this.deps.validateExecutor?.(task.id, agentId);
           this.#activeRunIds.add(run.id);
           const heartbeat = setInterval(() => {
@@ -117,7 +133,7 @@ export class TaskRunDispatcher {
           this.#heartbeats.add(heartbeat);
           try {
             await this.deps.runAgent(run.id, conversationId,
-              buildTaskRunMessage(task.contract?.objective ?? task.title, run.trigger, task.body, task.id));
+              buildTaskRunMessage(task.contract?.objective ?? task.title, run.trigger, task.contract?.brief, task.id));
           } finally {
             clearInterval(heartbeat);
             this.#heartbeats.delete(heartbeat);

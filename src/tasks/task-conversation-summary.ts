@@ -64,6 +64,7 @@ export function taskConversationSummary(taskId: string, conversationId: string) 
     phase: model.task.phase,
     resolution: model.task.resolution,
     operationalState: model.operationalState,
+    presentation: model.presentation,
     allocation: model.allocation,
     run: current && { status: current.status, queuedAt: current.queuedAt, startedAt: current.startedAt },
     waits: waits.slice(0, 4).map(wait => ({ kind: wait.kind, reason: wait.reason.slice(0, 500),

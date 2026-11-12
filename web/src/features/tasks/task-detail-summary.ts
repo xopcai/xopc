@@ -1,8 +1,9 @@
-import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
+import { taskCheckId, verifiedTaskCheckIds, type TaskPresentation } from '@xopcai/gateway-contract';
 
 import type { TaskDetail } from './home-api';
 
 export type CriterionSummary = {
+  id: string;
   text: string;
   status: 'passed' | 'failed' | 'unverified';
   evidence: TaskDetail['receipts'][number]['evidence'];
@@ -15,24 +16,26 @@ export type CriterionSummary = {
 
 export function summarizeTaskCriteria(detail: TaskDetail): CriterionSummary[] {
   const criteria = detail.task.contract?.acceptanceCriteria ?? [];
-  const runs = new Map(detail.runs.map((run) => [run.id, run]));
-  const receipts = detail.receipts
-    .filter((receipt) => runs.get(receipt.runId)?.contractVersion === detail.task.latestContractVersion)
-    .sort((a, b) => b.finalizedAt - a.finalizedAt);
+  const run = detail.runs.find(item => item.id === detail.acceptanceTarget?.runId
+    && item.contractVersion === detail.task.latestContractVersion);
+  const receipt = run ? detail.receipts.find(item => item.runId === run.id) : undefined;
+  const verified = verifiedTaskCheckIds(receipt);
 
   return criteria.map((text, index) => {
-    const review = detail.criterionReviews.find((item) => item.criterionIndex === index
+    const id = taskCheckId(detail.task.id, detail.task.latestContractVersion, index);
+    const review = detail.criterionReviews.find((item) => item.checkId === id
       && item.contractVersion === detail.task.latestContractVersion && item.criterionText === text);
-    let automatic: CriterionSummary = { text, status: 'unverified', evidence: [] };
-    for (const receipt of receipts) {
-      const check = receipt.verification.checks.find((item) => item.criterion === text);
-      if (!check) continue;
-      const evidence = receipt.evidence.filter((item) => check.evidenceTitles.includes(item.title));
-      const status = check.status === 'passed' && verifiedTaskCriteria(receipt).has(text)
-        ? 'passed'
-        : check.status === 'failed' ? 'failed' : 'unverified';
-      automatic = { text, status, evidence, runId: receipt.runId, verificationStatus: status, method: check.method, note: check.note };
-      break;
+    let automatic: CriterionSummary = { id, text, status: 'unverified', evidence: [] };
+    if (receipt) {
+      const checks = receipt.verification.checks.filter(item => item.checkId === id && item.criterion === text);
+      const check = checks.length === 1 ? checks[0] : undefined;
+      if (check) {
+        const evidence = receipt.evidence.filter((item) => check.evidenceTitles.includes(item.title));
+        const status = check.status === 'passed' && verified.has(id)
+          ? 'passed'
+          : check.status === 'failed' ? 'failed' : 'unverified';
+        automatic = { id, text, status, evidence, runId: receipt.runId, verificationStatus: status, method: check.method, note: check.note };
+      }
     }
     if (review) {
       return { ...automatic, status: review.status, review };
@@ -60,16 +63,9 @@ export function summarizeTaskResult(detail: TaskDetail) {
   };
 }
 
-export type DetailStatusKey = 'allocating' | 'captured' | 'ready' | 'queued' | 'running' | 'verifying' | 'waiting' | 'blocked' | 'failed' | 'cancelled' | 'needsUser' | 'review' | 'completed' | 'ended' | 'paused';
+export type DetailStatusKey = TaskPresentation['status'];
 export function detailStatusKey(detail: TaskDetail): DetailStatusKey {
-  if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
-  if (detail.waits.some((wait) => wait.kind === 'paused')) return 'paused';
-  if (detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) return 'needsUser';
-  if (detail.operationalState !== 'idle') return detail.operationalState;
-  if (detail.task.phase === 'backlog') return 'captured';
-  if (detail.task.phase === 'ready') return 'ready';
-  if (detail.task.phase === 'review') return 'review';
-  return 'ready';
+  return detail.presentation.status;
 }
 
 export function detailStatusTone(status: DetailStatusKey): string {

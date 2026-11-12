@@ -1,9 +1,10 @@
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
 
-import { resultReferenceVersion, type TurnOutcome } from '@xopcai/gateway-contract';
+import { resultReferenceVersion, taskCheckId, type TurnOutcome } from '@xopcai/gateway-contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 
@@ -12,14 +13,14 @@ import { saveMediaBuffer } from '../../media/store.js';
 import { isMediaUriReferencedByLiveSession } from '../../media/session-references.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
-import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { readSchemaVersion, setSchemaVersion, XOPC_DB_SCHEMA_VERSION } from '../../storage/sqlite/schema.js';
 import { appendTranscriptEntry, loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
 import { buildSessionContextForLlm } from '../../session/session-context-for-llm.js';
 import { materializeTaskHandoffFile, resolveTaskHandoffReferences } from '../task-handoff.js';
 import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
 import { TaskReadModelProjector } from '../task-read-model-projector.js';
 import { TaskRepository } from '../task-repository.js';
-import { createHash } from 'node:crypto';
 import { resolveMediaReference } from '../../media/media-reference.js';
 import { TaskApplicationService } from '../task-application-service.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
@@ -31,6 +32,7 @@ import { TaskResultDeliveryService } from '../task-result-delivery-service.js';
 import { enqueueTaskDelayNotices } from '../task-delay-notice.js';
 import { getTaskNotificationPreference } from '../task-notification-preference.js';
 import { TaskMainUpdateDelivery } from '../task-main-update-delivery.js';
+import { submitAndConfirmTaskMainUpdate } from '../task-main-update-input.js';
 import { TaskResultDeliveryRepository } from '../task-result-delivery-repository.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
 import { PersonalPromptContext } from '../../personal-agent/prompt-context.js';
@@ -38,6 +40,8 @@ import type { ClientHistoryMessage } from '../../session/client-history.js';
 import { SessionStore } from '../../session/store.js';
 import { resetSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
+import { signedDeviceHeaders } from '../../gateway/security/__tests__/signed-device-headers.js';
+import { createDevice, issueDeviceTokenPair } from '../../storage/sqlite/device-access-repository.js';
 import type { GatewayService } from '../../gateway/service.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
@@ -48,7 +52,7 @@ import * as modelCalls from '../../providers/model-call.js';
 import * as providers from '../../providers/index.js';
 import * as resultReader from '../../personal-agent/result-reader.js';
 import { personalPerformanceSnapshot } from '../../personal-agent/performance.js';
-import { insertSessionInput, claimNextSessionInput, finishSessionInputRun, bumpSessionInputRevision } from '../../storage/sqlite/session-input-repository.js';
+import { insertSessionInput, claimNextSessionInput, finishSessionInputRun, bumpSessionInputRevision, findSessionInput } from '../../storage/sqlite/session-input-repository.js';
 
 describe('background task result delivery', () => {
   let stateDir: string;
@@ -982,6 +986,161 @@ describe('background task result delivery', () => {
     expect(await new TaskResultDeliveryService().drain(vi.fn())).toBe(1);
     expect(await new TaskResultDeliveryService().drain(vi.fn())).toBe(0);
     expect(loadTranscriptRowsForSession(main.key)).toHaveLength(1);
+  });
+
+  it('upgrades a database copy and preserves an unresolved run decision and pending Personal Agent delivery', async () => {
+    const { main, coordinator, runId, taskId } = task(['Target file exists']);
+    markPersonal(main.key);
+    coordinator.captureOutcome(await image(runId));
+    const runs = new TaskRunRepository();
+    const decision = 'Confirm whether the file was written to the target workspace.';
+    runs.finalize({ runId, expectedVersion: runs.require(runId).version,
+      receipt: { status: 'succeeded', summary: 'A preview is available.', changes: [], evidence: [],
+        verification: { status: 'failed', checks: [] }, remainingWork: ['Target file exists'],
+        needsUser: true, nextAction: decision, completionVerdict: 'partial' } });
+    const db = getSqliteDatabase();
+    db.prepare("UPDATE tasks SET phase = 'review' WHERE task_id = ?").run(taskId);
+    db.prepare(`INSERT INTO task_criterion_reviews (task_id, contract_version, criterion_index, criterion_text,
+      status, reviewed_by_json, reviewed_at) VALUES (?, 1, 0, 'Target file exists', 'passed', '{"kind":"user"}', 1)`).run(taskId);
+    const board = new TaskCollaborationRepository();
+    const question = board.append({ taskId, taskRunId: runId, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'question', body: 'Did the write land in the workspace?', idempotencyKey: 'cutover-question' });
+    board.decideMainUpdate(question.id, 'notify', 'The question needs the owner');
+    insertSessionInput({ id: 'cutover-question-input', conversationId: main.key,
+      clientMessageId: `task-main-update:${question.id}`, requestedDelivery: 'next', effectiveDelivery: 'next',
+      status: 'queued', content: 'Private task update', origin: { type: 'system', source: 'task_update' } });
+    claimNextSessionInput(main.key, 'cutover-question-run');
+    finishSessionInputRun(main.key, 'cutover-question-run', 'completed');
+    expect(runSqliteWriteTransaction(() =>
+      new TaskResultDeliveryRepository().enqueue(runId, 'A preview is available.', 'succeeded'))).toBe(true);
+    const ambiguous = task();
+    ambiguous.coordinator.captureOutcome(await image(ambiguous.runId));
+    const late = board.append({ taskId: ambiguous.taskId, authorKind: 'user', authorId: 'owner',
+      kind: 'instruction', body: 'Use the revised reference image.', idempotencyKey: 'cutover-late-direction' });
+    db.prepare('UPDATE task_collaboration_entries SET created_at = ? WHERE entry_id = ?')
+      .run(runs.require(ambiguous.runId).startedAt!, late.id);
+    runs.finalize({ runId: ambiguous.runId, expectedVersion: runs.require(ambiguous.runId).version,
+      receipt: { status: 'succeeded', summary: 'Old preview', changes: [], evidence: [],
+        verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false } });
+    expect(runSqliteWriteTransaction(() =>
+      new TaskResultDeliveryRepository().enqueue(ambiguous.runId, 'Old preview', 'succeeded'))).toBe(true);
+    db.prepare('UPDATE tasks SET body = ? WHERE task_id = ?').run('Original workspace brief.', taskId);
+    db.exec(`DROP TABLE task_signoffs; DROP TABLE task_bound_criterion_reviews; DROP TABLE task_results;
+      ALTER TABLE task_runs DROP COLUMN instruction_sequence_at_start;
+      ALTER TABLE task_contracts DROP COLUMN brief; ALTER TABLE task_contracts DROP COLUMN result_policy`);
+    setSchemaVersion(db, 278);
+    const copyPath = join(stateDir, 'cutover-copy.db');
+    db.prepare('VACUUM INTO ?').run(copyPath);
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: copyPath });
+
+    expect(readSchemaVersion(getSqliteDatabase())).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(runs.require(ambiguous.runId).instructionSequenceAtStart).toBe(0);
+    expect(getSqliteDatabase().prepare('SELECT status FROM task_result_deliveries WHERE task_run_id = ?')
+      .get(ambiguous.runId)).toEqual({ status: 'stale' });
+    expect(getSqliteDatabase().prepare('SELECT 1 FROM task_results WHERE run_id = ? AND finalized_at IS NOT NULL').get(ambiguous.runId)).toBeUndefined();
+    expect(new TaskRepository().require(taskId).contract).toMatchObject({ brief: 'Original workspace brief.', resultPolicy: 'standard' });
+    expect(runs.listActiveWaits(taskId)).toMatchObject([{ taskRunId: runId, reason: decision, condition: { type: 'run_decision' } }]);
+    const submit = vi.fn(async () => true);
+    const updateOptions = { isAvailable: () => true, decide: vi.fn(),
+      submitAndConfirm: (message: { conversationId: string; clientMessageId: string; content: string }) =>
+        submitAndConfirmTaskMainUpdate(message, { findInput: findSessionInput, submit, waitForCompletion: vi.fn() }) };
+    expect(await new TaskMainUpdateDelivery().drain(updateOptions)).toBe(1);
+    expect(await new TaskMainUpdateDelivery().drain(updateOptions)).toBe(0);
+    expect(submit).not.toHaveBeenCalled();
+    const store = new SessionStore(stateDir);
+    const token = 'task-cutover-test-auth-token';
+    const app = createHonoApp({ service: {
+      currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
+      getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token,
+      isGatewayReady: () => true, getExtensionLoader: () => null,
+      sessionIndexInstance: store, projects: {}, sessions: {},
+      dispatchTaskEvents: vi.fn(), dispatchTaskRuns: vi.fn(),
+    } as unknown as GatewayService });
+    const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
+    try {
+      if (!server.listening) await once(server, 'listening');
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Expected TCP address');
+      const url = `http://127.0.0.1:${address.port}/api/tasks/${taskId}`;
+      const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+      expect((await fetch(url)).status).toBe(401);
+      const response = await fetch(url, { headers });
+      expect(response.status).toBe(200);
+      const detail = await response.json();
+      expect(detail.presentation).toEqual({ status: 'needsUser', reason: decision, primaryAction: { type: 'inspect_run', runId } });
+      expect(detail.acceptanceTarget).toEqual({ id: expect.any(String), runId, canSignOff: false });
+      expect(detail.acceptanceTarget.id).not.toBe(runId);
+      expect(detail.results.filter((result: { runId: string }) => result.runId === runId)).toHaveLength(2);
+      expect(detail.criterionReviews).toEqual([]);
+      expect(detail.criterionReviewHistory).toMatchObject([{ criterionText: 'Target file exists', status: 'passed' }]);
+      expect(detail.allowedCommands).not.toContain('start');
+      expect(detail.allowedCommands).not.toContain('resolve_wait');
+      const retried = await fetch(`${url}/commands`, { method: 'POST', headers,
+        body: JSON.stringify({ expectedVersion: detail.task.version, idempotencyKey: 'cutover-retry',
+          command: { type: 'start', executor: { kind: 'agent', agentId: 'worker' } } }) });
+      expect(retried.status).toBe(409);
+      expect(await retried.json()).toMatchObject({ ok: false, code: 'blocked' });
+      const reviewed = await fetch(`${url}/criteria/${encodeURIComponent(taskCheckId(taskId, 1, 0))}/review`, { method: 'PUT', headers,
+        body: JSON.stringify({ expectedVersion: detail.task.version, contractVersion: 1, resultId: detail.acceptanceTarget.id, status: 'passed' }) });
+      expect(reviewed.status).toBe(409);
+      const signed = await fetch(`${url}/commands`, { method: 'POST', headers,
+        body: JSON.stringify({ expectedVersion: detail.task.version, idempotencyKey: 'cutover-signoff',
+          command: { type: 'signoff', resultId: detail.acceptanceTarget.id } }) });
+      expect(signed.status).toBe(409);
+      expect(await signed.json()).toMatchObject({ ok: false, code: 'blocked' });
+      expect(getSqliteDatabase().prepare('SELECT result_id FROM task_signoffs').all()).toEqual([]);
+      expect(new TaskRepository().require(taskId).phase).toBe('review');
+      for (const platform of ['android', 'ios', 'harmonyos'] as const) {
+        const candidate = task(['Review the exact result'], 'manual', []);
+        for (const revision of [1, 2]) {
+          candidate.coordinator.captureOutcome({ version: 1, outcomeId: `draft:${revision}`,
+            runId: candidate.runId, turnId: candidate.runId, status: 'partial', deliverables: [],
+            evidence: [], createdAt: new Date().toISOString() });
+        }
+        expect(new TaskApplicationService().completeRun({ runId: candidate.runId,
+          expectedRunVersion: runs.require(candidate.runId).version,
+          receipt: { status: 'succeeded', summary: 'Final result ready', changes: [], evidence: [],
+            verification: { status: 'unverified', checks: [] }, remainingWork: [], needsUser: false },
+        }).ok).toBe(true);
+        const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+        const device = createDevice({ platform, displayName: platform,
+          publicKeyJwk: keys.publicKey.export({ format: 'jwk' }), scopes: ['tasks.read', 'tasks.write'] });
+        const access = issueDeviceTokenPair(device.id).accessToken;
+        const mobile = (path: string, method = 'GET', value?: object) => {
+          const body = value ? JSON.stringify(value) : '';
+          return fetch(`http://127.0.0.1:${address.port}${path}`, { method,
+            headers: signedDeviceHeaders(keys.privateKey, access, path, method, body, { 'Content-Type': 'application/json' }),
+            body: body || undefined });
+        };
+        const path = `/api/tasks/${candidate.taskId}`;
+        const before = await mobile(path);
+        expect(before.status, await before.clone().text()).toBe(200);
+        const selected = await before.json();
+        expect(selected.results.map((result: { version: number }) => result.version)).toEqual([3, 2, 1]);
+        const resultId = selected.acceptanceTarget.id;
+        expect(resultId).toBe(selected.results[0].id);
+        const check = `${path}/criteria/${encodeURIComponent(selected.acceptanceChecks[0].id)}/review`;
+        const reviewBody = { expectedVersion: selected.task.version, contractVersion: 1, status: 'passed' };
+        expect((await mobile(check, 'PUT', { ...reviewBody, resultId: selected.results[1].id })).status).toBe(409);
+        const accepted = await mobile(check, 'PUT', { ...reviewBody, resultId });
+        expect(accepted.status, await accepted.clone().text()).toBe(200);
+        const { version } = await accepted.json();
+        const closed = await mobile(`${path}/commands`, 'POST', { expectedVersion: version, idempotencyKey: `sign-${platform}`,
+          command: { type: 'signoff', resultId } });
+        expect(closed.status, await closed.clone().text()).toBe(200);
+        expect(await closed.json()).toMatchObject({ task: { phase: 'closed', resolution: 'done' } });
+      }
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+    const notify = vi.fn();
+    expect(await new TaskResultDeliveryService().drain(notify)).toBe(1);
+    expect(await new TaskResultDeliveryService().drain(notify)).toBe(0);
+    expect(notify).toHaveBeenCalledOnce();
+    expect(loadTranscriptRowsForSession(main.key).filter(row => row.customType === 'task_result_delivery')).toHaveLength(1);
+    expect(getSqliteDatabase().prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
 
   it('collects multiple worker rounds and marks unpublished or missing files unavailable', async () => {

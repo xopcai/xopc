@@ -76,10 +76,24 @@ export const ActorRefSchema = z.object({
   id: z.string().optional(),
 });
 
+export const TaskResultPolicySchema = z.enum(['standard', 'selected', 'connected']);
+export type TaskResultPolicy = z.infer<typeof TaskResultPolicySchema>;
+
+export const TaskWorkspaceDestinationSchema = z.object({
+  kind: z.literal('workspace_file'),
+  workspaceId: z.string().regex(/^(agent|project):[a-zA-Z0-9_-]{1,200}$/),
+  expectedRoot: z.string().min(1).max(2048).optional(),
+  relativePath: z.string().min(1).max(2048).refine(path =>
+    !/[\\:\u0000-\u001f]/u.test(path) && path.split('/').every(part => part && part !== '.' && part !== '..')),
+}).strict();
+export type TaskWorkspaceDestination = z.infer<typeof TaskWorkspaceDestinationSchema>;
+
 export const TaskContractSchema = z.object({
   taskId: z.string(),
   version: z.number().int().positive(),
   objective: z.string(),
+  brief: z.string().optional(),
+  resultPolicy: TaskResultPolicySchema,
   expectedOutputs: z.array(z.string()),
   acceptanceCriteria: z.array(z.string()),
   constraints: z.array(z.string()),
@@ -197,6 +211,7 @@ export const TaskRunReceiptSchema = z.object({
   verification: z.object({
     status: z.enum(['passed', 'failed', 'unverified']),
     checks: z.array(z.object({
+      checkId: z.string().optional(),
       criterion: z.string(),
       status: z.enum(['passed', 'failed', 'unverified']),
       evidenceTitles: z.array(z.string()),
@@ -218,7 +233,12 @@ export const TaskRunReceiptSchema = z.object({
   finalizedAt: z.number().int().nonnegative(),
 });
 
+export function taskCheckId(taskId: string, contractVersion: number, criterionIndex: number): string {
+  return `${taskId}:${contractVersion}:${criterionIndex}`;
+}
+
 export const TaskCriterionReviewSchema = z.object({
+  checkId: z.string(),
   contractVersion: z.number().int().positive(),
   criterionIndex: z.number().int().nonnegative(),
   criterionText: z.string(),
@@ -231,6 +251,7 @@ export const TaskCriterionReviewSchema = z.object({
 export const TaskCriterionReviewInputSchema = z.object({
   expectedVersion: z.number().int().positive(),
   contractVersion: z.number().int().positive(),
+  resultId: z.string().min(1),
   status: z.enum(['passed', 'failed', 'unverified']),
   note: z.string().trim().max(2000).optional(),
 }).strict();
@@ -246,6 +267,8 @@ export const TaskContractInputSchema = TaskContractSchema.omit({
   version: true,
   createdBy: true,
   createdAt: true,
+  brief: true,
+  resultPolicy: true,
 }).extend({ acceptancePolicy: TaskAcceptancePolicySchema.default('verified_auto') });
 
 export const TaskContextInputSchema = TaskContextEdgeSchema.omit({
@@ -320,6 +343,7 @@ export const TaskCommandSchema = z.discriminatedUnion('type', [
     scheduleAt: z.number().int().nonnegative().optional(),
   }),
   z.object({ type: z.literal('request_review') }),
+  z.object({ type: z.literal('signoff'), resultId: z.string().min(1) }),
   z.object({ type: z.literal('close'), resolution: TaskResolutionSchema }),
   z.object({ type: z.literal('reopen'), phase: z.enum(['backlog', 'ready', 'active', 'review']) }),
   z.object({ type: z.literal('add_wait'), wait: TaskWaitInputSchema }),
@@ -355,13 +379,48 @@ export const TaskBoardPositionRequestSchema = z.object({
   beforeTaskId: z.string().trim().min(1).nullable().optional(),
 }).strict();
 
+export const TaskPresentationSchema = z.object({
+  status: z.enum(['allocating', 'captured', 'ready', 'queued', 'running', 'verifying',
+    'waiting', 'blocked', 'failed', 'cancelled', 'needsUser', 'review', 'completed', 'ended', 'paused']),
+  reason: z.string().optional(),
+  primaryAction: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('view_results') }),
+    z.object({ type: z.literal('resume'), waitId: z.string() }),
+    z.object({ type: z.literal('resolve_wait'), waitId: z.string() }),
+    z.object({ type: z.literal('inspect_run'), runId: z.string() }),
+    z.object({ type: z.literal('review') }),
+    z.object({ type: z.literal('signoff'), resultId: z.string() }),
+    z.object({ type: z.literal('retry_allocation') }),
+    z.object({ type: z.literal('mark_ready') }),
+    z.object({ type: z.literal('start') }),
+    z.object({ type: z.literal('retry_run'), runId: z.string() }),
+  ]).optional(),
+});
+
+export type TaskPresentation = z.infer<typeof TaskPresentationSchema>;
+export const TaskAcceptanceTargetSchema = z.object({ id: z.string(), runId: z.string().optional(), canSignOff: z.boolean() });
+export type TaskAcceptanceTarget = z.infer<typeof TaskAcceptanceTargetSchema>;
+
+export const TaskResultVersionSchema = z.object({
+  id: z.string(),
+  runId: z.string(),
+  version: z.number().int().positive(),
+  contractVersion: z.number().int().positive(),
+  assignmentEpoch: z.number().int().nonnegative(),
+  instructionSequence: z.number().int().nonnegative(),
+  outcomeId: z.string().optional(),
+  finalizedAt: z.number().int().nonnegative().optional(),
+});
+export type TaskResultVersion = z.infer<typeof TaskResultVersionSchema>;
+
 export const TaskListResponseSchema = z.object({
   ok: z.literal(true),
   items: z.array(z.object({
     task: TaskSchema,
     allocation: TaskAllocationSchema.optional(),
-  operationalState: TaskOperationalStateSchema,
+    operationalState: TaskOperationalStateSchema,
     attention: z.array(TaskAttentionItemSchema),
+    presentation: TaskPresentationSchema,
   })),
 });
 
@@ -418,12 +477,17 @@ export const TaskDetailResponseSchema = z.object({
   task: TaskSchema,
   allocation: TaskAllocationSchema.optional(),
   operationalState: TaskOperationalStateSchema,
+  presentation: TaskPresentationSchema,
+  acceptanceTarget: TaskAcceptanceTargetSchema.optional(),
   attention: z.array(TaskAttentionItemSchema),
   waits: z.array(TaskWaitSchema),
   runs: z.array(TaskRunSchema),
   receipts: z.array(TaskRunReceiptSchema),
   deliverables: z.array(PersonalDeliverableSchema).optional(),
   criterionReviews: z.array(TaskCriterionReviewSchema),
+  acceptanceChecks: z.array(z.object({ id: z.string(), criterion: z.string() })).default([]),
+  results: z.array(TaskResultVersionSchema).default([]),
+  criterionReviewHistory: z.array(TaskCriterionReviewSchema.extend({ resultId: z.string().optional() })).optional(),
   context: z.array(TaskContextEdgeSchema),
   conversation: TaskConversationStateSchema,
   sessions: z.array(TaskSessionLinkSchema),
@@ -478,7 +542,25 @@ export function parseTaskRunReceipt(value: unknown): TaskRunReceipt {
 
 /** Criteria count as verified only when their passing check cites verified evidence. */
 export function verifiedTaskCriteria(receipt: Pick<TaskRunReceipt, 'verification' | 'evidence'> | undefined): Set<string> {
-  const evidence = new Set(receipt?.evidence.filter((item) => item.strength === 'verified').map((item) => item.title));
-  return new Set(receipt?.verification.checks.filter((check) => check.status === 'passed'
-    && check.evidenceTitles.some((title) => evidence.has(title))).map((check) => check.criterion));
+  return verifiedCheckKeys(receipt, check => check.criterion);
+}
+
+export function verifiedTaskCheckIds(receipt: Pick<TaskRunReceipt, 'verification' | 'evidence'> | undefined): Set<string> {
+  return verifiedCheckKeys(receipt, check => check.checkId);
+}
+
+function verifiedCheckKeys(receipt: Pick<TaskRunReceipt, 'verification' | 'evidence'> | undefined,
+  key: (check: TaskRunReceipt['verification']['checks'][number]) => string | undefined): Set<string> {
+  const evidence = new Map<string, boolean>();
+  for (const item of receipt?.evidence ?? []) {
+    evidence.set(item.title, !evidence.has(item.title) && item.strength === 'verified');
+  }
+  const checks = new Map<string, boolean>();
+  for (const check of receipt?.verification.checks ?? []) {
+    const id = key(check);
+    if (!id) continue;
+    checks.set(id, !checks.has(id) && check.status === 'passed'
+      && check.evidenceTitles.some(title => evidence.get(title) === true));
+  }
+  return new Set([...checks].filter(([, passed]) => passed).map(([criterion]) => criterion));
 }

@@ -1,25 +1,46 @@
 import type { XopcWorkspaceItem, XopcMobileTaskDetail, XopcMobileTaskReview,
   XopcMobileTaskRun, XopcMobileTaskReceipt, XopcMobileTaskCheck, XopcMobileTaskEvidence,
-  XopcMobileTaskWait, XopcTaskCommand, XopcTaskPatch } from '../model/workspace';
+  XopcMobileTaskWait, XopcTaskAcceptanceCheck, XopcTaskCheckMutation, XopcTaskCommand, XopcTaskPatch } from '../model/workspace';
 
 export function taskCriterionState(info: XopcMobileTaskDetail, criterion: string, index: number): string {
-  const review = info.criterionReviews.find((entry: XopcMobileTaskReview): boolean =>
-    entry.contractVersion === info.latestContractVersion && entry.criterionIndex === index);
-  if (review?.status === 'unverified') return 'pending';
-  if (review && info.contract?.acceptancePolicy !== 'verified_auto') return review.status;
+  const id = info.acceptanceChecks?.[index]?.id;
+  if (!id) return 'pending';
+  const review = info.criterionReviews.find((entry: XopcMobileTaskReview): boolean => entry.checkId === id);
+  if (review) return review.status === 'unverified' ? 'pending' : review.status;
   if (info.contract?.acceptancePolicy === 'manual') return 'pending';
-  const runIds = info.runs.filter((run: XopcMobileTaskRun): boolean => run.contractVersion === info.latestContractVersion)
-    .map((run: XopcMobileTaskRun): string => run.id);
-  const receipts = info.receipts.filter((receipt: XopcMobileTaskReceipt): boolean => runIds.includes(receipt.runId))
-    .sort((left: XopcMobileTaskReceipt, right: XopcMobileTaskReceipt): number => right.finalizedAt - left.finalizedAt);
-  for (const receipt of receipts) {
-    const check = receipt.verification.checks.find((entry: XopcMobileTaskCheck): boolean => entry.criterion === criterion);
-    if (!check || check.status === 'unverified') continue;
-    if (check.status !== 'passed') return 'failed';
-    return receipt.evidence.some((evidence: XopcMobileTaskEvidence): boolean => evidence.strength === 'verified'
-      && (check.evidenceTitles ?? []).includes(evidence.title)) ? 'passed' : 'pending';
-  }
-  return 'pending';
+  const receipt = info.receipts.find((item: XopcMobileTaskReceipt): boolean => item.runId === info.acceptanceTarget?.runId);
+  const matches = receipt?.verification.checks.filter((entry: XopcMobileTaskCheck): boolean =>
+    entry.checkId === id && entry.criterion === criterion) ?? [];
+  if (!receipt || matches.length !== 1) return 'pending';
+  const check = matches[0];
+  if (check.status === 'failed') return 'failed';
+  return check.status === 'passed' && check.evidenceTitles.some((title: string): boolean => {
+    const candidates = receipt.evidence.filter((item: XopcMobileTaskEvidence): boolean => item.title === title);
+    return candidates.length === 1 && candidates[0].strength === 'verified';
+  }) ? 'passed' : 'pending';
+}
+
+export function taskSignoffResult(item: XopcWorkspaceItem): string {
+  const target = item.taskDetail?.acceptanceTarget;
+  const primary = item.taskDetail?.presentation?.primaryAction;
+  return target && target.canSignOff && primary?.type === 'signoff' && primary.resultId === target.id ? target.id : '';
+}
+
+export function taskReviewAction(item: XopcWorkspaceItem, checkId: string, status: string): string {
+  const info = item.taskDetail;
+  const target = info?.acceptanceTarget;
+  if (!target || item.status === 'closed' || (info?.waits ?? []).some((wait: XopcMobileTaskWait): boolean => wait.status === 'active')) return '';
+  return 'review:' + target.id + '|' + checkId + '|' + (status === 'passed' ? 'unverified' : 'passed');
+}
+
+export function taskReviewMutation(item: XopcWorkspaceItem, action: string): XopcTaskCheckMutation {
+  const fields = action.slice('review:'.length).split('|');
+  const info = item.taskDetail;
+  if (!info || fields.length !== 3 || fields[0] !== info.acceptanceTarget?.id ||
+    !info.acceptanceChecks?.some((check: XopcTaskAcceptanceCheck): boolean => check.id === fields[1]) ||
+    !['passed', 'unverified'].includes(fields[2]) || item.status === 'closed' ||
+    (info.waits ?? []).some((wait: XopcMobileTaskWait): boolean => wait.status === 'active')) throw new Error('INVALID_ACTION');
+  return { expectedVersion: item.version, contractVersion: info.latestContractVersion, resultId: fields[0], status: fields[2] };
 }
 
 export function taskCompletionBlock(item: XopcWorkspaceItem): string {
@@ -40,6 +61,11 @@ export function taskPhaseAction(item: XopcWorkspaceItem, phase: string): string 
 }
 
 export function taskCommand(item: XopcWorkspaceItem, action: string, agentId: string): XopcTaskCommand {
+  if (action.startsWith('signoff:')) {
+    const resultId = action.slice('signoff:'.length);
+    if (!resultId || taskSignoffResult(item) !== resultId) throw new Error('INVALID_ACTION');
+    return { type: 'signoff', resultId };
+  }
   const parts = action.split(':');
   const kind = parts[0] === 'cancel_task' ? 'close' : parts[0];
   if (!item.actions.includes(kind)) throw new Error('INVALID_ACTION');

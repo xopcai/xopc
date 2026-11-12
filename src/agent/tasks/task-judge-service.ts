@@ -180,7 +180,7 @@ export class TaskJudgeService {
     const run = this.#runs.getActiveRoot(taskId);
     if (!run || run.status !== 'running' || run.conversationId !== payload.conversationId) return;
     // The evidence-aware coordinator owns research repair and finalization. A history-only judge must not bypass it.
-    if (currentTaskResearchResult(run.id) || task.body?.includes('publish_task_result')) return;
+    if (currentTaskResearchResult(run.id) || (task.contract && task.contract.resultPolicy !== 'standard')) return;
 
     let runtimeModel: string | undefined;
     try {

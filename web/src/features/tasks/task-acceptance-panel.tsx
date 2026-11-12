@@ -59,11 +59,12 @@ function CriterionRow({ criterion, index, language, closed, pending, onReview, p
   </li>;
 }
 
-export function TaskAcceptancePanel({ criteria, language, closed, pending, blockedReason, error, onReview, projectId, conversationId }: {
+export function TaskAcceptancePanel({ criteria, language, closed, pending, blockedReason, error, onReview, projectId, conversationId, reviewDisabled }: {
   criteria: CriterionSummary[];
   language: 'zh' | 'en';
   closed: boolean;
   pending: boolean;
+  reviewDisabled?: boolean;
   blockedReason?: string;
   error?: string | null;
   onReview: (index: number, status: ReviewStatus) => Promise<boolean>;
@@ -74,11 +75,11 @@ export function TaskAcceptancePanel({ criteria, language, closed, pending, block
   const broadNote = criteria.some((criterion) => criterion.note === BROAD_CRITERIA_NOTE);
   return <>
     {broadNote ? <TaskDetailDisclosure panelId="acceptance:diagnostic" title={zh ? '自动核验未完成：验收标准过于宽泛' : 'Automatic verification incomplete: criteria are too broad'} className="mx-4 mb-2 text-xs leading-5 text-fg-muted"><p className="mt-2 break-words">{BROAD_CRITERIA_NOTE}</p></TaskDetailDisclosure> : null}
-    <ul aria-busy={pending || undefined} className="border-t border-edge-subtle">{criteria.map((criterion, index) => <CriterionRow key={`${index}:${criterion.text}`} criterion={criterion} index={index} language={language} closed={closed} pending={pending} onReview={onReview} projectId={projectId} conversationId={conversationId} />)}</ul>
+    <ul aria-busy={pending || undefined} className="border-t border-edge-subtle">{criteria.map((criterion, index) => <CriterionRow key={`${index}:${criterion.text}`} criterion={criterion} index={index} language={language} closed={closed || Boolean(reviewDisabled)} pending={pending} onReview={onReview} projectId={projectId} conversationId={conversationId} />)}</ul>
     {criteria.length === 0 ? <p className="px-4 py-4 text-sm text-fg-muted">{zh ? '尚未定义验收标准' : 'No acceptance criteria defined'}</p> : null}
     {error ? <p role="alert" className="mx-4 my-2 text-sm text-danger">{error}</p> : null}
-    {!closed && criteria.length > 0 && (blockedReason || criteria.some(criterion => criterion.status !== 'passed')) ? <p className="border-t border-edge-subtle px-4 py-2.5 text-xs text-fg-muted">
-      {blockedReason ?? (zh ? '勾选全部验收项后，任务自动完成。' : 'Checking all criteria completes the task.')}
+    {!closed && blockedReason ? <p className="border-t border-edge-subtle px-4 py-2.5 text-xs text-fg-muted">
+      {blockedReason}
     </p> : null}
   </>;
 }

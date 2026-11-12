@@ -15,6 +15,8 @@ import {
   TaskRunCancelOutputSchema,
   TaskRunFeedbackOutputSchema,
   ProductReadContracts,
+  isMobileDevicePlatform,
+  taskCheckId,
 } from '@xopcai/gateway-contract';
 
 import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
@@ -26,13 +28,21 @@ import { TaskRepository } from '../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { TaskCollaborationRepository } from '../../../tasks/task-collaboration-repository.js';
 import { TaskCriterionReviewRepository } from '../../../tasks/task-criterion-review-repository.js';
-import { TaskApplicationService } from '../../../tasks/task-application-service.js';
 import { getTaskOrchestrationMetrics } from '../../../tasks/task-orchestration-metrics.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
-import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { getGatewayPrincipal, type GatewayPrincipal } from '../../security/gateway-principal.js';
+import { getDevice, isDeviceAccessSessionActive } from '../../../storage/sqlite/device-access-repository.js';
 import { ProjectOperatingViewService } from '../../../tasks/project-operating-view-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { submitSessionInput } from './session-input-handler.js';
+
+function canReviewTask(principal: GatewayPrincipal): boolean {
+  if (!hasGatewayScope(principal.scopes, 'tasks.write')) return false;
+  if (principal.kind === 'owner' || principal.kind === 'trusted-proxy') return true;
+  const device = principal.deviceId ? getDevice(principal.deviceId) : undefined;
+  return Boolean(device && isMobileDevicePlatform(device.platform) && principal.accessSessionId
+    && hasGatewayScope(device.scopes, 'tasks.write') && isDeviceAccessSessionActive(device.id, principal.accessSessionId));
+}
 
 export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const capabilities = createProductDispatcher(() => deps.service.notesServiceInstance, {
@@ -115,15 +125,13 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.put('/api/tasks/:id/criteria/:index/review', taskRateLimit, async (c) => {
+  authenticated.put('/api/tasks/:id/criteria/:checkId/review', taskRateLimit, async (c) => {
     const principal = getGatewayPrincipal(c);
-    if (!hasGatewayScope(principal.scopes, 'tasks.write')
-      || (principal.kind !== 'owner' && principal.kind !== 'trusted-proxy')) {
-      return c.json({ ok: false, error: 'Human review requires owner access' }, 403);
+    if (!canReviewTask(principal)) {
+      return c.json({ ok: false, error: 'Task review requires owner or paired mobile access' }, 403);
     }
-    const index = Number(c.req.param('index'));
     const parsed = TaskCriterionReviewInputSchema.safeParse(await c.req.json().catch(() => null));
-    if (!Number.isInteger(index) || index < 0 || !parsed.success) {
+    if (!parsed.success) {
       return c.json({ ok: false, error: 'Invalid criterion review' }, 400);
     }
     const task = tasks.get(c.req.param('id'));
@@ -132,28 +140,24 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
       || task.version !== parsed.data.expectedVersion || task.phase === 'closed') {
       return c.json({ ok: false, error: 'Task changed; refresh before reviewing' }, 409);
     }
-    if (task.contract?.acceptanceCriteria[index] === undefined) {
+    const checkId = c.req.param('checkId');
+    const index = task.contract?.acceptanceCriteria.findIndex((_, position) =>
+      taskCheckId(task.id, task.latestContractVersion, position) === checkId) ?? -1;
+    if (index < 0) {
       return c.json({ ok: false, error: 'Criterion not found' }, 404);
     }
     const actor = { kind: 'user' as const, id: principal.principalId };
     const result = runSqliteWriteTransaction((db) => {
-      const completed = parsed.data.status === 'passed' && criterionReviews.allPassed(task, index);
-      if (completed && (runs.getActiveRoot(task.id) || runs.listActiveWaits(task.id).length > 0)) {
+      if (runs.listActiveWaits(task.id).length > 0) {
         return { blocked: true } as const;
       }
       const review = criterionReviews.set({ task, expectedVersion: parsed.data.expectedVersion,
-        criterionIndex: index, status: parsed.data.status, note: parsed.data.note, actor });
+        criterionIndex: index, resultId: parsed.data.resultId, status: parsed.data.status, note: parsed.data.note, actor });
       if (!review) return undefined;
-      let version = task.version + 1;
-      if (completed) {
-        const closed = new TaskApplicationService().execute({ taskId: task.id, expectedVersion: version,
-          idempotencyKey: `criterion-completion:${task.id}:${version}`, actor, command: { type: 'close', resolution: 'done' } });
-        if (closed.ok === false) throw new Error(`Task completion failed after criterion review: ${closed.reason}`);
-        version = closed.model.task.version;
-      }
+      const version = task.version + 1;
       enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version,
         changedFields: ['acceptance'], actor });
-      return { review, version, completed };
+      return { review, version };
     });
     if (!result) return c.json({ ok: false, error: 'Task changed; refresh before reviewing' }, 409);
     if ('blocked' in result) return c.json({ ok: false, error: 'Wait for execution and pending items before completing acceptance' }, 409);
@@ -352,6 +356,12 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   authenticated.post('/api/tasks/:id/commands', taskRateLimit, async (c) => {
     const parsed = TaskCommandRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task command' }, 400);
+    if (parsed.data.command.type === 'signoff') {
+      const principal = getGatewayPrincipal(c);
+      if (!canReviewTask(principal)) {
+        return c.json({ ok: false, error: 'Task sign-off requires owner or paired mobile access' }, 403);
+      }
+    }
     const capabilityContext = capabilityHttpContext(c);
     const { idempotencyKey, ...input } = parsed.data;
     let result;

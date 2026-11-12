@@ -1,4 +1,5 @@
 import { taskDescriptionForDisplay, type TaskRunStatus } from '@xopcai/gateway-contract';
+import type { Ref } from 'react';
 import { Link } from 'react-router-dom';
 
 import { ChatMarkdownRenderer } from '@/features/chat/rendering/markdown/chat-markdown-renderer';
@@ -10,11 +11,12 @@ import { TaskInputCard } from './task-input-card';
 import { taskChatHref } from './task-detail-route';
 
 /** Keep actionable waits ahead of supporting status and historical results. */
-export function TaskCurrentAction({ detail, executorName, language, onUpdated }: {
+export function TaskCurrentAction({ detail, executorName, language, onUpdated, ref }: {
   detail: TaskDetail;
   executorName?: string;
   language: 'zh' | 'en';
   onUpdated: (detail: TaskDetail) => void;
+  ref?: Ref<HTMLElement>;
 }) {
   const zh = language === 'zh';
   const pausedWait = detail.waits.find((wait) => wait.kind === 'paused');
@@ -23,7 +25,7 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated }:
       || (wait.kind === 'approval' && typeof wait.condition.capability === 'string'))
       && wait.condition.type !== 'connection')
     : [];
-  const needsAttention = actionableWaits.length > 0 || detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
+  const needsAttention = detail.presentation.status === 'needsUser';
   const receipt = currentTaskReceipt(detail);
   const activeRun = detail.runs.find((run) => !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
   const activeProgress: Partial<Record<TaskRunStatus, string>> = {
@@ -34,7 +36,7 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated }:
     waiting: zh ? '任务正在等待继续。' : 'The task is waiting to resume.',
     verifying: zh ? '正在检查执行结果。' : 'Checking the result.',
   };
-  const summary = pausedWait?.reason ?? detail.waits[0]?.reason
+  const summary = detail.presentation.reason ?? pausedWait?.reason ?? detail.waits[0]?.reason
     ?? (detail.task.phase === 'closed'
       ? receipt?.summary ?? (zh ? '任务已关闭，可查看交付物与执行结果。' : 'The task is closed. Review its deliverables and results.')
       : detail.task.phase === 'review'
@@ -52,7 +54,7 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated }:
     })}
   </ul> : null;
 
-  return <section aria-label={zh ? '当前需要处理' : 'Current action'} className="rounded-xl border border-edge bg-surface-panel p-4">
+  return <section ref={ref} tabIndex={-1} aria-label={zh ? '当前需要处理' : 'Current action'} className="rounded-xl border border-edge bg-surface-panel p-4">
     <h2 className="text-sm font-semibold text-fg">{needsAttention
       ? (zh ? '需要你处理' : 'Your action needed')
       : (zh ? '当前进展' : 'Current progress')}{actionableWaits.length > 1 ? ` · ${actionableWaits.length}` : ''}</h2>

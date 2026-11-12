@@ -127,8 +127,8 @@ export function decisionFromTask(
   const task = model.task;
   if (task.phase === 'closed' || (model.operationalState === 'waiting' && model.attention.length === 0)) return null;
   const isChinese = locale?.toLowerCase().startsWith('zh') ?? task.locale === 'zh';
-  const waitingAttention = model.attention.some((item) => ['input_required', 'approval_required', 'dependency_blocked'].includes(item.kind));
-  if (task.phase === 'review' && !waitingAttention) {
+  const action = model.presentation.primaryAction;
+  if (action?.type === 'review' || action?.type === 'signoff') {
     return {
       id: `task:${task.id}:review`,
       response: { kind: 'task', taskId: task.id, canRetry: false },
@@ -145,16 +145,19 @@ export function decisionFromTask(
     };
   }
 
-  const item = model.attention.find((candidate) => [
+  const sourceId = action?.type === 'resolve_wait' ? action.waitId
+    : action?.type === 'inspect_run' || action?.type === 'retry_run' ? action.runId : undefined;
+  const item = (sourceId ? model.attention.find(candidate => candidate.sourceId === sourceId) : undefined) ?? model.attention.find((candidate) => [
     'input_required',
     'approval_required',
     'dependency_blocked',
+    'run_decision_required',
     'run_failed',
     'verification_failed',
     'overdue',
   ].includes(candidate.kind));
   if (!item) return null;
-  const reason = item.kind === 'input_required'
+  const reason = item.kind === 'input_required' || item.kind === 'run_decision_required'
     ? 'needs_input'
     : item.kind === 'approval_required'
       ? 'approval_required'
@@ -167,7 +170,7 @@ export function decisionFromTask(
   if (!reason) return null;
   return {
     id: `task:${task.id}`,
-    response: { kind: 'task', taskId: task.id, canRetry: reason === 'retry' && model.allowedCommands.includes('start') },
+    response: { kind: 'task', taskId: task.id, canRetry: action?.type === 'retry_run' },
     kind: 'task',
     title: task.title,
     detail: isChinese ? ({

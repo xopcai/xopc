@@ -12,6 +12,7 @@ import { hasPersonalResultFileLinks, sanitizePersonalResultFileLinks } from '../
 import { TaskRepository } from './task-repository.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
 import { finalReplyCharacterLimit } from './task-final-reply.js';
+import { finalizedTaskResultId, recordTaskResultVersion } from './task-result-versions.js';
 
 const log = createLogger('TaskResultDelivery');
 
@@ -69,18 +70,25 @@ export class TaskResultDeliveryRepository {
     if (outcome.deliverables.length > 50 || JSON.stringify(outcome).length > 256_000) {
       throw new Error('Task outcome exceeds delivery limits');
     }
-    const run = new TaskRunRepository().get(runId);
-    if (!run || !['running', 'waiting', 'verifying'].includes(run.status)) return;
-    const state = new TaskConversationRepository().getState(run.taskId);
-    if (!state || state.activeConversationId !== run.conversationId) return;
-    getSqliteDatabase().prepare(`INSERT INTO task_run_outcomes
+    runSqliteWriteTransaction(db => {
+      const run = new TaskRunRepository().get(runId);
+      if (!run || !['running', 'waiting', 'verifying'].includes(run.status)) return;
+      const state = new TaskConversationRepository().getState(run.taskId);
+      if (!state || state.activeConversationId !== run.conversationId) return;
+      const inserted = db.prepare(`INSERT INTO task_run_outcomes
       (task_run_id, outcome_id, assignment_epoch, outcome_json, created_at)
       VALUES (?, ?, ?, ?, ?) ON CONFLICT(task_run_id, outcome_id) DO NOTHING`)
       .run(runId, outcome.outcomeId, state.assignmentEpoch, JSON.stringify(outcome), Date.now());
+      if (inserted.changes) recordTaskResultVersion({
+        runId, assignmentEpoch: state.assignmentEpoch, outcomeId: outcome.outcomeId,
+        instructionSequence: outcome.research?.instructionSequence ?? run.instructionSequenceAtStart ?? 0,
+      });
+    });
   }
 
   /** Called inside the run completion transaction, after stale receipts are rejected. */
-  enqueue(runId: string, summary: string, status: 'succeeded' | 'failed', resultText?: string, hostArtifact?: { id: string; sha256?: string }): boolean {
+  enqueue(runId: string, summary: string, status: 'succeeded' | 'failed', resultText?: string,
+    hostArtifact?: { id: string; sha256?: string }, incompleteWorkspace = false): boolean {
     const db = getSqliteDatabase();
     const run = new TaskRunRepository().get(runId);
     if (!run || run.parentRunId) return false;
@@ -102,7 +110,7 @@ export class TaskResultDeliveryRepository {
     const task = new TaskRepository().require(run.taskId);
     const validResearch = research && research.contractVersion === task.latestContractVersion
       && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
-    const selectionRequired = !personalRequestForTask(task.id) && Boolean(task.body?.includes('finalArtifactIds'));
+    const selectionRequired = task.contract?.resultPolicy === 'selected';
     const researchGap = selectionRequired && !research && !hostArtifact?.sha256 || Boolean(research && (!validResearch || !validResearch.checks.length
       || validResearch.checks.length !== task.contract?.acceptanceCriteria.length
       || validResearch.checks.some(check => check.status !== 'passed')
@@ -136,7 +144,7 @@ export class TaskResultDeliveryRepository {
     if (!deliverables.length && personalRequestForTask(run.taskId)) return false;
     const outcome: TurnOutcome = { ...latest, research: validResearch, deliverables, evidence: [], changeSet: undefined,
       summary: replyTooLong ? undefined : summary,
-      status: selectedManifest
+      status: incompleteWorkspace ? 'partial' : selectedManifest
         ? status === 'failed' || researchGap || selectedMissing || unpublishedFile || replyTooLong || deliverables.some(item => item.availability !== 'available') ? 'partial' : 'succeeded'
         : latest.status === 'failed' ? 'failed'
         : status === 'failed' || latest.status === 'partial' || (hostArtifact && !verifiedArtifact) || unpublishedFile || replyTooLong || researchGap || deliverables.some(item => item.availability !== 'available')
@@ -155,7 +163,7 @@ export class TaskResultDeliveryRepository {
           verification: check?.status ?? 'unverified', claimIds: check?.claimIds ?? [], note: check?.note ?? 'No verified adoption evidence for this revision.' };
       });
     const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId: randomUUID(),
-      taskId: run.taskId, taskRunId: runId, taskTitle: origin.title,
+      taskId: run.taskId, taskRunId: runId, taskResultId: finalizedTaskResultId(runId), taskTitle: origin.title,
       conversationId: origin.conversation_id, originTranscriptId: origin.origin_transcript_id,
       ...(origin.request_input_id ? { requestInputId: origin.request_input_id } : {}),
       assignmentEpoch: state.assignmentEpoch, contractVersion: task.latestContractVersion,

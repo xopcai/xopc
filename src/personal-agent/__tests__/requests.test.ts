@@ -146,9 +146,9 @@ describe('Personal connected-app requests', () => {
     const task = new TaskRepository().get(request.taskId!);
     expect(task?.contract?.acceptancePolicy).toBe('verified_auto');
     expect(task?.body).toContain(request.objective);
-    expect(task?.body).toContain('## Result for the originating conversation');
-    expect(task?.body).toContain('Never substitute a progress page');
-    expect(task?.body).toContain('call personal_request_result');
+    expect(task?.contract?.resultPolicy).toBe('connected');
+    expect(task?.contract?.brief).toBe(task?.body);
+    expect(task?.body).not.toContain('call personal_request_result');
     expect(submit().taskId).toBe(request.taskId);
     expect(listPersonalRequests(conversationId)).toHaveLength(1);
     const choices = new AgentSelectionRepository().list(conversationId, { requestId: request.requestId });
@@ -976,6 +976,7 @@ describe('Personal connected-app requests', () => {
       coverage: { from: '2026-10-01T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', scannedCount: 1, partial: false } });
     const board = new TaskCollaborationRepository();
     board.append({ taskId: request.taskId!, authorKind: 'main_agent', authorId: agentId, kind: 'instruction', body: 'Change the report filter', idempotencyKey: 'late-change' });
+    getSqliteDatabase().prepare('UPDATE task_runs SET timeout_at = 1 WHERE run_id = ?').run(coordinator.runId);
     coordinator.finalize({ status: 'succeeded', summary: 'Finished', assistantText: 'Result' });
     finishSessionInputRun(conversationId, 'main-run', 'completed');
     drainPersonalRequestResults();
@@ -1005,6 +1006,17 @@ describe('Personal connected-app requests', () => {
       sender: 'Boss', receivedAt: '2026-10-07T09:00:00Z', importanceReason: 'Urgent' }] };
     await publish.execute('current', result); await publish.execute('current-replay', result);
     expect(board.list(request.taskId!).filter(entry => entry.kind === 'result' && entry.authorKind === 'worker_agent')).toHaveLength(2);
+    const body = JSON.stringify(result);
+    appendTranscriptEntry(chat.key, { role: 'toolResult', toolCallId: 'read-urgent-mail', toolName: 'xopc_tool_execute',
+      content: [{ type: 'text', text: body }], isError: false, timestamp: Date.now() });
+    await submitTaskResearchResult(chat.key, 'review-urgent-mail', {
+      sources: [{ id: 'app', toolCallId: 'read-urgent-mail', excerpt: body }],
+      claims: [{ id: 'urgent', statement: result.summary, kind: 'fact', sourceIds: ['app'] }],
+    }, undefined, async ({ criteria }) => ({
+      claims: [{ id: 'urgent', support: 'supported', note: 'Matches saved result and app read.' }],
+      checks: criteria.map((_criterion, criterionIndex) => ({ criterionIndex, status: 'passed', claimIds: ['urgent'], note: 'Verified.' })),
+      instructions: [{ sequence: instruction.sequence, status: 'passed', claimIds: ['urgent'], note: 'New title and filter verified.' }],
+    }));
     coordinator.finalize({ status: 'succeeded', summary: result.summary, assistantText: result.summary });
     finishSessionInputRun(conversationId, 'main-run', 'completed');
     drainPersonalRequestResults();

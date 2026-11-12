@@ -4,7 +4,8 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/
 import { appendTranscriptEntry, loadLlmMessagesForSession } from '../storage/sqlite/transcript-repository.js';
 import { readCurrentTranscriptId } from '../storage/sqlite/session-instance-repository.js';
 import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
-import { TaskCollaborationRepository } from '../tasks/task-collaboration-repository.js';
+import { taskInstructionSequence } from '../tasks/task-instruction-sequence.js';
+import { finalizedTaskResultId } from '../tasks/task-result-versions.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
 import { createLogger } from '../utils/logger.js';
@@ -89,36 +90,43 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
           return;
         }
         if (state?.activeConversationId !== run.conversationId) throw new Error('Task execution changed');
-        const latestDirection = new TaskCollaborationRepository().coordination(request.taskId!)
-          .filter(entry => ['main_agent', 'user'].includes(entry.authorKind) && ['answer', 'instruction'].includes(entry.kind)).at(-1)?.sequence ?? 0;
+        const latestDirection = taskInstructionSequence(run.taskId);
         const publication = db.prepare(`SELECT sequence FROM task_collaboration_entries
           WHERE task_id = ? AND task_run_id = ? AND author_kind = 'worker_agent' AND kind = 'result'
           AND idempotency_key LIKE ? ORDER BY sequence DESC LIMIT 1`)
           .get(request.taskId!, run.id, `personal-request-result:${request.requestId}:${run.id}:%`) as { sequence: number } | undefined;
         const outdated = latestDirection > (publication?.sequence ?? 0);
+        const unverifiedDirections = latestDirection > 0 && !db.prepare(`SELECT 1 FROM task_results
+          WHERE run_id = ? AND assignment_epoch = ? AND instruction_sequence = ? AND finalized_at IS NOT NULL`)
+          .get(run.id, state?.assignmentEpoch ?? 0, latestDirection);
         const parsed = !outdated && stored.result_json && stored.result_run_id === run.id
           ? PersonalRequestResultSchema.safeParse(JSON.parse(stored.result_json)) : undefined;
         const messages = run.conversationId ? loadLlmMessagesForSession(run.conversationId) : [];
         const assistant = messages.filter(message => message.role === 'assistant').at(-1);
         const fallback = assistant?.role === 'assistant'
           ? assistant.content.filter(part => part.type === 'text').map(part => part.text).join('\n').trim() : '';
-        const content = parsed?.success ? renderPersonalRequestResult(parsed.data)
+        const adoptionWarning = outdated ? 'Supplemental requirements arrived after the saved connected-app result. Their completion is unverified.'
+          : unverifiedDirections ? 'Adoption of supplemental requirements in this connected-app result is unverified.' : '';
+        const content = outdated ? adoptionWarning : parsed?.success ? renderPersonalRequestResult(parsed.data)
           : fallback && fallback !== 'NO_REPLY' ? fallback : receipt?.summary?.trim() || 'Request finished without a readable result.';
         const failed = run.status !== 'succeeded';
-        const adoptionWarning = outdated ? 'Supplemental requirements arrived after the saved connected-app result. Their completion is unverified; do not treat the older structured items as current.' : '';
-        const display = failed ? `查询未完成。\n\n${content}` : content;
+        const report = [outdated ? '' : adoptionWarning, content].filter(Boolean).join('\n\n');
+        const display = failed ? `查询未完成。\n\n${report}` : report;
         const now = Date.now();
         const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId: `personal-request:${request.requestId}`,
-          taskId: request.taskId, taskRunId: run.id, taskTitle: request.objective.slice(0, 300),
+          taskId: request.taskId, taskRunId: run.id, taskResultId: !outdated && !unverifiedDirections ? finalizedTaskResultId(run.id) : undefined,
+          taskTitle: request.objective.slice(0, 300),
           conversationId: request.conversationId, originTranscriptId: request.transcriptId,
           requestInputId: request.inputId, assignmentEpoch: state?.assignmentEpoch ?? 0,
+          contractVersion: run.contractVersion, instructionSequence: latestDirection,
           outcome: { version: 1, outcomeId: `personal-request:${request.requestId}`, runId: run.id,
-            turnId: `personal-request:${request.requestId}`, status: failed ? 'failed' : outdated || (parsed?.success && parsed.data.coverage?.partial) ? 'partial' : 'succeeded',
+            turnId: `personal-request:${request.requestId}`, status: failed ? 'failed'
+              : outdated || unverifiedDirections || (parsed?.success && parsed.data.coverage?.partial) ? 'partial' : 'succeeded',
             summary: content.slice(0, 2000), deliverables: [], evidence: [], createdAt: new Date(now).toISOString() }, createdAt: now });
         const personal = getPersonalAgentByConversation(request.conversationId);
         if (personal) warmPersonalResult(request.conversationId, delivery.deliveryId);
         if (personal) enqueuePersonalReply({ delivery, objective: request.objective, requestId: request.requestId,
-          report: [adoptionWarning, content].filter(Boolean).join('\n\n') });
+          report });
         const entry = personal ? undefined : appendTranscriptEntry(request.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
           content: display, details: delivery, display: true, timestamp: now });
         updatePersonalRequest(request, { state: run.status === 'cancelled' ? 'cancelled' : failed ? 'failed' : 'completed' });

@@ -1,5 +1,6 @@
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { TaskEvidence, TaskRunReceipt, TurnOutcome } from '@xopcai/gateway-contract';
+import { taskCheckId } from '@xopcai/gateway-contract';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 
@@ -13,7 +14,7 @@ import { TaskCollaborationRepository } from './task-collaboration-repository.js'
 import { TaskRepository } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
-import { currentTaskResearchResult, taskInstructionSequence } from './task-research-result.js';
+import { currentTaskResearchResult, taskInstructionSequence, verifiesTaskInstructions } from './task-research-result.js';
 import { buildResearchRepair, inspectTaskPublications } from './task-research-repair.js';
 import { getTaskHandoff } from './task-handoff.js';
 import { currentTaskJsonAcceptance, verifyTaskJsonPublication } from './task-json-acceptance.js';
@@ -23,7 +24,7 @@ import { TaskOriginRepository } from './task-origin-repository.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
 import { resolveTaskLocale } from './task-language.js';
 import { loadTranscriptRowsForSession } from '../storage/sqlite/index.js';
-import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
+import { ACCEPTANCE_REPAIR_READ_TOOLS, RECOVERY_READ_TOOLS, findUnconfirmedToolEffect, type UnconfirmedToolEffect } from '../agent/orchestration/turn-recovery.js';
 import { isTransientProviderErrorMessage } from '../providers/model-response.js';
 
 /** A single usable file can be delivered with explicit unverified status after execution. */
@@ -173,16 +174,20 @@ export class TaskRunCoordinator {
     const task = new TaskRepository().require(run.taskId);
     const research = currentTaskResearchResult(run.id);
     const personalSnapshot = personalRequestReviewSnapshot(task.id, run.id);
+    const instructionSequence = taskInstructionSequence(task.id);
+    const instructionsChanged = instructionSequence !== (run.instructionSequenceAtStart ?? 0);
     const currentResearch = research && (!personalSnapshot || (personalSnapshot.hash && personalSnapshot.hash === research.personalResultHash))
       && research.contractVersion === task.latestContractVersion
-      && research.instructionSequence === taskInstructionSequence(task.id) ? research : undefined;
+      && research.instructionSequence === instructionSequence ? research : undefined;
     const emptySuccess = input.status === 'succeeded' && !hasAssistantResult && !hasBoardResult
       && !currentResearch?.finalText && !this.#hasDeliverables && this.#evidence.length === 0;
     const zh = resolveTaskLocale(task) === 'zh';
     const status = emptySuccess ? 'failed' : input.status;
-    const recoveryOptions = { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS };
-    const unconfirmedEffects = status === 'failed' && Boolean(run.conversationId
-      && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId), recoveryOptions));
+    const recoveryOptions = { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS, allowMissingReadTools: RECOVERY_READ_TOOLS };
+    let recoveryCheck: { effect: UnconfirmedToolEffect | undefined } | undefined;
+    const unconfirmedEffect = () => (recoveryCheck ??= { effect: run.conversationId
+      ? findUnconfirmedToolEffect(loadTranscriptRowsForSession(run.conversationId), recoveryOptions) : undefined }).effect;
+    const unconfirmedEffects = status === 'failed' ? unconfirmedEffect() : undefined;
     const systemSummaries: Record<string, string> = { 'Message processed': '消息已处理', Interrupted: '执行已中断', 'Agent run ended unexpectedly': '助手执行意外结束' };
     const resultSummary = status === 'succeeded' && currentResearch?.finalText ? currentResearch.finalText
       : status === 'succeeded' && hasAssistantResult && /^Message processed(?: successfully)?$/.test(input.summary)
@@ -190,14 +195,17 @@ export class TaskRunCoordinator {
     const summary = emptySuccess ? (zh ? '助手执行未返回结果或证据' : 'Agent run returned no result or evidence')
       : zh ? systemSummaries[resultSummary] ?? resultSummary : resultSummary;
     const publications = inspectTaskPublications(run.id, currentResearch);
-    const instructionSequence = taskInstructionSequence(task.id);
+    const directionsReviewed = instructionsChanged && currentResearch && verifiesTaskInstructions(task.id, currentResearch)
+      && !publications.missing.length && !publications.unreviewed.length
+      && (currentResearch.finalText || personalSnapshot?.content || currentResearch.finalArtifactIds?.length)
+      && (currentResearch.finalArtifactIds ?? []).every(id => currentResearch.inspectedArtifactIds?.includes(id));
     const jsonSpec = status === 'succeeded' && !personalSnapshot && !instructionSequence && task.contract?.expectedOutputs.length === 1
       && /^[A-Za-z0-9_.-]+\.json$/i.test(task.contract.expectedOutputs[0] ?? '')
       ? currentTaskJsonAcceptance(task, getTaskHandoff(task.id)) : undefined;
     const publicationCandidate = status === 'succeeded' && (!research || jsonSpec) && !personalSnapshot && !instructionSequence
       ? unreviewedLocalPublication(task, run, publications) : undefined;
     const publication = publicationCandidate && run.conversationId
-      && canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId), recoveryOptions)
+      && !unconfirmedEffect()
       ? publicationCandidate : undefined;
     const structuralCheck = publication && jsonSpec ? verifyTaskJsonPublication(jsonSpec, publication, zh) : undefined;
     const hostArtifact = publication && (!jsonSpec || structuralCheck)
@@ -207,13 +215,12 @@ export class TaskRunCoordinator {
     const repair = hostArtifact ? undefined : buildResearchRepair({
       publicationStructureGap: jsonSpec ? zh ? `发布符合全部约定结构的 ${jsonSpec.file}。宿主会直接检查文件名、JSON 格式及约定的对象数量和字段。`
         : `Publish ${jsonSpec.file} with the agreed JSON structure. The host checks the actual file name, JSON syntax, and any required object count and fields.` : undefined,
-      research: currentResearch, stale: Boolean(research && !currentResearch),
+      research: currentResearch, stale: Boolean(research && !currentResearch || instructionsChanged && !directionsReviewed),
       instructionSequence, publications, criteria: task.contract?.acceptanceCriteria ?? [],
       resultFingerprint: personalSnapshot?.hash,
       requiresFinalText: !personalSnapshot && task.contract?.expectedOutputs.some(isChatReplyOutput),
-      requiresReview: !jsonSpec && (task.contract?.acceptancePolicy === 'verified_auto' || (!personalSnapshot && Boolean(task.body?.includes('publish_task_result')))) });
-    const repairBlocked = Boolean(repair && run.conversationId && !canResumeAfterModelFailure(loadTranscriptRowsForSession(run.conversationId),
-      { allowFailedReadTools: ACCEPTANCE_REPAIR_READ_TOOLS }));
+      requiresReview: !jsonSpec && (task.contract?.acceptancePolicy === 'verified_auto' || task.contract?.resultPolicy === 'selected') });
+    const repairBlocked = repair ? unconfirmedEffect() : undefined;
     if (status === 'failed' && isTransientProviderErrorMessage(input.summary) && !unconfirmedEffects
       && this.#runs.scheduleContinuation({ runId: run.id, expectedVersion: run.version, reason: 'model_failure',
         message: ['The previous model request failed transiently. Continue this same task from recorded completed operations; do not replay external effects.',
@@ -227,6 +234,7 @@ export class TaskRunCoordinator {
       verifies: currentResearch.checks.filter(check => check.status === 'passed' && check.claimIds.includes(claim.id)).map(check => check.criterion),
     })) ?? [];
     const checks = structuralCheck?.checks ?? currentResearch?.checks.map(check => ({ criterion: check.criterion, status: check.status,
+      checkId: taskCheckId(task.id, run.contractVersion, check.criterionIndex),
       evidenceTitles: check.claimIds.map(id => `Research claim: ${id}`), note: check.note,
       method: currentResearch.review === 'model_reviewed' ? 'model_reviewed' as const : 'unverified' as const }))
       ?? (task.contract?.acceptanceCriteria ?? []).map(criterion => ({ criterion, status: 'unverified' as const, evidenceTitles: [],
@@ -242,8 +250,10 @@ export class TaskRunCoordinator {
     this.#application.completeRun({
       runId: run.id,
       expectedRunVersion: run.version,
-      resultText: hostArtifact ? publicationText : input.assistantText,
+      resultText: hostArtifact ? publicationText : directionsReviewed ? currentResearch?.finalText : input.assistantText,
+      ...(directionsReviewed ? { reviewedInstructionSequence: instructionSequence } : {}),
       hostArtifact,
+      ...(unconfirmedEffects || repairBlocked ? { unconfirmedEffect: unconfirmedEffects ?? repairBlocked } : {}),
       receipt: {
         status: finalStatus,
         summary: hostArtifact ? publicationText : summary,
@@ -255,7 +265,7 @@ export class TaskRunCoordinator {
             ? [...currentResearch.checks.filter(check => check.status !== 'passed').map(check => check.criterion),
               ...currentResearch.claims.filter(claim => claim.support !== 'supported').map(claim => claim.note ?? claim.statement)]
             : task.contract?.acceptanceCriteria ?? [] : [],
-        needsUser: unconfirmedEffects || repairBlocked,
+        needsUser: Boolean(unconfirmedEffects || repairBlocked),
         ...(repairBlocked ? { nextAction: zh ? '先确认上次未确认操作的实际影响，再继续补查。' : 'Confirm the effects of the unconfirmed operation before repair.' } : {}),
         completionVerdict: achieved ? 'achieved' : status === 'succeeded' ? 'partial' : 'not_achieved',
         ...(finalStatus === 'failed' ? { failure: { code: acceptanceFailed ? 'acceptance_incomplete' : unconfirmedEffects ? 'tool_outcome_unconfirmed' : emptySuccess ? 'empty_agent_run' : 'agent_run_failed', phase: 'execution',

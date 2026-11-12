@@ -43,6 +43,8 @@ function detail(): TaskDetail {
     task: { id: 'task-1', title: 'Prepare report', body: 'Report description', phase: 'ready', priority: 'normal', version: 3, latestContractVersion: 1, updatedAt: 1,
       contract: { objective: 'Research objective', acceptanceCriteria: ['Report saved'], acceptancePolicy: 'manual', expectedOutputs: ['Expected report'] } },
     allowedCommands: ['start', 'mark_ready', 'move'], operationalState: 'idle',
+    presentation: { status: 'ready', primaryAction: { type: 'start' } },
+    acceptanceTarget: { id: 'run-1', runId: 'run-1', canSignOff: false },
     waits: [], attention: [], runs: [], receipts: [], sessions: [], context: [], dependencies: [], dependents: [], phaseChanges: [], criterionReviews: [],
     conversation: { activeConversationId: 'conversation-1', currentExecutorAgentId: 'main' },
   } as unknown as TaskDetail;
@@ -213,6 +215,7 @@ describe('task detail action-first layout', () => {
   });
 
   it('shows questions and submit controls inline without a competing chat link', async () => {
+    state.detail.presentation = { status: 'needsUser', primaryAction: { type: 'resolve_wait', waitId: 'wait-1' } };
     state.detail.waits = [{ id: 'wait-1', taskId: 'task-1', status: 'active', createdAt: 1, kind: 'user_input', reason: 'Choose audience', condition: { choices: ['Designers'] } }] as TaskDetail['waits'];
     state.detail.attention = [{ kind: 'input_required', summary: 'Choose audience' }] as TaskDetail['attention'];
     state.detail.allowedCommands = ['resolve_wait'];
@@ -227,6 +230,7 @@ describe('task detail action-first layout', () => {
   });
 
   it('keeps approval and denial in the first action section', async () => {
+    state.detail.presentation = { status: 'needsUser', primaryAction: { type: 'resolve_wait', waitId: 'wait-1' } };
     state.detail.waits = [{ id: 'wait-1', taskId: 'task-1', status: 'active', createdAt: 1, kind: 'approval', reason: 'Publish report?', condition: { capability: 'publish' } }] as TaskDetail['waits'];
     state.detail.allowedCommands = ['resolve_wait'];
     await render();
@@ -236,6 +240,7 @@ describe('task detail action-first layout', () => {
   });
 
   it('routes review to criteria before enabling completion and preserves rerun in More', async () => {
+    state.detail.presentation = { status: 'review', primaryAction: { type: 'review' } };
     state.detail.task.phase = 'review'; state.detail.allowedCommands = ['start', 'close'];
     await render();
     expect(button(copy.runTask)).toBeUndefined();
@@ -252,13 +257,15 @@ describe('task detail action-first layout', () => {
     expect(document.body.textContent).toContain(copy.deleteTask);
   });
 
-  it('closes the task on the last checkbox without a second command', async () => {
+  it('requires explicit sign-off after the last checkbox', async () => {
     state.detail.task.phase = 'review';
-    state.detail.task.contract!.acceptancePolicy = 'verified_auto';
+    state.detail.task.contract!.acceptancePolicy = 'manual';
     state.detail.allowedCommands = ['close'];
     vi.mocked(reviewTaskCriterion).mockImplementation(async (_taskId, _index, status) => {
-      state.detail = { ...state.detail, task: { ...state.detail.task, version: 5, phase: 'closed', resolution: 'done' },
-        criterionReviews: [{ criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1,
+      state.detail = { ...state.detail, task: { ...state.detail.task, version: 4 },
+        presentation: { status: 'review', primaryAction: { type: 'signoff', resultId: 'run-1' } },
+        acceptanceTarget: { id: 'run-1', runId: 'run-1', canSignOff: true },
+        criterionReviews: [{ checkId: 'task-1:1:0', criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1,
           status, reviewedBy: { kind: 'user', id: 'owner' }, reviewedAt: 1 }] };
       return state.detail;
     });
@@ -266,12 +273,13 @@ describe('task detail action-first layout', () => {
     expect(button('完成任务')).toBeUndefined();
     expect(checkbox().checked).toBe(false);
     await act(async () => checkbox().click());
-    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'passed', 3, 1);
+    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 'task-1:1:0', 'passed', 3, 1, 'run-1');
     await render();
     expect(checkbox().checked).toBe(true);
-    expect(checkbox().disabled).toBe(true);
-    expect(button('完成任务')).toBeUndefined();
+    expect(checkbox().disabled).toBe(false);
     expect(commandTask).not.toHaveBeenCalled();
+    await act(async () => button('确认验收').click());
+    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'signoff', resultId: 'run-1' }, 4);
   });
 
   it('keeps criterion checkboxes read-only for closed tasks', async () => {
@@ -283,6 +291,8 @@ describe('task detail action-first layout', () => {
   });
 
   it('keeps main sections readable while collapsing detailed evidence', async () => {
+    state.detail.presentation = { status: 'needsUser', reason: 'Choose internal or public release',
+      primaryAction: { type: 'inspect_run', runId: 'run-1' } };
     state.detail.task.phase = 'review';
     state.detail.allowedCommands = ['close', 'add_wait', 'start'];
     state.detail.task.contract!.acceptanceCriteria = ['Report saved', 'Evidence checked'];
@@ -291,7 +301,7 @@ describe('task detail action-first layout', () => {
     state.detail.receipts = [{ runId: 'run-1', status: 'succeeded', summary: 'Claim c-ac0-scope: Full report with detailed reasoning',
       finalizedAt: 1, completionVerdict: 'partial', needsUser: true, remainingWork: ['Confirm the public release scope'], nextAction: 'Choose internal or public release',
       evidence: [{ kind: 'source', title: 'Research claim: c-file', summary: 'Source details', provenance: 'judge', strength: 'observed' }],
-      verification: { status: 'unverified', checks: state.detail.task.contract!.acceptanceCriteria.map((criterion) => ({ criterion,
+      verification: { status: 'unverified', checks: state.detail.task.contract!.acceptanceCriteria.map((criterion, index) => ({ criterion, checkId: `task-1:1:${index}`,
         status: 'unverified', evidenceTitles: ['Research claim: c-file'], method: 'model_reviewed', note })) } }] as TaskDetail['receipts'];
     await render();
     const report = [...container.querySelectorAll('summary')].find((item) => item.textContent === '完整执行报告')!.parentElement as HTMLDetailsElement;
@@ -312,6 +322,8 @@ describe('task detail action-first layout', () => {
     expect(evidencePanels.map(item => item.textContent)).toEqual(['Report saved', 'Evidence checked']);
     for (const summary of evidencePanels) expect((summary.parentElement as HTMLDetailsElement).open).toBe(false);
     const toolbar = container.querySelector('[aria-label="任务操作"]')!;
+    expect(toolbar.textContent).not.toContain('去验收');
+    expect(toolbar.textContent).toContain('查看待处理事项');
     expect(toolbar.textContent).not.toContain(copy.pauseTask);
     expect(toolbar.textContent).not.toContain('设置执行时间');
     await act(async () => evidencePanels[0].querySelector('span[id]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
@@ -323,18 +335,19 @@ describe('task detail action-first layout', () => {
   it('allows changing a human decision and keeps save failures beside acceptance', async () => {
     state.detail.task.phase = 'review';
     state.detail.allowedCommands = ['close'];
-    state.detail.criterionReviews = [{ criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1,
+    state.detail.criterionReviews = [{ checkId: 'task-1:1:0', criterionIndex: 0, criterionText: 'Report saved', contractVersion: 1,
       status: 'passed', reviewedAt: 1 }] as TaskDetail['criterionReviews'];
     vi.mocked(reviewTaskCriterion).mockRejectedValueOnce(new Error('Conflict'));
     await render();
     await act(async () => checkbox().click());
-    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'unverified', 3, 1);
+    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 'task-1:1:0', 'unverified', 3, 1, 'run-1');
     expect(container.querySelector(`[aria-label="${copy.successDefinition}"] [role="alert"]`)?.textContent).toBe(copy.actionFailed);
     expect(checkbox().checked).toBe(true);
     expect(commandTask).not.toHaveBeenCalled();
   });
 
   it('shows a closed summary and view-results action while retaining reopen', async () => {
+    state.detail.presentation = { status: 'ended', primaryAction: { type: 'view_results' } };
     state.detail.task.phase = 'closed'; state.detail.allowedCommands = ['reopen'];
     await render();
     expect(container.querySelector('[aria-label="当前需要处理"]')?.textContent).toContain('任务已关闭');
@@ -344,6 +357,7 @@ describe('task detail action-first layout', () => {
     expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'reopen', phase: 'ready' }, 3);
   });
   it('resumes a paused task while keeping its blocking reason visible', async () => {
+    state.detail.presentation = { status: 'paused', primaryAction: { type: 'resume', waitId: 'pause-1' } };
     state.detail.waits = [{ id: 'pause-1', taskId: 'task-1', status: 'active', createdAt: 1, kind: 'paused', reason: 'Waiting for revised scope', condition: {} }] as TaskDetail['waits'];
     state.detail.allowedCommands = ['resolve_wait'];
     await render();
@@ -353,6 +367,7 @@ describe('task detail action-first layout', () => {
   });
 
   it('retains the chat fallback when the wait cannot be resolved inline', async () => {
+    state.detail.presentation = { status: 'needsUser', primaryAction: { type: 'resolve_wait', waitId: 'connection-1' } };
     state.detail.waits = [{ id: 'connection-1', taskId: 'task-1', status: 'active', createdAt: 1, kind: 'approval', reason: 'Connect account', condition: { type: 'connection' } }] as TaskDetail['waits'];
     state.detail.attention = [{ kind: 'approval_required', summary: 'Connect your publishing account' }] as TaskDetail['attention'];
     state.detail.allowedCommands = ['resolve_wait'];

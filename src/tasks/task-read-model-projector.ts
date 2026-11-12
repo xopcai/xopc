@@ -3,6 +3,8 @@ import type {
   TaskAttentionItem,
   TaskDependencySummary,
   TaskOperationalState,
+  TaskPresentation,
+  TaskAcceptanceTarget,
 } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
@@ -11,11 +13,15 @@ import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { resolveTaskLocale } from './task-language.js';
+import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
+import { taskInstructionSequence } from './task-instruction-sequence.js';
 
 export interface TaskReadModel {
   task: TaskAggregate;
   allocation?: TaskAllocation;
   operationalState: TaskOperationalState;
+  presentation: TaskPresentation;
+  acceptanceTarget?: TaskAcceptanceTarget;
   attention: TaskAttentionItem[];
   allowedCommands: string[];
   revisionBaseline?: { resultId: string; baselineVersion: string; resultRevision: number; expectedVersion: number };
@@ -50,6 +56,10 @@ export class TaskReadModelProjector {
       kind: allocation.status === 'failed' ? 'allocation_failed' : 'allocation_blocked',
       summary: allocation.selectionReason ?? allocation.reasonCode ?? 'Allocation needs attention', sourceId: allocation.id });
     for (const wait of waits) {
+      if (wait.kind === 'external_event' && wait.condition.type === 'run_decision') {
+        attention.push({ kind: 'run_decision_required', summary: wait.reason, sourceId: wait.taskRunId });
+        continue;
+      }
       const kind = wait.kind === 'approval'
         ? 'approval_required'
         : (wait.kind === 'user_input' || (wait.kind === 'external_event' && typeof wait.condition.collaborationEntryId === 'string'))
@@ -59,7 +69,8 @@ export class TaskReadModelProjector {
             : undefined;
       if (kind) attention.push({ kind, summary: wait.reason, sourceId: wait.id });
     }
-    if (latestRun?.status === 'failed') {
+    if (!attention.some(item => item.kind === 'run_decision_required')
+      && latestRun?.status === 'failed' && latestRun.contractVersion === task.latestContractVersion) {
       const receipt = this.#runs.getReceipt(latestRun.id);
       attention.push({
         kind: receipt?.verification.status === 'failed' ? 'verification_failed' : 'run_failed',
@@ -79,10 +90,12 @@ export class TaskReadModelProjector {
       hasIncompleteDependency,
     });
     const allocating = allocation && ['pending', 'selecting'].includes(allocation.status);
-    const allowedCommands = this.allowedCommands(task, activeRun?.status, waits.length > 0, paused)
+    const hasResolvableWait = waits.some(wait => wait.condition.type !== 'connection' && wait.condition.type !== 'run_decision');
+    const allowedCommands = this.allowedCommands(task, activeRun?.status, waits.length > 0, hasResolvableWait, paused)
       .filter(command => !(allocation && allocation.status !== 'assigned' && command === 'start'))
+      .filter(command => command !== 'start' || !hasIncompleteDependency)
       .filter(command => command!=='start' || !getSqliteDatabase().prepare('SELECT 1 FROM home_followups WHERE root_task_id=?').get(task.id));
-    if (allocation && ['blocked', 'failed'].includes(allocation.status) && task.phase !== 'closed' && !paused) {
+    if (allocation && ['blocked', 'failed'].includes(allocation.status) && task.phase !== 'closed' && !activeRun && !waits.length) {
       allowedCommands.push('retry_allocation');
     }
     const resultRow = getSqliteDatabase().prepare(`SELECT payload_json FROM task_result_deliveries WHERE task_run_id IN
@@ -96,14 +109,61 @@ export class TaskReadModelProjector {
     const operationalState = task.phase !== 'closed' && !paused && !activeRun && waits.length === 0 && allocation
       ? allocating ? 'allocating' : allocation.status === 'blocked' ? 'blocked' : allocation.status === 'failed' ? 'failed' : executionState
       : executionState;
+    const reviews = new TaskCriterionReviewRepository();
+    const target = reviews.target(task);
+    const workspaceBlocked = task.phase === 'review' && !reviews.workspaceVerified(task, target);
+    const acceptanceTarget = target ? { id: target.id, ...(target.runId ? { runId: target.runId } : {}),
+      canSignOff: !waits.length && !workspaceBlocked && reviews.canSignOff(task, target) } : undefined;
     return {
       task,
       allocation,
       operationalState,
+      presentation: this.presentation(task, operationalState, waits, attention, allowedCommands, latestRun, workspaceBlocked, acceptanceTarget),
+      acceptanceTarget,
       attention: (task.phase === 'closed' && (task.resolution !== 'done' || waits.length === 0)) || paused ? [] : attention,
       allowedCommands,
       ...(revisionBaseline ? { revisionBaseline } : {}),
     };
+  }
+
+  private presentation(task: TaskAggregate, state: TaskOperationalState, waits: ReturnType<TaskRunRepository['listActiveWaits']>,
+    attention: TaskAttentionItem[], commands: string[], latestRun: ReturnType<TaskRunRepository['getLatestRoot']>, workspaceBlocked: boolean,
+    acceptance?: TaskAcceptanceTarget): TaskPresentation {
+    if (task.phase === 'closed') {
+      return { status: task.resolution === 'done' ? 'completed' : 'ended', primaryAction: { type: 'view_results' } };
+    }
+    const pause = waits.find(wait => wait.kind === 'paused');
+    if (pause) return { status: 'paused', reason: pause.reason, primaryAction: { type: 'resume', waitId: pause.id } };
+    const pending = attention.find(item => item.kind === 'input_required' || item.kind === 'approval_required');
+    if (pending?.sourceId) return { status: 'needsUser', reason: pending.summary, primaryAction: { type: 'resolve_wait', waitId: pending.sourceId } };
+    const decision = attention.find(item => item.kind === 'run_decision_required');
+    if (decision?.sourceId) return { status: 'needsUser', reason: decision.summary, primaryAction: { type: 'inspect_run', runId: decision.sourceId } };
+    if (state === 'failed') {
+      const failure = attention.find(item => item.kind === 'run_failed' || item.kind === 'verification_failed');
+      const canRetryExecutor = latestRun?.executorKind === 'agent' && typeof latestRun.executorRef.agentId === 'string';
+      if (failure?.sourceId) return { status: 'failed', reason: failure.summary,
+        primaryAction: { type: commands.includes('start') && canRetryExecutor ? 'retry_run' : 'inspect_run', runId: failure.sourceId } };
+    }
+    if (commands.includes('retry_allocation')) return { status: state === 'failed' ? 'failed' : 'blocked',
+      reason: attention.find(item => item.kind === 'allocation_failed' || item.kind === 'allocation_blocked')?.summary,
+      primaryAction: { type: 'retry_allocation' } };
+    if (state !== 'idle') return { status: state, reason: waits[0]?.reason };
+    if (task.phase === 'review') {
+      if (workspaceBlocked) return { status: 'blocked', reason: resolveTaskLocale(task) === 'zh'
+        ? '尚未确认成果已写入指定工作区。' : 'The file has not been verified in the requested workspace.',
+        ...(latestRun ? { primaryAction: { type: 'inspect_run', runId: latestRun.id } } : {}) };
+      if (!acceptance && latestRun?.status === 'succeeded'
+        && taskInstructionSequence(task.id) !== (latestRun.instructionSequenceAtStart ?? 0)) {
+        return { status: 'blocked', reason: resolveTaskLocale(task) === 'zh'
+          ? '尚未核验补充指令是否已落实。' : 'Adoption of supplemental directions still needs verification.',
+        primaryAction: { type: 'inspect_run', runId: latestRun.id } };
+      }
+      if (!acceptance) return { status: 'blocked', reason: resolveTaskLocale(task) === 'zh'
+        ? '当前成果版本需要重新核验。' : 'Verify the current result again.' };
+      return { status: 'review', primaryAction: acceptance.canSignOff ? { type: 'signoff', resultId: acceptance.id } : { type: 'review' } };
+    }
+    if (commands.includes('mark_ready')) return { status: 'captured', primaryAction: { type: 'mark_ready' } };
+    return { status: 'ready', primaryAction: commands.includes('start') ? { type: 'start' } : undefined };
   }
 
   summary(taskId: string): TaskDependencySummary | undefined {
@@ -134,8 +194,8 @@ export class TaskReadModelProjector {
     if (input.activeRun?.status === 'waiting') return 'waiting';
     if (input.waits.some((wait) => wait.kind !== 'dependency')) return 'waiting';
     if (input.waits.some((wait) => wait.kind === 'dependency')) return 'blocked';
-    if (input.latestRun?.status === 'failed') return 'failed';
-    if (input.latestRun?.status === 'cancelled') return 'cancelled';
+    if (input.latestRun?.contractVersion === input.task.latestContractVersion && input.latestRun.status === 'failed') return 'failed';
+    if (input.latestRun?.contractVersion === input.task.latestContractVersion && input.latestRun.status === 'cancelled') return 'cancelled';
     if (input.hasIncompleteDependency) return 'blocked';
     return 'idle';
   }
@@ -144,13 +204,14 @@ export class TaskReadModelProjector {
     task: TaskAggregate,
     activeRunStatus: NonNullable<ReturnType<TaskRunRepository['getActiveRoot']>>['status'] | undefined,
     hasWaits: boolean,
+    hasResolvableWait: boolean,
     paused: boolean,
   ): string[] {
     if (task.phase === 'closed') return ['move', 'reopen', ...(activeRunStatus ? ['close'] : []),
-      ...(task.resolution === 'done' && hasWaits ? ['resolve_wait'] : [])];
+      ...(task.resolution === 'done' && hasResolvableWait ? ['resolve_wait'] : [])];
     const commands = ['move', 'revise_contract', 'close'];
     if (!paused) commands.push('add_wait');
-    if (hasWaits) commands.unshift('resolve_wait');
+    if (hasResolvableWait) commands.unshift('resolve_wait');
     if (task.phase === 'backlog') commands.unshift('mark_ready');
     if (!activeRunStatus && !hasWaits && task.phase !== 'backlog') commands.unshift('start');
     if (task.phase === 'active' && !activeRunStatus && !hasWaits) commands.push('request_review');

@@ -3,7 +3,6 @@ import { closeSync, constants, fstatSync, openSync, readSync } from 'node:fs';
 
 import type { TaskEvidence, TaskRunReceipt } from '@xopcai/gateway-contract';
 
-import { PERSONAL_WORKER_RESULT_GUIDANCE } from '../personal-agent/communication.js';
 import { isPersonalConversation } from '../personal-agent/repository.js';
 import { resolveMediaBufferPath } from '../media/store.js';
 import { tryParseMediaUri } from '../media/uri.js';
@@ -23,12 +22,12 @@ const listChineseRequest = new RegExp(`^生成一个名为[ ]*(${FILE})[ ]*的[ 
 export function taskJsonAcceptance(task: TaskAggregate, handoff: TaskHandoff | undefined) {
   const request = handoff?.originalRequest?.trim();
   const contract = task.contract;
-  if (!handoff || !request || request.length > 512 || contract?.acceptancePolicy !== 'verified_auto'
+  if (!handoff || !request || request.length > 512 || contract?.acceptancePolicy !== 'verified_auto' || contract.resultPolicy !== 'selected'
     || !isPersonalConversation(handoff.conversationId) || task.priority === 'critical'
     || contract.constraints.length || contract.risks.length || contract.approvalRequired.length || contract.assumptions.length
     || contract.outputDestinations.length || handoff.attachments.length || handoff.sources.length || handoff.requestedSources?.length
     || handoff.completeness.unresolvedReferences.length || handoff.completeness.omitted.length || handoff.conversationExcerpts?.length
-    || task.body?.trim() !== `${request}\n\n${PERSONAL_WORKER_RESULT_GUIDANCE}`) return undefined;
+    || contract.brief?.trim() !== request) return undefined;
   try { assertTaskHandoffAccess(handoff); } catch { return undefined; }
 
   // Match the entire original request. Free-form content stays on the regular verification path.

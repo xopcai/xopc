@@ -44,6 +44,26 @@ describe('TaskRunDispatcher', () => {
     return created.runId;
   }
 
+  it('retires a queued run whose requirements changed before invoking the executor', async () => {
+    const runId = queue('superseded-brief');
+    const runs = new TaskRunRepository();
+    const tasks = new TaskRepository();
+    const task = tasks.require(runs.require(runId).taskId);
+    const updated = tasks.update(task.id, { expectedVersion: task.version, body: 'Use only the new report.' });
+    expect(updated?.latestContractVersion).toBe(task.latestContractVersion + 1);
+    const ensureSession = vi.fn(async () => 'unused');
+    const runAgent = vi.fn(async () => {});
+    const dispatcher = new TaskRunDispatcher({ workerId: 'superseded', maxConcurrency: 1, ensureSession, runAgent });
+    try {
+      await dispatcher.drain();
+      expect(ensureSession).not.toHaveBeenCalled();
+      expect(runAgent).not.toHaveBeenCalled();
+      expect(runs.require(runId)).toMatchObject({ status: 'cancelled', terminalCode: 'spec_superseded' });
+    } finally {
+      dispatcher.stop();
+    }
+  });
+
   it('starts initial and subsequently queued Tasks outside the caller tool scope', async () => {
     const search = { name: 'web_search', label: 'Search', description: 'Search', parameters: {},
       execute: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'Found' }], details: {} })) };
@@ -230,7 +250,7 @@ describe('TaskRunDispatcher', () => {
     expect(runs.require(runId).status).toBe('succeeded');
   });
 
-  it.each(['confirmed', 'missing', 'failed', 'cancelled'] as const)('recovers only confirmed operation outcomes after a process restart (%s)', async outcome => {
+  it.each(['confirmed', 'missing', 'missing-read', 'failed', 'cancelled'] as const)('recovers only confirmed effects or unfinished reads after a process restart (%s)', async outcome => {
     const runId = queue('restart-safety');const runs = new TaskRunRepository();const conversationId = crypto.randomUUID();
     ensureSessionRecord(conversationId, stateDir, { agentId: 'main' });
     const claimed = runs.claimNext({ owner: 'dead-worker', leaseMs: 60_000 })!;
@@ -238,14 +258,15 @@ describe('TaskRunDispatcher', () => {
     runs.start({ runId, expectedVersion: claimed.version, conversationId, contextSnapshotId: snapshot.id,
       policySnapshot: {}, timeoutAt: Date.now() + 60_000 });
     appendTranscriptEntry(conversationId, { role: 'user', content: 'Send once', timestamp: 1 });
-    appendTranscriptEntry(conversationId, { role: 'assistant', content: [{ type: 'toolCall', id: 'effect', name: 'send_message', arguments: {} }], stopReason: 'toolUse', timestamp: 2 } as any);
-    if (outcome !== 'missing') appendTranscriptEntry(conversationId, { role: 'toolResult', toolName: 'send_message', toolCallId: 'effect', content: [], isError: outcome === 'failed', timestamp: 3 } as any);
+    const toolName = outcome === 'missing-read' ? 'read_file' : 'send_message';
+    appendTranscriptEntry(conversationId, { role: 'assistant', content: [{ type: 'toolCall', id: 'effect', name: toolName, arguments: {} }], stopReason: 'toolUse', timestamp: 2 } as any);
+    if (outcome !== 'missing' && outcome !== 'missing-read') appendTranscriptEntry(conversationId, { role: 'toolResult', toolName, toolCallId: 'effect', content: [], isError: outcome === 'failed', timestamp: 3 } as any);
     if (outcome === 'cancelled') appendTranscriptEntry(conversationId, { role: 'assistant', content: [], stopReason: 'aborted', timestamp: 4 } as any);
     getSqliteDatabase().prepare('UPDATE task_runs SET lease_expires_at = ? WHERE run_id = ?').run(Date.now() - 1, runId);
     const runAgent = vi.fn(async () => {});
     const dispatcher = new TaskRunDispatcher({ workerId: 'new-worker', maxConcurrency: 1, ensureSession: async () => conversationId, runAgent });
     await dispatcher.drain();dispatcher.stop();
-    if (outcome === 'confirmed') {
+    if (outcome === 'confirmed' || outcome === 'missing-read') {
       expect(runAgent).toHaveBeenCalledOnce();
       expect(runs.require(runId)).toMatchObject({ status: 'running', policySnapshot: { continuationAttempts: 1 } });
     } else {

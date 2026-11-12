@@ -31,16 +31,18 @@ struct TaskDetailView: View {
                     if let objective = detail.task.contract?.objective ?? detail.task.body, !objective.isEmpty {
                         Section("目标") { Text(objective).textSelection(.enabled) }
                     }
-                    if let criteria = detail.task.contract?.acceptanceCriteria, !criteria.isEmpty {
-                        Section("验收标准") {
-                            ForEach(Array(criteria.enumerated()), id: \.offset) { entry in Text(entry.element) }
-                        }
-                    }
+                    TaskReviewControls(configuration: configuration, detail: detail) { self.detail = $0 }
                 }
                 .safeAreaInset(edge: .bottom) {
-                    Button("继续任务") { showingConversation = true }
-                        .buttonStyle(.borderedProminent).frame(minHeight: 44)
-                        .accessibilityIdentifier("task-detail-continue")
+                    if detail.signoffResultID == nil {
+                        Button("继续任务") { showingConversation = true }
+                            .buttonStyle(.borderedProminent).frame(minHeight: 44)
+                            .accessibilityIdentifier("task-detail-continue")
+                    } else {
+                        Button("继续任务") { showingConversation = true }
+                            .buttonStyle(.bordered).frame(minHeight: 44)
+                            .accessibilityIdentifier("task-detail-continue")
+                    }
                 }
                 .refreshable { await load() }
             } else if let error {
@@ -260,18 +262,7 @@ struct TaskConversationView: View {
                 if !objective.isEmpty {
                     overviewSection("目标") { Text(objective).textSelection(.enabled) }
                 }
-                if let criteria = detail.task.contract?.acceptanceCriteria, !criteria.isEmpty {
-                    overviewSection("验收标准") {
-                        ForEach(criteria.enumerated().map {
-                            TaskCriterionDisplay(version: detail.task.latestContractVersion ?? 0, index: $0.offset, text: $0.element)
-                        }) { criterion in
-                            let status = TaskAcceptanceStatus.resolve(criterion.text, index: criterion.index, detail: detail)
-                            Label(criterion.text, systemImage: status == .passed ? "checkmark.circle"
-                                : status == .failed ? "exclamationmark.circle" : "circle")
-                                .accessibilityValue(status == .passed ? "已通过" : status == .failed ? "未通过" : "待核对")
-                        }
-                    }
-                }
+                TaskReviewControls(configuration: configuration, detail: detail) { self.detail = $0 }
                 if let outputs = detail.task.contract?.expectedOutputs, !outputs.isEmpty {
                     overviewSection("预期产出") { ForEach(outputs, id: \.self) { Text($0) } }
                 }
@@ -349,12 +340,63 @@ struct TaskConversationView: View {
     }
 }
 
-private struct TaskCriterionDisplay: Identifiable {
-    let version: Int
-    let index: Int
-    let text: String
-    var id: String {
-        "\(version):\(index)"
+private struct TaskReviewControls: View {
+    let configuration: GatewayConfiguration
+    let detail: TaskDetailEnvelope
+    let onUpdated: (TaskDetailEnvelope) -> Void
+
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        if let reason = detail.presentation?.reason {
+            Text(reason).foregroundStyle(.secondary)
+        }
+        if let resultID = detail.signoffResultID {
+            Button("确认验收") {
+                Task { await mutate { try await $0.commandTask(detail.task, command: "signoff", resultID: resultID) } }
+            }.buttonStyle(.borderedProminent).disabled(busy).accessibilityIdentifier("task-signoff")
+        }
+        if let checks = detail.acceptanceChecks, !checks.isEmpty {
+            Section("验收标准") {
+                ForEach(checks) { check in
+                    let status = TaskAcceptanceStatus.resolve(check, detail: detail)
+                    let icon = status == .passed ? "checkmark.circle" : status == .failed ? "exclamationmark.circle" : "circle"
+                    if let target = detail.acceptanceTarget, detail.task.phase != "closed",
+                       detail.waits?.contains(where: { $0.status == "active" }) != true
+                    {
+                        Button {
+                            Task {
+                                await mutate { client in
+                                    try await client.reviewTaskCheck(detail.task, checkID: check.id, resultID: target.id,
+                                                                     status: status == .passed ? "unverified" : "passed")
+                                }
+                            }
+                        } label: { Label(check.criterion, systemImage: icon) }
+                        .disabled(busy)
+                        .accessibilityValue(status == .passed ? "已通过" : status == .failed ? "未通过" : "待核对")
+                    } else {
+                        Label(check.criterion, systemImage: icon)
+                    }
+                }
+            }
+        }
+        if let error { Text(error).foregroundStyle(.red) }
+    }
+
+    @MainActor private func mutate(_ update: (GatewayClient) async throws -> Void) async {
+        guard !busy else { return }
+        busy = true
+        error = nil
+        defer { busy = false }
+        let client = GatewayClient(configuration: configuration)
+        do {
+            try await update(client)
+            onUpdated(try await client.fetchTask(id: detail.task.id))
+        } catch is CancellationError {} catch {
+            self.error = error.localizedDescription
+            if let latest = try? await client.fetchTask(id: detail.task.id) { onUpdated(latest) }
+        }
     }
 }
 
@@ -384,6 +426,10 @@ private struct TaskStatusView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let resultID = detail.signoffResultID {
+                    Button("确认验收") { Task { await apply("signoff", resultID: resultID) } }
+                        .accessibilityIdentifier("task-status-signoff")
+                }
                 Section {
                     ForEach(["backlog", "ready", "active", "review", "closed"], id: \.self) { phase in
                         Button {
@@ -432,8 +478,10 @@ private struct TaskStatusView: View {
                 }
                 if allowed.contains("close") {
                     Section {
-                        Button("完成任务") { Task { await apply("close") } }
-                            .accessibilityIdentifier("task-complete")
+                        if detail.runs?.isEmpty == true {
+                            Button("完成任务") { Task { await apply("close") } }
+                                .accessibilityIdentifier("task-complete")
+                        }
                         Button("取消任务", role: .destructive) { confirmsCancel = true }
                             .accessibilityIdentifier("task-cancel")
                     }
@@ -480,14 +528,15 @@ private struct TaskStatusView: View {
     }
 
     @MainActor private func apply(_ command: String, phase: String? = nil,
-                                  resolution: String = "done", agentID: String? = nil) async
+                                  resolution: String = "done", agentID: String? = nil, resultID: String? = nil) async
     {
-        guard !isWorking, allowed.contains(command) else { return }
+        guard !isWorking, allowed.contains(command) || (command == "signoff" && resultID == detail.signoffResultID && resultID != nil)
+        else { return }
         isWorking = true
         defer { isWorking = false }
         do {
             try await GatewayClient(configuration: configuration).commandTask(
-                detail.task, command: command, phase: phase, resolution: resolution, agentID: agentID
+                detail.task, command: command, phase: phase, resolution: resolution, agentID: agentID, resultID: resultID
             )
             dismiss()
         } catch { self.error = error.localizedDescription }

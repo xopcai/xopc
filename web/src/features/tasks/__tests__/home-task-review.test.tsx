@@ -17,7 +17,9 @@ function detail(reviewed = false): TaskDetail {
     task: { id: 'task-1', projectId: 'project-1', phase: 'review', version: reviewed ? 4 : 3, latestContractVersion: 1,
       contract: { acceptanceCriteria: ['Report saved'], acceptancePolicy: 'manual' } },
     allowedCommands: ['close'], waits: [], runs: [], receipts: [], conversation: { activeConversationId: 'conversation-1' },
-    criterionReviews: reviewed ? [{ criterionIndex: 0, contractVersion: 1, criterionText: 'Report saved', status: 'passed' }] : [],
+    presentation: { status: 'review', primaryAction: { type: 'review' } },
+    acceptanceTarget: { id: 'run-1', runId: 'run-1', canSignOff: reviewed },
+    criterionReviews: reviewed ? [{ checkId: 'task-1:1:0', criterionIndex: 0, contractVersion: 1, criterionText: 'Report saved', status: 'passed' }] : [],
   } as unknown as TaskDetail;
 }
 
@@ -34,18 +36,22 @@ describe('HomeTaskReview', () => {
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
   const button = (label: string) => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label)!;
 
-  it('refreshes the Home card when saving the last criterion completes the task', async () => {
+  it('requires a separate sign-off after saving the last criterion', async () => {
     vi.mocked(fetchTask).mockResolvedValue(detail());
     const closed = detail(true);
     closed.task = { ...closed.task, phase: 'closed', resolution: 'done' };
-    vi.mocked(reviewTaskCriterion).mockResolvedValue(closed);
+    vi.mocked(reviewTaskCriterion).mockResolvedValue(detail(true));
+    vi.mocked(commandTask).mockResolvedValue(closed);
     const complete = vi.fn();
     await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="zh" onComplete={complete} /></MemoryRouter>));
-    expect(button('验收完成').disabled).toBe(true);
+    expect(button('确认验收').disabled).toBe(true);
     await act(async () => button('确认通过').click());
-    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 0, 'passed', 3, 1);
-    expect(button('验收完成')).toBeUndefined();
+    expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 'task-1:1:0', 'passed', 3, 1, 'run-1');
+    expect(button('确认验收').disabled).toBe(false);
     expect(commandTask).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    await act(async () => button('确认验收').click());
+    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'signoff', resultId: 'run-1' }, 4);
     expect(complete).toHaveBeenCalledOnce();
   });
 
@@ -66,7 +72,7 @@ describe('HomeTaskReview', () => {
     value.receipts = [{ runId: 'run-1', finalizedAt: 2, summary: 'Report generated', remainingWork: ['Verify delivery'],
       nextAction: 'Open the report and verify its contents', completionVerdict: 'partial',
       evidence: [{ kind: 'artifact', title: 'Open report', uri: 'reports/report.html', summary: 'Saved HTML', strength: 'observed', provenance: 'tool' }],
-      verification: { status: 'unverified', checks: [{ criterion: 'Report saved', status: 'unverified', evidenceTitles: ['Open report'], note: 'Only a file path was returned.' }] },
+      verification: { status: 'unverified', checks: [{ checkId: 'task-1:1:0', criterion: 'Report saved', status: 'unverified', evidenceTitles: ['Open report'], note: 'Only a file path was returned.' }] },
     }] as TaskDetail['receipts'];
     return value;
   }
@@ -81,7 +87,7 @@ describe('HomeTaskReview', () => {
     expect(container.textContent).toContain('Verify delivery');
     expect(container.textContent).toContain('Open the report and verify its contents');
     expect(button('确认通过')).toBeUndefined();
-    expect(button('验收完成').disabled).toBe(true);
+    expect(button('确认验收').disabled).toBe(true);
     await act(async () => button('Open report').click());
     expect(document.querySelector('[role="dialog"] [data-preview-file]')?.getAttribute('data-preview-file')).toBe('reports/report.html');
     expect(document.querySelector('[data-preview-file]')?.getAttribute('data-preview-project')).toBe('project-1');
@@ -92,15 +98,16 @@ describe('HomeTaskReview', () => {
     expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'start', executor: { kind: 'agent', agentId: 'main' } }, 3);
     expect(onUpdated).toHaveBeenCalledOnce();
     expect(container.querySelector('[role="status"]')?.textContent).toContain('已开始执行');
-    expect(button('验收完成')).toBeUndefined();
+    expect(button('确认验收')).toBeUndefined();
   });
 
   it('shows the wait question and saves the answer on the home card', async () => {
     const value = detail(true);
+    value.acceptanceTarget = { id: 'run-1', runId: 'run-1', canSignOff: false };
     value.allowedCommands = ['resolve_wait', 'close'];
     value.waits = [{ id: 'wait-1', taskId: 'task-1', status: 'active', createdAt: 1, kind: 'user_input', reason: 'Need recipient', condition: { question: 'Who should receive the report?' } }] as TaskDetail['waits'];
     vi.mocked(fetchTask).mockResolvedValue(value);
-    vi.mocked(commandTask).mockResolvedValue({ ...value, waits: [] });
+    vi.mocked(commandTask).mockResolvedValue({ ...value, waits: [], acceptanceTarget: { id: 'run-1', runId: 'run-1', canSignOff: true } });
     const onUpdated = vi.fn();
     await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="en" onComplete={vi.fn()} onUpdated={onUpdated} /></MemoryRouter>));
     expect(button('Accept task').disabled).toBe(true);

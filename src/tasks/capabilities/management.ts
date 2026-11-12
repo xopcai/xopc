@@ -24,10 +24,13 @@ export function registerTaskManagementCapabilities(dispatcher: CapabilityDispatc
     surfaces: ['http', 'extension'], extensionOutput: LocalAppTaskEditSchema,
     input: TaskPatchRequestSchema.extend({ taskId: z.string().min(1) }), output: TaskEditOutputSchema,
     execute({ taskId, ...patch }, caller) {
-      const task = tasks.update(taskId, patch);
+      const previous = tasks.get(taskId);
+      const task = tasks.update(taskId, { ...patch, actor: caller.actor });
       if (!task) throw new CapabilityError('REVISION_CONFLICT', 'Task changed or was not found');
+      const changedFields = Object.keys(patch).filter((field): field is TaskChangedField => field !== 'expectedVersion');
+      if (previous?.latestContractVersion !== task.latestContractVersion) changedFields.push('contract');
       enqueueTaskChangedEvent(getSqliteDatabase(), { taskId, projectId: task.projectId, version: task.version,
-        changedFields: Object.keys(patch).filter((field): field is TaskChangedField => field !== 'expectedVersion'), actor: caller.actor });
+        changedFields, actor: caller.actor });
       return { ok: true as const, task };
     },
   }));

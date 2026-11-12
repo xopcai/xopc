@@ -80,14 +80,15 @@ export async function commandTask(
 
 export async function reviewTaskCriterion(
   taskId: string,
-  criterionIndex: number,
+  checkId: string,
   status: TaskCriterionReview['status'],
   expectedVersion: number,
   contractVersion: number,
+  resultId: string,
 ): Promise<TaskDetail> {
-  await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/criteria/${criterionIndex}/review`), {
+  await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/criteria/${encodeURIComponent(checkId)}/review`), {
     method: 'PUT',
-    body: JSON.stringify({ status, expectedVersion, contractVersion }),
+    body: JSON.stringify({ status, expectedVersion, contractVersion, resultId }),
   });
   return fetchTask(taskId);
 }

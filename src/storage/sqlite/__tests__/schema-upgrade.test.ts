@@ -3,8 +3,10 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { PERSONAL_WORKER_RESULT_GUIDANCE } from '@xopcai/gateway-contract';
 
 import { memorySearchText } from '../../../knowledge-memory/search-text.js';
+import { personalAgentId } from '../../../personal-agent/repository.js';
 import { closeXopcDatabase, openXopcDatabase } from '../connection.js';
 import { ensureXopcDatabaseSchema, readSchemaVersion, setSchemaVersion, XOPC_DB_SCHEMA_VERSION } from '../schema.js';
 import { readSqliteAsset, resolveSqliteAssetPath } from '../sql-assets.js';
@@ -73,6 +75,29 @@ function expectPreserved(db: DatabaseSync): void {
 }
 
 describe('supported installed database upgrades', () => {
+  it('moves only the current brief and converts the recognized Personal Agent execution policy', () => {
+    const db = historicalDatabase(278);
+    try {
+      db.exec(`INSERT INTO task_contracts(task_id, version, objective, created_by_json, created_at)
+        VALUES ('task-1', 1, 'Original', '{"kind":"user"}', 1), ('task-1', 2, 'Revised', '{"kind":"user"}', 2);
+        INSERT INTO task_origin_links(task_id, conversation_id, created_at) VALUES ('task-1', 'conversation-1', 1);
+        INSERT INTO tasks(task_id, title, body, phase, priority, source, created_at, updated_at)
+        VALUES ('ordinary', 'Read documentation', 'Explain publish_task_result and finalArtifactIds.', 'ready', 'normal', 'user', 1, 2);`);
+      db.prepare("UPDATE sessions SET agent_id = ?, custom_data_json = '{\"personalAgent\":true}' WHERE conversation_id = 'conversation-1'")
+        .run(personalAgentId('local-owner'));
+      db.prepare("UPDATE tasks SET latest_contract_version = 2, body = ? WHERE task_id = 'task-1'")
+        .run(`User requirements.\n\n${PERSONAL_WORKER_RESULT_GUIDANCE}`);
+      ensureXopcDatabaseSchema(db);
+      expect(db.prepare("SELECT version, brief, result_policy FROM task_contracts WHERE task_id = 'task-1' ORDER BY version").all()).toEqual([
+        { version: 1, brief: null, result_policy: 'selected' },
+        { version: 2, brief: 'User requirements.', result_policy: 'selected' },
+      ]);
+      expect(db.prepare("SELECT brief, result_policy FROM task_contracts WHERE task_id = 'ordinary'").get()).toEqual({
+        brief: 'Explain publish_task_result and finalArtifactIds.', result_policy: 'standard',
+      });
+    } finally { db.close(); }
+  });
+
   it('preserves v270 criterion decisions and supports clearing acceptance after upgrade', () => {
     const db = historicalDatabase(270);
     try {

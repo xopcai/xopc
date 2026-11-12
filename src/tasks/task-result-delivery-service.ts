@@ -21,6 +21,7 @@ import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskRunRepository } from './task-run-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
 import { resolveTaskLocale } from './task-language.js';
+import { enqueueTaskChangedEvent } from './task-change-events.js';
 
 const log = createLogger('TaskResultDelivery');
 
@@ -70,8 +71,10 @@ export class TaskResultDeliveryService {
             const state = new TaskConversationRepository().getState(delivery.taskId);
             const session = db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id = ?')
               .get(delivery.conversationId);
-            const task = db.prepare('SELECT resolution FROM tasks WHERE task_id = ?').get(delivery.taskId) as { resolution: string | null };
+            const task = db.prepare('SELECT resolution, latest_contract_version FROM tasks WHERE task_id = ?')
+              .get(delivery.taskId) as { resolution: string | null; latest_contract_version: number };
             if (delivery.instructionSequence !== undefined && delivery.instructionSequence !== taskInstructionSequence(delivery.taskId) || !session || !run || !['succeeded', 'failed'].includes(run.status)
+              || (delivery.contractVersion !== undefined && delivery.contractVersion !== task.latest_contract_version)
               || (task.resolution && task.resolution !== 'done')
               || new TaskRunRepository().getLatestRoot(delivery.taskId)?.id !== run.id
               || state?.assignmentEpoch !== delivery.assignmentEpoch
@@ -83,7 +86,8 @@ export class TaskResultDeliveryService {
             const outcome = { ...delivery.outcome, deliverables,
               status: deliverables.length > 0 && available === 0 ? 'failed' as const : available < deliverables.length
                 ? 'partial' as const : delivery.outcome.status };
-            const zh = resolveTaskLocale(new TaskRepository().require(delivery.taskId)) === 'zh';
+            const currentTask = new TaskRepository().require(delivery.taskId);
+            const zh = resolveTaskLocale(currentTask) === 'zh';
             const statusText = zh
               ? `${delivery.taskTitle}：${outcome.status === 'failed' ? '请求未完成' : outcome.status === 'partial' ? '部分内容已完成'
                 : deliverables.length ? '成果已生成' : '结果已返回'}。`
@@ -93,7 +97,7 @@ export class TaskResultDeliveryService {
             if (personal) warmPersonalResult(delivery.conversationId, delivery.deliveryId);
             if (personal && (delivery.text || !outcome.research?.finalText) && !personalRequestForTask(delivery.taskId)) enqueuePersonalReply({ delivery: { ...delivery, outcome },
               report: delivery.text?.trim() || delivery.outcome.summary?.trim() || statusText,
-              objective: new TaskRepository().get(delivery.taskId)?.contract?.objective ?? delivery.taskTitle });
+              objective: currentTask.contract?.objective ?? delivery.taskTitle });
             const content = personal || !delivery.text ? statusText
               : delivery.text === outcome.research?.finalText ? delivery.text : `${statusText}\n\n${delivery.text}`;
             const details = { ...delivery, outcome };
@@ -105,6 +109,10 @@ export class TaskResultDeliveryService {
             db.prepare(`UPDATE task_result_deliveries SET status = 'delivered', payload_json = ?,
               message_entry_id = ?, delivered_at = ? WHERE delivery_id = ?`)
               .run(JSON.stringify({ ...delivery, outcome }), entry?.entry_id ?? null, Date.now(), row.delivery_id);
+            if (deliverables.length && currentTask.phase === 'review') enqueueTaskChangedEvent(db, {
+              taskId: currentTask.id, projectId: currentTask.projectId, version: currentTask.version,
+              changedFields: ['acceptance', 'receipts'], source: 'runtime',
+            });
             return true;
           });
           if (!persisted) continue;

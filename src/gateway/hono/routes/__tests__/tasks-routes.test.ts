@@ -1,7 +1,9 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { generateKeyPairSync } from 'node:crypto';
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { taskCheckId } from '@xopcai/gateway-contract';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,8 +19,11 @@ import { TaskRepository } from '../../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../../tasks/task-run-repository.js';
 import { TaskCollaborationRepository } from '../../../../tasks/task-collaboration-repository.js';
 import { TaskCriterionReviewRepository } from '../../../../tasks/task-criterion-review-repository.js';
+import { TaskContextRepository } from '../../../../tasks/task-context-repository.js';
 import { registerTaskRoutes } from '../tasks.js';
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
+import { getSqliteDatabase } from '../../../../storage/sqlite/transaction.js';
+import { authenticateDeviceAccessToken, createDevice, issueDeviceTokenPair, revokeDevice } from '../../../../storage/sqlite/device-access-repository.js';
 
 describe('task routes', () => {
   let stateDir: string;
@@ -32,7 +37,10 @@ describe('task routes', () => {
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     app = new Hono();
     app.use('*', async (c, next) => {
-      setGatewayPrincipal(c, { kind: c.req.header('x-test-principal-kind') === 'device' ? 'device' : 'owner', principalId: 'test-owner', scopes: ['tasks.read', 'tasks.write'] });
+      const identity = authenticateDeviceAccessToken(c.req.header('x-test-device-token') ?? '');
+      setGatewayPrincipal(c, identity ? { kind: 'device', principalId: identity.deviceId,
+        deviceId: identity.deviceId, accessSessionId: identity.accessSessionId, scopes: identity.scopes }
+        : { kind: c.req.header('x-test-principal-kind') === 'device' ? 'device' : 'owner', principalId: 'test-owner', scopes: ['tasks.read', 'tasks.write'] });
       await next();
     });
     registerTaskRoutes(app, {
@@ -151,12 +159,12 @@ describe('task routes', () => {
   it.each(['manual', 'verified_then_review', 'verified_auto'] as const)('records a human criterion review for %s and rejects stale task versions', async (acceptancePolicy) => {
     const task = new TaskRepository().create({ title: 'Review route', objective: 'Check result',
       acceptanceCriteria: ['User accepts the result', 'User accepts the evidence'], acceptancePolicy });
-    const url = `/api/tasks/${task.id}/criteria/0/review`;
-    const input = { expectedVersion: task.version, contractVersion: task.latestContractVersion, status: 'passed' };
+    const url = `/api/tasks/${task.id}/criteria/${encodeURIComponent(taskCheckId(task.id, task.latestContractVersion, 0))}/review`;
+    const input = { expectedVersion: task.version, contractVersion: task.latestContractVersion, resultId: 'manual', status: 'passed' };
     const response = await app.request(url, { method: 'PUT',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ ok: true, completed: false,
+    await expect(response.json()).resolves.toMatchObject({ ok: true,
       review: { criterionIndex: 0, status: 'passed', reviewedBy: { kind: 'user', id: 'test-owner' } } });
     expect(new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)).toHaveLength(1);
     const stale = await app.request(url, { method: 'PUT',
@@ -170,16 +178,89 @@ describe('task routes', () => {
     expect(new TaskCriterionReviewRepository().allPassed(task)).toBe(false);
     await app.request(url, { method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ...input, expectedVersion: task.version + 2 }) });
-    const lastUrl = `/api/tasks/${task.id}/criteria/1/review`;
+    const lastUrl = `/api/tasks/${task.id}/criteria/${encodeURIComponent(taskCheckId(task.id, task.latestContractVersion, 1))}/review`;
     const lastInput = { method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ...input, expectedVersion: task.version + 3 }) };
     const last = await app.request(lastUrl, lastInput);
     expect(last.status).toBe(200);
-    await expect(last.json()).resolves.toMatchObject({ ok: true, completed: true, version: task.version + 5 });
+    await expect(last.json()).resolves.toMatchObject({ ok: true, version: task.version + 4 });
     expect((await app.request(lastUrl, lastInput)).status).toBe(409);
     const tasks = new TaskRepository();
+    expect(tasks.require(task.id)).toMatchObject({ phase: 'backlog' });
+    expect(tasks.phaseChanges(task.id).filter(change => change.toPhase === 'closed')).toHaveLength(0);
+  });
+
+  it('requires a separate sign-off on the reviewed result and rejects a superseded result', async () => {
+    const tasks = new TaskRepository();
+    const runs = new TaskRunRepository();
+    const service = new TaskApplicationService();
+    const created = service.create({ idempotencyKey: 'signoff-task', title: 'Sign-off',
+      contract: { objective: 'Deliver a report', acceptanceCriteria: ['Report is ready'], acceptancePolicy: 'manual',
+        expectedOutputs: [], constraints: [], approvalRequired: [], assumptions: [], risks: [], outputDestinations: [] },
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'ready' } });
+    if (!created.ok) throw new Error('Expected task');
+    const task = created.model.task;
+    const finish = (label: string) => {
+      const run = runs.create({ taskId: task.id, executorKind: 'agent', executorRef: { agentId: 'main' }, trigger: {},
+        correlationId: label, idempotencyKey: label, contractVersion: task.latestContractVersion });
+      const context = new TaskContextRepository().captureSnapshot({ ownerKind: 'task_run', ownerId: run.id, query: label });
+      const started = runs.start({ runId: run.id, expectedVersion: run.version, contextSnapshotId: context.id, policySnapshot: {} });
+      if (!started) throw new Error('Expected started run');
+      expect(service.completeRun({ runId: run.id, expectedRunVersion: started.version, receipt: {
+        status: 'succeeded', summary: label, changes: [], evidence: [], verification: { status: 'unverified', checks: [] },
+        remainingWork: [], needsUser: false, completionVerdict: 'partial',
+      } }).ok).toBe(true);
+      return run.id;
+    };
+    const url = `/api/tasks/${task.id}`;
+    const review = (resultId: string) => app.request(`${url}/criteria/${encodeURIComponent(taskCheckId(task.id, task.latestContractVersion, 0))}/review`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ resultId, contractVersion: task.latestContractVersion,
+        expectedVersion: tasks.require(task.id).version, status: 'passed' }),
+    });
+    const sign = (resultId: string, kind = 'owner', expectedVersion = tasks.require(task.id).version, deviceToken = '') => app.request(`${url}/commands`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-test-principal-kind': kind, 'x-test-device-token': deviceToken },
+      body: JSON.stringify({ expectedVersion,
+        idempotencyKey: `signoff:${resultId}:${expectedVersion}`, command: { type: 'signoff', resultId } }),
+    });
+    const firstRun = finish('First result');
+    const first = new TaskCriterionReviewRepository().target(task)!.id;
+    expect(first).not.toBe(firstRun);
+    expect((await review(first)).status).toBe(200);
+    expect(tasks.require(task.id).phase).toBe('review');
+    new TaskCollaborationRepository().append({ taskId: task.id, kind: 'instruction', authorKind: 'user',
+      authorId: 'test-owner', body: 'Use the corrected source', idempotencyKey: 'new-direction' });
+    const changes = getSqliteDatabase().prepare(`SELECT payload_json FROM domain_outbox
+      WHERE event_type = 'task.changed.v2' AND subject_id = ? ORDER BY rowid DESC LIMIT 1`).get(task.id) as { payload_json: string };
+    expect(JSON.parse(changes.payload_json)).toMatchObject({ changedFields: ['acceptance', 'attention'], source: 'runtime' });
+    await expect((await app.request(url)).json()).resolves.toMatchObject({
+      presentation: { status: 'blocked', primaryAction: { type: 'inspect_run', runId: firstRun } },
+    });
+    expect((await sign(first)).status).toBe(409);
+    const secondRun = finish('Second result');
+    const second = new TaskCriterionReviewRepository().target(task)!.id;
+    expect((await review(first)).status).toBe(409);
+    expect((await sign(second)).status).toBe(409);
+    expect((await review(second)).status).toBe(200);
+    const response = await app.request(url);
+    const detail = await response.json();
+    expect(response.status, JSON.stringify(detail)).toBe(200);
+    expect(detail.acceptanceTarget).toEqual({ id: second, runId: secondRun, canSignOff: true });
+    expect(detail.presentation.primaryAction).toEqual({ type: 'signoff', resultId: second });
+    expect(detail.criterionReviewHistory).toMatchObject([{ resultId: first, status: 'passed' }]);
+    expect((await sign(second, 'device')).status).toBe(403);
+    const signedVersion = tasks.require(task.id).version;
+    const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const device = createDevice({ displayName: 'Paired mobile', platform: 'android',
+      publicKeyJwk: keys.publicKey.export({ format: 'jwk' }), scopes: ['tasks.read', 'tasks.write'] });
+    const token = issueDeviceTokenPair(device.id).accessToken;
+    expect((await sign(second, 'device', signedVersion, token)).status).toBe(200);
+    expect((await sign(second, 'device', signedVersion, token)).status).toBe(200);
+    revokeDevice(device.id);
+    expect((await sign(second, 'device', signedVersion, token)).status).toBe(403);
     expect(tasks.require(task.id)).toMatchObject({ phase: 'closed', resolution: 'done' });
-    expect(tasks.phaseChanges(task.id).filter(change => change.toPhase === 'closed')).toHaveLength(1);
+    expect(getSqliteDatabase().prepare('SELECT result_id FROM task_signoffs').all()).toEqual([{ result_id: second }]);
+    expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM task_bound_criterion_reviews').get()).toEqual({ n: 2 });
   });
 
   it.each(['execution', 'wait'])('leaves the final criterion unreviewed while blocked by %s', async (blocker) => {
@@ -193,20 +274,64 @@ describe('task routes', () => {
     } else {
       runs.createWait({ taskId: task.id, kind: 'approval', reason: 'Pending approval', condition: {} });
     }
-    const response = await app.request(`/api/tasks/${task.id}/criteria/0/review`, { method: 'PUT',
+    const response = await app.request(`/api/tasks/${task.id}/criteria/${encodeURIComponent(taskCheckId(task.id, task.latestContractVersion, 0))}/review`, { method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ expectedVersion: task.version, contractVersion: task.latestContractVersion, status: 'passed' }) });
+      body: JSON.stringify({ expectedVersion: task.version, contractVersion: task.latestContractVersion, resultId: 'manual', status: 'passed' }) });
     expect(response.status).toBe(409);
     expect(tasks.require(task.id).version).toBe(task.version);
     expect(new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)).toEqual([]);
   });
 
+  it.each(['missing', 'written', 'changed after review', 'unchanged', 'a symlink'])(
+    'requires independent workspace evidence before sign-off when the target is %s', async (scenario) => {
+      const db = getSqliteDatabase();
+      db.prepare('INSERT INTO projects (project_id, name, slug, workspace_root, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1)')
+        .run('project-1', 'Project', 'project', stateDir);
+      const service = new TaskApplicationService();
+      const created = service.create({ idempotencyKey: 'workspace-target', title: 'Create TOOLS.md', projectId: 'project-1',
+        contract: { objective: 'Save TOOLS.md', acceptanceCriteria: ['The document is usable'], acceptancePolicy: 'manual',
+          expectedOutputs: ['TOOLS.md'], constraints: [], approvalRequired: [], assumptions: [], risks: [],
+          outputDestinations: [{ kind: 'workspace_file', workspaceId: 'project:project-1', relativePath: 'TOOLS.md' }] },
+        dependencies: [], context: [], authorityGrants: [], activation: { mode: 'capture', phase: 'ready' } });
+      if (!created.ok) throw new Error('Expected task');
+      const task = created.model.task;
+      const runs = new TaskRunRepository();
+      const run = runs.create({ taskId: task.id, executorKind: 'agent', executorRef: { agentId: 'main' }, trigger: {},
+        correlationId: 'workspace', idempotencyKey: 'workspace', contractVersion: task.latestContractVersion });
+      const context = new TaskContextRepository().captureSnapshot({ ownerKind: 'task_run', ownerId: run.id, query: 'Save file' });
+      const target = join(stateDir, 'TOOLS.md');
+      if (scenario === 'unchanged') writeFileSync(target, 'Pre-existing content');
+      const started = runs.start({ runId: run.id, expectedVersion: run.version, contextSnapshotId: context.id, policySnapshot: {} })!;
+      writeFileSync(join(stateDir, 'preview.md'), 'Preview exists at another location');
+      if (scenario === 'a symlink') symlinkSync(join(stateDir, 'preview.md'), target);
+      if (scenario === 'written' || scenario === 'changed after review') writeFileSync(target, 'Verified output');
+      expect(service.completeRun({ runId: run.id, expectedRunVersion: started.version, receipt: {
+        status: 'succeeded', summary: 'Preview saved', changes: [], evidence: [], verification: { status: 'unverified', checks: [] },
+        remainingWork: [], needsUser: false, completionVerdict: 'partial',
+      } }).ok).toBe(true);
+      const url = `/api/tasks/${task.id}`;
+      const detail = await (await app.request(url)).json();
+      const checkId = detail.acceptanceChecks[0].id;
+      const review = await app.request(`${url}/criteria/${encodeURIComponent(checkId)}/review`, { method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: detail.task.version, contractVersion: task.latestContractVersion,
+          resultId: detail.acceptanceTarget.id, status: 'passed' }) });
+      expect(review.status).toBe(200);
+      const latest = await (await app.request(url)).json();
+      expect(latest.acceptanceTarget.canSignOff).toBe(['written', 'changed after review'].includes(scenario));
+      if (scenario === 'changed after review') writeFileSync(target, 'Different file content after verification');
+      const signoff = await app.request(`${url}/commands`, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: latest.task.version, idempotencyKey: 'workspace-signoff',
+          command: { type: 'signoff', resultId: detail.acceptanceTarget.id } }) });
+      expect(signoff.status).toBe(scenario === 'written' ? 200 : 409);
+    });
+
   it('does not allow a device token to make a human criterion review', async () => {
     const task = new TaskRepository().create({ title: 'Owner review', objective: 'Check result',
       acceptanceCriteria: ['Owner accepts the result'], acceptancePolicy: 'manual' });
-    const response = await app.request(`/api/tasks/${task.id}/criteria/0/review`, { method: 'PUT',
+    const response = await app.request(`/api/tasks/${task.id}/criteria/${encodeURIComponent(taskCheckId(task.id, task.latestContractVersion, 0))}/review`, { method: 'PUT',
       headers: { 'content-type': 'application/json', 'x-test-principal-kind': 'device' },
-      body: JSON.stringify({ expectedVersion: task.version, contractVersion: task.latestContractVersion, status: 'passed' }) });
+      body: JSON.stringify({ expectedVersion: task.version, contractVersion: task.latestContractVersion, resultId: 'manual', status: 'passed' }) });
     expect(response.status).toBe(403);
     expect(new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)).toHaveLength(0);
   });

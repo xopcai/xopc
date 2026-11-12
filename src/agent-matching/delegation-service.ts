@@ -48,7 +48,7 @@ export function createSelectedTask(input: TaskCreateRequest, actor: ActorRef | u
       requestHash: hash, requirements: selection.requirements, assessment,
       candidates: selection.candidates, source: selection.source, reason: selection.reason, previousSelectionId: selection.previousSelectionId,
       status: 'task_linked' });
-    const result = new TaskApplicationService().create(input, actor);
+    const result = new TaskApplicationService().create(input, actor, { resultPolicy: 'selected' });
     repository.link(record.id, { taskId: result.model?.task.id, runId: result.ok ? result.runId : undefined,
       status: result.ok === false ? (result.reason === 'blocked' ? 'start_blocked' : 'start_failed') : 'task_linked',
       reasonCode: result.ok === false ? result.reason : undefined });

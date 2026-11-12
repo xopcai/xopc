@@ -8,6 +8,7 @@ export const TaskResultDeliverySchema = z.object({
   deliveryId: z.string().min(1),
   taskId: z.string().min(1),
   taskRunId: z.string().min(1),
+  taskResultId: z.string().min(1).optional(),
   taskTitle: z.string().min(1).max(500),
   conversationId: z.string().min(1),
   originTranscriptId: z.string().min(1),

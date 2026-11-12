@@ -10,6 +10,7 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { TaskApplicationService } from '../task-application-service.js';
+import { TaskRepository } from '../task-repository.js';
 import { TaskConversationRepository } from '../task-conversation-repository.js';
 import { TaskRunCoordinator } from '../task-run-coordinator.js';
 import { TaskRunRepository } from '../task-run-repository.js';
@@ -32,12 +33,13 @@ describe('personal repair benchmark v1', () => {
   beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'xopc-repair-')); vi.stubEnv('XOPC_STATE_DIR', root);
     resetXopcDatabaseSingletonForTest(); seedTestDatabase(join(root, 'xopc.db')); openXopcDatabase({ path: join(root, 'xopc.db') }); });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); });
-  function execution(acceptancePolicy: 'manual' | 'verified_auto' = 'manual') {
+  function execution(acceptancePolicy: 'manual' | 'verified_auto' = 'manual', resultPolicy: 'standard' | 'selected' = 'standard') {
     const main = createConversation({ agentId: 'main' }); const worker = createConversation({ agentId: 'worker' });
     const result = new TaskApplicationService().create({ idempotencyKey: main.key, title: 'Research', originConversationId: main.key,
       contract: { objective: 'Check price', expectedOutputs: ['Report'], acceptanceCriteria: ['Check actual price'],
         constraints: [], assumptions: [], risks: [], approvalRequired: [], acceptancePolicy, outputDestinations: [] },
-      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'start', executor: { kind: 'agent', agentId: 'worker' } } });
+      dependencies: [], context: [], authorityGrants: [], activation: { mode: 'start', executor: { kind: 'agent', agentId: 'worker' } } },
+    undefined, { resultPolicy });
     if (!result.ok || !result.runId) throw new Error('Expected execution');
     const runId = result.runId; const taskId = result.model.task.id;
     new TaskConversationRepository().activateExecutionSession({ taskId, runId, conversationId: worker.key, agentId: 'worker' });
@@ -120,6 +122,20 @@ describe('personal repair benchmark v1', () => {
     x.coordinator.finalize({ status: 'failed', summary: '502 provider_error' });
     expect(new TaskRunRepository().require(x.runId).status).toBe('failed');
     expect(new TaskRunRepository().getReceipt(x.runId)?.needsUser).toBe(true);
+    expect(new TaskRunRepository().listActiveWaits(x.taskId)).toMatchObject([{
+      taskRunId: x.runId, kind: 'external_event', condition: { type: 'run_decision', reasonCode: 'tool_outcome_unconfirmed',
+        operation: { cause: 'failed_tool', toolCallId: 'external-write', toolName: 'exec_command' } },
+    }]);
+  });
+  it('continues the same run when only a read-only tool result was interrupted', () => {
+    const x = execution();
+    appendTranscriptEntry(x.worker.key, { role: 'assistant', stopReason: 'toolUse', timestamp: Date.now(),
+      content: [{ type: 'toolCall', id: 'unfinished-read', name: 'read_file', arguments: { path: 'input.md' } }] } as never);
+    x.coordinator.finalize({ status: 'failed', summary: '502 provider_error' });
+    const runs = new TaskRunRepository();
+    expect(runs.require(x.runId)).toMatchObject({ status: 'waiting',
+      policySnapshot: { continuation: { reason: 'model_failure' } } });
+    expect(runs.listActiveWaits(x.taskId)).toEqual([]);
   });
   it('A05-direction: a later user instruction invalidates the old review and requires adoption evidence', async () => {
     const x = execution(); await submitTaskResearchResult(x.worker.key, 'old', submission, undefined, review);
@@ -137,6 +153,46 @@ describe('personal repair benchmark v1', () => {
     const reviewed = applyResearchReview(result, { ...(await review({} as never)), instructions: [{ sequence: result.instructionSequence,
       status: 'passed', claimIds: [], note: 'No proof' }] }, ['Check actual price']);
     expect(reviewed.instructionChecks?.[0].status).toBe('unverified');
+  });
+  it('does not sign off or deliver an acknowledged direction without adoption evidence', () => {
+    const x = execution();
+    const board = new TaskCollaborationRepository();
+    const entry = board.append({ taskId: x.taskId, authorKind: 'user', authorId: 'owner',
+      kind: 'instruction', body: 'Include the monthly rate.', idempotencyKey: 'late-direction' });
+    board.append({ taskId: x.taskId, taskRunId: x.runId, authorKind: 'worker_agent', authorId: 'worker',
+      kind: 'ack', body: 'Will include it.', causationId: entry.id, idempotencyKey: 'direction-ack' });
+    getSqliteDatabase().prepare('UPDATE task_runs SET timeout_at = 1 WHERE run_id = ?').run(x.runId);
+    finish(x.coordinator);
+    const runs = new TaskRunRepository();
+    expect(runs.require(x.runId).instructionSequenceAtStart).toBe(0);
+    expect(runs.getReceipt(x.runId)).toMatchObject({ completionVerdict: 'partial',
+      remainingWork: expect.arrayContaining(['Directions added during execution still need verification.']) });
+    expect(new TaskResultDeliveryRepository().hasForRun(x.runId)).toBe(false);
+    const task = new TaskApplicationService().execute({ taskId: x.taskId,
+      expectedVersion: new TaskRepository().require(x.taskId).version, idempotencyKey: 'reject-stale-signoff',
+      command: { type: 'signoff', resultId: x.runId } });
+    expect(task).toMatchObject({ ok: false, reason: 'blocked' });
+  });
+  it('binds a same-run corrected reply to the direction reviewed against its actual contents', async () => {
+    const x = execution('verified_auto');
+    const entry = new TaskCollaborationRepository().append({ taskId: x.taskId, authorKind: 'user', authorId: 'owner',
+      kind: 'instruction', body: 'Report the hourly price in English.', idempotencyKey: 'late-direction' });
+    finish(x.coordinator);
+    expect(new TaskRunRepository().require(x.runId).status).toBe('waiting');
+    const resumed = x.resume();
+    const finalText = 'The hourly price is 1.';
+    await submitTaskResearchResult(x.worker.key, 'corrected-reply', { ...submission, finalText }, undefined, async (input, signal) => ({
+      ...await review(input, signal),
+      instructions: [{ sequence: entry.sequence, status: 'passed', claimIds: ['price'], note: 'Verified in the reviewed reply.' }],
+    }));
+    finish(resumed);
+    expect(new TaskRepository().require(x.taskId)).toMatchObject({ phase: 'closed', resolution: 'done' });
+    const db = getSqliteDatabase();
+    expect(db.prepare('SELECT instruction_sequence FROM task_results WHERE run_id = ? AND finalized_at IS NOT NULL').get(x.runId))
+      .toEqual({ instruction_sequence: entry.sequence });
+    const row = db.prepare('SELECT payload_json FROM task_result_deliveries WHERE task_run_id = ?')
+      .get(x.runId) as { payload_json: string };
+    expect(JSON.parse(row.payload_json)).toMatchObject({ instructionSequence: entry.sequence, text: finalText });
   });
   it('A07-authority: paused tasks and expired deadlines cannot automatically resume', async () => {
     const x = execution(); await submitTaskResearchResult(x.worker.key, 'bad', submission, undefined, failed);
@@ -170,8 +226,7 @@ describe('personal repair benchmark v1', () => {
     expect(() => bindResearchSources({ ...submission, sources: [{ ...submission.sources[0], url: 'https://invented.test' }] }, [record])).toThrow(/no matching/);
   });
   it('A11-missing-review: an explicitly required result cannot bypass repair by omitting the evidence tool', () => {
-    const x = execution(); getSqliteDatabase().prepare('UPDATE tasks SET body = ? WHERE task_id = ?')
-      .run('Use publish_task_result for evidence review before completion.', x.taskId);
+    const x = execution('manual', 'selected');
     finish(x.coordinator); expect(new TaskRunRepository().require(x.runId).status).toBe('waiting');
     expect(new TaskRunRepository().require(x.runId).policySnapshot.continuation.message).toContain('required evidence-linked research result is missing');
   });

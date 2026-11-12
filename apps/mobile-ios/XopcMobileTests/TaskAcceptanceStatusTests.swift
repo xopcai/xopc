@@ -9,10 +9,11 @@ struct TaskAcceptanceStatusTests {
         "createdAt":1,"updatedAt":2,"latestContractVersion":2,
         "contract":{"objective":"Task","acceptanceCriteria":["A"],
         "acceptancePolicy":"verified_auto"}},"operationalState":"review",
+        "acceptanceChecks":[{"id":"t:2:0","criterion":"A"}],"acceptanceTarget":{"id":"r:2","runId":"r","canSignOff":true},
         "runs":[{"id":"r","status":"succeeded","attempt":1,"contractVersion":2}],
         "receipts":[{"runId":"r","status":"succeeded","summary":"Done","finalizedAt":5,
         "evidence":[{"kind":"test","title":"proof","strength":"verified"}],
-        "verification":{"checks":[{"criterion":"A","status":"passed",
+        "verification":{"checks":[{"checkId":"t:2:0","criterion":"A","status":"passed",
         "evidenceTitles":["proof"]}]}}]}
         """#
         let verified = try JSONDecoder().decode(TaskDetailEnvelope.self, from: Data(base.utf8))
@@ -40,7 +41,8 @@ struct TaskAcceptanceStatusTests {
         "createdAt":1,"updatedAt":2,"latestContractVersion":2,
         "contract":{"acceptanceCriteria":["A"],"acceptancePolicy":"manual"}},
         "operationalState":"idle","allowedCommands":["move","close"],
-        "criterionReviews":[{"contractVersion":2,"criterionIndex":0,"status":"passed"}],
+        "acceptanceChecks":[{"id":"t:2:0","criterion":"A"}],
+        "criterionReviews":[{"checkId":"t:2:0","contractVersion":2,"criterionIndex":0,"status":"passed"}],
         "runs":[],"waits":[]}
         """#
         func decode(_ value: String) throws -> TaskDetailEnvelope {
@@ -51,7 +53,7 @@ struct TaskAcceptanceStatusTests {
         #expect(ready.phaseCommand(for: "active") == "move")
         #expect(ready.phaseCommand(for: "review") == nil)
         #expect(ready.phaseCommand(for: "closed") == "move")
-        let stale = try decode(raw.replacingOccurrences(of: #""contractVersion":2"#, with: #""contractVersion":1"#))
+        let stale = try decode(raw.replacingOccurrences(of: #""checkId":"t:2:0""#, with: #""checkId":"t:1:0""#))
         #expect(TaskAcceptanceStatus.completionBlock(in: stale) == "acceptance")
         let run = try decode(raw.replacingOccurrences(of: #""runs":[]"#,
                                                       with: #""runs":[{"id":"r","status":"running","attempt":1}]"#))

@@ -31,6 +31,7 @@ import {
   NoteGetOutputSchema,
   NoteDeleteOutputSchema,
   TaskContextInputSchema,
+  TaskWorkspaceDestinationSchema,
   type TaskCommand,
   TaskCommandSchema,
   TaskRunCancelInputSchema,
@@ -1008,6 +1009,7 @@ async function handleTask(
     const baseContract = defineTaskContract(objective, taskLocale);
     const contractFields = [
       'expectedOutputs',
+      'workspaceOutputs',
       'acceptanceCriteria',
       'constraints',
       'approvalRequired',
@@ -1028,6 +1030,12 @@ async function handleTask(
       return { ok: false, error: 'Invalid acceptancePolicy' };
     }
     const originConversationId = deps.getCurrentConversationId?.();
+    const workspaceAgentId = originConversationId ? deps.getCurrentAgentId?.() : undefined;
+    const workspaceId = projectId ? `project:${projectId}` : workspaceAgentId ? `agent:${workspaceAgentId}` : '';
+    const workspaceOutputs = args.workspaceOutputs === undefined ? [] : args.workspaceOutputs;
+    if (!Array.isArray(workspaceOutputs) || workspaceOutputs.length > 20) return { ok: false, error: 'Invalid workspaceOutputs' };
+    const outputDestinations = workspaceOutputs.map(relativePath => TaskWorkspaceDestinationSchema.safeParse({ kind: 'workspace_file', workspaceId, relativePath }));
+    if (outputDestinations.some(target => !target.success)) return { ok: false, error: 'Use explicit paths relative to the task workspace' };
     const conversationId = trimString(args.conversationId) ?? originConversationId;
     const config = deps.getConfig?.();
     const projectService = deps.getProjectService?.();
@@ -1075,7 +1083,7 @@ async function handleTask(
       contract: {
         ...contract,
         acceptancePolicy: acceptancePolicy as 'verified_auto' | 'verified_then_review' | 'manual',
-        outputDestinations: [],
+        outputDestinations: outputDestinations.flatMap(target => target.success ? [target.data] : []),
       },
       dependencies: dependsOnTaskIds,
       context: [...(args.includeConversationContext === false ? [] : conversationId ? [{

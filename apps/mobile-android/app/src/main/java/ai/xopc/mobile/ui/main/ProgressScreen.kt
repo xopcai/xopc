@@ -885,6 +885,13 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
           Text(if (task.phase == "closed" && task.resolution == "cancelled") taskResolutionLabel("cancelled") else progressPhaseLabel(task.phase))
         }
         task.projectId?.let { Text(stringResource(R.string.progress_task_project, it)) }
+        task.presentationReason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        task.signoffResultId?.let { resultId ->
+          Button(onClick = { onCommand("signoff:$resultId") }, enabled = !busy,
+            modifier = Modifier.testTag("progress-task-signoff")) {
+            Text(stringResource(R.string.progress_task_signoff))
+          }
+        }
       }
     }
     if (task.latestResult.isNotBlank()) {
@@ -951,6 +958,12 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
                 if (criterion.humanReviewed) Text(stringResource(R.string.progress_criterion_human),
                   style = MaterialTheme.typography.labelSmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant)
+                task.reviewAction(criterion)?.let { action ->
+                  TextButton(onClick = { onCommand(action) }, enabled = !busy) {
+                    Text(stringResource(if (criterion.status == "passed") R.string.progress_task_clear_review
+                      else R.string.progress_task_mark_passed))
+                  }
+                }
               }
             }
           }
@@ -987,6 +1000,21 @@ internal fun ProgressTaskDetail(task: ProgressTask, busy: Boolean, commandError:
       verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(stringResource(R.string.progress_adjust_status), style = MaterialTheme.typography.titleLarge)
       Text(stringResource(R.string.progress_phase_help), color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (statusOnly) {
+        task.presentationReason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        task.signoffResultId?.let { resultId ->
+          Button(onClick = { onCommand("signoff:$resultId") }, enabled = !busy) {
+            Text(stringResource(R.string.progress_task_signoff))
+          }
+        }
+        task.criteria.forEach { criterion ->
+          task.reviewAction(criterion)?.let { action ->
+            TextButton(onClick = { onCommand(action) }, enabled = !busy) {
+              Text(criterion.text + if (criterion.status == "passed") " ✓" else " ○")
+            }
+          }
+        }
+      }
       if (commandError) {
         Text(stringResource(R.string.progress_command_error), color = MaterialTheme.colorScheme.error)
         OutlinedButton(onClick = onRefresh, enabled = !busy) { Text(stringResource(R.string.progress_refresh)) }

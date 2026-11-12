@@ -431,7 +431,10 @@ describe('background task allocation', () => {
   it('provides bounded complete long brief pages to an ordinary executor', async () => {
     const task = submit('long-brief');
     const body = 'Important requirement. '.repeat(900) + 'FINAL: retain the exact marker.';
-    getSqliteDatabase().prepare('UPDATE tasks SET body = ? WHERE task_id = ?').run(body, task.id);
+    const tasks = new TaskRepository();
+    const edited = tasks.update(task.id, { expectedVersion: task.version, body });
+    expect(edited?.contract).toMatchObject({ brief: body, version: task.latestContractVersion + 1 });
+    expect(tasks.getContract(task.id, task.latestContractVersion)?.brief).toBe(task.body);
     await dispatcher().drain();
     const run = new TaskRunRepository().getActiveRoot(task.id)!;
     const chat = createConversation({ agentId: 'analyst' }, '/tmp');

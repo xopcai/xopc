@@ -5,11 +5,12 @@ import { currentTaskReceipt, summarizeTaskCriteria, summarizeTaskResult } from '
 
 function detail(): TaskDetail {
   return {
-    task: { latestContractVersion: 2, contract: { acceptanceCriteria: ['Tests pass'], acceptancePolicy: 'verified_then_review' } },
+    task: { id: 'task-1', latestContractVersion: 2, contract: { acceptanceCriteria: ['Tests pass'], acceptancePolicy: 'verified_then_review' } },
+    acceptanceTarget: { id: 'current-result', runId: 'current', canSignOff: false },
     runs: [{ id: 'old', contractVersion: 1 }, { id: 'current', contractVersion: 2 }],
     receipts: [
-      { runId: 'old', finalizedAt: 200, verification: { checks: [{ criterion: 'Tests pass', status: 'passed', evidenceTitles: ['Old test'] }] }, evidence: [{ title: 'Old test', strength: 'verified' }] },
-      { runId: 'current', finalizedAt: 100, verification: { checks: [{ criterion: 'Tests pass', status: 'passed', evidenceTitles: ['Current test'] }] }, evidence: [{ title: 'Current test', strength: 'verified' }] },
+      { runId: 'old', finalizedAt: 200, verification: { checks: [{ checkId: 'task-1:2:0', criterion: 'Tests pass', status: 'passed', evidenceTitles: ['Old test'] }] }, evidence: [{ title: 'Old test', strength: 'verified' }] },
+      { runId: 'current', finalizedAt: 100, verification: { checks: [{ checkId: 'task-1:2:0', criterion: 'Tests pass', status: 'passed', evidenceTitles: ['Current test'] }] }, evidence: [{ title: 'Current test', strength: 'verified' }] },
     ],
     criterionReviews: [],
   } as unknown as TaskDetail;
@@ -23,7 +24,7 @@ describe('summarizeTaskCriteria', () => {
   it.each(['manual', 'verified_then_review', 'verified_auto'] as const)('lets the current human review decide a criterion under %s', (acceptancePolicy) => {
     const task = detail();
     task.task.contract!.acceptancePolicy = acceptancePolicy;
-    task.criterionReviews = [{ contractVersion: 2, criterionIndex: 0, criterionText: 'Tests pass',
+    task.criterionReviews = [{ checkId: 'task-1:2:0', contractVersion: 2, criterionIndex: 0, criterionText: 'Tests pass',
       status: 'failed', reviewedBy: { kind: 'user' }, reviewedAt: 300 }];
     expect(summarizeTaskCriteria(task)[0]).toMatchObject({ status: 'failed', review: { reviewedAt: 300 } });
   });
@@ -37,7 +38,7 @@ describe('summarizeTaskCriteria', () => {
   it('keeps a cleared criterion unchecked while preserving its automatic pass as evidence', () => {
     const task = detail();
     task.task.contract!.acceptancePolicy = 'verified_auto';
-    task.criterionReviews = [{ contractVersion: 2, criterionIndex: 0, criterionText: 'Tests pass',
+    task.criterionReviews = [{ checkId: 'task-1:2:0', contractVersion: 2, criterionIndex: 0, criterionText: 'Tests pass',
       status: 'unverified', reviewedBy: { kind: 'user' }, reviewedAt: 300 }];
     expect(summarizeTaskCriteria(task)[0]).toMatchObject({
       status: 'unverified', verificationStatus: 'passed', evidence: [{ title: 'Current test' }],
@@ -47,9 +48,10 @@ describe('summarizeTaskCriteria', () => {
   it('keeps the latest unverified reason instead of borrowing an older pass', () => {
     const task = detail();
     task.receipts.push({ runId: 'latest', finalizedAt: 300, verification: { status: 'unverified', checks: [{
-      criterion: 'Tests pass', status: 'unverified', evidenceTitles: [], method: 'model_reviewed', note: 'Missing source evidence' }] },
+      checkId: 'task-1:2:0', criterion: 'Tests pass', status: 'unverified', evidenceTitles: [], method: 'model_reviewed', note: 'Missing source evidence' }] },
       evidence: [] } as unknown as TaskDetail['receipts'][number]);
     task.runs.push({ id: 'latest', contractVersion: 2 } as unknown as TaskDetail['runs'][number]);
+    task.acceptanceTarget = { id: 'latest-result', runId: 'latest', canSignOff: false };
     expect(summarizeTaskCriteria(task)[0]).toMatchObject({ status: 'unverified', runId: 'latest', note: 'Missing source evidence', method: 'model_reviewed' });
   });
 });
