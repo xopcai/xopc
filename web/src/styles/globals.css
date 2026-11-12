@@ -1650,6 +1650,12 @@ html.dark[data-color-scheme="porcelain"] {
   padding-inline-end: 0;
 }
 
+/* Hide scrolling content at the lower corners without painting over the chat background. */
+.chat-messages--composer-fade {
+  --chat-composer-occlusion: calc(var(--chat-composer-bottom-space) + var(--chat-composer-bottom-radius));
+  mask-image: linear-gradient(to top, transparent var(--chat-composer-occlusion), black calc(var(--chat-composer-occlusion) + 0.75rem));
+}
+
 [data-app-chat-shell] {
   position: relative;
 }
@@ -1683,6 +1689,21 @@ html.dark[data-color-scheme="porcelain"] {
   height: var(--app-chat-header-height);
 }
 
+[data-app-header-overlay="controls"] {
+  isolation: isolate;
+  background-image: none;
+}
+
+/* Keep the toolbar opaque and start the fade below its controls. */
+[data-app-header-overlay="controls"]::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 -0.75rem;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, black var(--app-chat-header-height), transparent);
+}
+
 [data-app-chat-scroll] {
   padding-block-start: calc(var(--app-chat-header-height, 0px) + 1rem);
   scroll-padding-block-start: var(--app-chat-header-height, 0px);
@@ -1695,8 +1716,8 @@ html.dark[data-color-scheme="porcelain"] {
 }
 
 /* Composite translucent theme panels over a solid base so history never shows through. */
-.chat-composer-surface,
-.chat-composer-dock::before {
+[data-app-header-overlay="controls"]::before,
+.chat-composer-surface {
   background-color: var(--color-surface-base);
   background-image: linear-gradient(var(--color-surface-panel), var(--color-surface-panel));
 }
@@ -1709,20 +1730,6 @@ html.dark[data-color-scheme="porcelain"] {
 
 [data-personal-tasks-trigger]:is(:hover, :focus-visible) .personal-identity-label {
   --personal-identity-fill: var(--color-surface-active);
-}
-
-/* Cover the bottom gap and corner cutouts without covering the top corners. */
-.chat-composer-dock {
-  isolation: isolate;
-}
-
-.chat-composer-dock::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: auto 0 0;
-  height: calc(var(--chat-composer-bottom-space) + var(--chat-composer-bottom-radius, 1rem));
-  pointer-events: none;
 }
 
 @keyframes xopc-chat-user-message-enter {

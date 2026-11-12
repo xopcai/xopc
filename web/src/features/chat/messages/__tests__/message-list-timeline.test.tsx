@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
+import { SEEDANCE_VIDEO_MODEL_REF, type MusicGenerationSession, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '../messages.types';
+import { useChatMusicGeneration } from '../../music/chat-music-generation';
+import { useChatVideoGeneration } from '../../video/chat-video-generation';
+
+const mediaCache = vi.hoisted(() => ({ data: undefined as MusicGenerationSession | VideoGenerationSession | undefined, mutate: vi.fn() }));
+vi.mock('swr', () => ({ default: () => mediaCache }));
 
 vi.mock('@/features/chat/rendering/connected-message-bubble', () => ({
   ConnectedMessageBubble: ({ message, messageIndex, onRetryUserMessageRound }: {
@@ -11,14 +17,14 @@ vi.mock('@/features/chat/rendering/connected-message-bubble', () => ({
 }));
 import { MessageList } from '../message-list';
 
-describe('task results in conversation timeline', () => {
+describe('conversation timeline', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   });
-  afterEach(() => { act(() => root.unmount()); container.remove(); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); mediaCache.data = undefined; });
 
   it('interleaves results by time while retaining transcript action indices', () => {
     const retry = vi.fn();
@@ -27,6 +33,7 @@ describe('task results in conversation timeline', () => {
       streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} onRetryUserMessageRound={retry} />));
     const ordered = [...container.querySelectorAll('[data-transcript-time], [data-chat-timeline-entry]')];
     expect(ordered.map(node => node.getAttribute('data-transcript-time') ?? node.getAttribute('data-chat-timeline-entry'))).toEqual(['10', 'run-1', '30']);
+    expect(ordered[1].classList.contains('-mt-5')).toBe(false);
     act(() => (ordered[2] as HTMLButtonElement).click());
     expect(retry).toHaveBeenCalledWith(1);
     expect(list).toHaveLength(2);
@@ -48,6 +55,128 @@ describe('task results in conversation timeline', () => {
       timelineEntries={[{ id: 'video-generation:draft', timestamp: 20, content: 'Video draft' }]}
       streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />));
     expect(container.querySelectorAll('[data-chat-time-separator]')).toHaveLength(1);
+  });
+
+  it.each(['live', 'history'])('puts a music card after its originating %s reply', (source) => {
+    const receipt = { id: 'song', workId: 'song', state: 'queued' };
+    const toolResult = JSON.stringify(source === 'live' ? { details: receipt } : receipt);
+    const list: Message[] = [
+      { role: 'user', timestamp: 10, content: [{ type: 'text', text: 'Make a song' }] },
+      { role: 'assistant', timestamp: 30, content: [
+        { type: 'tool_use', id: 'create', name: 'music_generation', status: 'done', result: toolResult },
+        { type: 'text', text: 'The song is queued' },
+      ] },
+      { role: 'user', timestamp: 30, content: [{ type: 'text', text: 'Check its status' }] },
+      { role: 'assistant', timestamp: 40, content: [{ type: 'text', text: 'Still queued' }] },
+    ];
+    mediaCache.data = { configured: true, jobs: [{
+      id: 'song', workId: 'song', parentId: null, versionNumber: 1, modelRef: 'music/model',
+      title: 'Song', mode: 'song', prompt: 'Folk', lyrics: 'Lyrics', state: 'running',
+      durationMs: null, error: null, createdAt: 20,
+    }] };
+    function MusicConversation() {
+      const entries = useChatMusicGeneration('conversation', 'en', false, list);
+      return <MessageList messages={list} timelineEntries={entries}
+        streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />;
+    }
+    act(() => root.render(<MusicConversation />));
+    expect([...container.querySelectorAll('[data-chat-message-index], [data-chat-timeline-entry]')]
+      .map(node => node.getAttribute('data-chat-message-index') ?? node.getAttribute('data-chat-timeline-entry')))
+      .toEqual(['0', '1', 'music-generation:song', '2', '3']);
+    expect(container.querySelector('[data-chat-timeline-entry]')?.classList.contains('-mt-5')).toBe(true);
+  });
+
+  it.each(['live', 'history'])('keeps the video draft and its job below the originating %s reply', (source) => {
+    const original: VideoGenerationDraft = {
+      id: 'video', revision: 1, transcriptId: 'transcript', modelRef: SEEDANCE_VIDEO_MODEL_REF,
+      prompt: 'A boat', duration: 4, resolution: '480P', ratio: '16:9',
+      imageUri: null, imageName: null, estimatedCostFen: 100, createdAt: 20,
+    };
+    const draft = { ...original, revision: 2, prompt: 'A blue boat' };
+    const reply = (video: VideoGenerationDraft, timestamp: number, text: string): Message => {
+      const receipt = JSON.stringify(video);
+      const result = source === 'live' ? JSON.stringify({ content: [{ type: 'text', text: receipt }], details: {} }) : receipt;
+      return { role: 'assistant', timestamp, content: [
+        { type: 'tool_use', id: `draft-${video.revision}`, name: 'video_draft', status: 'done', result },
+        { type: 'text', text },
+      ] };
+    };
+    const list: Message[] = [
+      { role: 'user', timestamp: 10, content: [{ type: 'text', text: 'Make a video' }] },
+      reply(original, 30, 'Review the draft'),
+      { role: 'user', timestamp: 40, content: [{ type: 'text', text: 'Make the boat blue' }] },
+      reply(draft, 60, 'I updated the draft'),
+    ];
+    const session: VideoGenerationSession = { transcriptId: draft.transcriptId, configured: true,
+      modelRef: draft.modelRef, defaults: { duration: 4, resolution: '480P' }, draft, jobs: [] };
+    const job: VideoGenerationJob = { id: draft.id, transcriptId: draft.transcriptId, modelRef: draft.modelRef,
+      prompt: draft.prompt, duration: draft.duration, resolution: draft.resolution, ratio: draft.ratio,
+      imageName: null, state: 'queued', error: null, createdAt: 70, draftCreatedAt: draft.createdAt };
+    function VideoConversation({ data }: { data: VideoGenerationSession }) {
+      mediaCache.data = data;
+      const { timelineEntries } = useChatVideoGeneration('conversation', 'en', list);
+      return <MessageList messages={list} timelineEntries={timelineEntries}
+        streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />;
+    }
+    const expectOrder = () => {
+      expect([...container.querySelectorAll('[data-chat-message-index], [data-chat-timeline-entry]')]
+        .map(node => node.getAttribute('data-chat-message-index') ?? node.getAttribute('data-chat-timeline-entry')))
+        .toEqual(['0', '1', 'video-generation:video', '2', '3']);
+    };
+
+    act(() => root.render(<VideoConversation data={session} />));
+    expect(container.textContent).toContain('Video draft');
+    expectOrder();
+
+    act(() => root.render(<VideoConversation data={{ ...session, draft: undefined, jobs: [job] }} />));
+    expect(container.querySelector('[data-chat-timeline-entry] [role="status"]')?.textContent).toBe('Queued');
+    expectOrder();
+
+    act(() => root.render(<VideoConversation data={{ ...session, draft: undefined, jobs: [{ ...job, state: 'completed' }] }} />));
+    expect(container.querySelector('[data-chat-timeline-entry] video')).toBeTruthy();
+    expectOrder();
+  });
+
+  it('keeps music playback and download visible while showing lyrics and creation details on demand', () => {
+    mediaCache.data = { configured: true, jobs: [{
+      id: 'song', workId: 'song', parentId: null, versionNumber: 1, modelRef: 'music/model',
+      title: 'Song', mode: 'song', prompt: 'Full folk-pop prompt', lyrics: 'The first line', state: 'completed',
+      durationMs: 30_000, error: null, createdAt: 20,
+    }] };
+    const list: Message[] = [];
+    function MusicConversation() {
+      const entries = useChatMusicGeneration('conversation', 'zh', false, list);
+      return <MessageList messages={list} timelineEntries={entries}
+        streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />;
+    }
+    act(() => root.render(<MusicConversation />));
+    const card = container.querySelector('article')!;
+    const player = card.querySelector('audio');
+    const download = card.querySelector('a[download]');
+    const lyrics = card.querySelector<HTMLButtonElement>('[role="group"] button[aria-controls]')!;
+    const details = card.querySelector<HTMLButtonElement>('button[aria-label="创作详情"]')!;
+    expect(player).toBeTruthy();
+    expect(download?.getAttribute('aria-label')).toBe('下载音频');
+    expect(lyrics.textContent).toBe('歌词');
+    expect(card.textContent).not.toContain('Full folk-pop prompt');
+    expect(card.textContent).not.toContain('The first line');
+
+    act(() => lyrics.click());
+    expect(lyrics.getAttribute('aria-expanded')).toBe('true');
+    expect(lyrics.closest('[role="group"]')?.querySelector('[role="region"]')?.textContent).toBe('The first line');
+    expect(card.querySelector('button[aria-label="播放"]')).toBeTruthy();
+
+    act(() => details.click());
+    expect(lyrics.getAttribute('aria-expanded')).toBe('false');
+    expect(details.getAttribute('aria-expanded')).toBe('true');
+    expect(card.textContent).not.toContain('The first line');
+    expect(card.textContent).toContain('Full folk-pop prompt');
+    expect(card.textContent).toContain('music/model');
+    expect(card.querySelector('audio')).toBe(player);
+
+    act(() => details.click());
+    expect(details.getAttribute('aria-expanded')).toBe('false');
+    expect(card.textContent).not.toContain('Full folk-pop prompt');
   });
 
   it('preserves user and reply order when confirmation advances the user timestamp past the reply shell', () => {

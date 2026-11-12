@@ -4,7 +4,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { chatScrollBehavior } from '@/features/chat/scroll/chat-scroll-geometry';
 import { pauseChatTailFollowing, registerChatVirtualScroll } from '@/features/chat/scroll/chat-virtual-scroll';
 
-export interface MessageRowDescriptor { key: string; index: number; aliases: number[] }
+export interface MessageRowDescriptor { key: string; index: number; aliases: number[]; compactTop?: boolean }
 
 function MessageFooter({ context }: { context?: { footer: ReactNode } }) {
   return context?.footer;
@@ -17,7 +17,7 @@ export function VirtualMessageRows({ rows, scrollRef, renderRow, footer }: {
   rows: MessageRowDescriptor[];
   scrollRef: RefObject<HTMLDivElement | null>;
   footer: ReactNode;
-  renderRow: (index: number) => ReactNode;
+  renderRow: (row: MessageRowDescriptor) => ReactNode;
 }) {
   const handle = useRef<VirtuosoHandle>(null);
   const [parent, setParent] = useState<HTMLElement | undefined>();
@@ -81,6 +81,8 @@ export function VirtualMessageRows({ rows, scrollRef, renderRow, footer }: {
     firstItemIndex={position.first} initialTopMostItemIndex={{ index: rows.length - 1, align: 'end' }}
     defaultItemHeight={160} increaseViewportBy={selectionViewport}
     computeItemKey={(_index, row) => row.key}
-    itemContent={(_index, row) => <div className={row === rows[0] ? undefined : 'pt-8'}>{renderRow(row.index)}</div>}
+    itemContent={(_index, row) => (
+      <div className={row === rows[0] ? undefined : row.compactTop ? 'pt-3' : 'pt-8'}>{renderRow(row)}</div>
+    )}
   />;
 }

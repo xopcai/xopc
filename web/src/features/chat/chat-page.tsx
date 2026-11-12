@@ -219,10 +219,10 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     setWelcomeDraftSeed({ id: welcomeDraftSeq.current, preserveDraft: true,
       text: language === 'zh' ? '把视频草稿改成' : 'Adjust the video draft to ' });
   }, [language]);
-  const videoGeneration = useChatVideoGeneration(videoConversationId, language, {
+  const videoGeneration = useChatVideoGeneration(videoConversationId, language, msgSlice.items, {
     chatBusy: stream.streaming || stream.sending, readOnly, onAdjust: adjustVideoDraft,
   });
-  const musicTimeline = useChatMusicGeneration(videoConversationId, language, stream.streaming || stream.sending);
+  const musicTimeline = useChatMusicGeneration(videoConversationId, language, stream.streaming || stream.sending, msgSlice.items);
   const { draft: pendingVideoDraft, confirmDraft: confirmVideoDraft } = videoGeneration;
   const automationSetupBound = Boolean((sessionMetadata?.identity?.customData?.automationSetup as { automationId?: string } | undefined)?.automationId);
   const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
@@ -1098,7 +1098,13 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
             </div>
           </div>
         ) : null}
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className={cn(
+          'relative flex min-h-0 min-w-0 flex-1 flex-col',
+          personal ? '[--chat-composer-bottom-radius:1.65rem]' : '[--chat-composer-bottom-radius:1rem]',
+          compactWelcomeLayout
+            ? '[--chat-composer-bottom-space:max(0.625rem,env(safe-area-inset-bottom))]'
+            : '[--chat-composer-bottom-space:max(0.5rem,env(safe-area-inset-bottom))] sm:[--chat-composer-bottom-space:max(1rem,env(safe-area-inset-bottom))]',
+        )}>
           <ChatFindBar
             className={usesHeaderOverlay ? 'top-[calc(var(--app-chat-header-height,0px)+0.75rem)]' : undefined}
             open={chatFind.open}
@@ -1135,7 +1141,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
             data-chat-scroll-viewport
             data-app-chat-scroll={usesHeaderOverlay ? '' : undefined}
             className={cn(
-              'chat-messages chat-messages--wide-viewport relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
+              'chat-messages chat-messages--wide-viewport chat-messages--composer-fade relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
               compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
             )}
             onScroll={handleChatScroll}
@@ -1308,13 +1314,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
 
           <div
             ref={composerDockRef}
-            className={cn(
-              'chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 z-10',
-              personal ? '[--chat-composer-bottom-radius:1.65rem]' : '[--chat-composer-bottom-radius:1rem]',
-              compactWelcomeLayout
-                ? '[--chat-composer-bottom-space:max(0.625rem,env(safe-area-inset-bottom))]'
-                : '[--chat-composer-bottom-space:max(0.5rem,env(safe-area-inset-bottom))] sm:[--chat-composer-bottom-space:max(1rem,env(safe-area-inset-bottom))]',
-            )}
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10"
           >
             <div className={embedded && !personal ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
               <div
