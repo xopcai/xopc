@@ -61,7 +61,7 @@ data class ConversationMessage(val id: String, val role: String, val text: Strin
   val references: List<ConversationReference> = emptyList(),
   val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null,
   val sourceIds: Set<String> = setOf(id), val renderId: String = id, val answerConfirmed: Boolean = true,
-  val narrations: List<ConversationNarration> = emptyList())
+  val narrations: List<ConversationNarration> = emptyList(), val generatedMediaIds: List<String> = emptyList())
 data class ConversationNarration(val id: String, val text: String)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
   val agentId: String? = null, val nextBeforeCursor: String? = null)
@@ -1214,6 +1214,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         val references = parseMessageReferences(metadata?.optJSONArray("sourceContexts"))
         val outcome = parseMessageOutcome(metadata?.optJSONObject("turnOutcome"))
         val targets = parseMessageTargets(item.optJSONArray("deliveries"))
+        val ids = item.optJSONArray("generatedMediaIds")
+        val generatedMediaIds = (0 until (ids?.length() ?: 0)).mapNotNull { part -> ids?.optString(part)?.takeIf(String::isNotBlank) }
         val hasNonTextContent = narration || hasToolCall || (item.optJSONArray("media")?.length() ?: 0) > 0 ||
           (metadata?.optJSONArray("sourceContexts")?.length() ?: 0) > 0 ||
           outcome != null || targets.isNotEmpty() ||
@@ -1230,7 +1232,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         if (text.isBlank() && !hasNonTextContent) null else
           ConversationMessage(item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }, role, text,
             item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome,
-            narrations = narrations)
+            narrations = narrations, generatedMediaIds = generatedMediaIds)
       }
       val grouped = mutableListOf<ConversationMessage>()
       parsed.forEach { message ->
@@ -1251,6 +1253,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
             targets = (previous.targets + message.targets).distinctBy { it.kind to it.id },
             outcome = message.outcome ?: previous.outcome,
             narrations = (previous.narrations + message.narrations).distinctBy { it.id },
+            generatedMediaIds = (previous.generatedMediaIds + message.generatedMediaIds).distinct(),
           )
         }
       }

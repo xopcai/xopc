@@ -1,5 +1,6 @@
 package ai.xopc.mobile.gateway
 
+import java.io.File
 import java.io.InputStream
 import java.net.URL
 import java.net.URI
@@ -16,6 +17,8 @@ interface GatewayHttp {
     headers: Map<String, String>): String = request(origin, path, method, body, bearer)
   fun requestBytes(origin: String, path: String, bearer: String = ""): ByteArray =
     request(origin, path, "GET", "", bearer).toByteArray(Charsets.UTF_8)
+  fun downloadMedia(origin: String, path: String, bearer: String, destination: File): Unit =
+    throw UnsupportedOperationException("MEDIA_DOWNLOAD_UNAVAILABLE")
   fun postBytes(origin: String, path: String, body: String, bearer: String): ByteArray =
     throw UnsupportedOperationException("BINARY_POST_UNAVAILABLE")
   fun uploadMultipart(origin: String, path: String, bearer: String, name: String,
@@ -104,7 +107,27 @@ class GatewayTransport : GatewayHttp {
     }
   }
 
-  override fun requestBytes(origin: String, path: String, bearer: String): ByteArray {
+  override fun requestBytes(origin: String, path: String, bearer: String): ByteArray =
+    getMedia(origin, path, bearer, ::readMediaBounded)
+
+  override fun downloadMedia(origin: String, path: String, bearer: String, destination: File) {
+    getMedia(origin, path, bearer) { input ->
+      destination.outputStream().use { output ->
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        while (true) {
+          val count = input.read(buffer)
+          if (count < 0) break
+          total += count
+          require(total <= 256L * 1024 * 1024) { "MEDIA_TOO_LARGE" }
+          output.write(buffer, 0, count)
+        }
+        require(total > 0) { "EMPTY_MEDIA" }
+      }
+    }
+  }
+
+  private fun <T> getMedia(origin: String, path: String, bearer: String, read: (InputStream) -> T): T {
     val url = URL(PairingProtocol.secureOrigin(origin) + apiPath(path))
     val connection = url.openConnection() as HttpsURLConnection
     try {
@@ -116,7 +139,7 @@ class GatewayTransport : GatewayHttp {
       DeviceRequestProof.apply(connection, bearer)
       val status = connection.responseCode
       if (status !in 200..299) throw GatewayHttpException(status)
-      return connection.inputStream.use(::readMediaBounded)
+      return connection.inputStream.use(read)
     } finally {
       connection.disconnect()
     }
