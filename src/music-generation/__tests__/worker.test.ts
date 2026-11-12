@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { readMusicArtifact } from '../artifact.js';
-import { enqueueMusicJob, getMusicJob } from '../repository.js';
+import { enqueueMusicJob, getMusicJob, listMusicJobs } from '../repository.js';
 import { MusicGenerationWorker } from '../worker.js';
 
 vi.mock('../../media-shared/http/ssrf-guard.js', () => ({ assertSafeUrl: vi.fn() }));
@@ -69,10 +69,11 @@ it('reuses a tool receipt, resumes a paid Mureka task across restart, and keeps 
   const now = Date.now();
   const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 9_000);
   await tick();
-  expect(getMusicJob(conversationId, first.id)?.state).toBe('saving');
+  expect(listMusicJobs(conversationId, transcriptId)[0]).toMatchObject({ state: 'saving', errorCode: 'audio_retrying' });
   clock.mockReturnValue(now + 30_000);
   await tick();
   expect(getMusicJob(conversationId, first.id)).toMatchObject({ state: 'completed', duration_ms: 94000 });
+  expect(listMusicJobs(conversationId, transcriptId)[0].errorCode).toBeNull();
   expect(remote.mock.calls.map(([url]) => url.pathname)).toEqual([
     '/v1/song/generate', '/v1/song/query/task-1', '/result.mp3', '/v1/song/query/task-1', '/result.mp3',
   ]);
@@ -94,8 +95,24 @@ it('uses the configured international endpoint and does not retry an ambiguous i
   await tick();
   vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 180_000);
   await tick();
-  expect(getMusicJob(conversationId, job.id)?.state).toBe('submission_unknown');
+  expect(listMusicJobs(conversationId, transcriptId)[0]).toMatchObject({
+    id: job.id, state: 'submission_unknown', errorCode: null,
+  });
   expect(remote).toHaveBeenCalledTimes(1);
   expect(remote.mock.calls[0][0].href).toBe('https://api.mureka.ai/v1/instrumental/generate');
   expect(JSON.parse(remote.mock.calls[0][1].body)).not.toHaveProperty('lyrics');
+});
+
+it('persists a rejected HTTP 429 as a known provider failure', async () => {
+  const remote = vi.fn().mockResolvedValue(new Response(null, { status: 429 }));
+  vi.stubGlobal('fetch', remote);
+  const { job } = await enqueueMusicJob(conversationId, transcriptId, 'rate-limited', song);
+  await tick();
+  closeXopcDatabase();
+  openXopcDatabase({ path: database });
+  await tick();
+  expect(listMusicJobs(conversationId, transcriptId)[0]).toMatchObject({
+    id: job?.id, state: 'failed', errorCode: 'provider_rate_limited',
+  });
+  expect(remote).toHaveBeenCalledTimes(1);
 });

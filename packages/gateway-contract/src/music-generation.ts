@@ -1,5 +1,13 @@
 export type MusicMode = 'song' | 'instrumental';
 export type MusicJobState = 'queued' | 'submitting' | 'submitted' | 'running' | 'saving' | 'completed' | 'failed' | 'submission_unknown';
+export type MusicJobErrorCode =
+  | 'provider_rate_limited'
+  | 'provider_rejected'
+  | 'provider_failed'
+  | 'credentials_missing'
+  | 'status_retrying'
+  | 'audio_retrying'
+  | 'expired';
 
 export interface MusicGenerationJob {
   id: string;
@@ -14,6 +22,7 @@ export interface MusicGenerationJob {
   state: MusicJobState;
   durationMs: number | null;
   error: string | null;
+  errorCode?: MusicJobErrorCode | null;
   createdAt: number;
 }
 

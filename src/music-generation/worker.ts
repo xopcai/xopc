@@ -43,14 +43,18 @@ export class MusicGenerationWorker {
       return;
     }
     if (Date.now() - row.created_at >= lifetimeMs) {
-      updateMusicJob(id, token, 'failed', { error: 'The music task or its download is no longer available.' });
+      updateMusicJob(id, token, 'failed', {
+        error: 'The music task or its download is no longer available.', errorCode: 'expired',
+      });
       return;
     }
 
     const route = resolveMusicModel(row.model_ref);
     const key = route && await resolveMusicKey(route.provider);
     if (!route || !key) {
-      updateMusicJob(id, token, row.state, { delayMs: retryMs, error: 'Restore the original music model credentials to resume.' });
+      updateMusicJob(id, token, row.state, {
+        delayMs: retryMs, error: 'Restore the original music model credentials to resume.', errorCode: 'credentials_missing',
+      });
       return;
     }
     const { provider, model } = route;
@@ -61,7 +65,7 @@ export class MusicGenerationWorker {
         updateMusicJob(id, token, 'submitted', { taskId, delayMs: pollMs });
       } catch (err) {
         if (err instanceof MusicRequestRejected) {
-          updateMusicJob(id, token, 'failed', { error: err.message });
+          updateMusicJob(id, token, 'failed', { error: err.message, errorCode: err.code });
           log.warn({ jobId: id, modelRef: row.model_ref }, err.message);
         } else {
           updateMusicJob(id, token, 'submission_unknown', { error: 'The provider may have accepted this request.' });
@@ -81,7 +85,7 @@ export class MusicGenerationWorker {
           updateMusicJob(id, token, result.state, { delayMs: pollMs });
           return;
         case 'failed':
-          updateMusicJob(id, token, 'failed', { error: result.reason });
+          updateMusicJob(id, token, 'failed', { error: result.reason, errorCode: 'provider_failed' });
           return;
         case 'completed':
           if (!updateMusicJob(id, token, 'saving', { durationMs: result.durationMs, keepLease: true })) return;
@@ -92,7 +96,9 @@ export class MusicGenerationWorker {
       }
     } catch {
       updateMusicJob(id, token, saving ? 'saving' : row.state, {
-        delayMs: retryMs, error: saving ? 'Audio download failed. Retrying the same result.' : 'Status check failed. Retrying.',
+        delayMs: retryMs,
+        error: saving ? 'Audio download failed. Retrying the same result.' : 'Status check failed. Retrying.',
+        errorCode: saving ? 'audio_retrying' : 'status_retrying',
       });
     }
   }

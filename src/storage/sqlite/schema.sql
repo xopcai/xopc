@@ -3760,6 +3760,7 @@ CREATE TABLE music_generation_jobs (
   lease_token TEXT,
   lease_until INTEGER,
   created_at INTEGER NOT NULL,
+  error_code TEXT,
   UNIQUE (work_id, version_number)
 );
 CREATE INDEX music_generation_due ON music_generation_jobs(next_attempt_at)

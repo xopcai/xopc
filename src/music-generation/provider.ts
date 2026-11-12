@@ -1,4 +1,4 @@
-import type { MusicMode } from '@xopcai/gateway-contract';
+import type { MusicJobErrorCode, MusicMode } from '@xopcai/gateway-contract';
 
 export interface MusicInput {
   mode: MusicMode;
@@ -25,4 +25,8 @@ export interface MusicProvider {
   allowsAudioHost(host: string): boolean;
 }
 
-export class MusicRequestRejected extends Error {}
+export class MusicRequestRejected extends Error {
+  constructor(message: string, readonly code: Extract<MusicJobErrorCode, 'provider_rate_limited' | 'provider_rejected'>) {
+    super(message);
+  }
+}

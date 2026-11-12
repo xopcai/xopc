@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { MusicGenerationJob, MusicJobState, MusicMode } from '@xopcai/gateway-contract';
+import type { MusicGenerationJob, MusicJobErrorCode, MusicJobState, MusicMode } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { configuredMusicModel } from './providers.js';
@@ -22,6 +22,7 @@ export interface MusicJobRow {
   provider_task_id: string | null;
   duration_ms: number | null;
   error: string | null;
+  error_code: MusicJobErrorCode | null;
   created_at: number;
 }
 
@@ -30,7 +31,7 @@ export function publicMusicJob(row: MusicJobRow): MusicGenerationJob {
     id: row.id, workId: row.work_id, parentId: row.parent_id, versionNumber: row.version_number,
     modelRef: row.model_ref, title: row.title,
     mode: row.mode, prompt: row.prompt, lyrics: row.lyrics, state: row.state, durationMs: row.duration_ms,
-    error: row.error, createdAt: row.created_at,
+    error: row.error, errorCode: row.error_code, createdAt: row.created_at,
   };
 }
 
@@ -123,7 +124,8 @@ export async function enqueueMusicJob(conversationId: string, transcriptId: stri
 export function claimMusicJob() {
   return runSqliteWriteTransaction(db => {
     const now = Date.now();
-    db.prepare(`UPDATE music_generation_jobs SET state = 'submission_unknown', lease_token = NULL, lease_until = NULL
+    db.prepare(`UPDATE music_generation_jobs SET state = 'submission_unknown', error = NULL, error_code = NULL,
+      lease_token = NULL, lease_until = NULL
       WHERE state = 'submitting' AND lease_until <= ?`).run(now);
     const row = db.prepare(`SELECT * FROM music_generation_jobs WHERE state IN ('queued', 'submitted', 'running', 'saving')
       AND next_attempt_at <= ? AND (lease_until IS NULL OR lease_until <= ?) ORDER BY next_attempt_at, rowid LIMIT 1`)
@@ -137,14 +139,16 @@ export function claimMusicJob() {
 }
 
 export function updateMusicJob(id: string, token: string, state: MusicJobState, options: {
-  taskId?: string; durationMs?: number | null; error?: string; delayMs?: number; keepLease?: boolean;
+  taskId?: string; durationMs?: number | null; error?: string; errorCode?: MusicJobErrorCode;
+  delayMs?: number; keepLease?: boolean;
 } = {}): boolean {
   const now = Date.now();
-  return getSqliteDatabase().prepare(`UPDATE music_generation_jobs SET state = ?, error = ?,
+  return getSqliteDatabase().prepare(`UPDATE music_generation_jobs SET state = ?, error = ?, error_code = ?,
     provider_task_id = COALESCE(?, provider_task_id), duration_ms = COALESCE(?, duration_ms), next_attempt_at = ?,
     lease_token = CASE WHEN ? THEN lease_token END, lease_until = CASE WHEN ? THEN lease_until END
     WHERE id = ? AND lease_token = ? AND lease_until > ?`).run(
-    state, options.error ?? null, options.taskId ?? null, options.durationMs ?? null, now + (options.delayMs ?? 0),
+    state, options.error ?? null, options.errorCode ?? null,
+    options.taskId ?? null, options.durationMs ?? null, now + (options.delayMs ?? 0),
     Number(options.keepLease ?? false), Number(options.keepLease ?? false), id, token, now,
   ).changes === 1;
 }

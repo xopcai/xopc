@@ -20,7 +20,7 @@ async function request(apiOrigin: string, key: string, path: string, input?: obj
     await response.body?.cancel().catch(() => undefined);
     const message = `Mureka returned HTTP ${response.status}.`;
     if (input && [400, 401, 402, 403, 404, 422, 429].includes(response.status)) {
-      throw new MusicRequestRejected(message);
+      throw new MusicRequestRejected(message, response.status === 429 ? 'provider_rate_limited' : 'provider_rejected');
     }
     throw new Error(message);
   }
