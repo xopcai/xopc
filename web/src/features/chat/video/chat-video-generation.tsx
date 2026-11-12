@@ -1,9 +1,10 @@
 import { VIDEO_AUTO_DURATION, VIDEO_MODELS, WAN_VIDEO_MODEL_REF, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
-import { ChevronRight, Download, Video } from 'lucide-react';
+import { Download, Video } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { MediaGenerationCard, MediaGenerationDetails } from '@/features/chat/media-generation-card';
 import type { ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import { apiUrl } from '@/lib/url';
 import { fetchJson } from '@/lib/fetch';
@@ -28,8 +29,6 @@ const labels = {
       saving: 'Saving', completed: 'Ready', failed: 'Generation failed', submission_unknown: 'Submission unconfirmed' },
   },
 };
-
-const cardClass = 'min-w-0 w-full max-w-lg space-y-2.5 rounded-xl border border-edge-subtle bg-surface-panel p-3 sm:p-4';
 
 export function isVideoDraftConfirmation(text: string): boolean {
   return /^(就按这个生成|确认生成视频|确认生成|confirm video generation|generate this video)[。！.!]?$/iu.test(text.trim());
@@ -161,7 +160,7 @@ function VideoDraftCard({ draft, conversationId, language, configured, modelChan
   const price = `¥${(draft.estimatedCostFen / 100).toFixed(2)}`;
   const imageUrl = draft.imageUri
     ? apiUrl(`/api/media/read?${new URLSearchParams({ uri: draft.imageUri, conversationId })}`) : undefined;
-  return <article className={cardClass}>
+  return <MediaGenerationCard>
     <h3 className="flex items-center gap-2 text-sm font-medium text-fg"><Video size={16} aria-hidden />{m.draft}</h3>
     <div className="flex items-start gap-3">
       {imageUrl && <img src={imageUrl} alt={draft.imageName ?? m.reference}
@@ -184,7 +183,7 @@ function VideoDraftCard({ draft, conversationId, language, configured, modelChan
         onClick={() => void onConfirm()}>{submitting ? m.submitting : m.generate}</Button>
       {onAdjust && <Button variant="ghost" className="min-h-9 px-3 py-1" disabled={disabled} onClick={onAdjust}>{m.adjust}</Button>}
     </div>}
-  </article>;
+  </MediaGenerationCard>;
 }
 
 function videoSpecs(video: Pick<VideoGenerationJob, 'duration' | 'resolution' | 'ratio'>, language: Language): string {
@@ -196,14 +195,10 @@ function videoSpecs(video: Pick<VideoGenerationJob, 'duration' | 'resolution' | 
 function VideoPromptDetails({ video, language, children }: {
   video: Pick<VideoGenerationJob, 'prompt' | 'modelRef'>; language: Language; children?: ReactNode;
 }) {
-  return <details className="group text-xs text-fg-muted">
-    <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm py-1 hover:text-fg focus-visible:outline-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
-      <ChevronRight size={14} aria-hidden className="group-open:rotate-90" />
-      {labels[language].details}
-    </summary>
+  return <MediaGenerationDetails label={labels[language].details}>
     <p className="mt-1 whitespace-pre-wrap wrap-anywhere border-s border-edge px-3 text-sm leading-relaxed text-fg">{video.prompt}</p>
     <p className="mt-2">{VIDEO_MODELS[video.modelRef ?? WAN_VIDEO_MODEL_REF].name}{children && <> · {children}</>}</p>
-  </details>;
+  </MediaGenerationDetails>;
 }
 
 function VideoJobCard({ job, url, language }: {
@@ -211,7 +206,7 @@ function VideoJobCard({ job, url, language }: {
 }) {
   const m = labels[language];
   return (
-    <article className={cardClass}>
+    <MediaGenerationCard>
       <div className="flex items-center justify-between gap-3 text-sm">
         <h3 className="flex items-center gap-2 font-medium text-fg"><Video size={16} aria-hidden />{m.title}</h3>
         <span role="status" className="text-xs text-fg-muted">{m.status[job.state]}</span>
@@ -228,6 +223,6 @@ function VideoJobCard({ job, url, language }: {
       <VideoPromptDetails video={job} language={language}>
         {job.imageName && <span className="wrap-anywhere">{m.reference} · {job.imageName}</span>}
       </VideoPromptDetails>
-    </article>
+    </MediaGenerationCard>
   );
 }
