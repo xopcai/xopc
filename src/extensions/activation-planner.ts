@@ -2,6 +2,7 @@
  * Decides which extensions to activate from manifest metadata + config + env.
  */
 
+import { isBundledChannelExtension } from '../channels/bundled-channel-extensions.js';
 import type { ManifestRegistry, ManifestRegistryEntry } from './manifest-registry.js';
 
 export type ActivationLoadPhase = 'startup' | 'deferred';
@@ -39,8 +40,10 @@ export class ActivationPlanner {
     const decisions: ActivationDecision[] = [];
     const decided = new Set<string>();
 
+    // Built-in channel extensions load through their manifests so setup is available while the channel is off.
     if (context.enabledIds) {
       for (const id of context.enabledIds) {
+        if (isBundledChannelExtension(id)) continue;
         decisions.push({
           extensionId: id,
           activated: true,
@@ -52,6 +55,7 @@ export class ActivationPlanner {
 
     if (context.disabledIds) {
       for (const id of context.disabledIds) {
+        if (isBundledChannelExtension(id)) continue;
         if (!decided.has(id)) {
           decisions.push({
             extensionId: id,
