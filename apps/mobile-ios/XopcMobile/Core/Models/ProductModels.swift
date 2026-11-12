@@ -291,6 +291,7 @@ struct TaskDetailPresentation: Decodable, Sendable {
         let resultId: String?
     }
 }
+
 struct TaskPhaseChange: Decodable, Sendable, Identifiable {
     let id: String
     let fromPhase: String

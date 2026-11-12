@@ -26,14 +26,30 @@ struct GeneratedMediaCard: Identifiable, Equatable, Sendable {
     enum Kind: String, Sendable { case music, video }
     let kind: Kind
     let item: GeneratedMediaPayload
-    var id: String { item.id }
+    var id: String {
+        item.id
+    }
+
     var title: String {
         item.title ?? item.summary ?? AppLocalization.resolve(isDraft ? "视频草稿" : "视频")
     }
-    var isDraft: Bool { item.revision != nil && item.state == nil }
-    var completed: Bool { item.state == "completed" }
-    var active: Bool { ["queued", "submitting", "submitted", "running", "saving"].contains(item.state ?? "") }
-    var order: Double { item.draftCreatedAt ?? item.createdAt }
+
+    var isDraft: Bool {
+        item.revision != nil && item.state == nil
+    }
+
+    var completed: Bool {
+        item.state == "completed"
+    }
+
+    var active: Bool {
+        ["queued", "submitting", "submitted", "running", "saving"].contains(item.state ?? "")
+    }
+
+    var order: Double {
+        item.draftCreatedAt ?? item.createdAt
+    }
+
     var status: String {
         switch item.state {
         case "queued", "submitted": AppLocalization.resolve("排队中")
@@ -45,17 +61,25 @@ struct GeneratedMediaCard: Identifiable, Equatable, Sendable {
         default: AppLocalization.resolve("待确认")
         }
     }
-    var symbol: String { kind == .music ? "music.note" : "film" }
+
+    var symbol: String {
+        kind == .music ? "music.note" : "film"
+    }
+
     var metadata: String {
         if kind == .music {
             let version = item.versionNumber.map { AppLocalization.resolve("第 \($0) 版") }
             let length = item.durationMs.map { formatGeneratedMediaTime(Double($0) / 1000) }
-            return [version, length].compactMap { $0 }.joined(separator: " · ")
+            return [version, length].compactMap(\.self).joined(separator: " · ")
         }
         let length = item.duration.map { $0 > 0 ? AppLocalization.resolve("\($0) 秒") : AppLocalization.resolve("自动时长") }
-        return [length, item.resolution, item.ratio == "adaptive" ? nil : item.ratio].compactMap { $0 }.joined(separator: " · ")
+        return [length, item.resolution, item.ratio == "adaptive" ? nil : item.ratio].compactMap(\.self).joined(separator: " · ")
     }
-    func jobsPath(_ conversationID: String) -> String { "/api/\(kind.rawValue)-generation/sessions/\(conversationID)/jobs" }
+
+    func jobsPath(_ conversationID: String) -> String {
+        "/api/\(kind.rawValue)-generation/sessions/\(conversationID)/jobs"
+    }
+
     func artifactPath(_ conversationID: String) -> String {
         jobsPath(conversationID) + "/\(id)/" + (kind == .music ? "audio" : "video")
     }
@@ -100,8 +124,12 @@ final class GeneratedMediaState {
         async let video = fetch(.video, id: id, client: client)
         let (musicResult, videoResult) = await (music, video)
         guard !Task.isCancelled, scope == id else { return }
-        if let musicResult { replace(.music, with: musicResult.jobs) }
-        if let videoResult, request == videoRequest, !submitting { applyVideo(videoResult) }
+        if let musicResult {
+            replace(.music, with: musicResult.jobs)
+        }
+        if let videoResult, request == videoRequest, !submitting {
+            applyVideo(videoResult)
+        }
     }
 
     private func fetch(_ kind: GeneratedMediaCard.Kind, id: String, client: GatewayClient) async -> GeneratedMediaResponse? {
@@ -117,7 +145,9 @@ final class GeneratedMediaState {
     private func replace(_ kind: GeneratedMediaCard.Kind, with items: [GeneratedMediaPayload]) {
         let next = (cards.filter { $0.kind != kind } + items.map { GeneratedMediaCard(kind: kind, item: $0) })
             .sorted { ($0.order, $0.id) < ($1.order, $1.id) }
-        if next != cards { cards = next }
+        if next != cards {
+            cards = next
+        }
     }
 
     func confirm(_ card: GeneratedMediaCard, conversationID: String, client: GatewayClient) async {
@@ -126,11 +156,15 @@ final class GeneratedMediaState {
         error = nil
         videoRequest += 1
         let request = videoRequest
-        defer { if scope == conversationID, videoRequest == request { submitting = false } }
+        defer {
+            if scope == conversationID, videoRequest == request {
+                submitting = false
+            }
+        }
         do {
             let job: GeneratedMediaPayload = try await client.request(
                 path: card.jobsPath(conversationID) + "/confirm-draft", method: "POST",
-                body: try client.encoder.encode(GeneratedDraftConfirmation(id: card.id, revision: revision))
+                body: client.encoder.encode(GeneratedDraftConfirmation(id: card.id, revision: revision))
             )
             guard scope == conversationID, videoRequest == request else { return }
             replace(.video, with: cards.filter { $0.kind == .video && $0.id != job.id && !$0.isDraft }.map(\.item) + [job])
@@ -138,7 +172,10 @@ final class GeneratedMediaState {
             guard scope == conversationID, videoRequest == request else { return }
             self.error = error.localizedDescription
             if let response = await fetch(.video, id: conversationID, client: client),
-               scope == conversationID, videoRequest == request { applyVideo(response) }
+               scope == conversationID, videoRequest == request
+            {
+                applyVideo(response)
+            }
         }
     }
 
@@ -146,7 +183,9 @@ final class GeneratedMediaState {
         let replies = messages.filter { $0.role == "assistant" && $0.answerConfirmed }
         var anchors: [String: String] = [:]
         for reply in replies {
-            for id in reply.generatedMediaIds where anchors[id] == nil { anchors[id] = reply.id }
+            for id in reply.generatedMediaIds where anchors[id] == nil {
+                anchors[id] = reply.id
+            }
         }
         return Dictionary(grouping: cards) { anchors[$0.id] ?? replies.last?.id ?? "" }
     }
@@ -199,7 +238,9 @@ struct GeneratedMediaRow: View {
                     Label(submitting ? "正在提交" : "确认生成", systemImage: "sparkles")
                         .frame(maxWidth: .infinity, minHeight: 36)
                 }.buttonStyle(.borderedProminent).disabled(!canConfirm || submitting)
-                if !canConfirm { Text("当前视频服务不可用").font(.caption).foregroundStyle(.secondary) }
+                if !canConfirm {
+                    Text("当前视频服务不可用").font(.caption).foregroundStyle(.secondary)
+                }
             }
             if let error = error ?? card.item.error {
                 Text(verbatim: error).font(.caption).foregroundStyle(.secondary)
@@ -271,7 +312,9 @@ struct GeneratedMediaPlayerSheet: View {
             .onDisappear {
                 player?.pause()
                 player?.replaceCurrentItem(with: nil)
-                if let localURL { try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent()) }
+                if let localURL {
+                    try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent())
+                }
             }
         }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     }
@@ -289,9 +332,13 @@ struct GeneratedMediaPlayerSheet: View {
                 HStack {
                     Button {
                         if player.rate == 0 {
-                            if duration > 0 && position >= duration - 0.1 { player.seek(to: .zero) }
+                            if duration > 0, position >= duration - 0.1 {
+                                player.seek(to: .zero)
+                            }
                             player.play()
-                        } else { player.pause() }
+                        } else {
+                            player.pause()
+                        }
                     } label: {
                         Image(systemName: player.rate == 0 ? "play.fill" : "pause.fill")
                             .frame(width: 44, height: 44).background(.tint.opacity(0.12), in: .circle)
@@ -316,7 +363,9 @@ struct GeneratedMediaPlayerSheet: View {
             media.play()
         } catch is CancellationError {
         } catch {
-            if !Task.isCancelled { self.error = error.localizedDescription }
+            if !Task.isCancelled {
+                self.error = error.localizedDescription
+            }
         }
     }
 }

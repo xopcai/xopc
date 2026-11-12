@@ -2215,6 +2215,11 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertFalse(jump.exists)
         app.buttons["assistant-options"].tap()
         app.staticTexts["新建会话"].tap()
+        dismissNewConversationConfirmation()
+        XCTAssertEqual(app.textFields["assistant-chat-composer"].value as? String, "请整理移动端布局")
+    }
+
+    private func dismissNewConversationConfirmation() {
         let confirmation = app.buttons.matching(NSPredicate(format: "label == %@", "开始新对话")).firstMatch
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
         let cancel = app.buttons.matching(NSPredicate(format: "label == %@", "取消")).firstMatch
@@ -2223,7 +2228,6 @@ final class MobileLayoutParityUITests: XCTestCase {
         } else {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
-        XCTAssertEqual(app.textFields["assistant-chat-composer"].value as? String, "请整理移动端布局")
     }
 
     private func revealJumpToLatest(_ jump: XCUIElement) {

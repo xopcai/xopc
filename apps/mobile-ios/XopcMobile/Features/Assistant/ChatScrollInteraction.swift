@@ -27,11 +27,11 @@ struct ChatScrollInteraction: ViewModifier {
         } else {
             content.simultaneousGesture(DragGesture().onChanged { value in
                 onStart()
-                let dy = value.translation.height - previousDragTranslation.height
-                let dx = value.translation.width - previousDragTranslation.width
+                let verticalDelta = value.translation.height - previousDragTranslation.height
+                let horizontalDelta = value.translation.width - previousDragTranslation.width
                 previousDragTranslation = value.translation
-                if abs(dy) > 1, abs(dy) > abs(dx) {
-                    onDirectionChange(dy < 0)
+                if abs(verticalDelta) > 1, abs(verticalDelta) > abs(horizontalDelta) {
+                    onDirectionChange(verticalDelta < 0)
                 }
             }.onEnded { _ in
                 previousDragTranslation = .zero
