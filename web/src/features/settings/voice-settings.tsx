@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { SecretInput } from '@/components/ui/secret-input';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { claimPlayback, releasePlayback } from '@/features/media-playback/playback-coordinator';
 import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import {
   fetchVoiceModels,
@@ -717,7 +718,10 @@ function TtsSection({
   const previewRequestRef = useRef<AbortController | null>(null);
 
   const stopTestAudio = useCallback(() => {
-    previewRequestRef.current?.abort();
+    if (previewRequestRef.current) {
+      releasePlayback(previewRequestRef.current);
+      previewRequestRef.current.abort();
+    }
     previewRequestRef.current = null;
     audioRef.current?.pause();
     audioRef.current = null;
@@ -807,6 +811,7 @@ function TtsSection({
     stopTestAudio();
     const request = new AbortController();
     previewRequestRef.current = request;
+    claimPlayback(request, () => { stopTestAudio(); setTestState({ status: 'idle' }); });
     setTestState({ status: 'loading' });
     try {
       const result = await testTtsVoice({
@@ -827,10 +832,16 @@ function TtsSection({
         result.latencyMs !== undefined ? `${result.latencyMs}ms` : undefined,
         audioBytesLabel(result.audioSize),
       ].filter(Boolean).join(' · ');
-      audio.addEventListener('ended', () => setTestState({ status: 'done', summary }), { once: true });
-      audio.addEventListener('error', () => setTestState({ status: 'error', message: v.tts.test.playFailed }), { once: true });
+      audio.addEventListener('ended', () => {
+        releasePlayback(request);
+        if (!request.signal.aborted) setTestState({ status: 'done', summary });
+      }, { once: true });
+      audio.addEventListener('error', () => {
+        releasePlayback(request);
+        if (!request.signal.aborted) setTestState({ status: 'error', message: v.tts.test.playFailed });
+      }, { once: true });
       await audio.play();
-      setTestState({ status: 'playing', summary });
+      if (!request.signal.aborted) setTestState({ status: 'playing', summary });
     } catch (err) {
       if (request.signal.aborted) return;
       stopTestAudio();

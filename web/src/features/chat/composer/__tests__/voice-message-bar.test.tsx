@@ -18,8 +18,16 @@ describe('voice message playback', () => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) { this.dispatchEvent(new Event('pause')); });
-    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async function (this: HTMLMediaElement) { this.dispatchEvent(new Event('play')); });
+    const playing = new WeakSet<HTMLMediaElement>();
+    vi.spyOn(HTMLMediaElement.prototype, 'paused', 'get').mockImplementation(function (this: HTMLMediaElement) { return !playing.has(this); });
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) {
+      playing.delete(this);
+      this.dispatchEvent(new Event('pause'));
+    });
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(async function (this: HTMLMediaElement) {
+      playing.add(this);
+      this.dispatchEvent(new Event('play'));
+    });
     URL.createObjectURL = vi.fn(() => 'blob:voice');
     URL.revokeObjectURL = vi.fn();
   });

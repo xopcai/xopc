@@ -24,9 +24,10 @@ describe('conversation timeline', () => {
   const renderTimeline = (content: ReactNode) => act(() => root.render(<MemoryRouter>{content}</MemoryRouter>));
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   });
-  afterEach(() => { act(() => root.unmount()); container.remove(); mediaCache.data = undefined; });
+  afterEach(() => { act(() => root.unmount()); container.remove(); mediaCache.data = undefined; vi.restoreAllMocks(); });
 
   it('interleaves results by time while retaining transcript action indices', () => {
     const retry = vi.fn();
@@ -165,7 +166,9 @@ describe('conversation timeline', () => {
 
     act(() => lyrics.click());
     expect(lyrics.getAttribute('aria-expanded')).toBe('true');
-    expect(lyrics.closest('[role="group"]')?.querySelector('[role="region"]')?.textContent).toBe('The first line');
+    const lyricsRegion = lyrics.closest('[role="group"]')!.querySelector('[role="region"]')!;
+    expect(lyricsRegion.textContent).toBe('The first line');
+    expect(download!.compareDocumentPosition(lyricsRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(card.querySelector('button[aria-label="播放"]')).toBeTruthy();
 
     act(() => details.click());

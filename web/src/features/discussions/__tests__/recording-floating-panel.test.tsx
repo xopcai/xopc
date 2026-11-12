@@ -2,7 +2,8 @@
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { RecordingFloatingPanel, clampRecordingPosition } from '../recording-floating-panel';
+import { clampFloatingPosition } from '@/features/chat/composer/use-composer-safe-floating-layout';
+import { RecordingFloatingPanel } from '../recording-floating-panel';
 let root: ReturnType<typeof createRoot>; let container: HTMLDivElement;
 function Fixture() {
   const [compact,setCompact] = useState(false);
@@ -45,5 +46,17 @@ it('provides tap and keyboard alternatives and reclamps after a viewport shrink'
   expect(container.querySelector('aside')!.style.left).toBe('18px'); expect(container.querySelector('aside')!.style.top).toBe('48px');
 });
 it('keeps even oversized panels inside the visible origin', () => {
-  expect(clampRecordingPosition({ x: -50,y: 5000 },2000,1200)).toEqual({ x: 12,y: 12 });
+  expect(clampFloatingPosition({ x: -50,y: 5000 }, { width: 2000, height: 1200 },
+    { left: 12, top: 12, right: 1188, bottom: 788 })).toEqual({ x: 12,y: 12 });
+});
+
+it('keeps the recording window above the composer when using a bottom position', async () => {
+  const composer = document.createElement('div');
+  composer.dataset.chatComposerFrame = '';
+  composer.style.top = '600px';
+  await act(async () => container.append(composer));
+  const handle = button('移动录音窗');
+  await act(async () => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })));
+  expect(container.querySelector('aside')!.style.left).toBe('788px');
+  expect(container.querySelector('aside')!.style.top).toBe('288px');
 });

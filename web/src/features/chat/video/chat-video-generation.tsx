@@ -9,6 +9,7 @@ import { MediaGenerationCard, MediaGenerationDetails } from '@/features/chat/med
 import { findMediaGenerationReplyIndexes } from '@/features/chat/media-generation-replies';
 import type { ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import type { Message } from '@/features/chat/messages/messages.types';
+import { GeneratedVideo } from '@/features/media-playback/generated-video';
 import { apiUrl } from '@/lib/url';
 import { fetchJson } from '@/lib/fetch';
 
@@ -225,7 +226,7 @@ function VideoJobCard({ job, url, language }: {
       <p className="text-xs text-fg-muted">{videoSpecs(job, language)}</p>
       {job.error && <p className="text-xs text-danger">{job.error}</p>}
       {job.state === 'completed' && <>
-        <video controls playsInline preload="none" aria-label={m.title} className="max-h-96 w-full rounded-lg bg-black" src={url} />
+        <GeneratedVideo src={url} title={job.summary || m.title} />
         <a href={`${url}?download=1`} download="generated-video.mp4" className="inline-flex items-center gap-2 text-sm text-accent-fg hover:underline">
           <Download size={15} aria-hidden />{m.download}
         </a>
