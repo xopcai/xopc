@@ -18,7 +18,7 @@ const Handler = new Function('Edge', 'ScrollAlign', 'chatReplySpaceBudget', 'con
 function setup() {
   vi.useFakeTimers();
   return Object.assign(new Handler(), {
-    visible: true, atBottom: true, initialScrollPending: false, loadingOlder: false,
+    visible: true, atBottom: true, showJumpBottom: false, initialScrollPending: false, loadingOlder: false,
     renderKeys: { update() {} }, chat: { selectedId: 'one', loading: false, cachedHistory: false }, scrollTimer: -1,
     olderGeneration: 0, initialScrollAttempts: 0,
     layout: { reduceMotion: false }, presentationRows: [{ id: 'last' }],
@@ -82,7 +82,7 @@ describe('chat keyboard viewport following', () => {
   it('lets the reader stop following cached history while its network refresh is pending', () => {
     const view = setup(); view.chat.loading = true; view.chat.cachedHistory = true;
     view.onMessageScrollSource('drag'); view.onMessageScroll(-10, 'scroll');
-    expect(view.atBottom).toBe(false); expect(view.showJumpBottom).toBe(true);
+    expect(view.atBottom).toBe(false); expect(view.showJumpBottom).toBe(false);
     view.onMessageChange(); vi.runAllTimers();
     expect(view.messagesScroller.scrollEdge).not.toHaveBeenCalled();
   });
@@ -153,6 +153,13 @@ describe('chat keyboard viewport following', () => {
     view.onMessageScroll(20, 'scroll');
     expect(view.atBottom).toBe(false);
     expect(view.showJumpBottom).toBe(true);
+    view.onMessageScroll(-10, 'scroll');
+    expect(view.showJumpBottom).toBe(false);
+    view.onMessageScroll(10, 'scroll');
+    expect(view.showJumpBottom).toBe(true);
+    view.messagesScroller.isAtEnd.mockReturnValue(true);
+    view.onMessageScroll(10, 'scroll');
+    expect(view.showJumpBottom).toBe(false);
   });
 
   it('follows the bottom after keyboard resize without requiring new messages', () => {

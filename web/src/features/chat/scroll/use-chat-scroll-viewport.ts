@@ -49,6 +49,7 @@ export interface UseChatScrollViewportResult {
   composerDockRef: RefObject<HTMLDivElement | null>;
   /** True when the viewport is within the near-bottom threshold, including non-overflowing content. */
   atBottom: boolean;
+  showScrollToBottom: boolean;
   registerListContentRef: (el: HTMLDivElement | null) => void;
   scrollToBottom: (smooth?: boolean) => void;
   onScroll: () => void;
@@ -93,6 +94,13 @@ export function useChatScrollViewport({
   const measuredClientHeightRef = useRef(0);
 
   const [atBottom, setAtBottom] = useState(true);
+  const [towardLatest, setTowardLatest] = useState(false);
+  const scrollbarTopRef = useRef<number | null>(null);
+
+  const updateAtBottom = useCallback((near: boolean) => {
+    setAtBottom(near);
+    if (near) setTowardLatest(false);
+  }, []);
 
   const prevLoadingRef = useRef(true);
   const prevMessageCountRef = useRef(0);
@@ -116,10 +124,10 @@ export function useChatScrollViewport({
     // intent with the actual position, including scroll events still in flight.
     const near = isNearChatBottom(el);
     setFollowing(near);
-    setAtBottom(near);
+    updateAtBottom(near);
     pendingReplyAnchorRef.current = near ? messageRenderKey : null;
     if (!near) readingAnchorRef.current = readChatScrollAnchor(el);
-  }, [setFollowing]);
+  }, [setFollowing, updateAtBottom]);
 
   const updateReplySpace = useCallback(() => {
     const el = scrollRef.current;
@@ -161,6 +169,7 @@ export function useChatScrollViewport({
 
       if (opts?.force) {
         setFollowing(true);
+        setTowardLatest(false);
       }
 
       const virtual = chatVirtualScroll(el);
@@ -178,9 +187,9 @@ export function useChatScrollViewport({
       scrollChatToEnd(el);
       measuredScrollHeightRef.current = el.scrollHeight;
       measuredClientHeightRef.current = el.clientHeight;
-      setAtBottom(isNearChatBottom(el));
+      updateAtBottom(isNearChatBottom(el));
     },
-    [setFollowing],
+    [setFollowing, updateAtBottom],
   );
 
   const stopFollowing = useCallback(() => {
@@ -189,8 +198,8 @@ export function useChatScrollViewport({
     // Input intent pauses auto-follow before scrolling, but does not imply a
     // change in position (the gesture may be consumed by a nested scroll area).
     setFollowing(false);
-    setAtBottom(isNearChatBottom(el));
-  }, [setFollowing]);
+    updateAtBottom(isNearChatBottom(el));
+  }, [setFollowing, updateAtBottom]);
 
   const onResize = useCallback(() => {
     const el = scrollRef.current;
@@ -205,8 +214,8 @@ export function useChatScrollViewport({
     // tail when growth, viewport shrink, or adjusted reply space needs it.
     if (grew || viewportShrank || replySpaceChanged) scrollToEnd();
     // Resizing the composer or keyboard must not re-enable following for history readers.
-    setAtBottom(isNearChatBottom(el));
-  }, [scrollToEnd, updateReplySpace]);
+    updateAtBottom(isNearChatBottom(el));
+  }, [scrollToEnd, updateAtBottom, updateReplySpace]);
 
   const scheduleResize = useCallback(() => {
     const el = scrollRef.current;
@@ -276,22 +285,27 @@ export function useChatScrollViewport({
     const layoutChanged = measuredClientHeightRef.current > 0
       && (el.scrollHeight !== measuredScrollHeightRef.current
         || el.clientHeight !== measuredClientHeightRef.current);
+    if (scrollbarTopRef.current !== null) {
+      const delta = el.scrollTop - scrollbarTopRef.current;
+      scrollbarTopRef.current = el.scrollTop;
+      if (!near && !layoutChanged && delta !== 0) setTowardLatest(delta > 0);
+    }
     // A queued layout scroll can arrive before ResizeObserver's frame. It must
     // not revoke following while newly rendered content is still being measured.
     if (!near && followingRef.current && layoutChanged) {
-      setAtBottom(false);
+      updateAtBottom(false);
       scheduleResize();
       return;
     }
     setFollowing(near);
     if (!near) readingAnchorRef.current = readChatScrollAnchor(el);
-    setAtBottom(near);
+    updateAtBottom(near);
     if (near) updateReplySpace();
 
     if (el.scrollTop < 100 && !near && hasMore && !loadingMore) {
       void loadMoreMessages();
     }
-  }, [setFollowing, hasMore, loadingMore, loadMoreMessages, updateReplySpace, scheduleResize]);
+  }, [setFollowing, hasMore, loadingMore, loadMoreMessages, updateAtBottom, updateReplySpace, scheduleResize]);
 
   const scrollToBottom = useCallback(
     (smooth = true) => {
@@ -378,34 +392,47 @@ export function useChatScrollViewport({
     viewportObserver.observe(root);
 
     const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.shiftKey) return;
       if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
       if (Math.abs(e.deltaY) < 0.25) return;
       if (wheelDeltaImpliesTowardOlderMessages(e)) {
         stopFollowing();
       }
+      setTowardLatest(e.deltaY > 0 && !isNearChatBottom(root));
     };
 
-    let touchLastY = 0;
+    let lastTouch: Touch | null = null;
     const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) touchLastY = e.touches[0].clientY;
+      lastTouch = e.touches.length === 1 ? e.touches[0] : null;
     };
     const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      const y = e.touches[0].clientY;
-      const dy = y - touchLastY;
-      touchLastY = y;
+      const previous = lastTouch;
+      onTouchStart(e);
+      if (!previous || !lastTouch) return;
+      const dy = lastTouch.clientY - previous.clientY;
+      const dx = lastTouch.clientX - previous.clientX;
+      if (Math.abs(dy) <= 2 || Math.abs(dy) < Math.abs(dx)) return;
       if (dy > 2) stopFollowing();
+      setTowardLatest(dy < 0 && !isNearChatBottom(root));
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target !== root || e.altKey || e.ctrlKey || e.metaKey) return;
+      const towardOlder = ['ArrowUp', 'PageUp', 'Home'].includes(e.key) || (e.key === ' ' && e.shiftKey);
+      const towardNewer = ['ArrowDown', 'PageDown', 'End'].includes(e.key) || (e.key === ' ' && !e.shiftKey);
+      if (towardOlder) stopFollowing();
+      if (towardOlder || towardNewer) setTowardLatest(towardNewer && !isNearChatBottom(root));
     };
 
     const onPointerDown = (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      const scrollbarWidth = root.offsetWidth - root.clientWidth;
-      if (scrollbarWidth <= 0) return;
-      const rect = root.getBoundingClientRect();
-      if (e.clientX >= rect.right - scrollbarWidth) {
+      if (e.button !== 0 || e.pointerType === 'touch' || e.target !== root) return;
+      const clientRight = root.getBoundingClientRect().left + root.clientLeft + root.clientWidth;
+      if (e.clientX >= clientRight) {
+        scrollbarTopRef.current = root.scrollTop;
         stopFollowing();
       }
     };
+    const endScrollbarDrag = () => { scrollbarTopRef.current = null; };
 
     const pauseForSelection = () => {
       const selection = window.getSelection();
@@ -422,20 +449,27 @@ export function useChatScrollViewport({
 
     root.addEventListener('chat-scroll-reading', stopFollowing);
     root.addEventListener('wheel', onWheel, { passive: true });
+    root.addEventListener('keydown', onKeyDown);
     root.addEventListener('pointerdown', onPointerDown);
     root.addEventListener('touchstart', onTouchStart, { passive: true });
     root.addEventListener('touchmove', onTouchMove, { passive: true });
     root.addEventListener('click', pauseForDisclosure, true);
     document.addEventListener('selectionchange', pauseForSelection);
+    window.addEventListener('pointerup', endScrollbarDrag, true);
+    window.addEventListener('pointercancel', endScrollbarDrag, true);
     return () => {
+      endScrollbarDrag();
       viewportObserver.disconnect();
       root.removeEventListener('chat-scroll-reading', stopFollowing);
       root.removeEventListener('wheel', onWheel);
+      root.removeEventListener('keydown', onKeyDown);
       root.removeEventListener('pointerdown', onPointerDown);
       root.removeEventListener('touchstart', onTouchStart);
       root.removeEventListener('touchmove', onTouchMove);
       root.removeEventListener('click', pauseForDisclosure, true);
       document.removeEventListener('selectionchange', pauseForSelection);
+      window.removeEventListener('pointerup', endScrollbarDrag, true);
+      window.removeEventListener('pointercancel', endScrollbarDrag, true);
     };
   }, [hasToken, showSessionLoading, stopFollowing, scheduleResize]);
 
@@ -466,6 +500,7 @@ export function useChatScrollViewport({
     scrollRef,
     composerDockRef,
     atBottom,
+    showScrollToBottom: !atBottom && towardLatest,
     registerListContentRef,
     scrollToBottom,
     onScroll,

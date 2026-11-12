@@ -63,6 +63,7 @@ struct AssistantView<Dock: View>: View {
     @State private var replyUserText: String?
     @State private var activityHeight: CGFloat = 0
     @State private var followingBottom = true
+    @State private var showJumpBottom = false
     @State private var bottomJumpID: UUID?
     @State private var userScrollingMessages = false
     @State private var bottomScrollTask: Task<Void, Never>?
@@ -181,6 +182,7 @@ struct AssistantView<Dock: View>: View {
                 assistantAudio.stop()
                 executionPresentation = nil
                 isAtBottom = true
+                showJumpBottom = false
                 followingBottom = true
                 replySpace = ChatReplySpace()
                 replyRowHeights = [:]
@@ -495,6 +497,9 @@ struct AssistantView<Dock: View>: View {
                 .onChange(of: bottomDockHeight) {
                     updateReplySpace()
                 }
+                .onChange(of: isAtBottom) {
+                    if isAtBottom { showJumpBottom = false }
+                }
                 .onChange(of: viewport.size.height) {
                     updateReplySpace()
                     if followingBottom, !userScrollingMessages, bottomJumpID == nil {
@@ -511,11 +516,15 @@ struct AssistantView<Dock: View>: View {
                     followingBottom = isAtBottom
                     userScrollingMessages = false
                     updateReplySpace()
+                }, onDirectionChange: { towardLatest in
+                    guard userScrollingMessages else { return }
+                    showJumpBottom = towardLatest && !isAtBottom
                 }))
                 .overlay(alignment: .bottom) {
-                    if state.isRunActive || !isAtBottom {
+                    if showJumpBottom && !isAtBottom {
                         Button {
                             guard bottomJumpID == nil else { return }
+                            showJumpBottom = false
                             bottomScrollTask?.cancel(); bottomScrollTask = nil
                             userScrollingMessages = false
                             followingBottom = true

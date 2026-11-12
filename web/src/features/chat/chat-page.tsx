@@ -365,6 +365,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     atBottom,
     registerListContentRef,
     scrollToBottom,
+    showScrollToBottom,
     replySpaceRef,
     reserveReplySpace,
     onScroll: onChatViewportScroll,
@@ -1145,6 +1146,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
               compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
             )}
             onScroll={handleChatScroll}
+            tabIndex={0}
             data-chat-find-open={chatFind.open ? '' : undefined}
           >
             {usesHeaderOverlay ? <ChatRealtimeStatus /> : null}
@@ -1327,7 +1329,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 )}
               >
               <ScrollToBottomDock
-                visible={!session.showSessionLoading && !atBottom}
+                visible={!session.showSessionLoading && showScrollToBottom}
                 onClick={() => scrollToBottom(true)}
                 running={stream.streaming || stream.sending}
               />

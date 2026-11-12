@@ -42,10 +42,10 @@ describe('chat bottom region composition', () => {
     expect(jump).toContain('this.resetMessagePosition(); this.updateReplySpace(); this.onMessageChange();');
   });
 
-  it('shows the jump button whenever reading away from the latest message', () => {
+  it('gates the jump button on downward scrolling away from the latest message', () => {
     expect(chat).toContain('@Local showJumpBottom: boolean = false;');
     expect(chat).toContain('if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }');
-    expect(chat).toContain('else this.showJumpBottom = true;');
+    expect(chat).toContain('else if (offset !== 0) this.showJumpBottom = offset > 0;');
     expect(chat).toContain('if (!this.atBottom && this.showJumpBottom)');
     expect(chat).toContain('this.resetMessagePosition(); this.updateReplySpace(); this.onMessageChange();');
   });
