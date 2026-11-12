@@ -1,8 +1,8 @@
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
-import { SpacePatchSchema, SpaceSaveReplySchema } from '@xopcai/gateway-contract';
+import { SpacePatchSchema, SpaceSaveReplySchema, SpaceSaveVersionSchema } from '@xopcai/gateway-contract';
 
-import { changeSpaceItem, findSpaceArtifact, findSpaceTaskDelivery, getSpaceItem, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply } from '../../../space/repository.js';
+import { changeSpaceItem, findSpaceArtifact, findSpaceTaskDelivery, getSpaceItem, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply, saveSpaceVersion } from '../../../space/repository.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const revisionSchema = SpacePatchSchema.pick({ revision: true });
@@ -13,6 +13,7 @@ const listSchema = z.object({
   projectId: z.string().max(160).optional(),
   taskId: z.string().max(160).optional(),
   cursor: z.string().max(512).optional(),
+  versionTargetFor: z.string().uuid().optional(),
 });
 
 export function registerSpaceRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
@@ -45,6 +46,13 @@ export function registerSpaceRoutes(app: Hono, deps: AuthenticatedRouteDeps): vo
     const { revision, ...patch } = input.data;
     const result = changeSpaceItem(c.req.param('id'), revision, patch);
     return result === 'ok' ? c.json(getSpaceItem(c.req.param('id'))) : c.json({ error: result }, result === 'missing' ? 404 : 409);
+  });
+  app.post('/api/spaces/items/:id/versions', limited, async c => {
+    const input = SpaceSaveVersionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ error: 'Invalid version reference' }, 400);
+    const result = saveSpaceVersion(c.req.param('id'), input.data.sourceVersionId, input.data.revision);
+    return typeof result !== 'string' ? c.json(result)
+      : c.json({ error: result }, result === 'missing' ? 404 : 409);
   });
   for (const action of ['trash', 'restore', 'purge'] as const) {
     const handler = async (c: Context) => {

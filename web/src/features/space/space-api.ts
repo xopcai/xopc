@@ -1,4 +1,4 @@
-import type { SpaceDetail, SpaceList } from '@xopcai/gateway-contract';
+import type { SpaceDetail, SpaceList, SpaceVersionLink } from '@xopcai/gateway-contract';
 
 import { apiUrl } from '@/lib/url';
 import { apiFetch, fetchJson } from '@/lib/fetch';
@@ -14,6 +14,12 @@ export const getSpaceDetail = (path: string) => fetchJson<SpaceDetail>(apiUrl(pa
 
 export function saveReplyToSpace(conversationId: string, reference: { entryId: string } | { turnId: string }): Promise<{ id: string }> {
   return fetchJson(apiUrl(spacePath), { method: 'POST', body: JSON.stringify({ conversationId, ...reference }) });
+}
+
+export function saveSpaceVersion(id: string, sourceVersionId: string, revision: number): Promise<SpaceVersionLink> {
+  return fetchJson(apiUrl(`${spaceItemPath(id)}/versions`), {
+    method: 'POST', body: JSON.stringify({ sourceVersionId, revision }),
+  });
 }
 
 export function spaceContentUrl(id: string, versionId: string): string {

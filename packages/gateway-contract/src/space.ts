@@ -12,6 +12,14 @@ export const SpaceSaveReplySchema = z.object({
   turnId: z.string().min(1).max(160).optional(),
 }).strict().refine(input => Boolean(input.entryId) !== Boolean(input.turnId));
 
+export const SpaceSaveVersionSchema = z.object({
+  sourceVersionId: z.string().uuid(),
+  revision: z.number().int().positive(),
+}).strict();
+
+export type SpaceVersionLink = { id: string; versionId: string };
+export type SpaceArtifactLink = SpaceVersionLink & { canSaveAsVersion: boolean };
+
 export type SpaceOrigin = {
   kind: 'chat' | 'task' | 'automation';
   versionId?: string;

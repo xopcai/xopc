@@ -2,6 +2,7 @@ import type { TaskEvidence } from '@xopcai/gateway-contract';
 import { Link, useLocation } from 'react-router-dom';
 
 import { FileIcon } from '@/features/file-tree/file-icon';
+import { SpaceArtifactLink } from '@/features/space/space-artifact-link';
 import { DeliverablePreview } from './deliverable-preview';
 import type { TaskDetail } from './home-api';
 import { currentTaskReceipt } from './task-detail-summary';
@@ -48,6 +49,8 @@ export function TaskDeliverySummary({ detail, language }: { detail: TaskDetail; 
             className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-edge-subtle px-3 py-2 text-left text-sm text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <FileIcon name={title} /><span className="min-w-0 break-words [overflow-wrap:anywhere]">{title}</span>
           </DeliverablePreview>
+          {item.artifact?.availability === 'available' && item.artifact.uri?.startsWith('media://outbound/')
+            ? <SpaceArtifactLink file={item.artifact} zh={zh} /> : null}
         </li>;
       })}
     </ul> : null}

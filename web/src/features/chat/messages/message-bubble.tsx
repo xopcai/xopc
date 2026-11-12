@@ -364,6 +364,8 @@ export const MessageBubble = memo(function MessageBubble({
   const showMeta = Boolean(progressForMeta?.message) || showPendingThinking;
 
   const assistantActionsVisible = isAssistant && !readonly && !isStreaming && !suppressAssistantActions;
+  const spaceDeliverables = (message.taskResultDelivery?.outcome.deliverables ?? message.outcome?.deliverables)
+    ?.filter(file => file.availability === 'available' && file.uri?.startsWith('media://outbound/'));
   const reserveAssistantActions = isAssistant && isStreaming && !readonly && !suppressAssistantActions
     && assistantAnswerStarted;
   const copyMarkdown = useMemo(
@@ -788,16 +790,16 @@ export const MessageBubble = memo(function MessageBubble({
                   clusterLabels={clusterLabels} cardLabels={cardLabels} conversationId={conversationId} />
               ) : null}
 
-            {!isUser && (spaceId || message.taskResultDelivery || message.outcome?.deliverables.some(file => file.uri?.startsWith('media://outbound/'))) ? (
+            {!isUser && (spaceId || message.taskResultDelivery || spaceDeliverables?.length) ? (
               <div className="flex flex-wrap items-center gap-1">
                 {spaceId ? <Link to={`/space?item=${encodeURIComponent(spaceId)}`} className="rounded-lg px-2 py-1 text-xs text-accent-fg hover:bg-surface-hover">
                   {language === 'zh' ? '在 Space 中查看回复' : 'View reply in Space'}
                 </Link> : null}
-                {message.taskResultDelivery && !message.outcome?.deliverables.some(file => file.availability === 'available' && file.uri?.startsWith('media://outbound/')) ? (
+                {message.taskResultDelivery && !spaceDeliverables?.length ? (
                   <SpaceTaskResultLink deliveryId={message.taskResultDelivery.deliveryId} title={message.taskResultDelivery.taskTitle} zh={language === 'zh'} />
                 ) : null}
-                {message.outcome?.deliverables.filter(file => file.availability === 'available').slice(0, 8)
-                  .map(file => <SpaceArtifactLink key={file.artifactId} file={file} zh={language === 'zh'} />)}
+                {spaceDeliverables?.slice(0, 8)
+                  .map(file => <SpaceArtifactLink key={file.artifactId} file={file} zh={language === 'zh'} readonly={readonly || isStreaming} />)}
               </div>
             ) : null}
 
