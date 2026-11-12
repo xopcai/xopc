@@ -265,7 +265,7 @@ function AppShellContent() {
           <SidebarColumn />
 
           {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
-          <div className="app-main-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
+          <div className="app-main-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel text-fg">
             <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
               <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', routeKey === 'personal' && '@container/personal-chat')} inert={personalDetailsOverlay} data-app-chat-shell={routeKey === 'chat' || routeKey === 'personal' ? '' : undefined}>
                 {!isSettingsRoute ? <PrimaryAppHeader /> : null}
@@ -276,7 +276,6 @@ function AppShellContent() {
                       data-workbench-page-scroll={pathname === '/' ? '' : undefined}
                       className={cn(
                         'flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden',
-                        pathname === '/' ? 'bg-surface-base' : 'bg-surface-panel',
                         routeKey !== 'settings' && routeKey !== 'chat' && 'page-enter',
                         routeKey === 'settings'
                           ? 'overflow-hidden'

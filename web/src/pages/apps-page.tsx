@@ -206,7 +206,7 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
   ];
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
+    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'bg-surface-panel')}>
       <div className={cn(
         'mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8',
         'pb-7 pt-3 lg:pb-9 lg:pt-4',

@@ -38,7 +38,8 @@ export async function storeVideoArtifact(jobId: string, response: Response): Pro
   });
   try {
     await pipeline(Readable.fromWeb(response.body!), limit, createWriteStream(temporary, { flags: 'wx', mode: 0o600 }));
-    const file = await open(temporary, 'r');
+    // Windows requires a writable handle for fsync.
+    const file = await open(temporary, 'r+');
     try {
       const header = Buffer.alloc(12);
       const { bytesRead } = await file.read(header);

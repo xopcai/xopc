@@ -89,7 +89,7 @@ describe('conversation timeline', () => {
     expect(container.querySelector('[data-chat-timeline-entry]')?.classList.contains('-mt-5')).toBe(true);
   });
 
-  it.each(['live', 'history'])('keeps the video draft and its job below the originating %s reply', (source) => {
+  it.each(['live', 'history'])('keeps the video draft and its job below the latest draft-changing %s reply', (source) => {
     const original: VideoGenerationDraft = {
       id: 'video', revision: 1, transcriptId: 'transcript', modelRef: SEEDANCE_VIDEO_MODEL_REF,
       prompt: 'A boat', duration: 4, resolution: '480P', ratio: '16:9',
@@ -109,35 +109,43 @@ describe('conversation timeline', () => {
       reply(original, 30, 'Review the draft'),
       { role: 'user', timestamp: 40, content: [{ type: 'text', text: 'Make the boat blue' }] },
       reply(draft, 60, 'I updated the draft'),
+      { role: 'user', timestamp: 80, content: [{ type: 'text', text: 'What color is the boat?' }] },
+      { role: 'assistant', timestamp: 90, content: [
+        { type: 'tool_use', id: 'inspect', name: 'video_draft', status: 'done', result: JSON.stringify({ draft }) },
+        { type: 'text', text: 'The boat is blue' },
+      ] },
     ];
     const session: VideoGenerationSession = { transcriptId: draft.transcriptId, configured: true,
       modelRef: draft.modelRef, defaults: { duration: 4, resolution: '480P' }, draft, jobs: [] };
     const job: VideoGenerationJob = { id: draft.id, transcriptId: draft.transcriptId, modelRef: draft.modelRef,
       prompt: draft.prompt, duration: draft.duration, resolution: draft.resolution, ratio: draft.ratio,
       imageName: null, state: 'queued', error: null, createdAt: 70, draftCreatedAt: draft.createdAt };
-    function VideoConversation({ data }: { data: VideoGenerationSession }) {
+    function VideoConversation({ data, messages = list }: { data: VideoGenerationSession; messages?: Message[] }) {
       mediaCache.data = data;
-      const { timelineEntries } = useChatVideoGeneration('conversation', 'en', list);
-      return <MessageList messages={list} timelineEntries={timelineEntries}
+      const { timelineEntries } = useChatVideoGeneration('conversation', 'zh', messages);
+      return <MessageList messages={messages} timelineEntries={timelineEntries}
         streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />;
     }
-    const expectOrder = () => {
-      expect([...container.querySelectorAll('[data-chat-message-index], [data-chat-timeline-entry]')]
-        .map(node => node.getAttribute('data-chat-message-index') ?? node.getAttribute('data-chat-timeline-entry')))
-        .toEqual(['0', '1', 'video-generation:video', '2', '3']);
-    };
+    const order = () => [...container.querySelectorAll('[data-chat-message-index], [data-chat-timeline-entry]')]
+      .map(node => node.getAttribute('data-chat-message-index') ?? node.getAttribute('data-chat-timeline-entry'));
+    const updatedOrder = ['0', '1', '2', '3', 'video-generation:video', '4', '5'];
+
+    renderTimeline(<VideoConversation data={{ ...session, draft: original }} messages={list.slice(0, 2)} />);
+    expect(order()).toEqual(['0', '1', 'video-generation:video']);
 
     renderTimeline(<VideoConversation data={session} />);
-    expect(container.textContent).toContain('Video draft');
-    expectOrder();
+    const card = container.querySelector('[data-chat-timeline-entry]');
+    expect(card?.textContent).toContain('A blue boat');
+    expect(card?.querySelector('button')?.textContent).toBe('确认生成');
+    expect(order()).toEqual(updatedOrder);
 
     renderTimeline(<VideoConversation data={{ ...session, draft: undefined, jobs: [job] }} />);
-    expect(container.querySelector('[data-chat-timeline-entry] [role="status"]')?.textContent).toBe('Queued');
-    expectOrder();
+    expect(container.querySelector('[data-chat-timeline-entry] [role="status"]')?.textContent).toBe('排队中');
+    expect(order()).toEqual(updatedOrder);
 
     renderTimeline(<VideoConversation data={{ ...session, draft: undefined, jobs: [{ ...job, state: 'completed' }] }} />);
     expect(container.querySelector('[data-chat-timeline-entry] video')).toBeTruthy();
-    expectOrder();
+    expect(order()).toEqual(updatedOrder);
   });
 
   it('keeps music playback and download visible while showing lyrics and creation details on demand', () => {

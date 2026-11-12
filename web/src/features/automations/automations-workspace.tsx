@@ -218,7 +218,7 @@ function AutomationsPageSkeleton() {
           ))}
       </section>
       <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-1 lg:grid-cols-[17rem_minmax(0,1fr)]">
-        <section className="rounded-xl bg-surface-panel p-4 shadow-surface">
+        <section className="rounded-xl bg-surface-inset p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 space-y-2">
               <Skeleton className="h-4 w-36" />
@@ -228,7 +228,7 @@ function AutomationsPageSkeleton() {
           </div>
           <div className="mt-4 grid gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-lg bg-surface-base p-3">
+              <div key={i} className="rounded-lg p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -245,7 +245,7 @@ function AutomationsPageSkeleton() {
             ))}
           </div>
         </section>
-        <section className="hidden rounded-xl bg-surface-panel p-4 shadow-surface xl:block">
+        <section className="hidden rounded-xl border border-edge-subtle p-4 xl:block">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="mt-4 h-24 rounded-lg" />
           <div className="mt-4 grid gap-2">
@@ -981,7 +981,7 @@ export function AutomationsWorkspace({
   }, [clearPageHeader, embedded, headerEnd, pageTitle, setPageHeader]);
 
   return (
-    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', embedded ? 'bg-transparent' : 'bg-surface-panel')}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className={cn('flex min-h-0 w-full flex-1 flex-col gap-4', embedded ? 'py-1' : 'px-4 pt-3 sm:px-9 lg:pt-4 xl:px-10', !embedded && (activityView ? 'overflow-y-auto' : 'overflow-hidden'))}>
         {embedded ? (
           <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-base px-4 py-3 shadow-surface">
@@ -1037,7 +1037,7 @@ export function AutomationsWorkspace({
           <AutomationsPageSkeleton />
         ) : (
           <AutomationSplitLayout language={language} busy={scopeLoading}>
-            <aside className={cn('max-h-[28vh] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-surface-base md:flex md:h-full md:max-h-none', executionView ? 'hidden' : 'flex')}>
+            <aside className={cn('max-h-[28vh] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-surface-inset md:flex md:h-full md:max-h-none', executionView ? 'hidden' : 'flex')}>
               <div className="shrink-0 p-3">
                 <AutomationListToolbar language={language} labels={labels} filter={filter} ownership={ownership} source={sourceFilter}
                   projectId={projectIdParam} projects={projects} projectLocked={projectLocked} query={searchQuery}
@@ -1984,7 +1984,7 @@ function AutomationDetails({
     : assigneeName ? labels.form.defaultAgentWithName.replace('{{name}}', assigneeName) : labels.form.defaultAgent;
 
   return (
-    <article className="min-w-0 overflow-hidden bg-surface-panel">
+    <article className="min-w-0 overflow-hidden">
       <header className="flex flex-col items-start gap-3 border-b border-edge px-5 py-4">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">

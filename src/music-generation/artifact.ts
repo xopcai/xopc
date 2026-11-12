@@ -53,7 +53,8 @@ export async function saveMusicArtifact(id: string, provider: MusicProvider, sou
   });
   try {
     await pipeline(Readable.fromWeb(response.body), limit, createWriteStream(temporary, { flags: 'wx', mode: 0o600 }));
-    const file = await open(temporary, 'r');
+    // Windows requires a writable handle for fsync.
+    const file = await open(temporary, 'r+');
     try {
       const header = Buffer.alloc(10);
       const { bytesRead } = await file.read(header);
