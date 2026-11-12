@@ -14,12 +14,19 @@ export type EnterpriseRegistration = {
   poll: (signal: AbortSignal) => Promise<EnterpriseCredentials | 'expired' | undefined>;
 };
 
+export type ChannelSetupLink = (locale: string | undefined, identity?: string) => {
+  url: string;
+  label: string;
+  message?: string;
+};
+
 export function createEnterpriseSetup(options: {
   channel: string;
-  credentialFields: readonly [string, string];
-  credentialLabels: readonly [string, string];
+  credentialFields: readonly [string, string?];
+  credentialLabels: readonly [string, string?];
   begin?: (signal: AbortSignal) => Promise<EnterpriseRegistration>;
   credentialIdIsSecret?: boolean;
+  setupLink?: ChannelSetupLink;
   setupTemplate?: { content: string; url: string; instructions: { zh: string; en: string } };
   verify: (credentials: EnterpriseCredentials) => Promise<void | string>;
 }): ChannelRuntimeActionAdapter {
@@ -48,7 +55,7 @@ export function createEnterpriseSetup(options: {
           ...(sameBot ? current : {}),
           enabled: true,
           [idField]: credentials.id,
-          [secretField]: credentials.secret,
+          ...(secretField ? { [secretField]: credentials.secret } : {}),
           ...(credentials.identity ? { credentialIdentity: credentials.identity } : {}),
         },
       },
@@ -61,40 +68,48 @@ export function createEnterpriseSetup(options: {
       const copy = (chinese: string, english: string) => zh ? chinese : english;
       const raw = record(input);
       const id = string(raw.conversationId);
+      const link = options.setupLink?.(locale);
       const manual = {
         type: 'form' as const,
         submitAction: 'setup.manual',
+        ...(link ? { setupLink: { url: link.url, label: link.label }, message: link.message } : {}),
         ...(options.setupTemplate ? {
           setupTemplate: { content: options.setupTemplate.content, url: options.setupTemplate.url },
           message: copy(options.setupTemplate.instructions.zh, options.setupTemplate.instructions.en),
         } : {}),
         schema: {
           type: 'object',
-          required: [idField, secretField],
+          required: secretField ? [idField, secretField] : [idField],
           properties: {
             [idField]: { type: 'string', title: idLabel, ...(options.credentialIdIsSecret ? { format: 'password' } : {}) },
-            [secretField]: { type: 'string', title: secretLabel, format: 'password' },
+            ...(secretField ? { [secretField]: { type: 'string', title: secretLabel, format: 'password' } } : {}),
           },
         },
       };
       if (accountId && accountId !== 'default') return { ok: false, message: 'Only the default account is supported.' };
 
       if (actionId === 'setup.manual') {
-        const credentials: EnterpriseCredentials = { id: string(raw[idField]), secret: string(raw[secretField]) };
-        if (!credentials.id || !credentials.secret) return { ok: true, payload: manual };
+        const credentials: EnterpriseCredentials = { id: string(raw[idField]), secret: secretField ? string(raw[secretField]) : '' };
+        if (!credentials.id || (secretField && !credentials.secret)) return { ok: true, payload: manual };
         try {
           const current = record(cfg.channels?.[channel]);
-          if (options.credentialIdIsSecret || current[idField] !== credentials.id || current[secretField] !== credentials.secret || current.enabled !== true) {
+          if (options.credentialIdIsSecret || current[idField] !== credentials.id || (secretField && current[secretField] !== credentials.secret) || current.enabled !== true) {
             const identity = await options.verify(credentials);
             if (typeof identity === 'string') credentials.identity = identity;
           }
         } catch {
           return { ok: false, message: copy('凭据校验失败，请确认机器人配置后重试。', 'Credential validation failed. Check the bot settings and retry.') };
         }
+        const connectedLink = options.setupLink?.(locale, credentials.identity);
         return {
           ok: true,
           nextConfig: complete(cfg, credentials),
-          payload: { type: 'ok', configChanged: true },
+          payload: {
+            type: 'ok', configChanged: true,
+            ...(connectedLink ? {
+              setupLink: { url: connectedLink.url, label: connectedLink.label }, message: connectedLink.message,
+            } : {}),
+          },
           onConfigSaved: () => { session?.controller.abort(); session = undefined; },
         };
       }

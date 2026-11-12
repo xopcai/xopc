@@ -12,6 +12,7 @@ Channels let people talk to an xopc Agent from another application. Configure th
 | DingTalk | QR bot setup or Client ID and Secret | [DingTalk](./dingtalk.md) |
 | WeCom | QR bot setup or Bot ID and Secret | [WeCom](./wecom.md) |
 | Slack | App Manifest, Bot Token and App Token | [Slack](./slack.md) |
+| Discord | Bot Token and server invitation | [Discord](./discord.md) |
 | Web console | Gateway URL and token | [Web console](./webui.md) |
 
 Extensions may add more channel types.

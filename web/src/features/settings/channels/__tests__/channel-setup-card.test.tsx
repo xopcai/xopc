@@ -59,3 +59,52 @@ it('shows a single Slack setup action, a copyable App Manifest and two masked in
     container.remove();
   }
 });
+
+it('configures Discord with one masked Bot Token and shows the invite after saving', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  const inviteUrl = 'https://discord.com/oauth2/authorize?client_id=100000000000000002&scope=bot';
+  vi.mocked(apiFetch).mockReset()
+    .mockResolvedValueOnce(Response.json({ ok: true, payload: {
+      type: 'form',
+      submitAction: 'setup.manual',
+      setupLink: { url: 'https://discord.com/developers/applications', label: 'Open Discord Developer Portal' },
+      schema: { type: 'object', required: ['botToken'], properties: { botToken: { type: 'string', format: 'password' } } },
+    } }))
+    .mockResolvedValueOnce(Response.json({ ok: true, payload: {
+      type: 'ok', configChanged: true, setupLink: { url: inviteUrl, label: 'Invite bot to a server' },
+    } }));
+  const entry: ChannelCatalogEntry = {
+    id: 'discord', label: 'Discord', configured: false, extensionId: 'discord',
+    source: 'bundled', order: 70, configPath: 'channels.discord',
+    actions: { 'setup.manual': { label: 'Configure Discord', result: 'form' } },
+  };
+  const changed = vi.fn();
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(
+      <ChannelSetupCard entry={entry} locale="en" messages={messages('en').channelsSettings} onChanged={changed} />,
+    ));
+    const buttons = () => [...container.querySelectorAll('button')];
+    await act(async () => buttons().find((button) => button.textContent === 'Configure Discord')?.click());
+    expect(container.querySelector('a')?.href).toBe('https://discord.com/developers/applications');
+    const fields = container.querySelectorAll<HTMLInputElement>('input[type="password"]');
+    expect(fields).toHaveLength(1);
+    const save = buttons().find((button) => button.textContent === messages('en').channelsSettings.saveSetup)!;
+    expect(save.disabled).toBe(true);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(fields[0], 'fixture-bot-token');
+      fields[0].dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(save.disabled).toBe(false);
+    await act(async () => save.click());
+    expect(vi.mocked(apiFetch).mock.calls.at(-1)?.[1]?.body).toContain('fixture-bot-token');
+    expect(container.querySelector('a')?.href).toBe(inviteUrl);
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(changed).toHaveBeenCalledOnce();
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+});

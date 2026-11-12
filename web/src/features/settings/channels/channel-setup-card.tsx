@@ -16,7 +16,7 @@ import { choosePrimaryChannelAction } from './channel-primary-action';
 import type { ChannelCatalogEntry } from './use-channel-catalog';
 
 export type ChannelActionPayload =
-  | { type?: 'ok'; message?: string; configChanged?: boolean; [key: string]: unknown }
+  | { type?: 'ok'; message?: string; configChanged?: boolean; setupLink?: { url: string; label: string }; [key: string]: unknown }
   | {
       type: 'qr';
       conversationId: string;
@@ -55,6 +55,7 @@ export type ChannelActionPayload =
       values?: Record<string, unknown>;
       submitAction: string;
       setupTemplate?: { content: string; url: string };
+      setupLink?: { url: string; label: string };
       message?: string;
     };
 
@@ -186,7 +187,7 @@ export function ChannelSetupCard({
         payload,
         poll: pollTarget(payload) ?? (payload.type === 'poll' && payload.phase === 'pending' ? prev.poll : null),
         busy: false,
-        formDraft: payload.type === 'form' ? payload.values ?? {} : prev.formDraft,
+        formDraft: payload.type === 'form' ? payload.values ?? {} : {},
       }));
       if ('configChanged' in payload && payload.configChanged === true) {
         await onChanged();
@@ -269,7 +270,8 @@ export function ChannelSetupCard({
     void runAction(poll.cancelAction, { conversationId: poll.conversationId }, poll.accountId);
   };
   const formPayload = state.payload?.type === 'form' ? state.payload : null;
-  const requiredSetupFields = formPayload?.setupTemplate && Array.isArray(formPayload.schema.required)
+  const setupLink = state.payload?.type === 'ok' || state.payload?.type === 'form' ? state.payload.setupLink : undefined;
+  const requiredSetupFields = (formPayload?.setupTemplate || formPayload?.setupLink) && Array.isArray(formPayload.schema.required)
     ? formPayload.schema.required
     : [];
   const missingSetupField = requiredSetupFields.some((field) => {
@@ -343,6 +345,14 @@ export function ChannelSetupCard({
       </div>
 
       {message && (!isTerminalPoll(state.payload) || confirmAction) ? <p className="mt-3 text-sm text-fg-muted">{message}</p> : null}
+      {setupLink ? (
+        <a className="mt-2 inline-flex items-center gap-1 text-sm text-accent hover:underline"
+          href={setupLink.url} target="_blank" rel="noreferrer"
+        >
+          {setupLink.label}
+          <ExternalLink className="size-3.5" />
+        </a>
+      ) : null}
       {botName ? <p className="mt-2 text-sm font-medium text-fg">{botName}</p> : null}
       {verificationCode ? <code className="mt-2 block select-all break-all rounded-md bg-surface-base p-2 text-sm">{verificationCode}</code> : null}
       {setupHint ? <p className="mt-2 text-sm text-fg-muted">{setupHint}</p> : null}

@@ -29,7 +29,8 @@
     "extensions/feishu/src/**/*",
     "extensions/dingtalk/src/**/*",
     "extensions/wecom/src/**/*",
-    "extensions/slack/src/**/*"
+    "extensions/slack/src/**/*",
+    "extensions/discord/src/**/*"
   ],
   "exclude": ["node_modules", "dist", "**/__tests__/**/*"]
 }
