@@ -1,3 +1,19 @@
+import type { TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
+
+import type { MessageAttachment } from '@/features/chat/messages/messages.types';
+
+export function attachmentFromDeliverable(deliverable: TurnOutcomeDeliverable): MessageAttachment {
+  return {
+    id: deliverable.artifactId,
+    name: deliverable.title,
+    type: deliverable.kind,
+    mimeType: deliverable.mimeType,
+    size: deliverable.sizeBytes,
+    uri: deliverable.uri,
+    workspaceRelativePath: deliverable.workspaceRelativePath,
+  };
+}
+
 /** Max files per chat message (keep in sync with `src/gateway/chat-limits.ts`). */
 export const MAX_CHAT_ATTACHMENTS = 10;
 

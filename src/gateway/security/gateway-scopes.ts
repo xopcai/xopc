@@ -53,6 +53,9 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path.startsWith('/api/endpoint-tools')) return 'device.self';
   if (path === '/api/user-context/environment' || path.startsWith('/api/user-context/environment/')) return 'device.self';
   if (path === '/api/personal-agent/activity') return 'tasks.read';
+  if (path === '/api/personal-agent/schedules' || path.startsWith('/api/personal-agent/schedules/')) {
+    return methodScope(method, 'automations.read', 'automations.write');
+  }
   if (path === '/api/personal-agent' || path.startsWith('/api/personal-agent/')) {
     return methodScope(method, 'sessions.read', 'sessions.write');
   }

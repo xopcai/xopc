@@ -246,9 +246,11 @@ describe('background task result delivery', () => {
     expect(results.fileDeliveryState(taskId, main.key)).toMatchObject({ status: 'pending', availableFileCount: 0 });
     await new TaskResultDeliveryService().drain(vi.fn());
     expect(results.fileDeliveryState(taskId, main.key)).toMatchObject({ status: 'delivered', availableFileCount: 1 });
+    expect(results.fileDeliveryState(taskId, main.key, true).artifact).toMatchObject({ kind: 'image', availability: 'available' });
     expect(results.fileDeliveryState(taskId, createConversation({ agentId: 'other' }).key)).toEqual(initial);
     resetSessionRecord(main.key, stateDir);
     expect(results.fileDeliveryState(taskId, main.key)).toMatchObject(initial);
+    expect(results.fileDeliveryState(taskId, main.key, true).artifact).toBeUndefined();
   });
 
   it('atomically reopens the same Task, preserves the prior run and delivery, and retries one revision idempotently', async () => {
@@ -1011,7 +1013,7 @@ describe('background task result delivery', () => {
   });
 
   it('delivers to the active transcript after reset and serves only scoped media through authenticated Gateway', async () => {
-    const { main, coordinator, runId } = task();
+    const { main, coordinator, runId, taskId } = task();
     markPersonal(main.key);
     const outcome = await image(runId);
     coordinator.captureOutcome(outcome);
@@ -1052,6 +1054,16 @@ describe('background task result delivery', () => {
       expect(await media.text()).toBe('published-image');
       const unrelated = createConversation({ agentId: 'other' });
       expect((await fetch(base + query + unrelated.key, { headers })).status).toBe(404);
+      const unpublished = task();
+      const unpublishedOutcome = await image(unpublished.runId);
+      unpublished.coordinator.captureOutcome(unpublishedOutcome);
+      const unpublishedUri = unpublishedOutcome.deliverables[0]!.uri!;
+      expect(isMediaUriReferencedByLiveSession(unpublishedUri)).toBe(true);
+      const taskQuery = `${base}/api/media/read?uri=${encodeURIComponent(unpublishedUri)}&taskId=`;
+      expect((await fetch(taskQuery + taskId, { headers })).status).toBe(404);
+      const taskMedia = await fetch(taskQuery + unpublished.taskId, { headers });
+      expect(taskMedia.status).toBe(200);
+      expect(await taskMedia.text()).toBe('published-image');
     } finally {
       await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     }

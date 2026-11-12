@@ -138,6 +138,13 @@ export class AutomationActionExecutor {
     ));
     this.register('task_command', { mode: 'idempotent', key: 'run_id' },
       (input, action) => this.executeTaskCommand(input, action));
+    this.register('personal_task', { mode: 'idempotent', key: 'run_id' }, async (input, action) => {
+      await input.hooks.onRunPatch?.({ currentPhase: 'action' });
+      const { startScheduledPersonalTask } = await import('../../personal-agent/schedules.js');
+      input.signal.throwIfAborted();
+      const taskId = startScheduledPersonalTask(input.automation.name, action, input.run.id);
+      return { status: 'succeeded', summary: `Task ${taskId} queued` };
+    });
     this.register('system', {
       mode: 'transient_only',
       classify: error => /temporar|timeout|timed out|unavailable|busy|rate limit|econn|network/i.test(String(error)),

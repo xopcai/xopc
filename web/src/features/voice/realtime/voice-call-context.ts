@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import type { NaturalVoiceBackend, VoiceMode } from '@xopcai/realtime-protocol/voice';
 
 export interface VoiceCallTarget {
@@ -15,7 +15,7 @@ export interface VoiceCallContextValue {
   minimize: () => void;
   setMiniAnchor: (element: HTMLElement | null) => void;
   conversationId: string | null;
-  open: (target: VoiceCallTarget) => void;
+  open: (target: VoiceCallTarget, presentation?: { anchor: HTMLElement; avatar: ReactNode }) => void;
 }
 
 export const VoiceCallContext = createContext<VoiceCallContextValue | null>(null);

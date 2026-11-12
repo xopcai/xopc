@@ -134,6 +134,7 @@ export const MessageList = memo(function MessageList({
   const currentOutcome = currentRound.findLast(message => message.outcome)?.outcome;
   const running = streaming || sending;
   const retry = !running && onRetryUserMessageRound && lastUserIndex >= 0
+    && !list[lastUserIndex].clarificationChoice
     && Boolean(list[lastUserIndex].turnId || (list[lastUserIndex].deliveryStatus === 'failed' && list[lastUserIndex].clientSubmissionId))
     && !currentRound.some(message => message.content.some(part => part.type === 'tool_use'))
     ? () => onRetryUserMessageRound(lastUserIndex) : undefined;
@@ -235,9 +236,9 @@ export const MessageList = memo(function MessageList({
           progress={isStreamRow && !recovering ? progress : null}
           reasoningLevel={reasoningLevel}
           messageIndex={index}
-          onDeleteRound={msg.pendingSteer ? undefined : onDeleteRound}
+          onDeleteRound={msg.pendingSteer || msg.clarificationChoice ? undefined : onDeleteRound}
           onRetryUserMessageRound={onRetryUserMessageRound}
-          userMessageCanRetry={Boolean(onRetryUserMessageRound) && isLastUserRow}
+          userMessageCanRetry={Boolean(onRetryUserMessageRound) && isLastUserRow && !msg.clarificationChoice}
           // Streaming is only relevant to the active user round. Passing this
           // session-wide flag to every historical row defeats MessageBubble's memo.
           deleteRoundDisabled={Boolean(deleteRoundDisabled && isLastUserRow)}
@@ -249,7 +250,7 @@ export const MessageList = memo(function MessageList({
           suppressAssistantActions={hideAssistantActions}
           onEditUserMessage={onEditUserMessage}
           userMessageCanEdit={
-            !msg.pendingSteer && (!editLatestUserOnly || isLastUserRow)
+            !msg.pendingSteer && !msg.clarificationChoice && (!editLatestUserOnly || isLastUserRow)
             && (!editRequiresTurnId || Boolean(msg.turnId))
             && msg.deliveryStatus !== 'sending'
           }

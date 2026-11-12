@@ -12,16 +12,19 @@ import { useAppShellStore } from '@/stores/app-shell-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
-/** Primary chrome: rail expand, mobile menu, and `page-header-store` slots (`h-14` per shell). */
+/** Primary chrome: rail expand, mobile menu, and page-specific header slots. */
 export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
   const { pathname } = useLocation();
   const startExtra = usePageHeaderStore((s) => s.startExtra);
   const main = usePageHeaderStore((s) => s.main);
   const end = usePageHeaderStore((s) => s.end);
   const headerClassName = usePageHeaderStore((s) => s.className);
+  const personalChat = usePageHeaderStore((s) => s.personalChat);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const showMobileNav = !pathname.startsWith('/settings');
+  const personal = pathname === '/personal';
+  const chatOverlay = personal ? personalChat : /^\/chat(?:\/|$)/.test(pathname) ? 'controls' : undefined;
   const chromeLayout = resolveShellChromeLayout({
     runtime: getShellChromeRuntime(),
     sidebarCollapsed,
@@ -30,15 +33,19 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
 
   return (
     <header
+      data-app-header-overlay={chatOverlay}
       className={cn(
-        'grid min-w-0 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 bg-surface-panel',
+        'app-header-gradient grid min-w-0 shrink-0 items-center gap-1',
+        chatOverlay && 'pointer-events-none absolute inset-x-0 top-0 z-30 [&_:is(button,a)]:pointer-events-auto',
+        personal ? '@container/personal-header grid-cols-[minmax(5.5rem,1fr)_minmax(0,2fr)_minmax(5.5rem,1fr)] @max-[26rem]/personal-chat:grid-cols-[minmax(2.5rem,1fr)_minmax(6rem,2fr)_auto] @max-[26rem]/personal-chat:gap-1 @max-[26rem]/personal-chat:px-2.5' : 'grid-cols-[auto_minmax(0,1fr)_auto]',
         APP_CHROME_BAR_CLASS,
-        chromeLayout.mainHeaderDraggable && APP_CHROME_DRAG_CLASS,
+        chromeLayout.mainHeaderDraggable && !chatOverlay && APP_CHROME_DRAG_CLASS,
         'px-3 sm:gap-4 sm:px-5 xl:px-6',
         headerClassName,
       )}
     >
-      <div className={cn('flex min-w-0 shrink-0 items-center gap-1 sm:gap-2.5', APP_CHROME_NO_DRAG_CLASS)}>
+      {chatOverlay && chromeLayout.mainHeaderDraggable ? <div className={cn('pointer-events-auto absolute inset-x-0 top-0 h-2', APP_CHROME_DRAG_CLASS)} aria-hidden /> : null}
+      <div className={cn('flex min-w-0 shrink-0 items-center gap-1 sm:gap-2.5', personal && 'self-start pt-2', APP_CHROME_NO_DRAG_CLASS)}>
         {chromeLayout.mainHeaderLeadingInsetClass ? (
           <ShellQuickActions
             sidebarToggleVariant="main"
@@ -50,11 +57,11 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
         {startExtra}
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden">
-        <div className={cn('w-fit max-w-full', APP_CHROME_NO_DRAG_CLASS)}>
+        <div className={cn(personal ? 'w-full' : 'w-fit max-w-full', APP_CHROME_NO_DRAG_CLASS)}>
           <ProductSectionHeader fallback={main} />
         </div>
       </div>
-      <div className={cn('flex min-w-0 shrink-0 items-center justify-end gap-2', APP_CHROME_NO_DRAG_CLASS)}>
+      <div className={cn('flex min-w-0 shrink-0 items-center justify-end gap-2', personal && 'self-start pt-2', APP_CHROME_NO_DRAG_CLASS)}>
         {end}
       </div>
     </header>

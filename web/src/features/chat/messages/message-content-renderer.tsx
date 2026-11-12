@@ -4,11 +4,9 @@ import {
   useCallback,
   useEffect,
   useId,
-  useRef,
-  useState,
   type ReactNode,
 } from 'react';
-import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, Settings, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import type { UserTurnDocument } from '@xopcai/gateway-contract';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
@@ -30,8 +28,6 @@ import { parseProviderSetupRequired } from '@/features/chat/messages/provider-se
 import {
   fetchWorkspaceFileBlob,
   resolveWorkspaceFileReference,
-  resolveFileReferenceAction,
-  type WorkspaceFileReference,
 } from '@/features/workspace/workspace-api';
 import { mergeConsecutiveTextBlocks, textRunSourceIds } from '@/features/chat/messages/streaming-markdown';
 import {
@@ -42,16 +38,10 @@ import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-pr
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ChatImageThumbnail } from './chat-image-thumbnail';
-import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
-import { isElectron } from '@/lib/electron-env';
-import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
+import type { FileReferencePreview } from '@/features/workspace/file-reference-preview';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
-
-type MarkdownFileResolution =
-  | { status: 'loading'; target: WorkspaceFileLinkTarget }
-  | { status: 'ready'; target: WorkspaceFileLinkTarget; ref: WorkspaceFileReference }
-  | { status: 'error'; target: WorkspaceFileLinkTarget; message: string };
 
 function reviewLocation(finding: ReviewContent['findings'][number]): string {
   if (!finding.filePath) return '';
@@ -141,120 +131,6 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
   );
 }
 
-function ChatMarkdownFileActionCard({
-  resolution,
-  conversationId,
-  onClose,
-}: {
-  resolution: MarkdownFileResolution;
-  conversationId?: string | null;
-  onClose: () => void;
-}) {
-  const language = useLocaleStore((s) => s.language);
-  const m = messages(language).chat.fileReference;
-  const [copied, setCopied] = useState(false);
-  const [actionError, setActionError] = useState('');
-  const [actionPending, setActionPending] = useState(false);
-  const canUseShell = isElectron() && Boolean(window.electronAPI?.shell);
-  const targetPath = resolution.target.path;
-  const ref = resolution.status === 'ready' ? resolution.ref : null;
-  const displayName = ref?.displayName ?? targetPath.split(/[\\/]/).pop() ?? targetPath;
-  const displayPath = ref?.absolutePath ?? ref?.workspaceRelativePath ?? targetPath;
-
-  const copyPath = useCallback(() => {
-    void copyTextToClipboard(displayPath).then((ok) => {
-      if (!ok) return;
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    });
-  }, [displayPath]);
-
-  const runAction = async (action: 'openExternal' | 'revealInFolder') => {
-    const shell = window.electronAPI?.shell;
-    if (!ref?.fileRefId || !canUseShell || !shell || actionPending) return;
-    setActionError('');
-    setActionPending(true);
-    try {
-      const target = await resolveFileReferenceAction(ref.fileRefId, action, { conversationId: conversationId?.trim() || undefined });
-      if (action === 'openExternal') {
-        const result = await shell.openPath(target.absolutePath);
-        if (!result.ok) setActionError(result.error);
-      } else {
-        const result = await shell.showItemInFolder(target.absolutePath);
-        if (!result.success) setActionError(m.resolveFailedDescription);
-      }
-    } catch (error) { setActionError(error instanceof Error ? error.message : String(error)); }
-    finally { setActionPending(false); }
-  };
-
-  const tone =
-    resolution.status === 'ready' && resolution.ref.exists && resolution.ref.scope !== 'missing'
-      ? 'border-edge-subtle bg-surface-panel'
-      : 'border-warning/30 bg-warning/5';
-
-  return (
-    <div className={cn('mt-2 flex max-w-xl min-w-0 flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-xs', tone)}>
-      <div className="flex min-w-0 items-center gap-1.5">
-        {resolution.status === 'loading' ? (
-          <Loader2 className="size-3.5 shrink-0 animate-spin text-fg-muted" strokeWidth={1.75} aria-hidden />
-        ) : resolution.status === 'error' || ref?.scope === 'missing' || ref?.scope === 'invalid' ? (
-          <AlertCircle className="size-3.5 shrink-0 text-warning" strokeWidth={1.75} aria-hidden />
-        ) : (
-          <File className="size-3.5 shrink-0 text-accent" strokeWidth={1.75} aria-hidden />
-        )}
-        <span className="min-w-0 truncate font-medium">{displayName}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          className={cn('ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}
-          aria-label={m.closeActions}
-        >
-          <X className="size-3" strokeWidth={1.75} aria-hidden />
-        </button>
-      </div>
-      <p className="line-clamp-2 break-all text-[11px] leading-snug text-fg-muted">
-        {resolution.status === 'loading'
-          ? m.resolvingDescription
-          : resolution.status === 'error'
-            ? resolution.message
-            : ref?.scope === 'missing'
-              ? m.missingDescription
-              : ref?.scope === 'invalid'
-                ? m.invalidDescription
-                : canUseShell ? m.externalDescription : m.browserExternalDescription}
-      </p>
-      <div className="flex flex-wrap items-center gap-1 pt-0.5">
-        {canUseShell && ref?.capabilities.includes('openExternal') ? (
-          <button type="button" className={fileActionButtonClass} disabled={actionPending} onClick={() => void runAction('openExternal')}>
-            <ExternalLink className="size-3" aria-hidden /><span>{m.openExternal}</span>
-          </button>
-        ) : null}
-        {canUseShell && ref?.capabilities.includes('revealInFolder') ? (
-          <button type="button" className={fileActionButtonClass} disabled={actionPending} onClick={() => void runAction('revealInFolder')}>
-            <FolderOpen className="size-3" aria-hidden /><span>{m.revealInFolder}</span>
-          </button>
-        ) : null}
-        {ref?.manageRoute ? (
-          <a className={fileActionButtonClass} href={`#${ref.manageRoute}`}>
-            <Settings className="size-3" aria-hidden /><span>{messages(language).nav.settings}</span>
-          </a>
-        ) : null}
-        <button type="button" className={fileActionButtonClass} onClick={copyPath}>
-          <Copy className="size-3" strokeWidth={1.75} aria-hidden />
-          <span>{copied ? messages(language).chat.messageCopied : m.copyPath}</span>
-        </button>
-      </div>
-      {actionError ? <p role="alert" className="text-warning">{actionError}</p> : null}
-    </div>
-  );
-}
-
-const fileActionButtonClass = cn(
-  'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
-  interaction.focusRingPanel,
-  interaction.press,
-);
-
 export function ChatMarkdownView({
   taskRunId,
   content: snapshotContent,
@@ -304,9 +180,6 @@ export function ChatMarkdownView({
   const setPreview = useWorkspacePreviewStore((s) => s.setPath);
   const language = useLocaleStore((s) => s.language);
   const fileReferenceMessages = messages(language).chat.fileReference;
-  const [resolution, setResolution] = useState<MarkdownFileResolution | null>(null);
-  const fileGeneration = useRef(0);
-  useEffect(() => () => { fileGeneration.current++; }, [conversationId, projectId, taskRunId]);
 
   const loadFileImage = useCallback(async (target: WorkspaceFileLinkTarget) => {
     try {
@@ -322,77 +195,47 @@ export function ChatMarkdownView({
   }, [projectId, conversationId, taskRunId]);
 
   const openFile = useCallback(
-    (target: WorkspaceFileLinkTarget) => {
-      const generation = ++fileGeneration.current;
-      if (target.kind === 'workspace-relative') {
-        setResolution({ status: 'loading', target });
-        void (async () => {
-          const scoped = await resolveWorkspaceFileReference(target.path, {
-            projectId: projectId?.trim() || undefined,
-            conversationId: conversationId?.trim() || undefined,
-            taskRunId,
+    function openReference(target: WorkspaceFileLinkTarget) {
+      const workspace = useRightWorkspaceStore.getState();
+      const scope = workspace.scope;
+      const request: FileReferencePreview = { status: 'loading', target };
+      const context = { projectId: projectId?.trim() || undefined, conversationId: conversationId?.trim() || undefined, taskRunId };
+      const id = workspace.openFile({ path: target.path, projectId: context.projectId, conversationId: context.conversationId, reference: request }, scope);
+      const pending = { id, scope, reference: request };
+      const isCurrent = () => useRightWorkspaceStore.getState().panes[scope]?.tabs.some(tab =>
+        tab.id === id && tab.kind === 'file' && tab.reference === request);
+      const retry = () => openReference(target);
+      void (async () => {
+        const scoped = await resolveWorkspaceFileReference(target.path, context);
+        if (!isCurrent()) return;
+        const path = scoped?.absolutePath || scoped?.workspaceRelativePath;
+        if (path && scoped?.capabilities.includes('preview')) {
+          setPreview(path, target.line, projectId, conversationId, undefined, {
+            ...pending, resolvedFile: scoped.fileId ? { id: scoped.fileId, mtimeMs: scoped.mtimeMs } : undefined,
           });
-          if (generation !== fileGeneration.current) return;
-          if (scoped?.capabilities.includes('preview') && (scoped.absolutePath || scoped.workspaceRelativePath)) {
-            setPreview(scoped.absolutePath || scoped.workspaceRelativePath!, target.line, projectId, conversationId);
-            setResolution(null);
-            return;
-          }
-          // A delegated result may be saved in the default workspace while its
-          // message is delivered in another Agent's conversation.
-          const fallback = !taskRunId && !projectId && conversationId
-            ? await resolveWorkspaceFileReference(target.path)
-            : null;
-          if (generation !== fileGeneration.current) return;
-          if (fallback?.capabilities.includes('preview') && (fallback.absolutePath || fallback.workspaceRelativePath)) {
-            setPreview(fallback.absolutePath || fallback.workspaceRelativePath!, target.line);
-            setResolution(null);
-            return;
-          }
-          setResolution(scoped
-            ? { status: 'ready', target, ref: scoped }
-            : { status: 'error', target, message: fileReferenceMessages.resolveFailedDescription });
-        })().catch((err) => {
-          if (generation !== fileGeneration.current) return;
-          setResolution({
-          status: 'error', target,
-          message: err instanceof Error ? err.message : String(err),
-          });
-        });
-        return;
-      }
-
-      setResolution({ status: 'loading', target });
-      void resolveWorkspaceFileReference(target.path, {
-        projectId: projectId?.trim() || undefined,
-        conversationId: conversationId?.trim() || undefined,
-        taskRunId,
-      })
-        .then((ref) => {
-          if (generation !== fileGeneration.current) return;
-          if (!ref) {
-            setResolution({
-              status: 'error',
-              target,
-              message: fileReferenceMessages.resolveFailedDescription,
+          return;
+        }
+        // A forwarded result can belong to the default workspace instead of the chat's Agent.
+        if (target.kind === 'workspace-relative' && !taskRunId && !projectId && conversationId) {
+          const fallback = await resolveWorkspaceFileReference(target.path);
+          const fallbackPath = fallback?.absolutePath || fallback?.workspaceRelativePath;
+          if (fallbackPath && fallback?.capabilities.includes('preview')) {
+            setPreview(fallbackPath, target.line, undefined, undefined, undefined, {
+              ...pending, defaultWorkspace: true,
+              resolvedFile: fallback.fileId ? { id: fallback.fileId, mtimeMs: fallback.mtimeMs } : undefined,
             });
             return;
           }
-          if (ref.capabilities.includes('preview') && (ref.absolutePath || ref.workspaceRelativePath)) {
-            setPreview(ref.absolutePath || ref.workspaceRelativePath!, target.line, projectId, conversationId);
-            setResolution(null);
-            return;
-          }
-          setResolution({ status: 'ready', target, ref });
-        })
-        .catch((err) => {
-          if (generation !== fileGeneration.current) return;
-          setResolution({
-            status: 'error',
-            target,
-            message: err instanceof Error ? err.message : String(err),
-          });
+        }
+        workspace.finishFileReference(id, scope, request, {
+          reference: scoped ? { status: 'ready', target, ref: scoped, retry: scoped.exists ? undefined : retry }
+            : { status: 'error', target, message: fileReferenceMessages.resolveFailedDescription, retry },
         });
+      })().catch(error => {
+        workspace.finishFileReference(id, scope, request, {
+          reference: { status: 'error', target, message: error instanceof Error ? error.message : String(error), retry },
+        });
+      });
     },
     [fileReferenceMessages.resolveFailedDescription, projectId, conversationId, taskRunId, setPreview],
   );
@@ -411,13 +254,6 @@ export function ChatMarkdownView({
         streamingMetricsKey={metricsKey}
         responseRunId={responseRunId}
       />}
-      {resolution ? (
-        <ChatMarkdownFileActionCard
-          resolution={resolution}
-          conversationId={conversationId}
-          onClose={() => { fileGeneration.current++; setResolution(null); }}
-        />
-      ) : null}
     </>
   );
 }

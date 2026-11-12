@@ -26,10 +26,11 @@ export function materializeAutomationTrigger(trigger: z.infer<typeof triggerRequ
 
 export const AutomationCreateCapabilityInputSchema = CreateAutomationSchema
   .omit({ state: true, management: true, trigger: true }).extend({ trigger: triggerRequest })
-  .refine(input => input.action.kind !== 'system', { message: 'System actions can only be created by the runtime' });
+  .refine(input => input.action.kind !== 'system' && input.action.kind !== 'personal_task', { message: 'This action requires its dedicated creation flow' });
 export const AutomationUpdatePatchSchema = z.object({ ...UpdateAutomationSchema.shape,
   trigger: triggerRequest.optional(), state: z.never().optional(), management: z.never().optional() })
-  .strict().refine(data => Object.keys(data).length > 0, { message: 'At least one field must be provided' });
+  .strict().refine(data => Object.keys(data).length > 0, { message: 'At least one field must be provided' })
+  .refine(data => data.action?.kind !== 'personal_task', { message: 'This action requires its dedicated creation flow' });
 
 function assertManagedOperation(
   automation: NonNullable<ReturnType<typeof getAutomation>>,

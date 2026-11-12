@@ -1,4 +1,4 @@
-import { PersonalProvenanceSchema } from '@xopcai/gateway-contract';
+import { clarificationChoiceReceiptSchema, PersonalProvenanceSchema } from '@xopcai/gateway-contract';
 import { isUserTurnDocument, parseTaskResultDelivery, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type {
@@ -344,6 +344,7 @@ function buildUserMessage(m: WireMessage): Message {
   const contentRaw = m.content;
   const metadata = asRecord(m.metadata);
   const clientMessageId = metadata?.steered === true ? metadata.clientMessageId : undefined;
+  const clarificationChoice = clarificationChoiceReceiptSchema.safeParse(metadata?.clarificationChoice);
   const blocks =
     typeof contentRaw === 'string'
       ? (() => {
@@ -354,6 +355,7 @@ function buildUserMessage(m: WireMessage): Message {
 
   return {
     role: 'user',
+    ...(clarificationChoice.success ? { clarificationChoice: clarificationChoice.data } : {}),
     ...(m.turnId ? { turnId: m.turnId } : {}),
     ...(typeof clientMessageId === 'string' ? { clientMessageId } : {}),
     content: blocks,

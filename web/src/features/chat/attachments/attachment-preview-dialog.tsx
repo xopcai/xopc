@@ -36,6 +36,7 @@ export function AttachmentPreviewDialog(props: Parameters<typeof AttachmentPrevi
 function AttachmentPreviewContent({
   open,
   embedded = false,
+  showEmbeddedClose = false,
   tabId,
   attachment,
   images = [],
@@ -48,6 +49,7 @@ function AttachmentPreviewContent({
 }: {
   open: boolean;
   embedded?: boolean;
+  showEmbeddedClose?: boolean;
   tabId?: string;
   attachment: MessageAttachment | null;
   images?: MessageAttachment[];
@@ -154,7 +156,7 @@ function AttachmentPreviewContent({
               header={{
                 expanded,
                 onToggleExpanded: canExpandPreview ? () => setExpanded((value) => !value) : undefined,
-                hideClose: embedded,
+                hideClose: embedded && !showEmbeddedClose,
                 hideExpand: Boolean(tabId),
                 onClose: handleClose,
                 share: canShare ? { onClick: handleShare, loading: share.loading } : undefined,

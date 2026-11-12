@@ -137,6 +137,7 @@ export function useWorkspacePreviewState({
   projectId,
   conversationId,
   agentId,
+  resolvedFile,
   initialEditMode = false,
 }: {
   initialEditMode?: boolean;
@@ -144,6 +145,7 @@ export function useWorkspacePreviewState({
   projectId?: string;
   conversationId?: string;
   agentId?: string;
+  resolvedFile?: { id: string; mtimeMs?: number };
 }) {
   const readOpts = useWorkspacePreviewReadOpts({ projectId, conversationId, agentId });
   const descriptor = useMemo((): PreviewFileDescriptor => {
@@ -255,11 +257,8 @@ export function useWorkspacePreviewState({
     }
 
     if (mode === 'text') {
-      void Promise.all([
-        readWorkspaceFile(filePath, readOpts),
-        resolveWorkspaceFileReference(filePath, readOpts).catch(() => null),
-      ])
-        .then(([{ content, mtimeMs, revision }, ref]) => {
+      void readWorkspaceFile(filePath, readOpts, refreshKey === 0 ? resolvedFile : undefined)
+        .then(({ content, mtimeMs, revision, fileId }) => {
           if (!cancelled) { revisionRef.current = revision; draftRef.current = content; savedRef.current = content; setDirty(false); setExternalChange(false); }
           if (!cancelled) {
             dispatchPreview({
@@ -267,7 +266,7 @@ export function useWorkspacePreviewState({
               payload: {
                 descriptor,
                 textContent: content,
-                fileResourceId: ref?.fileId ?? null,
+                fileResourceId: fileId ?? null,
                 mtimeMs: typeof mtimeMs === 'number' ? mtimeMs : null,
               },
             });
@@ -299,7 +298,7 @@ export function useWorkspacePreviewState({
     return () => {
       cancelled = true;
     };
-  }, [descriptor, filePath, readOpts, refreshKey]);
+  }, [descriptor, filePath, readOpts, refreshKey, resolvedFile]);
 
   useEffect(() => {
     if (!preview.binaryBuffer || preview.descriptor.type !== 'pptx') {

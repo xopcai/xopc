@@ -1,6 +1,6 @@
 import { PERSONAL_PROACTIVE_MESSAGE_TYPE, PersonalProvenanceSchema, parsePersonalProactiveMessage, type PersonalProvenance } from '@xopcai/gateway-contract';
-import { isUserTurnDocument, parseTurnOutcome, parseTaskResultDelivery, TASK_RESULT_DELIVERY_TYPE,
-  type TaskResultDelivery, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
+import { clarificationChoiceReceiptSchema, isUserTurnDocument, parseTurnOutcome, parseTaskResultDelivery, TASK_RESULT_DELIVERY_TYPE,
+  type ClarificationChoiceReceipt, type TaskResultDelivery, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
 
 import type { Message } from './types.js';
 import type { TaskUpdateTrigger } from '../storage/sqlite/session-input-repository.js';
@@ -49,6 +49,7 @@ export interface ClientHistoryMessage {
     turnOutcome?: TurnOutcome;
     taskResultDelivery?: TaskResultDelivery;
     personalProvenance?: PersonalProvenance;
+    clarificationChoice?: ClarificationChoiceReceipt;
   };
   kind?: 'message' | 'compaction' | 'context' | 'bash' | 'custom' | 'branch';
   tokensBefore?: number;
@@ -524,6 +525,16 @@ function customRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessag
 
   const customType = optionalString(r.customType)?.trim();
   if (!customType) return null;
+  if (customType === 'clarification_answers' && r.display !== false) {
+    const details = r.details as { waitId?: unknown; choice?: unknown } | undefined;
+    const parsed = clarificationChoiceReceiptSchema.safeParse(details?.choice);
+    const label = parsed.success ? parsed.data.choices.find(choice => choice.id === parsed.data.choiceId)?.label : undefined;
+    if (parsed.success && label && typeof details?.waitId === 'string') {
+      return { role: 'user', kind: 'message', turnId: `clarification-choice:${details.waitId}`,
+        content: label, timestamp: parseTimestampValue(typeof r.timestamp === 'number' ? r.timestamp : undefined),
+        metadata: { clarificationChoice: parsed.data } };
+    }
+  }
   if (customType === 'task_allocation_status' && (r.display === false || isRoutineTaskAllocationStatus(r.details))) return null;
   if (customType === 'personal_request_status' || customType === 'task_allocation_status') {
     const content = typeof r.content === 'string' ? r.content : '';

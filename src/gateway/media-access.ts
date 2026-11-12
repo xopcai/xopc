@@ -1,7 +1,7 @@
 import { pendingTranscriptReferencesMediaUri } from '../agent/inbound/attachment-pipeline.js';
 import { FileServiceError } from '../files/file-service.js';
 import { resolveMediaReference } from '../media/media-reference.js';
-import { messagesReferenceMediaUri, taskResultReferencesMediaUri } from '../media/session-references.js';
+import { messagesReferenceMediaUri, taskOutcomeReferencesMediaUri, taskResultReferencesMediaUri } from '../media/session-references.js';
 import { TaskContextRepository } from '../tasks/task-context-repository.js';
 import { TaskRepository } from '../tasks/task-repository.js';
 import type { GatewayService } from './service.js';
@@ -21,7 +21,7 @@ export async function resolveScopedMediaReference(
       || taskResultReferencesMediaUri(conversationId, media.uri)
     : false;
   const taskReferencesUri = taskId && new TaskRepository().get(taskId)
-    ? new TaskContextRepository().list(taskId)
+    ? taskOutcomeReferencesMediaUri(taskId, media.uri) || new TaskContextRepository().list(taskId)
       .some((edge) => edge.targetKind === 'file' && edge.targetId === media.uri)
     : false;
   if (!sessionReferencesUri && !taskReferencesUri) throw new FileServiceError(404, 'Not found');

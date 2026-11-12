@@ -11,6 +11,7 @@ import { TaskConversationRepository } from '../task-conversation-repository.js';
 import { TaskDependencyService } from '../task-dependency-service.js';
 import { TaskCriterionReviewRepository } from '../task-criterion-review-repository.js';
 import { TaskValueMetricsService } from '../task-value-metrics-service.js';
+import { listDeliverables } from '../task-deliverables.js';
 import { LocalAppTaskOutputSchema, LocalAppTaskListSchema } from '../../local-apps/capabilities/projections.js';
 
 export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): void {
@@ -65,6 +66,7 @@ export function registerTaskReadCapabilities(dispatcher: CapabilityDispatcher): 
       return {
         ok: true as const, ...model, phaseChanges: tasks.phaseChanges(id),
         waits: runs.listActiveWaits(id), runs: runs.listByTask(id), receipts: runs.listReceipts(id),
+        deliverables: listDeliverables({ taskId: id }, 100).items,
         criterionReviews: criterionReviews.list(id, task.latestContractVersion),
         context: context.list(id), conversation: conversations.requireState(id), sessions: conversations.listSessions(id),
         authorityGrants: context.listActiveGrants(id),

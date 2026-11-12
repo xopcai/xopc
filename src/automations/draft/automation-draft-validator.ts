@@ -133,6 +133,7 @@ function summarizeAction(action: CreateAutomationInput['action']): string {
   if (action.kind === 'routine') return `Runs verified routine ${action.routineId}, method v${action.version}.`;
 
   if (action.kind === 'task_command') return `Applies ${action.command?.type ?? 'a command'} to task ${action.taskId}.`;
+  if (action.kind === 'personal_task') return 'Starts a new task in Personal.';
   if (action.kind === 'system') return `Runs system capability ${action.capability}.`;
   return action.agentId ? `Runs agent ${action.agentId}.` : 'Runs the default agent.';
 }

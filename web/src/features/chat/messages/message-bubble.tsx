@@ -608,8 +608,21 @@ export const MessageBubble = memo(function MessageBubble({
     <article className={cn(
       'group/msg flex w-full min-w-0',
       isUser ? 'justify-end' : 'justify-start',
+      message.clarificationChoice && 'flex-col items-end gap-3',
       animateUserEntry && 'xopc-chat-user-message-enter',
     )}>
+      {message.clarificationChoice ? <section className="w-full max-w-[var(--max-width-chat-reading)] self-start rounded-xl border border-edge-subtle bg-surface-base p-3 text-sm">
+        <p className="mb-2 break-words font-medium text-fg">{message.clarificationChoice.question}</p>
+        <ul className="space-y-1.5">
+          {message.clarificationChoice.choices.map(choice => {
+            const selected = choice.id === message.clarificationChoice?.choiceId;
+            return <li key={choice.id} className={cn('flex items-center justify-between gap-2 rounded-lg border px-3 py-2', selected ? 'border-accent bg-accent-soft text-fg' : 'border-edge-subtle text-fg-muted')}>
+              <span className="min-w-0 break-words">{choice.label}</span>
+              {selected ? <><span className="sr-only">{language === 'zh' ? '已选择' : 'Selected'}</span><Check className="size-4 shrink-0 text-accent-fg" aria-hidden /></> : null}
+            </li>;
+          })}
+        </ul>
+      </section> : null}
       <div
         className={cn(
           'min-w-0',

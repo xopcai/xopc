@@ -28,6 +28,9 @@ export const HTML_PREVIEW_SHELL = `<!doctype html>
 </head><body><iframe title="HTML preview" sandbox="${HTML_PREVIEW_SANDBOX}"></iframe>
 <script>
 const preview = document.querySelector('iframe');
+preview.addEventListener('load', () => {
+  if (preview.hasAttribute('srcdoc')) window.parent.postMessage({ type: 'xopc-html-preview-ready' }, '*');
+});
 window.addEventListener('message', (event) => {
   if (event.source !== window.parent || window.parent === window) return;
   const data = event.data;

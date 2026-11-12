@@ -13,6 +13,7 @@ export function ChatFindBar({
   truncated = false,
   limitedToLoaded = false,
   inputRef,
+  className,
   labels,
   onQueryChange,
   onPrevious,
@@ -27,6 +28,7 @@ export function ChatFindBar({
     truncated?: boolean;
     limitedToLoaded?: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
+  className?: string;
   labels: {
     input: string;
     previous: string;
@@ -63,7 +65,7 @@ export function ChatFindBar({
       data-chat-find-bar
       role="search"
       aria-label={labels.input}
-      className="absolute right-3 top-3 z-30 w-[min(25rem,calc(100%-1.5rem))] overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover"
+      className={cn('absolute right-3 top-3 z-30 w-[min(25rem,calc(100%-1.5rem))] overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover', className)}
     >
       <div className="flex min-w-0 items-center gap-2 px-3">
         <Search className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />

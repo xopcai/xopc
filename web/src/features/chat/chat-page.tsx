@@ -6,7 +6,7 @@ import { chatVirtualScroll, pauseChatTailFollowing } from '@/features/chat/scrol
 import * as Dialog from '@radix-ui/react-dialog';
 import { DeviceInteractionPanel } from '@/features/endpoint-tools/device-interaction-panel';
 import { serializeUserTurnDocument } from '@xopcai/gateway-contract';
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -115,7 +115,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   conversationId?: string;
   taskId?: string;
   personal?: boolean;
-  personalWelcome?: { name: string; addressAs?: string; avatar?: ReactNode; opening?: string;
+  personalWelcome?: { name: string; addressAs?: string; opening?: string;
     };
 } = {}) {
   const language = useLocaleStore((s) => s.language);
@@ -124,6 +124,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname } = location;
+  const usesHeaderOverlay = personal || (!embedded && /^\/chat(?:\/|$)/.test(pathname));
   const [searchParams, setSearchParams] = useSearchParams();
   /** Dedupe applying the same `?skill=` / `?slash=` seed for a session (StrictMode-safe). */
   const routeComposerSeedMarkerRef = useRef<string | null>(null);
@@ -148,6 +149,9 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     taskId: taskId ?? undefined,
     personal,
   });
+  const chatNavigation = location.state as { focusClarification?: string; personalSourceTurnId?: string } | null;
+  const focusClarification = chatNavigation?.focusClarification;
+  const personalSourceTurnId = personal ? chatNavigation?.personalSourceTurnId : undefined;
   const editingUserTurn = followUp.composerMode.kind === 'editTurn' ? followUp.composerMode : null;
 
   const readableHistoryReady = useChatSessionStore(state => Boolean(session.conversationId && !state.shellError
@@ -465,7 +469,9 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     ],
   );
   useInitialTurnNavigation({
-    conversationId: session.conversationId, turnId: initialTurnId, messages: msgSlice.items, ready: readableHistoryReady,
+    conversationId: session.conversationId, turnId: personalSourceTurnId ?? initialTurnId,
+    requestKey: personalSourceTurnId ? location.key : undefined, assistantOnly: Boolean(personalSourceTurnId),
+    messages: msgSlice.items, ready: readableHistoryReady,
     hasMore: session.hasMore, loadingMore: session.loadingMore, loadMore: session.loadMoreMessages,
     reveal: scrollToLocalMessageIndex, onLocated: onInitialTurnLocated,
   });
@@ -1017,7 +1023,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   const sessionError = stream.error ? parseAgentRunError(stream.error) : null;
   if (sessionError?.code === 'session_not_found') {
     return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel pt-[var(--app-chat-header-height,0px)]">
         <ChatRealtimeStatus />
         <ChatPageHeaderRegistration
           chatHeadline={m.chat.sessionNotFoundTitle}
@@ -1039,7 +1045,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   return (
     <AutomationConfigurationContext value={automationSetup}>
     <div className={cn('flex h-full min-h-0 flex-1 flex-col bg-surface-panel', automationWorkspace ? 'overflow-clip' : 'overflow-hidden')}>
-      <ChatRealtimeStatus />
+      {!usesHeaderOverlay ? <ChatRealtimeStatus /> : null}
 
       {!embedded || automationWorkspace ? <ChatPageHeaderRegistration
         inline={automationWorkspace}
@@ -1067,32 +1073,6 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
       /> : null}
 
       <div className="relative flex min-h-0 w-full flex-1 flex-col">
-        {!embedded && sessionMetadata?.parentConversationId ? (
-          <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-2 text-xs text-fg-muted sm:px-5 xl:px-6">
-            <Link
-              to={`/chat/${encodeURIComponent(sessionMetadata.parentConversationId)}`}
-              className="font-medium text-accent transition-colors hover:text-accent-fg"
-            >
-              {m.chat.forkedFromConversation.replace(
-                '{{name}}',
-                sessionMetadata.forkedFromSessionName || m.chat.forkedFromConversationFallback,
-              )}
-            </Link>
-            <span className="ms-2">{m.chat.forkSharedWorkspaceNotice}</span>
-          </div>
-        ) : null}
-        {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
-        agents.displayAgentId ? (
-          <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
-            <Link
-              to={agentsAppDetailPath(agents.displayAgentId)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-fg"
-            >
-              <span aria-hidden>←</span>
-              {m.agentsSettings.backToEditor}
-            </Link>
-          </div>
-        ) : null}
         {embedded && sourceNoteId && !sourceNoteInView ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
@@ -1120,6 +1100,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
         ) : null}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <ChatFindBar
+            className={usesHeaderOverlay ? 'top-[calc(var(--app-chat-header-height,0px)+0.75rem)]' : undefined}
             open={chatFind.open}
             query={chatFind.query}
             activeIndex={chatFind.activeIndex}
@@ -1135,7 +1116,10 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
             onClose={chatFind.close}
           />
           {!embedded || automationWorkspace ? (
-            <div className="pointer-events-none absolute inset-y-0 left-1/2 z-20 hidden w-full max-w-[calc(var(--max-width-chat-frame)+8rem)] -translate-x-1/2 xl:block">
+            <div className={cn(
+              'pointer-events-none absolute bottom-0 left-1/2 z-20 hidden w-full max-w-[calc(var(--max-width-chat-frame)+8rem)] -translate-x-1/2 xl:block',
+              usesHeaderOverlay ? 'top-[var(--app-chat-header-height,0px)]' : 'top-0',
+            )}>
               <div className="pointer-events-auto absolute inset-y-0 right-0">
                 <ChatTimelineRail
                   items={timeline.items}
@@ -1149,6 +1133,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
           <div
             ref={scrollRef}
             data-chat-scroll-viewport
+            data-app-chat-scroll={usesHeaderOverlay ? '' : undefined}
             className={cn(
               'chat-messages chat-messages--wide-viewport relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
               compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
@@ -1156,6 +1141,33 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
             onScroll={handleChatScroll}
             data-chat-find-open={chatFind.open ? '' : undefined}
           >
+            {usesHeaderOverlay ? <ChatRealtimeStatus /> : null}
+            {!embedded && sessionMetadata?.parentConversationId ? (
+              <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-2 text-xs text-fg-muted sm:px-5 xl:px-6">
+                <Link
+                  to={`/chat/${encodeURIComponent(sessionMetadata.parentConversationId)}`}
+                  className="font-medium text-accent transition-colors hover:text-accent-fg"
+                >
+                  {m.chat.forkedFromConversation.replace(
+                    '{{name}}',
+                    sessionMetadata.forkedFromSessionName || m.chat.forkedFromConversationFallback,
+                  )}
+                </Link>
+                <span className="ms-2">{m.chat.forkSharedWorkspaceNotice}</span>
+              </div>
+            ) : null}
+            {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
+            agents.displayAgentId ? (
+              <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
+                <Link
+                  to={agentsAppDetailPath(agents.displayAgentId)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-colors hover:text-accent-fg"
+                >
+                  <span aria-hidden>←</span>
+                  {m.agentsSettings.backToEditor}
+                </Link>
+              </div>
+            ) : null}
             <div className={embedded && !personal ? 'px-3' : 'px-3 sm:px-5 xl:px-6'}>
               <div
                 data-chat-message-frame
@@ -1221,7 +1233,6 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                     welcomeOverlay={
                       personal && personalWelcome ? (
                         <div className="mx-auto flex w-full max-w-2xl flex-col items-start gap-3 px-4 py-8 text-fg">
-                          <div className="flex size-16 items-center justify-center rounded-3xl bg-accent/10 text-3xl text-accent" aria-hidden>{personalWelcome.avatar ?? '✦'}</div>
                           <h2 className="text-2xl font-semibold">{language === 'zh' ? `你好${personalWelcome.addressAs ? `，${personalWelcome.addressAs}` : ''}。我们从哪里开始？` : `Hello${personalWelcome.addressAs ? `, ${personalWelcome.addressAs}` : ''}. Where should we start?`}</h2>
                           <p className="max-w-xl text-sm leading-relaxed text-fg-muted">{personalWelcome.opening ?? (language === 'zh' ? '想讨论问题、整理思路或推进工作，都可以直接说。' : 'Bring a question, an idea, or work to move forward.')}</p>
                           <button
@@ -1335,6 +1346,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
               </div>
               <ClarifyPrompt
                 prompt={clarify.clarifyPrompt}
+                focusRequestKey={focusClarification && focusClarification === clarify.clarifyPrompt?.requestId ? location.key : undefined}
                 submitting={clarify.clarifySubmitting}
                 submitError={clarify.clarifySubmitError}
                 labels={m.chat}

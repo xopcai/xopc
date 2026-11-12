@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useFilePreviewExpanded } from '@/features/file-preview/use-file-preview-expanded';
 import { readPreviewView, savePreviewView } from '@/features/preview-runtime/preview-view-state';
 import { registerFileCloseGuard } from '@/features/right-workspace/file-close-guards';
-import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
+import { useRightWorkspaceStore, type FileTab } from '@/stores/right-workspace-store';
 import { FilePreview } from '@/features/file-preview/file-preview';
 import { FilePreviewSurface } from '@/features/file-preview/file-preview-surface';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,11 +39,13 @@ function formatWorkspaceFileMtime(mtimeMs: number, language: 'en' | 'zh'): strin
 
 export interface WorkspaceFilePreviewPanelProps {
   tabId?: string;
+  showEmbeddedClose?: boolean;
   active?: boolean;
   filePath: string | null;
   onClose: () => void;
   targetLine?: number | null;
   resultRevision?: number;
+  resolvedFile?: FileTab['resolvedFile'];
   /** Project workspace root. Takes priority over chat session / agent workspace. */
   projectId?: string;
   /** Per-chat session workspace (takes priority over `agentId`). */
@@ -55,10 +57,12 @@ export interface WorkspaceFilePreviewPanelProps {
 export function WorkspaceFilePreviewPanel({
   filePath,
   tabId,
+  showEmbeddedClose = false,
   active = true,
   onClose,
   targetLine,
   resultRevision,
+  resolvedFile,
   projectId,
   conversationId,
   agentId,
@@ -67,7 +71,7 @@ export function WorkspaceFilePreviewPanel({
   const m = messages(language);
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
-  const state = useWorkspacePreviewState({ filePath, projectId, conversationId, agentId, initialEditMode: tabId ? readPreviewView(tabId).sourceEditMode : false });
+  const state = useWorkspacePreviewState({ filePath, projectId, conversationId, agentId, resolvedFile, initialEditMode: tabId ? readPreviewView(tabId).sourceEditMode : false });
   const {
     dialogOpen,
     loading,
@@ -215,7 +219,7 @@ export function WorkspaceFilePreviewPanel({
           onRefresh: state.refresh,
           onRetrySave: state.saveStatus === 'error' ? () => void state.flushSource() : undefined,
           onToggleExpanded: canExpandPreview ? () => setExpanded((value) => !value) : undefined,
-          hideClose: Boolean(tabId),
+          hideClose: Boolean(tabId) && !showEmbeddedClose,
           hideExpand: Boolean(tabId),
           onClose: handleClose,
           edit: isEditableText ? {

@@ -1,4 +1,4 @@
-import { normalizeClarificationQuestion, normalizeClarificationSubmission, type ClarificationPresentation, type ClarificationSubmission } from '@xopcai/gateway-contract';
+import { clarificationChoiceReceipt, normalizeClarificationQuestion, normalizeClarificationSubmission, type ClarificationPresentation, type ClarificationSubmission } from '@xopcai/gateway-contract';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -409,9 +409,13 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
       thinking: origin?.thinking,
       origin: { type: 'system', source: 'internal' },
     });
-    if (wait.schemaVersion === 2) appendTranscriptEntry(wait.conversationId, {
+    const quickChoice = clarificationChoiceReceipt(wait, normalized);
+    const choice = quickChoice && db.prepare("SELECT 1 FROM sessions WHERE conversation_id = ? AND json_extract(custom_data_json, '$.personalAgent') = 1").get(wait.conversationId)
+      ? quickChoice : undefined;
+    if (wait.schemaVersion === 2 || choice) appendTranscriptEntry(wait.conversationId, {
       role: 'custom', customType: 'clarification_answers', display: true,
-      content: answer, details: { waitId: wait.id, schemaVersion: 2, questions: wait.questions, answers: normalized?.answers, resolution }, timestamp: now,
+      content: answer, details: { waitId: wait.id, schemaVersion: wait.schemaVersion, questions: wait.questions,
+        answers: normalized?.answers, resolution, ...(choice ? { choice } : {}) }, timestamp: now,
     }, { transcriptId: wait.transcriptId });
     return { ok: true, clarification: queued, idempotent: false, queued: true };
   });

@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TaskDetailModal, TaskDetailPage } from '../task-detail-page';
+import { TaskDetailPage } from '../task-detail-page';
+import { TaskDetailModal } from '@/features/tasks/task-detail-modal';
 import { commandTask, reviewTaskCriterion, type TaskDetail } from '@/features/tasks/home-api';
 import { automationApi, type Automation } from '@/features/automations/automation-api';
 import { taskCopy } from '@/features/tasks/task-copy';
@@ -14,7 +15,10 @@ vi.mock('@/components/ui/date-time-picker', () => ({
   DateTimePicker: ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) =>
     <input aria-label={label} data-test-date-time-picker value={value} onChange={event => onChange(event.target.value)} />,
 }));
-vi.mock('@/features/tasks/use-task-detail', () => ({ useTaskDetail: () => ({ data: state.detail, mutate: state.mutate }) }));
+vi.mock('@/features/tasks/use-task-detail', () => ({
+  useTaskDetail: () => ({ data: state.detail, mutate: state.mutate }),
+  useTaskDetailQuery: vi.fn(),
+}));
 vi.mock('swr', async () => {
   const { useState } = await import('react');
   return { default: function useMockAutomationList() {
@@ -107,6 +111,27 @@ describe('task detail action-first layout', () => {
       expect(header.querySelector('[aria-hidden="false"]')?.textContent).toBe('任务详情');
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+
+  it('opens with the selected title and waits until the entrance finishes to mount details', async () => {
+    let finishEntrance!: () => void;
+    const finished = new Promise<void>((resolve) => { finishEntrance = resolve; });
+    Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
+      configurable: true,
+      value: () => [{ animationName: 'task-detail-enter', finished }],
+    });
+    try {
+      await act(async () => root.render(<MemoryRouter><TaskDetailModal taskId="task-1" initialTitle="Prepare report" backgroundPath="/personal" onClose={vi.fn()} /></MemoryRouter>));
+      const dialog = document.querySelector('[role="dialog"]')!;
+      expect(dialog.querySelector('[data-task-header-compact]')?.textContent).toBe('Prepare report');
+      expect(dialog.querySelector('[aria-busy="true"]')).not.toBeNull();
+      expect(dialog.querySelector('.task-detail-scroll')).toBeNull();
+
+      await act(async () => finishEntrance());
+      expect(dialog.querySelector('.task-detail-scroll')).not.toBeNull();
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations');
     }
   });
 

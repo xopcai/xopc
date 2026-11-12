@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { serve } from '@hono/node-server';
+import { TASK_RESULT_DELIVERY_TYPE, type TurnOutcome, type TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 import { describe, expect, it, vi } from 'vitest';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { SessionHydrator } from '../../agent/session/session-hydrator.js';
@@ -15,6 +16,11 @@ import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../agent-catalog/service.js';
 import { AgentToolsFactory } from '../../agent/tools/factory.js';
 import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js';
+import { TaskRepository } from '../../tasks/task-repository.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { taskOutcomeReferencesMediaUri } from '../../media/session-references.js';
+import { listDeliverables } from '../../tasks/task-deliverables.js';
+import { AutomationService } from '../../automations/service/automation-service.js';
 import { applyUserProfilePatch } from '../../user-model/profile.js';
 import { SessionConfigService } from '../../agent/session/session-config-service.js';
 import { SessionConfigStore } from '../../session/config-store.js';
@@ -42,6 +48,7 @@ describe('personal Agent identity', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(dir, 'xopc.db') });
     const token = 'personal-agent-test-token';
+    const automationService = new AutomationService();
     const app = createHonoApp({ service: {
       currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
       getResolvedAuth: () => ({ mode: 'token', token }),
@@ -50,6 +57,7 @@ describe('personal Agent identity', () => {
       getExtensionLoader: () => null,
       refreshAgentCatalog: vi.fn(),
       agentService: { evictSessionAgent: vi.fn() },
+      automationServiceInstance: automationService,
     } as unknown as GatewayService });
     const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
     try {
@@ -162,6 +170,110 @@ describe('personal Agent identity', () => {
       const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ ok: true, payload: { displayName: '阿沐', conversationId: first.conversationId } });
+      const tasks = new TaskRepository();
+      const pending = tasks.create({ title: 'Older approval', objective: 'Review plan', now: 1 });
+      const recent = tasks.create({ title: 'Recent delivery', objective: 'Deliver plan', now: 2 });
+      tasks.setLifecycle({ taskId: recent.id, expectedVersion: recent.version, phase: 'closed', resolution: 'done', now: 3 });
+      const unrelated = tasks.create({ title: 'Other work', objective: 'Other work' });
+      const linkOrigin = getSqliteDatabase().prepare('INSERT INTO task_origin_links (task_id, conversation_id, created_at) VALUES (?, ?, ?)');
+      linkOrigin.run(pending.id, conversationId, 1);
+      linkOrigin.run(recent.id, conversationId, 2);
+      linkOrigin.run(unrelated.id, ordinary, 3);
+      new TaskRunRepository().createWait({ taskId: pending.id, kind: 'approval', reason: 'Approve the plan', condition: {} });
+      const activityUrl = `${url}/activity?view=work&limit=1`;
+      expect((await fetch(activityUrl)).status).toBe(401);
+      const activity = await fetch(activityUrl, { headers });
+      expect(activity.status).toBe(200);
+      expect(await activity.json()).toMatchObject({ payload: { current: [{ id: pending.id, attention: { kind: 'approval_required' } }],
+        total: 1, items: [{ id: recent.id }] } });
+      const report: TurnOutcomeDeliverable = { artifactId: 'report', title: 'Report.html', kind: 'site',
+        location: 'artifact_store', availability: 'available', capabilities: ['preview'], uri: 'media://outbound/report.html' };
+      const outcome = (turnId: string, deliverables: TurnOutcomeDeliverable[]): TurnOutcome => ({
+        version: 1, outcomeId: `${turnId}:outcome`, runId: turnId, turnId, status: 'succeeded',
+        evidence: [], createdAt: new Date().toISOString(), deliverables,
+      });
+      const appendOutcome = (scope: string, data: TurnOutcome) => appendTranscriptEntry(scope,
+        { type: 'custom', customType: 'turn_outcome', data } as Parameters<typeof appendTranscriptEntry>[1]);
+      appendOutcome(ordinary, outcome('other-turn', [{ ...report, artifactId: 'private', uri: 'media://outbound/private.html' }]));
+      appendOutcome(conversationId, outcome('personal-turn', [
+        report, { ...report, artifactId: 'summary', title: 'Summary.pdf', kind: 'pdf', uri: 'media://outbound/summary.pdf' },
+        { ...report, artifactId: 'expired', uri: 'media://outbound/expired.html', expiresAt: '2000-01-01' },
+      ]));
+      appendTranscriptEntry(conversationId, { role: 'toolResult', turnId: 'note-turn', content: [], details: {
+        delivery: { version: 2, operation: 'created', primary: { kind: 'note', id: 'note-1', title: 'Published note' } },
+      } } as Parameters<typeof appendTranscriptEntry>[1]);
+      appendTranscriptEntry(conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE, content: '',
+        details: { version: 1, deliveryId: 'delivery-1', taskId: recent.id, taskTitle: recent.title,
+          taskRunId: 'worker-run', conversationId, originTranscriptId: 'personal-transcript',
+          assignmentEpoch: 1, createdAt: Date.now(), outcome: outcome('worker-run', [report]) },
+      } as Parameters<typeof appendTranscriptEntry>[1]);
+      const execution = createConversation({ agentId: first.agentId }, dir).key;
+      const run = new TaskRunRepository().create({ taskId: recent.id, executorKind: 'agent',
+        executorRef: { agentId: first.agentId }, trigger: {}, correlationId: 'report-run',
+        idempotencyKey: 'report-run', contractVersion: recent.latestContractVersion, conversationId: execution });
+      const undelivered = { ...report, artifactId: 'worker-only', title: 'Worker only.html', uri: 'media://outbound/worker-only.html' };
+      getSqliteDatabase().prepare(`INSERT INTO task_run_outcomes (task_run_id, outcome_id, assignment_epoch, outcome_json, created_at)
+        VALUES (?, ?, ?, ?, ?)`).run(run.id, 'worker-outcome', 1, JSON.stringify(outcome(run.id, [undelivered])), 10);
+      appendTranscriptEntry(execution, { role: 'toolResult', turnId: 'worker-note-turn', content: [], details: {
+        delivery: { version: 2, operation: 'created', primary: { kind: 'note', id: 'worker-note', title: 'Worker note' } },
+      } } as Parameters<typeof appendTranscriptEntry>[1]);
+      expect(taskOutcomeReferencesMediaUri(recent.id, undelivered.uri)).toBe(true);
+      expect(taskOutcomeReferencesMediaUri(unrelated.id, undelivered.uri)).toBe(false);
+      expect(listDeliverables({ taskId: recent.id }, 100).items).toMatchObject([
+        { reference: { id: 'worker-note' } }, { artifact: { artifactId: 'worker-only' } },
+      ]);
+      const deliverablesUrl = `${url}/activity?view=deliverables&limit=2`;
+      expect((await fetch(deliverablesUrl)).status).toBe(401);
+      const deliverables = await fetch(deliverablesUrl, { headers });
+      expect(deliverables.status).toBe(200);
+      expect((await deliverables.json()).payload).toMatchObject({ nextOffset: 2, items: [
+        { reference: { id: 'worker-note' }, task: { id: recent.id, conversationId: execution } },
+        { artifact: { artifactId: 'report' }, turnId: 'task-result:delivery-1', task: { id: recent.id } },
+      ] });
+      const olderDeliverables = await fetch(`${deliverablesUrl}&offset=2`, { headers });
+      expect((await olderDeliverables.json()).payload).toMatchObject({ nextOffset: 4, items: [
+        { reference: { id: 'note-1', kind: 'note' }, turnId: 'note-turn' },
+        { artifact: { artifactId: 'summary' }, turnId: 'personal-turn' },
+      ] });
+      const oldestDeliverables = await fetch(`${deliverablesUrl}&offset=4`, { headers });
+      expect((await oldestDeliverables.json()).payload).toMatchObject({ nextOffset: null, items: [
+        { artifact: { artifactId: 'worker-only' }, task: { id: recent.id, conversationId: execution } },
+      ] });
+      await automationService.initialize();
+      const scheduleUrl = `${url}/schedules`;
+      expect((await fetch(scheduleUrl)).status).toBe(401);
+      const scheduleInput = { name: 'Scheduled AI digest', instruction: 'Prepare a short AI digest.', locale: 'en',
+        schedule: { kind: 'cron', expr: '0 9 * * 1-5', tz: 'Asia/Shanghai' } };
+      const createdSchedule = await fetch(scheduleUrl, { method: 'POST', headers, body: JSON.stringify(scheduleInput) });
+      expect(createdSchedule.status).toBe(201);
+      const { payload: schedule } = await createdSchedule.json();
+      expect(schedule).toMatchObject({ action: { kind: 'personal_task', conversationId, agentId }, state: { nextRunAtMs: expect.any(Number) } });
+      const editScheduleUrl = `${scheduleUrl}/${schedule.id}`;
+      const paused = await fetch(editScheduleUrl, { method: 'PATCH', headers, body: JSON.stringify({ enabled: false, expectedRevision: schedule.updatedAtMs }) });
+      expect(paused.status).toBe(200);
+      expect((await paused.json()).payload.enabled).toBe(false);
+      expect((await fetch(editScheduleUrl, { method: 'PATCH', headers, body: JSON.stringify({ enabled: true, expectedRevision: schedule.updatedAtMs }) })).status).toBe(409);
+      const runNow = await fetch(`${editScheduleUrl}/run`, { method: 'POST', headers });
+      expect(runNow.status).toBe(202);
+      const { payload: scheduledRun } = await runNow.json();
+      await vi.waitFor(async () => expect((await automationService.getRun(scheduledRun.id))?.status).toBe('succeeded'));
+      const task = tasks.getByIdempotencyKey(`personal-schedule:${scheduledRun.id}`)!;
+      expect(task).toMatchObject({ title: scheduleInput.name, body: scheduleInput.instruction });
+      expect(getSqliteDatabase().prepare('SELECT conversation_id, request_input_id FROM task_origin_links WHERE task_id = ?').get(task.id))
+        .toEqual({ conversation_id: conversationId, request_input_id: null });
+      expect(new TaskRunRepository().getActiveRoot(task.id)?.executorRef).toMatchObject({ agentId });
+      const listedSchedules = await fetch(scheduleUrl, { headers });
+      expect((await listedSchedules.json()).payload).toMatchObject([{ id: schedule.id, enabled: false }]);
+      const timed = await fetch(scheduleUrl, { method: 'POST', headers, body: JSON.stringify({ ...scheduleInput,
+        name: 'One-time Personal digest', schedule: { kind: 'once', at: new Date(Date.now() + 1000).toISOString() },
+      }) });
+      expect(timed.status).toBe(201);
+      await vi.waitFor(() => {
+        const tasksForSchedule = getSqliteDatabase().prepare(`SELECT t.task_id FROM tasks t
+          JOIN task_origin_links origin ON origin.task_id = t.task_id WHERE origin.conversation_id = ? AND t.title = ?`)
+          .all(conversationId, 'One-time Personal digest');
+        expect(tasksForSchedule).toHaveLength(1);
+      }, { timeout: 7000 });
       const phoneKeys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
       createDevice({ id: 'personal-phone', displayName: 'Phone', platform: 'harmonyos',
         publicKeyJwk: phoneKeys.publicKey.export({ format: 'jwk' }), scopes: [...DEFAULT_MOBILE_SCOPES] });
@@ -204,6 +316,7 @@ describe('personal Agent identity', () => {
       expect((await fetch(url, { method: 'POST', headers, body: JSON.stringify({ unknown: true }) })).status).toBe(400);
       expect((await fetch(`${url}/profile`, { method: 'PATCH', headers, body: JSON.stringify({ revision: -1 }) })).status).toBe(400);
     } finally {
+      await automationService.stop();
       if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
       closeXopcDatabase();
       resetXopcDatabaseSingletonForTest();

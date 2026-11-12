@@ -1,8 +1,8 @@
 import { TaskChangedEventSchema, type TaskChangedEvent } from '@xopcai/gateway-contract';
 import { useEffect, useRef, useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { type SWRConfiguration } from 'swr';
 
-import { ensureTaskConversation, fetchTask } from '@/features/tasks/home-api';
+import { ensureTaskConversation, fetchTask, type TaskDetail } from '@/features/tasks/home-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function taskDetailSWRKey(taskId: string, token: string | undefined): readonly [string, string, string] | null {
@@ -16,27 +16,27 @@ export function shouldRefreshTaskDetailFromChange(
   return change.source !== 'user' || currentVersion === undefined || change.version > currentVersion;
 }
 
-export function useTaskDetail(taskId: string) {
+export function useTaskDetailQuery(taskId: string, options?: SWRConfiguration<TaskDetail>) {
   const token = useGatewayStore((state) => state.conversationId);
+  return useSWR(taskDetailSWRKey(taskId, token), () => fetchTask(taskId), options);
+}
+
+export function useTaskDetail(taskId: string) {
   const [lastChange, setLastChange] = useState<TaskChangedEvent | null>(null);
   const [conversationLoading, setConversationLoading] = useState(false);
   const [conversationError, setConversationError] = useState<unknown>(null);
   const ensureMarkerRef = useRef('');
   const currentVersionRef = useRef<number | undefined>(undefined);
-  const swr = useSWR(
-    taskDetailSWRKey(taskId, token),
-    () => fetchTask(taskId),
-    {
-      keepPreviousData: false,
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
-      refreshInterval: (latest) => latest && [
-        'allocating', 'queued', 'running', 'waiting', 'verifying',
-      ].includes(latest.operationalState)
-        ? 5_000
-        : 0,
-    },
-  );
+  const swr = useTaskDetailQuery(taskId, {
+    keepPreviousData: false,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    refreshInterval: (latest) => latest && [
+      'allocating', 'queued', 'running', 'waiting', 'verifying',
+    ].includes(latest.operationalState)
+      ? 5_000
+      : 0,
+  });
   currentVersionRef.current = swr.data?.task.version;
 
   useEffect(() => {

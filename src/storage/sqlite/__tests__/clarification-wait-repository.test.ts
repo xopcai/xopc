@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildSessionContextForLlm, buildSessionDisplayMessages } from '../../../session/session-context-for-llm.js';
+import { transcriptRowsToClientHistory } from '../../../session/client-history.js';
 import { loadTranscriptRowsForSession } from '../transcript-repository.js';
 import { getSqliteDatabase } from '../transaction.js';
 
@@ -71,6 +72,27 @@ describe('clarification wait repository', () => {
     expect(() => resolveClarification({ id: wait.id, schemaVersion: 2, action: 'answer', expectedVersion: wait.version, idempotencyKey: 'rollback', answers: [{ questionId: 'details', text: 'A report' }] })).toThrow('injected resume failure');
     expect(getClarification(wait.id)).toMatchObject({ status: 'open', version: wait.version });
     expect(loadTranscriptRowsForSession(conversationId).some(row => 'customType' in row && row.customType === 'clarification_answers')).toBe(false);
+  });
+
+  it.each([1, 2] as const)('keeps a personal quick choice visible across reloads without replaying it as model input (v%s)', schemaVersion => {
+    getSqliteDatabase().prepare("UPDATE sessions SET custom_data_json = ? WHERE conversation_id = ?")
+      .run(JSON.stringify({ personalAgent: true }), conversationId);
+    const choices = [{ id: 'update', label: 'Update the page' }, { id: 'keep', label: 'Leave it as is' }];
+    const presentation = schemaVersion === 1 ? { choiceDetails: choices } : { schemaVersion,
+      questions: [{ id: 'q', type: 'single_choice' as const, header: 'Choice', question: 'Proceed?', choices }] };
+    const wait = createClarificationWait({ conversationId, runId: 'origin-run', toolCallId: 'quick', kind: 'input',
+      question: 'Proceed?', ...presentation });
+    finishSessionInputRun(conversationId, 'origin-run', 'suspended');
+    const command = { id: wait.id, action: 'answer' as const, expectedVersion: wait.version,
+      idempotencyKey: 'quick-answer', ...(schemaVersion === 1 ? { response: { choiceId: 'update' } }
+        : { schemaVersion, answers: [{ questionId: 'q', choiceId: 'update' }] }) };
+    expect(resolveClarification(command).ok).toBe(true);
+    expect(resolveClarification(command)).toMatchObject({ ok: true, idempotent: true });
+    const rows = loadTranscriptRowsForSession(conversationId);
+    expect(transcriptRowsToClientHistory(rows).filter(message => message.metadata?.clarificationChoice)).toMatchObject([
+      { role: 'user', content: 'Update the page', metadata: { clarificationChoice: { question: 'Proceed?', choiceId: 'update', choices } } },
+    ]);
+    expect(buildSessionContextForLlm(rows).some(message => JSON.stringify(message).includes('Update the page'))).toBe(false);
   });
 
   it('persists an input wait and resumes it after an arbitrarily late answer', () => {

@@ -12,6 +12,7 @@ import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { RightWorkspace } from '@/features/right-workspace/right-workspace';
 import { WorkspaceOwnerContext } from '@/features/right-workspace/workspace-context';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
+import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
 import { SideChatSelectionLauncher } from '@/features/side-chat/side-chat-selection-launcher';
 import { useChatRouteConversationId } from '@/features/chat/use-chat-route-conversation-id';
 import { TokenDialog } from '@/components/shell/token-dialog';
@@ -36,6 +37,7 @@ import { SupportReportHost } from '@/features/support/support-report-host';
 import { ReadAloudDockProvider } from '@/features/voice/read-aloud-dock';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
+import { TaskDetailModal } from '@/features/tasks/task-detail-modal';
 import { closeTaskDetailModalHref, TASK_DETAIL_MODAL_PARAM } from '@/features/tasks/task-detail-route';
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
@@ -47,16 +49,14 @@ import {
 import { isChatPreviewPath } from '@/lib/chat-preview-origin';
 import { cn } from '@/lib/cn';
 import { isElectronDarwin } from '@/lib/electron-window-chrome';
-import { loadTaskDetailPage, loadWorkDiscoveryOverlay } from '@/lib/route-preload';
+import { loadWorkDiscoveryOverlay } from '@/lib/route-preload';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSettingsNavigationOrigin } from '@/features/settings/use-settings-navigation-origin';
 
 const WorkDiscoveryOverlay = lazy(() =>
   loadWorkDiscoveryOverlay().then((module) => ({ default: module.WorkDiscoveryOverlay })),
-);
-const TaskDetailModal = lazy(() =>
-  loadTaskDetailPage().then((module) => ({ default: module.TaskDetailModal })),
 );
 
 /** Align with `ui` `navigate-to-chat` custom event from session manager. */
@@ -101,7 +101,7 @@ export function AppShell() {
 function AppShellContent() {
   useSettingsNavigationOrigin();
   const token = useGatewayStore((s) => s.conversationId);
-  const { pathname, search } = useLocation();
+  const { pathname, search, state } = useLocation();
   const navigate = useNavigate();
   const isSettingsRoute = pathname.startsWith('/settings');
   const isWorkDiscoveryRoute = pathname === '/onboarding/workspace';
@@ -110,11 +110,21 @@ function AppShellContent() {
   const workspaceOverride = useWorkspacePanelStore((s) => s.conversationIdOverride);
   const [workspaceDockedWidth, setWorkspaceDockedWidth] = useState(0);
   const parentConversationId = useChatRouteConversationId(pathname);
+  const { profile: personalProfile } = usePersonalProfile(pathname === '/personal');
   const showWorkDiscoveryOverlay = pathname === '/user-model' && isWorkDiscoveryOverlaySearch(search);
   const taskModalId = pathname.startsWith('/tasks/')
     ? null
     : new URLSearchParams(search).get(TASK_DETAIL_MODAL_PARAM);
-  const workspaceScope = taskModalId && workspaceOverride ? workspaceOverride : parentConversationId ?? (pathname.startsWith('/chat') ? 'new' : workspaceOverride ?? 'new');
+  const taskPreview = (state as { taskPreview?: { id: string; title: string } } | null)?.taskPreview;
+  const workspaceScope = taskModalId && workspaceOverride ? workspaceOverride
+    : pathname === '/personal' ? personalProfile?.conversationId ?? 'new'
+      : parentConversationId ?? (pathname.startsWith('/chat') ? 'new' : workspaceOverride ?? 'new');
+  const personalDetailsOverlay = useRightWorkspaceStore(s => {
+    if (pathname !== '/personal') return false;
+    const pane = s.panes[workspaceScope];
+    const active = pane?.tabs.find(tab => tab.id === pane.activeId);
+    return Boolean(pane?.open && pane.personalDetailsOpen && (active?.kind === 'file' || active?.kind === 'browser'));
+  });
   const productPreviewRoute = isChatPreviewPath(pathname)
     ? new URLSearchParams(search).get(PRODUCT_PREVIEW_PARAM) : null;
   const productPreviewTarget = productPreviewRoute && !taskModalId ? resolveProductPreviewTarget(productPreviewRoute) : null;
@@ -228,9 +238,8 @@ function AppShellContent() {
         <NotePreviewModal noteId={noteModalId} backgroundPath={noteModalBackgroundPath} onClose={() => navigate(noteModalBackgroundPath, { replace: true })} />
       ) : null}
       {taskModalId ? (
-        <Suspense fallback={null}>
-          <TaskDetailModal taskId={taskModalId} backgroundPath={taskModalBackgroundPath} workspacePanelWidth={workspaceDockedWidth} onClose={closeTaskDetailModal} />
-        </Suspense>
+        <TaskDetailModal taskId={taskModalId} initialTitle={taskPreview?.id === taskModalId ? taskPreview.title : undefined}
+          backgroundPath={taskModalBackgroundPath} workspacePanelWidth={workspaceDockedWidth} onClose={closeTaskDetailModal} />
       ) : null}
       {workDiscoveryOverlayMounted ? (
         <Suspense fallback={null}>
@@ -254,7 +263,7 @@ function AppShellContent() {
           {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
           <div className="app-main-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
             <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', routeKey === 'personal' && '@container/personal-chat')} inert={personalDetailsOverlay} data-app-chat-shell={routeKey === 'chat' || routeKey === 'personal' ? '' : undefined}>
                 {!isSettingsRoute ? <PrimaryAppHeader /> : null}
                 <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   {(

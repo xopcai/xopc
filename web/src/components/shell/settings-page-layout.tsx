@@ -262,7 +262,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
       <div
         className={cn(
-          'flex shrink-0 items-center gap-2 border-b border-edge-subtle bg-surface-panel px-3 py-2 md:hidden',
+          'app-header-gradient flex shrink-0 items-center gap-2 px-3 py-2 md:hidden',
           chromeLayout.mainHeaderDraggable && APP_CHROME_DRAG_CLASS,
         )}
       >

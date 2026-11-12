@@ -52,6 +52,10 @@ function preload(loader: RouteLoader) {
   });
 }
 
+export function preloadTaskDetailPage() {
+  preload(loadTaskDetailPage);
+}
+
 function pathWithoutSearch(to: string): string {
   const [path] = to.split(/[?#]/, 1);
   return path || '/';
@@ -89,7 +93,7 @@ export function preloadRouteForPath(to: string) {
   if (path === '/user-model') return preload(loadUserModelPage);
   if (path === '/automations') return preload(loadAutomationsPage);
   if (path === '/') return preload(loadHomePage);
-  if (path.startsWith('/tasks/')) return preload(loadTaskDetailPage);
+  if (path.startsWith('/tasks/')) return preloadTaskDetailPage();
   if (path === '/projects') return preload(loadProjectsPage);
   if (path.startsWith('/projects/')) return preload(loadProjectDetailPage);
   if (path === '/notes') return preload(loadNotesPage);

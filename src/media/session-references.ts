@@ -1,7 +1,8 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { TASK_RESULT_DELIVERY_TYPE, parseTaskResultDelivery } from '@xopcai/gateway-contract';
+import { TASK_RESULT_DELIVERY_TYPE, TurnOutcomeDeliverableSchema, parseTaskResultDelivery } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase } from '../storage/sqlite/index.js';
+import { isAvailableDeliverable } from '../tasks/task-deliverables.js';
 import { deleteMediaBuffer } from './store.js';
 import { tryParseMediaUri } from './uri.js';
 
@@ -59,6 +60,19 @@ export function taskResultReferencesMediaUri(conversationId: string, uri: string
   });
 }
 
+export function taskOutcomeReferencesMediaUri(taskId: string, uri: string): boolean {
+  const rows = getSqliteDatabase().prepare(`SELECT item.value AS artifact FROM task_runs run
+    JOIN task_run_outcomes outcome ON outcome.task_run_id = run.run_id
+    JOIN json_each(outcome.outcome_json, '$.deliverables') item
+    WHERE run.task_id = ? AND json_extract(item.value, '$.uri') = ?`).iterate(taskId, uri.trim()) as Iterable<{ artifact: string }>;
+  const now = Date.now();
+  for (const { artifact } of rows) {
+    const parsed = TurnOutcomeDeliverableSchema.safeParse(JSON.parse(artifact));
+    if (parsed.success && isAvailableDeliverable(parsed.data, now)) return true;
+  }
+  return false;
+}
+
 /**
  * A media object remains live while any non-deleted session references it,
  * including archived transcripts retained by a reset of that session key.
@@ -81,9 +95,12 @@ export function isMediaUriReferencedByLiveSession(uri: string): boolean {
        SELECT 1 AS referenced FROM task_result_deliveries d
        JOIN sessions s ON s.conversation_id = d.conversation_id
        WHERE d.status IN ('pending', 'delivered', 'stale') AND d.payload_json LIKE ? ESCAPE '\\'
+       UNION ALL
+       SELECT 1 AS referenced FROM task_run_outcomes o
+       WHERE o.outcome_json LIKE ? ESCAPE '\\'
        LIMIT 1`,
     )
-    .get(`%${escaped}%`, `%${escaped}%`) as { referenced?: number } | undefined;
+    .get(`%${escaped}%`, `%${escaped}%`, `%${escaped}%`) as { referenced?: number } | undefined;
   return row?.referenced === 1;
 }
 

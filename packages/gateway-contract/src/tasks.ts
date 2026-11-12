@@ -9,6 +9,7 @@ import {
   TaskWaitSchema,
 } from './task-lifecycle.js';
 import { TaskRunSchema } from './task-runs.js';
+import { PersonalDeliverableSchema } from './turn-outcome.js';
 
 export {
   TaskAttentionItemSchema,
@@ -421,6 +422,7 @@ export const TaskDetailResponseSchema = z.object({
   waits: z.array(TaskWaitSchema),
   runs: z.array(TaskRunSchema),
   receipts: z.array(TaskRunReceiptSchema),
+  deliverables: z.array(PersonalDeliverableSchema).optional(),
   criterionReviews: z.array(TaskCriterionReviewSchema),
   context: z.array(TaskContextEdgeSchema),
   conversation: TaskConversationStateSchema,

@@ -147,11 +147,18 @@ export async function searchWorkspaceFiles(
 export async function readWorkspaceFile(
   path: string,
   options?: WorkspaceEditorRequestOptions,
-): Promise<{ content: string; path: string; mtimeMs?: number; revision: string }> {
+  resolved?: { id: string; mtimeMs?: number },
+): Promise<{ content: string; path: string; mtimeMs?: number; revision: string; fileId: string }> {
+  if (resolved) {
+    const response = await apiFetch(apiUrl(`/api/files/${encodeURIComponent(resolved.id)}/content`));
+    const revision = response.headers.get('ETag');
+    if (response.ok && revision) return { content: await response.text(), path, mtimeMs: resolved.mtimeMs, revision, fileId: resolved.id };
+    if (!response.ok && response.status !== 404) throw await readApiError(response);
+  }
   const resource = await resolveResource(path, options);
   const response = await apiFetch(apiUrl(`/api/files/${encodeURIComponent(resource.id)}/content`));
   if (!response.ok) throw await readApiError(response);
-  return { content: await response.text(), path: resource.relativePath, mtimeMs: resource.modifiedAt, revision: response.headers.get('ETag') ?? resource.revision };
+  return { content: await response.text(), path: resource.relativePath, mtimeMs: resource.modifiedAt, revision: response.headers.get('ETag') ?? resource.revision, fileId: resource.id };
 }
 
 export async function readWorkspaceFileBase64(
