@@ -328,12 +328,12 @@ function ChannelHubCard({
 
   return (
     <article className={cn(
-      'relative flex items-start justify-between gap-2 rounded-2xl bg-surface-inset p-4 transition-colors dark:bg-surface-overlay',
-      !pending && 'hover:bg-surface-hover dark:hover:bg-surface-hover',
+      'relative flex items-start justify-between gap-2 rounded-xl border border-edge bg-surface-panel p-4 transition-colors',
+      !pending && 'hover:border-edge-strong hover:bg-surface-hover',
     )}>
       <button
         type="button"
-        className="absolute inset-0 cursor-pointer rounded-2xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:cursor-default"
+        className="absolute inset-0 cursor-pointer rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:cursor-default"
         aria-label={`${entry.label} · ${label}`}
         aria-describedby={statusId}
         title={pending ? undefined : label}
