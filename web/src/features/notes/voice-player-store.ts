@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { claimPlayback, releasePlayback } from '@/features/media-playback/playback-coordinator';
+
 import { acquireNoteMediaObjectUrl, releaseNoteMediaObjectUrl } from './note-media-blob';
 
 export type VoicePlayerState = {
@@ -38,6 +40,7 @@ let audioElement: HTMLAudioElement | null = null;
 let currentObjectUrl: string | null = null;
 let currentNoteId: string | null = null;
 let currentAttachmentId: string | null = null;
+let playbackOperation = 0;
 
 function getAudio(): HTMLAudioElement {
   if (!audioElement) {
@@ -52,6 +55,7 @@ function getAudio(): HTMLAudioElement {
       }
     });
     audioElement.addEventListener('ended', () => {
+      releasePlayback(audioElement!);
       useVoicePlayerStore.setState({ playing: false, currentTime: 0 });
       audioElement!.currentTime = 0;
     });
@@ -80,43 +84,41 @@ export const useVoicePlayerStore = create<VoicePlayerState & VoicePlayerActions>
   play: async (noteId, attachmentId, hintDuration) => {
     const audio = getAudio();
     const state = get();
-
-    if (state.noteId === noteId && state.attachmentId === attachmentId && currentObjectUrl) {
-      audio.play();
-      return;
-    }
-
-    audio.pause();
-    releaseCurrent();
-
-    set({
-      noteId,
-      attachmentId,
-      playing: false,
-      currentTime: 0,
-      duration: hintDuration ?? 0,
-      loading: true,
-    });
+    const operation = ++playbackOperation;
+    claimPlayback(audio, () => get().pause());
 
     try {
-      const url = await acquireNoteMediaObjectUrl(noteId, attachmentId);
-      currentObjectUrl = url;
-      currentNoteId = noteId;
-      currentAttachmentId = attachmentId;
-      audio.src = url;
+      if (state.noteId !== noteId || state.attachmentId !== attachmentId || !currentObjectUrl) {
+        audio.pause();
+        releaseCurrent();
+        set({ noteId, attachmentId, playing: false, currentTime: 0, duration: hintDuration ?? 0, loading: true });
+        const url = await acquireNoteMediaObjectUrl(noteId, attachmentId);
+        if (operation !== playbackOperation) {
+          releaseNoteMediaObjectUrl(noteId, attachmentId);
+          return;
+        }
+        currentObjectUrl = url;
+        currentNoteId = noteId;
+        currentAttachmentId = attachmentId;
+        audio.src = url;
+      }
       await audio.play();
-      window.dispatchEvent(new CustomEvent('xopc-voice-playback-start', {
-        detail: { id: `note:${noteId}:${attachmentId}` },
-      }));
-      set({ loading: false });
+      if (operation === playbackOperation) set({ loading: false });
     } catch {
+      if (operation !== playbackOperation) return;
+      releasePlayback(audio);
       set({ loading: false, playing: false });
       releaseCurrent();
     }
   },
 
   pause: () => {
-    getAudio().pause();
+    playbackOperation += 1;
+    if (audioElement) {
+      releasePlayback(audioElement);
+      audioElement.pause();
+    }
+    set({ playing: false, loading: false });
   },
 
   toggle: (noteId, attachmentId, hintDuration) => {
@@ -135,8 +137,11 @@ export const useVoicePlayerStore = create<VoicePlayerState & VoicePlayerActions>
   },
 
   reset: () => {
-    getAudio().pause();
-    getAudio().src = '';
+    get().pause();
+    if (audioElement) {
+      audioElement.removeAttribute('src');
+      audioElement.load();
+    }
     releaseCurrent();
     set(initialState);
   },

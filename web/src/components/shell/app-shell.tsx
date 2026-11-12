@@ -36,6 +36,7 @@ import { ProductNotificationCoordinator } from '@/features/notifications/product
 import { SupportReportHost } from '@/features/support/support-report-host';
 import { ReadAloudDockProvider } from '@/features/voice/read-aloud-dock';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
+import { GlobalMediaPlayer } from '@/features/media-playback/global-media-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
 import { TaskDetailModal } from '@/features/tasks/task-detail-modal';
 import { closeTaskDetailModalHref, TASK_DETAIL_MODAL_PARAM } from '@/features/tasks/task-detail-route';
@@ -95,7 +96,10 @@ function ExtensionNavigateListener() {
 export function AppShell() {
   const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
-  return <VoiceCallProvider key={`${baseUrl}:${token ?? ''}`}><ReadAloudDockProvider><AppShellContent /></ReadAloudDockProvider></VoiceCallProvider>;
+  return <VoiceCallProvider key={`${baseUrl}:${token ?? ''}`}><ReadAloudDockProvider>
+    <AppShellContent />
+    {token ? <GlobalMediaPlayer /> : null}
+  </ReadAloudDockProvider></VoiceCallProvider>;
 }
 
 function AppShellContent() {

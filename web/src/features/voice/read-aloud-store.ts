@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-import { useVoicePlayerStore } from '@/features/notes/voice-player-store';
+import { claimPlayback, ownsPlayback, releasePlayback } from '@/features/media-playback/playback-coordinator';
 
 import { claimReadAloudMediaSession, releaseReadAloudMediaSession, updateReadAloudMediaSession } from './read-aloud-media-session';
 import { splitSpeakableText } from './read-aloud-text';
@@ -72,6 +72,7 @@ let chunkRequests = new Map<number, Promise<string>>();
 let requestController: AbortController | null = null;
 let generation = 0;
 let playbackOperation = 0;
+let advanceChunks = false;
 let loadedChunkIndex: number | null = null;
 let offsetOnLoad: number | null = null;
 let sessionConsent = false;
@@ -138,6 +139,11 @@ async function playChunk(index: number, offset = 0, autoplay = true): Promise<vo
   const runGeneration = generation;
   const operation = ++playbackOperation;
   const audio = getAudio();
+  advanceChunks = autoplay;
+  if (autoplay) claimPlayback(audio, () => {
+    releaseReadAloudMediaSession();
+    useReadAloudStore.getState().pause();
+  });
   useReadAloudStore.setState({ status: 'preparing', currentChunkIndex: index, currentText: chunks[index] ?? '', currentTime: completedDuration(index) + offset, error: null });
   audio.pause();
   try {
@@ -158,7 +164,6 @@ async function playChunk(index: number, offset = 0, autoplay = true): Promise<vo
     if (runGeneration !== generation || operation !== playbackOperation) return;
     useReadAloudStore.setState({ status: autoplay ? 'playing' : 'paused' });
     if (autoplay) {
-      useVoicePlayerStore.getState().pause();
       window.dispatchEvent(new CustomEvent('xopc-voice-playback-start', { detail: { id: PLAYBACK_ID } }));
       claimReadAloudMediaSession({ ...useReadAloudStore.getState(), position: () => useReadAloudStore.getState().currentTime });
       updateReadAloudMediaSession(useReadAloudStore.getState());
@@ -166,6 +171,8 @@ async function playChunk(index: number, offset = 0, autoplay = true): Promise<vo
     if (index + 1 < chunks.length) void ensureChunk(index + 1, runGeneration).catch(() => undefined);
   } catch (error) {
     if (runGeneration !== generation || operation !== playbackOperation || (error instanceof DOMException && error.name === 'AbortError')) return;
+    releasePlayback(audio);
+    releaseReadAloudMediaSession();
     useReadAloudStore.setState({ status: 'error', error: error instanceof Error ? error.message : String(error) });
   }
 }
@@ -195,11 +202,12 @@ function getAudio(): HTMLAudioElement {
   });
   audioElement.addEventListener('ended', () => {
     const status = useReadAloudStore.getState().status;
-    if (!activeInput || (status !== 'playing' && status !== 'paused')) return;
+    if (!audioElement || !ownsPlayback(audioElement) || !advanceChunks || !activeInput || (status !== 'playing' && status !== 'paused')) return;
     const next = useReadAloudStore.getState().currentChunkIndex + 1;
     if (next < chunks.length) {
       void playChunk(next);
     } else {
+      advanceChunks = false;
       useReadAloudStore.setState({ status: 'ended', currentTime: useReadAloudStore.getState().duration });
     }
   });
@@ -214,17 +222,13 @@ function getAudio(): HTMLAudioElement {
       loadedChunkIndex = null;
     }
     playbackOperation += 1;
+    advanceChunks = false;
+    if (audioElement) releasePlayback(audioElement);
+    releaseReadAloudMediaSession();
     useReadAloudStore.setState({ status: 'error', error: 'Audio playback failed', durationComplete: false });
   });
 
   window.addEventListener('xopc-voice-recording-start', () => useReadAloudStore.getState().pause());
-  window.addEventListener('xopc-voice-playback-start', (event) => {
-    const otherId = (event as CustomEvent<{ id?: string }>).detail?.id;
-    if (otherId && otherId !== PLAYBACK_ID) {
-      releaseReadAloudMediaSession();
-      useReadAloudStore.getState().pause();
-    }
-  });
   return audioElement;
 }
 
@@ -232,12 +236,14 @@ function stopPlayback(): void {
   releaseReadAloudMediaSession();
   generation += 1;
   playbackOperation += 1;
+  advanceChunks = false;
   loadedChunkIndex = null;
   offsetOnLoad = null;
   useReadAloudStore.setState({ ...initialState, rate: useReadAloudStore.getState().rate });
   requestController?.abort();
   requestController = null;
   if (audioElement) {
+    releasePlayback(audioElement);
     audioElement.pause();
     audioElement.removeAttribute('src');
     audioElement.load();
@@ -259,7 +265,6 @@ function startPlayback(input: ReadAloudInput): void {
   chunkUrls = Array.from({ length: chunks.length }, () => null);
   chunkDurations = Array.from({ length: chunks.length }, () => 0);
   requestController = new AbortController();
-  useVoicePlayerStore.getState().pause();
   useReadAloudStore.setState({
     source: input.source,
     status: 'preparing',
@@ -313,6 +318,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     const state = get();
     if (state.status !== 'playing' && state.status !== 'preparing') return;
     playbackOperation += 1;
+    advanceChunks = false;
     audioElement?.pause();
     set({ status: 'paused' });
   },
@@ -331,6 +337,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     const target = Math.max(0, Math.min(time, state.duration));
     if (target === state.duration) {
       playbackOperation += 1;
+      advanceChunks = false;
       audioElement?.pause();
       set({ status: 'ended', currentTime: target });
       return;

@@ -12,6 +12,7 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { claimNativePlayback, ownsPlayback, releasePlayback } from '@/features/media-playback/playback-coordinator';
 import { taskDetailHref } from '@/features/tasks/task-detail-route';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -103,7 +104,8 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
     rangeEnd.current = endMs ?? null;
     pendingSeek.current = player.readyState === 0 ? seconds : null;
     positionPlayer(player, seconds);
-    void player.play().catch(() => undefined);
+    claimNativePlayback(player);
+    void player.play().catch(() => { if (player.paused) releasePlayback(player); });
   }
   function rememberReading() {
     if (evidenceOrigin.current) return;
@@ -397,7 +399,7 @@ export function DiscussionNoteSections({ noteId, onPersonalNotes, onMeetingConte
           if (pendingSeek.current !== null) {
             positionPlayer(player, pendingSeek.current);
             pendingSeek.current = null;
-            void player.play().catch(() => undefined);
+            if (ownsPlayback(player)) void player.play().catch(() => { if (player.paused) releasePlayback(player); });
           } else positionPlayer(player, review.source === audioSource ? review.positionMs / 1000 : 0);
         }}
         onError={() => setError(zh ? '录音暂不可播放' : 'Recording unavailable')}

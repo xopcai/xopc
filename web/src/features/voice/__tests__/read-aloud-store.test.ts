@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { claimPlayback, releasePlayback } from '@/features/media-playback/playback-coordinator';
 
-const mocks = vi.hoisted(() => ({ fetch: vi.fn(), pauseNote: vi.fn() }));
+const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock('@/lib/fetch', () => ({ apiFetch: mocks.fetch }));
-vi.mock('@/features/notes/voice-player-store', () => ({ useVoicePlayerStore: { getState: () => ({ pause: mocks.pauseNote }) } }));
 vi.mock('../read-aloud-text', () => ({ splitSpeakableText: (text: string) => text.split('|') }));
 
 class FakeAudio extends EventTarget {
@@ -75,6 +75,22 @@ describe('read aloud playback lifecycle', () => {
     expect(store().status).toBe('idle');
     expect(store().source).toBeNull();
     expect(audio.play).not.toHaveBeenCalled();
+  });
+
+  it('does not interrupt a newer player when speech synthesis finishes late', async () => {
+    const pending = deferred<ReturnType<typeof response>>();
+    const nextPlayer = {};
+    const interrupt = vi.fn();
+    mocks.fetch.mockReturnValueOnce(pending.promise);
+    store().requestStart(input());
+    claimPlayback(nextPlayer, interrupt);
+    try {
+      pending.resolve(response());
+      await vi.waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+      expect(store().status).toBe('paused');
+      expect(audio.play).not.toHaveBeenCalled();
+      expect(interrupt).not.toHaveBeenCalled();
+    } finally { releasePlayback(nextPlayer); }
   });
 
   it('announces resumed playback so other message players pause', async () => {

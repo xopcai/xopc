@@ -5,6 +5,7 @@ import { PopoverSelect } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { mediaUriToReadUrl } from '@/features/chat/attachments/attachment-utils-core';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
+import { claimNativePlayback, releasePlayback } from '@/features/media-playback/playback-coordinator';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
@@ -80,27 +81,26 @@ function VoiceClip({ att, align = 'start', embedded = false, conversationId }: P
   useEffect(() => {
     const audio = audioRef.current;
     const pause = () => audio?.pause();
-    const otherPlayback = (event: Event) => {
-      const otherId = (event as CustomEvent<{ id?: string }>).detail?.id;
-      if (otherId && otherId !== id) pause();
-    };
     window.addEventListener('xopc-voice-recording-start', pause);
-    window.addEventListener('xopc-voice-playback-start', otherPlayback);
     return () => {
       pause();
+      if (audio) releasePlayback(audio);
       window.removeEventListener('xopc-voice-recording-start', pause);
-      window.removeEventListener('xopc-voice-playback-start', otherPlayback);
     };
-  }, [id]);
+  }, []);
 
   const toggle = () => {
     const audio = audioRef.current;
     if (error) { setAttempt((value) => value + 1); return; }
     if (!audio || !src) return;
     if (playing) audio.pause();
-    else void audio.play().catch((cause: unknown) => {
-      if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(true);
-    });
+    else {
+      claimNativePlayback(audio);
+      void audio.play().catch((cause: unknown) => {
+        if (audio.paused) releasePlayback(audio);
+        if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(true);
+      });
+    }
   };
   const syncDuration = () => {
     const value = audioRef.current?.duration;
@@ -144,7 +144,12 @@ function VoiceClip({ att, align = 'start', embedded = false, conversationId }: P
       </div> : null}
       <audio ref={audioRef} src={src} preload="metadata" className="hidden" onLoadedMetadata={syncDuration} onDurationChange={syncDuration}
         onTimeUpdate={(event) => setCurrent(event.currentTarget.currentTime)} onError={() => { if (src) { setPlaying(false); setError(true); } }}
-        onPlay={(event) => { event.currentTarget.playbackRate = rate; setPlaying(true); window.dispatchEvent(new CustomEvent('xopc-voice-playback-start', { detail: { id } })); }}
+        onPlay={(event) => {
+          if (event.currentTarget.paused) return;
+          claimNativePlayback(event.currentTarget);
+          event.currentTarget.playbackRate = rate;
+          setPlaying(true);
+        }}
         onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setCurrent(0); }} />
     </div>
   </div>;

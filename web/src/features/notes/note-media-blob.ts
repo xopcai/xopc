@@ -69,7 +69,7 @@ export async function acquireNoteMediaObjectUrl(
 
   if (!entry.objectUrl) {
     const blob = await entry.blob;
-    entry.objectUrl = URL.createObjectURL(blob);
+    entry.objectUrl ??= URL.createObjectURL(blob);
   }
   entry.refCount += 1;
   return entry.objectUrl;
