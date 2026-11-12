@@ -4,6 +4,7 @@ import { act } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
+import { CapabilitySettingsSheet } from '@/features/settings/models-hub/capability-settings-sheet';
 import { useLocaleStore } from '@/stores/locale-store';
 import { VoiceCallProvider } from '../voice-call-provider';
 import { useVoiceCall, type VoiceCallContextValue } from '../voice-call-context';
@@ -37,6 +38,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/features/chat/composer/voice-transcribe-api', () => ({ fetchDictationRoute: mocks.route, transcribeVoiceBlob: mocks.transcribe }));
 vi.mock('@/lib/fetch', () => ({ fetchJson: mocks.refine }));
+vi.mock('@/features/settings/models-hub/capabilities-settings-panel', () => ({ CapabilitiesSettingsPanel: () => null }));
 vi.mock('@/features/voice/realtime/voice-session-client', () => ({
   VoiceSessionClient: { connect: mocks.connect, preflight: mocks.preflight },
 }));
@@ -899,6 +901,30 @@ describe('useRealtimeVoice', () => {
     expect(card.style.right).toBe(`${window.innerWidth - 700}px`);
     expect(card.style.top).toBe('64px');
     expect(mocks.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens realtime voice settings from a failed Personal call', async () => {
+    useLocaleStore.setState({ language: 'en' });
+    mocks.preflight.mockRejectedValueOnce(new Error('Voice service unavailable'));
+    let call!: VoiceCallContextValue;
+    function Page() {
+      call = useVoiceCall();
+      return <button type="button" id="personal-call-anchor">Call</button>;
+    }
+    await act(async () => root.render(<MemoryRouter initialEntries={['/personal']}>
+      <VoiceCallProvider><Page /><CapabilitySettingsSheet /></VoiceCallProvider>
+    </MemoryRouter>));
+    const anchor = document.getElementById('personal-call-anchor')!;
+    await act(async () => call.open({ conversationId: 'same-session', name: 'Ada' }, { anchor, avatar: null }));
+    const card = document.querySelector('[data-personal-call-card]')!;
+    const settingsLink = card.querySelector('a')!;
+    expect(settingsLink.textContent).toBe(chat.callSettings);
+    await act(async () => { settingsLink.focus(); settingsLink.click(); });
+
+    const settings = document.querySelector('[data-capability-settings-sheet][data-state="open"]');
+    expect(settings?.querySelector('h2')?.textContent).toBe('Realtime conversation');
+    expect(card.contains(settings)).toBe(false);
+    expect(call.expanded).toBe(false);
   });
 
   it('keeps muted native calls connected after a recoverable reply failure', async () => {
