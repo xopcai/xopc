@@ -15,6 +15,7 @@ export interface MusicProvider {
   id: string;
   name: string;
   models: Readonly<Record<string, {
+    name?: string;
     modes: readonly MusicMode[];
     maxPromptCharacters: number;
     maxLyricsCharacters: number;

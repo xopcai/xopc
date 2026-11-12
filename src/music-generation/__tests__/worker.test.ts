@@ -31,6 +31,62 @@ beforeEach(() => {
   transcriptId = conversation.transcriptId!;
 });
 
+it('submits Tencent songs and instrumentals and resumes both using saved task IDs', async () => {
+  vi.stubEnv('XOPC_MUSIC_MODEL', 'tencent-mps/minimax-music-3.0');
+  vi.stubEnv('TENCENTCLOUD_SECRET_ID', 'fixture-id');
+  vi.stubEnv('TENCENTCLOUD_SECRET_KEY', 'fixture-key');
+  const audio = Buffer.from('fffb9064' + '00'.repeat(414), 'hex');
+  const remote = vi.fn(async (url: string | URL, init?: RequestInit) => {
+    if (String(url) === 'https://track-123456.cos.ap-guangzhou.myqcloud.com/music.mp3') {
+      expect(init?.headers).toBeUndefined();
+      return new Response(audio);
+    }
+    expect(url).toBe('https://mps.tencentcloudapi.com/');
+    const headers = new Headers(init?.headers);
+    expect(headers.get('Authorization')).toMatch(/^TC3-HMAC-SHA256 Credential=fixture-id\/.*\/mps\/tc3_request,/);
+    const body = JSON.parse(String(init?.body));
+    if (headers.get('X-TC-Action') === 'CreateAigcAudioTask') {
+      expect(body).toMatchObject({
+        ModelName: 'MiniMaxMusic', ModelVersion: '3.0', SceneType: 'music', ExtraParameters: { OutputAudioFormat: 'mp3' },
+      });
+      const input = JSON.parse(body.AdditionalParameters);
+      if (body.Prompt === song.prompt) {
+        expect(input).toEqual({ lyrics: '沿着海风向前走\n把今天写进歌里' });
+        return Response.json({ Response: { TaskId: 'song-task' } });
+      }
+      expect(input).toEqual({ is_instrumental: true });
+      return Response.json({ Response: { TaskId: 'instrumental-task' } });
+    }
+    expect(headers.get('X-TC-Action')).toBe('DescribeAigcAudioTask');
+    expect(['song-task', 'instrumental-task']).toContain(body.TaskId);
+    return Response.json({ Response: {
+      Status: 'DONE', AudioInfos: [{ Url: 'https://track-123456.cos.ap-guangzhou.myqcloud.com/music.mp3', Duration: 45 }],
+    } });
+  });
+  vi.stubGlobal('fetch', remote);
+  const first = (await enqueueMusicJob(conversationId, transcriptId, 'tencent-song', {
+    ...song, lyrics: '沿着海风向前走\n把今天写进歌里',
+  })).job!;
+  const second = (await enqueueMusicJob(conversationId, transcriptId, 'tencent-instrumental', {
+    title: 'Quiet morning', mode: 'instrumental', prompt: 'Acoustic guitar',
+  })).job!;
+  await tick();
+  await tick();
+  expect(getMusicJob(conversationId, first.id)).toMatchObject({ state: 'submitted', provider_task_id: 'song-task' });
+  expect(getMusicJob(conversationId, second.id)).toMatchObject({ state: 'submitted', provider_task_id: 'instrumental-task' });
+  closeXopcDatabase();
+  openXopcDatabase({ path: database });
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 9_000);
+  await tick();
+  await tick();
+  expect(listMusicJobs(conversationId, transcriptId)).toMatchObject([
+    { id: second.id, state: 'completed', durationMs: 45_000 },
+    { id: first.id, state: 'completed', durationMs: 45_000 },
+  ]);
+  const actions = remote.mock.calls.map(([, init]) => new Headers(init?.headers).get('X-TC-Action')).filter(Boolean);
+  expect(actions).toEqual(['CreateAigcAudioTask', 'CreateAigcAudioTask', 'DescribeAigcAudioTask', 'DescribeAigcAudioTask']);
+});
+
 afterEach(() => {
   closeXopcDatabase();
   rmSync(directory, { recursive: true, force: true });

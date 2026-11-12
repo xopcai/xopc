@@ -122,7 +122,7 @@ function MusicJobCard({ job, audioUrl, language }: { job: MusicGenerationJob; au
     </MediaGenerationDetails>}
     <MediaGenerationDetails label={m.details}>
       <p className="mt-1 whitespace-pre-wrap wrap-anywhere border-s border-edge px-3 text-sm leading-relaxed text-fg">{job.prompt}</p>
-      <p className="mt-2 wrap-anywhere">{job.modelRef}{job.errorCode === 'provider_rate_limited' && ' · HTTP 429'}</p>
+      <p className="mt-2 wrap-anywhere">{job.modelRef}{job.errorCode === 'provider_rate_limited' && job.error?.endsWith('HTTP 429.') && ' · HTTP 429'}</p>
     </MediaGenerationDetails>
   </MediaGenerationCard>;
 }

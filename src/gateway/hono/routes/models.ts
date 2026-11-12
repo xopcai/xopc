@@ -1,3 +1,4 @@
+import { TENCENT_MPS_MUSIC_PROVIDER } from '@xopcai/gateway-contract';
 import { phoneModelProfile, isDedicatedPhoneModel } from '../../../phone/model-policy.js';
 import { withModelUsageOrigin } from '../../../providers/model-usage.js';
 import { getProviderSetupProfile } from '../../../providers/setup/profiles.js';
@@ -942,6 +943,9 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
       const providerId = rawId.toLowerCase();
       if (providerId === 'boson') return c.json({ ok: false, error: { message: 'Manage Boson credentials in voice settings' } }, 403);
+      if (providerId === TENCENT_MPS_MUSIC_PROVIDER) {
+        return c.json({ ok: false, error: { message: 'Manage Tencent Cloud MPS credentials in music settings' } }, 403);
+      }
       const resolver = new CredentialResolver();
       const stored = await resolver.revealGatewayStoredApiKey(providerId);
       if (stored) {

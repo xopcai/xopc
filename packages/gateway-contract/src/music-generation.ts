@@ -1,4 +1,6 @@
 export type MusicMode = 'song' | 'instrumental';
+export const TENCENT_MPS_MUSIC_PROVIDER = 'tencent-mps';
+
 export type MusicJobState = 'queued' | 'submitting' | 'submitted' | 'running' | 'saving' | 'completed' | 'failed' | 'submission_unknown';
 export type MusicJobErrorCode =
   | 'provider_rate_limited'
