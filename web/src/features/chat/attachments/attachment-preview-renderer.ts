@@ -28,7 +28,7 @@ export async function renderPdfInContainer(
   container: HTMLDivElement,
   arrayBuffer: ArrayBuffer,
   options?: RenderPdfInContainerOptions,
-): Promise<{ cleanup: () => void }> {
+): Promise<{ cleanup: () => void; goToPage: (page: number) => Promise<void> }> {
   const pdfjsLib = await ensurePdfWorker();
   // PDF.js transfers this buffer to its worker; keep the source available for retries/downloads.
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
@@ -100,25 +100,44 @@ export async function renderPdfInContainer(
     return pageContainer;
   };
 
-  const appendRenderedPages = async (pageNums: number[], numPagesTotal: number) => {
-    const rendered = await Promise.all(
-      pageNums.map((pageNum) => renderPageElement(pageNum, numPagesTotal)),
-    );
-    for (const pageContainer of rendered) {
-      if (pageContainer) pagesHost.appendChild(pageContainer);
-    }
+  const numPages = pdf.numPages;
+  const rendering = new Map<number, Promise<HTMLDivElement | null>>();
+  const renderPage = (pageNum: number) => {
+    const existing = rendering.get(pageNum);
+    if (existing) return existing;
+    const pending = renderPageElement(pageNum, numPages).then(element => {
+      if (!pdf || !element) return null;
+      const next = Array.from(pagesHost.children).find(child => Number((child as HTMLElement).dataset.pdfPage) > pageNum);
+      pagesHost.insertBefore(element, next ?? null);
+      return element;
+    }).catch(error => {
+      rendering.delete(pageNum);
+      throw error;
+    });
+    rendering.set(pageNum, pending);
+    return pending;
+  };
+  const appendRenderedPages = async (pageNums: number[]) => {
+    await Promise.all(pageNums.map(renderPage));
     await yieldToBrowser();
   };
+  let navigation = 0;
+  const goToPage = async (page: number) => {
+    if (!pdf || !Number.isInteger(page) || page < 1 || page > numPages) return;
+    const request = ++navigation;
+    const element = await renderPage(page);
+    if (pdf && request === navigation) element?.scrollIntoView({ block: 'start' });
+  };
 
-  const numPages = pdf.numPages;
   options?.onPageCount?.(numPages);
   const initialEnd = Math.min(PDF_INITIAL_PAGE_COUNT, numPages);
 
-  if (initialEnd > 0) {
-    await appendRenderedPages(
-      Array.from({ length: initialEnd }, (_, i) => i + 1),
-      numPages,
-    );
+  try {
+    await appendRenderedPages(Array.from({ length: initialEnd }, (_, i) => i + 1));
+  } catch (error) {
+    pdf = null;
+    void loadingTask.destroy();
+    throw error;
   }
 
   let nextPage = initialEnd + 1;
@@ -145,7 +164,7 @@ export async function renderPdfInContainer(
             { length: batchEnd - nextPage + 1 },
             (_, i) => nextPage + i,
           );
-          await appendRenderedPages(batchPageNums, numPages);
+          await appendRenderedPages(batchPageNums);
           nextPage = batchEnd + 1;
           if (nextPage > numPages) {
             observer?.disconnect();
@@ -153,6 +172,10 @@ export async function renderPdfInContainer(
             hint.remove();
             sentinel.remove();
           }
+        } catch {
+          // The page control can still request an individual page after a failed batch.
+          observer?.disconnect();
+          observer = null;
         } finally {
           loadingMore = false;
         }
@@ -163,6 +186,7 @@ export async function renderPdfInContainer(
   }
 
   return {
+    goToPage,
     cleanup: () => {
       observer?.disconnect();
       observer = null;
@@ -237,6 +261,7 @@ export async function renderDocxInContainer(
 
 export type RenderExcelInContainerOptions = {
   truncationNotice?: string;
+  initialSheet?: string;
 };
 
 export async function renderExcelInContainer(
@@ -273,6 +298,7 @@ export async function renderExcelInContainer(
   let anyTruncated = false;
 
   if (names.length > 1) {
+    const initialIndex = Math.max(0, names.indexOf(options?.initialSheet ?? ''));
     const tabContainer = document.createElement('div');
     tabContainer.className =
       'z-30 flex shrink-0 gap-1 overflow-x-auto border-b border-edge bg-surface-panel px-2 pt-1 dark:border-edge';
@@ -284,12 +310,12 @@ export async function renderExcelInContainer(
       tab.type = 'button';
       tab.textContent = sheetName;
       tab.className =
-        index === 0
+        index === initialIndex
           ? 'shrink-0 border-b-2 border-accent px-3 py-2 text-xs font-medium text-accent'
           : 'shrink-0 border-b-2 border-transparent px-3 py-2 text-xs font-medium text-fg-muted hover:border-edge hover:text-fg';
 
       const sheetDiv = document.createElement('div');
-      sheetDiv.style.display = index === 0 ? 'flex' : 'none';
+      sheetDiv.style.display = index === initialIndex ? 'flex' : 'none';
       sheetDiv.className = 'min-h-0 flex-1 overflow-hidden';
       const built = buildExcelSheetDomWithXlsx(
         XLSX,

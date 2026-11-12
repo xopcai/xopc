@@ -54,6 +54,7 @@ const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })
 const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m.TaskDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
 const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
+const SpacePage = lazy(() => import('@/features/space/space-page').then(m => ({ default: m.SpacePage })));
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
 const ImportsPage = lazy(() => import('@/features/imports/imports-page').then(m => ({ default: m.ImportsPage })));
 const CapabilitiesPage = lazy(() => import('@/features/capabilities/capabilities-page').then((m) => ({ default: m.CapabilitiesPage })));
@@ -262,6 +263,10 @@ const router = createHashRouter([
             ),
           },
         ],
+      },
+      {
+        path: 'space',
+        element: <Suspense fallback={<SecondaryRouteFallback />}><SpacePage /></Suspense>,
       },
       {
         path: 'notes',

@@ -127,6 +127,7 @@ function BinaryContainerPlugin(props: PreviewRuntimeRenderProps & { kind: 'pdf' 
     ref.current = node;
     setContainerEl(node);
   }, []);
+  const page = props.kind === 'pdf' ? (props.controls?.page ?? 1) : undefined;
   const { error, excelTruncated } = useBinaryPreviewInContainer({
     language: props.language,
     buffer: props.binaryBuffer,
@@ -134,11 +135,13 @@ function BinaryContainerPlugin(props: PreviewRuntimeRenderProps & { kind: 'pdf' 
     fileKey: props.descriptor.id,
     containerEl,
     onPdfPageCount: props.kind === 'pdf' ? props.controls?.setPageCount : undefined,
+    pdfPage: page,
+    targetSheet: props.targetSheet,
+    targetParagraph: props.targetParagraph,
   });
   const m = messages(props.language);
   const zoom = props.kind === 'pdf' ? (props.controls?.zoom ?? 1) : 1;
   const rotation = props.kind === 'pdf' ? (props.controls?.rotation ?? 0) : 0;
-  const page = props.kind === 'pdf' ? (props.controls?.page ?? 1) : 1;
 
   useEffect(() => {
     if (props.kind !== 'pdf' || !ref.current) return;
@@ -156,11 +159,6 @@ function BinaryContainerPlugin(props: PreviewRuntimeRenderProps & { kind: 'pdf' 
       el.style.marginBottom = zoom === 1 ? '' : `${Math.max(16, 24 * zoom)}px`;
     });
   }, [props.kind, rotation, zoom]);
-
-  useEffect(() => {
-    if (props.kind !== 'pdf' || !ref.current) return;
-    ref.current.querySelector<HTMLElement>(`[data-pdf-page="${page}"]`)?.scrollIntoView({ block: 'start' });
-  }, [page, props.kind]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
@@ -203,6 +201,7 @@ export function PptxPreviewPluginView(props: PreviewRuntimeRenderProps) {
           ) : null}
           <PptxPreviewView
             text={text}
+            targetSlide={props.targetSlide}
             slideLabel={(n) => m.chat.attachmentPreviewPptxSlide.replaceAll('{n}', String(n))}
             emptySlideLabel={m.chat.attachmentPreviewPptxEmptySlide}
           />

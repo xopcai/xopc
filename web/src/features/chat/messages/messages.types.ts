@@ -123,6 +123,7 @@ export interface MessageContextRef {
 }
 
 export interface Message {
+  transcriptEntryId?: string;
   role: 'user' | 'assistant' | 'task';
   content: MessageContent[];
   clarificationChoice?: ClarificationChoiceReceipt;

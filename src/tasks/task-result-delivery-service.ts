@@ -4,6 +4,7 @@ import { lstat } from 'node:fs/promises';
 
 import { TASK_RESULT_DELIVERY_TYPE, TaskResultDeliverySchema, type TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 
+import { archiveSpaceTaskDelivery } from '../space/ingest.js';
 import { MEDIA_ARTIFACT_MAX_BYTES, resolveMediaBufferPath } from '../media/store.js';
 import { tryParseMediaUri } from '../media/uri.js';
 import { appendTranscriptEntry } from '../storage/sqlite/transcript-repository.js';
@@ -109,6 +110,7 @@ export class TaskResultDeliveryService {
             db.prepare(`UPDATE task_result_deliveries SET status = 'delivered', payload_json = ?,
               message_entry_id = ?, delivered_at = ? WHERE delivery_id = ?`)
               .run(JSON.stringify({ ...delivery, outcome }), entry?.entry_id ?? null, Date.now(), row.delivery_id);
+            archiveSpaceTaskDelivery(db, { ...delivery, outcome }, entry?.entry_id);
             if (deliverables.length && currentTask.phase === 'review') enqueueTaskChangedEvent(db, {
               taskId: currentTask.id, projectId: currentTask.projectId, version: currentTask.version,
               changedFields: ['acceptance', 'receipts'], source: 'runtime',

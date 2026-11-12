@@ -4,6 +4,7 @@ import { estimateVideoCostFen, VIDEO_MODELS, type VideoGenerationDraft, type Vid
 
 import { getVideoModel } from './settings.js';
 import { DurableState } from '../storage/sqlite/durable-state.js';
+import { archiveSpaceGeneratedMedia } from '../space/ingest.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 type VideoRequest = Pick<VideoGenerationJob, 'id' | 'transcriptId' | 'prompt' | 'duration' | 'ratio' | 'resolution' | 'imageName' | 'modelRef'>;
@@ -127,7 +128,7 @@ export function updateVideoJob(id: string, token: string, state: VideoGeneration
   providerTaskId?: string; delayMs?: number; error?: string; keepLease?: boolean;
 } = {}): boolean {
   const now = Date.now();
-  return getSqliteDatabase().prepare(`UPDATE video_generation_jobs SET state = ?, error = ?,
+  const update = (db: ReturnType<typeof getSqliteDatabase>) => db.prepare(`UPDATE video_generation_jobs SET state = ?, error = ?,
     provider_task_id = COALESCE(?, provider_task_id), next_attempt_at = ?,
     lease_token = CASE WHEN ? THEN lease_token ELSE NULL END,
     lease_until = CASE WHEN ? THEN lease_until ELSE NULL END,
@@ -135,4 +136,10 @@ export function updateVideoJob(id: string, token: string, state: VideoGeneration
     WHERE id = ? AND lease_token = ? AND lease_until > ?`).run(state, options.error ?? null,
     options.providerTaskId ?? null, now + (options.delayMs ?? 0), Number(options.keepLease ?? false),
     Number(options.keepLease ?? false), state, id, token, now).changes === 1;
+  if (state !== 'completed') return update(getSqliteDatabase());
+  return runSqliteWriteTransaction(db => {
+    const updated = update(db);
+    if (updated) archiveSpaceGeneratedMedia(db, 'video', id);
+    return updated;
+  });
 }

@@ -646,10 +646,12 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
       main: hasTaskTitle ? <div className="min-w-0 text-sm font-semibold text-fg">
         <TaskHeaderTitle label={projectName ? `${projectName} / ${copy.taskLabel}` : copy.taskLabel} title={taskTitle} compact={compactHeader} />
       </div> : null,
-      end: null,
+      end: taskId ? <Link to={`/space?taskId=${encodeURIComponent(taskId)}`} className="rounded-lg px-2.5 py-2 text-sm text-fg-muted hover:bg-surface-hover">
+        {language === 'zh' ? '成果' : 'Results'}
+      </Link> : null,
     });
     return clearPageHeader;
-  }, [clearPageHeader, compactHeader, copy.backToWork, copy.taskLabel, hasTaskTitle, presentation, projectName, returnPath, setPageHeader, taskTitle]);
+  }, [clearPageHeader, compactHeader, copy.backToWork, copy.taskLabel, hasTaskTitle, language, presentation, projectName, returnPath, setPageHeader, taskId, taskTitle]);
 
   if (loadError && !detail) return <div className={presentation === 'modal' ? 'p-5 text-sm text-danger' : 'mx-auto max-w-3xl p-6 text-sm text-danger'}>{copy.taskNotFound}</div>;
   if (!detail) return <div className={presentation === 'modal' ? 'p-5' : 'mx-auto max-w-4xl p-4 sm:p-6'}><TaskDetailSkeleton /></div>;

@@ -69,6 +69,7 @@ export async function publishArtifactPaths(params: {
         kind,
         mimeType: media.mimeType,
         sizeBytes: media.size,
+        sha256: media.sha256,
         availability: 'available',
         location: 'artifact_store',
         capabilities: kind === 'archive' || kind === 'file'

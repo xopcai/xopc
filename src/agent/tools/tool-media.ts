@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 
 import { sniffImageMimeType } from '../image/generation/image-assets.js';
@@ -43,7 +44,7 @@ export async function persistToolMedia(params: {
   buffer: Buffer;
   filePath: string;
   mediaType?: ToolMediaType;
-}): Promise<MediaRef> {
+}): Promise<MediaRef & { sha256: string }> {
   const name = basename(params.filePath);
   const mimeType = detectToolMediaMimeType(params.buffer, params.filePath);
   const saved = await saveMediaBuffer(params.buffer, {
@@ -59,6 +60,7 @@ export async function persistToolMedia(params: {
     mimeType: saved.contentType,
     name,
     size: saved.size,
+    sha256: createHash('sha256').update(params.buffer).digest('hex'),
     uri: saved.uri,
     path: saved.path,
   };

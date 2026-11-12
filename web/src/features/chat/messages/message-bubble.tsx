@@ -1,3 +1,9 @@
+import { Archive } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+import { SpaceArtifactLink, SpaceTaskResultLink } from '@/features/space/space-artifact-link';
+import { saveReplyToSpace } from '@/features/space/space-api';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { PersonalProvenanceTail } from './personal-provenance-tail';
 import { AutomationRunLinkContext, automationRunBindings } from '../product-delivery/automation-run-link-context';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -394,6 +400,23 @@ export const MessageBubble = memo(function MessageBubble({
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
   const [moreActionsOpen, setMoreActionsOpen] = useState(false);
   const [assistantActionFeedback, setAssistantActionFeedback] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
+  const [savedSpaceItem, setSavedSpaceItem] = useState<{ entryId: string; id: string }>();
+  const spaceReference = message.transcriptEntryId ? { entryId: message.transcriptEntryId }
+    : message.turnId && !message.taskResultDelivery ? { turnId: message.turnId } : null;
+  const spaceReferenceKey = spaceReference?.entryId ?? spaceReference?.turnId;
+  const spaceId = savedSpaceItem?.entryId === spaceReferenceKey ? savedSpaceItem?.id : undefined;
+  const [savingToSpace, setSavingToSpace] = useState(false);
+  const saveToSpace = async () => {
+    if (!conversationId || !spaceReference || !spaceReferenceKey || savingToSpace) return;
+    setSavingToSpace(true);
+    try {
+      const { id } = await saveReplyToSpace(conversationId, spaceReference);
+      setSavedSpaceItem({ entryId: spaceReferenceKey, id });
+      showComposerNotification('success', language === 'zh' ? '已保存到 Space' : 'Saved to Space', undefined, { href: `/space?item=${encodeURIComponent(id)}` });
+    } catch {
+      showComposerNotification('error', language === 'zh' ? '保存失败，请重试' : 'Could not save to Space. Try again.');
+    } finally { setSavingToSpace(false); }
+  };
   const [assistantActionBusy, setAssistantActionBusy] = useState<'create-note' | 'save-source-note' | 'extract-task' | null>(null);
   const [forkBusy, setForkBusy] = useState(false);
   const [responseFeedback, setResponseFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
@@ -765,6 +788,19 @@ export const MessageBubble = memo(function MessageBubble({
                   clusterLabels={clusterLabels} cardLabels={cardLabels} conversationId={conversationId} />
               ) : null}
 
+            {!isUser && (spaceId || message.taskResultDelivery || message.outcome?.deliverables.some(file => file.uri?.startsWith('media://outbound/'))) ? (
+              <div className="flex flex-wrap items-center gap-1">
+                {spaceId ? <Link to={`/space?item=${encodeURIComponent(spaceId)}`} className="rounded-lg px-2 py-1 text-xs text-accent-fg hover:bg-surface-hover">
+                  {language === 'zh' ? '在 Space 中查看回复' : 'View reply in Space'}
+                </Link> : null}
+                {message.taskResultDelivery && !message.outcome?.deliverables.some(file => file.availability === 'available' && file.uri?.startsWith('media://outbound/')) ? (
+                  <SpaceTaskResultLink deliveryId={message.taskResultDelivery.deliveryId} title={message.taskResultDelivery.taskTitle} zh={language === 'zh'} />
+                ) : null}
+                {message.outcome?.deliverables.filter(file => file.availability === 'available').slice(0, 8)
+                  .map(file => <SpaceArtifactLink key={file.artifactId} file={file} zh={language === 'zh'} />)}
+              </div>
+            ) : null}
+
             {!personal && !isUser && message.taskResultDelivery && conversationId ? (
               <div className="flex flex-wrap items-center gap-2" data-result-follow-up>
                 {message.taskResultDelivery.resultRevision ? (
@@ -1038,6 +1074,12 @@ export const MessageBubble = memo(function MessageBubble({
                         {forkBusy ? m.chat.messageForkCreating : m.chat.messageForkFromHere}
                       </button>
                     </Popover.Close>
+                  ) : null}
+                  {conversationId && spaceReference && !spaceId ? (
+                    <Popover.Close asChild><button type="button" disabled={savingToSpace} onClick={() => void saveToSpace()}
+                      className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg">
+                      <Archive className="size-4" aria-hidden />{language === 'zh' ? '保存到 Space' : 'Save to Space'}
+                    </button></Popover.Close>
                   ) : null}
                   {onSaveAssistantAsNote ? (
                     <Popover.Close asChild>

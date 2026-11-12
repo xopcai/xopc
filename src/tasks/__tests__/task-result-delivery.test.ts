@@ -1025,7 +1025,9 @@ describe('background task result delivery', () => {
     expect(runSqliteWriteTransaction(() =>
       new TaskResultDeliveryRepository().enqueue(ambiguous.runId, 'Old preview', 'succeeded'))).toBe(true);
     db.prepare('UPDATE tasks SET body = ? WHERE task_id = ?').run('Original workspace brief.', taskId);
-    db.exec(`DROP TABLE task_signoffs; DROP TABLE task_bound_criterion_reviews; DROP TABLE task_results;
+    db.exec(`DROP TABLE space_search; DROP TABLE space_search_short; DROP TABLE space_origins;
+      DROP TABLE space_versions; DROP TABLE space_items; DROP TABLE space_backfill; DROP TABLE space_media_cleanup;
+      DROP TABLE task_signoffs; DROP TABLE task_bound_criterion_reviews; DROP TABLE task_results;
       ALTER TABLE task_runs DROP COLUMN instruction_sequence_at_start;
       ALTER TABLE task_contracts DROP COLUMN brief; ALTER TABLE task_contracts DROP COLUMN result_policy`);
     setSchemaVersion(db, 278);

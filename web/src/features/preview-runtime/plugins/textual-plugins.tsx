@@ -73,6 +73,18 @@ function LineNumberedTextPreview({ text, targetLine }: { text: string; targetLin
   );
 }
 
+function MarkdownDocumentPreview({ text, targetLine }: { text: string; targetLine?: number | null }) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!targetLine || !host.current) return;
+    const source = text.split(/\r?\n/, targetLine);
+    if (!/^#{1,6}\s/.test(source.at(-1) ?? '')) return;
+    const index = source.filter(line => /^#{1,6}\s/.test(line)).length - 1;
+    host.current.querySelectorAll('h1,h2,h3,h4,h5,h6')[index]?.scrollIntoView({ block: 'nearest' });
+  }, [targetLine, text]);
+  return <div ref={host} className="min-h-0 flex-1 overflow-y-auto px-4 py-3"><MarkdownView content={text} /></div>;
+}
+
 function renderTextLike(props: PreviewRuntimeRenderProps, mode: 'text' | 'markdown' | 'code' | 'html') {
   const text = props.textContent ?? '';
   const isWorkspace = props.descriptor.context === 'workspace';
@@ -96,11 +108,7 @@ function renderTextLike(props: PreviewRuntimeRenderProps, mode: 'text' | 'markdo
   }
 
   if (mode === 'markdown') {
-    return (
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        <MarkdownView content={text} />
-      </div>
-    );
+    return <MarkdownDocumentPreview text={text} targetLine={props.targetLine} />;
   }
 
   if (mode === 'html') {

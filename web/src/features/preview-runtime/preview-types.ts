@@ -83,6 +83,9 @@ export type PreviewRuntimeRenderProps = PreviewLoadedSource & {
   language: StoredLanguage;
   resolvedTheme?: 'light' | 'dark';
   targetLine?: number | null;
+  targetSlide?: number;
+  targetSheet?: string;
+  targetParagraph?: number;
   workspaceEditing?: PreviewWorkspaceEditing;
   showExtractedText?: boolean;
   extractedText?: string | null;

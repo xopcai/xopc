@@ -1,3 +1,4 @@
+import { SpaceGeneratedMediaLink } from '@/features/space/space-artifact-link';
 import type { MusicGenerationJob, MusicGenerationSession, MusicJobErrorCode } from '@xopcai/gateway-contract';
 import { Ellipsis, Music2 } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
@@ -130,6 +131,7 @@ function MusicJobCard({ job, audioUrl, language }: { job: MusicGenerationJob; au
       </Button>
     </div>
     {message && <p className={failed ? 'text-xs text-danger' : 'text-xs text-fg-muted'}>{message}</p>}
+    {completed && <SpaceGeneratedMediaLink mediaId={`music-${job.id}.mp3`} title={job.title} zh={language === 'zh'} />}
     {completed && <MusicPlayer key={audioUrl} src={audioUrl} title={job.title} durationMs={job.durationMs}
       lyrics={job.mode === 'song' ? job.lyrics : null} lyricsOpen={openPanel === 'lyrics'}
       onToggleLyrics={() => togglePanel('lyrics')} language={language} />}
