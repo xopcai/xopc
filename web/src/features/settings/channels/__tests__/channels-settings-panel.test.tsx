@@ -92,6 +92,13 @@ async function openPanel() {
   ));
 }
 
+const connectorIconByChannel: Record<string, string> = {
+  dingtalk: '/connector-icons/dingtalk-mark.svg',
+  discord: '/connector-icons/discord.svg',
+  slack: '/connector-icons/slack.svg',
+  wecom: '/connector-icons/wecom.svg',
+};
+
 const flows = [
   ...cases.map((entry) => ({ ...entry, manual: entry.fields.length > 0 })),
   ...cases.filter((entry) => entry.qr && entry.fields.length).map((entry) => ({ ...entry, manual: false })),
@@ -163,7 +170,19 @@ it.each(flows)('$id completes quick setup (manual: $manual), then stops and resu
 
   await openPanel();
   expect(container.querySelector('[role="switch"]')).toBeNull();
-  await act(async () => button(container, qr ? ch.scanToConnect : ch.connect).click());
+  if (connectorIconByChannel[id]) {
+    expect(container.querySelector('article img')?.getAttribute('src')).toBe(connectorIconByChannel[id]);
+  }
+  const cardAction = (label: string) => button(container, `${id} · ${label}`);
+  const settingsLabel = ch.channelSettingsLabel.replace('{{channel}}', id);
+  const connect = cardAction(qr ? ch.scanToConnect : ch.connect);
+  expect(connect.textContent).toBe('');
+  expect(container.textContent).toContain(ch.pendingSetup);
+  await act(async () => button(container, settingsLabel).click());
+  expect(dialog().textContent).toContain(ch.messageHandling);
+  expect(actions).not.toHaveBeenCalled();
+  await act(async () => button(dialog(), ch.close).click());
+  await act(async () => cardAction(qr ? ch.scanToConnect : ch.connect).click());
   expect(actions).toHaveBeenCalledTimes(1);
   expect(actions.mock.calls[0][0]).toBe(start);
   expect(dialog().textContent).not.toContain(ch.messageHandling);
@@ -203,16 +222,18 @@ it.each(flows)('$id completes quick setup (manual: $manual), then stops and resu
     expect(dialog().textContent).toContain(ch.setupSaved);
   }
 
-  const settingsLabel = ch.channelSettingsLabel.replace('{{channel}}', id);
   await act(async () => button(dialog(), settingsLabel).click());
   expect(dialog().textContent).toContain(ch.messageHandling);
   await act(async () => button(dialog(), ch.toggleChannel.replace('{{channel}}', id)).click());
   expect(update).toHaveBeenLastCalledWith({ channels: { [id]: { enabled: false } } });
   await act(async () => button(dialog(), ch.close).click());
   const actionCount = actions.mock.calls.length;
-  await act(async () => button(container, ch.enableChannel).click());
+  expect(container.textContent).toContain(ch.connectionDisabled);
+  await act(async () => cardAction(ch.enableChannel).click());
   expect(update).toHaveBeenLastCalledWith({ channels: { [id]: { enabled: true } } });
   expect(actions).toHaveBeenCalledTimes(actionCount);
   expect(document.querySelector('[role="dialog"]')).toBeNull();
-  expect(button(container, ch.testMessage).disabled).toBe(false);
+  expect(container.textContent).toContain(ch.connected);
+  await act(async () => cardAction(ch.testMessage).click());
+  expect(dialog().textContent).toContain(ch.testMessageHint);
 });

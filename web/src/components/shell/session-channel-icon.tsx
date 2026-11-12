@@ -5,10 +5,14 @@ import { cn } from '@/lib/cn';
 
 const BRAND_IMG_BY_CHANNEL: Record<string, string> = {
   // Static assets in `web/public` (served as `/…` in Vite + gateway static root).
+  dingtalk: '/connector-icons/dingtalk-mark.svg',
+  discord: '/connector-icons/discord.svg',
   feishu: '/channel-icons/feishu.svg',
   lark: '/channel-icons/lark.svg',
+  slack: '/connector-icons/slack.svg',
   telegram: '/channel-icons/telegram.svg',
   wechat: '/channel-icons/wechat.svg',
+  wecom: '/connector-icons/wecom.svg',
   weixin: '/channel-icons/weixin.svg',
 };
 
@@ -30,14 +34,14 @@ export function SessionChannelIcon({
   const TaskIcon = identity.purpose === 'chat' ? undefined : taskIcon[identity.purpose];
   if (TaskIcon) return <TaskIcon className={cn('shrink-0', className)} strokeWidth={1.75} aria-hidden />;
   const key = sourceChannel.trim().toLowerCase();
-  const brandSrc = BRAND_IMG_BY_CHANNEL[key];
-  if (brandSrc && ['telegram', 'wechat', 'feishu'].includes(identity.source)) {
+  const brandSrc = Object.hasOwn(BRAND_IMG_BY_CHANNEL, key) ? BRAND_IMG_BY_CHANNEL[key] : undefined;
+  if (brandSrc && ['telegram', 'wechat', 'feishu', 'other'].includes(identity.source)) {
     return (
       <img
         src={brandSrc}
         alt=""
         draggable={false}
-        className={cn('shrink-0', className)}
+        className={cn('shrink-0 object-contain', className)}
         aria-hidden
       />
     );

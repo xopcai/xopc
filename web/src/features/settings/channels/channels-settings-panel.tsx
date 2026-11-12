@@ -2,7 +2,7 @@ import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { TelegramSetupGuide } from './telegram-setup-guide';
 import { channelDocsUrl } from '@/navigation';
 import { AlertTriangle, CircleAlert, CircleCheck, ExternalLink, Loader2, RotateCcw, Settings, Settings2 } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -116,8 +116,7 @@ function runtimeStatusClass(runtime: ChannelRuntimeState): string {
   if (runtime === 'running') return 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300';
   if (runtime === 'stopped') return 'bg-red-500/10 text-red-700 dark:text-red-300';
   if (runtime === 'checking') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  if (runtime === 'disabled') return 'bg-surface-hover text-fg-muted';
-  return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  return 'bg-surface-hover text-fg-muted';
 }
 
 function getBasicConfigPaths(entry: ChannelCatalogEntry | undefined): string[] {
@@ -311,39 +310,52 @@ function ChannelHubCard({
   onToggle: () => void;
   onRestart: () => void;
 }) {
+  const statusId = useId();
   const action = choosePrimaryChannelAction(entry);
-  const label = restarting ? ch.restartingChannel
-    : runtime === 'disabled' ? ch.enableChannel
+  const label = runtime === 'disabled' ? ch.enableChannel
     : runtime === 'stopped' ? ch.restartChannel
-    : runtime === 'running' || runtime === 'checking' ? ch.testMessage
+    : runtime === 'running' ? ch.testMessage
     : action?.[1].result === 'qr' ? ch.scanToConnect
     : ch.connect;
+  const pending = busy || restarting || runtime === 'checking';
+  const status = restarting ? ch.restartingChannel
+    : busy ? ch.enablingChannel
+    : runtime === 'needs_setup' ? ch.pendingSetup
+    : runtime === 'running' ? ch.connected
+    : runtimeStatusLabel(runtime, ch);
   const settingsLabel = ch.channelSettingsLabel.replace('{{channel}}', entry.label);
 
   return (
-    <article className="flex flex-col gap-4 rounded-xl bg-surface-panel p-4 shadow-surface">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <ChannelIcon entry={entry} />
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-fg">{entry.label}</h2>
-            <span className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium', runtimeStatusClass(runtime))}>
-              {runtime === 'needs_setup' ? ch.notConnected : runtimeStatusLabel(runtime, ch)}
-            </span>
-          </div>
-        </div>
-        <Button type="button" variant="ghost" className="size-11 shrink-0 p-0"
-          aria-label={settingsLabel} title={settingsLabel} onClick={onSettings}
-        >
-          <Settings className="size-4" />
-        </Button>
-      </div>
-      <Button type="button" variant="secondary" className="min-h-11 w-full"
+    <article className={cn(
+      'relative flex items-start justify-between gap-2 rounded-2xl bg-surface-inset p-4 transition-colors dark:bg-surface-overlay',
+      !pending && 'hover:bg-surface-hover dark:hover:bg-surface-hover',
+    )}>
+      <button
+        type="button"
+        className="absolute inset-0 cursor-pointer rounded-2xl focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:cursor-default"
+        aria-label={`${entry.label} · ${label}`}
+        aria-describedby={statusId}
+        title={pending ? undefined : label}
         onClick={runtime === 'disabled' ? onToggle : runtime === 'stopped' ? onRestart : onOpen}
-        disabled={busy || restarting || runtime === 'checking'}
+        disabled={pending}
+      />
+      <div className="flex min-w-0 items-center gap-3">
+        <ChannelIcon entry={entry} />
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-semibold text-fg">{entry.label}</h2>
+          <span id={statusId} className={cn(
+            'mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+            runtimeStatusClass(pending ? 'checking' : runtime),
+          )}>
+            {pending ? <Loader2 aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" /> : null}
+            {status}
+          </span>
+        </div>
+      </div>
+      <Button type="button" variant="ghost" className="relative size-11 shrink-0 p-0"
+        aria-label={settingsLabel} title={settingsLabel} onClick={onSettings}
       >
-        {busy || restarting ? <Loader2 className="size-4 animate-spin" /> : null}
-        {label}
+        <Settings className="size-4" />
       </Button>
     </article>
   );
@@ -719,7 +731,7 @@ export function ChannelsSettingsPanel({
       ) : catalog.error ? (
         <p className="text-sm text-red-600 dark:text-red-400">{String(catalog.error)}</p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-5 md:grid-cols-2 md:gap-6 xl:grid-cols-3">
           {entries.map((entry) => (
             <ChannelHubCard
               key={entry.id}
