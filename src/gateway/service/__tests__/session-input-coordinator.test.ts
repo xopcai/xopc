@@ -273,6 +273,7 @@ describe('SessionInputCoordinator', () => {
   });
 
   it('allows a verified endpoint submission to steer an active run', async () => {
+    ensureSessionRecord(conversationId, '/tmp/workspace', { agentId: 'main' });
     let complete!: (value: { status: string; summary: string }) => void;
     const steer = vi.fn(async () => true);
     const coordinator = new SessionInputCoordinator({
@@ -294,7 +295,11 @@ describe('SessionInputCoordinator', () => {
     });
 
     expect(steered.ok && steered.effectiveDelivery).toBe('steer');
-    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust', coordinator.snapshot(conversationId).activeRunId);
+    const runId = coordinator.snapshot(conversationId).activeRunId;
+    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust', runId,
+      expect.objectContaining({ clientMessageId: 'endpoint-steer' }));
+    appendTranscriptEntry(conversationId, { role: 'user', content: 'adjust', timestamp: Date.now(), turnId: runId,
+      metadata: { clientMessageId: 'endpoint-steer', steered: true } } as Parameters<typeof appendTranscriptEntry>[1]);
     complete({ status: 'ok', summary: 'done' });
     await coordinator.waitForCompletion(conversationId, 'endpoint-steer');
   });
@@ -328,11 +333,13 @@ describe('SessionInputCoordinator', () => {
 
     await coordinator.dispatchAcceptedInput(conversationId, row.id);
 
-    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust accepted command', coordinator.snapshot(conversationId).activeRunId);
+    expect(steer).toHaveBeenCalledWith(conversationId, 'adjust accepted command', coordinator.snapshot(conversationId).activeRunId,
+      expect.objectContaining({ clientMessageId: 'accepted-endpoint-steer' }));
     expect(getSessionInputById(conversationId, row.id)?.effectiveDelivery).toBe('steer');
     expect(getSessionInputById(conversationId, row.id)?.status).toBe('injecting');
     complete({ status: 'ok', summary: 'done' });
-    await coordinator.waitForCompletion(conversationId, 'accepted-endpoint-steer');
+    await expect(coordinator.waitForCompletion(conversationId, 'accepted-endpoint-steer'))
+      .rejects.toThrow('Current reply ended before steer delivery was confirmed');
   });
 
   it.each(['text-and-attachment', 'attachment-only', 'reference-only'])('steers %s into the current run', async kind => {
@@ -360,13 +367,14 @@ describe('SessionInputCoordinator', () => {
     });
 
     expect(queued.ok && queued.effectiveDelivery).toBe('steer');
-    expect(steer).toHaveBeenCalledWith(conversationId, kind === 'reference-only' ? expect.stringContaining('Frozen note') : kind === 'attachment-only' ? '' : 'see image', coordinator.snapshot(conversationId).activeRunId, {
+    expect(steer).toHaveBeenCalledWith(conversationId, kind === 'reference-only' ? expect.stringContaining('Frozen note') : kind === 'attachment-only' ? '' : 'see image', coordinator.snapshot(conversationId).activeRunId, expect.objectContaining({
+      clientMessageId: 'endpoint-rich-steer',
       attachments: kind === 'reference-only' ? undefined : [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
       sourceContexts: kind === 'reference-only' ? [expect.objectContaining({ text: 'Frozen note', version: 'v1' })] : [],
-    });
+    }));
     expect(coordinator.snapshot(conversationId).inputs.map(row => row.status)).toEqual(['running', 'injecting']);
     complete({ status: 'ok', summary: 'done' });
-    await coordinator.waitForCompletion(conversationId, 'endpoint-rich-steer');
+    await coordinator.waitForCompletion(conversationId, 'active');
     expect(execute).toHaveBeenCalledOnce();
   });
 

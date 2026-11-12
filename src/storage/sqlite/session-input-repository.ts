@@ -346,11 +346,12 @@ export function finishSessionInputRun(conversationId: string, runId: string, sta
     if (runtime.active_input_id) db.prepare(`UPDATE session_inputs SET status = ?, error = ?,
       version = version + 1, updated_at_ms = ? WHERE id = ?`)
       .run(status, error ?? null, now, runtime.active_input_id);
-    db.prepare(`UPDATE session_inputs SET status = ?, error = ?, version = version + 1,
+    db.prepare(`UPDATE session_inputs SET
+      status = CASE WHEN ? AND json_extract(origin_json, '$.type') != 'endpoint' THEN 'completed' ELSE 'interrupted' END,
+      error = CASE WHEN ? AND json_extract(origin_json, '$.type') != 'endpoint' THEN NULL ELSE 'Current reply ended before steer delivery was confirmed' END,
+      version = version + 1,
       updated_at_ms = ? WHERE conversation_id = ? AND target_run_id = ? AND status = 'injecting'`)
-      .run(status === 'completed' ? 'completed' : 'interrupted',
-        status === 'completed' ? null : 'Current reply ended before steer delivery was confirmed',
-        now, conversationId, runId);
+      .run(Number(status === 'completed'), Number(status === 'completed'), now, conversationId, runId);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = NULL, active_input_id = NULL,
       revision = revision + 1, updated_at_ms = ?
       WHERE conversation_id = ?`).run(now, conversationId);

@@ -129,7 +129,7 @@ export const MessageList = memo(function MessageList({
   }
 
   const now = Date.now();
-  const lastUserIndex = list.findLastIndex((message) => message.role === 'user');
+  const lastUserIndex = list.findLastIndex((message) => message.role === 'user' && !message.pendingSteer);
   const currentRound = list.slice(lastUserIndex + 1);
   const currentOutcome = currentRound.findLast(message => message.outcome)?.outcome;
   const running = streaming || sending;
@@ -226,7 +226,7 @@ export const MessageList = memo(function MessageList({
           progress={isStreamRow && !recovering ? progress : null}
           reasoningLevel={reasoningLevel}
           messageIndex={index}
-          onDeleteRound={onDeleteRound}
+          onDeleteRound={msg.pendingSteer ? undefined : onDeleteRound}
           onRetryUserMessageRound={onRetryUserMessageRound}
           userMessageCanRetry={Boolean(onRetryUserMessageRound) && isLastUserRow}
           // Streaming is only relevant to the active user round. Passing this
@@ -240,7 +240,7 @@ export const MessageList = memo(function MessageList({
           suppressAssistantActions={hideAssistantActions}
           onEditUserMessage={onEditUserMessage}
           userMessageCanEdit={
-            (!editLatestUserOnly || isLastUserRow)
+            !msg.pendingSteer && (!editLatestUserOnly || isLastUserRow)
             && (!editRequiresTurnId || Boolean(msg.turnId))
             && msg.deliveryStatus !== 'sending'
           }

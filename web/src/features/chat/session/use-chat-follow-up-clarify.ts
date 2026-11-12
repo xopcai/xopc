@@ -4,7 +4,7 @@ import type { ComposerDraft, ComposerMode } from '@/features/chat/composer/compo
 import { readInputControl, rememberInputControl, requestInputControl } from './session-input-control';
 import { submitQuestionBatch } from '../clarification/clarification-submission';
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
-import { readClarificationPresentation } from '@xopcai/gateway-contract';
+import { parseUserTurnDocument, readClarificationPresentation, renderUserTurnDocument } from '@xopcai/gateway-contract';
 import type { AppContextEnvelope } from '@xopcai/gateway-contract';
 import {
   useCallback,
@@ -19,6 +19,7 @@ import { showComposerNotification } from '@/features/chat/composer/composer-noti
 import type { ClarifyPromptState } from '@/features/chat/composer/clarify-prompt';
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
+import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
 import {
   projectVisiblePendingFollowUps,
   type PendingFollowUp,
@@ -81,6 +82,28 @@ export type ChatFollowUpClarifyApi = {
   dismissClarifyAndClearPending: () => void;
   makeOnClarifyRequest: (chatId: string) => (payload: ClarifyPromptState) => void;
 };
+
+function projectPendingSteers(inputs: readonly unknown[]) {
+  return inputs.flatMap(value => {
+    if (!value || typeof value !== 'object') return [];
+    const row = value as Record<string, unknown>;
+    const origin = row.origin as { type?: unknown } | undefined;
+    if (row.status !== 'injecting' || row.effectiveDelivery !== 'steer' || origin?.type !== 'endpoint'
+      || typeof row.clientMessageId !== 'string' || typeof row.content !== 'string') return [];
+    const userTurnDocument = parseUserTurnDocument(row.content);
+    const contextRefs = Array.isArray(row.contextRefs) ? row.contextRefs : [];
+    const titles = new Map<string, string>(contextRefs.flatMap(ref =>
+      typeof ref?.refId === 'string' && typeof ref.title === 'string' ? [[ref.refId, ref.title]] : []));
+    return sessionWireToUiMessages([{
+      role: 'user',
+      content: userTurnDocument ? renderUserTurnDocument(userTurnDocument, refId => titles.get(refId)) : row.content,
+      attachments: row.attachments,
+      metadata: { clientMessageId: row.clientMessageId, steered: true, sourceContexts: contextRefs, userTurnDocument },
+      timestamp: row.createdAtMs,
+      turnId: row.targetRunId,
+    }]).map(message => ({ ...message, pendingSteer: true }));
+  });
+}
 
 function parseClarification(raw: unknown, expectedConversationId?: string): ClarifyPromptState | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -190,6 +213,16 @@ export function useChatFollowUpClarify(options: {
       activeRunId: state.activeRunId,
       preparation: state.preparation,
     });
+    const steers = projectPendingSteers(state.inputs);
+    const store = useChatSessionStore.getState();
+    if (steers.length || store.sessions[state.conversationId as string]?.messages.some(message => message.pendingSteer)) {
+      const queuedIds = new Set(rows.map(row => row.clientMessageId));
+      store.updateSessionMessages(state.conversationId as string, messages => {
+        const next = messages.filter(message => !message.pendingSteer || !message.clientMessageId || !queuedIds.has(message.clientMessageId));
+        const present = new Set(next.map(message => message.clientMessageId));
+        return [...next, ...steers.filter(message => !present.has(message.clientMessageId))];
+      });
+    }
     revisionRef.current = state.revision;
     setQueueEmpty(!state.activeRunId && state.inputs.length === 0);
     pendingFollowUpsRef.current = rows;

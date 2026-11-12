@@ -6,7 +6,12 @@ import { AgentRunCancelledError } from '../orchestration/run-termination.js';
 import { registerSteeringTranscript, type TranscriptUserMessage } from '../inbound/attachment-pipeline.js';
 import { VOICE_AGENT_INSTRUCTION_TYPE } from '../../session/voice-transcript.js';
 
-export type EmbeddedSteerOptions = { images?: ImageContent[]; transcriptMessage?: TranscriptUserMessage; voiceAgentInstruction?: boolean };
+export type EmbeddedSteerOptions = {
+  images?: ImageContent[];
+  transcriptMessage?: TranscriptUserMessage;
+  voiceAgentInstruction?: boolean;
+  onHandled?: () => void;
+};
 
 export type EmbeddedRunIdentity = {
   conversationId: string;
@@ -119,7 +124,7 @@ export class EmbeddedRunRegistry {
       return true;
     }
     const transcript = options?.transcriptMessage;
-    const unregister = transcript ? registerSteeringTranscript(conversationId, transcript) : undefined;
+    const unregister = transcript ? registerSteeringTranscript(conversationId, transcript, text) : undefined;
     if (transcript && options?.images?.length) entry.steeringImages.set(transcript, options.images);
     const cleanup = () => { unregister?.(); if (transcript) entry.steeringImages.delete(transcript); };
     entry.steeringCleanup.push(cleanup);
@@ -127,7 +132,10 @@ export class EmbeddedRunRegistry {
       const disposition = options?.images?.length
         ? await handle.session.steer(text, options.images)
         : await handle.session.steer(text);
-      if (disposition === 'handled') cleanup();
+      if (disposition === 'handled') {
+        cleanup();
+        options?.onHandled?.();
+      }
     } catch (error) {
       cleanup();
       throw error;

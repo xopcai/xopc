@@ -58,6 +58,7 @@ function userTurnDocumentsEquivalent(a: Message, b: Message): boolean {
 /** True when the server row should replace the last optimistic user bubble from send(). */
 export function shouldReplaceOptimisticUserRow(optimistic: Message, server: Message): boolean {
   if (!isUiUserMessage(optimistic.role) || !isUiUserMessage(server.role)) return false;
+  if (optimistic.clientMessageId || server.clientMessageId) return optimistic.clientMessageId === server.clientMessageId;
   if (optimistic.turnId && server.turnId && optimistic.turnId !== server.turnId) return false;
 
   const optText = extractUserMessagePlainText(optimistic.content).trim();
@@ -91,6 +92,7 @@ export function shouldReplaceOptimisticUserRow(optimistic: Message, server: Mess
 
 export function userMessagesEquivalent(a: Message, b: Message): boolean {
   if (!isUiUserMessage(a.role) || !isUiUserMessage(b.role)) return false;
+  if (a.clientMessageId || b.clientMessageId) return a.clientMessageId === b.clientMessageId;
   if (a.turnId && b.turnId) return a.turnId === b.turnId;
   if (a.timestamp === b.timestamp) return true;
   if (userTurnDocumentsEquivalent(a, b)) return true;

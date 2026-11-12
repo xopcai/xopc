@@ -31,6 +31,7 @@ export interface ClientHistoryMessage {
   metadata?: {
     /** Stable client-generated id used to reconcile optimistic sends exactly. */
     clientMessageId?: string;
+    steered?: true;
     sourceContexts?: Array<{
       refId?: string;
       kind: 'result' | 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'mcp_resource';
@@ -103,12 +104,7 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
   const userTurnDocument = isUserTurnDocument(record.userTurnDocument)
     ? record.userTurnDocument
     : undefined;
-  if (!Array.isArray(rows)) {
-    return clientMessageId || userTurnDocument
-      ? { ...(clientMessageId ? { clientMessageId } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
-      : undefined;
-  }
-  const sourceContexts = rows.flatMap((value): NonNullable<NonNullable<ClientHistoryMessage['metadata']>['sourceContexts']>[number][] => {
+  const sourceContexts = (Array.isArray(rows) ? rows : []).flatMap((value): NonNullable<NonNullable<ClientHistoryMessage['metadata']>['sourceContexts']>[number][] => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
     const row = value as Record<string, unknown>;
     if (
@@ -136,7 +132,11 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
     }];
   });
   return clientMessageId || sourceContexts.length || userTurnDocument
-    ? { ...(clientMessageId ? { clientMessageId } : {}), ...(sourceContexts.length ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
+    ? {
+        ...(clientMessageId ? { clientMessageId, ...(record.steered === true ? { steered: true } : {}) } : {}),
+        ...(sourceContexts.length ? { sourceContexts } : {}),
+        ...(userTurnDocument ? { userTurnDocument } : {}),
+      }
     : undefined;
 }
 
