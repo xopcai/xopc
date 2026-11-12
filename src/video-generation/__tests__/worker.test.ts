@@ -8,8 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
+import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { readVideoArtifact } from '../artifact.js';
-import { beginVideoSubmission, claimVideoJob, enqueueVideoJob, getVideoJob } from '../repository.js';
+import { getVideoDraft, prepareVideoDraft } from '../drafts.js';
+import { beginVideoSubmission, claimVideoJob, enqueueVideoJob, getVideoJob, listVideoJobs } from '../repository.js';
 import { queryWanVideo, submitWanVideo } from '../wan.js';
 import { fetchProviderVideo } from '../providers.js';
 import { querySeedanceVideo, submitSeedanceVideo } from '../seedance.js';
@@ -68,6 +70,34 @@ async function runOneWorkerIteration() {
   worker.start();
   await worker.stop();
 }
+
+describe('conversation video drafts', () => {
+  it('persists the unsubmitted draft and creates a new version from the submitted image', () => {
+    const image = { uri: 'media://inbound/boat.png', name: 'boat.png', mimeType: 'image/png' };
+    const other = { ...image, uri: 'media://inbound/sea.png', name: 'sea.png' };
+    const message = { role: 'user' as const, content: 'Make a video', timestamp: Date.now(), media: [image, other] };
+    appendTranscriptEntry(conversationId, message);
+    setVideoModel(SEEDANCE_VIDEO_MODEL_REF);
+    expect(() => prepareVideoDraft(conversationId, { action: 'create', prompt: 'Make waves' })).toThrow('Multiple images');
+    expect(() => prepareVideoDraft(conversationId, { action: 'create', prompt: 'Make waves', imageUri: 'media://inbound/foreign.png' })).toThrow('unavailable');
+    const original = prepareVideoDraft(conversationId, {
+      action: 'create', prompt: 'Make waves', imageUri: image.uri, duration: 4, resolution: '480P',
+    });
+    expect(original).toMatchObject({ revision: 1, ratio: 'adaptive', imageName: 'boat.png' });
+    expect(listVideoJobs(conversationId)).toEqual([]);
+    closeXopcDatabase();
+    openXopcDatabase({ path: database });
+    expect(getVideoDraft(conversationId, transcriptId)).toEqual(original);
+    expect(getVideoDraft(conversationId, randomUUID())).toBeUndefined();
+    const edited = prepareVideoDraft(conversationId, { action: 'update', prompt: 'Make gentle waves' });
+    expect(edited).toMatchObject({ id: original.id, revision: 2, imageUri: image.uri, duration: 4 });
+    expect(enqueueVideoJob(conversationId, edited, 'confirmed').job?.id).toBe(original.id);
+    const revision = prepareVideoDraft(conversationId, { action: 'revise', prompt: 'Make bigger waves' });
+    expect(revision).toMatchObject({ revision: 1, imageUri: image.uri, duration: 4 });
+    expect(revision.id).not.toBe(original.id);
+    expect(listVideoJobs(conversationId).map(job => job.id)).toEqual([original.id]);
+  });
+});
 
 describe('video generation recovery', () => {
   it('deduplicates a confirmed request and resumes a known provider task after reopening SQLite', async () => {

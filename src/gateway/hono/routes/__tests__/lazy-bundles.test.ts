@@ -7,7 +7,7 @@ import {
 
 describe('lazy route bundles', () => {
   it('maps conversation video jobs and their media without capturing nearby routes', () => {
-    for (const path of ['/api/video-generation/settings', '/api/video-generation/sessions/session/jobs', '/api/video-generation/sessions/session/jobs/job/video']) {
+    for (const path of ['/api/video-generation/settings', '/api/video-generation/sessions/session/jobs', '/api/video-generation/sessions/session/jobs/confirm-draft', '/api/video-generation/sessions/session/jobs/job/video']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('video-generation');
     }
     for (const path of ['/api/media/read', '/api/video-generation/settings/extra', '/api/video-generation/sessions/session/jobs/job', '/api/video-generation/sessions/session/jobs/job/video/extra']) {

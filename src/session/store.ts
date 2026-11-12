@@ -13,6 +13,7 @@ import { promoteCompactionLedger } from '../agent/memory/compaction-promotion.js
 import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
 import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
 import { deleteVideoArtifact } from '../video-generation/artifact.js';
+import { deleteVideoDraft } from '../video-generation/drafts.js';
 import { listVideoJobIds } from '../video-generation/repository.js';
 import { createLogger } from '../utils/logger.js';
 import {
@@ -566,6 +567,7 @@ export class SessionStore {
       const cwd = this.resolveWorkspaceCwd(key);
       const task = resetSessionRecord(key, cwd);
       if (task) {
+        deleteVideoDraft(key);
         this.clearCompactionCheckpoint(key);
         log.info({ key, ...task }, 'Session reset');
       }
@@ -580,6 +582,7 @@ export class SessionStore {
       const videoJobs = listVideoJobIds(key);
       const ok = deleteSessionRecord(key);
       if (ok) {
+        deleteVideoDraft(key);
         await Promise.allSettled(videoJobs.map(deleteVideoArtifact));
         this.clearCompactionCheckpoint(key);
         log.info({ key }, 'Session deleted');

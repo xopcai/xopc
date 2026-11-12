@@ -97,6 +97,7 @@ import { resolveUserContextSessionAccess } from '../../user-context/access-polic
 import type { SessionStore } from '../../session/store.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
+import { createVideoDraftTool } from './video-draft-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { BrowserNotReadyError, checkBrowserReadiness } from '../../browser/index.js';
 import { createBrowserDriver } from '../../browser/drivers/create-driver.js';
@@ -506,7 +507,18 @@ export class AgentToolsFactory {
       getMemoryManager: getMemMgr,
       canAccessMemory: () => currentAccess().knowledge,
     });
-    const optionalTools = [imageTool, imageGenerateTool].filter((t) => t != null) as any[];
+    const webMediaConversation = () => {
+      const id = currentConversationId();
+      const current = this.deps.getCurrentContext();
+      if (!id || (current && (current.conversationId !== id || current.channel !== 'webchat'))) return undefined;
+      const session = isXopcDatabaseOpen() ? getSessionMetadata(id) : null;
+      return session?.sourceChannel === 'webchat' && session.sessionType === 'chat' && !session.customData?.automationSetup
+        ? id : undefined;
+    };
+    const webMediaTools = webMediaConversation()
+      ? [createVideoDraftTool(webMediaConversation)]
+      : [];
+    const optionalTools = [imageTool, imageGenerateTool, ...webMediaTools].filter((t) => t != null) as any[];
 
     const readTool = createReadFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,

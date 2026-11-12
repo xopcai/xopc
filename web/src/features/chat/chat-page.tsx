@@ -15,6 +15,7 @@ import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkillDiscoveryWelcome } from '@/features/skills/skill-discovery-welcome';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
+import type { ComposerDraftSeed } from '@/features/chat/composer/use-composer-editor';
 import { PageContextPreview } from '@/features/chat/context/page-context-preview';
 import { pageContextDrafts, pageContextDraftKey } from '@/features/chat/context/page-context-draft';
 import { usePersonalUnread } from '@/features/personal-agent/use-personal-unread';
@@ -36,7 +37,7 @@ import {
   conversationPlanFromTaskPlanState,
   extractActiveTurnConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
-import { ChatVideoLauncher, useChatVideoGeneration } from '@/features/chat/video/chat-video-generation';
+import { isVideoDraftConfirmation, useChatVideoGeneration } from '@/features/chat/video/chat-video-generation';
 import { MessageList, type ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import { chatScrollBehavior, chatTimelineAnchorIndex } from '@/features/chat/scroll/chat-scroll-geometry';
 import { usePersonalSendTransition } from '@/features/chat/messages/use-personal-send-transition';
@@ -128,7 +129,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
 
   const welcomeDraftSeq = useRef(0);
   const pendingSourceNoteSaveRef = useRef<PendingSourceNoteSave | null>(null);
-  const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
+  const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<ComposerDraftSeed | null>(null);
   const [injectedDraftSeed, setInjectedDraftSeed] = useState<{ id: number; text: string } | null>(null);
   useEffect(() => { setInjectedDraftSeed(draftSeed ?? null); }, [draftSeed]);
   const [personalCalibrationDismissed, setPersonalCalibrationDismissed] = useState(() =>
@@ -205,9 +206,18 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     if (chatConversationId && chatRunUnread) markChatRunViewed(chatConversationId);
   }, [chatConversationId, chatRunUnread, markChatRunViewed]);
   const { data: sessionMetadata } = useChatSessionMetadata(chatConversationId);
-  const videoConversationId = !embedded && !taskId && !agentSetup && !automationSetupRequested ? chatConversationId : null;
-  const videoGeneration = useChatVideoGeneration(videoConversationId, language);
   const automationSetup = automationSetupRequested || Boolean(sessionMetadata?.identity?.customData?.automationSetup);
+  const videoAvailable = (!embedded || personal) && !taskId && !agentSetup && !automationSetup;
+  const videoConversationId = videoAvailable ? chatConversationId : null;
+  const adjustVideoDraft = useCallback(() => {
+    welcomeDraftSeq.current += 1;
+    setWelcomeDraftSeed({ id: welcomeDraftSeq.current, preserveDraft: true,
+      text: language === 'zh' ? '把视频草稿改成' : 'Adjust the video draft to ' });
+  }, [language]);
+  const videoGeneration = useChatVideoGeneration(videoConversationId, language, {
+    chatBusy: stream.streaming || stream.sending, readOnly, onAdjust: adjustVideoDraft,
+  });
+  const { draft: pendingVideoDraft, confirmDraft: confirmVideoDraft } = videoGeneration;
   const automationSetupBound = Boolean((sessionMetadata?.identity?.customData?.automationSetup as { automationId?: string } | undefined)?.automationId);
   const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
     if (!chatConversationId) return;
@@ -668,6 +678,9 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
             sendOptions?.submittedAt,
           );
         }
+        if (pendingVideoDraft && !attachments?.length && !contextRefs?.length && !pageContextDraft && isVideoDraftConfirmation(text)) {
+          return confirmVideoDraft();
+        }
         let dispatched = false;
         const acceptance = stream.sendMessage(
           text,
@@ -692,7 +705,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
       const scope = sendScope.current;
       return beforeSend().then(ready => ready && scope === sendScope.current ? dispatch() : false);
     },
-    [beforeSend, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending, reserveReplySpace],
+    [beforeSend, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending, reserveReplySpace, pendingVideoDraft, confirmVideoDraft],
   );
 
   const projectComposer = useProjectSessionComposer({
@@ -1353,14 +1366,22 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
               ) : null}
               <ReadAloudDock />
               <DeviceInteractionPanel conversationId={session.conversationId} active={stream.streaming || stream.sending} />
-              {videoConversationId && !readOnly && !showConversationLoading && session.sessionManager && (
-                <ChatVideoLauncher key={videoConversationId} conversationId={videoConversationId} language={language}
-                  messages={msgSlice.items} data={videoGeneration.data}
-                  materialize={async () => { await session.sessionManager?.materialize(videoConversationId, 'session_resources'); }}
-                  onSubmitted={() => { void videoGeneration.mutate(); }} />
-              )}
               <ChatComposer
                 personal={personal}
+                addActions={videoAvailable && !readOnly ? {
+                  label: language === 'zh' ? '添加附件或操作' : 'Add attachments or actions',
+                  items: [
+                    {
+                      kind: 'video',
+                      label: language === 'zh' ? '生成视频' : 'Generate video',
+                      onSelect: () => {
+                        welcomeDraftSeq.current += 1;
+                        setWelcomeDraftSeed({ id: welcomeDraftSeq.current, preserveDraft: true,
+                          text: language === 'zh' ? '帮我生成一段视频：' : 'Generate a video: ' });
+                      },
+                    },
+                  ],
+                } : undefined}
                 nextTurnSuggestionsEnabled={!stream.streaming}
                 onPersonalSendDispatched={personal ? onPersonalSendDispatched : undefined}
                 placeholder={personal

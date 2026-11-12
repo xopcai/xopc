@@ -1,6 +1,7 @@
 import { AudioLines, Plus, Send, Square } from 'lucide-react';
 import { memo, type HTMLAttributes } from 'react';
 
+import { ComposerAddMenu, type ComposerAddActions } from './composer-add-menu';
 import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
 import { ComposerVoiceInputButton } from '@/features/chat/composer/composer-voice-input-button';
 import { interpolate } from '@/features/chat/composer/composer.types';
@@ -24,6 +25,7 @@ export interface ComposerToolbarProps {
   attachmentCount: number;
   maxAttachments: number;
   onPickFiles: () => void;
+  addActions?: ComposerAddActions;
 
   thinkingLevel: string;
   onThinkingChange: (level: string) => void | Promise<void>;
@@ -50,13 +52,14 @@ export function ComposerAttachButton({
   maxAttachments,
   chat: m,
   onPickFiles,
-}: Pick<ComposerToolbarProps, 'disabled' | 'runBusy' | 'attachmentCount' | 'maxAttachments' | 'chat' | 'onPickFiles'>) {
+  addActions,
+}: Pick<ComposerToolbarProps, 'disabled' | 'runBusy' | 'attachmentCount' | 'maxAttachments' | 'chat' | 'onPickFiles' | 'addActions'>) {
   const attachmentsFull = attachmentCount >= maxAttachments;
   const title = attachmentsFull
     ? interpolate(m.maxAttachmentsReached, { max: maxAttachments })
     : `${m.attachFile} (${attachmentCount}/${maxAttachments})`;
 
-  return (
+  const trigger = (
     <button
       type="button"
       className={cn(
@@ -66,14 +69,16 @@ export function ComposerAttachButton({
         interaction.focusRingPanel,
         'disabled:cursor-not-allowed disabled:opacity-50',
       )}
-      disabled={attachmentsFull || disabled || runBusy}
-      title={title}
-      aria-label={title}
-      onClick={onPickFiles}
+      disabled={(!addActions && attachmentsFull) || disabled || runBusy}
+      title={addActions?.label ?? title}
+      aria-label={addActions?.label ?? title}
+      onClick={addActions ? undefined : onPickFiles}
     >
       <Plus className="size-4" />
     </button>
   );
+  return addActions ? <ComposerAddMenu trigger={trigger} fileLabel={m.attachFile} filesDisabled={attachmentsFull}
+    onPickFiles={onPickFiles} actions={addActions} /> : trigger;
 }
 
 export function ComposerRunControl({
@@ -164,6 +169,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   attachmentCount,
   maxAttachments,
   onPickFiles,
+  addActions,
   thinkingLevel,
   onThinkingChange,
   voiceActive,
@@ -188,6 +194,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
         maxAttachments={maxAttachments}
         chat={m}
         onPickFiles={onPickFiles}
+        addActions={addActions}
       />
 
       <div className="ml-auto flex min-w-0 items-center gap-2">

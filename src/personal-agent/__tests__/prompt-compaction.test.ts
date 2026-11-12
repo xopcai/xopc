@@ -22,6 +22,7 @@ describe('personal tool instruction projection', () => {
     const full = personalInstructions();
     const all = ['personal_task','personal_result','personal_request','personal_capability','personal_preference','personal_attention','personal_memory'];
     expect(projectPersonalInstructions(full, all)).toBe(full);
+    expect(projectPersonalInstructions(full, [...all, 'video_draft'])).toContain('use video_draft directly');
     const custom = 'Quoted policy: personal_task(command="submit"). Keep this exact text.';
     expect(projectPersonalInstructions(custom, [])).toBe(custom);
     const appended = full + '\nUser exception: ' + full.split('\n')[1] + ' only after asking me.';

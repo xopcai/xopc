@@ -5,13 +5,21 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
-import { useChatVideoGeneration } from '../chat-video-generation';
+import { isVideoDraftConfirmation, useChatVideoGeneration } from '../chat-video-generation';
 
 const cache = vi.hoisted(() => ({
   data: undefined as VideoGenerationSession | undefined,
   mutate: vi.fn(),
 }));
 vi.mock('swr', () => ({ default: () => cache }));
+
+it('requires an explicit confirmation message before submitting a draft', () => {
+  expect(isVideoDraftConfirmation(' 就按这个生成。 ')).toBe(true);
+  expect(isVideoDraftConfirmation('Confirm video generation!')).toBe(true);
+  expect(isVideoDraftConfirmation('可以')).toBe(false);
+  expect(isVideoDraftConfirmation('就按这个生成，改成竖屏')).toBe(false);
+  expect(isVideoDraftConfirmation('不要确认生成视频')).toBe(false);
+});
 
 it('starts polling when the first job appears and stops when it completes', () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);

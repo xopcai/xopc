@@ -1,24 +1,28 @@
 import { Mic, Plus, Square, ArrowUp } from 'lucide-react';
 
+import { ComposerAddMenu, type ComposerAddActions } from './composer-add-menu';
 import { cn } from '@/lib/cn';
 import type { ChatMessages } from '@/i18n/messages';
 import { interpolate } from '@/features/chat/composer/composer.types';
 
 const controlClass = 'flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:size-10';
 
-export function PersonalComposerAttachButton({ disabled, attachmentCount, maxAttachments, chat, onPickFiles }: {
+export function PersonalComposerAttachButton({ disabled, attachmentCount, maxAttachments, chat, onPickFiles, addActions }: {
   disabled: boolean;
   attachmentCount: number;
   maxAttachments: number;
   chat: ChatMessages;
   onPickFiles: () => void;
+  addActions?: ComposerAddActions;
 }) {
   const full = attachmentCount >= maxAttachments;
   const label = full ? interpolate(chat.maxAttachmentsReached, { max: maxAttachments }) : chat.attachFile;
-  return <button type="button" className={controlClass} disabled={disabled || full}
-    aria-label={label} title={label} onClick={onPickFiles}>
+  const trigger = <button type="button" className={controlClass} disabled={disabled || (!addActions && full)}
+    aria-label={addActions?.label ?? label} title={addActions?.label ?? label} onClick={addActions ? undefined : onPickFiles}>
     <Plus className="size-5" aria-hidden />
   </button>;
+  return addActions ? <ComposerAddMenu trigger={trigger} fileLabel={chat.attachFile} filesDisabled={full}
+    onPickFiles={onPickFiles} actions={addActions} /> : trigger;
 }
 
 export function PersonalComposerActions({ disabled, voiceActive, runBusy, hasDraft, chat, onStartVoiceInput,
