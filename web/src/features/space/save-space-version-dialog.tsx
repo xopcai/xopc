@@ -67,12 +67,12 @@ export function SaveSpaceVersionDialog({ sourceVersionId, title, zh, onSaved }: 
         <header className="space-y-3 px-5 pt-5">
           <Dialog.Title className="text-base font-semibold text-fg">{label}</Dialog.Title>
           <Dialog.Description className="truncate text-sm text-fg-muted" title={title}>
-            {zh ? `为「${title}」选择原成果` : `Choose the original result for “${title}”`}
+            {zh ? `为「${title}」选择原资料` : `Choose the original result for “${title}”`}
           </Dialog.Description>
           <label className="flex min-h-10 items-center gap-2 rounded-lg border border-edge-subtle bg-surface-inset px-3 focus-within:ring-2 focus-within:ring-accent">
             <Search className="size-4 shrink-0 text-fg-muted" aria-hidden />
             <input value={query} maxLength={160} onChange={event => { setQuery(event.target.value); setSelectedId(undefined); }}
-              aria-label={zh ? '搜索原成果' : 'Search original results'} placeholder={zh ? '搜索原成果' : 'Search original results'}
+              aria-label={zh ? '搜索原资料' : 'Search original results'} placeholder={zh ? '搜索原资料' : 'Search original results'}
               className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none" />
           </label>
         </header>
@@ -84,7 +84,7 @@ export function SaveSpaceVersionDialog({ sourceVersionId, title, zh, onSaved }: 
             {zh ? '加载失败，重试' : 'Could not load. Retry'}
           </button> : null}
           {!list.isLoading && !list.error && !items.length ? <p className="py-5 text-center text-sm text-fg-muted">
-            {zh ? '没有可选的成果' : 'No matching results'}
+            {zh ? '没有可选的资料' : 'No matching results'}
           </p> : null}
           <ul className="space-y-1">
             {items.map(item => <li key={item.id}>
@@ -105,7 +105,7 @@ export function SaveSpaceVersionDialog({ sourceVersionId, title, zh, onSaved }: 
           </button> : null}
         </div>
         <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge-subtle px-5 py-3">
-          {error ? <p role="alert" className="flex-1 text-xs text-danger">{zh ? '保存失败，请重新选择成果。' : 'Could not save. Choose the result again.'}</p> : null}
+          {error ? <p role="alert" className="flex-1 text-xs text-danger">{zh ? '保存失败，请重新选择资料。' : 'Could not save. Choose the result again.'}</p> : null}
           <Dialog.Close asChild><Button variant="secondary" disabled={busy}>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close>
           <Button variant="primary" disabled={!selected || busy} onClick={() => { if (selected) void save(selected); }}>
             {busy ? (zh ? '正在保存' : 'Saving') : (zh ? '保存版本' : 'Save version')}

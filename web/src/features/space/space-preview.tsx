@@ -62,7 +62,7 @@ export function SpacePreview({ itemId, version, hit, download }: {
       setLoaded({ loading: false, textContent, binaryBuffer, rawUrl: url, loadError: null });
     }).catch(() => {
       if (request.signal.aborted) return;
-      setLoaded({ loading: false, textContent: null, binaryBuffer: null, loadError: language === 'zh' ? '成果暂不可读' : 'Content unavailable' });
+      setLoaded({ loading: false, textContent: null, binaryBuffer: null, loadError: language === 'zh' ? '资料暂不可读' : 'Content unavailable' });
     });
     return () => {
       request.abort();

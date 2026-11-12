@@ -26,7 +26,7 @@ function SpaceLookupLink({ path, zh, title, readonly }: { path: string | null; z
   if (data.versionId) params.set('version', data.versionId);
   return <span className="inline-flex flex-wrap items-center gap-1"><Link to={`/space?${params}`} title={title}
     className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg">
-    <Archive className="size-3.5" aria-hidden />{zh ? '在 Space 中查看' : 'View in Space'}
+    <Archive className="size-3.5" aria-hidden />{zh ? '在资料库中查看' : 'View in Space'}
   </Link>
     {!readonly && data.canSaveAsVersion && data.versionId && title ? <SaveSpaceVersionDialog sourceVersionId={data.versionId}
       title={title} zh={zh} onSaved={result => {

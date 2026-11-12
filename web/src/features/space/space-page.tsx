@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover';
 import { ArrowDownToLine, ArrowLeft, Archive, Ellipsis, File, FileImage, FileText, Film, Inbox, Music2, Presentation, Search, Sheet, Star, Trash2, X } from 'lucide-react';
-import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { Link, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 import type { SpaceItem, SpaceList, SpaceOrigin } from '@xopcai/gateway-contract';
@@ -14,6 +14,7 @@ import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { getSpaceDetail, getSpaceList, spaceContent, spaceItemPath, spacePath } from './space-api';
 import { SpacePreview } from './space-preview';
@@ -37,9 +38,49 @@ function MarkedText({ text, query }: { text: string; query: string }) {
   return <>{index > 40 ? `…${text.slice(index - 40, index)}` : text.slice(0, index)}<mark className="rounded-sm bg-accent-soft text-accent-fg">{text.slice(index, end)}</mark>{text.slice(end, end + 100)}{end + 100 < text.length ? '…' : ''}</>;
 }
 
+function SpaceHeaderSearch({ zh, previewOpen }: { zh: boolean; previewOpen: boolean }) {
+  const [params, setParams] = useSearchParams();
+  const navigationType = useNavigationType();
+  const input = useRef<HTMLInputElement>(null);
+  const q = (params.get('q') ?? '').slice(0, 160);
+  const label = zh ? '搜索资料' : 'Search results';
+
+  useLayoutEffect(() => {
+    const field = input.current;
+    if (field && (document.activeElement !== field || navigationType === 'POP')) field.value = q;
+  }, [navigationType, q]);
+
+  function changeQuery(value: string) {
+    setParams(current => {
+      const next = new URLSearchParams(current);
+      if (value) next.set('q', value);
+      else next.delete('q');
+      return next;
+    }, { replace: true });
+  }
+
+  return (
+    <div role="search" className={cn('h-9 w-[clamp(7rem,30vw,18rem)] items-center gap-2 rounded-lg border border-edge-subtle bg-surface-inset px-2.5 focus-within:ring-2 focus-within:ring-accent', previewOpen ? 'hidden md:flex' : 'flex')}>
+      <Search className="size-4 shrink-0 text-fg-muted" aria-hidden />
+      <input ref={input} defaultValue={q} maxLength={160} onChange={event => changeQuery(event.target.value)}
+        aria-label={label} placeholder={label} className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none" />
+      {q ? <button type="button" className={cn(iconButton, 'size-6')} onClick={() => {
+        changeQuery('');
+        if (input.current) {
+          input.current.value = '';
+          input.current.focus();
+        }
+      }}
+        aria-label={zh ? '清除搜索' : 'Clear search'}><X className="size-4" /></button> : null}
+    </div>
+  );
+}
+
 export function SpacePage() {
   const language = useLocaleStore(state => state.language);
   const zh = language === 'zh';
+  const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
+  const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const selectedVersion = params.get('version');
@@ -56,7 +97,7 @@ export function SpacePage() {
   const kind = params.get('kind');
   const scope = params.get('taskId') ? 'taskId' : params.get('projectId') ? 'projectId' : undefined;
   const views = [
-    { key: 'all', label: zh ? '全部成果' : 'All results', Icon: Inbox },
+    { key: 'all', label: zh ? '全部资料' : 'All results', Icon: Inbox },
     { key: 'favorites', label: zh ? '收藏' : 'Favorites', Icon: Star },
     { key: 'trash', label: zh ? '回收站' : 'Trash', Icon: Trash2 },
   ];
@@ -67,6 +108,20 @@ export function SpacePage() {
     ['archive', zh ? '压缩包' : 'Archives'], ['file', zh ? '文件' : 'Files'],
   ];
   const title = views.find(option => option.key === view)?.label;
+  const previewOpen = Boolean(selected);
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: null,
+      main: (
+        <h1 className="flex min-w-0 items-baseline gap-2 text-base font-semibold tracking-tight text-fg">
+          <span className="shrink-0">{zh ? '资料库' : 'Space'}</span>
+          {view !== 'all' ? <span className="truncate text-xs font-normal text-fg-muted">{title}</span> : null}
+        </h1>
+      ),
+      end: <SpaceHeaderSearch zh={zh} previewOpen={previewOpen} />,
+    });
+    return clearPageHeader;
+  }, [clearPageHeader, previewOpen, setPageHeader, title, view, zh]);
   const list = useSWRInfinite<SpaceList>((index, previous) => {
     if (index && !previous?.nextCursor) return null;
     const queryParams = new URLSearchParams({ view, q: query });
@@ -84,7 +139,7 @@ export function SpacePage() {
     ?? item?.origins.find(row => row.available) ?? item?.origin;
   const source = sourceHref(origin);
 
-  function setQueryValues(values: Record<string, string | null>, replace = false) {
+  function setQueryValues(values: Record<string, string | null>) {
     setParams(current => {
       const next = new URLSearchParams(current);
       for (const [key, value] of Object.entries(values)) {
@@ -92,7 +147,7 @@ export function SpacePage() {
         else next.delete(key);
       }
       return next;
-    }, { replace });
+    });
   }
 
   function select(id: string | null) {
@@ -203,10 +258,9 @@ export function SpacePage() {
     : row.origin?.kind === 'automation' ? (zh ? '定时任务' : 'Automation') : (zh ? '对话' : 'Chat'));
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <nav aria-label="Space" className={cn('flex shrink-0 items-center gap-1 border-b border-edge-subtle bg-surface-rail p-2 md:w-40 md:flex-col md:items-stretch md:border-b-0 md:p-3', selected && 'hidden md:flex')}>
-          <span className="px-2 py-1 text-sm font-semibold md:mb-2">Space</span>
+        <nav aria-label={zh ? '资料库' : 'Space'} className={cn('flex shrink-0 items-center gap-1 border-b border-edge-subtle bg-surface-inset p-2 md:my-4 md:ms-4 md:w-40 md:flex-col md:items-stretch md:rounded-xl md:border-b-0 md:p-3', selected && 'hidden md:flex')}>
           {views.map(({ key, label, Icon }) => <button key={key} type="button" aria-pressed={view === key}
             onClick={() => { setUndo(undefined); setActionError(''); setQueryValues({ view: key === 'all' ? null : key, item: null, version: null, q: null, kind: null }); }}
             className={cn('flex items-center gap-2 rounded-lg px-2 py-2 text-start text-sm', key === 'trash' && 'md:mt-auto',
@@ -215,15 +269,7 @@ export function SpacePage() {
           </button>)}
         </nav>
         <section className={cn('min-w-0 flex-1 flex-col overflow-y-auto px-4 py-5 md:px-5', selected ? 'hidden md:flex' : 'flex')} aria-label={title}>
-          <h1 className="mb-4 text-2xl font-semibold tracking-tight text-fg">{title}</h1>
-          <div className="flex min-h-10 items-center gap-2 rounded-xl border border-edge-subtle bg-surface-inset px-3 focus-within:ring-2 focus-within:ring-accent">
-            <Search className="size-4 shrink-0 text-fg-muted" aria-hidden />
-            <input value={q} maxLength={160} onChange={event => setQueryValues({ q: event.target.value }, true)}
-              aria-label={zh ? '搜索成果' : 'Search results'} placeholder={zh ? '搜索成果' : 'Search results'}
-              className="min-w-0 flex-1 bg-transparent py-2 text-sm text-fg outline-none" />
-            {q ? <button type="button" className={iconButton} onClick={() => setQueryValues({ q: null }, true)} aria-label={zh ? '清除搜索' : 'Clear search'}><X className="size-4" /></button> : null}
-          </div>
-          <div className="my-3 flex flex-wrap items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <Select value={kind ?? 'all'} onChange={event => setQueryValues({ kind: event.target.value === 'all' ? null : event.target.value })}>
               <SelectOption value="all">{zh ? '全部类型' : 'All types'}</SelectOption>
               {types.map(([value, label]) => <SelectOption key={value} value={value}>{label}</SelectOption>)}
@@ -236,7 +282,7 @@ export function SpacePage() {
           {list.isLoading ? <div className="space-y-2" aria-busy="true">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-14 w-full rounded-xl" />)}</div> : null}
           {list.error ? <button className="rounded-lg py-3 text-sm text-accent-fg" onClick={() => void list.mutate()}>{zh ? '加载失败，重试' : 'Could not load. Retry'}</button> : null}
           {!list.isLoading && !list.error && items.length === 0 ? <p className="py-10 text-center text-sm text-fg-muted">
-            {q ? (zh ? '没有匹配的成果' : 'No matching results') : view === 'favorites' ? (zh ? '暂无收藏' : 'No favorites') : view === 'trash' ? (zh ? '回收站为空' : 'Trash is empty') : (zh ? '暂无成果' : 'No results yet')}
+            {q ? (zh ? '没有匹配的资料' : 'No matching results') : view === 'favorites' ? (zh ? '暂无收藏' : 'No favorites') : view === 'trash' ? (zh ? '回收站为空' : 'Trash is empty') : (zh ? '暂无资料' : 'No results yet')}
           </p> : null}
           <ul className="space-y-0.5">
             {items.map((row, index) => {
@@ -261,7 +307,7 @@ export function SpacePage() {
             {zh ? '加载更多' : 'Load more'}
           </button> : null}
         </section>
-        {selected ? <section aria-label={zh ? '成果预览' : 'Result preview'} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto bg-surface-inset px-4 py-4 md:max-w-[48%] md:border-l md:border-edge-subtle">
+        {selected ? <section aria-label={zh ? '资料预览' : 'Result preview'} className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto bg-surface-inset px-4 py-4 md:max-w-[48%] md:border-l md:border-edge-subtle">
           <header className="flex items-center gap-1">
             <button type="button" className={cn(iconButton, 'md:hidden')} onClick={close} aria-label={zh ? '返回' : 'Back'}><ArrowLeft className="size-4" /></button>
             <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{item?.title ?? (zh ? '预览' : 'Preview')}</h2>
@@ -280,13 +326,13 @@ export function SpacePage() {
             <button type="button" className={cn(iconButton, 'hidden md:inline-flex')} onClick={close} aria-label={zh ? '关闭预览' : 'Close preview'}><X className="size-4" /></button>
           </header>
           {editing && item ? <form className="flex flex-wrap items-center gap-2" onSubmit={rename}>
-            <input name="title" defaultValue={item.title} required maxLength={240} autoFocus aria-label={zh ? '成果名称' : 'Result name'}
+            <input name="title" defaultValue={item.title} required maxLength={240} autoFocus aria-label={zh ? '资料名称' : 'Result name'}
               className="min-w-24 flex-1 rounded-lg border border-edge bg-surface-panel px-2 py-2 text-sm" />
             <button className={primaryButton} disabled={busy}>{zh ? '保存' : 'Save'}</button>
             <button type="button" className="rounded-lg p-2 text-sm hover:bg-surface-hover" onClick={() => setEditing(false)}>{zh ? '取消' : 'Cancel'}</button>
           </form> : null}
           {detail.isLoading ? <Skeleton className="min-h-64 flex-1 rounded-xl" /> : null}
-          {detail.error ? <p className="py-5 text-sm text-fg-muted">{zh ? '成果暂不可用' : 'Result unavailable'}</p> : null}
+          {detail.error ? <p className="py-5 text-sm text-fg-muted">{zh ? '资料暂不可用' : 'Result unavailable'}</p> : null}
           {item && version ? <>
             <SpacePreview key={version.id} itemId={item.id} version={version} hit={hit} download={download} />
             {hit ? <p className="line-clamp-2 text-xs text-fg-muted"><MarkedText text={hit.text} query={query.trim()} /></p> : null}

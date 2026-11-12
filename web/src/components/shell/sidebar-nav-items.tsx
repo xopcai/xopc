@@ -30,7 +30,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { useNavOrderStore } from '@/stores/nav-order-store';
 
 const DRAG_MIME = 'application/x-xopc-sidebar-nav';
-const DEFAULT_VISIBLE_ITEMS = 3;
+export const DEFAULT_VISIBLE_NAV_ITEMS = 4;
+const SPACE_NAV_ID = 'builtin:space';
 const SIDEBAR_DOMAIN_IDS = ['work', 'capabilities', 'automation', 'apps'] as const;
 
 const DOMAIN_ICONS = {
@@ -68,7 +69,7 @@ function NavIcon({ Icon }: { Icon: LucideIcon }) {
 export function SidebarNavItems({
   collapsed = false,
   onNavigate,
-  visibleLimit = DEFAULT_VISIBLE_ITEMS,
+  visibleLimit = DEFAULT_VISIBLE_NAV_ITEMS,
 }: {
   collapsed?: boolean;
   onNavigate?: () => void;
@@ -112,13 +113,17 @@ export function SidebarNavItems({
         };
       });
   });
-  const available = [...builtins, ...extensionItems];
-  const byId = new Map(available.map((item) => [item.id, item]));
-  const orderedIds = [...new Set([...order, ...byId.keys()])].filter((id) => byId.has(id));
+  const space: MenuItem = { id: SPACE_NAV_ID, label: language === 'zh' ? '资料库' : 'Space', to: '/space', Icon: Archive, active: pathname === '/space' };
+  const shortcuts = [...builtins, ...extensionItems];
+  const byId = new Map([...shortcuts, space].map((item) => [item.id, item]));
+  const orderedIds = [...new Set([...order, ...shortcuts.map(item => item.id)])].filter((id) => byId.has(id));
+  if (!order.includes(SPACE_NAV_ID)) {
+    orderedIds.splice(orderedIds.indexOf('builtin:work') + 1, 0, SPACE_NAV_ID);
+  }
   const ordered = orderedIds.map((id) => byId.get(id)!);
   const limit = Number.isFinite(visibleLimit)
-    ? Math.min(available.length, Math.max(1, Math.round(visibleLimit)))
-    : DEFAULT_VISIBLE_ITEMS;
+    ? Math.min(ordered.length, Math.max(1, Math.round(visibleLimit)))
+    : DEFAULT_VISIBLE_NAV_ITEMS;
   const visibleItems = ordered.slice(0, limit);
   const overflow = ordered.slice(limit);
   const overflowItems = overflow.filter((item) => !item.id.startsWith('ext:'));
@@ -153,6 +158,7 @@ export function SidebarNavItems({
       key={item.id}
       to={item.to}
       aria-current={item.active ? 'page' : undefined}
+      aria-label={collapsed && !inPopover ? item.label : undefined}
       className={cn(
         rowClass(collapsed, item.active, inPopover),
         draggingId === item.id && 'opacity-40',
@@ -208,11 +214,6 @@ export function SidebarNavItems({
           className={cn('shrink-0 rounded-full bg-accent/15 px-1.5 text-center text-[10px] font-semibold leading-5 tabular-nums text-accent',
             collapsed ? 'absolute right-0 top-0 min-w-4 leading-4' : 'min-w-5')}
         >{personalUnreadLabel(personalUnreadCount)}</span>}
-      </Link>
-      <Link to="/space" aria-current={pathname === '/space' ? 'page' : undefined}
-        className={rowClass(collapsed, pathname === '/space')} title="Space" aria-label="Space" onClick={onNavigate}>
-        <NavIcon Icon={Archive} />
-        {!collapsed ? <span className="truncate">Space</span> : null}
       </Link>
       {visibleItems.map((item) => renderLink(item))}
       {overflow.length > 0 ? <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>
