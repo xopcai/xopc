@@ -1,6 +1,6 @@
 import { VIDEO_AUTO_DURATION, VIDEO_MODELS, WAN_VIDEO_MODEL_REF, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
-import { Download, Video } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, Download, Video } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -12,22 +12,24 @@ type Language = 'en' | 'zh';
 
 const labels = {
   zh: {
-    title: '生成视频', draft: '视频草稿', original: '跟随原图', autoDuration: '自动时长', download: '下载视频',
-    previous: '重置前生成的视频', generate: '生成', adjust: '调整', submitting: '正在提交…',
+    title: '视频', draft: '视频草稿', original: '跟随原图', autoDuration: '自动时长', download: '下载视频',
+    previous: '重置前生成的视频', generate: '确认生成', adjust: '修改草稿', submitting: '正在提交…',
     noKey: '请在「模型与能力」为当前视频服务配置 API Key。',
-    confirmation: '也可以回复「就按这个生成」。',
+    details: '查看完整提示词和模型', estimate: '预计', reference: '参考图',
     status: { queued: '排队中', submitting: '正在提交', submitted: '供应商排队中', running: '生成中',
       saving: '正在保存', completed: '已完成', failed: '生成失败', submission_unknown: '提交结果待确认' },
   },
   en: {
-    title: 'Generate video', draft: 'Video draft', original: 'Match the image', autoDuration: 'Auto duration', download: 'Download video',
-    previous: 'Videos from before the reset', generate: 'Generate', adjust: 'Adjust', submitting: 'Submitting…',
+    title: 'Video', draft: 'Video draft', original: 'Match the image', autoDuration: 'Auto duration', download: 'Download video',
+    previous: 'Videos from before the reset', generate: 'Confirm generation', adjust: 'Edit draft', submitting: 'Submitting…',
     noKey: 'Configure the video provider API key in Models and capabilities.',
-    confirmation: 'You can also reply “confirm video generation”.',
+    details: 'View full prompt and model', estimate: 'Est.', reference: 'Reference image',
     status: { queued: 'Queued', submitting: 'Submitting', submitted: 'Queued at provider', running: 'Generating',
       saving: 'Saving', completed: 'Ready', failed: 'Generation failed', submission_unknown: 'Submission unconfirmed' },
   },
 };
+
+const cardClass = 'min-w-0 w-full max-w-lg space-y-2.5 rounded-xl border border-edge-subtle bg-surface-panel p-3 sm:p-4';
 
 export function isVideoDraftConfirmation(text: string): boolean {
   return /^(就按这个生成|确认生成视频|确认生成|confirm video generation|generate this video)[。！.!]?$/iu.test(text.trim());
@@ -124,7 +126,7 @@ export function useChatVideoGeneration(conversationId: string | null, language: 
     const previous = data.jobs.filter(job => job.transcriptId !== data.transcriptId);
     const entries: ChatTimelineEntry[] = active.map(job => ({
       id: `video-generation:${job.id}`,
-      timestamp: job.createdAt,
+      timestamp: job.draftCreatedAt ?? job.createdAt,
       content: renderJob(job),
     }));
     if (draft) entries.push({
@@ -138,7 +140,7 @@ export function useChatVideoGeneration(conversationId: string | null, language: 
     if (previous.length) entries.push({
       id: 'video-generation:previous-transcripts',
       timestamp: previous[0].createdAt,
-      content: <details className="mx-auto w-full max-w-lg rounded-xl border border-edge px-4 py-3">
+      content: <details className="w-full max-w-lg rounded-xl border border-edge-subtle px-4 py-3">
         <summary className="cursor-pointer text-sm text-fg-muted">{labels[language].previous}</summary>
         <div className="mt-3 space-y-3">{previous.map(renderJob)}</div>
       </details>,
@@ -156,28 +158,23 @@ function VideoDraftCard({ draft, conversationId, language, configured, modelChan
 }) {
   const m = labels[language];
   const zh = language === 'zh';
-  const duration = draft.duration === VIDEO_AUTO_DURATION ? m.autoDuration : `${draft.duration}s`;
   const price = `¥${(draft.estimatedCostFen / 100).toFixed(2)}`;
   const imageUrl = draft.imageUri
     ? apiUrl(`/api/media/read?${new URLSearchParams({ uri: draft.imageUri, conversationId })}`) : undefined;
-  return <article className="mx-auto w-full max-w-lg space-y-3 rounded-xl border border-edge bg-surface-panel p-4">
+  return <article className={cardClass}>
     <h3 className="flex items-center gap-2 text-sm font-medium text-fg"><Video size={16} aria-hidden />{m.draft}</h3>
     <div className="flex items-start gap-3">
-      {imageUrl && <img src={imageUrl} alt={draft.imageName ?? (zh ? '参考图' : 'Reference image')}
-        className="size-16 shrink-0 rounded-lg object-cover" />}
-      <div className="min-w-0 space-y-1">
-        <p className="whitespace-pre-wrap break-words text-sm text-fg">{draft.prompt}</p>
-        <p className="text-xs text-fg-muted">
-          {[duration, draft.resolution.toLowerCase(), draft.ratio === 'adaptive' ? m.original : draft.ratio,
-            `${zh ? '预计' : 'Est.'} ${price}`].join(' · ')}
-        </p>
-      </div>
+      {imageUrl && <img src={imageUrl} alt={draft.imageName ?? m.reference}
+        className="size-14 shrink-0 rounded-lg object-cover" />}
+      <p className="line-clamp-3 min-w-0 wrap-anywhere text-sm leading-relaxed text-fg">{draft.summary || draft.prompt}</p>
     </div>
-    <details className="text-xs text-fg-muted">
-      <summary className="cursor-pointer">{zh ? '模型与费用说明' : 'Model and estimate'}</summary>
-      <p className="mt-1">{VIDEO_MODELS[draft.modelRef].name} · {zh ? '以供应商实际账单为准。' : 'Actual charges are set by the provider.'}
-        {draft.duration === VIDEO_AUTO_DURATION && (zh ? ' 自动时长按最长时长估算。' : ' Auto duration is estimated at the model maximum.')}</p>
-    </details>
+    <p className="text-xs leading-relaxed text-fg-muted">
+      {videoSpecs(draft, language)} · <span className="font-medium tabular-nums text-fg">{m.estimate} {price}</span>
+    </p>
+    <VideoPromptDetails video={draft} language={language}>
+      {zh ? '以供应商实际账单为准。' : 'Actual charges are set by the provider.'}
+      {draft.duration === VIDEO_AUTO_DURATION && (zh ? '自动时长按最长时长估算。' : ' Auto duration is estimated at the model maximum.')}
+    </VideoPromptDetails>
     {!configured && <p className="text-xs text-fg-muted">{modelChanged
       ? (zh ? '默认视频模型已切换，请先调整草稿。' : 'The default video model changed. Adjust the draft first.')
       : m.noKey}</p>}
@@ -186,9 +183,27 @@ function VideoDraftCard({ draft, conversationId, language, configured, modelChan
       <Button variant="primary" className="min-h-9 px-3 py-1" disabled={disabled || !configured}
         onClick={() => void onConfirm()}>{submitting ? m.submitting : m.generate}</Button>
       {onAdjust && <Button variant="ghost" className="min-h-9 px-3 py-1" disabled={disabled} onClick={onAdjust}>{m.adjust}</Button>}
-      {configured && !disabled && <p className="text-xs text-fg-muted">{m.confirmation}</p>}
     </div>}
   </article>;
+}
+
+function videoSpecs(video: Pick<VideoGenerationJob, 'duration' | 'resolution' | 'ratio'>, language: Language): string {
+  const m = labels[language];
+  const duration = video.duration === VIDEO_AUTO_DURATION ? m.autoDuration : language === 'zh' ? `${video.duration} 秒` : `${video.duration}s`;
+  return [duration, video.resolution.toLowerCase(), video.ratio === 'adaptive' ? m.original : video.ratio].join(' · ');
+}
+
+function VideoPromptDetails({ video, language, children }: {
+  video: Pick<VideoGenerationJob, 'prompt' | 'modelRef'>; language: Language; children?: ReactNode;
+}) {
+  return <details className="group text-xs text-fg-muted">
+    <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm py-1 hover:text-fg focus-visible:outline-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
+      <ChevronRight size={14} aria-hidden className="group-open:rotate-90" />
+      {labels[language].details}
+    </summary>
+    <p className="mt-1 whitespace-pre-wrap wrap-anywhere border-s border-edge px-3 text-sm leading-relaxed text-fg">{video.prompt}</p>
+    <p className="mt-2">{VIDEO_MODELS[video.modelRef ?? WAN_VIDEO_MODEL_REF].name}{children && <> · {children}</>}</p>
+  </details>;
 }
 
 function VideoJobCard({ job, url, language }: {
@@ -196,22 +211,23 @@ function VideoJobCard({ job, url, language }: {
 }) {
   const m = labels[language];
   return (
-    <article className="mx-auto w-full max-w-lg space-y-3 rounded-xl border border-edge bg-surface-panel p-4">
+    <article className={cardClass}>
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="flex items-center gap-2 font-medium text-fg"><Video size={16} aria-hidden />{m.title}</span>
+        <h3 className="flex items-center gap-2 font-medium text-fg"><Video size={16} aria-hidden />{m.title}</h3>
         <span role="status" className="text-xs text-fg-muted">{m.status[job.state]}</span>
       </div>
-      <p className="whitespace-pre-wrap break-words text-sm text-fg">{job.prompt}</p>
-      <p className="break-words text-xs text-fg-muted">
-        {[VIDEO_MODELS[job.modelRef ?? WAN_VIDEO_MODEL_REF].name, job.duration === VIDEO_AUTO_DURATION ? m.autoDuration : `${job.duration}s`, job.resolution, job.ratio === 'adaptive' ? m.original : job.ratio, job.imageName].filter(Boolean).join(' · ')}
-      </p>
-      {job.error && <p className="text-xs text-fg-muted">{job.error}</p>}
+      <p className="text-xs text-fg-muted">{videoSpecs(job, language)}</p>
+      {job.error && <p className="text-xs text-danger">{job.error}</p>}
       {job.state === 'completed' && <>
         <video controls playsInline preload="none" aria-label={m.title} className="max-h-96 w-full rounded-lg bg-black" src={url} />
         <a href={`${url}?download=1`} download="generated-video.mp4" className="inline-flex items-center gap-2 text-sm text-accent-fg hover:underline">
           <Download size={15} aria-hidden />{m.download}
         </a>
       </>}
+      {job.summary && <p className="line-clamp-3 wrap-anywhere text-sm leading-relaxed text-fg">{job.summary}</p>}
+      <VideoPromptDetails video={job} language={language}>
+        {job.imageName && <span className="wrap-anywhere">{m.reference} · {job.imageName}</span>}
+      </VideoPromptDetails>
     </article>
   );
 }

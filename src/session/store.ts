@@ -16,7 +16,7 @@ import { deleteMusicArtifact } from '../music-generation/artifact.js';
 import { listMusicJobIds } from '../music-generation/repository.js';
 import { deleteVideoArtifact } from '../video-generation/artifact.js';
 import { deleteVideoDraft } from '../video-generation/drafts.js';
-import { listVideoJobIds } from '../video-generation/repository.js';
+import { deleteVideoJobPlacements, listVideoJobIds } from '../video-generation/repository.js';
 import { createLogger } from '../utils/logger.js';
 import {
   SessionCompactor,
@@ -586,6 +586,7 @@ export class SessionStore {
       const ok = deleteSessionRecord(key);
       if (ok) {
         deleteVideoDraft(key);
+        deleteVideoJobPlacements(key);
         await Promise.allSettled([...videoJobs.map(deleteVideoArtifact), ...musicJobs.map(deleteMusicArtifact)]);
         this.clearCompactionCheckpoint(key);
         log.info({ key }, 'Session deleted');

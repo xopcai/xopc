@@ -39,6 +39,17 @@ describe('task results in conversation timeline', () => {
     expect(container.textContent).not.toContain('Welcome');
   });
 
+  it('keeps a single time separator for nearby messages around a video card', () => {
+    const messages: Message[] = [
+      { role: 'user', timestamp: 10, content: [{ type: 'text', text: 'Make a video' }] },
+      { role: 'assistant', timestamp: 30, content: [{ type: 'text', text: 'Review the draft' }] },
+    ];
+    act(() => root.render(<MessageList messages={messages}
+      timelineEntries={[{ id: 'video-generation:draft', timestamp: 20, content: 'Video draft' }]}
+      streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />));
+    expect(container.querySelectorAll('[data-chat-time-separator]')).toHaveLength(1);
+  });
+
   it('preserves user and reply order when confirmation advances the user timestamp past the reply shell', () => {
     const user: Message = { role: 'user', timestamp: 30, content: [{ type: 'text', text: 'Export the result' }] };
     const reply: Message = { role: 'assistant', timestamp: 31, content: [], pendingResponseStatus: 'sending' };

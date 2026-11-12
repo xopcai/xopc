@@ -36,6 +36,7 @@ export function videoDraftImages(conversationId: string): { current: MediaRef[];
 export function prepareVideoDraft(conversationId: string, input: {
   action: 'create' | 'update' | 'revise';
   prompt?: string;
+  summary?: string;
   duration?: number;
   ratio?: VideoRatio;
   resolution?: VideoResolution;
@@ -56,6 +57,7 @@ export function prepareVideoDraft(conversationId: string, input: {
     const defaults = getVideoDefaults(modelRef);
     const prompt = (input.prompt ?? base?.prompt ?? '').trim();
     if (!prompt || prompt.length > 1_000) throw new Error('Provide a video description of 1–1000 characters.');
+    const summary = input.summary?.trim() || (prompt === base?.prompt ? base.summary : undefined);
     const inherited = base?.modelRef === modelRef ? base : undefined;
     const duration = input.duration ?? inherited?.duration ?? defaults.duration;
     const resolution = input.resolution ?? inherited?.resolution ?? defaults.resolution;
@@ -86,7 +88,7 @@ export function prepareVideoDraft(conversationId: string, input: {
     const updating = input.action === 'update';
     const draft: VideoGenerationDraft = {
       id: updating ? base!.id : randomUUID(), revision: updating ? base!.revision + 1 : 1,
-      transcriptId, modelRef, prompt, duration, resolution, ratio, imageUri, imageName,
+      transcriptId, modelRef, prompt, summary, duration, resolution, ratio, imageUri, imageName,
       estimatedCostFen: estimateVideoCostFen(modelRef, duration, resolution),
       createdAt: updating ? base!.createdAt : Date.now(),
     };

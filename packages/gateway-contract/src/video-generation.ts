@@ -50,6 +50,8 @@ export interface VideoGenerationJob {
   state: VideoGenerationState;
   error: string | null;
   createdAt: number;
+  draftCreatedAt?: number;
+  summary?: string;
 }
 
 export interface VideoGenerationDefaults {
@@ -63,6 +65,7 @@ export interface VideoGenerationDraft extends VideoGenerationDefaults {
   transcriptId: string;
   modelRef: VideoModelRef;
   prompt: string;
+  summary?: string;
   ratio: VideoRatio;
   imageUri: string | null;
   imageName: string | null;

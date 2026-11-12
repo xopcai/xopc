@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
-import { estimateVideoCostFen, VIDEO_MODELS, type VideoGenerationJob, type VideoGenerationState } from '@xopcai/gateway-contract';
+import { estimateVideoCostFen, VIDEO_MODELS, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationState } from '@xopcai/gateway-contract';
 
 import { getVideoModel } from './settings.js';
+import { DurableState } from '../storage/sqlite/durable-state.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 type VideoRequest = Pick<VideoGenerationJob, 'id' | 'transcriptId' | 'prompt' | 'duration' | 'ratio' | 'resolution' | 'imageName' | 'modelRef'>;
+type VideoJobPlacement = Pick<VideoGenerationJob, 'draftCreatedAt' | 'summary'>;
+const jobPlacements = new DurableState<Record<string, VideoJobPlacement>>('video-generation-job-placement');
 
 interface JobRow {
   id: string;
@@ -26,18 +29,23 @@ interface JobRow {
   created_at: number;
 }
 
-export function publicVideoJob(row: JobRow): VideoGenerationJob {
+export function publicVideoJob(row: JobRow, placement?: VideoJobPlacement): VideoGenerationJob {
   return {
     id: row.id, transcriptId: row.transcript_id, modelRef: row.model_ref, prompt: row.prompt, duration: row.duration,
     ratio: row.ratio, resolution: row.resolution, imageName: row.image_name,
-    state: row.state, error: row.error, createdAt: row.created_at,
+    state: row.state, error: row.error, createdAt: row.created_at, ...placement,
   };
 }
 
 export function listVideoJobs(conversationId: string): VideoGenerationJob[] {
+  const placements = jobPlacements.get(conversationId);
   return (getSqliteDatabase().prepare(`SELECT id, transcript_id, model_ref, prompt, duration, ratio, resolution,
     image_name, state, error, created_at FROM video_generation_jobs WHERE conversation_id = ?
-    ORDER BY created_at DESC, rowid DESC`).all(conversationId) as unknown as JobRow[]).map(publicVideoJob);
+    ORDER BY created_at DESC, rowid DESC`).all(conversationId) as unknown as JobRow[]).map(row => publicVideoJob(row, placements?.[row.id]));
+}
+
+export function deleteVideoJobPlacements(conversationId: string): void {
+  jobPlacements.delete(conversationId);
 }
 
 export function listVideoJobIds(conversationId: string): string[] {
@@ -50,14 +58,16 @@ export function getVideoJob(conversationId: string, id: string): JobRow | undefi
     .get(conversationId, id) as unknown as JobRow | undefined;
 }
 
-export function enqueueVideoJob(conversationId: string, request: VideoRequest, requestHash: string, image?: { bytes: Buffer; mime: string }) {
+export function enqueueVideoJob(conversationId: string, request: VideoRequest, requestHash: string,
+  image?: { bytes: Buffer; mime: string }, draft?: Pick<VideoGenerationDraft, 'createdAt' | 'summary'>) {
   return runSqliteWriteTransaction(db => {
     const session = db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id = ?').get(conversationId);
     if (session?.active_transcript_id !== request.transcriptId) return { error: 'conversation_changed' } as const;
     const existing = db.prepare('SELECT * FROM video_generation_jobs WHERE id = ?').get(request.id) as unknown as JobRow | undefined;
     if (existing) {
       return existing.conversation_id === conversationId && existing.request_hash === requestHash && existing.model_ref === request.modelRef
-        ? { job: publicVideoJob(existing) } : { error: 'idempotency_conflict' } as const;
+        ? { job: publicVideoJob(existing, jobPlacements.get(conversationId)?.[existing.id]) }
+        : { error: 'idempotency_conflict' } as const;
     }
     if (getVideoModel() !== request.modelRef) return { error: 'model_changed' } as const;
     const active = db.prepare(`SELECT count(*) AS count FROM video_generation_jobs
@@ -81,7 +91,11 @@ export function enqueueVideoJob(conversationId: string, request: VideoRequest, r
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?)`).run(request.id, conversationId,
       request.transcriptId, requestHash, request.modelRef, request.prompt, request.duration, request.ratio, request.resolution,
       request.imageName, image?.mime ?? null, image?.bytes ?? null, now, now);
-    return { job: publicVideoJob(getVideoJob(conversationId, request.id)!) };
+    const placement = draft ? { draftCreatedAt: draft.createdAt, summary: draft.summary } : undefined;
+    if (placement) {
+      jobPlacements.set(conversationId, { ...jobPlacements.get(conversationId), [request.id]: placement });
+    }
+    return { job: publicVideoJob(getVideoJob(conversationId, request.id)!, placement) };
   });
 }
 

@@ -36,6 +36,7 @@ it('serves jobs created by the Agent and scoped audio through the authenticated 
     getAuthToken: () => token,
     isGatewayReady: () => true,
     getExtensionLoader: () => null,
+    getModelCatalogSync: () => ({}),
     sessionIndexInstance: { getSessionMetadata },
   } as unknown as GatewayService });
   const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
@@ -68,6 +69,11 @@ it('serves jobs created by the Agent and scoped audio through the authenticated 
     const savedBody = await saved.text();
     expect(savedBody).not.toContain('gateway-music-test-key');
     expect(JSON.parse(savedBody)).toMatchObject({ credentials: { 'mureka-global': 'saved', 'mureka-cn': 'environment' } });
+    const reveal = `http://127.0.0.1:${address.port}/api/providers/mureka-global/reveal-api-key`;
+    expect((await fetch(reveal, { method: 'POST' })).status).toBe(401);
+    expect(await (await fetch(reveal, { method: 'POST', headers })).json()).toMatchObject({
+      payload: { apiKey: 'gateway-music-test-key', source: 'credential' },
+    });
     const route = await configuredMusicModel();
     expect(route?.ref).toBe('mureka-global/mureka-9.5');
     expect(await resolveMusicKey(route!.provider)).toBe('gateway-music-test-key');
@@ -81,6 +87,9 @@ it('serves jobs created by the Agent and scoped audio through the authenticated 
     expect(removed.status).toBe(200);
     expect(await removed.json()).toMatchObject({ credentials: { 'mureka-global': 'environment' } });
     expect(await resolveMusicKey(route!.provider)).toBe('test-key');
+    expect(await (await fetch(reveal, { method: 'POST', headers })).json()).toMatchObject({
+      payload: { apiKey: null, source: 'none' },
+    });
     const jobs = `${base}/sessions/${session.key}/jobs`;
     const audio = `${jobs}/${job.id}/audio`;
 

@@ -81,7 +81,7 @@ describe('conversation video drafts', () => {
     expect(() => prepareVideoDraft(conversationId, { action: 'create', prompt: 'Make waves' })).toThrow('Multiple images');
     expect(() => prepareVideoDraft(conversationId, { action: 'create', prompt: 'Make waves', imageUri: 'media://inbound/foreign.png' })).toThrow('unavailable');
     const original = prepareVideoDraft(conversationId, {
-      action: 'create', prompt: 'Make waves', imageUri: image.uri, duration: 4, resolution: '480P',
+      action: 'create', prompt: 'Make waves', summary: 'Waves at sea', imageUri: image.uri, duration: 4, resolution: '480P',
     });
     expect(original).toMatchObject({ revision: 1, ratio: 'adaptive', imageName: 'boat.png' });
     expect(listVideoJobs(conversationId)).toEqual([]);
@@ -91,11 +91,17 @@ describe('conversation video drafts', () => {
     expect(getVideoDraft(conversationId, randomUUID())).toBeUndefined();
     const edited = prepareVideoDraft(conversationId, { action: 'update', prompt: 'Make gentle waves' });
     expect(edited).toMatchObject({ id: original.id, revision: 2, imageUri: image.uri, duration: 4 });
-    expect(enqueueVideoJob(conversationId, edited, 'confirmed').job?.id).toBe(original.id);
+    expect(edited.summary).toBeUndefined();
+    const reviewed = prepareVideoDraft(conversationId, { action: 'update', summary: 'Gentle waves at sea' });
+    const placement = { id: original.id, draftCreatedAt: original.createdAt, summary: reviewed.summary };
+    expect(enqueueVideoJob(conversationId, reviewed, 'confirmed', undefined, reviewed).job).toMatchObject(placement);
+    expect(enqueueVideoJob(conversationId, reviewed, 'confirmed', undefined, reviewed).job).toMatchObject(placement);
     const revision = prepareVideoDraft(conversationId, { action: 'revise', prompt: 'Make bigger waves' });
     expect(revision).toMatchObject({ revision: 1, imageUri: image.uri, duration: 4 });
     expect(revision.id).not.toBe(original.id);
-    expect(listVideoJobs(conversationId).map(job => job.id)).toEqual([original.id]);
+    closeXopcDatabase();
+    openXopcDatabase({ path: database });
+    expect(listVideoJobs(conversationId)).toMatchObject([placement]);
   });
 });
 

@@ -9,6 +9,7 @@ import { getVideoJob } from '../../video-generation/repository.js';
 const schema = Type.Object({
   action: Type.Union([Type.Literal('create'), Type.Literal('update'), Type.Literal('revise'), Type.Literal('inspect')]),
   prompt: Type.Optional(Type.String({ maxLength: 1000 })),
+  summary: Type.Optional(Type.String({ maxLength: 180, description: 'A short description of the visible scene in the user’s language. Keep it in sync whenever the prompt changes.' })),
   duration: Type.Optional(Type.Integer()),
   ratio: Type.Optional(Type.Union([Type.Literal('16:9'), Type.Literal('9:16'), Type.Literal('adaptive')])),
   resolution: Type.Optional(Type.Union([Type.Literal('480P'), Type.Literal('720P'), Type.Literal('1080P')])),
@@ -20,7 +21,7 @@ export function createVideoDraftTool(getConversationId: () => string | undefined
   return {
     name: 'video_draft',
     label: 'Prepare video draft',
-    description: 'Prepare a video when the user asks to generate one in Web chat. Create a draft, update the pending draft, or revise the last submitted video as a new version. For a new draft, a single image in the current user message is used by default. An update or revision keeps its reference image unless the user requests another one; use image=current to switch to a new attachment. Use inspect to list recent images and the previous draft. Ask which image to use when the reference is ambiguous. Use video settings for any unspecified options. The draft appears as a card. Tell the user to click Generate or reply “confirm video generation” / “就按这个生成” to submit the reviewed draft. This tool cannot start generation.',
+    description: 'Prepare a video when the user asks to generate one in Web chat. Create a draft, update the pending draft, or revise the last submitted video as a new version. For a new draft, a single image in the current user message is used by default. An update or revision keeps its reference image unless the user requests another one; use image=current to switch to a new attachment. Use inspect to list recent images and the previous draft. Ask which image to use when the reference is ambiguous. Use video settings for any unspecified options. Provide a short scene summary alongside the full prompt. The draft appears as a card. When first presenting it, briefly tell the user they can click Confirm generation or reply “confirm video generation” / “就按这个生成”. This tool cannot start generation.',
     parameters: schema,
     async execute(_id, args) {
       if (!Value.Check(schema, args)) throw new Error('Invalid video draft parameters.');
