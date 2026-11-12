@@ -879,7 +879,8 @@
 // Mobile layout parity
 "会话选项" = "Chat Options";
 "上下文" = "Context";
-"助手角色" = "Assistant Role";
+"选择新对话对象" = "Choose who to start a new chat with";
+"对话对象" = "Chat with";
 "思考档位" = "Thinking Level";
 "后续消息队列" = "Follow-up Queue";
 "默认模型" = "Default Model";

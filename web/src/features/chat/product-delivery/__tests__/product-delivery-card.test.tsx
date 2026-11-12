@@ -28,7 +28,7 @@ import { AutomationConfigurationContext } from '@/features/automations/automatio
 
 function LocationProbe() {
   const location = useLocation();
-  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
+  return <output data-testid="location" data-agent-id={location.state?.agentId}>{`${location.pathname}${location.search}`}</output>;
 }
 
 function renderDelivery(delivery: ProductDeliveryEnvelope, conversationId?: string) {
@@ -82,6 +82,24 @@ describe('AssistantResultTail product deliveries', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+  });
+
+  it('opens the newly created expert or starts a chat with that expert', async () => {
+    const delivery: ProductDeliveryEnvelope = { version: 2, operation: 'created', primary: {
+      kind: 'agent', id: 'weekly-report', title: '周报专家', capabilities: ['open', 'edit'],
+    } };
+    const render = () => <MemoryRouter initialEntries={['/chat/setup']}>{renderDelivery(delivery)}<LocationProbe /></MemoryRouter>;
+    await act(async () => root.render(render()));
+    const settings = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('编辑设置'));
+    expect(settings?.textContent).toContain('周报专家');
+    await act(async () => settings!.click());
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toContain('/capabilities/agents/weekly-report');
+
+    const startChat = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.trim() === '开始对话');
+    await act(async () => startChat!.click());
+    const location = container.querySelector('[data-testid="location"]');
+    expect(location?.textContent).toBe('/chat/new?projectScope=none');
+    expect(location?.getAttribute('data-agent-id')).toBe('weekly-report');
   });
 
   it('does not render read-only query results in the delivery tail', () => {

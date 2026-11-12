@@ -90,7 +90,12 @@ describe('xopc_use tool', () => {
       },
     };
 
-    const created = parseToolJson(await tool.execute('agent-create', createInput));
+    const creation = await tool.execute('agent-create', createInput);
+    expect(creation.details.delivery).toMatchObject({
+      operation: 'created',
+      primary: { kind: 'agent', id: 'coder', title: 'Coder', capabilities: ['open', 'edit'] },
+    });
+    const created = parseToolJson(creation);
     const replayed = parseToolJson(await tool.execute('agent-create-retry', createInput));
     expect(created).toEqual(replayed);
     expect(created).toMatchObject({

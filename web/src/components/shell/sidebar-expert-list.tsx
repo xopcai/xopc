@@ -39,8 +39,9 @@ async function findLatestExpertSession(agentId: string, setupConversationIds: Re
   }
 }
 
-export function SidebarExpertList({ agents, activeConversationId, onNavigate }: {
+export function SidebarExpertList({ agents, defaultAgentId, activeConversationId, onNavigate }: {
   agents: ChatAgentOption[];
+  defaultAgentId: string;
   activeConversationId?: string;
   onNavigate?: () => void;
 }) {
@@ -64,9 +65,9 @@ export function SidebarExpertList({ agents, activeConversationId, onNavigate }: 
     return () => { pending.current = null; };
   }, [locationKey, gatewaySession]);
 
-  const experts = agents
-    .filter(({ id, purpose }) => id !== 'task-router' && !isPersonalAgentId(id) && purpose !== 'task_dispatcher')
-    .sort((a, b) => Number(b.id === 'main') - Number(a.id === 'main'));
+  const experts = agents.filter(({ id, purpose }) =>
+    id !== 'main' && id !== 'task-router' && !isPersonalAgentId(id) && purpose !== 'task_dispatcher',
+  );
 
   async function openExpert(agentId: string, forceNew = false) {
     if (pending.current) return;
@@ -145,8 +146,8 @@ export function SidebarExpertList({ agents, activeConversationId, onNavigate }: 
         disabled={openingId !== undefined}
         onCreate={() => navigateToNewChat(
           navigate,
-          newAgentSetupHref(agentsSettings.setupDraftPrefix),
-          { state: { forceNewChat: true, agentId: 'main' } },
+          newAgentSetupHref(),
+          { state: { forceNewChat: true, agentId: defaultAgentId } },
           onNavigate,
         )}
       />
@@ -189,7 +190,7 @@ export function SidebarExpertList({ agents, activeConversationId, onNavigate }: 
                     onClick={() => void openExpert(agent.id, true)}
                     disabled={openingId !== undefined}
                     aria-label={newLabel}
-                    title={sidebar.newTask}
+                    title={newLabel}
                     className="flex h-8 w-6 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
                   >
                     {openingId === agent.id

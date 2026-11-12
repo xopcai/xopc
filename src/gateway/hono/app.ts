@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
 import { getConnInfo } from '@hono/node-server/conninfo';
+import { VIDEO_IMAGE_MAX_BYTES } from '@xopcai/gateway-contract';
 import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
@@ -276,7 +277,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       || (c.req.method === 'PATCH' && /^\/api\/sessions\/[^/]+\/inputs\/[^/]+$/.test(c.req.path));
     const isEndpointUpload = c.req.method === 'POST'
       && /^\/api\/endpoint-tools\/invocations\/[^/]+\/files$/.test(c.req.path);
-    const maxSize = isEndpointUpload
+    const isVideoUpload = c.req.method === 'POST' && /^\/api\/video-generation\/sessions\/[^/]+\/jobs$/.test(c.req.path);
+    const maxSize = isVideoUpload
+      ? VIDEO_IMAGE_MAX_BYTES + 64 * 1024
+      : isEndpointUpload
       ? ENDPOINT_MAX_FILE_BYTES
       : isAttachmentInputRequest
       ? SESSION_INPUT_BODY_MAX

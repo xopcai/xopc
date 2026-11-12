@@ -1,4 +1,4 @@
-import { taskDescriptionForDisplay } from '@xopcai/gateway-contract';
+import { taskDescriptionForDisplay, type TaskRunStatus } from '@xopcai/gateway-contract';
 import { Link } from 'react-router-dom';
 
 import { ChatMarkdownRenderer } from '@/features/chat/rendering/markdown/chat-markdown-renderer';
@@ -10,8 +10,9 @@ import { TaskInputCard } from './task-input-card';
 import { taskChatHref } from './task-detail-route';
 
 /** Keep actionable waits ahead of supporting status and historical results. */
-export function TaskCurrentAction({ detail, language, onUpdated }: {
+export function TaskCurrentAction({ detail, executorName, language, onUpdated }: {
   detail: TaskDetail;
+  executorName?: string;
   language: 'zh' | 'en';
   onUpdated: (detail: TaskDetail) => void;
 }) {
@@ -24,15 +25,22 @@ export function TaskCurrentAction({ detail, language, onUpdated }: {
     : [];
   const needsAttention = actionableWaits.length > 0 || detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
   const receipt = currentTaskReceipt(detail);
-  const running = detail.runs.some((run) => !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
+  const activeRun = detail.runs.find((run) => !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
+  const activeProgress: Partial<Record<TaskRunStatus, string>> = {
+    queued: zh ? '等待开始执行。' : 'Waiting to start.',
+    running: executorName
+      ? (zh ? `${executorName} 正在处理任务。` : `${executorName} is working on the task.`)
+      : (zh ? '任务处理中。' : 'The task is in progress.'),
+    waiting: zh ? '任务正在等待继续。' : 'The task is waiting to resume.',
+    verifying: zh ? '正在检查执行结果。' : 'Checking the result.',
+  };
   const summary = pausedWait?.reason ?? detail.waits[0]?.reason
     ?? (detail.task.phase === 'closed'
-      ? (zh ? '任务已关闭，可查看交付物与执行结果。' : 'The task is closed. Review its deliverables and results.')
+      ? receipt?.summary ?? (zh ? '任务已关闭，可查看交付物与执行结果。' : 'The task is closed. Review its deliverables and results.')
       : detail.task.phase === 'review'
         ? (zh ? '请检查交付物并勾选通过的验收项。' : 'Review the deliverables and check the criteria that pass.')
-        : running
-          ? (zh ? 'Agent 正在执行任务，无需你操作。' : 'The agent is working. No action is needed from you.')
-          : receipt?.summary ?? (zh ? '任务尚未开始，可开始执行或设置执行时间。' : 'Start the task or set an execution time.'));
+        : (activeRun && activeProgress[activeRun.status]) ?? receipt?.summary
+          ?? (zh ? '任务尚未开始，可开始执行或设置执行时间。' : 'Start the task or set an execution time.'));
   const attentionContent = detail.attention.length > 0 ? <ul className="mt-3 space-y-3">
     {detail.attention.map((item, index) => {
       const hasInlineControl = actionableWaits.some((wait) => (item.kind === 'input_required' && wait.kind === 'user_input')

@@ -16,6 +16,7 @@ import { ExtensionIframeHost } from '@/features/extensions/extension-iframe-host
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import type { GatewayConfigBinding } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { channelsStatusSwrKey, fetchChannelsStatusSwr } from '@/features/settings/channels-status-swr';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame } from '@/features/settings/settings-page-layout';
@@ -532,18 +533,19 @@ export function ChannelsSettingsPanel({
     ? agentBindingDraft ?? getChannelAgentBinding(bindings, activeEntry.id)
     : '';
   const agentOptions = useMemo<PopoverSelectOption[]>(() => (
-    (agentsData?.items ?? []).map((agent) => {
-      const name = agentListDisplayName(agent, m.agentsSettings);
-      return {
-        value: agent.id,
-        label: name === agent.id ? name : `${name} · ${agent.id}`,
-      };
-    })
+    (agentsData?.items ?? []).map((agent) => ({
+      value: agent.id,
+      label: agentListDisplayName(agent, m.agentsSettings),
+      icon: <AgentAvatarDisplay agentId={agent.id} avatar={agent.avatar} size={20} />,
+    }))
   ), [agentsData?.items, m.agentsSettings]);
   const defaultAgent = agentsData?.items.find((agent) => agent.id === agentsData.defaultId);
   const defaultAgentName = defaultAgent
     ? agentListDisplayName(defaultAgent, m.agentsSettings)
     : agentsData?.defaultId ?? '';
+  const defaultReplyLabel = defaultAgentName
+    ? ch.agentRoutingDefault.replace('{{agent}}', defaultAgentName)
+    : ch.agentRoutingSelect;
   const schemaLabels = useMemo(() => ({
     secretInputLabels: secretInputLabelsFromChannels(ch),
     defaultBooleanLabel: ch.schemaBooleanDefault,
@@ -944,13 +946,12 @@ export function ChannelsSettingsPanel({
               <div className="bg-surface-base/50 p-4">
                 <div className="mb-3">
                   <h3 className="text-sm font-semibold text-fg">{ch.agentRouting}</h3>
-                  <p className="mt-1 text-sm text-fg-muted">{ch.messageHandlingHint}</p>
+                  <p className="mt-1 text-sm text-fg-muted">{ch.agentRoutingHint}</p>
                 </div>
                 <PopoverSelect
                   value={channelAgentId}
                   options={agentOptions}
-                  placeholder={ch.agentRoutingSelect}
-                  emptyLabel={ch.agentRoutingDefault.replace('{{agent}}', defaultAgentName || ch.agentRoutingSelect)}
+                  placeholder={defaultReplyLabel}
                   ariaLabel={ch.agentRouting}
                   disabled={saving || !agentsData}
                   onChange={(agentId) => setAgentBindingDraft(agentId)}

@@ -319,10 +319,10 @@
       "sessionUpdatedWhen": "会话内容更新时运行"
     },
     "action": {
-      "agent": "智能体",
-      "agentWithId": "智能体：{id}",
+      "agent": "使用默认执行者",
+      "agentWithId": "执行者 · {id}",
       "taskWithId": "任务：{id}",
-      "runAgent": "运行智能体",
+      "runAgent": "交给助手或专家执行",
       "runTask": "执行任务"
     },
     "status": {
@@ -367,14 +367,14 @@
       "eventPayloadMatch": "载荷匹配（JSON，可选）",
       "invalidJsonObject": "请输入有效的 JSON 对象。",
       "action": "动作",
-      "agent": "智能体",
-      "defaultAgent": "默认智能体",
-      "loadingAgents": "正在加载智能体...",
+      "agent": "由谁执行",
+      "defaultAgent": "使用默认",
+      "defaultAgentWithName": "使用默认（{{name}}）",
       "model": "运行模型",
-      "defaultModel": "使用智能体默认模型",
+      "defaultModel": "使用执行者的默认模型",
       "searchModels": "搜索模型",
       "noModels": "没有匹配的模型",
-      "modelHint": "仅为此自动化覆盖所选智能体的默认模型。",
+      "modelHint": "这个模型仅用于当前自动化。",
       "instruction": "任务内容",
       "task": "任务",
       "loadingTasks": "正在加载任务...",

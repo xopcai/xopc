@@ -2,7 +2,7 @@ import type { ModelSetupUse } from '@xopcai/gateway-contract';
 
 export const capabilityGroups: { label: [string, string]; uses: ModelSetupUse[] }[] = [
   { label: ['文本', 'Text'], uses: ['chat'] },
-  { label: ['图片', 'Images'], uses: ['vision', 'image'] },
+  { label: ['视觉', 'Visual'], uses: ['vision', 'image'] },
   { label: ['语音', 'Voice'], uses: ['transcription', 'speech', 'conversation'] },
   { label: ['后台', 'Background'], uses: ['background'] },
 ];

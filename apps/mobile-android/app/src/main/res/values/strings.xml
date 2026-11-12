@@ -182,10 +182,10 @@
     <string name="assistant_model_error">Could not load or change the model. Refresh the list and try again.</string>
     <string name="assistant_model_retry">Refresh models</string>
     <string name="assistant_model_close">Close</string>
-    <string name="assistant_agent">Agent</string>
-    <string name="assistant_agent_search">Search agents</string>
-    <string name="assistant_agent_error">Could not load agents. Refresh the list and try again.</string>
-    <string name="assistant_agent_retry">Refresh agents</string>
+    <string name="assistant_agent">Chat with</string>
+    <string name="assistant_agent_search">Search by name</string>
+    <string name="assistant_agent_error">Could not load chat options. Refresh and try again.</string>
+    <string name="assistant_agent_retry">Refresh list</string>
     <string name="assistant_context">Context</string>
     <string name="assistant_context_hint">Current associations, not a record of everything the model has read.</string>
     <string name="assistant_session_files">Session files</string>

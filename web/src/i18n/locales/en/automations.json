@@ -319,10 +319,10 @@
       "sessionUpdatedWhen": "Runs when session content changes"
     },
     "action": {
-      "agent": "Agent",
-      "agentWithId": "Agent: {id}",
+      "agent": "Use default assignee",
+      "agentWithId": "Assignee · {id}",
       "taskWithId": "Task: {id}",
-      "runAgent": "Run Agent",
+      "runAgent": "Assign to an assistant or expert",
       "runTask": "Run Task"
     },
     "status": {
@@ -367,14 +367,14 @@
       "eventPayloadMatch": "Payload match (optional JSON)",
       "invalidJsonObject": "Enter a valid JSON object.",
       "action": "Action",
-      "agent": "Agent",
-      "defaultAgent": "Default agent",
-      "loadingAgents": "Loading agents...",
+      "agent": "Who runs it",
+      "defaultAgent": "Use default",
+      "defaultAgentWithName": "Use default ({{name}})",
       "model": "Model",
-      "defaultModel": "Use agent default",
+      "defaultModel": "Use the assignee’s default model",
       "searchModels": "Search models",
       "noModels": "No matching models",
-      "modelHint": "Overrides the selected agent's default model for this automation.",
+      "modelHint": "This model applies only to this automation.",
       "instruction": "Task content",
       "task": "Task",
       "loadingTasks": "Loading tasks...",

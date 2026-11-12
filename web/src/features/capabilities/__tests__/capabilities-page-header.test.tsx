@@ -44,7 +44,7 @@ describe('CapabilitiesPage header', () => {
   });
 
   it.each([
-    ['agents', 'Agents'],
+    ['agents', 'Assistants and experts'],
     ['connectors', 'Connections'],
     ['channels', 'Channels'],
     ['extensions', 'Plugins'],

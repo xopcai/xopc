@@ -6,7 +6,7 @@
     "agent-browser": "浏览器",
     "computer-use": "电脑控制",
     "phone-use": "手机控制",
-    "agent-defaults": "智能体设置",
+    "agent-defaults": "默认设置",
     "connectors": "连接",
     "channels": "消息通道",
     "devices": "设备",
@@ -271,7 +271,7 @@
     "subtitle": "配置 xopc 全局可用的模型、图片、语音与搜索服务。",
     "docsLink": "查看文档",
     "tabsAria": "模型分区",
-    "agentSettingsLink": "配置智能体",
+    "agentSettingsLink": "打开默认设置",
     "unsavedChanges": "有未保存改动",
     "saveBar": {
       "title": "未保存改动汇总",

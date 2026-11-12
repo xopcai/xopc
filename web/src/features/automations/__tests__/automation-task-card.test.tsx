@@ -50,13 +50,15 @@ describe('scheduled task card and shared editor', () => {
     expect(patch).not.toHaveProperty('trigger');
     expect(patch).not.toHaveProperty('enabled');
   });
-  it('saves the execution assistant from advanced settings while preserving the task action', async () => {
+  it('shows and saves the assignee without opening advanced settings', async () => {
     vi.mocked(automationApi.update).mockResolvedValue({ automation: task });
     await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><AutomationEditDialog automation={task} language="zh" onClose={vi.fn()} /></SWRConfig>));
     const advanced = document.querySelector('details')!;
     expect(advanced.open).toBe(false);
-    await act(async () => { advanced.open = true; });
-    await act(async () => (document.querySelector('[aria-label="执行助手"]') as HTMLButtonElement).click());
+    const assignee = document.querySelector<HTMLButtonElement>('button[aria-label="由谁执行"]')!;
+    expect(assignee.textContent).toBe('使用默认（通用助手）');
+    expect(advanced.contains(assignee)).toBe(false);
+    await act(async () => assignee.click());
     const choice = Array.from(document.querySelectorAll('button')).find(element => element.textContent?.includes('Research'));
     expect(choice).toBeDefined();
     await act(async () => (choice as HTMLElement).click());

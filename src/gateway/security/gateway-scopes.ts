@@ -67,6 +67,8 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path.startsWith('/api/agents') || path.startsWith('/api/models')) {
     return methodScope(method, 'agents.read', 'gateway.admin');
   }
+  if (path === '/api/video-generation/settings') return 'gateway.admin';
+  if (path.startsWith('/api/video-generation/')) return methodScope(method, 'sessions.read', 'sessions.write');
   if (path.startsWith('/api/sessions') || path.startsWith('/api/side-chats')) {
     return methodScope(method, 'sessions.read', 'sessions.write');
   }

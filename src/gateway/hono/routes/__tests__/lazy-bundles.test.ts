@@ -6,6 +6,15 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps conversation video jobs and their media without capturing nearby routes', () => {
+    for (const path of ['/api/video-generation/settings', '/api/video-generation/sessions/session/jobs', '/api/video-generation/sessions/session/jobs/job/video']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('video-generation');
+    }
+    for (const path of ['/api/media/read', '/api/video-generation/settings/extra', '/api/video-generation/sessions/session/jobs/job', '/api/video-generation/sessions/session/jobs/job/video/extra']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('video-generation');
+    }
+  });
+
   it('maps TUI session controls without capturing neighboring routes', () => {
     for (const path of ['/api/tui/manage', '/api/tui/side', '/api/tui/sessions/id/search', '/api/tui/sessions/id/jobs/job/resize', '/api/tui/sessions/id/subagents/child/steer', '/api/tui/sessions/id/subagents/child/resume', '/api/tui/sessions/id/subagents/child/transcript', '/api/tui/startup-resources', '/api/tui/diff', '/api/tui/capabilities/skills', '/api/tui/capabilities/mcp', '/api/tui/capabilities/plugins', '/api/tui/sessions/id/policy', '/api/tui/sessions/id/jobs',
       '/api/tui/sessions/id/jobs/job', '/api/tui/sessions/id/jobs/job/stop', '/api/tui/sessions/id/jobs/job/stdin',

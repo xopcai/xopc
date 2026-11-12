@@ -6,7 +6,7 @@
     "agent-browser": "Browser",
     "computer-use": "Computer use",
     "phone-use": "Phone Use",
-    "agent-defaults": "Agent settings",
+    "agent-defaults": "Default settings",
     "connectors": "Connections",
     "channels": "Channels",
     "devices": "Devices",
@@ -271,7 +271,7 @@
     "subtitle": "Configure the model, image, voice, and search services available across xopc.",
     "docsLink": "Read the docs",
     "tabsAria": "Model sections",
-    "agentSettingsLink": "Configure agents",
+    "agentSettingsLink": "Open default settings",
     "unsavedChanges": "Unsaved changes",
     "saveBar": {
       "title": "Unsaved changes summary",

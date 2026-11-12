@@ -18,6 +18,7 @@ import {
   NotebookPen,
   Settings,
   Target,
+  UserRound,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
@@ -28,6 +29,10 @@ import { fetchTask } from '@/features/tasks/home-api';
 import { taskDetailHref } from '@/features/tasks/task-detail-route';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { navigateToNewChat } from '@/features/chat/session/new-chat-navigation';
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -42,6 +47,7 @@ import {
 import { TaskDeliveryGroup } from './task-delivery-group';
 
 const KIND_ICON = {
+  agent: UserRound,
   task: Target,
   project: FolderKanban,
   note: NotebookPen,
@@ -139,6 +145,10 @@ function DeliveryRow({
     && reference.capabilities.includes('continue_in_chat');
   const isFailure = delivery.operation === 'failed';
   const token = useGatewayStore((state) => state.conversationId);
+  const agentLabels = reference.kind === 'agent' ? messages(language).agentsSettings : null;
+  const { data: agents } = useSWR(agentLabels && token ? ['gateway-chat-agents', token] : null, fetchChatAgents);
+  const agent = agents?.items.find((item) => item.id === reference.id);
+  const title = agentLabels && agent ? agentListDisplayName(agent, agentLabels) : reference.title;
   const taskDetail = useSWR(reference.kind === 'task' ? ['task-delivery', reference.id, token] : null,
     () => fetchTask(reference.id), { revalidateOnFocus: true });
   useEffect(() => {
@@ -185,25 +195,35 @@ function DeliveryRow({
       navigate(withDetailReturnTo(chatProductHref(`${location.pathname}${location.search}`, `${target.pathname}${target.search}`), `${location.pathname}${location.search}`));
     }
   };
-
   return (
     <li className="flex max-w-full min-w-0 flex-wrap items-center gap-2" data-product-delivery={reference.kind}>
       <button
         type="button"
         onClick={canOpen ? open : undefined}
         disabled={!canOpen}
-        title={[reference.title, description, reference.summary?.trim()].filter(Boolean).join(' · ')}
+        title={[title, description, reference.summary?.trim()].filter(Boolean).join(' · ')}
         className={cn(assistantCapsuleClassName, canOpen ? 'cursor-pointer' : 'cursor-default', isFailure && 'text-danger')}
       >
         <AssistantCapsuleContent
-          icon={<Icon strokeWidth={1.75} className={isFailure ? 'text-danger' : undefined} />}
-          title={reference.title}
-          meta={description}
+          icon={agentLabels ? <AgentAvatarDisplay agentId={reference.id} avatar={agent?.avatar} size={18} />
+            : <Icon strokeWidth={1.75} className={isFailure ? 'text-danger' : undefined} />}
+          title={title}
+          meta={agentLabels ? agentLabels.backToEditor : description}
           fullTitle={fullTitle}
           trailing={canOpen ? <ChevronRight className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden /> : null}
         />
       </button>
-      {canContinue ? (
+      {agentLabels && canOpen && !isFailure ? (
+        <button
+          type="button"
+          className={assistantCapsuleClassName}
+          onClick={() => navigateToNewChat(navigate, '/chat/new?projectScope=none', {
+            state: { agentId: reference.id, forceNewChat: true, fromAgentEditor: true },
+          })}
+        >
+          {agentLabels.listChatWithAgent}
+        </button>
+      ) : canContinue ? (
         <button
           type="button"
           className={cn(

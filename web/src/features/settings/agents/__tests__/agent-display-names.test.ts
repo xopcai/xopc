@@ -35,7 +35,7 @@ describe('agent display names', () => {
     const en = messages('en').agentsSettings;
     const zh = messages('zh').agentsSettings;
     const agents = [
-      ['main', 'Smart Assistant', '智能助手'],
+      ['main', 'General assistant', '通用助手'],
       ['conductor', 'Conductor', '指挥家'],
       ['task-router', 'Task Router', '任务调度员'],
       ['coder', 'Coding Expert', '编程专家'],
@@ -55,14 +55,14 @@ describe('agent display names', () => {
     const en = messages('en').agentsSettings;
     const zh = messages('zh').agentsSettings;
 
-    expect(agentListDisplayName({ id: 'main', name: 'Main' }, zh)).toBe('智能助手');
+    expect(agentListDisplayName({ id: 'main', name: 'Main' }, zh)).toBe('通用助手');
     expect(agentListDisplayName({ id: 'coder', name: 'Coder' }, zh)).toBe('编程专家');
     expect(agentListDisplayName({ id: 'conductor', name: 'Conductor' }, zh)).toBe('指挥家');
     expect(agentListDisplayDescription({ id: 'conductor' }, zh)).toBe(
-      '与你保持对话，安排专长智能体协作，并在有进展时告诉你。',
+      '协调多位专家，并向你汇报进展。',
     );
     expect(agentListDisplayDescription({ id: 'conductor' }, en)).toBe(
-      'Coordinates specialist agents and keeps you updated as work progresses.',
+      'Coordinates experts and keeps you updated on progress.',
     );
     expect(
       agentListDisplayDescription(
@@ -103,7 +103,7 @@ describe('agent display names', () => {
     const zh = messages('zh').agentsSettings;
 
     expect(agentListDisplayName(agent, zh)).toBe('任务调度员');
-    expect(agentListDisplayDescription(agent, zh)).toBe('为委派的任务选择合适的专长智能体。');
+    expect(agentListDisplayDescription(agent, zh)).toBe('为委派的任务选择合适的专家。');
     expect(agentListDisplayName(agent, en)).toBe(agent.name);
     expect(agentListDisplayDescription(agent, en)).toBe(agent.description);
     expect(agentListDisplayName({ ...agent, name: 'My Router' }, zh)).toBe('My Router');

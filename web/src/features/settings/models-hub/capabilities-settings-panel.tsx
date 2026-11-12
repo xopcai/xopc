@@ -1,5 +1,5 @@
 import type { ModelSetupUse } from '@xopcai/gateway-contract';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { ImageModelsSettingsPanel } from '@/features/settings/image-models-setti
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
+import { revalidateVideoModelSettings } from '@/features/video-generation/api';
 import { messages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -17,12 +18,14 @@ import { capabilityReturnPath, parseCapabilityUse } from './capability-navigatio
 import { MediaServiceConnections } from './media-service-connections';
 import { openCapabilitySettings } from './open-capability-settings';
 import { ModelUsesList } from './model-uses-list';
+import { ModelSectionNavigation } from './model-section-navigation';
 import { AddProviderDialog } from './add-provider-dialog';
 import { ConnectedProvidersGrid, useConnectedProviders } from './connected-providers-grid';
 import { revalidateModelsHubCaches } from './models-hub-cache';
 import { ProviderManageDialog } from './provider-manage-dialog';
 import { ModelExecutionSettings } from './model-execution-settings';
 import { ModelCatalogStatus } from './model-catalog-status';
+import { VideoModelSettingsPanel } from './video-model-settings';
 import { XopcCloudAccountCard } from './xopc-cloud-account-card';
 
 export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', onViewChange, onPendingChange }: { inlineUse?: ModelSetupUse; inlineView?: 'settings' | 'services'; onViewChange?: (view: 'settings' | 'services') => void; onPendingChange?: (pending: boolean) => void } = {}) {
@@ -41,10 +44,9 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
   const settingsPending = modelPending || voicePending || connectionPending;
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [manageTarget, setManageTarget] = useState<{ providerId: string; isCustom: boolean } | null>(null);
-  const servicesRef = useRef<HTMLElement>(null);
   const providerData = useConnectedProviders();
   const hasCloudAccount = providerData.cards.some(row => row.id === 'xopc-cloud' && !row.isCustom);
-  const handleSaved = useCallback(() => { void revalidateModelsHubCaches(); }, []);
+  const handleSaved = useCallback(() => { void revalidateModelsHubCaches(); void revalidateVideoModelSettings(); }, []);
   useEffect(() => { onPendingChange?.(settingsPending); return () => onPendingChange?.(false); }, [settingsPending, onPendingChange]);
   useEffect(() => {
     if (inlineUse || capability !== 'models') return;
@@ -90,16 +92,19 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
   if (capability === 'search') return <SettingsPageFrame><SettingsPageHeader title={messages(language).nav.settingsSearch} /><WebSearchSettingsPanel /></SettingsPageFrame>;
   if (capability !== 'models') return <Navigate to="/settings/capabilities/models" replace />;
   return <SettingsPageFrame>
-    <SettingsPageHeader title={zh ? '模型与能力' : 'Models and capabilities'} subtitle={zh ? '按用途选择模型，在设置中调整参数与服务连接。' : 'Choose models by purpose. Adjust parameters and connections in settings.'} actions={<div className="flex items-center gap-2"><a href={docsGuidePageUrl(language, 'configuration')} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-lg px-2 text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{c.docsLink}</a><Button variant="secondary" disabled={settingsPending} onClick={() => { servicesRef.current?.scrollIntoView?.({ block: 'start' }); servicesRef.current?.focus({ preventScroll: true }); }}>{zh ? '服务账户' : 'Service accounts'}</Button></div>} />
+    <SettingsPageHeader title={zh ? '模型与能力' : 'Models and capabilities'} subtitle={zh ? '按用途选择模型，点击服务商名称管理连接。' : 'Choose models by purpose. Select a provider name to manage its connection.'} actions={<div className="flex items-center gap-2"><a href={docsGuidePageUrl(language, 'configuration')} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-lg px-2 text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{c.docsLink}</a></div>} />
     {returnTo ? <Link to={returnTo} className="text-sm text-accent-fg hover:underline">{returnTo === '/settings/phone-use' ? (zh ? '返回手机控制并测试模型' : 'Return to phone control and test the model') : (zh ? '返回原来的工作' : 'Return to your work')}</Link> : null}
     {returnTo ? <p className="text-sm text-fg-muted">{returnTo === '/settings/phone-use' ? (zh ? '正在为手机控制连接模型服务；此处保存服务设置后，还需返回选择并测试手机模型。' : 'Connect a model service for phone control, then return to select and test the phone model.') : (zh ? '正在为原来的工作配置模型。服务保存、模型选择和实际运行验证分别生效。' : 'Configure models for your work. Saving a service, choosing a model and verifying a run are separate steps.')}</p> : null}
-    <ModelUsesList data={providerData} zh={zh} disabled={settingsPending} onPendingChange={setModelPending} onChange={openConnection} onSettings={use => { if (!settingsPending) openCapabilitySettings(use); }} />
-    <section ref={servicesRef} tabIndex={-1} aria-labelledby="model-services-heading" className="space-y-4 scroll-mt-4 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-      <div><h2 id="model-services-heading" className="text-base font-semibold text-fg">{zh ? '连接的服务' : 'Connected services'}</h2><p className="mt-1 text-sm text-fg-muted">{zh ? '在这里管理账户和密钥；各项能力的模型与参数在上方调整。' : 'Manage accounts and keys here. Choose models and adjust capability settings above.'}</p></div>
-      {hasCloudAccount ? <XopcCloudAccountCard labels={c.xopcCloudAccount}><ModelCatalogStatus showCapabilities={false} embedded /></XopcCloudAccountCard> : null}
-      <ConnectedProvidersGrid labels={c.connectedProviders} data={providerData} onAdd={() => setAddDialogOpen(true)} onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })} />
-      {!hasCloudAccount && providerData.cards.length > 0 ? <ModelCatalogStatus showCapabilities={false} /> : null}
-    </section>
+    <ModelSectionNavigation zh={zh}>
+      <ModelUsesList data={providerData} zh={zh} videoRow={<VideoModelSettingsPanel zh={zh} disabled={settingsPending}
+        onManage={providerId => setManageTarget({ providerId, isCustom: false })} />} disabled={settingsPending} onPendingChange={setModelPending} onChange={openConnection} onSettings={use => { if (!settingsPending) openCapabilitySettings(use); }} />
+      <section data-model-section="services" aria-labelledby="model-services-heading" className="space-y-4 scroll-mt-4 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <div><h2 id="model-services-heading" className="text-base font-semibold text-fg">{zh ? '连接的服务' : 'Connected services'}</h2><p className="mt-1 text-sm text-fg-muted">{zh ? '在这里管理账户和密钥；各项能力的模型与参数在上方调整。' : 'Manage accounts and keys here. Choose models and adjust capability settings above.'}</p></div>
+        {hasCloudAccount ? <XopcCloudAccountCard labels={c.xopcCloudAccount}><ModelCatalogStatus showCapabilities={false} embedded /></XopcCloudAccountCard> : null}
+        <ConnectedProvidersGrid labels={c.connectedProviders} data={providerData} onAdd={() => setAddDialogOpen(true)} onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })} />
+        {!hasCloudAccount && providerData.cards.length > 0 ? <ModelCatalogStatus showCapabilities={false} /> : null}
+      </section>
+    </ModelSectionNavigation>
     <AddProviderDialog open={addDialogOpen} connectOnly onOpenChange={setAddDialogOpen} builtinRows={providerData.builtinRows} customConfig={providerData.customConfig} labels={c.addProviderDialog} language={language} onSaved={() => { handleSaved(); setAddDialogOpen(false); }} />
     {manageTarget ? <ProviderManageDialog open onOpenChange={open => { if (!open) setManageTarget(null); }} providerId={manageTarget.providerId} isCustom={manageTarget.isCustom} builtinRows={providerData.builtinRows} customConfig={providerData.customConfig} allModels={providerData.allModels} labels={c.manageProviderDialog} language={language} onSaved={handleSaved} /> : null}
   </SettingsPageFrame>;

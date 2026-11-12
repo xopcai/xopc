@@ -280,7 +280,20 @@ function deliveryForXopcResult(
 
   let source: Record<string, unknown> | undefined;
   let primary: ProductReference | undefined;
-  if (mode === 'project') {
+  if (mode === 'agent' && command === 'create' && resultRecord.ok === true) {
+    source = record(resultRecord.agent);
+    const id = deliveryText(source?.id);
+    const profile = record(source?.profile);
+    if (id) {
+      primary = {
+        kind: 'agent',
+        id,
+        title: deliveryText(profile?.name) ?? id,
+        summary: deliverySummary(profile?.description),
+        capabilities: ['open', 'edit'],
+      };
+    }
+  } else if (mode === 'project') {
     const match = record(resultRecord.match);
     source = record(resultRecord.project) ?? record(match?.project) ?? match;
     const id = deliveryText(source?.id);

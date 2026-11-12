@@ -7,8 +7,10 @@ import { AutomationDeliveryStatus } from './automation-delivery-status';
 import { AutomationListToolbar } from './automation-list-toolbar';
 import { AutomationContinueButton, AutomationEditDialog } from './automation-task-card';
 import { AutomationDiscovery } from './automation-discovery';
+import { AutomationAssigneeSelect } from './automation-assignee-select';
 import { scheduledRunPreview, SchedulePreview } from './schedule-preview';
 import { FormField as Field } from '@/components/ui/form-field';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -48,7 +50,6 @@ import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { fetchProjects, type Project } from '@/features/projects/api';
-import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
@@ -1084,6 +1085,8 @@ export function AutomationsWorkspace({
                 cronLabels={cronLabels}
                 language={language}
                 projects={projects}
+                agentOptions={agentOptions}
+                defaultAgentId={chatAgentsSwr.data?.defaultId}
                 busyAction={busyAction}
                 onEdit={openAutomationEditor}
                 onSelectRun={selectRun}
@@ -1944,6 +1947,8 @@ function AutomationDetails({
   cronLabels,
   language,
   projects,
+  agentOptions,
+  defaultAgentId,
   busyAction,
   onEdit,
   onSelectRun,
@@ -1957,6 +1962,8 @@ function AutomationDetails({
   cronLabels: CronMessages;
   language: StoredLanguage;
   projects: Project[];
+  agentOptions: ChatAgentOption[];
+  defaultAgentId?: string;
   busyAction: string | null;
   onEdit: (automation: Automation) => void;
   onSelectRun: (runId: string) => void;
@@ -1969,6 +1976,12 @@ function AutomationDetails({
   const canRun = !automation.management || automation.management.runnable;
   const canEdit = !automation.management || automation.management.editable.includes('trigger');
   const canDelete = !automation.management || automation.management.deletable;
+  const actionAgentId = automation.action.kind === 'agent' ? automation.action.agentId : undefined;
+  const assignee = agentOptions.find((agent) => agent.id === (actionAgentId ?? defaultAgentId));
+  const assigneeName = assignee ? agentListDisplayName(assignee, messages(language).agentsSettings) : undefined;
+  const assigneeLabel = actionAgentId
+    ? assigneeName ?? actionAgentId
+    : assigneeName ? labels.form.defaultAgentWithName.replace('{{name}}', assigneeName) : labels.form.defaultAgent;
 
   return (
     <article className="min-w-0 overflow-hidden bg-surface-panel">
@@ -2096,7 +2109,7 @@ function AutomationDetails({
             <summary className="cursor-pointer text-sm font-medium text-fg">{labels.experience.settings}</summary>
             <div className="mt-4 space-y-4">
               <MarkdownView content={automationTaskSummary(automation, labels)} compact />
-              <AutomationOverview automation={automation} labels={labels} cronLabels={cronLabels} language={language} projects={projects} />
+              <AutomationOverview automation={automation} labels={labels} cronLabels={cronLabels} language={language} projects={projects} assigneeLabel={assigneeLabel} />
             </div>
           </details>
         </div>
@@ -2117,12 +2130,14 @@ function AutomationOverview({
   cronLabels,
   language,
   projects,
+  assigneeLabel,
 }: {
   automation: Automation;
   labels: AutomationsMessages;
   cronLabels: CronMessages;
   language: StoredLanguage;
   projects: Project[];
+  assigneeLabel: string;
 }) {
   const mode = safetyMode(automation);
   const nextRun = automationNextRunLabel(automation, labels, language);
@@ -2178,8 +2193,8 @@ function AutomationOverview({
           icon={automation.action.kind === 'task_command'
                 ? <CheckCircle2 className="size-4" aria-hidden />
               : <Zap className="size-4" aria-hidden />}
-          label={labels.info.action}
-          value={actionLabel(automation.action, labels)}
+          label={automation.action.kind === 'agent' ? labels.form.agent : labels.info.action}
+          value={automation.action.kind === 'agent' ? assigneeLabel : actionLabel(automation.action, labels)}
         />
         <OverviewItem
           icon={<ShieldCheck className="size-4" aria-hidden />}
@@ -2349,7 +2364,6 @@ function AutomationForm({
   language: StoredLanguage;
   projectLocked?: boolean;
 }) {
-  const agentsMessages = messages(language).agentsSettings;
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
   const intervalMs = automationIntervalMs(form.intervalValue, form.intervalUnit);
   const intervalPreviewNow = Date.now();
@@ -2571,20 +2585,14 @@ function AutomationForm({
           <SelectOption value="agent">{labels.action.runAgent}</SelectOption>
           <SelectOption value="task_command">{labels.action.runTask}</SelectOption>
         </Select>
-        <Field label={labels.form.agent}>
-          <Select
-            className={inputClass}
-            value={form.agentId}
-            onChange={(e) => update({ agentId: e.target.value })}
-          >
-            <SelectOption value="">{agentsLoading ? labels.form.loadingAgents : labels.form.defaultAgent}</SelectOption>
-            {agentOptions.map((agent) => (
-              <SelectOption key={agent.id} value={agent.id}>
-                {agentListDisplayName(agent, agentsMessages)}
-              </SelectOption>
-            ))}
-          </Select>
-        </Field>
+        <AutomationAssigneeSelect
+          language={language}
+          agents={agentOptions}
+          defaultId={defaultAgentId}
+          loading={agentsLoading}
+          value={form.agentId}
+          onChange={(agentId) => update({ agentId })}
+        />
         {form.actionMode === 'agent' ? (
           <>
             <Field label={labels.form.model}>
