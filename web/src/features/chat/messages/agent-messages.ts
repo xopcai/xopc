@@ -342,6 +342,8 @@ function wireAttachmentsFromMessage(m: WireMessage): Message['attachments'] {
 
 function buildUserMessage(m: WireMessage): Message {
   const contentRaw = m.content;
+  const metadata = asRecord(m.metadata);
+  const clientMessageId = metadata?.steered === true ? metadata.clientMessageId : undefined;
   const blocks =
     typeof contentRaw === 'string'
       ? (() => {
@@ -353,6 +355,7 @@ function buildUserMessage(m: WireMessage): Message {
   return {
     role: 'user',
     ...(m.turnId ? { turnId: m.turnId } : {}),
+    ...(typeof clientMessageId === 'string' ? { clientMessageId } : {}),
     content: blocks,
     attachments: wireAttachmentsFromMessage(m),
     contextRefs: normalizeMessageContextRefs(m.metadata),

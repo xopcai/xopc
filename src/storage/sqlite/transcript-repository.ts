@@ -21,6 +21,7 @@ import {
 import { getCurrentTranscriptId, readCurrentTranscriptId } from './session-repository.js';
 import { escapeFts5Query, buildFts5SearchQuery, sessionHanSearchTerms, escapeSqlLike } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+import { bumpSessionInputRevision } from './session-input-repository.js';
 
 export interface TranscriptSourceEntry {
   entryId: string;
@@ -122,6 +123,7 @@ function withSessionInputContextMetadata(
   const metadata = message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
     ? message.metadata as Record<string, unknown>
     : {};
+  if (classified.role === 'user' && metadata.steered === true) return row;
   const input = db.prepare(
     `SELECT client_message_id, context_refs_json, origin_json FROM session_inputs
      WHERE conversation_id = ? AND run_id = ?
@@ -176,6 +178,17 @@ export function appendTranscriptEntry(
     }
     const persistedRow = withSessionInputContextMetadata(db, conversationId, row);
     const inserted = insertEntry(db, { transcriptId, conversationId, row: persistedRow, entryId: opts?.entryId });
+    if (isUserMessageRow(row)) {
+      const { metadata, turnId } = row as { metadata?: { clientMessageId?: string; steered?: boolean }; turnId?: string };
+      if (metadata?.steered && metadata.clientMessageId && turnId) {
+        const now = Date.now();
+        const delivered = db.prepare(`UPDATE session_inputs SET status = 'completed', error = NULL,
+          version = version + 1, updated_at_ms = ? WHERE conversation_id = ? AND client_message_id = ?
+          AND target_run_id = ? AND status = 'injecting' AND (expected_transcript_id IS NULL OR expected_transcript_id = ?)`)
+          .run(now, conversationId, metadata.clientMessageId, turnId, transcriptId).changes;
+        if (delivered) bumpSessionInputRevision(db, conversationId);
+      }
+    }
     if (classifyStoredRow(persistedRow).entryKind === 'message') {
       const tokenDelta = opts?.tokenDelta ?? 0;
       const now = Date.now();

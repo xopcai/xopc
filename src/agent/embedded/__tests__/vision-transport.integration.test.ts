@@ -24,6 +24,7 @@ import { createSqliteTranscriptRuntime, InMemoryTranscriptRuntime } from '../tra
 import { evictEmbeddedSessionRunner } from '../session-runner.js';
 import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
+import { claimNextSessionInput, finishSessionInputRun, getSessionInputById, insertSessionInput } from '../../../storage/sqlite/session-input-repository.js';
 import { closeXopcDatabase } from '../../../storage/sqlite/connection.js';
 import { SessionStore } from '../../../session/store.js';
 import { onSessionTranscriptUpdate } from '../../../session/transcript-events.js';
@@ -40,6 +41,14 @@ it('steers attachments and reference images through a live AgentSession and stor
   initializeTestAgentCatalog();
   const conversationId = createConversation({ agentId: 'main' }).key;
   const runId = randomUUID();
+  const origin = { type: 'endpoint' as const, endpointId: 'browser' };
+  insertSessionInput({ id: randomUUID(), conversationId, clientMessageId: 'initial-input', content: 'Start work.',
+    requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', origin });
+  claimNextSessionInput(conversationId, runId);
+  const steeringInput = insertSessionInput({
+    id: randomUUID(), conversationId, clientMessageId: 'steering-input', content: 'Change course',
+    requestedDelivery: 'steer', effectiveDelivery: 'steer', status: 'injecting', origin, targetRunId: runId,
+  });
   const config = ConfigSchema.parse({ userContext: { enabled: false } });
   const store = new SessionStore({ config });
   const unsubscribe = onSessionTranscriptUpdate(update => { void store.syncEmbeddedTranscriptUpdate(update); });
@@ -81,9 +90,11 @@ it('steers attachments and reference images through a live AgentSession and stor
           const enriched = injectSourceContextsIntoUserMessage({ role: 'user', content: 'Change course', timestamp: Date.now() }, contexts);
           const text = (enriched.content as Array<{ text: string }>)[0]!.text;
           expect(await dispatcher.steerWebchatSession(conversationId, text, runId, { sourceContexts: contexts,
+            clientMessageId: steeringInput.clientMessageId,
             attachments: [{ type: 'image', name: 'design.png', mimeType: 'image/png', data: imagePart.data },
               { type: 'file', name: 'brief.txt', mimeType: 'text/plain', data: Buffer.from('Updated brief').toString('base64') }],
           })).toBe(true);
+          expect(getSessionInputById(conversationId, steeringInput.id)?.status).toBe('injecting');
           return { content: [{ type: 'text' as const, text: 'Ready.' }], details: {} };
         } }],
     });
@@ -96,8 +107,11 @@ it('steers attachments and reference images through a live AgentSession and stor
     const messages = await store.loadMessages(conversationId);
     const steered = messages.find(message => message.role === 'user' && JSON.stringify(message).includes('Change course'));
     expect(steered).toMatchObject({ media: [{ name: 'design.png' }, { name: 'brief.txt' }],
-      metadata: { sourceContexts: [{ sourceId: 'fixture-note', version: 'v1' }] } });
+      metadata: { clientMessageId: steeringInput.clientMessageId, steered: true,
+        sourceContexts: [{ sourceId: 'fixture-note', version: 'v1' }] } });
     expect(JSON.stringify(steered)).not.toContain(imagePart.data);
+    finishSessionInputRun(conversationId, runId, 'cancelled');
+    expect(getSessionInputById(conversationId, steeringInput.id)?.status).toBe('completed');
   } finally {
     unsubscribe(); evictEmbeddedSessionRunner(conversationId); server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));

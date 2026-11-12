@@ -196,6 +196,7 @@ function preserveLocalUserDisplayPayload(existing: Message, incoming: Message): 
 
 function samePersistedRow(existing: Message, incoming: Message): boolean {
   if (existing.role !== incoming.role) return false;
+  if (existing.clientMessageId || incoming.clientMessageId) return existing.clientMessageId === incoming.clientMessageId;
   if (existing.turnId && incoming.turnId) {
     return existing.turnId === incoming.turnId && existing.startsNewBubble === incoming.startsNewBubble;
   }
@@ -206,8 +207,11 @@ function samePersistedRow(existing: Message, incoming: Message): boolean {
 function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
   let changed = current.length !== incoming.length;
   let cursor = 0;
+  const byClientId = new Map(current.flatMap((message, index) => message.clientMessageId
+    ? [[message.clientMessageId, index] as const] : []));
   const next = incoming.map((incomingMessage, index) => {
-    const matchIndex = current.findIndex((message, i) => i >= cursor && samePersistedRow(message, incomingMessage));
+    const identified = incomingMessage.clientMessageId ? byClientId.get(incomingMessage.clientMessageId) : undefined;
+    const matchIndex = identified ?? current.findIndex((message, i) => i >= cursor && samePersistedRow(message, incomingMessage));
     const atIndex = index >= cursor ? current[index] : undefined;
     const equivalentAtIndex = atIndex && (
       shouldReplaceOptimisticUserRow(atIndex, incomingMessage)
@@ -216,7 +220,7 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
     );
     const existingIndex = matchIndex >= 0 ? matchIndex : equivalentAtIndex ? index : -1;
     const existing = current[existingIndex];
-    if (existing) cursor = existingIndex + 1;
+    if (existing) cursor = Math.max(cursor, existingIndex + 1);
     const message = existing && isUiUserMessage(existing.role) && isUiUserMessage(incomingMessage.role)
       ? preserveLocalUserDisplayPayload(existing, incomingMessage)
       : incomingMessage;
@@ -275,11 +279,17 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
   return changed ? next : current;
 }
 
+function preservePendingSteers(current: Message[], incoming: Message[]): Message[] {
+  const serverIds = new Set(incoming.map(message => message.clientMessageId));
+  const steers = current.filter(message => message.pendingSteer && !serverIds.has(message.clientMessageId));
+  return steers.length ? [...incoming, ...steers] : incoming;
+}
+
 function preserveOptimisticMessages(current: Message[], incoming: Message[]): Message[] {
   const pending = current.filter((message) => isUiUserMessage(message.role) && message.deliveryStatus);
-  if (pending.length === 0) return incoming;
+  if (pending.length === 0) return preservePendingSteers(current, incoming);
   const knownLocalUserCount = current.filter(
-    (message) => isUiUserMessage(message.role) && !message.deliveryStatus,
+    (message) => isUiUserMessage(message.role) && !message.deliveryStatus && !message.pendingSteer,
   ).length;
   const unmatchedServerUsers = incoming
     .filter((message) => isUiUserMessage(message.role))
@@ -292,7 +302,21 @@ function preserveOptimisticMessages(current: Message[], incoming: Message[]): Me
     unmatchedServerUsers.splice(matchIndex, 1);
     return false;
   });
-  return missing.length > 0 ? [...incoming, ...missing] : incoming;
+  return preservePendingSteers(current, missing.length ? [...incoming, ...missing] : incoming);
+}
+
+/** Live history can skip newly persisted users that share the active run ID. */
+function reconcileLiveSteers(current: Message[], server: Message[]): Message[] {
+  const byClientId = new Map(server.flatMap(message => message.clientMessageId
+    ? [[message.clientMessageId, message] as const] : []));
+  let changed = false;
+  const next = current.map(message => {
+    const persisted = message.pendingSteer && message.clientMessageId ? byClientId.get(message.clientMessageId) : undefined;
+    if (!persisted) return message;
+    changed = true;
+    return preserveLocalUserDisplayPayload(message, persisted);
+  });
+  return changed ? next : current;
 }
 
 export function findHistoryPageStart(current: Message[], incoming: Message[]): number {
@@ -752,7 +776,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             ...state.sessions,
             [key]: {
               ...current,
-              messages: cloneMessages(messagesWithoutTail),
+              messages: reconcileMessages(current.messages, preservePendingSteers(current.messages, messagesWithoutTail)),
               streamingMsg: tail ? cloneMessageForRender(tail) : null,
               streaming: true,
               sending: true,
@@ -854,11 +878,22 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           };
         }
-        const merged = mergeMissingUserMessagesFromServer(
-          current.messages,
+        const withPersistedSteers = reconcileLiveSteers(current.messages, serverMessages);
+        const settled = withPersistedSteers.some(message => message.pendingSteer)
+          ? withPersistedSteers.filter(message => !message.pendingSteer)
+          : withPersistedSteers;
+        const recovered = mergeMissingUserMessagesFromServer(
+          settled,
           retained,
           current.streamingMsg?.turnId,
         );
+        let merged = recovered === settled ? withPersistedSteers : preservePendingSteers(withPersistedSteers, recovered);
+        if (current.streamingMsg?.turnId) {
+          const seen = new Set(merged.map(message => message.clientMessageId));
+          const unseenSteers = serverMessages.filter(message => message.clientMessageId
+            && message.turnId === current.streamingMsg?.turnId && !seen.has(message.clientMessageId));
+          if (unseenSteers.length) merged = [...merged, ...unseenSteers];
+        }
         if (
           merged === current.messages &&
           mergedHasMore === current.hasMore &&

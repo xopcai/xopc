@@ -249,16 +249,17 @@ export async function hydrateUserTurnForLlm(opts: {
 
 const pendingTranscriptBySession = new Map<string, TranscriptUserMessage>();
 const activeTranscriptUserBySession = new Map<string, TranscriptUserMessage>();
-const pendingSteeringTranscripts = new Map<string, TranscriptUserMessage[]>();
+const pendingSteeringTranscripts = new Map<string, Array<{ message: TranscriptUserMessage; queuedText: string }>>();
 
 /** Retain each queued steer separately so image bytes never enter transcript storage. */
-export function registerSteeringTranscript(conversationId: string, message: TranscriptUserMessage): () => void {
+export function registerSteeringTranscript(conversationId: string, message: TranscriptUserMessage, queuedText: string): () => void {
   assertTranscriptUserMessage(message);
   const pending = pendingSteeringTranscripts.get(conversationId) ?? [];
-  pending.push(message);
+  const entry = { message, queuedText: queuedText.trim() };
+  pending.push(entry);
   pendingSteeringTranscripts.set(conversationId, pending);
   return () => {
-    const index = pending.indexOf(message);
+    const index = pending.indexOf(entry);
     if (index >= 0) pending.splice(index, 1);
     if (pending.length === 0 && pendingSteeringTranscripts.get(conversationId) === pending) pendingSteeringTranscripts.delete(conversationId);
   };
@@ -334,17 +335,19 @@ export function transformUserMessageForPersistence(
     return message;
   }
   if (conversationId) {
-    const steering = pendingSteeringTranscripts.get(conversationId);
-    const index = steering?.findIndex(pending => pendingMatchesMessage(pending, message)) ?? -1;
-    if (steering && index >= 0) {
-      const [pending] = steering.splice(index, 1);
-      if (steering.length === 0) pendingSteeringTranscripts.delete(conversationId);
-      return pending!;
-    }
     const pending = pendingTranscriptBySession.get(conversationId);
     if (pending && pendingMatchesMessage(pending, message)) {
       pendingTranscriptBySession.delete(conversationId);
       return pending;
+    }
+    const steering = pendingSteeringTranscripts.get(conversationId);
+    const text = messageTextForPendingCompare(message).trim();
+    const exact = steering?.findIndex(entry => entry.queuedText === text) ?? -1;
+    const index = exact >= 0 ? exact : steering?.findIndex(entry => pendingMatchesMessage(entry.message, message)) ?? -1;
+    if (steering && index >= 0) {
+      const [pending] = steering.splice(index, 1);
+      if (steering.length === 0) pendingSteeringTranscripts.delete(conversationId);
+      return pending!.message;
     }
   }
   assertTranscriptUserMessage(message);

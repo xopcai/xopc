@@ -140,6 +140,9 @@ export interface Message {
   pendingResponseStatus?: 'sending' | 'waiting';
   /** Client-only identity used to update one optimistic submission in place. */
   clientSubmissionId?: string;
+  /** Durable input identity shared by a queued steer and its transcript row. */
+  clientMessageId?: string;
+  pendingSteer?: boolean;
   /** Client-only frozen page context retained only while an optimistic send can be retried. */
   pendingAppContext?: AppContextEnvelope;
   /** Stable server run identifier used to attribute context and feedback. */

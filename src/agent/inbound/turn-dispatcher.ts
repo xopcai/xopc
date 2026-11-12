@@ -186,6 +186,8 @@ export class TurnDispatcher {
     attachments?: DirectAttachment[];
     sourceContexts?: AgentSourceContext[];
     voiceAgentInstruction?: boolean;
+    clientMessageId?: string;
+    onHandled?: () => void;
   }): Promise<boolean> {
     const trimmed = text.trim();
     if (!trimmed && !options?.attachments?.length && !options?.sourceContexts?.length) return false;
@@ -201,15 +203,24 @@ export class TurnDispatcher {
           content: trimmed, attachments: prepared, conversationId, config: c.requireConfig(),
           agentManager: c.agentManager, modelManager: c.modelManager,
         });
-        const transcriptMessage = options.sourceContexts?.length ? {
-          ...message, metadata: { sourceContexts: options.sourceContexts.map(summarizeSourceContext) },
-        } : message;
+        const transcriptMessage = {
+          ...message,
+          metadata: {
+            ...(options.clientMessageId ? { clientMessageId: options.clientMessageId, steered: true } : {}),
+            ...(options.sourceContexts?.length ? { sourceContexts: options.sourceContexts.map(summarizeSourceContext) } : {}),
+          },
+        };
         const hydrated = await hydrateUserTurnForLlm({ message: transcriptMessage, modelRef });
         const contextImages = resolveImageHandlingStrategy(modelRef) === 'native'
           ? options.sourceContexts?.flatMap(context => context.images ?? []) ?? [] : [];
         return await queueEmbeddedSteer(conversationId, hydrated.text, expectedRunId, {
-          images: [...hydrated.images, ...contextImages], transcriptMessage,
+          images: [...hydrated.images, ...contextImages], transcriptMessage, onHandled: options.onHandled,
         });
+      }
+      if (options?.clientMessageId) {
+        const transcriptMessage = { role: 'user' as const, content: trimmed, timestamp: Date.now(),
+          metadata: { clientMessageId: options.clientMessageId, steered: true } };
+        return await queueEmbeddedSteer(conversationId, trimmed, expectedRunId, { transcriptMessage, onHandled: options.onHandled });
       }
       return await queueEmbeddedSteer(conversationId, trimmed, expectedRunId);
     } catch (err) {

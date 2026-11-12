@@ -171,6 +171,8 @@ export class SessionInputCoordinator {
       attachments?: UserTurnAttachment[];
       sourceContexts?: AgentSourceContext[];
       voiceAgentInstruction?: boolean;
+      clientMessageId?: string;
+      onHandled?: () => void;
     }) => Promise<boolean>;
     emit: (type: string, payload: unknown) => void;
   }) {}
@@ -188,7 +190,6 @@ export class SessionInputCoordinator {
       throw new SessionInputControlConflict('This input cannot steer the active reply');
     }
     const accepted = acceptSessionInputControl(conversationId, command);
-    this.publish(conversationId);
     if (command.action === 'steer') {
       if (!accepted.replay && row) {
         try {
@@ -201,6 +202,7 @@ export class SessionInputCoordinator {
       }
       return this.publish(conversationId);
     }
+    this.publish(conversationId);
     if (accepted.runId) {
       // Keep the durable stop fence if cancellation fails. Retrying the same operation
       // must never capture or cancel a later run.
@@ -532,10 +534,18 @@ export class SessionInputCoordinator {
   private steerInput(row: SessionInput, runId?: string): Promise<boolean> {
     const text = steeringText(row.content, row.contextSnapshots);
     const voiceAgentInstruction = isNaturalVoiceDelegation(row);
-    if (!voiceAgentInstruction && !row.attachments?.length && !row.contextSnapshots?.length) return this.deps.steer(row.conversationId, text, runId);
+    const trackDelivery = row.origin.type === 'endpoint';
+    if (!trackDelivery && !voiceAgentInstruction && !row.attachments?.length && !row.contextSnapshots?.length) return this.deps.steer(row.conversationId, text, runId);
     return this.deps.steer(row.conversationId, text, runId, {
       attachments: row.attachments as UserTurnAttachment[] | undefined, sourceContexts: row.contextSnapshots,
       ...(voiceAgentInstruction ? { voiceAgentInstruction: true } : {}),
+      ...(trackDelivery ? {
+        clientMessageId: row.clientMessageId,
+        onHandled: () => {
+          const current = getSessionInputById(row.conversationId, row.id);
+          if (current?.status === 'injecting' && current.targetRunId === runId) setSessionInputStatus(row.id, 'completed');
+        },
+      } : {}),
     });
   }
 

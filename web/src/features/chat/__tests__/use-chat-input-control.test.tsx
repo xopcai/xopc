@@ -9,6 +9,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useChatSessionStore } from '../session/chat-session-store';
 import { showComposerNotification } from '../composer/composer-notifications';
 import { apiFetch } from '@/lib/fetch';
+import { sessionWireToUiMessages } from '../messages/agent-messages';
 
 vi.mock('../composer/composer-notifications', () => ({ showComposerNotification: vi.fn() }));
 vi.mock('@/lib/fetch', () => ({ apiFetch: vi.fn() }));
@@ -44,6 +45,46 @@ beforeEach(async () => {
   act(() => hook.markComposerHydrated());
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.clearAllMocks(); });
+
+it('shows accepted steers immediately, merges each by input ID, and returns undelivered steers to the retry queue', async () => {
+  const store = useChatSessionStore.getState();
+  const original = { role: 'user', content: 'Same text', turnId: 'active', timestamp: 1 };
+  store.mergeCommittedFromServer(id, sessionWireToUiMessages([original]));
+  store.setSessionFlags(id, { streaming: true });
+  store.mutateSessionStreaming(id, message => { message.turnId = 'active'; });
+  const accepted = (clientMessageId: string) => ({
+    id: clientMessageId, clientMessageId, content: 'Same text', status: 'injecting',
+    effectiveDelivery: 'steer', origin: { type: 'endpoint', endpointId: 'browser' }, targetRunId: 'active',
+    createdAtMs: 2, version: 2,
+  });
+  const first = accepted('first');
+  const second = accepted('second');
+  const messages = () => useChatSessionStore.getState().sessions[id].messages;
+  const publish = async (inputs: unknown[], revision: number) => {
+    state = { ...state, inputs, revision };
+    await act(async () => { window.dispatchEvent(new CustomEvent('session-input-state', { detail: state })); });
+  };
+  await publish([first, second], 1);
+  const keys = messages().map(row => row.renderKey);
+  expect(messages().map(row => row.pendingSteer)).toEqual([undefined, true, true]);
+  expect(hook.pendingFollowUps).toEqual([]);
+
+  const persisted = { ...original, timestamp: 3, metadata: { clientMessageId: 'first', steered: true } };
+  store.mergeCommittedFromServer(id, sessionWireToUiMessages([original, persisted]));
+  expect(messages().map(row => row.renderKey)).toEqual(keys);
+  expect(messages().map(row => row.pendingSteer)).toEqual([undefined, undefined, true]);
+  await publish([{ ...second, status: 'interrupted', version: 3 }], 2);
+  expect(messages().map(row => row.renderKey)).toEqual(keys.slice(0, 2));
+  expect(hook.pendingFollowUps).toMatchObject([{ id: 'second', status: 'interrupted' }]);
+
+  const third = { ...original, timestamp: 4, metadata: { clientMessageId: 'third', steered: true } };
+  store.mergeCommittedFromServer(id, sessionWireToUiMessages([original, persisted, third]));
+  await publish([accepted('third')], 3);
+  expect(messages().map(row => [row.clientMessageId, row.pendingSteer])).toEqual([
+    [undefined, undefined], ['first', undefined], ['third', undefined],
+  ]);
+  useChatSessionStore.setState({ sessions: {} });
+});
 
 describe('unified input editing', () => {
   it('waits for persisted editor restoration before clearing an empty pause', async () => {

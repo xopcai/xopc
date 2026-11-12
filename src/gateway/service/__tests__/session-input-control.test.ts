@@ -196,7 +196,8 @@ describe('durable session input control', () => {
     const request = { ...command('pause'), action: 'steer' as const, inputId: row.id, inputVersion: row.version };
     await service.control(id, request);
     await service.control(id, request);
-    expect(steer).toHaveBeenCalledExactlyOnceWith(id, 'steer', 'active-run');
+    expect(steer).toHaveBeenCalledExactlyOnceWith(id, 'steer', 'active-run',
+      expect.objectContaining({ clientMessageId: row.clientMessageId }));
     expect(getSessionInputState(id).inputs.filter(input => input.id === row.id)).toMatchObject([{ status: 'injecting', targetRunId: 'active-run' }]);
   });
 
@@ -225,9 +226,8 @@ describe('durable session input control', () => {
     const request = { ...command('steer'), inputId: row.id, inputVersion: row.version };
     await service.control(id, request);
     await service.control(id, request);
-    expect(steer).toHaveBeenCalledExactlyOnceWith(id, expect.stringContaining('Frozen source'), 'active-run', {
-      attachments, sourceContexts: [context],
-    });
+    expect(steer).toHaveBeenCalledExactlyOnceWith(id, expect.stringContaining('Frozen source'), 'active-run',
+      expect.objectContaining({ attachments, sourceContexts: [context], clientMessageId: row.clientMessageId }));
     expect(getSessionInputState(id).inputs.find(input => input.id === row.id)?.status).toBe('injecting');
   });
 
