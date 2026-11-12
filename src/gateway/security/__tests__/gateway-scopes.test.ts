@@ -8,6 +8,16 @@ import {
 } from '../gateway-scopes.js';
 
 describe('gateway scopes', () => {
+  it('grants paired phones session-level access to generated music', () => {
+    const jobs = '/api/music-generation/sessions/session-id/jobs';
+    const audio = `${jobs}/${'a'.repeat(64)}/audio`;
+    for (const path of [jobs, audio]) {
+      expect(requiredGatewayScope('GET', path)).toBe('sessions.read');
+    }
+    expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'sessions.read')).toBe(true);
+    expect(requiredGatewayScope('POST', jobs)).toBe('gateway.admin');
+    expect(requiredGatewayScope('GET', '/api/music-generation/settings')).toBe('gateway.admin');
+  });
   it('requires automation permission for routine adoption and lifecycle controls', () => {
     expect(requiredGatewayScope('GET', '/api/home/routines')).toBe('automations.read');
     expect(requiredGatewayScope('POST', '/api/home/routines/adopt')).toBe('automations.write');

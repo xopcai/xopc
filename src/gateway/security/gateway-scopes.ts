@@ -72,6 +72,9 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   }
   if (path === '/api/video-generation/settings') return 'gateway.admin';
   if (path.startsWith('/api/video-generation/')) return methodScope(method, 'sessions.read', 'sessions.write');
+  if (method === 'GET' && /^\/api\/music-generation\/sessions\/[^/]+\/jobs(?:\/[a-f0-9]{64}\/audio)?$/.test(path)) {
+    return 'sessions.read';
+  }
   if (path.startsWith('/api/sessions') || path.startsWith('/api/side-chats')) {
     return methodScope(method, 'sessions.read', 'sessions.write');
   }

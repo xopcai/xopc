@@ -63,7 +63,8 @@ extension AssistantState {
                 references: references,
                 resultLinks: resultLinks,
                 unavailableOutputs: unavailableOutputs,
-                taskReceipts: receipts
+                taskReceipts: receipts,
+                generatedMediaIds: message.generatedMediaIds ?? []
             )
         }
     }

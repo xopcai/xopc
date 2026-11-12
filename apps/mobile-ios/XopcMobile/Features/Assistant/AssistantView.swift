@@ -50,6 +50,8 @@ struct AssistantView<Dock: View>: View {
     @State private var handledQuickChatID: UUID?
     @State private var readAloud = ChatReadAloud()
     @State private var assistantAudio = AssistantAudioAutoplay()
+    @State private var generatedMedia = GeneratedMediaState()
+    @State private var playingGeneratedMedia: GeneratedMediaCard?
     @State private var startingVoice = false
     @State private var voiceStartError: String?
     @State private var voiceMaterializationIDs: [String: String] = [:]
@@ -164,6 +166,15 @@ struct AssistantView<Dock: View>: View {
                 guard scenePhase == .active, isActive, let conversation, !conversation.isDraft else { return }
                 await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
             }
+            .task(id: GeneratedMediaObservationKey(configuration: configuration, conversationID: conversation?.id,
+                                                  transcriptID: conversation?.transcriptId, busy: state.isRunActive,
+                                                  visible: isActive && scenePhase == .active)) {
+                await generatedMedia.observe(isActive && scenePhase == .active && conversation?.isDraft == false ? conversation?.id : nil,
+                                             client: GatewayClient(configuration: configuration), busy: state.isRunActive)
+            }
+            .sheet(item: $playingGeneratedMedia) { card in
+                if let id = conversation?.id { GeneratedMediaPlayerSheet(card: card, conversationID: id, configuration: configuration) }
+            }
             .onChange(of: scenePhase) {
                 if scenePhase != .active {
                     state.pauseConversation()
@@ -172,6 +183,7 @@ struct AssistantView<Dock: View>: View {
             .onChange(of: isActive) {
                 if !isActive {
                     state.pauseConversation()
+                    playingGeneratedMedia = nil
                 }
             }
             .onChange(of: conversation?.id, initial: true) {
@@ -181,6 +193,7 @@ struct AssistantView<Dock: View>: View {
                 readAloud.stop()
                 assistantAudio.stop()
                 executionPresentation = nil
+                playingGeneratedMedia = nil
                 isAtBottom = true
                 showJumpBottom = false
                 followingBottom = true
@@ -392,7 +405,8 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var messageTimeline: some View {
-        GeometryReader { viewport in
+        let cards = generatedMedia.cardsByReply(state.messages)
+        return GeometryReader { viewport in
             ScrollViewReader { scroller in
                 ScrollView {
                     // Exact row heights keep long replies anchored during keyboard resize.
@@ -432,7 +446,9 @@ struct AssistantView<Dock: View>: View {
                                     scheduleBottomScroll(scroller)
                                 }
                             }
+                            generatedMediaRows(cards[message.id] ?? [])
                         }
+                        generatedMediaRows(cards[""] ?? [])
                         clarificationCard
                         if showsStagedProgress {
                             AssistantStagesView(progress: state.runProgress,
@@ -559,6 +575,23 @@ struct AssistantView<Dock: View>: View {
                         .padding(.bottom, 8)
                     }
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func generatedMediaRows(_ cards: [GeneratedMediaCard]) -> some View {
+        if let id = conversation?.id, conversation?.isDraft == false {
+            ForEach(cards) { card in
+                GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
+                                  submitting: generatedMedia.submitting, error: card.isDraft ? generatedMedia.error : nil,
+                                  onPlay: {
+                    readAloud.stop()
+                    assistantAudio.stop()
+                    playingGeneratedMedia = card
+                }, onConfirm: {
+                    Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
+                })
             }
         }
     }
@@ -1084,6 +1117,14 @@ private struct TaskResultObservationKey: Equatable {
     let configuration: GatewayConfiguration
     let conversationID: String?
     let isActive: Bool
+}
+
+private struct GeneratedMediaObservationKey: Equatable {
+    let configuration: GatewayConfiguration
+    let conversationID: String?
+    let transcriptID: String?
+    let busy: Bool
+    let visible: Bool
 }
 
 private extension AssistantView {

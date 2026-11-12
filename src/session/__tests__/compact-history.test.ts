@@ -7,6 +7,19 @@ describe('compact history', () => {
     const [message] = compactHistory([{ role: 'assistant', content: 'Draft', stopReason: 'aborted' }]);
     expect(message?.stopReason).toBe('aborted');
   });
+  it('anchors generated media to the first reply that introduced it', () => {
+    const id = 'a'.repeat(64);
+    const receipt = { name: 'music_generation', result: JSON.stringify({ id, prompt: 'private prompt' }) };
+    const compact = compactHistory([
+      { id: 'tool', role: 'assistant', turnId: 'first', content: '', toolCalls: [receipt] },
+      { id: 'reply', role: 'assistant', turnId: 'first', content: 'Queued' },
+      { id: 'update', role: 'assistant', turnId: 'second', content: '', toolCalls: [receipt] },
+      { id: 'follow-up', role: 'assistant', turnId: 'second', content: 'Ready' },
+    ]);
+    expect(compact.filter(message => message.generatedMediaIds).map(message => message.id)).toEqual(['reply']);
+    expect(compact.find(message => message.id === 'reply')?.generatedMediaIds).toEqual([id]);
+    expect(JSON.stringify(compact)).not.toContain('private prompt');
+  });
   it('removes private reasoning and tool data without modifying the default response', () => {
     const messages = transcriptRowsToClientHistory([
       { role: 'user', content: 'hello', metadata: { clientMessageId: 'client' } },
