@@ -312,6 +312,8 @@ function ChannelHubCard({
   onRestart: () => void;
 }) {
   const statusId = useId();
+  const descriptionId = useId();
+  const description = entry.description?.trim();
   const action = choosePrimaryChannelAction(entry);
   const label = runtime === 'disabled' ? ch.enableChannel
     : runtime === 'stopped' ? ch.restartChannel
@@ -328,14 +330,14 @@ function ChannelHubCard({
 
   return (
     <article className={cn(
-      'relative flex items-start justify-between gap-2 rounded-xl border border-edge bg-surface-panel p-4 transition-colors',
+      'relative flex items-center justify-between gap-2 rounded-xl border border-edge bg-surface-panel p-4 transition-colors',
       !pending && 'hover:border-edge-strong hover:bg-surface-hover',
     )}>
       <button
         type="button"
         className="absolute inset-0 cursor-pointer rounded-[inherit] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:cursor-default"
         aria-label={`${entry.label} · ${label}`}
-        aria-describedby={statusId}
+        aria-describedby={description ? `${statusId} ${descriptionId}` : statusId}
         title={pending ? undefined : label}
         onClick={runtime === 'disabled' ? onToggle : runtime === 'stopped' ? onRestart : onOpen}
         disabled={pending}
@@ -351,6 +353,7 @@ function ChannelHubCard({
             {pending ? <Loader2 aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" /> : null}
             {status}
           </span>
+          {description ? <p id={descriptionId} className="mt-1 truncate text-xs text-fg-muted">{description}</p> : null}
         </div>
       </div>
       <Button type="button" variant="ghost" className="relative size-11 shrink-0 p-0"
