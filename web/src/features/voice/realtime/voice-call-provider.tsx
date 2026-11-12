@@ -196,7 +196,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     </Presence>
     <Dialog.Root open={Boolean(target && expanded)} onOpenChange={(open) => { if (!open) setExpanded(false); }} modal={false}>
       <Dialog.Portal>
-        <Dialog.Content ref={setCallCard} onCloseAutoFocus={(event) => event.preventDefault()} onInteractOutside={(event) => event.preventDefault()} data-side="bottom"
+        <Dialog.Content ref={setCallCard} aria-modal={false} onCloseAutoFocus={(event) => event.preventDefault()} onInteractOutside={(event) => event.preventDefault()} data-side="bottom"
           data-personal-call-card={callAnchor ? '' : undefined}
           style={{ transformOrigin: 'top right', ...(callAnchor && callPosition ? {
             right: callPosition.right, top: callPosition.top,

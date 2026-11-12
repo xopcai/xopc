@@ -10,6 +10,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { capabilityLabels, parseCapabilityUse } from './capability-navigation';
 
 const Editor = lazy(() => import('./capabilities-settings-panel').then(module => ({ default: module.CapabilitiesSettingsPanel })));
+const modalDialogSelector = '[role="dialog"]:not([aria-modal="false"])';
 
 export function CapabilitySettingsSheet() {
   const id = useId();
@@ -31,8 +32,8 @@ export function CapabilitySettingsSheet() {
       const use = parseCapabilityUse(detail?.use ?? null);
       if (use && !pending) { if (!isOpen.current) {
         returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const nearestDialog = returnFocus.current?.closest<HTMLElement>('[role="dialog"]');
-        if (!nearestDialog?.closest('[data-capability-settings-sheet]')) setPortalHost(nearestDialog?.parentElement?.closest<HTMLElement>('[role="dialog"]') ?? nearestDialog ?? null);
+        const nearestDialog = returnFocus.current?.closest<HTMLElement>(modalDialogSelector);
+        if (!nearestDialog?.closest('[data-capability-settings-sheet]')) setPortalHost(nearestDialog?.parentElement?.closest<HTMLElement>(modalDialogSelector) ?? nearestDialog ?? null);
       } setUse(use); setPurpose(detail?.purpose === 'phone' || detail?.purpose === 'automation' ? detail.purpose : undefined); setOpen(true); setView(detail?.view === 'services' ? 'services' : 'settings'); }
     };
     const close = () => {
