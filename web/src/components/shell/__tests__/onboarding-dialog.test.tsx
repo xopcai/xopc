@@ -67,6 +67,7 @@ describe('OnboardingDialog', () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     mocks.cloudPending = false;
     mocks.needsSetup = false;
     mocks.desktop = false;
@@ -130,10 +131,17 @@ describe('OnboardingDialog', () => {
     expect(mocks.dismissSetup).toHaveBeenCalledOnce();
   });
 
-  afterEach(() => {
-    act(() => root.unmount());
-    container.remove();
-    vi.clearAllMocks();
+  afterEach(async () => {
+    try {
+      await act(async () => {
+        root.unmount();
+        await vi.runOnlyPendingTimersAsync();
+      });
+    } finally {
+      container.remove();
+      vi.useRealTimers();
+      vi.clearAllMocks();
+    }
   });
 
   it('opens work understanding when model setup is already complete', async () => {

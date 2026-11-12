@@ -1,3 +1,4 @@
+import { cloudMediaManifestSchema } from './xopc-cloud-media-manifest.js';
 import { PhoneModelMetadataSchema } from '../phone/contracts.js';
 import { ImageGenerationCapabilitiesSchema } from '../config/models-json.js';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
@@ -98,6 +99,7 @@ const persistedCatalogSchema = z.object({
     z.string(),
   ).optional(),
   search: searchSchema.optional(),
+  mediaGeneration: cloudMediaManifestSchema.optional(),
   models: z.array(catalogModelSchema),
 }).strict();
 
@@ -118,6 +120,7 @@ export class ModelCatalogPersistence {
         recommendedModel: parsed.data.recommendedModel,
         recommended: parsed.data.recommended,
         search: parsed.data.search,
+        ...(parsed.data.mediaGeneration ? { mediaGeneration: parsed.data.mediaGeneration } : {}),
         lastSuccessAt: parsed.data.fetchedAt,
         models: parsed.data.models as CatalogModel[],
       };
@@ -140,6 +143,7 @@ export class ModelCatalogPersistence {
       recommendedModel: source.recommendedModel,
       recommended: source.recommended,
       search: source.search,
+      mediaGeneration: source.mediaGeneration,
       models: source.models,
     });
     const serialized = `${JSON.stringify(payload, null, 2)}\n`;

@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { getVideoDurationOptions, VIDEO_AUTO_DURATION, VIDEO_MODELS, VIDEO_MODEL_REFS, type VideoGenerationDefaults, type VideoModelDefinition, type VideoModelRef, type VideoModelSettings, type VideoResolution } from '@xopcai/gateway-contract';
+import { getVideoDurationOptions, VIDEO_AUTO_DURATION, VIDEO_MODELS, LOCAL_VIDEO_MODEL_REFS, type VideoGenerationDefaults, type VideoModelDefinition, type VideoModelRef, type VideoModelSettings, type VideoResolution } from '@xopcai/gateway-contract';
 import { useState } from 'react';
 import { useSWRConfig } from 'swr';
 
@@ -26,7 +26,7 @@ export function VideoModelSettingsPanel({ zh, disabled, onManage }: {
   const connected = selected && data?.configured[selected.provider];
   const providerLabel = (provider: VideoModelDefinition['provider']) => provider === 'dashscope-cn'
     ? (zh ? '阿里云百炼' : 'Alibaba Cloud Bailian')
-    : (zh ? '火山方舟' : 'Volcengine Ark');
+    : provider === 'xopc-cloud' ? 'XOPC Cloud' : (zh ? '火山方舟' : 'Volcengine Ark');
   async function save(method: 'PUT' | 'PATCH', payload: object) {
     if (disabled || saving) return false;
     setSaving(true);
@@ -61,7 +61,7 @@ export function VideoModelSettingsPanel({ zh, disabled, onManage }: {
             ariaLabel={zh ? '选择视频生成模型' : 'Select video generation model'}
             value={data.modelRef} triggerClassName="min-h-11" allowEmpty={false}
             disabled={disabled || saving} onChange={ref => { if (ref !== data.modelRef) void save('PUT', { modelRef: ref }); }}
-            options={VIDEO_MODEL_REFS.map(ref => {
+            options={(data.modelRefs ?? LOCAL_VIDEO_MODEL_REFS).map(ref => {
               const model = VIDEO_MODELS[ref];
               return { value: ref, label: model.name, group: providerLabel(model.provider) };
             })} />

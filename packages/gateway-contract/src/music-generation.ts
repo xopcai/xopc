@@ -45,6 +45,7 @@ export interface MusicModelSettings {
     name: string;
     providerId: string;
     modes: readonly MusicMode[];
+    creditMicroPerTrack?: number;
   }>;
-  credentials: Record<string, 'saved' | 'environment' | 'missing'>;
+  credentials: Record<string, 'saved' | 'environment' | 'oauth' | 'missing'>;
 }

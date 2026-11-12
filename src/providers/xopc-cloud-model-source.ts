@@ -1,3 +1,4 @@
+import { cloudMediaManifestSchema } from './xopc-cloud-media-manifest.js';
 import { PhoneModelMetadataSchema } from '../phone/contracts.js';
 import { ImageGenerationCapabilitiesSchema } from '../config/models-json.js';
 import type { ComputerProfile } from '@xopcai/computer-control-contract';
@@ -92,6 +93,7 @@ export class XopcCloudModelSource {
         schemaVersion?: unknown;
         defaults?: unknown;
         search?: unknown;
+        mediaGeneration?: unknown;
       };
       error?: { message?: unknown; code?: unknown };
     } | null;
@@ -179,6 +181,7 @@ export class XopcCloudModelSource {
       })).values()];
     const recommended = parseRecommendations(body.xopc?.defaults, models);
     const search = parseSearchCapability(body.xopc?.search);
+    const mediaGeneration = cloudMediaManifestSchema.safeParse(body.xopc?.mediaGeneration).data;
     return {
       status: 'fetched',
       source: {
@@ -189,6 +192,7 @@ export class XopcCloudModelSource {
         recommendedModel: models.find(model => model.id === 'auto')?.id ?? models.find(model => !model.phoneUse && !isDedicatedComputerProfile(model.computerUse?.profile))?.id ?? null,
         ...(Object.keys(recommended).length > 0 ? { recommended } : {}),
         ...(search ? { search } : {}),
+        ...(mediaGeneration ? { mediaGeneration } : {}),
         lastSuccessAt: Date.now(),
       },
       models,

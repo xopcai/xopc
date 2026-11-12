@@ -7,7 +7,6 @@ import { ImageModelsSettingsPanel } from '@/features/settings/image-models-setti
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
-import { revalidateVideoModelSettings } from '@/features/video-generation/api';
 import { messages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -47,7 +46,7 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
   const [manageTarget, setManageTarget] = useState<{ providerId: string; isCustom: boolean } | null>(null);
   const providerData = useConnectedProviders();
   const hasCloudAccount = providerData.cards.some(row => row.id === 'xopc-cloud' && !row.isCustom);
-  const handleSaved = useCallback(() => { void revalidateModelsHubCaches(); void revalidateVideoModelSettings(); }, []);
+  const handleSaved = useCallback(() => { void revalidateModelsHubCaches(); }, []);
   useEffect(() => { onPendingChange?.(settingsPending); return () => onPendingChange?.(false); }, [settingsPending, onPendingChange]);
   useEffect(() => {
     if (inlineUse || capability !== 'models') return;
@@ -99,7 +98,7 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
     <ModelSectionNavigation zh={zh}>
       <ModelUsesList data={providerData} zh={zh} videoRow={<VideoModelSettingsPanel zh={zh} disabled={settingsPending}
         onManage={providerId => setManageTarget({ providerId, isCustom: false })} />}
-        musicRow={<MusicModelSettingsPanel zh={zh} disabled={settingsPending} />} disabled={settingsPending} onPendingChange={setModelPending} onChange={openConnection} onSettings={use => { if (!settingsPending) openCapabilitySettings(use); }} />
+        musicRow={<MusicModelSettingsPanel zh={zh} disabled={settingsPending} onManageCloud={() => setManageTarget({ providerId: 'xopc-cloud', isCustom: false })} />} disabled={settingsPending} onPendingChange={setModelPending} onChange={openConnection} onSettings={use => { if (!settingsPending) openCapabilitySettings(use); }} />
       <section data-model-section="services" aria-labelledby="model-services-heading" className="space-y-4 scroll-mt-4 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <div><h2 id="model-services-heading" className="text-base font-semibold text-fg">{zh ? '连接的服务' : 'Connected services'}</h2><p className="mt-1 text-sm text-fg-muted">{zh ? '在这里管理账户和密钥；各项能力的模型与参数在上方调整。' : 'Manage accounts and keys here. Choose models and adjust capability settings above.'}</p></div>
         {hasCloudAccount ? <XopcCloudAccountCard labels={c.xopcCloudAccount}><ModelCatalogStatus showCapabilities={false} embedded /></XopcCloudAccountCard> : null}

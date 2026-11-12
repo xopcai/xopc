@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { TENCENT_MPS_MUSIC_PROVIDER, type MusicMode, type MusicModelSettings } from '@xopcai/gateway-contract';
+import { creditDecimal, TENCENT_MPS_MUSIC_PROVIDER, type MusicMode, type MusicModelSettings } from '@xopcai/gateway-contract';
 import { ArrowUpRight } from 'lucide-react';
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
@@ -28,10 +28,10 @@ function providerLabel(provider: string, zh: boolean): string {
   if (provider === 'mureka-cn') return zh ? 'Mureka 中国站' : 'Mureka China';
   if (provider === 'mureka-global') return zh ? 'Mureka 国际站' : 'Mureka Global';
   if (provider === TENCENT_MPS_MUSIC_PROVIDER) return zh ? '腾讯云媒体处理（MPS）' : 'Tencent Cloud MPS';
-  return provider;
+  return provider === 'xopc-cloud' ? 'XOPC Cloud' : provider;
 }
 
-export function MusicModelSettingsPanel({ zh, disabled }: { zh: boolean; disabled?: boolean }) {
+export function MusicModelSettingsPanel({ zh, disabled, onManageCloud }: { zh: boolean; disabled?: boolean; onManageCloud?: () => void }) {
   const { data, error, mutate } = useSWR<MusicModelSettings>(settingsUrl(), fetchJson<MusicModelSettings>);
   const { mutate: mutateCache } = useSWRConfig();
   const [provider, setProvider] = useState<string>();
@@ -55,6 +55,7 @@ export function MusicModelSettingsPanel({ zh, disabled }: { zh: boolean; disable
   }) : Boolean(replacementKey && !isMaskedSecret(replacementKey));
   const credentialLabel = (source: MusicModelSettings['credentials'][string] | undefined) => {
     if (source === 'saved') return zh ? '已保存密钥' : 'Credentials saved';
+    if (source === 'oauth') return zh ? '已连接' : 'Connected';
     if (source === 'environment') return zh ? '使用环境变量' : 'Using environment variables';
     return zh ? '待连接' : 'Connection needed';
   };
@@ -101,7 +102,10 @@ export function MusicModelSettingsPanel({ zh, disabled }: { zh: boolean; disable
           onChange={ref => { if (ref !== data.modelRef) void save(settingsUrl(), 'PUT', { modelRef: ref }); }}
           options={data.models.map(model => ({ value: model.ref, label: model.name, group: providerLabel(model.providerId, zh) }))} />
         <ModelUseService name={providerLabel(selected.providerId, zh)} manageLabel={zh ? '管理服务' : 'Manage services'}
-          disabled={disabled || pending} onManage={() => { setFailure(''); setProvider(selected.providerId); }} />
+          disabled={disabled || pending} onManage={selected.providerId === 'xopc-cloud' ? onManageCloud : () => { setFailure(''); setProvider(selected.providerId); }} />
+        {selected.creditMicroPerTrack && <p className="text-xs text-fg-muted">
+          {creditDecimal(String(selected.creditMicroPerTrack))} {zh ? 'Credits / 首' : 'Credits / track'}
+        </p>}
         {pending && !provider && !defaults && <p role="status" className="text-xs text-fg-muted">{zh ? '正在切换…' : 'Switching…'}</p>}
         {!provider && !defaults && failure && <p role="alert" className="text-xs text-danger">{failure}</p>}
       </> : error ? <div role="alert" className="text-sm text-danger">

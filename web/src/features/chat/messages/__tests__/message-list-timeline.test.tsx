@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { SEEDANCE_VIDEO_MODEL_REF, type MusicGenerationSession, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '../messages.types';
 import { useChatMusicGeneration } from '../../music/chat-music-generation';
@@ -20,6 +21,7 @@ import { MessageList } from '../message-list';
 describe('conversation timeline', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
+  const renderTimeline = (content: ReactNode) => act(() => root.render(<MemoryRouter>{content}</MemoryRouter>));
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
@@ -79,7 +81,7 @@ describe('conversation timeline', () => {
       return <MessageList messages={list} timelineEntries={entries}
         streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />;
     }
-    act(() => root.render(<MusicConversation />));
+    renderTimeline(<MusicConversation />);
     expect([...container.querySelectorAll('[data-chat-message-index], [data-chat-timeline-entry]')]
       .map(node => node.getAttribute('data-chat-message-index') ?? node.getAttribute('data-chat-timeline-entry')))
       .toEqual(['0', '1', 'music-generation:song', '2', '3']);
@@ -124,15 +126,15 @@ describe('conversation timeline', () => {
         .toEqual(['0', '1', 'video-generation:video', '2', '3']);
     };
 
-    act(() => root.render(<VideoConversation data={session} />));
+    renderTimeline(<VideoConversation data={session} />);
     expect(container.textContent).toContain('Video draft');
     expectOrder();
 
-    act(() => root.render(<VideoConversation data={{ ...session, draft: undefined, jobs: [job] }} />));
+    renderTimeline(<VideoConversation data={{ ...session, draft: undefined, jobs: [job] }} />);
     expect(container.querySelector('[data-chat-timeline-entry] [role="status"]')?.textContent).toBe('Queued');
     expectOrder();
 
-    act(() => root.render(<VideoConversation data={{ ...session, draft: undefined, jobs: [{ ...job, state: 'completed' }] }} />));
+    renderTimeline(<VideoConversation data={{ ...session, draft: undefined, jobs: [{ ...job, state: 'completed' }] }} />);
     expect(container.querySelector('[data-chat-timeline-entry] video')).toBeTruthy();
     expectOrder();
   });
@@ -149,7 +151,7 @@ describe('conversation timeline', () => {
       return <MessageList messages={list} timelineEntries={entries}
         streaming={false} progress={null} reasoningLevel="off" registerListContentRef={() => {}} />;
     }
-    act(() => root.render(<MusicConversation />));
+    renderTimeline(<MusicConversation />);
     const card = container.querySelector('article')!;
     const player = card.querySelector('audio');
     const download = card.querySelector('a[download]');

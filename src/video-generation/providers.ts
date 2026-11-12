@@ -1,7 +1,8 @@
-import { VIDEO_MODELS, type VideoModelRef, type VideoModelDefinition } from '@xopcai/gateway-contract';
+import { VIDEO_MODELS, LOCAL_VIDEO_MODEL_REFS, VIDEO_MODEL_REFS, type VideoModelRef, type VideoModelDefinition } from '@xopcai/gateway-contract';
 
+import { CLOUD_MEDIA_PROVIDER, CloudMediaError, getCloudMediaModels, queryCloudMedia, resolveCloudMediaToken, submitCloudMedia } from '../providers/xopc-cloud-media.js';
 import { assertSafeUrl } from '../media-shared/http/ssrf-guard.js';
-import { safeVideoErrorCode, type VideoProviderInput, type VideoProviderStatus } from './provider-types.js';
+import { VideoProviderError, safeVideoErrorCode, type VideoProviderInput, type VideoProviderStatus } from './provider-types.js';
 import { querySeedanceVideo, resolveSeedanceKey, submitSeedanceVideo } from './seedance.js';
 import { queryWanVideo, resolveWanKey, submitWanVideo } from './wan.js';
 
@@ -41,15 +42,38 @@ const providers: Record<ProviderId, VideoProvider> = {
     submit: submitSeedanceVideo, query: querySeedanceVideo,
     downloadHost: /^[a-z0-9.-]+\.tos-cn-[a-z0-9-]+\.volces\.com$/i,
   },
+  [CLOUD_MEDIA_PROVIDER]: {
+    name: 'XOPC Cloud', taskTtlMs: 7 * dayMs, resolveKey: resolveCloudMediaToken,
+    downloadHost: /(?:^|\.)aliyuncs\.com$|^[a-z0-9.-]+\.tos-cn-[a-z0-9-]+\.volces\.com$/i,
+    async submit(token, job) {
+      try {
+        return await submitCloudMedia('videos', token, {
+          model: job.model_ref.split('/')[1], prompt: job.prompt, duration: job.duration,
+          ratio: job.ratio, resolution: job.resolution,
+          ...(job.image_bytes ? { image: `data:${job.image_mime};base64,${Buffer.from(job.image_bytes).toString('base64')}` } : {}),
+        });
+      } catch (error) {
+        if (error instanceof CloudMediaError) throw new VideoProviderError('XOPC Cloud', error.status);
+        throw error;
+      }
+    },
+    query: (token, task) => queryCloudMedia('videos', token, task),
+  },
 };
 
 export function getVideoProvider(ref: VideoModelRef): VideoProvider {
   return providers[VIDEO_MODELS[ref].provider];
 }
 
+export function getAvailableVideoModelRefs(): VideoModelRef[] {
+  const published = getCloudMediaModels('video');
+  return [...LOCAL_VIDEO_MODEL_REFS, ...VIDEO_MODEL_REFS.filter(ref => published.some(model => `${CLOUD_MEDIA_PROVIDER}/${model.id}` === ref))];
+}
+
 export async function getConfiguredVideoProviders(): Promise<Record<ProviderId, boolean>> {
-  const [wan, seedance] = await Promise.all([resolveWanKey().catch(() => undefined), resolveSeedanceKey().catch(() => undefined)]);
-  return { 'dashscope-cn': Boolean(wan), 'volcengine-ark': Boolean(seedance) };
+  const [wan, seedance, cloud] = await Promise.all([resolveWanKey(), resolveSeedanceKey(), resolveCloudMediaToken()]
+    .map(key => key.catch(() => undefined)));
+  return { 'dashscope-cn': Boolean(wan), 'volcengine-ark': Boolean(seedance), [CLOUD_MEDIA_PROVIDER]: Boolean(cloud) };
 }
 
 export async function fetchProviderVideo(provider: VideoProvider, url: string): Promise<Response> {
