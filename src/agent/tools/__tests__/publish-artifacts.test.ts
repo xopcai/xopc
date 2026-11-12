@@ -59,6 +59,7 @@ describe('publish_artifacts', () => {
       kind: 'spreadsheet',
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       sizeBytes: 4,
+      sha256: '1c980b22bca31941462855e560db3053e7772efb4b8bc7c4d5d8bb799a1abc6c',
       availability: 'available',
       location: 'artifact_store',
       capabilities: ['preview', 'download'],

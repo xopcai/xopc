@@ -1,9 +1,11 @@
+import { rmSync } from 'node:fs';
+
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { TASK_RESULT_DELIVERY_TYPE, TurnOutcomeDeliverableSchema, parseTaskResultDelivery } from '@xopcai/gateway-contract';
 
-import { getSqliteDatabase } from '../storage/sqlite/index.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/index.js';
 import { isAvailableDeliverable } from '../tasks/task-deliverables.js';
-import { deleteMediaBuffer } from './store.js';
+import { resolveMediaBufferPath } from './store.js';
 import { tryParseMediaUri } from './uri.js';
 
 function collectFromValue(value: unknown, out: Set<string>, seen: WeakSet<object>): void {
@@ -79,6 +81,15 @@ export function taskOutcomeReferencesMediaUri(taskId: string, uri: string): bool
  */
 export function isMediaUriReferencedByLiveSession(uri: string): boolean {
   const normalized = uri.trim();
+  const media = tryParseMediaUri(normalized);
+  if (media?.bucket === 'outbound') {
+    const db = getSqliteDatabase();
+    if (db.prepare('SELECT 1 FROM space_versions WHERE media_id = ? LIMIT 1').get(media.id)) return true;
+    const musicId = /^music-([a-f0-9-]+)\.mp3$/i.exec(media.id)?.[1];
+    const videoId = /^wan-([a-f0-9-]+)\.mp4$/i.exec(media.id)?.[1];
+    if (musicId && db.prepare("SELECT 1 FROM music_generation_jobs WHERE id = ? AND state = 'completed'").get(musicId)) return true;
+    if (videoId && db.prepare("SELECT 1 FROM video_generation_jobs WHERE id = ? AND state = 'completed'").get(videoId)) return true;
+  }
   if (!normalized) return false;
   const escaped = JSON.stringify(normalized)
     .replaceAll('\\', '\\\\')
@@ -104,12 +115,17 @@ export function isMediaUriReferencedByLiveSession(uri: string): boolean {
   return row?.referenced === 1;
 }
 
-export async function deleteMediaUris(uris: Iterable<string>): Promise<void> {
+export async function deleteMediaUris(uris: Iterable<string>, options?: { strict?: boolean }): Promise<void> {
   for (const uri of new Set(uris)) {
     const parsed = tryParseMediaUri(uri);
     if (!parsed) continue;
-    if (isMediaUriReferencedByLiveSession(uri)) continue;
-    await deleteMediaBuffer(parsed.id, parsed.bucket).catch(() => {});
+    try {
+      runSqliteWriteTransaction(() => {
+        if (!isMediaUriReferencedByLiveSession(uri)) rmSync(resolveMediaBufferPath(parsed.id, parsed.bucket), { force: true });
+      });
+    } catch (error) {
+      if (options?.strict) throw error;
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
+import { archiveSpaceTurn } from '../../space/ingest.js';
 import type { MediaRef } from '../../media/types.js';
 import type { CompactionBoundarySummary } from '../../session/types.js';
 import {
@@ -178,6 +179,10 @@ export function appendTranscriptEntry(
     }
     const persistedRow = withSessionInputContextMetadata(db, conversationId, row);
     const inserted = insertEntry(db, { transcriptId, conversationId, row: persistedRow, entryId: opts?.entryId });
+    if ('type' in persistedRow && persistedRow.type === 'custom' && persistedRow.customType === 'turn_outcome') {
+      archiveSpaceTurn(db, { conversationId, transcriptId, entryId: inserted.entry_id,
+        createdAt: inserted.created_at, outcome: persistedRow.data });
+    }
     if (isUserMessageRow(row)) {
       const { metadata, turnId } = row as { metadata?: { clientMessageId?: string; steered?: boolean }; turnId?: string };
       if (metadata?.steered && metadata.clientMessageId && turnId) {

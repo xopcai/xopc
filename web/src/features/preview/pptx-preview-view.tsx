@@ -1,16 +1,20 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { parsePptxExtractedForDisplay } from '@/features/chat/attachments/pptx-preview-parse';
 
 export interface PptxPreviewViewProps {
   text: string;
+  targetSlide?: number;
   slideLabel: (slideNumber: number) => string;
   emptySlideLabel: string;
 }
 
 /** Renders PPTX extracted text as slide cards instead of raw pseudo-XML. */
-export function PptxPreviewView({ text, slideLabel, emptySlideLabel }: PptxPreviewViewProps) {
+export function PptxPreviewView({ text, targetSlide, slideLabel, emptySlideLabel }: PptxPreviewViewProps) {
   const parsed = useMemo(() => parsePptxExtractedForDisplay(text), [text]);
+
+  const target = useRef<HTMLElement>(null);
+  useEffect(() => { target.current?.scrollIntoView({ block: 'nearest' }); }, [targetSlide, parsed]);
 
   if (!parsed.ok) {
     return (
@@ -42,6 +46,7 @@ export function PptxPreviewView({ text, slideLabel, emptySlideLabel }: PptxPrevi
     nodes.push(
       <section
         key={slide.slideNumber}
+        ref={slide.slideNumber === targetSlide ? target : undefined}
         className="rounded-lg border border-edge-subtle bg-surface-panel p-3 dark:border-edge"
       >
         <h3 className="mb-2 text-sm font-semibold text-fg">{slideLabel(slide.slideNumber)}</h3>

@@ -203,8 +203,15 @@ export function sessionConfigRowToConfig(row: SessionConfigRow): SessionAgentCon
   };
 }
 
+const storedTranscriptEntryIds = new WeakMap<TranscriptStoredRow, string>();
+
+export function storedTranscriptEntryId(row: TranscriptStoredRow): string | undefined {
+  return storedTranscriptEntryIds.get(row);
+}
+
 export function transcriptEntryRowToStoredRow(row: TranscriptEntryRow): TranscriptStoredRow {
   const payload = JSON.parse(row.payload_json) as TranscriptStoredRow;
+  if (row.role === 'assistant') storedTranscriptEntryIds.set(payload, row.entry_id);
   return payload;
 }
 

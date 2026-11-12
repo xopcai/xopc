@@ -424,6 +424,7 @@ export function createImageGenerateTool(options: {
               kind: 'image',
               mimeType: item.mimeType,
               sizeBytes: item.size,
+              sha256: item.sha256,
               availability: 'available',
               location: 'artifact_store',
               capabilities: ['preview', 'download'],

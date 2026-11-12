@@ -31,3 +31,33 @@ describe('PDF preview buffer ownership', () => {
     expect(destroy).toHaveBeenCalledTimes(2);
   });
 });
+
+it('jumps to an unloaded PDF page without rasterizing intermediate pages', async () => {
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { callback(0); return 1; });
+  vi.stubGlobal('IntersectionObserver', class {
+    observe() {}
+    disconnect() {}
+  });
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ fillRect: vi.fn() } as unknown as CanvasRenderingContext2D);
+  const scrolled: string[] = [];
+  const previous = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = function () { scrolled.push(this.dataset.pdfPage ?? ''); };
+  const getPage = vi.fn(async (_page: number) => ({
+    getViewport: () => ({ width: 30, height: 30 }),
+    render: () => ({ promise: Promise.resolve() }),
+  }));
+  vi.mocked(ensurePdfWorker).mockResolvedValue({
+    getDocument: () => ({ destroy: async () => {}, promise: Promise.resolve({ numPages: 30, getPage }) }),
+  } as unknown as Awaited<ReturnType<typeof ensurePdfWorker>>);
+  const container = document.createElement('div');
+  try {
+    const { goToPage, cleanup } = await renderPdfInContainer(container, new ArrayBuffer(4));
+    try {
+      await goToPage(24);
+      await goToPage(24);
+      expect(getPage.mock.calls.map(([page]) => page)).toEqual([1, 2, 3, 4, 5, 24]);
+      expect(container.querySelectorAll('[data-pdf-page="24"]')).toHaveLength(1);
+      expect(scrolled).toEqual(['24', '24']);
+    } finally { cleanup(); }
+  } finally { HTMLElement.prototype.scrollIntoView = previous; }
+});

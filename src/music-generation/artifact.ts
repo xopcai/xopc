@@ -7,6 +7,8 @@ import { pipeline } from 'node:stream/promises';
 
 import { parseByteRange } from '../media-shared/http/byte-range.js';
 import { assertSafeUrl } from '../media-shared/http/ssrf-guard.js';
+import { deleteMediaUris } from '../media/session-references.js';
+import { buildMediaUri } from '../media/uri.js';
 import { resolveMediaBufferPath } from '../media/store.js';
 import type { MusicProvider } from './provider.js';
 
@@ -22,7 +24,7 @@ export async function musicArtifactExists(id: string): Promise<boolean> {
 }
 
 export async function deleteMusicArtifact(id: string): Promise<void> {
-  await rm(artifactPath(id), { force: true });
+  await deleteMediaUris([buildMediaUri('outbound', `music-${id}.mp3`)], { strict: true });
 }
 
 export async function saveMusicArtifact(id: string, provider: MusicProvider, source: string, canPublish: () => boolean): Promise<void> {

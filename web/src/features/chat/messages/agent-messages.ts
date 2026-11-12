@@ -141,6 +141,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       }
       if (m.completedAt != null) prev.completedAt = m.completedAt;
       if (m.renderKey) prev.renderKey = m.renderKey;
+      if (m.transcriptEntryId && m.content.some(block => block.type === 'text' && block.presentation !== 'narration' && block.text?.trim())) prev.transcriptEntryId = m.transcriptEntryId;
       if (!prev.turnId && m.turnId) prev.turnId = m.turnId;
       if (m.progressiveRender) prev.progressiveRender = true;
       if (m.usage) prev.usage = m.usage;
@@ -436,6 +437,7 @@ function buildAssistantMessage(m: WireMessage, segmentId: string): Message {
   return {
     role: 'assistant',
     fromHistory: true,
+    ...(m.transcriptEntryId ? { transcriptEntryId: m.transcriptEntryId } : {}),
     ...(interrupted ? { runStatus: m.stopReason === 'aborted' ? 'cancelled' as const : 'error' as const } : {}),
     ...(m.turnId ? { turnId: m.turnId } : {}),
     ...(m.startsNewBubble ? { startsNewBubble: true } : {}),

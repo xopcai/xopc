@@ -3,6 +3,7 @@ import { clarificationChoiceReceiptSchema, isUserTurnDocument, parseTurnOutcome,
   type ClarificationChoiceReceipt, type TaskResultDelivery, type TurnOutcome, type UserTurnDocument } from '@xopcai/gateway-contract';
 
 import type { Message } from './types.js';
+import { storedTranscriptEntryId } from '../storage/sqlite/row-mappers.js';
 import type { TaskUpdateTrigger } from '../storage/sqlite/session-input-repository.js';
 import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
@@ -13,6 +14,7 @@ import { isVoiceConversationMessage, VOICE_CHAT_MESSAGE_TYPE } from './voice-tra
 /** Transcript row for TUI and HTTP clients (flattened from persisted session messages). */
 export interface ClientHistoryMessage {
   id?: string;
+  transcriptEntryId?: string;
   turnId?: string;
   /** A background Agent turn starts a new visible assistant bubble without a visible user row. */
   startsNewBubble?: boolean;
@@ -832,8 +834,10 @@ export function transcriptRowsToClientHistory(
     }
 
     const rawContent = rawAssistantContent(messageRow.content);
+    const transcriptEntryId = storedTranscriptEntryId(row);
     out.push({
       id,
+      ...(transcriptEntryId ? { transcriptEntryId } : {}),
       ...(messageRow.stopReason === 'aborted' || messageRow.stopReason === 'error' ? { stopReason: messageRow.stopReason } : {}),
       ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
       ...(PersonalProvenanceSchema.safeParse((messageRow.metadata as Record<string, unknown> | undefined)?.personalProvenance).success

@@ -5,6 +5,8 @@ import { dirname } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
+import { deleteMediaUris } from '../media/session-references.js';
+import { buildMediaUri } from '../media/uri.js';
 import { resolveMediaBufferPath } from '../media/store.js';
 
 const VIDEO_ARTIFACT_MAX_BYTES = 256 * 1024 * 1024;
@@ -14,7 +16,7 @@ export function videoArtifactPath(jobId: string): string {
 }
 
 export async function deleteVideoArtifact(jobId: string): Promise<void> {
-  await rm(videoArtifactPath(jobId), { force: true });
+  await deleteMediaUris([buildMediaUri('outbound', `wan-${jobId}.mp4`)], { strict: true });
 }
 
 export async function videoArtifactExists(jobId: string): Promise<boolean> {

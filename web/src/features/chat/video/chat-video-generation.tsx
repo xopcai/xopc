@@ -1,3 +1,4 @@
+import { SpaceGeneratedMediaLink } from '@/features/space/space-artifact-link';
 import { VIDEO_AUTO_DURATION, VIDEO_MODELS, WAN_VIDEO_MODEL_REF, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationSession } from '@xopcai/gateway-contract';
 import { Download, Video } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -223,6 +224,7 @@ function VideoJobCard({ job, url, language }: {
         <a href={`${url}?download=1`} download="generated-video.mp4" className="inline-flex items-center gap-2 text-sm text-accent-fg hover:underline">
           <Download size={15} aria-hidden />{m.download}
         </a>
+        <SpaceGeneratedMediaLink mediaId={`wan-${job.id}.mp4`} title={job.summary || m.title} zh={language === 'zh'} />
       </>}
       {job.summary && <p className="line-clamp-3 wrap-anywhere text-sm leading-relaxed text-fg">{job.summary}</p>}
       <VideoPromptDetails video={job} language={language}>

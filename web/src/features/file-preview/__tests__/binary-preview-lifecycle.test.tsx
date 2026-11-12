@@ -36,7 +36,7 @@ describe('binary preview lifecycle', () => {
   });
 
   it('cleans up a late render without overwriting the next document', async () => {
-    let completeFirst!: (result: { cleanup: () => void }) => void;
+    let completeFirst!: (result: Awaited<ReturnType<typeof renderPdf>>) => void;
     let firstHost!: HTMLDivElement;
     const firstCleanup = vi.fn(() => { firstHost.innerHTML = ''; });
     const secondCleanup = vi.fn();
@@ -46,11 +46,11 @@ describe('binary preview lifecycle', () => {
     });
     renderPdf.mockImplementationOnce(async container => {
       container.textContent = 'Second PDF';
-      return { cleanup: secondCleanup };
+      return { cleanup: secondCleanup, goToPage: vi.fn(async () => {}) };
     });
     await act(async () => root.render(<PdfPreviewPluginView {...propsFor('first')} />));
     await act(async () => root.render(<PdfPreviewPluginView {...propsFor('second')} />));
-    await act(async () => { firstHost.textContent = 'Stale first PDF'; completeFirst({ cleanup: firstCleanup }); });
+    await act(async () => { firstHost.textContent = 'Stale first PDF'; completeFirst({ cleanup: firstCleanup, goToPage: vi.fn(async () => {}) }); });
     expect(host.textContent).toContain('Second PDF');
     expect(host.textContent).not.toContain('Stale first PDF');
     expect(firstCleanup).toHaveBeenCalledOnce();
@@ -64,7 +64,7 @@ describe('binary preview lifecycle', () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('Invalid PDF');
     renderPdf.mockImplementationOnce(async container => {
       container.textContent = 'Valid PDF';
-      return { cleanup: vi.fn() };
+      return { cleanup: vi.fn(), goToPage: vi.fn(async () => {}) };
     });
     await act(async () => root.render(<PdfPreviewPluginView {...propsFor('valid')} />));
     expect(host.querySelector('[role="alert"]')).toBeNull();

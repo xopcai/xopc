@@ -549,3 +549,12 @@ it('keeps purpose-authenticated stop receipts outside owner/device-token lazy ro
   expect(findAuthenticatedLazyRouteBundle('/api/device-auth/execution-stops/extra')).toBeUndefined();
   expect(findAuthenticatedLazyRouteBundle('/api/desktop-host/execution')?.id).toBe('desktop-host');
 });
+
+it('matches the authenticated Space routes without taking neighboring paths', () => {
+  for (const path of ['/api/spaces/items', '/api/spaces/items/item', '/api/spaces/items/item/restore',
+    '/api/spaces/items/item/purge', '/api/spaces/items/item/versions/version/content', '/api/spaces/artifacts/media', '/api/spaces/deliveries/result']) {
+    expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('space');
+  }
+  expect(findAuthenticatedLazyRouteBundle('/api/spaces/items/item/versions/version')?.id).not.toBe('space');
+  expect(findAuthenticatedLazyRouteBundle('/api/notes')?.id).toBe('notes');
+});

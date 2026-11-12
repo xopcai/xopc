@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { MusicGenerationJob, MusicJobErrorCode, MusicJobState, MusicMode } from '@xopcai/gateway-contract';
 
+import { archiveSpaceGeneratedMedia } from '../space/ingest.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { configuredMusicModel } from './providers.js';
 
@@ -143,7 +144,7 @@ export function updateMusicJob(id: string, token: string, state: MusicJobState, 
   delayMs?: number; keepLease?: boolean;
 } = {}): boolean {
   const now = Date.now();
-  return getSqliteDatabase().prepare(`UPDATE music_generation_jobs SET state = ?, error = ?, error_code = ?,
+  const update = (db: ReturnType<typeof getSqliteDatabase>) => db.prepare(`UPDATE music_generation_jobs SET state = ?, error = ?, error_code = ?,
     provider_task_id = COALESCE(?, provider_task_id), duration_ms = COALESCE(?, duration_ms), next_attempt_at = ?,
     lease_token = CASE WHEN ? THEN lease_token END, lease_until = CASE WHEN ? THEN lease_until END
     WHERE id = ? AND lease_token = ? AND lease_until > ?`).run(
@@ -151,4 +152,10 @@ export function updateMusicJob(id: string, token: string, state: MusicJobState, 
     options.taskId ?? null, options.durationMs ?? null, now + (options.delayMs ?? 0),
     Number(options.keepLease ?? false), Number(options.keepLease ?? false), id, token, now,
   ).changes === 1;
+  if (state !== 'completed') return update(getSqliteDatabase());
+  return runSqliteWriteTransaction(db => {
+    const updated = update(db);
+    if (updated) archiveSpaceGeneratedMedia(db, 'music', id);
+    return updated;
+  });
 }

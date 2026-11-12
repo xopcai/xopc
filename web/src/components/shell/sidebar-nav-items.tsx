@@ -1,5 +1,6 @@
 import * as Popover from '@radix-ui/react-popover';
 import {
+  Archive,
   Boxes,
   BriefcaseBusiness,
   Layers3,
@@ -207,6 +208,11 @@ export function SidebarNavItems({
           className={cn('shrink-0 rounded-full bg-accent/15 px-1.5 text-center text-[10px] font-semibold leading-5 tabular-nums text-accent',
             collapsed ? 'absolute right-0 top-0 min-w-4 leading-4' : 'min-w-5')}
         >{personalUnreadLabel(personalUnreadCount)}</span>}
+      </Link>
+      <Link to="/space" aria-current={pathname === '/space' ? 'page' : undefined}
+        className={rowClass(collapsed, pathname === '/space')} title="Space" aria-label="Space" onClick={onNavigate}>
+        <NavIcon Icon={Archive} />
+        {!collapsed ? <span className="truncate">Space</span> : null}
       </Link>
       {visibleItems.map((item) => renderLink(item))}
       {overflow.length > 0 ? <Popover.Root open={popoverOpen} onOpenChange={setPopoverOpen}>

@@ -48,12 +48,13 @@ function openMore(): HTMLButtonElement {
 }
 
 describe('product primary navigation', () => {
-  it('shows three primary destinations by default and groups the rest under More', () => {
+  it('pins Space before the three default shortcuts', () => {
     renderAt('/projects/example', <SidebarNavItems />);
 
     const links = [...container.querySelectorAll('a')];
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/personal',
+      '/space',
       '/',
       '/capabilities/extensions',
       '/automations',
@@ -106,6 +107,7 @@ describe('product primary navigation', () => {
 
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
       '/personal',
+      '/space',
       '/',
       '/capabilities/extensions',
       '/automations',
@@ -117,7 +119,7 @@ describe('product primary navigation', () => {
   it('allows the visible shortcut area to shrink to one item', () => {
     renderAt('/', <SidebarNavItems visibleLimit={1} />);
 
-    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/personal', '/']);
+    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/personal', '/space', '/']);
     expect(container.querySelector('button[aria-label="More navigation items"]')).not.toBeNull();
   });
 
@@ -160,7 +162,7 @@ describe('product primary navigation', () => {
     renderAt('/extensions/sample-extension/dashboard', <SidebarNavItems />);
 
     const links = [...container.querySelectorAll('a')];
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
     const more = openMore();
     expect(more.className).toContain('bg-surface-active');
     const extensionLink = document.body.querySelector<HTMLAnchorElement>('a[href="/extensions/sample-extension/dashboard"]');
@@ -196,7 +198,7 @@ describe('product primary navigation', () => {
     drag(work, 'dragover');
     drag(work, 'drop');
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
-      '/personal', '/extensions/reading/list', '/', '/capabilities/extensions',
+      '/personal', '/space', '/extensions/reading/list', '/', '/capabilities/extensions',
     ]);
     const saved = JSON.parse(localStorage.getItem('xopc-web-sidebar-nav-order')!);
     expect(saved[0]).toBe('ext:reading:list');
@@ -219,7 +221,7 @@ describe('product primary navigation', () => {
     useNavOrderStore.getState().setOrder(['ext:missing:page', 'builtin:automations', 'builtin:automations']);
     renderAt('/', <SidebarNavItems />);
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
-      '/personal', '/automations', '/', '/capabilities/extensions',
+      '/personal', '/space', '/automations', '/', '/capabilities/extensions',
     ]);
     const work = container.querySelector('a[href="/"]')!;
     const event = new Event('drop', { bubbles: true, cancelable: true });

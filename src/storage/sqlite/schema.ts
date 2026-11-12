@@ -9,13 +9,14 @@ import { upgradeXopcDatabase, XOPC_DB_MINIMUM_SCHEMA_VERSION } from './schema-up
 
 export { SCHEMA_META_SCHEMA_VERSION_KEY, readSchemaVersionForTest, readSchemaVersion, setSchemaVersion, ensureSchemaMetaTable } from './schema-version.js';
 
-export const XOPC_DB_SCHEMA_VERSION = 279;
+export const XOPC_DB_SCHEMA_VERSION = 280;
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = XOPC_DB_SCHEMA_VERSION;
 export { XOPC_DB_MINIMUM_SCHEMA_VERSION } from './schema-upgrade.js';
 
 /** Initialize fresh databases directly; upgrade supported installed databases transactionally. */
 export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
   db.function('xopc_memory_search_text', { deterministic: true }, value => memorySearchText(String(value ?? '')));
+  db.function('xopc_space_search_text', { deterministic: true }, value => String(value ?? '').normalize('NFKC').toLowerCase());
   db.function('xopc_operation_id', () => currentOperationId() ?? null);
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all();
   const hasMetadata = tables.some(row => row.name === 'schema_meta');

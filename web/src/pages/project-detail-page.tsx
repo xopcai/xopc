@@ -1163,6 +1163,9 @@ export function ProjectDetailPage() {
   const headerEnd = useMemo(
     () => project ? (
       <>
+        <Link to={`/space?projectId=${encodeURIComponent(project.id)}`} className="inline-flex h-9 items-center rounded-lg px-2.5 text-sm text-fg-muted hover:bg-surface-hover">
+          {language === 'zh' ? '成果' : 'Results'}
+        </Link>
         <PageContextCaptureButton resource={{ kind: 'project', id: project.id, revision: String(project.version) }} disabled={saving || projectSettingsDirty(draft, project)} />
 
         <Button variant="secondary" className="h-9 rounded-lg" onClick={openTaskCreate}>
@@ -1177,7 +1180,7 @@ export function ProjectDetailPage() {
         </Button>
       </>
     ) : null,
-    [openTaskCreate, onProjectTabLinkClick, pm.board.create, pm.common.newChat, project, saving, draft],
+    [language, openTaskCreate, onProjectTabLinkClick, pm.board.create, pm.common.newChat, project, saving, draft],
   );
 
   useLayoutEffect(() => {

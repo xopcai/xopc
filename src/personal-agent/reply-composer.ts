@@ -21,6 +21,7 @@ import { TaskCriterionReviewRepository } from '../tasks/task-criterion-review-re
 import { taskInstructionSequence } from '../tasks/task-research-result.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { TaskConversationRepository } from '../tasks/task-conversation-repository.js';
+import { archiveSpaceTaskDelivery } from '../space/ingest.js';
 import { createLogger } from '../utils/logger.js';
 import { getPersonalAgentByConversation } from './repository.js';
 import { PERSONAL_REPLY_EXAMPLES, PERSONAL_REPLY_STYLE_RULES } from './reply-style.js';
@@ -256,6 +257,7 @@ export class PersonalReplyComposer {
           content: text, details: delivery, display: true, timestamp: Date.now() });
         db.prepare(`UPDATE task_result_deliveries SET reply_status = 'delivered', reply_message_entry_id = ?, reply_text = ?,
           reply_lease_token = NULL, reply_lease_until = 0 WHERE delivery_id = ?`).run(entry.entry_id, text, row.delivery_id);
+        archiveSpaceTaskDelivery(db, { ...packet.delivery, text: packet.delivery.text ?? text }, entry.entry_id);
         if (packet.requestId) db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, packet.requestId);
         recordPersonalPerformance({ phase: 'busy_fallback', conversationId: delivery.conversationId,
           taskId: delivery.taskId, runId: delivery.taskRunId, deliveryId: row.delivery_id,
@@ -386,6 +388,7 @@ export class PersonalReplyComposer {
             const entry = appendTranscriptEntry(delivery.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
               content: text!, details: delivery, display: true, timestamp: Date.now() });
             db.prepare("UPDATE task_result_deliveries SET reply_status = 'delivered', reply_message_entry_id = ? WHERE delivery_id = ?").run(entry.entry_id, row.delivery_id);
+            archiveSpaceTaskDelivery(db, { ...packet.delivery, text: packet.delivery.text ?? text }, entry.entry_id);
             if (packet.requestId) db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, packet.requestId);
             return true;
           });

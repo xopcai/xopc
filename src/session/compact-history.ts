@@ -33,7 +33,7 @@ export function compactHistory(messages: ClientHistoryMessage[]): ClientHistoryM
       name: call.name, status: call.isError ? 'error' : 'done' }));
     const outcome = message.metadata?.turnOutcome;
     if (!content && !mediaAndReview.length && !message.media?.length && !outcome && !deliveries.length && !activities.length) return [];
-    return [{ id: message.id, turnId: message.turnId, startsNewBubble: message.startsNewBubble,
+    return [{ id: message.id, ...(!narration && message.transcriptEntryId ? { transcriptEntryId: message.transcriptEntryId } : {}), turnId: message.turnId, startsNewBubble: message.startsNewBubble,
       ...(message.stopReason ? { stopReason: message.stopReason } : {}),
       role: message.role, content, timestamp: message.timestamp,
       media: message.media, deliveries,

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { open, lstat } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { extname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -15,6 +16,7 @@ export interface ResultPreparation {
 const MAX_CHARS = 16 * 1024 * 1024;
 const MAX_BYTES = 50 * 1024 * 1024;
 export const RESULT_PARSER_VERSION = 2;
+const require = createRequire(import.meta.url);
 function charLength(text: string): number { let count = 0; for (const _char of text) count++; return count; }
 export const resultFingerprint = (value: { size: number; mtimeMs: number; ctimeMs: number }) => `${value.size}:${value.mtimeMs}:${value.ctimeMs}`;
 
@@ -65,7 +67,8 @@ export async function extractResult(input: Pick<ResultPreparation, 'file' | 'tit
       }
     }
   } else if (extension === '.pdf' || input.mimeType === 'application/pdf') {
-    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    // Use Node's loader so PDF.js can load its native canvas dependency from a tsx worker.
+    const { getDocument } = require('pdfjs-dist/legacy/build/pdf.mjs') as typeof import('pdfjs-dist');
     const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: false, stopAtErrors: true });
     const pdf = await task.promise;
     try {
