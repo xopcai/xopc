@@ -25,6 +25,8 @@ export default defineConfig({
     '!./extensions/wecom/src/**/__tests__/**/*.ts',
     './extensions/slack/src/**/*.ts',
     '!./extensions/slack/src/**/__tests__/**/*.ts',
+    './extensions/discord/src/**/*.ts',
+    '!./extensions/discord/src/**/__tests__/**/*.ts',
   ],
   outDir: 'dist',
   root: '.',

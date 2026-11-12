@@ -10,7 +10,7 @@ import { readAllowFromIdsSync } from '../pairing/allow-from-file.js';
 import type { ChannelPlugin, ChannelPluginInitOptions, DmPolicy, GroupPolicy } from '../plugin-types.js';
 import { evaluateAccess } from '../security.js';
 import { redactEnterpriseChannelSecret } from './config-surface.js';
-import { createEnterpriseSetup, type EnterpriseCredentials, type EnterpriseRegistration } from './setup.js';
+import { createEnterpriseSetup, type ChannelSetupLink, type EnterpriseCredentials, type EnterpriseRegistration } from './setup.js';
 import { record, string } from './socket.js';
 
 const accountId = 'default';
@@ -32,14 +32,16 @@ export type EnterpriseTransport = {
 };
 
 export function createEnterpriseChannel(options: {
-  id: 'dingtalk' | 'wecom' | 'slack';
+  id: 'dingtalk' | 'wecom' | 'slack' | 'discord';
   label: string;
   order: number;
-  credentialFields: readonly [string, string];
-  credentialLabels: readonly [string, string];
+  credentialFields: readonly [string, string?];
+  credentialLabels: readonly [string, string?];
   begin?: (signal: AbortSignal) => Promise<EnterpriseRegistration>;
   credentialIdIsSecret?: boolean;
   threads?: boolean;
+  sendWhileDisconnected?: boolean;
+  setupLink?: ChannelSetupLink;
   setupTemplate?: { content: string; url: string; instructions: { zh: string; en: string } };
   verify: (credentials: EnterpriseCredentials) => Promise<void | string>;
   transport: (credentials: EnterpriseCredentials, receive: (message: EnterpriseMessage) => Promise<void>) => EnterpriseTransport;
@@ -54,10 +56,10 @@ export function createEnterpriseChannel(options: {
   const section = (config: Config) => record(config.channels?.[id]);
   const credentialsFor = (config: Config) => ({
     id: string(section(config)[idField]),
-    secret: string(section(config)[secretField]),
+    secret: secretField ? string(section(config)[secretField]) : '',
     identity: options.credentialIdIsSecret ? string(section(config).credentialIdentity) || undefined : undefined,
   });
-  const configured = (credentials: EnterpriseCredentials) => Boolean(credentials.id && credentials.secret);
+  const configured = (credentials: EnterpriseCredentials) => Boolean(credentials.id && (!secretField || credentials.secret));
   const pairingKey = (credentials: EnterpriseCredentials) =>
     `${accountId}-${createHash('sha256').update(credentials.identity ?? credentials.id).digest('hex').slice(0, 24)}`;
   const stop = async () => {
@@ -95,6 +97,7 @@ export function createEnterpriseChannel(options: {
       begin: options.begin,
       credentialIdIsSecret: options.credentialIdIsSecret,
       setupTemplate: options.setupTemplate,
+      setupLink: options.setupLink,
       verify: options.verify,
     }),
     async init(init) {
@@ -196,7 +199,9 @@ export function createEnterpriseChannel(options: {
         const separator = to.indexOf(':');
         const kind = to.slice(0, separator);
         const target = to.slice(separator + 1);
-        if (!runtime || !online || (targetAccount && targetAccount !== accountId)) throw new Error(`${label} is disconnected`);
+        if (!runtime || (!online && !options.sendWhileDisconnected) || (targetAccount && targetAccount !== accountId)) {
+          throw new Error(`${label} is disconnected`);
+        }
         if (!target || (kind !== 'user' && kind !== 'group')) throw new Error(`Invalid ${label} target`);
         if (mediaUrl) throw new Error(`${label} only supports text delivery`);
         const reply = string(outboundMetadata?.channelReplyId) || (options.threads ? string(threadId) : '') || replyToId || undefined;

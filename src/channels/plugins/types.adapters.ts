@@ -85,6 +85,7 @@ export type ChannelRuntimeActionPayload =
   | {
       type: 'ok';
       message?: string;
+      setupLink?: { url: string; label: string };
       configChanged?: boolean;
       [key: string]: unknown;
     }
@@ -122,6 +123,7 @@ export type ChannelRuntimeActionPayload =
       values?: Record<string, unknown>;
       submitAction: string;
       setupTemplate?: { content: string; url: string };
+      setupLink?: { url: string; label: string };
       message?: string;
       [key: string]: unknown;
     };

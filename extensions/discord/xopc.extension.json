@@ -1,0 +1,113 @@
+{
+  "id": "discord",
+  "name": "Discord",
+  "description": "Discord bot messaging over Gateway",
+  "version": "0.1.0",
+  "kind": "channel",
+  "main": "src/index.js",
+  "channels": [
+    "discord"
+  ],
+  "engines": {
+    "xopc": ">=0.0.465"
+  },
+  "contracts": {
+    "channels": [
+      "discord"
+    ]
+  },
+  "channelContributions": {
+    "discord": {
+      "label": "Discord",
+      "description": "Discord bot messaging over Gateway",
+      "order": 70,
+      "configPath": "channels.discord",
+      "docsPath": "/channels/discord",
+      "capabilities": {
+        "login": true,
+        "pairing": true,
+        "threads": true
+      },
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "dmPolicy": {
+            "type": "string",
+            "enum": [
+              "pairing",
+              "allowlist",
+              "open",
+              "disabled"
+            ],
+            "default": "pairing"
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupPolicy": {
+            "type": "string",
+            "enum": [
+              "allowlist",
+              "open",
+              "disabled"
+            ],
+            "default": "allowlist"
+          },
+          "groupAllowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "botToken": {
+            "type": "string",
+            "title": "Bot Token",
+            "format": "password",
+            "pattern": "^\\S+$",
+            "x-hidden": true
+          },
+          "credentialIdentity": {
+            "type": "string",
+            "pattern": "^\\d{17,20}:\\d{17,20}$",
+            "x-hidden": true
+          }
+        },
+        "required": [
+          "botToken"
+        ]
+      },
+      "uiHints": {
+        "botToken": {
+          "sensitive": true
+        },
+        "groupAllowFrom": {
+          "label": "Allowed channel senders"
+        }
+      },
+      "actions": {
+        "setup.manual": {
+          "label": "Configure Discord",
+          "result": "form"
+        }
+      },
+      "i18n": {
+        "zh": {
+          "description": "通过 Gateway 连接 Discord 机器人",
+          "actions": {
+            "setup.manual": {
+              "label": "配置 Discord"
+            }
+          }
+        }
+      }
+    }
+  }
+}
