@@ -11,17 +11,25 @@ const MOODS: Record<Exclude<PersonalAppearance, 'custom'>, LoopiMood> = {
   'loopi-care': 'care',
 };
 
-export function PersonalAvatar({ appearance, agentId, className = '' }: {
+export type PersonalAvatarActivity = 'idle' | 'working' | 'waiting' | 'delivered';
+const ACTIVITY_MOODS: Partial<Record<PersonalAvatarActivity, LoopiMood>> = {
+  working: 'work',
+  waiting: 'decision',
+  delivered: 'done',
+};
+
+export function PersonalAvatar({ appearance, agentId, activity = 'idle', className = '' }: {
   appearance: PersonalAppearance;
   agentId?: string;
+  activity?: PersonalAvatarActivity;
   className?: string;
 }) {
   if (appearance === 'custom' && agentId) {
     return <AgentAvatarDisplay agentId={agentId} avatar="xopc:custom" className={className} />;
   }
 
-  const mood = appearance === 'custom' ? 'idle' : MOODS[appearance];
-  return <span className={`personal-avatar-motion inline-flex items-center justify-center ${className}`} aria-hidden="true">
+  const mood = ACTIVITY_MOODS[activity] ?? (appearance === 'custom' ? 'idle' : MOODS[appearance]);
+  return <span data-activity={activity} className={`personal-avatar-motion inline-flex items-center justify-center ${className}`} aria-hidden="true">
     <Loopi variant="avatar" mood={mood} className="size-full" />
   </span>;
 }

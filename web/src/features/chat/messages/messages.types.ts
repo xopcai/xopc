@@ -1,4 +1,4 @@
-import type { AgentStreamRunStatus, PersonalProvenance } from '@xopcai/gateway-contract';
+import type { AgentStreamRunStatus, ClarificationChoiceReceipt, PersonalProvenance } from '@xopcai/gateway-contract';
 import type { AppContextEnvelope, TaskResultDelivery, ToolActivity, TurnOutcome, UserTurnDocument } from '@xopcai/gateway-contract';
 
 /** Canonical chat message model for the web UI (gateway chat + embedded agent chat). */
@@ -125,6 +125,7 @@ export interface MessageContextRef {
 export interface Message {
   role: 'user' | 'assistant' | 'task';
   content: MessageContent[];
+  clarificationChoice?: ClarificationChoiceReceipt;
   /** Server-assigned mode for public Personal AI text, including live pending segments. */
   textSurface?: 'conversation';
   /** Visible provenance for a background Task update; never model input. */

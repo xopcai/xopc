@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { TaskResultDeliverySchema, TurnOutcomeSchema, type TurnOutcome } from '@xopcai/gateway-contract';
+import { TaskResultDeliverySchema, TurnOutcomeSchema, type TurnOutcome, type TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 
 import { afterSqliteCommit, getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
@@ -32,10 +32,11 @@ export interface TaskResultDeliveryRow {
 
 export class TaskResultDeliveryRepository {
   /** Only cards persisted in this conversation's current transcript confirm file delivery. */
-  fileDeliveryState(taskId: string, conversationId: string): {
+  fileDeliveryState(taskId: string, conversationId: string, includeArtifact = false): {
     status: 'not_delivered' | 'pending' | 'delivered' | 'stale' | 'failed';
     availableFileCount: number;
     resultId?: string;
+    artifact?: TurnOutcomeDeliverable;
   } {
     const db = getSqliteDatabase();
     const run = new TaskRunRepository().getLatestRoot(taskId);
@@ -49,13 +50,18 @@ export class TaskResultDeliveryRepository {
       || delivery.instructionSequence !== undefined && delivery.instructionSequence !== taskInstructionSequence(taskId)) {
       return { status: 'stale', availableFileCount: 0 };
     }
-    const availableFileCount = delivery.outcome.deliverables.filter(item => item.availability === 'available').length;
+    const availableFiles = delivery.outcome.deliverables.filter(item => item.availability === 'available');
+    const availableFileCount = availableFiles.length;
     const inCurrentTranscript = row.message_entry_id && db.prepare(`SELECT 1 FROM transcript_entries entry
       JOIN sessions session ON session.active_transcript_id = entry.transcript_id
       WHERE entry.entry_id = ? AND session.conversation_id = ?`).get(row.message_entry_id, conversationId);
+    const artifact = includeArtifact && row.status === 'delivered' && inCurrentTranscript
+      ? availableFiles.find(item => item.uri && item.capabilities.some(capability => ['open', 'preview', 'download'].includes(capability))
+        && (!item.expiresAt || Date.parse(item.expiresAt) > Date.now()))
+      : undefined;
     return { status: row.status === 'delivered' && (!availableFileCount || !inCurrentTranscript)
       ? 'not_delivered' : row.status, availableFileCount: row.status === 'delivered' && inCurrentTranscript ? availableFileCount : 0,
-      resultId: delivery.deliveryId };
+      resultId: delivery.deliveryId, ...(artifact ? { artifact } : {}) };
   }
 
   capture(runId: string, value: TurnOutcome): void {

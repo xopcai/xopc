@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { usePhoneWorkspaceStore } from '@/features/phone/phone-workspace-store';
 
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
+import type { FileReferencePreview } from '@/features/workspace/file-reference-preview';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 const STORAGE_KEY = 'xopc:right-workspace:v1';
@@ -21,17 +22,20 @@ export type FileTab = {
   resultRevision?: number;
   attachment?: MessageAttachment;
   images?: MessageAttachment[];
+  reference?: FileReferencePreview;
+  resolvedFile?: { id: string; mtimeMs?: number };
   returnTo?: string;
   visitedAt: number;
 };
 export type BrowserTab = { id: string; kind: 'browser'; title: string; initialUrl?: string; visitedAt: number; returnTo?: string };
 export type PhoneTab = { id: string; kind: 'phone'; phoneSessionId: string; title: string; visitedAt: number; returnTo?: string };
-export type WorkspaceTab = PhoneTab | BrowserTab | { id: string; kind: 'home' | 'files'; title: string; visitedAt: number; returnTo?: string } | FileTab | { id: string; kind: 'sidechat'; sideChatId: string; title: string; visitedAt: number; returnTo?: string };
-export type WorkspacePane = { open: boolean; tabs: WorkspaceTab[]; activeId: string | null };
+export const PERSONAL_TASKS_TAB_ID = 'personal-tasks';
+export type WorkspaceTab = PhoneTab | BrowserTab | { id: string; kind: 'home' | 'files' | 'personal-tasks'; title: string; visitedAt: number; returnTo?: string } | FileTab | { id: string; kind: 'sidechat'; sideChatId: string; title: string; visitedAt: number; returnTo?: string };
+export type WorkspacePane = { open: boolean; tabs: WorkspaceTab[]; activeId: string | null; personalDetailsOpen?: boolean };
 export const EMPTY_WORKSPACE_PANE: WorkspacePane = { open: false, tabs: [], activeId: null };
 
-type Stored = { panes: Record<string, WorkspacePane>; width: number; treeWidth: number; fileTreeOpen: boolean; sideTreeOpen: boolean };
-const defaults: Stored = { panes: {}, width: 0, treeWidth: 240, fileTreeOpen: false, sideTreeOpen: false };
+type Stored = { panes: Record<string, WorkspacePane>; width: number; personalTasksWidth: number; personalPreviewChatWidth: number; treeWidth: number; fileTreeOpen: boolean; sideTreeOpen: boolean };
+const defaults: Stored = { panes: {}, width: 0, personalTasksWidth: 0, personalPreviewChatWidth: 0, treeWidth: 240, fileTreeOpen: false, sideTreeOpen: false };
 function read(): Stored {
   try {
     const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
@@ -41,7 +45,7 @@ function read(): Stored {
       const p = value as WorkspacePane;
       if (!p || !Array.isArray(p.tabs)) continue;
       const tabs = p.tabs.filter((t) => t && typeof t.id === 'string' && typeof t.title === 'string'
-        && ((t.kind === 'file' && typeof t.path === 'string') || (t.kind === 'sidechat' && typeof t.sideChatId === 'string') || t.kind === 'home' || t.kind === 'files'));
+        && ((t.kind === 'file' && typeof t.path === 'string') || (t.kind === 'sidechat' && typeof t.sideChatId === 'string') || t.kind === 'home' || t.kind === 'files' || t.kind === 'personal-tasks'));
       panes[scope] = { open: p.open === true && tabs.length > 0, tabs, activeId: tabs.some((t) => t.id === p.activeId) ? p.activeId : tabs[0]?.id ?? null };
     }
     return { ...defaults, panes };
@@ -53,7 +57,7 @@ function layoutRead(key: string, fallback: number): number {
 function persist(state: Stored) {
   try {
     const panes = Object.fromEntries(Object.entries(state.panes).map(([key, p]) => [key, {
-      ...p, tabs: p.tabs.filter((t) => t.kind !== 'browser' && (t.kind !== 'file' || !t.attachment)).map((t) => ({ ...t })),
+      ...p, tabs: p.tabs.filter((t) => t.kind !== 'browser' && (t.kind !== 'file' || (!t.attachment && !t.reference))).map((t) => ({ ...t })),
     }]));
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, identity: useGatewayStore.getState().conversationId, gateway: useGatewayStore.getState().baseUrl, panes }));
   } catch { /* Storage can be unavailable or full. */ }
@@ -84,17 +88,22 @@ type State = Stored & {
   openPhone: (phoneSessionId: string, title: string, scope: string, activate?: boolean, showWindow?: boolean) => void;
   openTools: (scope?: string) => string;
   openFiles: (scope?: string) => void;
+  openPersonalTasks: (scope: string) => void;
+  closePersonalTasks: (scope: string) => void;
   openBrowser: (url?: string, scope?: string, returnTo?: string) => string;
   updateBrowserTitle: (id: string, title: string) => void;
   setScope: (scope: string) => void;
   setOpen: (open: boolean, scope?: string) => void;
   activate: (id: string | null, scope?: string) => void;
   openFile: (file: Omit<FileTab, 'id' | 'kind' | 'title' | 'visitedAt'>, scope?: string) => string;
+  finishFileReference: (id: string, scope: string, request: FileReferencePreview, file: Pick<FileTab, 'path' | 'line' | 'projectId' | 'conversationId' | 'agentId' | 'reference' | 'resolvedFile'>) => boolean;
   addSideChat: (sideChatId: string, title: string, scope: string, activate?: boolean) => void;
   resolveFileIdentity: (id: string, resourceId: string) => void;
   replaceSideChat: (oldId: string, id: string, scope: string) => void;
   remove: (id: string, scope?: string) => void;
   setWidth: (width: number) => void;
+  setPersonalTasksWidth: (width: number) => void;
+  setPersonalPreviewChatWidth: (width: number) => void;
   setTreeWidth: (width: number) => void;
   setTreeOpen: (kind: 'file' | 'sidechat', open: boolean) => void;
   reset: () => void;
@@ -106,7 +115,9 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
     persist(get());
   };
   return {
-    ...read(), width: layoutRead('xopc:workspace-width', 0), treeWidth: layoutRead('xopc:workspace-tree-width', 240),
+    ...read(), width: layoutRead('xopc:workspace-width', 0), personalTasksWidth: layoutRead('xopc:personal-tasks-width', 0),
+    personalPreviewChatWidth: layoutRead('xopc:personal-preview-chat-width', 0),
+    treeWidth: layoutRead('xopc:workspace-tree-width', 240),
     notices: {},
     setNotice: (scope, message) => set((s) => ({ notices: { ...s.notices, [scope]: message } })),
     fileStatus: {},
@@ -162,7 +173,8 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
         const at = tabs.findIndex(t => t.id === id);
         if (at >= 0) tabs[at] = tab;
         else tabs.splice(Math.max(0, tabs.findIndex(t => t.id === p.activeId) + 1), 0, tab);
-        return { open: true, activeId: id, tabs };
+        return { ...p, open: true, activeId: id, tabs,
+          ...(p.open && p.activeId === PERSONAL_TASKS_TAB_ID ? { personalDetailsOpen: true } : {}) };
       });
       return id;
     },
@@ -182,9 +194,24 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
           : [...pane.tabs, { id, kind: 'files', title: 'Files', visitedAt: Date.now() }],
       }));
     },
+    openPersonalTasks: (scope) => commit(scope, (pane) => {
+      const active = pane.tabs.find(tab => tab.id === pane.activeId);
+      const alongsidePreview = pane.open && (active?.kind === 'file' || active?.kind === 'browser');
+      return {
+        open: true,
+        activeId: alongsidePreview ? pane.activeId : PERSONAL_TASKS_TAB_ID,
+        ...(alongsidePreview ? { personalDetailsOpen: true } : {}),
+        tabs: pane.tabs.some(tab => tab.id === PERSONAL_TASKS_TAB_ID)
+          ? pane.tabs.map(tab => tab.id === PERSONAL_TASKS_TAB_ID ? { ...tab, visitedAt: Date.now() } : tab)
+          : [...pane.tabs, { id: PERSONAL_TASKS_TAB_ID, kind: 'personal-tasks', title: 'Tasks', visitedAt: Date.now() }],
+      };
+    }),
+    closePersonalTasks: (scope) => commit(scope, ({ personalDetailsOpen, ...pane }) =>
+      pane.activeId === PERSONAL_TASKS_TAB_ID ? { ...pane, open: false } : pane),
     setOpen: (open, scope = get().scope) => {
       if (open && !get().panes[scope]?.tabs.length) { get().openTools(scope); return; }
-      commit(scope, (p) => ({ ...p, open, activeId: p.activeId ?? p.tabs[0]?.id ?? null }));
+      commit(scope, ({ personalDetailsOpen, ...p }) => ({ ...p, open, activeId: p.activeId ?? p.tabs[0]?.id ?? null,
+        ...(open && personalDetailsOpen ? { personalDetailsOpen } : {}) }));
     },
     activate: (id, scope = get().scope) => {
       const tab = get().panes[scope]?.tabs.find(t => t.id === id);
@@ -192,14 +219,17 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
         usePhoneWorkspaceStore.getState().setDisplayMode('docked');
         usePhoneWorkspaceStore.getState().show(tab.phoneSessionId, true, /^[\da-f]{8}-[\da-f-]{27}$/i.test(scope) ? scope : undefined);
       }
-      commit(scope, (p) => ({
-      ...p, open: Boolean(id && p.tabs.some((t) => t.id === id)), activeId: id && p.tabs.some((t) => t.id === id) ? id : p.activeId,
-      tabs: p.tabs.map((t) => t.id === id ? { ...t, visitedAt: Date.now() } : t),
-    }));
+      commit(scope, ({ personalDetailsOpen, ...p }) => ({
+        ...p, open: Boolean(tab), activeId: tab?.id ?? p.activeId,
+        tabs: p.tabs.map((t) => t.id === id ? { ...t, visitedAt: Date.now() } : t),
+        ...((tab?.kind === 'file' || tab?.kind === 'browser') && p.open
+          && (personalDetailsOpen || p.activeId === PERSONAL_TASKS_TAB_ID) ? { personalDetailsOpen: true } : {}),
+      }));
     },
     openFile: (file, scope = get().scope) => {
       const pane = get().panes[scope] ?? EMPTY_WORKSPACE_PANE;
-      const existing = pane.tabs.find((t) => t.kind === 'file' && (fileTabKey(t) === fileTabKey(file) || t.aliases?.includes(fileTabKey(file))));
+      const existing = pane.tabs.find((t) => t.kind === 'file' && Boolean(t.reference) === Boolean(file.reference)
+        && (fileTabKey(t) === fileTabKey(file) || t.aliases?.includes(fileTabKey(file))));
       const preview = !existing && file.preview !== false ? pane.tabs.find((t) => t.kind === 'file' && t.preview && !get().fileStatus[t.id]) : undefined;
       const id = existing?.id ?? crypto.randomUUID();
       const tab: FileTab = { ...(existing?.kind === 'file' ? existing : {}), ...file, preview: existing?.kind === 'file' ? existing.preview === true : file.preview !== false, id, kind: 'file', title: file.path?.replace(/\\/g, '/').split('/').pop() || file.attachment?.name || 'File', visitedAt: Date.now(), returnTo: existing?.returnTo ?? (preview ? preview.returnTo : pane.activeId ?? undefined) };
@@ -209,9 +239,21 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
         if (index >= 0) tabs[index] = tab;
         else if (preview) tabs[tabs.findIndex((t) => t.id === preview.id)] = tab;
         else tabs.splice(Math.max(0, tabs.findIndex((t) => t.id === p.activeId) + 1), 0, tab);
-        return { open: true, tabs, activeId: id };
+        return { ...p, open: true, tabs, activeId: id,
+          ...(p.open && p.activeId === PERSONAL_TASKS_TAB_ID ? { personalDetailsOpen: true } : {}) };
       });
       return id;
+    },
+    finishFileReference: (id, scope, request, file) => {
+      const pane = get().panes[scope];
+      const pending = pane?.tabs.find((tab) => tab.id === id);
+      if (pending?.kind !== 'file' || pending.reference !== request) return false;
+      const duplicate = file.reference ? undefined : pane.tabs.find(tab => tab.kind === 'file' && !tab.reference
+        && (fileTabKey(tab) === fileTabKey(file) || tab.aliases?.includes(fileTabKey(file))));
+      commit(scope, p => duplicate
+        ? { ...p, tabs: p.tabs.filter(tab => tab.id !== id), activeId: p.activeId === id ? duplicate.id : p.activeId }
+        : { ...p, tabs: p.tabs.map(tab => tab.id === id ? { ...pending, ...file, reference: file.reference } : tab) });
+      return true;
     },
     addSideChat: (sideChatId, title, scope, activate = true) => commit(scope, (p) => {
       const id = `side:${sideChatId}`;
@@ -241,10 +283,18 @@ export const useRightWorkspaceStore = create<State>((set, get) => {
     remove: (id, scope = get().scope) => commit(scope, (p) => {
       const removed = p.tabs.find((t) => t.id === id);
       const tabs = p.tabs.filter((t) => t.id !== id);
+      if (p.activeId === id && (removed?.kind === 'file' || removed?.kind === 'browser') && tabs.some(t => t.id === PERSONAL_TASKS_TAB_ID)) {
+        const previewTabs = tabs.filter(t => t.id !== PERSONAL_TASKS_TAB_ID);
+        const next = previewTabs.find(t => t.id === removed.returnTo) ?? [...previewTabs].sort((a, b) => b.visitedAt - a.visitedAt)[0];
+        return { tabs, open: p.open && Boolean(next || p.personalDetailsOpen), activeId: next?.id ?? PERSONAL_TASKS_TAB_ID,
+          ...(next && p.personalDetailsOpen ? { personalDetailsOpen: true } : {}) };
+      }
       const next = tabs.find((t) => t.id === removed?.returnTo) ?? [...tabs].sort((a, b) => b.visitedAt - a.visitedAt)[0];
       return { ...p, open: p.open && tabs.length > 0, tabs, activeId: p.activeId === id ? next?.id ?? null : p.activeId };
     }),
     setWidth: (width) => { set({ width }); try { localStorage.setItem('xopc:workspace-width', String(width)); } catch { /* Optional preference. */ } },
+    setPersonalTasksWidth: (personalTasksWidth) => { set({ personalTasksWidth }); try { localStorage.setItem('xopc:personal-tasks-width', String(personalTasksWidth)); } catch { /* Optional preference. */ } },
+    setPersonalPreviewChatWidth: (personalPreviewChatWidth) => { set({ personalPreviewChatWidth }); try { localStorage.setItem('xopc:personal-preview-chat-width', String(personalPreviewChatWidth)); } catch { /* Optional preference. */ } },
     setTreeWidth: (treeWidth) => { set({ treeWidth: Math.max(200, Math.min(320, treeWidth)) }); try { localStorage.setItem('xopc:workspace-tree-width', String(get().treeWidth)); } catch { /* Optional preference. */ } },
     setTreeOpen: (kind, open) => set(kind === 'file' ? { fileTreeOpen: open } : { sideTreeOpen: open }),
     reset: () => { set({ panes: {}, fileStatus: {}, notices: {}, scope: EMPTY_WORKSPACE_SCOPE }); persist(get()); },

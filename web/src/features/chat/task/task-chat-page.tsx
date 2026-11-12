@@ -10,10 +10,10 @@ export function TaskChatPage() {
   const conversationId = data?.conversation.activeConversationId ?? null;
 
   if (isLoading || conversationLoading || (data && !conversationId && !conversationError)) {
-    return <div className="flex h-full flex-col gap-4 p-6" aria-busy><Skeleton className="h-10 w-64" /><Skeleton className="min-h-0 flex-1 rounded-xl" /></div>;
+    return <div className="flex h-full flex-col gap-4 p-6 pt-[calc(var(--app-chat-header-height,0px)+1.5rem)]" aria-busy><Skeleton className="h-10 w-64" /><Skeleton className="min-h-0 flex-1 rounded-xl" /></div>;
   }
   if (error || conversationError || !data) {
-    return <div className="grid h-full place-items-center text-sm text-danger">Task conversation could not be loaded.</div>;
+    return <div className="grid h-full place-items-center pt-[var(--app-chat-header-height,0px)] text-sm text-danger">Task conversation could not be loaded.</div>;
   }
   if (!conversationId) return null;
   return <ChatPage conversationId={conversationId} taskId={taskId} />;

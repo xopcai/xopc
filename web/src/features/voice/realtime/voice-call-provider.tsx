@@ -1,9 +1,10 @@
 import { openCapabilitySettings } from '@/features/settings/models-hub/open-capability-settings';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Presence } from '@radix-ui/react-presence';
+import { autoUpdate } from '@floating-ui/dom';
 import { AudioLines, Captions, Ellipsis, Mic, MicOff, Minimize2, Phone, PhoneOff } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { TaskSessionBanner } from '@/features/chat/task/task-session-banner';
@@ -13,9 +14,10 @@ import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useVoicePreferencesStore } from '@/stores/voice-preferences-store';
+import { cn } from '@/lib/cn';
 
 import { useRealtimeVoice } from './use-realtime-voice';
-import { VoiceCallContext, type VoiceCallTarget } from './voice-call-context';
+import { VoiceCallContext, type VoiceCallContextValue, type VoiceCallTarget } from './voice-call-context';
 
 function clampMiniPosition(left: number, top: number, width: number, height: number) {
   return {
@@ -30,6 +32,23 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
   const [target, setTarget] = useState<VoiceCallTarget | null>(null);
   const lastTargetName = useRef('');
   const [expanded, setExpanded] = useState(false);
+  const { pathname } = useLocation();
+  const [presentation, setPresentation] = useState<Parameters<VoiceCallContextValue['open']>[1]>();
+  const [callCard, setCallCard] = useState<HTMLDivElement | null>(null);
+  const [callPosition, setCallPosition] = useState<{ right: number; top: number; maxWidth: number }>();
+  const callAnchor = pathname === '/personal' && presentation?.anchor.isConnected ? presentation.anchor : null;
+  useLayoutEffect(() => {
+    if (!expanded || !callAnchor || !callCard) return;
+    const boundary = callAnchor.closest('[data-app-chat-shell]');
+    return autoUpdate(callAnchor, callCard, () => {
+      const rect = callAnchor.getBoundingClientRect();
+      const rightEdge = Math.min(window.innerWidth - 12, rect.right);
+      const right = window.innerWidth - rightEdge;
+      const top = rect.bottom + 12;
+      const maxWidth = rightEdge - Math.max(0, boundary?.getBoundingClientRect().left ?? 0) - 12;
+      setCallPosition(previous => previous?.right === right && previous.top === top && previous.maxWidth === maxWidth ? previous : { right, top, maxWidth });
+    }, { animationFrame: true, elementResize: typeof ResizeObserver !== 'undefined', layoutShift: typeof IntersectionObserver !== 'undefined' });
+  }, [callAnchor, callCard, expanded]);
   const [more, setMore] = useState(false);
   const captions = useVoicePreferencesStore((state) => state.captions);
   const setCaptions = useVoicePreferencesStore((state) => state.setCaptions);
@@ -119,7 +138,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setTarget(next);
     void voice.startVoiceConversation(next.conversationId, next.mode, next.naturalBackend).finally(() => { if (attempt === startAttempt.current) starting.current = false; });
   };
-  const context = {
+  const context: VoiceCallContextValue = {
     active,
     setMiniAnchor: registerMiniAnchor,
     expanded: Boolean(target && expanded),
@@ -128,10 +147,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
       setMore(false);
     },
     conversationId: active ? target?.conversationId ?? null : null,
-    open: (next: VoiceCallTarget) => {
+    open: (next, nextPresentation) => {
       start(next);
       setMiniPosition(null);
-      setExpanded(Boolean(target));
+      setPresentation(nextPresentation);
+      setExpanded(Boolean(target || nextPresentation));
     },
   };
   const status = voice.error ? m.callFailed
@@ -150,6 +170,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     starting.current = false;
     voice.cancelVoiceInput();
     setTarget(null);
+    setPresentation(undefined);
     setExpanded(false);
     setMore(false);
   };
@@ -175,16 +196,26 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     </Presence>
     <Dialog.Root open={Boolean(target && expanded)} onOpenChange={(open) => { if (!open) setExpanded(false); }} modal={false}>
       <Dialog.Portal>
-        <Dialog.Content onCloseAutoFocus={(event) => event.preventDefault()} onInteractOutside={(event) => event.preventDefault()} data-side="bottom" style={{ transformOrigin: 'top right' }}
-          className="xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[71] flex h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-fg shadow-float focus:outline-none">
-          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
+        <Dialog.Content ref={setCallCard} onCloseAutoFocus={(event) => event.preventDefault()} onInteractOutside={(event) => event.preventDefault()} data-side="bottom"
+          data-personal-call-card={callAnchor ? '' : undefined}
+          style={{ transformOrigin: 'top right', ...(callAnchor && callPosition ? {
+            right: callPosition.right, top: callPosition.top,
+            maxWidth: callPosition.maxWidth,
+            maxHeight: `calc(100dvh - ${callPosition.top + 12}px)`,
+          } : {}) }}
+          className={cn('xopc-session-context-popover data-[state=closed]:pointer-events-none fixed right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[71] flex flex-col overflow-hidden border bg-surface-overlay text-fg shadow-float focus:outline-none',
+            callAnchor ? 'h-[min(34rem,calc(100dvh-6rem))] w-[min(27rem,calc(100vw-1.5rem))] rounded-[1.75rem] border-edge-subtle' : 'h-[min(480px,calc(100dvh-6rem))] w-[min(380px,calc(100vw-1.5rem))] rounded-xl border-edge')}>
+          <header className={cn('flex shrink-0 items-center justify-between gap-3 px-4 py-3', !callAnchor && 'border-b border-edge')}>
             <div className="min-w-0"><Dialog.Title className="truncate font-medium">{target?.name ?? lastTargetName.current}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{m.callSessionHint}</Dialog.Description></div>
             <div className="flex"><Button variant="ghost" onClick={() => setMore(!more)} aria-label={m.callMore} aria-expanded={more}><Ellipsis className="size-4" /></Button><Button variant="ghost" onClick={() => setExpanded(false)} aria-label={m.callMinimize}><Minimize2 className="size-4" /></Button></div>
           </header>
           {more ? <div className="flex shrink-0 items-center justify-between border-b border-edge px-4 py-2"><Button variant="ghost" aria-pressed={captions} onClick={() => setCaptions(!captions)}><Captions className="size-4" />{m.callCaptions}</Button>{settingsLink}</div> : null}
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-5">
-            <AudioLines className="size-10 text-accent-fg" aria-hidden="true" />
-            <div><p className="text-lg font-medium" role="status">{status}</p>{connected || !active ? <p className="mt-1 text-xs tabular-nums text-fg-muted">{connected ? voice.elapsedLabel : m.callContinuity}{connected && voice.muted && voice.responsePhase !== 'idle' ? ` · ${m.callMicMuted}` : ''}</p> : null}</div>
+            <div className={cn('flex flex-col gap-4', callAnchor && 'items-center py-3 text-center')}>
+              {callAnchor ? <div className="size-24 rounded-full bg-surface-inset" aria-hidden>{presentation?.avatar}</div>
+                : <AudioLines className="size-10 text-accent-fg" aria-hidden="true" />}
+              <div><p className="text-lg font-medium" role="status">{status}</p>{connected || !active ? <p className="mt-1 text-xs tabular-nums text-fg-muted">{connected ? voice.elapsedLabel : m.callContinuity}{connected && voice.muted && voice.responsePhase !== 'idle' ? ` · ${m.callMicMuted}` : ''}</p> : null}</div>
+            </div>
             {voice.error ? <details className="text-sm text-fg-muted"><summary className="cursor-pointer">{m.callErrorDetails}</summary><p role="alert" className="mt-2 break-words text-xs">{voice.error}</p></details> : null}
             {!active && voice.failureKind === 'session' ? <div className="space-y-2 text-sm text-fg-muted">
               <p>{m.callSetupHint}</p>{settingsLink}

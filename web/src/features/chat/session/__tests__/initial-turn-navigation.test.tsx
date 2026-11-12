@@ -10,9 +10,11 @@ const located = vi.fn();
 const loadMore = vi.fn(async () => {});
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
-function Reader({ ids, hasMore = false, turnId = 'target' }: { ids: string[]; hasMore?: boolean; turnId?: string }) {
+function Reader({ ids, hasMore = false, turnId = 'target', requestKey }: { ids: string[]; hasMore?: boolean; turnId?: string; requestKey?: string }) {
   useInitialTurnNavigation({ conversationId: 'shared-conversation', turnId,
-    messages: ids.map(id => ({ turnId: id })), ready: true, hasMore, loadingMore: false, loadMore, reveal, onLocated: located });
+    requestKey, assistantOnly: Boolean(requestKey),
+    messages: ids.map((id, index) => ({ turnId: id, role: index === 0 ? 'user' : 'assistant' })),
+    ready: true, hasMore, loadingMore: false, loadMore, reveal, onLocated: located });
   return null;
 }
 beforeEach(() => {
@@ -36,6 +38,11 @@ it('loads older history before locating the selected run by identity', async () 
   expect(loadMore).toHaveBeenCalledTimes(1); expect(located).not.toHaveBeenCalled();
   await render(['older', 'target', 'newest'], true);
   expect(reveal).toHaveBeenCalledWith(1); expect(located).toHaveBeenCalledWith(true);
+});
+it('returns to the assistant result each time its source link is activated', async () => {
+  await act(async () => root.render(<Reader ids={['target', 'target']} requestKey="first" />));
+  await act(async () => root.render(<Reader ids={['target', 'target']} requestKey="second" />));
+  expect(reveal.mock.calls).toEqual([[1], [1]]);
 });
 it('reports missing legacy turn identities instead of guessing from message order or time', async () => {
   await render(['other']);

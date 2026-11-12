@@ -76,7 +76,7 @@ export class TaskApplicationService {
   readonly #dependencies = new TaskDependencyService();
   readonly #projector = new TaskReadModelProjector();
 
-  create(input: TaskCreateRequest, actor: ActorRef = { kind: 'user' }): TaskApplicationResult {
+  create(input: TaskCreateRequest, actor: ActorRef = { kind: 'user' }, options?: { linkRunningOriginInput?: boolean }): TaskApplicationResult {
     const existing = this.#tasks.getByIdempotencyKey(input.idempotencyKey);
     if (existing) {
       this.readCommand(input.idempotencyKey, requestHash(input));
@@ -118,9 +118,9 @@ export class TaskApplicationService {
         if (linked.changes !== 1) throw new Error('Task origin conversation not found');
         db.prepare(`UPDATE task_origin_links SET
           origin_transcript_id = (SELECT active_transcript_id FROM sessions WHERE conversation_id = ?),
-          request_input_id = (SELECT id FROM session_inputs WHERE conversation_id = ?
+          request_input_id = (SELECT id FROM session_inputs WHERE ? AND conversation_id = ?
             AND status = 'running' ORDER BY created_at_ms DESC LIMIT 1)
-          WHERE task_id = ?`).run(input.originConversationId, input.originConversationId, task.id);
+          WHERE task_id = ?`).run(input.originConversationId, options?.linkRunningOriginInput === false ? 0 : 1, input.originConversationId, task.id);
         db.prepare(`INSERT INTO task_main_agent_links (task_id, agent_id, origin_conversation_id, created_at)
           SELECT ?, agent_id, conversation_id, ? FROM sessions WHERE conversation_id = ?`)
           .run(task.id, task.createdAt, input.originConversationId);

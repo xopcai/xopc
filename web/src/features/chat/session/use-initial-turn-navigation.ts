@@ -1,18 +1,19 @@
 import { useEffect, useRef } from 'react';
 
 /** Reveal a persisted turn by identity, loading older pages when necessary. */
-export function useInitialTurnNavigation({ conversationId, turnId, messages, ready, hasMore, loadingMore, loadMore, reveal, onLocated }: {
-  conversationId?: string | null; turnId?: string; messages: readonly { turnId?: string }[]; ready: boolean;
+export function useInitialTurnNavigation({ conversationId, turnId, requestKey, assistantOnly, messages, ready, hasMore, loadingMore, loadMore, reveal, onLocated }: {
+  conversationId?: string | null; turnId?: string; requestKey?: string; assistantOnly?: boolean;
+  messages: readonly { turnId?: string; role?: string }[]; ready: boolean;
   hasMore: boolean; loadingMore: boolean; loadMore: () => Promise<unknown>;
   reveal: (index: number) => boolean; onLocated?: (found: boolean) => void;
 }) {
   const progress = useRef({ key: '', finished: false, requestedLength: -1 });
   useEffect(() => {
-    const key = `${conversationId ?? ''}:${turnId ?? ''}`;
+    const key = JSON.stringify([conversationId, turnId, requestKey]);
     if (progress.current.key !== key) progress.current = { key, finished: false, requestedLength: -1 };
     if (!turnId || !ready || progress.current.finished) return;
     const search = progress.current;
-    const index = messages.findIndex(message => message.turnId === turnId);
+    const index = messages.findIndex(message => message.turnId === turnId && (!assistantOnly || message.role === 'assistant'));
     if (index >= 0) {
       let frame = 0;
       let cancelled = false;
@@ -39,5 +40,5 @@ export function useInitialTurnNavigation({ conversationId, turnId, messages, rea
       if (progress.current !== search) return;
       search.finished = true; onLocated?.(false);
     });
-  }, [conversationId, turnId, messages, ready, hasMore, loadingMore, loadMore, reveal, onLocated]);
+  }, [conversationId, turnId, requestKey, assistantOnly, messages, ready, hasMore, loadingMore, loadMore, reveal, onLocated]);
 }

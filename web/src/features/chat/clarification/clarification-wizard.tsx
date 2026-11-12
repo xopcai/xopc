@@ -15,7 +15,7 @@ import { clarificationDraftStorage } from './clarification-draft-storage';
 
 type Draft = { index: number; answers: Record<string, ClarificationQuestionAnswer> };
 
-export function ClarificationWizard({ prompt, submitting, submitError, labels, onSubmit, onAgentDecide, onCancel }: ClarifyPromptProps) {
+export function ClarificationWizard({ prompt, focusRequestKey, submitting, submitError, labels, onSubmit, onAgentDecide, onCancel }: ClarifyPromptProps) {
   const language = useLocaleStore(s => s.language);
   const t = messages(language).chat;
   const [draft, setDraft] = useState<Draft>({ index: 0, answers: {} });
@@ -72,6 +72,11 @@ export function ClarificationWizard({ prompt, submitting, submitError, labels, o
   }, [draft, ready]);
 
   useEffect(() => { if (customQuestion) input.current?.focus(); }, [customQuestion]);
+  useEffect(() => {
+    if (!ready || !focusRequestKey) return;
+    section.current?.scrollIntoView?.({ block: 'nearest' });
+    section.current?.focus({ preventScroll: true });
+  }, [focusRequestKey, ready]);
 
   function update(next: Draft, flush = false) {
     edited.current = true;

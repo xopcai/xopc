@@ -169,7 +169,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   }, [activeConversationId, handleSideChatToggle, hasMessages, terminalPlatform]);
 
   const header = useMemo(() => ({
-      className: 'bg-surface-panel',
       startExtra: showNewChatLink ? (
         <NewChatLink
           to={newChatHrefForProject(projectId)}

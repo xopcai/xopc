@@ -185,6 +185,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
 
   const fq = useChatFollowUpClarify({
     conversationId: focusedConversationId,
+    personal: options?.personal,
     decodedKey,
     conversationIdRef: focusedConversationIdRef,
     sendingRef,

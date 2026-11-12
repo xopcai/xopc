@@ -27,7 +27,13 @@ export type AutomationAction =
       workingDirectory?: string;
       model?: string;
       timeoutSeconds?: number;
-    } | { kind: 'routine'; routineId: string; version: number; hash: string } | {
+  } | { kind: 'routine'; routineId: string; version: number; hash: string } | {
+      kind: 'personal_task';
+      conversationId: string;
+      agentId: string;
+      instruction: string;
+      locale: 'zh' | 'en';
+    } | {
       kind: 'task_command';
       taskId: string;
       command: TaskCommand;

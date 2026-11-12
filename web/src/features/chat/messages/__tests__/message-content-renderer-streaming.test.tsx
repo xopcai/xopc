@@ -14,6 +14,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { messages } from '@/i18n/messages';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+import { useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import * as workspaceApi from '@/features/workspace/workspace-api';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
 
@@ -71,6 +72,7 @@ describe('streaming assistant Markdown rendering', () => {
     document.body.append(container);
     root = createRoot(container);
     useWorkspacePreviewStore.getState().setPath(null);
+    useRightWorkspaceStore.getState().reset();
     useDevViewStore.setState({ showRawToolData: false });
   });
 
@@ -308,6 +310,26 @@ describe('streaming assistant Markdown rendering', () => {
     await act(async () => { container.querySelector<HTMLAnchorElement>('a')?.click(); });
     expect(resolveFile).toHaveBeenCalledWith('report.html', expect.objectContaining({ taskRunId: 'producing-run', conversationId: 'side-chat-id' }));
     expect(useWorkspacePreviewStore.getState().path).toBe('/worker/report.html');
+  });
+
+  it('opens the preview before resolving the path and keeps the same tab when ready', async () => {
+    let resolveRequest!: (value: workspaceApi.WorkspaceFileReference) => void;
+    const request = new Promise<workspaceApi.WorkspaceFileReference>(resolve => { resolveRequest = resolve; });
+    vi.spyOn(workspaceApi, 'resolveWorkspaceFileReference').mockReturnValue(request);
+    render([{ type: 'text', text: '[Open page](report.html)' }], false);
+    act(() => container.querySelector<HTMLAnchorElement>('a')?.click());
+    const getPane = () => {
+      const store = useRightWorkspaceStore.getState();
+      return store.panes[store.scope];
+    };
+    const id = getPane().activeId;
+    expect(getPane()).toMatchObject({ open: true, tabs: [{ id, reference: { status: 'loading' } }] });
+    await act(async () => resolveRequest({
+      inputPath: 'report.html', displayName: 'report.html', scope: 'workspace', exists: true,
+      absolutePath: '/workspace/report.html', capabilities: ['preview'],
+    }));
+    expect(getPane().activeId).toBe(id);
+    expect(getPane().tabs[0]).toMatchObject({ id, path: '/workspace/report.html', reference: undefined });
   });
 
   it('opens external host files in the preview pane', async () => {

@@ -11,11 +11,10 @@ import { TaskCurrentAction } from '@/features/tasks/task-current-action';
 import { TaskHeaderTitle } from '@/features/tasks/task-header-title';
 import { findTaskScroller } from '@/features/tasks/task-section-scroll';
 import type { TaskChangedEvent, TaskCommand, TaskCriterionReview, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
-import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ArrowLeft, CalendarClock, Circle, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause, X } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Circle, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { TaskExpandableContent } from '@/features/tasks/task-expandable-content';
@@ -26,6 +25,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TaskDetailSkeleton } from '@/features/tasks/task-detail-skeleton';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { ChatPage } from '@/features/chat/chat-page';
 import { fetchProjectOperatingView } from '@/features/projects/api';
@@ -49,17 +49,12 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
-import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 function phaseLabel(phase: TaskPhase, language: 'en' | 'zh'): string {
   const labels = language === 'zh'
     ? { backlog: '待规划', ready: '就绪', active: '进行中', review: '待验收', closed: '已关闭' }
     : { backlog: 'Backlog', ready: 'Ready', active: 'Active', review: 'Review', closed: 'Closed' };
   return labels[phase];
-}
-
-function DetailSkeleton() {
-  return <div className="space-y-4" aria-busy><Skeleton className="h-32 rounded-2xl" /><Skeleton className="h-52 rounded-2xl" /><Skeleton className="h-40 rounded-2xl" /></div>;
 }
 
 function dateInputValue(timestamp: number | undefined): string {
@@ -223,9 +218,9 @@ function TextList({ items, empty, contentKey }: {
   })}</ul></TaskExpandableContent>;
 }
 
-type TaskHeaderState = { taskId: string; title?: string; compact: boolean };
+export type TaskHeaderState = { taskId: string; title?: string; compact: boolean };
 
-function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHeaderChange }: {
+export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHeaderChange }: {
   taskId: string;
   presentation: 'page' | 'modal';
   backgroundPath?: string;
@@ -264,6 +259,17 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHea
   const [resizingPanels, setResizingPanels] = useState(false);
   const acceptanceRef = useRef<HTMLDetailsElement>(null);
   const resultsRef = useRef<HTMLElement>(null);
+  const location = useLocation();
+  const focusTaskResults = (location.state as { focusTaskResults?: string } | null)?.focusTaskResults;
+  const resultsReady = Boolean(detail);
+  useEffect(() => {
+    if (!resultsReady || focusTaskResults !== taskId) return;
+    const frame = requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView?.({ block: 'start' });
+      resultsRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusTaskResults, location.key, resultsReady, taskId]);
   const splitPaneRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const [compactHeader, setCompactHeader] = useState(false);
@@ -646,7 +652,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHea
   }, [clearPageHeader, compactHeader, copy.backToWork, copy.taskLabel, hasTaskTitle, presentation, projectName, returnPath, setPageHeader, taskTitle]);
 
   if (loadError && !detail) return <div className={presentation === 'modal' ? 'p-5 text-sm text-danger' : 'mx-auto max-w-3xl p-6 text-sm text-danger'}>{copy.taskNotFound}</div>;
-  if (!detail) return <div className={presentation === 'modal' ? 'p-5' : 'mx-auto max-w-4xl p-4 sm:p-6'}><DetailSkeleton /></div>;
+  if (!detail) return <div className={presentation === 'modal' ? 'p-5' : 'mx-auto max-w-4xl p-4 sm:p-6'}><TaskDetailSkeleton /></div>;
 
   const activeWait = detail.waits[0];
   const activeRun = detail.runs.find((run) => !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
@@ -1055,79 +1061,4 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHea
 export function TaskDetailPage() {
   const { taskId = '' } = useParams();
   return <TaskDetailView taskId={taskId} presentation="page" />;
-}
-
-export function TaskDetailModal({ taskId, backgroundPath, workspacePanelWidth = 0, onClose }: {
-  taskId: string;
-  backgroundPath: string;
-  workspacePanelWidth?: number;
-  onClose: () => void;
-}) {
-  const language = useLocaleStore((state) => state.language);
-  const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
-  const workspacePanelOpen = workspacePanelWidth > 0;
-  const [header, setHeader] = useState<TaskHeaderState>();
-  const currentHeader = header?.taskId === taskId ? header : undefined;
-
-  return (
-    <Dialog.Root
-      modal={false}
-      open
-      onOpenChange={(open) => {
-        if (open) return;
-        setPreviewPath(null);
-        onClose();
-      }}
-    >
-      <Dialog.Portal>
-        <button
-          type="button"
-          tabIndex={-1}
-          data-task-modal-backdrop
-          className="fixed inset-0 z-[80] bg-black/45"
-          aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}
-          onClick={() => {
-            setPreviewPath(null);
-            onClose();
-          }}
-        />
-        <Dialog.Content
-          className="xopc-dialog-content task-detail-modal-content fixed top-1/2 z-[90] flex h-[min(54rem,calc(100dvh-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay focus:outline-none"
-          data-workspace-panel-open={workspacePanelOpen ? 'true' : 'false'}
-          style={{
-            '--task-detail-workspace-offset': `${workspacePanelWidth / 2}px`,
-            '--task-detail-workspace-width': `${workspacePanelWidth}px`,
-          } as CSSProperties}
-          onEscapeKeyDown={(event) => {
-            const target = event.target;
-            if (target instanceof HTMLElement && target.closest('[data-task-inline-editor]')) event.preventDefault();
-          }}
-          onInteractOutside={(event) => {
-            const target = event.detail.originalEvent.target;
-            if (
-              target instanceof Element
-              && target.closest('#app-workspace-panel, [data-task-modal-backdrop]')
-            ) event.preventDefault();
-          }}
-        >
-          <header className="flex shrink-0 items-center justify-between gap-3 bg-surface-panel px-5 py-3.5">
-            <Dialog.Title className="min-w-0 flex-1 font-medium text-fg">
-              <TaskHeaderTitle label={language === 'zh' ? '任务详情' : 'Task details'} title={currentHeader?.title} compact={currentHeader?.compact ?? false} />
-            </Dialog.Title>
-            <Dialog.Description className="sr-only">{language === 'zh' ? '查看并操作任务详情' : 'View and manage task details'}</Dialog.Description>
-            <div className="flex shrink-0 items-center gap-1">
-              <Dialog.Close className="flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={language === 'zh' ? '关闭任务详情' : 'Close task details'}><X className="size-4" aria-hidden /></Dialog.Close>
-            </div>
-          </header>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <TaskDetailView key={taskId} taskId={taskId} presentation="modal" backgroundPath={backgroundPath} onHeaderChange={setHeader} onDeleted={() => {
-              setPreviewPath(null);
-              onClose();
-            }} />
-          </div>
-        </Dialog.Content>
-
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
 }

@@ -8,6 +8,11 @@ import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
 import { markPersonalRead, personalUnreadSnapshot } from '../../../personal-agent/unread.js';
 import { getPersonalAgent } from '../../../personal-agent/repository.js';
+import { isPersonalSchedule } from '../../../personal-agent/schedules.js';
+import { AutomationScheduleSchema } from '../../../automations/domain/validation.js';
+import { getAutomation } from '../../../automations/storage/index.js';
+import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
+import { listDeliverables } from '../../../tasks/task-deliverables.js';
 import { legacyNaturalModel } from '../../../voice/realtime/omniRoute.js';
 import { finishPersonalWelcome, getPersonalOnboarding, PersonalOnboardingDraftSchema, PersonalOnboardingStepSchema, savePersonalOnboarding } from '../../../personal-agent/onboarding.js';
 import { TaskOriginRepository } from '../../../tasks/task-origin-repository.js';
@@ -44,7 +49,18 @@ const ProfileSchema = z.object({
 const ActivityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(5),
   offset: z.coerce.number().int().min(0).default(0),
+  view: z.enum(['work', 'deliverables']).optional(),
 });
+const PersonalScheduleSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  instruction: z.string().trim().min(1).max(50_000),
+  locale: z.enum(['zh', 'en']),
+  schedule: AutomationScheduleSchema,
+}).strict();
+const PersonalSchedulePatchSchema = PersonalScheduleSchema.partial().extend({
+  enabled: z.boolean().optional(),
+  expectedRevision: z.number().int().nonnegative(),
+}).refine(value => Object.keys(value).length > 1);
 
 export function registerPersonalAgentRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const owner = (c: Parameters<typeof getGatewayPrincipal>[0]) => {
@@ -56,6 +72,88 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
   };
 
   registerProactivityRoutes(authenticated, deps, owner);
+
+  authenticated.get('/api/personal-agent/schedules', async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const profile = getPersonalAgent(ownerId);
+    if (profile?.state !== 'ready') return c.json({ ok: true, payload: [] });
+    const items = await deps.service.automationServiceInstance.list();
+    return c.json({ ok: true, payload: items.filter(item => isPersonalSchedule(item, profile.conversationId, profile.agentId)) });
+  });
+
+  authenticated.post('/api/personal-agent/schedules', deps.strictRateLimitMiddleware, async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const profile = getPersonalAgent(ownerId);
+    if (profile?.state !== 'ready') return c.json({ ok: false, error: 'Personal Agent is unavailable' }, 409);
+    const parsed = PersonalScheduleSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid Personal schedule' }, 400);
+    const { name, instruction, locale, schedule } = parsed.data;
+    try {
+      const automation = await deps.service.automationServiceInstance.create({
+        name, trigger: { kind: 'schedule', schedule },
+        action: { kind: 'personal_task', agentId: profile.agentId, conversationId: profile.conversationId, instruction, locale },
+        management: { owner: 'personal-agent', editable: ['enabled', 'trigger'], runnable: true, deletable: true },
+        conversationMode: 'new_session',
+        delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
+      });
+      return c.json({ ok: true, payload: automation }, 201);
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+
+  authenticated.patch('/api/personal-agent/schedules/:id', deps.strictRateLimitMiddleware, async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const profile = getPersonalAgent(ownerId);
+    if (profile?.state !== 'ready') return c.json({ ok: false, error: 'Personal Agent is unavailable' }, 409);
+    const parsed = PersonalSchedulePatchSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: 'Invalid Personal schedule changes' }, 400);
+    const service = deps.service.automationServiceInstance;
+    const id = c.req.param('id');
+    const { name, instruction, locale, schedule, enabled, expectedRevision } = parsed.data;
+    try {
+      const result = runSqliteWriteTransaction(() => {
+        const current = getAutomation(id);
+        if (!isPersonalSchedule(current, profile.conversationId, profile.agentId)) return { status: 'missing' } as const;
+        if (current.updatedAtMs !== expectedRevision) return { status: 'conflict' } as const;
+        const automation = service.updateAtomically(id, {
+          ...(name !== undefined ? { name } : {}),
+          ...(enabled !== undefined ? { enabled } : {}),
+          ...(schedule ? { trigger: { kind: 'schedule', schedule } } : {}),
+          ...(instruction !== undefined || locale !== undefined ? {
+            action: { ...current.action, instruction: instruction ?? current.action.instruction, locale: locale ?? current.action.locale },
+          } : {}),
+        });
+        return { status: 'updated', automation } as const;
+      });
+      if (result.status === 'missing') return c.json({ ok: false, error: 'Personal schedule not found' }, 404);
+      if (result.status === 'conflict') return c.json({ ok: false, error: 'The schedule changed. Reload and try again.' }, 409);
+      service.refreshSchedule();
+      return c.json({ ok: true, payload: result.automation });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
+
+  authenticated.post('/api/personal-agent/schedules/:id/run', deps.strictRateLimitMiddleware, async c => {
+    const ownerId = owner(c);
+    if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
+    const profile = getPersonalAgent(ownerId);
+    if (profile?.state !== 'ready') return c.json({ ok: false, error: 'Personal Agent is unavailable' }, 409);
+    const id = c.req.param('id');
+    if (!isPersonalSchedule(getAutomation(id), profile.conversationId, profile.agentId)) {
+      return c.json({ ok: false, error: 'Personal schedule not found' }, 404);
+    }
+    try {
+      const run = await deps.service.automationServiceInstance.runNow(id);
+      return c.json({ ok: true, payload: run }, 202);
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
+  });
   authenticated.put('/api/personal-agent/avatar', deps.strictRateLimitMiddleware, async c => {
     const ownerId = owner(c);
     if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
@@ -159,12 +257,23 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
   authenticated.get('/api/personal-agent/activity', c => {
     const ownerId = owner(c);
     if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
-    const query = ActivityQuerySchema.safeParse({ limit: c.req.query('limit'), offset: c.req.query('offset') });
+    const query = ActivityQuerySchema.safeParse({ limit: c.req.query('limit'), offset: c.req.query('offset'), view: c.req.query('view') });
     if (!query.success) return c.json({ ok: false, error: 'Invalid activity pagination' }, 400);
     const record = getPersonalAgent(ownerId);
+    const { limit, offset, view } = query.data;
+    if (view === 'deliverables') {
+      const payload = record?.state === 'ready'
+        ? listDeliverables({ conversationId: record.conversationId }, limit, offset) : { items: [], nextOffset: null };
+      return c.json({ ok: true, payload });
+    }
+    const tasks = new TaskOriginRepository();
+    if (view === 'work') {
+      const conversationId = record?.state === 'ready' ? record.conversationId : null;
+      const recent = conversationId ? tasks.listRecentEnded(conversationId, limit, offset) : { items: [], total: 0 };
+      return c.json({ ok: true, payload: { ...recent, current: conversationId && offset === 0 ? tasks.listCurrent(conversationId) : [] } });
+    }
     if (!record || record.state !== 'ready') return c.json({ ok: true, payload: { items: [], total: 0 } });
-    return c.json({ ok: true, payload: new TaskOriginRepository().list(record.conversationId, query.data.limit,
-      { offset: query.data.offset, order: 'recent' }) });
+    return c.json({ ok: true, payload: tasks.list(record.conversationId, limit, { offset, order: 'recent' }) });
   });
 
   authenticated.post('/api/personal-agent', deps.strictRateLimitMiddleware, async c => {

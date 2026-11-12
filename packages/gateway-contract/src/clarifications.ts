@@ -89,6 +89,26 @@ export const clarificationPresentationSchema = z.object({
   }).strict().optional(),
 });
 export type ClarificationPresentation = z.infer<typeof clarificationPresentationSchema>;
+export const clarificationChoiceReceiptSchema = z.object({
+  question: z.string(),
+  choiceId: z.string(),
+  choices: clarificationPresentationSchema.shape.choiceDetails.unwrap(),
+});
+export type ClarificationChoiceReceipt = z.infer<typeof clarificationChoiceReceiptSchema>;
+
+export function clarificationChoiceReceipt(
+  prompt: ClarificationPresentation & { question: string; kind: ClarificationKind },
+  submission: ClarificationSubmission | undefined,
+): ClarificationChoiceReceipt | undefined {
+  if (prompt.kind !== 'input') return undefined;
+  const question = prompt.schemaVersion === 2 && prompt.questions?.length === 1 ? prompt.questions[0] : undefined;
+  if (prompt.schemaVersion === 2 && question?.type !== 'single_choice') return undefined;
+  const response = question ? submission?.answers?.find(answer => answer.questionId === question.id) : submission?.response;
+  const choices = question?.type === 'single_choice' ? question.choices : prompt.choiceDetails;
+  if (!response?.choiceId || response.text?.trim() || !choices?.some(choice => choice.id === response.choiceId)) return undefined;
+  return { question: question?.question ?? prompt.question, choiceId: response.choiceId, choices };
+}
+
 export const clarificationSubmissionSchema = z.object({
   schemaVersion: z.union([z.literal(1), z.literal(2)]).optional(),
   answers: clarificationAnswersSchema.optional(),

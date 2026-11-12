@@ -6,6 +6,8 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PersonalTaskPanel } from '@/features/personal-agent/personal-task-panel';
+import { PERSONAL_TASKS_TAB_ID, useRightWorkspaceStore } from '@/stores/right-workspace-store';
 import { PersonalPage } from '@/features/personal-agent/personal-page';
 import { fetchJson } from '@/lib/fetch';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -25,7 +27,13 @@ vi.mock('@/features/personal-agent/personal-avatar', () => ({
 }));
 vi.mock('@/lib/fetch', () => ({ fetchJson: vi.fn() }));
 
-describe('Personal AI editor', () => {
+function TaskPanelHost() {
+  const pane = useRightWorkspaceStore(state => state.panes['conversation-1']);
+  return pane?.open && pane.activeId === PERSONAL_TASKS_TAB_ID
+    ? <aside><PersonalTaskPanel scope="conversation-1" zh={false} /></aside> : null;
+}
+
+describe('Personal AI header', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
   let headerContainer: HTMLDivElement;
@@ -34,12 +42,16 @@ describe('Personal AI editor', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
       .IS_REACT_ACT_ENVIRONMENT = true;
+    useRightWorkspaceStore.getState().reset();
     callState.active = false;
     callState.expanded = false;
+    minimizeVoiceCall.mockImplementation(() => { callState.expanded = false; });
     let revision = 1;
     vi.mocked(fetchJson).mockImplementation(async (url, options) => {
-      if (String(url).includes('/activity')) return { ok: true, payload: { items: [], total: 0 } };
+      if (String(url).includes('/activity')) return { ok: true, payload: { items: [], total: 0, current: [] } };
+      if (String(url).includes('/clarification')) return { ok: true, payload: { clarification: null } };
       if (String(url).includes('/models')) return { ok: true, payload: [] };
+      if (String(url).includes('/schedules')) return { ok: true, payload: [] };
       const body = options?.method === 'PATCH' ? JSON.parse(String(options.body)) : null;
       return { ok: true, payload: {
         agentId: 'personal',
@@ -85,10 +97,11 @@ describe('Personal AI editor', () => {
     act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Voice call"]')?.click());
     expect(openVoiceCall).toHaveBeenCalledExactlyOnceWith({
       conversationId: 'conversation-1', name: 'Ada',
-    });
+    }, expect.objectContaining({ anchor: headerContainer.firstElementChild }));
   });
 
-  it.each(["Edit Ada's profile", 'Ada settings'])('keeps quick controls at %s and opens the settings page only for more settings', async label => {
+  it('keeps quick controls in settings and opens the settings page only for more settings', async () => {
+    const label = 'Ada settings';
     function Location() { return <output data-testid="location">{useLocation().pathname}</output>; }
     await act(async () => root.render(<MemoryRouter initialEntries={['/personal']}><PersonalPage /><Location /></MemoryRouter>));
     act(() => headerRoot.render(<>{usePageHeaderStore.getState().main}{usePageHeaderStore.getState().end}</>));
@@ -108,71 +121,89 @@ describe('Personal AI editor', () => {
     expect(vi.mocked(fetchJson).mock.calls.some(([url, options]) => String(url).includes('/profile') && options?.method === 'PATCH')).toBe(false);
   });
 
-  it('toggles the delegated tasks popover from the header button', async () => {
-    await act(async () => {
-      root.render(<MemoryRouter><PersonalPage /></MemoryRouter>);
-    });
-    act(() => headerRoot.render(usePageHeaderStore.getState().end));
-
-    await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());
-    act(() => headerRoot.render(usePageHeaderStore.getState().end));
-    expect(document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Delegated tasks"]')).not.toBeNull();
+  it('toggles the shared right-hand workspace from the avatar', async () => {
+    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter initialEntries={['/personal']}><PersonalPage /><TaskPanelHost /></MemoryRouter></SWRConfig>));
+    const renderHeader = () => act(() => headerRoot.render(usePageHeaderStore.getState().main));
+    const trigger = () => headerContainer.querySelector<HTMLButtonElement>('[data-personal-tasks-trigger]');
+    renderHeader();
+    expect(trigger()?.textContent).toBe('Ada');
     expect(container.querySelector('aside')).toBeNull();
-    expect(headerContainer.querySelector('button[aria-label="Activity"]')?.getAttribute('aria-pressed')).toBe('true');
-    act(() => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());
-    act(() => headerRoot.render(usePageHeaderStore.getState().end));
-    expect(document.querySelector('[data-radix-popper-content-wrapper] [aria-label="Delegated tasks"]')).toBeNull();
-    expect(headerContainer.querySelector('button[aria-label="Activity"]')?.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => trigger()!.click());
+    renderHeader();
+    expect(trigger()).toBeNull();
+    expect(usePageHeaderStore.getState().personalChat).toBe('controls');
+    expect(container.querySelector('aside [aria-label="Delegated tasks"]')).not.toBeNull();
+    expect(container.querySelector('[data-personal-task-identity]')?.textContent).toBe('Ada');
+    act(() => useRightWorkspaceStore.getState().openFiles('conversation-1'));
+    renderHeader();
+    expect(trigger()?.getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector('aside')).toBeNull();
+    await act(async () => trigger()!.click());
+    expect(useRightWorkspaceStore.getState().panes['conversation-1'].tabs.map(tab => tab.kind)).toEqual(['personal-tasks', 'files']);
+    renderHeader();
+    act(() => useRightWorkspaceStore.getState().setOpen(false, 'conversation-1'));
+    renderHeader();
+    expect(trigger()).not.toBeNull();
+    expect(useRightWorkspaceStore.getState().panes['conversation-1'].open).toBe(false);
   });
 
-  it('switches between settings, tasks and an ongoing call without overlapping panels', async () => {
+  it('opens settings and calls beside the task panel', async () => {
     callState.active = true;
     callState.expanded = true;
-    await act(async () => root.render(<MemoryRouter><PersonalPage /></MemoryRouter>));
-    const renderHeader = () => act(() => headerRoot.render(usePageHeaderStore.getState().end));
+    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><PersonalPage /><TaskPanelHost /></MemoryRouter></SWRConfig>));
+    const renderHeader = () => act(() => headerRoot.render(<>{usePageHeaderStore.getState().main}{usePageHeaderStore.getState().end}</>));
     const click = async (label: string) => {
       renderHeader();
-      await act(async () => headerContainer.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click());
+      const button = [...headerContainer.querySelectorAll<HTMLButtonElement>('button')].find(item => item.getAttribute('aria-label') === label);
+      await act(async () => button!.click());
       renderHeader();
     };
     await click('Ada settings');
     expect(minimizeVoiceCall).toHaveBeenCalled();
     expect(document.querySelector('[aria-label="Ada quick settings"]')).not.toBeNull();
-    await click('Activity');
+    await click("Ada's tasks");
     expect(document.querySelector('[aria-label="Ada quick settings"]')).toBeNull();
     expect(document.querySelector('[aria-label="Delegated tasks"]')).not.toBeNull();
     await click('Ada settings');
-    expect(document.querySelector('[aria-label="Delegated tasks"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Delegated tasks"]')).not.toBeNull();
     expect(document.querySelector('[aria-label="Ada quick settings"]')).not.toBeNull();
     await click('Voice call');
-    expect(openVoiceCall).toHaveBeenCalledExactlyOnceWith({ conversationId: 'conversation-1', name: 'Ada' });
+    expect(openVoiceCall).toHaveBeenCalledExactlyOnceWith({ conversationId: 'conversation-1', name: 'Ada' },
+      expect.objectContaining({ anchor: expect.any(HTMLElement) }));
+    expect(document.querySelector('[aria-label="Delegated tasks"]')).not.toBeNull();
     expect(document.querySelector('[aria-label="Ada quick settings"]')).toBeNull();
   });
 
-  it('refreshes an open delegated task when its run finishes', async () => {
-    let phase = 'active';
-    let runStatus = 'running';
-    let operationalState = 'running';
-    vi.mocked(fetchJson).mockImplementation(async (url) => String(url).includes('/activity')
-      ? { ok: true, payload: { items: [{ id: 'task-1', title: 'Research', phase, operationalState, runStatus, updatedAt: 1 }], total: 1 } }
-      : String(url).includes('/models')
-        ? { ok: true, payload: [] }
-        : { ok: true, payload: { agentId: 'personal', conversationId: 'conversation-1',
-          state: 'ready', displayName: 'Ada', appearance: 'loopi', revision: 1 } });
-    await act(async () => root.render(<MemoryRouter><PersonalPage /></MemoryRouter>));
-    act(() => headerRoot.render(<MemoryRouter>{usePageHeaderStore.getState().end}</MemoryRouter>));
-    await act(async () => headerContainer.querySelector<HTMLButtonElement>('button[aria-label="Activity"]')?.click());
-    act(() => headerRoot.render(<MemoryRouter>{usePageHeaderStore.getState().end}</MemoryRouter>));
-    expect(document.querySelector('[aria-label="Delegated tasks"]')?.textContent).toContain('Working');
+  it('updates the collapsed header and open panel as delegated work progresses', async () => {
+    let finished = false;
+    const fetchPersonal = vi.mocked(fetchJson).getMockImplementation()!;
+    vi.mocked(fetchJson).mockImplementation(async (url, options) => {
+      if (!String(url).includes('/activity')) return fetchPersonal(url, options);
+      const task = { id: 'task-1', title: 'Research', updatedAt: Date.now() };
+      return { ok: true, payload: finished
+        ? { current: [], items: [{ ...task, phase: 'closed', resolution: 'done' }], total: 1 }
+        : { current: [{ ...task, phase: 'active', operationalState: 'running' }], items: [], total: 0 } };
+    });
+    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><PersonalPage /><TaskPanelHost /></MemoryRouter></SWRConfig>));
+    act(() => headerRoot.render(usePageHeaderStore.getState().main));
+    expect(headerContainer.textContent).toContain('Working · Research');
+    expect(container.querySelector('aside')).toBeNull();
+    await act(async () => headerContainer.querySelector<HTMLButtonElement>('[data-personal-tasks-trigger]')!.click());
+    expect(container.querySelector('aside')?.textContent).toContain('Working');
 
-    phase = 'closed';
-    runStatus = 'succeeded';
-    operationalState = 'idle';
+    finished = true;
     await act(async () => {
       window.dispatchEvent(new CustomEvent('task-changed-v2'));
       await new Promise(resolve => setTimeout(resolve, 180));
     });
-    act(() => headerRoot.render(<MemoryRouter>{usePageHeaderStore.getState().end}</MemoryRouter>));
-    expect(document.querySelector('[aria-label="Delegated tasks"]')?.textContent).toContain('Finished');
+    act(() => headerRoot.render(usePageHeaderStore.getState().main));
+    expect(container.querySelector('aside')?.textContent).toContain('Finished');
+    expect([...container.querySelectorAll('aside h3')].map(node => node.textContent)).toEqual(['Scheduled tasks', 'Today']);
+    const tabs = container.querySelectorAll('aside [aria-label="Tasks and deliverables"] [role="tab"]');
+    expect([...tabs].map(tab => tab.textContent)).toEqual(['Tasks', 'Deliverables']);
+    expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('[data-personal-task-identity]')?.textContent).toContain('Just delivered');
+    expect(headerContainer.textContent).not.toContain('Just delivered');
   });
 });

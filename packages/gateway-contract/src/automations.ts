@@ -32,6 +32,8 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     timeoutSeconds: z.number().positive().optional(),
   }),
   z.object({ kind: z.literal('task_command'), taskId: z.string(), command: TaskCommandSchema }),
+  z.object({ kind: z.literal('personal_task'), conversationId: z.string(), agentId: z.string(), instruction: z.string(),
+    locale: z.enum(['zh', 'en']) }),
   z.object({
     kind: z.literal('system'),
     capability: z.enum([

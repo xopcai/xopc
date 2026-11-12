@@ -881,6 +881,26 @@ describe('useRealtimeVoice', () => {
     expect(mocks.connect.mock.calls.map(([options]) => options.conversationId)).toEqual(['same-session', 'same-session']);
   });
 
+  it('opens a Personal call below the header controls on the first click', async () => {
+    let call!: VoiceCallContextValue;
+    function Page() { call = useVoiceCall(); return <button type="button" id="personal-call-anchor">Call</button>; }
+    act(() => root.render(<MemoryRouter initialEntries={['/personal']}><VoiceCallProvider><Page /></VoiceCallProvider></MemoryRouter>));
+    const anchor = document.getElementById('personal-call-anchor')!;
+    let anchorRect = { right: 800, bottom: 48 };
+    vi.spyOn(anchor, 'getBoundingClientRect').mockImplementation(() => anchorRect as DOMRect);
+    await act(async () => call.open({ conversationId: 'same-session', name: 'Ada' }, { anchor, avatar: <span>Avatar</span> }));
+    const card = document.querySelector<HTMLElement>('[data-personal-call-card]')!;
+    expect(call.expanded).toBe(true);
+    expect(card.textContent).toContain('Avatar');
+    expect(card.style.right).toBe(`${window.innerWidth - 800}px`);
+    expect(card.style.top).toBe('60px');
+    anchorRect = { right: 700, bottom: 52 };
+    act(() => window.dispatchEvent(new Event('resize')));
+    expect(card.style.right).toBe(`${window.innerWidth - 700}px`);
+    expect(card.style.top).toBe('64px');
+    expect(mocks.connect).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps muted native calls connected after a recoverable reply failure', async () => {
     render();
     await act(async () => voice.startVoiceConversation('same-session', 'natural'));

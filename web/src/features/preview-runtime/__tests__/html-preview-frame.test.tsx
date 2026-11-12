@@ -83,4 +83,15 @@ describe('HTML preview frame', () => {
       '*',
     );
   });
+
+  it('reveals the iframe when its own preview shell reports that the content loaded', () => {
+    act(() => root.render(<HtmlPreviewFrame html="<p>Ready</p>" title="report.html" />));
+    const frame = container.querySelector('iframe')!;
+    expect(frame.parentElement?.getAttribute('aria-busy')).toBe('true');
+    const data = { type: 'xopc-html-preview-ready' };
+    act(() => window.dispatchEvent(new MessageEvent('message', { source: window, data })));
+    expect(frame.parentElement?.getAttribute('aria-busy')).toBe('true');
+    act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, data })));
+    expect(frame.parentElement?.getAttribute('aria-busy')).toBe('false');
+  });
 });

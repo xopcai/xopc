@@ -1,6 +1,17 @@
 .personal-avatar-motion {
-  animation: personal-avatar-breathe 4.4s ease-in-out infinite;
   transform-origin: center 58%;
+}
+
+.personal-avatar-motion[data-activity="idle"] {
+  animation: personal-avatar-breathe 4.4s ease-in-out infinite;
+}
+
+.personal-avatar-motion[data-activity="delivered"] {
+  animation: personal-avatar-nod 400ms ease-out;
+}
+
+@keyframes personal-avatar-nod {
+  45% { transform: translateY(2px) rotate(6deg); }
 }
 
 @keyframes personal-avatar-breathe {
@@ -9,5 +20,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .personal-avatar-motion { animation: none; }
+  .personal-avatar-motion[data-activity] { animation: none; }
 }

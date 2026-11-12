@@ -7,6 +7,28 @@ import { useRightWorkspaceStore as workspace } from '@/stores/right-workspace-st
 beforeEach(() => { workspace.getState().reset(); workspace.getState().setScope('parent'); });
 
 describe('right workspace transitions', () => {
+  it('opens and closes Personal details independently from the active file', () => {
+    const s = workspace.getState();
+    const file = s.openFile({ path: 'report.html' });
+    s.openPersonalTasks('parent');
+    expect(workspace.getState().panes.parent).toMatchObject({ open: true, activeId: file, personalDetailsOpen: true });
+    s.closePersonalTasks('parent');
+    expect(workspace.getState().panes.parent).toMatchObject({ open: true, activeId: file });
+    expect(workspace.getState().panes.parent.personalDetailsOpen).toBeUndefined();
+    s.remove(file);
+    expect(workspace.getState().panes.parent.open).toBe(false);
+  });
+
+  it('keeps Personal details open when previewing a file from the task panel', () => {
+    const s = workspace.getState();
+    s.openPersonalTasks('parent');
+    const file = s.openFile({ path: 'report.html' });
+    expect(workspace.getState().panes.parent).toMatchObject({ activeId: file, personalDetailsOpen: true });
+    s.remove(file);
+    expect(workspace.getState().panes.parent).toMatchObject({ open: true, activeId: 'personal-tasks' });
+    expect(workspace.getState().panes.parent.personalDetailsOpen).toBeUndefined();
+  });
+
   it.each(['home', 'files', 'file', 'browser', 'sidechat'] as const)('closes the workspace when its last %s tab is removed', (kind) => {
     const s = workspace.getState();
     if (kind === 'home') s.openTools();

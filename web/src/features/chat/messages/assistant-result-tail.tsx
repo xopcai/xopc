@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
-import type { TurnOutcome, TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
+import type { TurnOutcome } from '@xopcai/gateway-contract';
 import {
   Archive,
   ChevronRight,
@@ -16,6 +16,7 @@ import {
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { AttachmentRenderer } from '@/features/chat/attachments/attachment-renderer';
 import {
+  attachmentFromDeliverable,
   formatFileSize,
   getAttachmentBinaryPayload,
 } from '@/features/chat/attachments/attachment-utils-core';
@@ -49,18 +50,6 @@ type ResultAttachment = {
   href?: string;
   failed?: boolean;
 };
-
-function attachmentFromDeliverable(deliverable: TurnOutcomeDeliverable): MessageAttachment {
-  return {
-    id: deliverable.artifactId,
-    name: deliverable.title,
-    type: deliverable.kind,
-    mimeType: deliverable.mimeType,
-    size: deliverable.sizeBytes,
-    uri: deliverable.uri,
-    workspaceRelativePath: deliverable.workspaceRelativePath,
-  };
-}
 
 function resultAttachmentIcon(attachment: MessageAttachment) {
   const mime = attachment.mimeType?.toLowerCase() ?? '';

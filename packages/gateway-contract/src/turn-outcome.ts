@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TaskResearchResultSchema } from './task-research-result.js';
+import { ProductReferenceSchema } from './product-delivery.js';
 
 export const TURN_OUTCOME_VERSION = 1 as const;
 
@@ -108,6 +109,18 @@ export type TurnOutcomeArtifactLocation = z.infer<typeof TurnOutcomeArtifactLoca
 export type TurnOutcomeArtifactAvailability = z.infer<typeof TurnOutcomeArtifactAvailabilitySchema>;
 export type TurnOutcomeArtifactCapability = z.infer<typeof TurnOutcomeArtifactCapabilitySchema>;
 export type TurnOutcomeDeliverable = z.infer<typeof TurnOutcomeDeliverableSchema>;
+
+export const PersonalDeliverableSchema = z.object({
+  id: z.string(),
+  turnId: z.string(),
+  createdAt: z.number(),
+  task: z.object({ id: z.string(), title: z.string(), conversationId: z.string().optional() }).optional(),
+  artifact: TurnOutcomeDeliverableSchema.optional(),
+  reference: ProductReferenceSchema.optional(),
+}).refine(item => Boolean(item.artifact) !== Boolean(item.reference));
+export type PersonalDeliverable = z.infer<typeof PersonalDeliverableSchema>;
+
+export type PersonalDeliverablesPage = { items: PersonalDeliverable[]; nextOffset: number | null };
 export type TurnOutcomeChangedFile = z.infer<typeof TurnOutcomeChangedFileSchema>;
 export type TurnOutcomeChangeSet = z.infer<typeof TurnOutcomeChangeSetSchema>;
 export type TurnOutcomeEvidence = z.infer<typeof TurnOutcomeEvidenceSchema>;

@@ -42,6 +42,7 @@ export type ClarifyPromptCopy = Pick<ChatMessages,
 
 export type ClarifyPromptProps = {
   prompt: ClarifyPromptView | null;
+  focusRequestKey?: string;
   submitting: boolean;
   submitError: string | null;
   labels: ClarifyPromptCopy;
@@ -55,7 +56,7 @@ export function ClarifyPrompt(props: ClarifyPromptProps) {
   return props.prompt ? <ClarifyPromptBody key={props.prompt.requestId} {...props} prompt={props.prompt} /> : null;
 }
 
-function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, onAgentDecide, onCancel }:
+function ClarifyPromptBody({ prompt, focusRequestKey, submitting, submitError, labels, onSubmit, onAgentDecide, onCancel }:
   Omit<ClarifyPromptProps, 'prompt'> & { prompt: ClarifyPromptView }) {
   const [draft, setDraft] = useState('');
   const [selected, setSelected] = useState<string>();
@@ -80,7 +81,10 @@ function ClarifyPromptBody({ prompt, submitting, submitError, labels, onSubmit, 
   const hintId = `clarify-hint-${prompt.requestId}`;
   const recommended = prompt.recommendedChoiceId;
 
-  useEffect(() => { region.current?.focus(); }, []);
+  useEffect(() => {
+    if (focusRequestKey) region.current?.scrollIntoView?.({ block: 'nearest' });
+    region.current?.focus({ preventScroll: Boolean(focusRequestKey) });
+  }, [focusRequestKey]);
   useEffect(() => {
     if (submitError || localError) errorRegion.current?.focus();
   }, [submitError, localError]);

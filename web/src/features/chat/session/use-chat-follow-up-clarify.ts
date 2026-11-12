@@ -4,7 +4,7 @@ import type { ComposerDraft, ComposerMode } from '@/features/chat/composer/compo
 import { readInputControl, rememberInputControl, requestInputControl } from './session-input-control';
 import { submitQuestionBatch } from '../clarification/clarification-submission';
 import type { ClarificationSubmission } from '@xopcai/gateway-contract';
-import { parseUserTurnDocument, readClarificationPresentation, renderUserTurnDocument } from '@xopcai/gateway-contract';
+import { clarificationChoiceReceipt, parseUserTurnDocument, readClarificationPresentation, renderUserTurnDocument } from '@xopcai/gateway-contract';
 import type { AppContextEnvelope } from '@xopcai/gateway-contract';
 import {
   useCallback,
@@ -135,6 +135,7 @@ function parseClarification(raw: unknown, expectedConversationId?: string): Clar
 
 export function useChatFollowUpClarify(options: {
   conversationId: string | null;
+  personal?: boolean;
   decodedKey: string | undefined;
   conversationIdRef: MutableRefObject<string | null>;
   sendingRef: MutableRefObject<boolean>;
@@ -145,6 +146,7 @@ export function useChatFollowUpClarify(options: {
 }): ChatFollowUpClarifyApi {
   const {
     conversationId,
+    personal,
     decodedKey,
     conversationIdRef,
     sendingRef,
@@ -590,7 +592,9 @@ export function useChatFollowUpClarify(options: {
 
   const respondToClarification = useCallback(async (action: 'answer' | 'agent_decide' | 'cancel', submission?: ClarificationSubmission) => {
     const p = clarifyPromptRef.current;
-    if (!p) return;
+    const key = conversationIdRef.current;
+    if (!p || !key) return;
+    const isCurrentScope = captureScope();
     const signature = JSON.stringify([p.requestId, p.version, action, submission]);
     if (clarificationAttemptRef.current?.signature !== signature) {
       clarificationAttemptRef.current = { signature, idempotencyKey: crypto.randomUUID() };
@@ -606,6 +610,14 @@ export function useChatFollowUpClarify(options: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...submission, expectedVersion: p.version, idempotencyKey }),
       });
+      if (!isCurrentScope()) return;
+      const choice = personal && action === 'answer' && res.ok ? clarificationChoiceReceipt(p, submission) : undefined;
+      const label = choice?.choices.find(option => option.id === choice.choiceId)?.label;
+      if (choice && label) {
+        const turnId = `clarification-choice:${p.requestId}`;
+        useChatSessionStore.getState().updateSessionMessages(key, current => current.some(message => message.turnId === turnId)
+          ? current : [...current, { role: 'user', content: [{ type: 'text', text: label }], timestamp: Date.now(), turnId, clarificationChoice: choice }]);
+      }
       if (clarifyPromptRef.current?.requestId !== p.requestId) return;
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
@@ -622,7 +634,7 @@ export function useChatFollowUpClarify(options: {
     } finally {
       setClarifySubmitting(false);
     }
-  }, [refreshClarification, conversationIdRef]);
+  }, [captureScope, conversationIdRef, personal, refreshClarification]);
 
   const submitClarifyAnswer = useCallback(
     (submission: ClarificationSubmission) => respondToClarification('answer', submission),
