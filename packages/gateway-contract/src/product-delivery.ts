@@ -5,6 +5,7 @@ import { LocalAppSourceHashSchema } from './local-apps.js';
 export const PRODUCT_DELIVERY_VERSION = 2 as const;
 
 export const ProductReferenceKindSchema = z.enum([
+  'agent',
   'task',
   'project',
   'note',
@@ -138,6 +139,8 @@ export function parseProductDeliveryText(text: string): ProductDeliveryEnvelope 
 export function productReferenceRoute(reference: ProductReference): string | null {
   const id = encodeURIComponent(reference.id);
   switch (reference.kind) {
+    case 'agent':
+      return `/capabilities/agents/${id}`;
     case 'task':
       return `/tasks/${id}`;
     case 'project':

@@ -54,6 +54,7 @@ export type AgentDefaults = {
 export type AgentOverride = {
   id: string;
   enabled: boolean;
+  purpose?: 'specialist' | 'task_dispatcher';
   workspace?: string;
   profile?: AgentProfile;
   specialistProfile?: SpecialistProfile;

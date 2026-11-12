@@ -49,6 +49,7 @@ export function ChatAgentSelector({
   value,
   disabled,
   placeholder,
+  newChatLabel,
   searchPlaceholder,
   noMatches,
   compact,
@@ -61,6 +62,7 @@ export function ChatAgentSelector({
   value: string;
   disabled?: boolean;
   placeholder: string;
+  newChatLabel?: string;
   searchPlaceholder: string;
   noMatches: string;
   compact?: boolean;
@@ -92,6 +94,7 @@ export function ChatAgentSelector({
         <button
           type="button"
           disabled={disabled}
+          aria-label={label === placeholder ? placeholder : `${newChatLabel ?? placeholder} · ${label}`}
           title={selectedTitle ?? placeholder}
           className={cn(
             comboboxTriggerLayoutClass,
@@ -135,6 +138,9 @@ export function ChatAgentSelector({
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
+          {newChatLabel ? (
+            <p className="border-b border-edge px-3 py-2 text-xs font-medium text-fg-muted">{newChatLabel}</p>
+          ) : null}
           <div className="shrink-0 border-b border-edge p-2">
             <input
               type="search"

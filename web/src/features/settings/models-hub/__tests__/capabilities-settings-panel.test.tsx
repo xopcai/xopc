@@ -17,13 +17,14 @@ const render = async (query = '', inlineUse?: 'speech') => {
   container=document.createElement('div');document.body.append(container);root=createRoot(container);
   await act(async () => { root.render(<MemoryRouter initialEntries={['/settings/capabilities/models'+query]}><Routes><Route path="/settings/capabilities/:capability" element={<><CapabilitiesSettingsPanel inlineUse={inlineUse}/><Location/></>}/></Routes></MemoryRouter>);await new Promise(resolve=>setTimeout(resolve,20)); });
 };
-it('keeps a single overview and service list, and focuses accounts without navigating', async () => {
+it('keeps a single overview and service list, and jumps to accounts without navigating', async () => {
   await render();
   expect(container.querySelectorAll('[data-testid="capability-overview"]')).toHaveLength(1);
   expect(container.querySelectorAll('[data-testid="service-accounts"]')).toHaveLength(1);
   const button=[...container.querySelectorAll('button')].find(button=>/Service accounts|服务账户/.test(button.textContent??''))!;
   await act(async()=>button.click());
-  expect(document.activeElement?.getAttribute('aria-labelledby')).toBe('model-services-heading');
+  expect(button.getAttribute('aria-current')).toBe('location');
+  expect(container.querySelector('[data-model-section="services"]')).not.toBeNull();
   expect(container.querySelector('output')?.textContent).toBe('/settings/capabilities/models');
 });
 it.each(['speech','transcription','conversation'])('opens the %s modal from the canonical link and consumes its command', async use => {

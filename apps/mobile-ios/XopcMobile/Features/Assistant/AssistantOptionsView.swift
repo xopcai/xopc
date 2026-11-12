@@ -43,9 +43,9 @@ struct AssistantSessionActionsView: View {
                                     }
                                 }.frame(minHeight: 44)
                             }
-                        }.navigationTitle("助手角色")
+                        }.navigationTitle("选择新对话对象")
                     } label: {
-                        optionRow("助手角色", value: state.agents.first(where: { $0.id == conversation?.agentId })?.displayName
+                        optionRow("对话对象", value: state.agents.first(where: { $0.id == conversation?.agentId })?.displayName
                             ?? state.selectedAgent?.displayName ?? conversation?.agentId ?? "Main", symbol: "person.crop.circle")
                     }
                 }

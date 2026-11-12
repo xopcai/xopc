@@ -12,6 +12,8 @@ import { resolveCompactionPolicy } from '../agent/memory/compaction-policy.js';
 import { promoteCompactionLedger } from '../agent/memory/compaction-promotion.js';
 import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
 import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
+import { deleteVideoArtifact } from '../video-generation/artifact.js';
+import { listVideoJobIds } from '../video-generation/repository.js';
 import { createLogger } from '../utils/logger.js';
 import {
   SessionCompactor,
@@ -575,8 +577,10 @@ export class SessionStore {
     this.idleCompaction.interrupt(key);
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
+      const videoJobs = listVideoJobIds(key);
       const ok = deleteSessionRecord(key);
       if (ok) {
+        await Promise.allSettled(videoJobs.map(deleteVideoArtifact));
         this.clearCompactionCheckpoint(key);
         log.info({ key }, 'Session deleted');
       }

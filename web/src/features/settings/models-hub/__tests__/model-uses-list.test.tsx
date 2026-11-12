@@ -133,7 +133,7 @@ it('blocks concurrent selections until saving finishes and refreshes the saved s
 });
 
 
-it('keeps direct model switching and separate modal actions on every capability', async () => {
+it('opens settings and service management from distinct controls', async () => {
   const settings = vi.fn(); const connect = vi.fn();
   await act(async () => root.render(<MemoryRouter><SWRConfig value={{ provider: () => new Map() }}><ModelUsesList data={data} zh onChange={connect} onSettings={settings} /></SWRConfig></MemoryRouter>));
   expect(container.querySelectorAll('[aria-label^="选择 "]')).toHaveLength(7);
@@ -141,7 +141,7 @@ it('keeps direct model switching and separate modal actions on every capability'
   const row = container.querySelector('[data-capability="speech"]')!;
   await act(async () => [...row.querySelectorAll('button')].find(button => button.textContent === '设置')!.click());
   expect(settings).toHaveBeenCalledExactlyOnceWith('speech');
-  await act(async () => [...row.querySelectorAll('button')].find(button => button.textContent === '管理服务')!.click());
+  await act(async () => row.querySelector<HTMLButtonElement>('button[aria-label^="管理服务"]')!.click());
   expect(connect).toHaveBeenCalledExactlyOnceWith('speech');
 });
 it('does not query a preset whose model registry connection has not been created', async () => {

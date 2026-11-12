@@ -104,7 +104,7 @@ export class SystemPromptBuilder {
         options.extraSystemPrompt,
         getConversationalConfigurationGuide(reg),
         agentSetup
-          ? 'In this agent setup conversation, follow Response Language for every question and reply. A language requested for the new Agent configures that Agent only. Keep the current conversation language unless the user asks to switch it.'
+          ? 'This conversation is for creating a new expert. Treat the user’s description of responsibilities and expected deliverables as requirements. Ask about missing details when needed, and give the expert a short profile description of its responsibilities. Follow Response Language for every question and reply. A language requested for the new Agent configures that Agent only. Keep the current conversation language unless the user asks to switch it.'
           : undefined,
         interactionPrompt,
       ].filter(Boolean).join('\n\n'),

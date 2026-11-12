@@ -56,7 +56,7 @@ describe('ProductSectionHeader', () => {
   it('switches capability sections and restores selection on back', () => {
     renderAt('/capabilities/connectors');
     const tabs = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map(tab => tab.textContent)).toEqual(['Plugins', 'Skills', 'Connections', 'Agents', 'Channels']);
+    expect(tabs.map(tab => tab.textContent)).toEqual(['Plugins', 'Skills', 'Connections', 'Assistants and experts', 'Channels']);
     act(() => tabs[0].click());
     expect(container.querySelector('output')?.textContent).toBe('/capabilities/extensions');
     expect(container.querySelector('[aria-selected="true"]')?.textContent).toBe('Plugins');

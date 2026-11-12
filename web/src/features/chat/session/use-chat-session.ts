@@ -160,12 +160,16 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     messageCount: sessionSlice?.messages.length ?? 0,
   });
 
+  const fromAgentEditor = isNewRoute && (locationState as { fromAgentEditor?: boolean } | null)?.fromAgentEditor === true;
   const navigateToSession = useCallback(
     (key: string, replace = false, search?: string) => {
       const s = search ?? '';
-      navigate({ pathname: `/chat/${encodeURIComponent(key)}`, search: s }, { replace });
+      navigate({ pathname: `/chat/${encodeURIComponent(key)}`, search: s }, {
+        replace,
+        ...(fromAgentEditor ? { state: { fromAgentEditor: true } } : {}),
+      });
     },
-    [navigate],
+    [fromAgentEditor, navigate],
   );
 
   const shouldApplyStreamUpdate = useCallback((streamConversationId: string) => {

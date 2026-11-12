@@ -1809,7 +1809,7 @@ function SidebarTaskListContent({
                 <Button variant="secondary" onClick={() => void mutateChatAgents()}>{sb.sessionFilters.retry}</Button>
               </div>
             ) : chatAgents ? (
-              <SidebarExpertList agents={chatAgents.items} activeConversationId={activeConversationId} onNavigate={onNavigate} />
+              <SidebarExpertList agents={chatAgents.items} defaultAgentId={defaultAgentId} activeConversationId={activeConversationId} onNavigate={onNavigate} />
             ) : <SidebarTaskListSkeleton />}
           </div>
         ) : view === 'recent' ? (

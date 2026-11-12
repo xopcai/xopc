@@ -69,3 +69,5 @@ export * from './device-request-proof.js';
 export * from './local-app-delegation.js';
 
 export * from './follow-ups.js';
+
+export * from './video-generation.js';

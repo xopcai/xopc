@@ -36,6 +36,7 @@ import {
   conversationPlanFromTaskPlanState,
   extractActiveTurnConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
+import { ChatVideoLauncher, useChatVideoGeneration } from '@/features/chat/video/chat-video-generation';
 import { MessageList, type ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import { chatScrollBehavior, chatTimelineAnchorIndex } from '@/features/chat/scroll/chat-scroll-geometry';
 import { usePersonalSendTransition } from '@/features/chat/messages/use-personal-send-transition';
@@ -204,6 +205,8 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     if (chatConversationId && chatRunUnread) markChatRunViewed(chatConversationId);
   }, [chatConversationId, chatRunUnread, markChatRunViewed]);
   const { data: sessionMetadata } = useChatSessionMetadata(chatConversationId);
+  const videoConversationId = !embedded && !taskId && !agentSetup && !automationSetupRequested ? chatConversationId : null;
+  const videoGeneration = useChatVideoGeneration(videoConversationId, language);
   const automationSetup = automationSetupRequested || Boolean(sessionMetadata?.identity?.customData?.automationSetup);
   const automationSetupBound = Boolean((sessionMetadata?.identity?.customData?.automationSetup as { automationId?: string } | undefined)?.automationId);
   const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
@@ -532,7 +535,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
   const showConversationLoading = isLoadingHistory;
   const compactWelcomeLayout =
-    !showConversationLoading && msgSlice.items.length === 0 && !automationTimelineEntries?.length && !stream.streaming;
+    !showConversationLoading && msgSlice.items.length === 0 && !automationTimelineEntries?.length && !videoGeneration.timelineEntries.length && !stream.streaming;
   const latestConversationPlan = useMemo(
     () => {
       if (stream.taskPlan) {
@@ -1025,7 +1028,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
 
       {!embedded || automationWorkspace ? <ChatPageHeaderRegistration
         inline={automationWorkspace}
-        chatHeadline={skillDiscovery && msgSlice.items.length === 0 ? m.skills.findTitle : chatHeadline}
+        chatHeadline={agentSetup ? m.agentsSettings.setupTitle : skillDiscovery && msgSlice.items.length === 0 ? m.skills.findTitle : chatHeadline}
         chatAgents={agents.chatAgents?.items ?? []}
         showChatAgentSelector={!automationWorkspace && !agentSetup && agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
@@ -1185,7 +1188,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                     key={chatConversationId}
                     scrollRef={scrollRef}
                     messages={msgSlice.items}
-                    timelineEntries={automationTimelineEntries}
+                    timelineEntries={[...(automationTimelineEntries ?? []), ...videoGeneration.timelineEntries]}
                     personal={personal}
                     authToken={token ?? undefined}
                     conversationId={session.decodedKey ?? session.conversationId}
@@ -1206,7 +1209,17 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                           <div className="flex size-16 items-center justify-center rounded-3xl bg-accent/10 text-3xl text-accent" aria-hidden>{personalWelcome.avatar ?? '✦'}</div>
                           <h2 className="text-2xl font-semibold">{language === 'zh' ? `你好${personalWelcome.addressAs ? `，${personalWelcome.addressAs}` : ''}。我们从哪里开始？` : `Hello${personalWelcome.addressAs ? `, ${personalWelcome.addressAs}` : ''}. Where should we start?`}</h2>
                           <p className="max-w-xl text-sm leading-relaxed text-fg-muted">{personalWelcome.opening ?? (language === 'zh' ? '想讨论问题、整理思路或推进工作，都可以直接说。' : 'Bring a question, an idea, or work to move forward.')}</p>
-
+                          <button
+                            type="button"
+                            disabled={session.sessionRoutePending || session.showSessionLoading}
+                            className="min-h-11 rounded-lg border border-edge px-3 py-2 text-left text-sm text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                            onClick={() => {
+                              welcomeDraftSeq.current += 1;
+                              setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: m.chat.personalStarterPrompt });
+                            }}
+                          >
+                            {m.chat.personalStarterPrompt}
+                          </button>
                         </div>
                       ) : automationSetup ? (
                         <div className="mx-auto max-w-xl px-4 py-10 text-center">
@@ -1340,6 +1353,12 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
               ) : null}
               <ReadAloudDock />
               <DeviceInteractionPanel conversationId={session.conversationId} active={stream.streaming || stream.sending} />
+              {videoConversationId && !readOnly && !showConversationLoading && session.sessionManager && (
+                <ChatVideoLauncher key={videoConversationId} conversationId={videoConversationId} language={language}
+                  messages={msgSlice.items} data={videoGeneration.data}
+                  materialize={async () => { await session.sessionManager?.materialize(videoConversationId, 'session_resources'); }}
+                  onSubmitted={() => { void videoGeneration.mutate(); }} />
+              )}
               <ChatComposer
                 personal={personal}
                 nextTurnSuggestionsEnabled={!stream.streaming}

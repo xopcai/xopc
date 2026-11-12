@@ -10,12 +10,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { CapabilityHeaderActionChange } from '@/features/capabilities/capability-header-actions';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { newAgentSetupHref } from '@/features/chat/session/composer-handoff-params';
+import { navigateToNewChat } from '@/features/chat/session/new-chat-navigation';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
+import { usePersonalProfile } from '@/features/personal-agent/use-personal-profile';
 import { AgentEditor } from '@/features/settings/agents/agent-editor';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { AgentsEditorModal } from '@/features/settings/agents/agents-editor-modal';
-import { AgentsListGrid } from '@/features/settings/agents/agents-list-grid';
+import { agentDirectoryGrid, AgentsListGrid } from '@/features/settings/agents/agents-list-grid';
 import { CreateAgentDialog, type ManualAgentDraft } from '@/features/settings/agents/create-agent-dialog';
 import { SettingsPageFrame } from '@/features/settings/settings-page-layout';
 import {
@@ -39,12 +41,16 @@ type PendingConfirmation =
 function AgentsSkeleton() {
   return (
     <SettingsPageFrame gap="gap-5" padding={capabilityPagePadding} className={capabilityPageWidth}>
-      <div className="flex items-center justify-between gap-4">
-        <div className="space-y-2"><Skeleton className="h-7 w-28" /><Skeleton className="h-4 w-80 max-w-full" /></div>
-        <Skeleton className="h-9 w-28" />
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {[0, 1, 2].map((item) => <Skeleton key={item} className="h-64 rounded-2xl" />)}
+      <div className="@container/agent-directory flex flex-col gap-5">
+        <Skeleton className="h-11 w-full max-w-sm rounded-lg" />
+        {[2, 3].map((count) => (
+          <div key={count} className="space-y-2.5">
+            <Skeleton className="h-5 w-24" />
+            <div className={agentDirectoryGrid}>
+              {Array.from({ length: count }, (_, index) => <Skeleton key={index} className="h-24 rounded-xl" />)}
+            </div>
+          </div>
+        ))}
       </div>
     </SettingsPageFrame>
   );
@@ -63,6 +69,7 @@ export function AgentsSettingsPanel({
   const messageBundle = messages(language);
   const agentsMessages = messageBundle.agentsSettings;
   const navigate = useNavigate();
+  const { profile: personalProfile } = usePersonalProfile();
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-gateway-agents' : null, fetchGatewayAgents);
   const { data: gatewayConfigData } = useGatewayConfigSwr(Boolean(token));
   const config = gatewayConfigData?.payload?.config as { tui?: { defaultAgent?: string } } | undefined;
@@ -84,10 +91,10 @@ export function AgentsSettingsPanel({
     if (!data) return;
     setActionError(null);
     rememberSelectedAgent(data.defaultId);
-    navigate(newAgentSetupHref(agentsMessages.setupDraftPrefix), {
+    navigate(newAgentSetupHref(), {
       state: { forceNewChat: true, agentId: data.defaultId },
     });
-  }, [agentsMessages.setupDraftPrefix, data, navigate]);
+  }, [data, navigate]);
 
   const createAgentManually = useCallback(async () => {
     if (busy || !manualDraft.name.trim()) return;
@@ -104,7 +111,7 @@ export function AgentsSettingsPanel({
       setManualDraft({ open: false, name: '', instructions: '', workspace: '' });
       rememberSelectedAgent(next.createdAgentId);
       navigate('/chat/new?projectScope=none', {
-        state: { forceNewChat: true, agentId: next.createdAgentId },
+        state: { forceNewChat: true, agentId: next.createdAgentId, fromAgentEditor: true },
       });
     } catch (cause) {
       setManualError(cause instanceof Error ? cause.message : String(cause));
@@ -128,7 +135,7 @@ export function AgentsSettingsPanel({
               onSelect={() => navigate('/settings/agent-defaults')}
             >
               <Settings className="size-4 text-fg-muted" aria-hidden />
-              {zh ? '全局默认配置' : 'Global defaults'}
+              {messageBundle.nav.settingsAgentDefaults}
             </DropdownMenu.Item>
             <DropdownMenu.Item
               className={cn('touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover', interaction.transition)}
@@ -150,7 +157,7 @@ export function AgentsSettingsPanel({
         <span className="hidden sm:inline">{agentsMessages.listNewAgentCard}</span>
       </Button>
     ),
-  }), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, messageBundle.capabilitiesHub.moreActions, navigate, startAgentCreation, zh]);
+  }), [agentsMessages.listNewAgentCard, agentsMessages.manualCreateMenu, messageBundle.capabilitiesHub.moreActions, messageBundle.nav.settingsAgentDefaults, navigate, startAgentCreation]);
 
   useLayoutEffect(() => {
     onHeaderActionChange?.(headerContribution);
@@ -171,8 +178,12 @@ export function AgentsSettingsPanel({
   };
 
   const startChat = (id: string) => {
+    if (id === personalProfile?.agentId) {
+      navigate('/personal');
+      return;
+    }
     rememberSelectedAgent(id);
-    navigate('/chat/new');
+    navigateToNewChat(navigate, '/chat/new', { state: { forceNewChat: true, agentId: id, fromAgentEditor: true } });
   };
 
   const openAgent = (id: string) => {
@@ -287,12 +298,10 @@ export function AgentsSettingsPanel({
       <ConfirmDialog
         open={pendingConfirmation !== null}
         title={pendingConfirmation?.kind === 'delete'
-          ? (zh ? '删除智能体？' : 'Delete agent?')
+          ? (zh ? `删除 ${pendingConfirmation.displayName}？` : `Delete ${pendingConfirmation.displayName}?`)
           : (zh ? '放弃未保存的更改？' : 'Discard unsaved changes?')}
         description={pendingConfirmation?.kind === 'delete'
-          ? (zh
-            ? `删除 ${pendingConfirmation.displayName}？此操作无法撤销。`
-            : `Delete ${pendingConfirmation.displayName}? This cannot be undone.`)
+          ? (zh ? '此操作无法撤销。' : 'This cannot be undone.')
           : (zh ? '当前更改尚未保存，离开后将丢失。' : 'Your changes have not been saved. Leaving will discard them.')}
         confirmLabel={pendingConfirmation?.kind === 'delete'
           ? (zh ? '删除' : 'Delete')

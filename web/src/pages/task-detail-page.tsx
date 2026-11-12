@@ -30,6 +30,8 @@ import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-sel
 import { ChatPage } from '@/features/chat/chat-page';
 import { fetchProjectOperatingView } from '@/features/projects/api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+import { messages } from '@/i18n/messages';
 import { DependencyPicker, type DependencyCandidate } from '@/features/tasks/dependency-picker';
 import { taskChatHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { cancelTaskRun, commandTask, deleteTask, handoffTask, reviewTaskCriterion, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
@@ -135,6 +137,7 @@ const TaskExecutorField = memo(function TaskExecutorField({
   label,
   unassignedLabel,
   agents,
+  language,
   onChange,
 }: {
   value: string;
@@ -142,9 +145,11 @@ const TaskExecutorField = memo(function TaskExecutorField({
   label: string;
   unassignedLabel: string;
   agents: ChatAgentOption[];
+  language: 'en' | 'zh';
   onChange: (agentId: string) => void;
 }) {
-  return <label className="grid gap-1.5 text-xs text-fg-muted"><span>{label}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}><SelectOption value="" disabled>{unassignedLabel}</SelectOption>{agents.map((agent) => <SelectOption key={agent.id} value={agent.id}>{agent.name || agent.id}</SelectOption>)}</Select></label>;
+  const { agentsSettings } = messages(language);
+  return <label className="grid gap-1.5 text-xs text-fg-muted"><span>{label}</span><Select triggerClassName="border-0 bg-surface-hover shadow-none focus-visible:ring-2 focus-visible:ring-accent/30" contentClassName="border-0" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}><SelectOption value="" disabled>{unassignedLabel}</SelectOption>{agents.map((agent) => <SelectOption key={agent.id} value={agent.id}>{agentListDisplayName(agent, agentsSettings)}</SelectOption>)}</Select></label>;
 });
 
 const TaskDependenciesField = memo(function TaskDependenciesField({
@@ -662,6 +667,12 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHea
     ?? detail.task.delegateAgentId
     ?? detail.task.ownerId;
   const conversationAgent = agents.find((agent) => agent.id === conversationAgentId);
+  const agentsSettings = messages(language).agentsSettings;
+  const conversationAgentName = conversationAgent ? agentListDisplayName(conversationAgent, agentsSettings) : undefined;
+  const activeExecutor = activeRun?.executorKind === 'agent'
+    ? agents.find((agent) => agent.id === (activeRun.executorRef.agentId ?? detail.conversation.currentExecutorAgentId))
+    : undefined;
+  const activeExecutorName = activeExecutor ? agentListDisplayName(activeExecutor, agentsSettings) : undefined;
   const taskWorkspaceOpen = Boolean(
     conversationConversationId
     && workspacePanes[conversationConversationId]?.open,
@@ -834,7 +845,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHea
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
           <span className="inline-flex min-w-0 items-center gap-2">
             {conversationAgentId ? <AgentAvatarDisplay agentId={conversationAgentId} avatar={conversationAgent?.avatar} size={20} className="shrink-0" /> : null}
-            <span className="min-w-0 break-words [overflow-wrap:anywhere]">{copy.executorLabel} · {conversationAgent?.name ?? conversationAgentId ?? copy.unassigned}</span>
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]">{copy.executorLabel} · {conversationAgentName ?? conversationAgentId ?? copy.unassigned}</span>
           </span>
           <span className="text-fg-subtle">{copy.updatedAt.replace('{{date}}', formatMediumDateTime(detail.task.updatedAt, language))}</span>
         </div>
@@ -848,7 +859,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHea
       </div>
 
       <section className="min-w-0 space-y-4 p-4 sm:p-5">
-        {detail.task.phase !== 'review' ? <TaskCurrentAction detail={detail} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} /> : null}
+        {detail.task.phase !== 'review' ? <TaskCurrentAction detail={detail} executorName={activeExecutorName} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} /> : null}
         <section data-task-section="results" data-task-section-label={language === 'zh' ? '交付结果' : 'Results'} ref={resultsRef} tabIndex={-1} aria-labelledby="task-results-heading" className="scroll-mt-24 space-y-4">
           <TaskDeliverySummary detail={detail} language={language} />
           {detail.task.phase === 'review' && (detail.waits.length > 0 || detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) ? <TaskCurrentAction detail={detail} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} /> : null}
@@ -942,7 +953,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted, onHea
               <TaskPhaseField value={detail.task.phase} disabled={pendingOperations.has('phase')} canMove={canMovePhase} canApprove={canApprove} canReopen={canReopen} language={language} label={copy.taskPhase} onChange={changePhase} />
               <TaskPriorityField value={detail.task.priority} disabled={pendingOperations.has('priority')} label={copy.priority} labels={copy.priorityLabels} onChange={changePriority} />
               <TaskDueDateField value={dateInputValue(detail.task.dueAt)} disabled={pendingOperations.has('dueAt')} label={copy.dueDate} onChange={changeDueDate} />
-              <TaskExecutorField value={detail.conversation.currentExecutorAgentId ?? ''} disabled={pendingOperations.has('delegateAgentId')} label={copy.executorLabel} unassignedLabel={copy.unassigned} agents={agents} onChange={switchExecutor} />
+              <TaskExecutorField value={detail.conversation.currentExecutorAgentId ?? ''} disabled={pendingOperations.has('delegateAgentId')} label={copy.executorLabel} unassignedLabel={copy.unassigned} agents={agents} language={language} onChange={switchExecutor} />
             </div>
           </section>
 

@@ -23,6 +23,7 @@ import { openAutomationConfigurationChat } from './automation-create-navigation'
 import { buildInput, formFromAutomation, initialForm, type FormState } from './automation-form';
 import { scheduledRunPreview } from './schedule-preview';
 import { automationIntervalMs } from './automation-display';
+import { AutomationAssigneeSelect } from './automation-assignee-select';
 
 export async function refreshAutomationViews() {
   await mutate(key => typeof key === 'string' ? key.startsWith('automation') : Array.isArray(key) && typeof key[0] === 'string' && key[0].startsWith('automation'));
@@ -37,7 +38,7 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
   onClose: () => void;
   onCreated?: (automation: Automation) => void;
 }) {
-  const { data: agents, error: agentsError } = useSWR('automation-chat-agents', fetchChatAgents);
+  const { data: agents, error: agentsError, isLoading: agentsLoading } = useSWR('automation-chat-agents', fetchChatAgents);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const [returnFocus] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [snapshot, setSnapshot] = useState(automation);
@@ -133,14 +134,13 @@ export function AutomationEditDialog({ automation, projectId, language, onClose,
         </section>
         {nextPreview ? <p className="text-xs text-fg-muted" role="status">{nextPreview}</p> : null}
         {form.triggerMode === 'once' ? <p className="text-xs text-fg-muted">{zh ? '按你所在时区输入，换时区后仍在同一时刻运行。' : 'Enter your local time. Changing timezone keeps the same instant.'}</p> : null}
+        <AutomationAssigneeSelect language={language} agents={agents?.items ?? []} defaultId={agents?.defaultId ?? ''}
+          loading={agentsLoading} value={form.agentId} onChange={(agentId) => update({ agentId })} />
+        {agentsError ? <p role="status" className="text-xs text-fg-muted">{zh ? '暂时无法加载执行者，请稍后重试。' : 'Could not load assignees. Try again later.'}</p>
+          : snapshot ? <p className="text-xs text-fg-muted">{zh ? '更换执行者后，从下一次运行开始生效。' : 'Assignee changes apply on the next run.'}</p> : null}
         <details className="group" onToggle={event => setAdvancedOpen(event.currentTarget.open)}><summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-md px-1 py-2 text-sm text-fg-muted focus-visible:outline-accent">{zh ? '高级' : 'Advanced'}<ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden /></summary><div className="mt-2 grid gap-4 pb-2">
           {!snapshot ? <FormField label={zh ? '任务名称（可选）' : 'Task name (optional)'}><input className={inputClass} value={form.name} onChange={event => update({ name: event.target.value })} placeholder={zh ? '根据说明自动命名' : 'Named from your description'} /></FormField> : null}
           <FormField label={zh ? '时区' : 'Timezone'}><input className={inputClass} value={form.timezone ?? ''} placeholder="Asia/Shanghai" onChange={event => update({ timezone: event.target.value })} /></FormField>
-          <FormField label={zh ? '执行助手' : 'Run with'}><Select aria-label={zh ? '执行助手' : 'Run with'} className={inputClass} value={form.agentId} onChange={event => update({ agentId: event.target.value })}>
-            <SelectOption value="">{zh ? '默认助手' : 'Default assistant'}</SelectOption>
-            {form.agentId && !agents?.items.some(agent => agent.id === form.agentId) ? <SelectOption value={form.agentId}>{form.agentId}</SelectOption> : null}
-            {agents?.items.map(agent => <SelectOption key={agent.id} value={agent.id}>{agent.name || agent.id}</SelectOption>)}
-          </Select><p className="mt-1 text-xs text-fg-muted">{agentsError ? (zh ? '暂时无法加载助手，请稍后重试。' : 'Could not load assistants. Try again later.') : zh ? '从下次运行生效，切换时衔接最近的执行结果。' : 'Applies to the next run, carrying over the latest result when switching.'}</p></FormField>
           <FormField label={zh ? '使用模型' : 'Model'}><ModelSelector value={form.model} onChange={model => update({ model })} allowEmpty placeholder={messages(language).automations.form.defaultModel} searchPlaceholder={messages(language).automations.form.searchModels} noMatches={messages(language).automations.form.noModels} emptyLabel={zh ? '默认模型' : 'Default model'} ariaLabel={zh ? '使用模型' : 'Model'} /></FormField>
           <FormField label={zh ? '运行上下文' : 'Run context'}><Select className={inputClass} value={form.conversationMode} onChange={event => update({ conversationMode: event.target.value as FormState['conversationMode'] })}><SelectOption value="new_session">{zh ? '每次独立运行' : 'Independent runs'}</SelectOption><SelectOption value="continuous">{zh ? '延续之前的运行' : 'Continue previous runs'}</SelectOption></Select></FormField>
           <FormField label={zh ? '通知我' : 'Notify me'}><Select className={inputClass} value={form.notificationPolicy} onChange={event => update({ notificationPolicy: event.target.value as FormState['notificationPolicy'] })}><SelectOption value="attention">{zh ? '需要关注时' : 'When attention is needed'}</SelectOption><SelectOption value="all">{zh ? '每次完成时' : 'After every run'}</SelectOption><SelectOption value="none">{zh ? '不通知' : 'Never'}</SelectOption></Select></FormField>
