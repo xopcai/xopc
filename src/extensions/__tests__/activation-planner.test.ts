@@ -88,7 +88,14 @@ describe('ActivationPlanner', () => {
         },
       ]),
     );
-    expect(planner.getActivatedIds({ env: {} })).toContain('weixin');
+    for (const overrides of [{ enabledIds: ['weixin'] }, { disabledIds: ['weixin'] }]) {
+      expect(planner.plan({ env: {}, ...overrides })).toEqual([{
+        extensionId: 'weixin',
+        activated: true,
+        reason: 'activation_trigger',
+        trigger: 'channel-contribution',
+      }]);
+    }
   });
 
   it('normalizes activation.onStartup', () => {

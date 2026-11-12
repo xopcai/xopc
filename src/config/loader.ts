@@ -72,7 +72,7 @@ export function loadConfig(configPath?: string): Config {
       const snapshot = readConfigFileSnapshot(path);
       const cfg = snapshot.config;
       assertChannelPluginConfigs(cfg);
-      snapshot.persistMigrations();
+      snapshot.discardRetiredFields();
       return activateConfig(cfg);
     } catch (error) {
       log.error({ err: error, path }, `Failed to load config`);

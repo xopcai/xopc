@@ -24,7 +24,7 @@ async function listen(fetch: Parameters<typeof serve>[0]['fetch']) {
   };
 }
 
-it('migrates disabled built-in channels and restores their connections through Channels settings', async ({ onTestFinished }) => {
+it('controls built-in channel connections exclusively through Channels settings', async ({ onTestFinished }) => {
   const state = mkdtempSync(join(process.env.XOPC_STATE_DIR!, 'bundled-channels-'));
   vi.stubEnv('XOPC_STATE_DIR', state);
   onTestFinished(() => {
@@ -60,7 +60,7 @@ it('migrates disabled built-in channels and restores their connections through C
     return new Response(null, { status: 404 });
   });
 
-  const configPath = join(state, 'bundled-channels-upgrade.json');
+  const configPath = join(state, 'bundled-channels.json');
   const accountId = 'fixture-im-bot';
   const accountPath = join(state, 'weixin', 'accounts', `${accountId}.json`);
   const weixinCredentials = JSON.stringify({ token: weixinToken, baseUrl: provider.url });
@@ -89,11 +89,12 @@ it('migrates disabled built-in channels and restores their connections through C
     name: 'Inventory fixture',
     version: '1.0.0',
   }));
-  writeFileSync(configPath, JSON.stringify({
+  const initialConfig = {
     gateway: { auth: { mode: 'token', token: gatewayToken }, heartbeat: { enabled: false } },
-    channels,
+    channels: Object.fromEntries(Object.entries(channels).map(([id, channel]) => [id, { ...channel, enabled: false }])),
     extensions: { disabled: extensionIds },
-  }));
+  };
+  writeFileSync(configPath, JSON.stringify(initialConfig));
 
   async function withGateway(check: (request: (path: string, patch?: unknown, method?: string) => Promise<Response>) => Promise<void>) {
     const service = new GatewayService({ configPath, enableHotReload: false });
@@ -148,20 +149,9 @@ it('migrates disabled built-in channels and restores their connections through C
         expect(response.status).toBe(400);
         expect(await response.json()).toMatchObject({ error: { message: expect.stringContaining('Channels settings') } });
       }
-      expect(JSON.parse(readFileSync(configPath, 'utf8'))).toMatchObject({
-        extensions: {},
-        channels: {
-          feishu: { ...channels.feishu, enabled: false },
-          telegram: { ...channels.telegram, enabled: false },
-          weixin: { ...channels.weixin, enabled: false },
-        },
-      });
-      expect(JSON.parse(readFileSync(configPath, 'utf8')).extensions).not.toHaveProperty('disabled');
-    });
-
-    await withGateway(async (request) => {
-      await expectChannels(request, false);
-      expect(requests.size).toBe(0);
+      const savedConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+      expect(savedConfig.extensions).toEqual(initialConfig.extensions);
+      expect(savedConfig.channels).toEqual(initialConfig.channels);
       const response = await request('/api/config', {
         channels: Object.fromEntries(channelIds.map((id) => [id, { enabled: true }])),
       });

@@ -79,7 +79,7 @@ describe('existing configuration after Workflow removal', () => {
     const snapshot = readConfigFileSnapshot(path);
     const edited = `${JSON.stringify({ ...settings, gateway: { ...settings.gateway, port: 18888 } })}\n`;
     writeFileSync(path, edited);
-    snapshot.persistMigrations();
+    snapshot.discardRetiredFields();
     expect(readFileSync(path, 'utf8')).toBe(edited);
     expect(writeTextAtomicSync).not.toHaveBeenCalled();
   });
@@ -90,49 +90,5 @@ describe('existing configuration after Workflow removal', () => {
     vi.mocked(writeTextAtomicSync).mockImplementationOnce(() => { throw new Error('read-only test file'); });
     expect(loadConfig(path)).not.toHaveProperty('workflows');
     expect(readFileSync(path, 'utf8')).toBe(original);
-  });
-});
-
-describe('bundled channel activation migration', () => {
-  it('preserves channel settings and unrelated extension preferences across repeated loads', () => {
-    const channels = {
-      telegram: { enabled: true, accounts: { default: { botToken: '123:telegram-fixture' } } },
-      feishu: { enabled: true, accounts: { default: { appId: 'cli_fixture', appSecret: 'feishu-fixture' } } },
-      weixin: { enabled: true, accounts: { 'weixin-fixture': { enabled: true } } },
-    };
-    const extensions = {
-      enabled: ['feishu-tools', 'other-enabled'],
-      disabled: ['telegram', 'feishu-tools', 'weixin', 'other-disabled'],
-      config: { 'other-enabled': { example: true } },
-    };
-    const path = configFile({ ...settings, channels, extensions, workflows: {} });
-    const expected = {
-      ...settings,
-      channels: {
-        telegram: { ...channels.telegram, enabled: false },
-        feishu: { ...channels.feishu, enabled: false },
-        weixin: { ...channels.weixin, enabled: false },
-      },
-      extensions: { ...extensions, enabled: ['other-enabled'], disabled: ['other-disabled'] },
-    };
-
-    expect(loadConfig(path)).toMatchObject(expected);
-    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(expected);
-    expect(loadConfig(path)).toMatchObject(expected);
-    expect(writeTextAtomicSync).toHaveBeenCalledTimes(1);
-  });
-
-  it('preserves a missing channel as disabled and leaves the global extension switch alone', () => {
-    const path = configFile({ ...settings, extensions: { enabled: false, disabled: ['weixin'] } });
-    const expected = { channels: { weixin: { enabled: false } }, extensions: { enabled: false } };
-    expect(loadConfig(path)).toMatchObject(expected);
-    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ ...settings, ...expected });
-  });
-
-  it('removes obsolete enable overrides without enabling a stopped channel', () => {
-    const channels = { telegram: { enabled: false } };
-    const path = configFile({ ...settings, channels, extensions: { enabled: ['telegram'] } });
-    expect(loadConfig(path)).toMatchObject({ channels, extensions: {} });
-    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ ...settings, channels, extensions: {} });
   });
 });
