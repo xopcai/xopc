@@ -4,6 +4,7 @@ import { FieldLabel } from './field-label';
 
 type SelectFieldProps<T extends string> = {
   label: string;
+  disabled?: boolean;
   value: T;
   onChange: (value: T) => void;
   options: Array<{ value: T; label: string }>;
@@ -11,6 +12,7 @@ type SelectFieldProps<T extends string> = {
 
 export function SelectField<T extends string>({
   label,
+  disabled,
   value,
   onChange,
   options,
@@ -20,6 +22,8 @@ export function SelectField<T extends string>({
       <FieldLabel>{label}</FieldLabel>
       <Select
         className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2 text-sm text-fg"
+        aria-label={label}
+        disabled={disabled}
         value={value}
         onChange={(event) => onChange(event.target.value as T)}
       >

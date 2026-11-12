@@ -1,7 +1,7 @@
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { TelegramSetupGuide } from './telegram-setup-guide';
 import { channelDocsUrl } from '@/navigation';
-import { AlertTriangle, CircleAlert, CircleCheck, ExternalLink, Loader2, RotateCcw, Settings2 } from 'lucide-react';
+import { AlertTriangle, CircleAlert, CircleCheck, ExternalLink, Loader2, RotateCcw, Settings, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -51,10 +51,7 @@ async function fetchChannelConfig(channelId: string): Promise<Record<string, unk
   return data.payload?.config ?? {};
 }
 
-type ChannelsConfigMap = Record<string, { config?: Record<string, unknown> }>;
-
 type ChannelsSettingsConfig = {
-  channels: ChannelsConfigMap;
   bindings: GatewayConfigBinding[];
 };
 
@@ -65,12 +62,11 @@ const capabilityPagePadding = 'px-4 pb-7 pt-3 sm:px-6 lg:px-8 lg:pb-9 lg:pt-4';
 async function fetchChannelsSettingsConfig(): Promise<ChannelsSettingsConfig> {
   const data = await fetchJson<{
     ok?: boolean;
-    payload?: { config?: { channels?: ChannelsConfigMap; bindings?: GatewayConfigBinding[] } };
+    payload?: { config?: { bindings?: GatewayConfigBinding[] } };
   }>(
     apiUrl('/api/config'),
   );
   return {
-    channels: data.payload?.config?.channels ?? {},
     bindings: data.payload?.config?.bindings ?? [],
   };
 }
@@ -218,88 +214,6 @@ function hasSchemaFields(schema: JsonSchema): boolean {
   return schema.type === 'object' && isRecord(schema.properties) && Object.keys(schema.properties).length > 0;
 }
 
-function readPath(value: Record<string, unknown>, path: string): unknown {
-  let cur: unknown = value;
-  for (const part of path.split('.')) {
-    if (!isRecord(cur)) return undefined;
-    cur = cur[part];
-  }
-  return cur;
-}
-
-function countAccounts(config: Record<string, unknown>): number {
-  const accounts = config.accounts;
-  if (!isRecord(accounts)) return config.configured === true ? 1 : 0;
-  return Object.values(accounts).filter((account) => isRecord(account) && account.enabled !== false).length;
-}
-
-function formatSummaryValue(path: string, value: unknown, ch: ReturnType<typeof messages>['channelsSettings']): string | null {
-  if (value === undefined || value === null || value === '') return null;
-  if (path.toLowerCase().includes('dmpolicy') && typeof value === 'string') {
-    return `${ch.dmPolicy}: ${ch.policy.dm[value as keyof typeof ch.policy.dm] ?? value}`;
-  }
-  if ((path.toLowerCase().includes('stream') || path.toLowerCase().includes('streaming')) && typeof value === 'string') {
-    return `${ch.cardStream}: ${ch.policy.stream[value as keyof typeof ch.policy.stream] ?? value}`;
-  }
-  if (typeof value === 'boolean') return value ? ch.enabledLabel : ch.disabledLabel;
-  return String(value);
-}
-
-function channelSummary(
-  entry: ChannelCatalogEntry,
-  config: Record<string, unknown> | undefined,
-  ch: ReturnType<typeof messages>['channelsSettings'],
-): string[] {
-  const out: string[] = [];
-  const setup = channelSetupStatus(entry);
-  if (setup.issues.length > 0) {
-    out.push(setupIssueText(setup.issues[0], ch));
-  }
-  if (config) {
-    const fields = entry.ui?.card?.summaryFields ?? ['dmPolicy', 'streamMode', 'streaming.mode'];
-    for (const field of fields) {
-      const text = formatSummaryValue(field, readPath(config, field), ch);
-      if (text) out.push(text);
-    }
-    const accounts = countAccounts(config);
-    if (accounts > 0) out.push(ch.cardAccounts.replace('{{count}}', String(accounts)));
-  }
-  if (out.length > 0) return out.slice(0, 2);
-  if (setup.ready) return [ch.hubStatusConfigured];
-  return [];
-}
-
-function channelActionLabel(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>['channelsSettings']): string {
-  const setup = channelSetupStatus(entry);
-  const primary = choosePrimaryChannelAction(entry);
-  if (setup.state === 'needs_setup') return primary?.[1].label ?? ch.completeSetup;
-  if (!setup.enabled && setup.ready) return ch.enableChannel;
-  if (setup.state === 'error') return ch.diagnose;
-  return setup.ready ? ch.manageChannel : primary?.[1].label ?? ch.startConfiguration;
-}
-
-function channelSetupHint(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>['channelsSettings']): string {
-  const primary = choosePrimaryChannelAction(entry);
-  if (primary?.[1].result === 'qr') return ch.cardSetupQrHint;
-  if (primary?.[1].result === 'form') return ch.cardSetupConfigHint;
-  return ch.cardSetupGenericHint;
-}
-
-function channelCapabilityLabels(
-  entry: ChannelCatalogEntry,
-  ch: ReturnType<typeof messages>['channelsSettings'],
-): string[] {
-  const c = entry.capabilities ?? {};
-  const labels: string[] = [];
-  if (c.login === true) labels.push(ch.cardCapabilityLogin);
-  if (c.pairing === true) labels.push(ch.cardCapabilityPairing);
-  if (c.multiAccount === true) labels.push(ch.cardCapabilityMultiAccount);
-  if (c.streaming === true) labels.push(ch.cardCapabilityStreaming);
-  if (c.media === true) labels.push(ch.cardCapabilityMedia);
-  if (c.doctor === true) labels.push(ch.cardCapabilityDoctor);
-  return labels.slice(0, 3);
-}
-
 function setupIssueText(issue: ChannelSetupIssue, ch: ReturnType<typeof messages>['channelsSettings']): string {
   if (issue.code === 'telegram.missing_credential') return ch.setupIssueTelegramMissingCredential;
   if (issue.code === 'weixin.missing_account') return ch.setupIssueWeixinMissingAccount;
@@ -378,91 +292,59 @@ function ChannelEnabledSwitch({
 
 function ChannelHubCard({
   entry,
-  config,
   runtime,
   busy,
   restarting,
   ch,
   onOpen,
+  onSettings,
   onToggle,
   onRestart,
 }: {
   entry: ChannelCatalogEntry;
-  config?: Record<string, unknown>;
   runtime: ChannelRuntimeState;
   busy: boolean;
   restarting: boolean;
   ch: ReturnType<typeof messages>['channelsSettings'];
   onOpen: () => void;
+  onSettings: () => void;
   onToggle: () => void;
   onRestart: () => void;
 }) {
-  const setup = channelSetupStatus(entry);
-  const summary = channelSummary(entry, config, ch);
-  const capabilityLabels = channelCapabilityLabels(entry, ch);
-  const canDirectEnable = !setup.enabled && setup.ready;
-  const primaryAction = canDirectEnable ? onToggle : runtime === 'stopped' ? onRestart : onOpen;
+  const action = choosePrimaryChannelAction(entry);
+  const label = restarting ? ch.restartingChannel
+    : runtime === 'disabled' ? ch.enableChannel
+    : runtime === 'stopped' ? ch.restartChannel
+    : runtime === 'running' || runtime === 'checking' ? ch.testMessage
+    : action?.[1].result === 'qr' ? ch.scanToConnect
+    : ch.connect;
+  const settingsLabel = ch.channelSettingsLabel.replace('{{channel}}', entry.label);
+
   return (
-    <article
-      className="flex min-h-[15.5rem] flex-col rounded-xl bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
+    <article className="flex flex-col gap-4 rounded-xl bg-surface-panel p-4 shadow-surface">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
           <ChannelIcon entry={entry} />
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-fg">{entry.label}</h2>
             <span className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium', runtimeStatusClass(runtime))}>
-              {runtimeStatusLabel(runtime, ch)}
+              {runtime === 'needs_setup' ? ch.notConnected : runtimeStatusLabel(runtime, ch)}
             </span>
           </div>
         </div>
-        <ChannelEnabledSwitch
-          checked={setup.enabled}
-          disabled={busy}
-          label={ch.toggleChannel.replace('{{channel}}', entry.label)}
-          onToggle={onToggle}
-        />
-      </div>
-
-      <button type="button" onClick={onOpen} className="mt-5 min-h-[6.25rem] text-left">
-        {setup.ready ? (
-          <>
-            <p className="line-clamp-2 text-sm leading-6 text-fg-muted">{entry.description ?? entry.id}</p>
-            {summary.length > 0 ? (
-              <div className="mt-3 space-y-0.5 text-sm leading-5 text-fg-muted">
-                {summary.map((item) => (
-                  <p key={item} className="truncate" title={item}>
-                    {item}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <div className="rounded-lg bg-surface-base p-3">
-            <p className="text-sm font-medium text-fg">{ch.cardSetupTitle}</p>
-            <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">
-              {summary[0] ?? channelSetupHint(entry, ch)}
-            </p>
-            {capabilityLabels.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {capabilityLabels.map((label) => (
-                  <span key={label} className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
-                    {label}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        )}
-      </button>
-
-      <div className="mt-auto pt-4">
-        <Button type="button" variant="secondary" className="w-full rounded-2xl py-2.5" onClick={primaryAction} disabled={busy || restarting}>
-          {busy || restarting ? <Loader2 className="size-4 animate-spin" /> : null}
-          {restarting ? ch.restartingChannel : runtime === 'stopped' ? ch.restartChannel : channelActionLabel(entry, ch)}
+        <Button type="button" variant="ghost" className="size-11 shrink-0 p-0"
+          aria-label={settingsLabel} title={settingsLabel} onClick={onSettings}
+        >
+          <Settings className="size-4" />
         </Button>
       </div>
+      <Button type="button" variant="secondary" className="min-h-11 w-full"
+        onClick={runtime === 'disabled' ? onToggle : runtime === 'stopped' ? onRestart : onOpen}
+        disabled={busy || restarting || runtime === 'checking'}
+      >
+        {busy || restarting ? <Loader2 className="size-4 animate-spin" /> : null}
+        {label}
+      </Button>
     </article>
   );
 }
@@ -576,6 +458,7 @@ export function ChannelsSettingsPanel({
   const activeChannelId = normalizeChannelRouteId(channelId);
 
   const catalog = useChannelCatalog(hasToken, language);
+  const mutateCatalog = catalog.mutate;
   const entries = catalog.entries;
   const { data: runtimeStatuses, mutate: mutateRuntimeStatuses, isValidating: isValidatingRuntime } = useSWR(
     hasToken ? channelsStatusSwrKey() : null,
@@ -587,7 +470,6 @@ export function ChannelsSettingsPanel({
     fetchChannelsSettingsConfig,
     { revalidateOnFocus: false },
   );
-  const channelsConfig = channelsSettingsConfig?.channels ?? {};
   const bindings = channelsSettingsConfig?.bindings ?? [];
   const { data: agentsData } = useSWR(
     hasToken ? 'channel-routing-agents' : null,
@@ -604,6 +486,8 @@ export function ChannelsSettingsPanel({
     hasToken && activeConfigKey ? configSwrKey(activeConfigKey) : null,
     () => fetchChannelConfig(activeConfigKey!),
   );
+  const [quickConnection, setQuickConnection] = useState<{ id: string; test: boolean } | null>(null);
+  const quickEntry = entries.find((entry) => entry.id === quickConnection?.id);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
   const [toggleBusy, setToggleBusy] = useState<string | null>(null);
@@ -668,8 +552,14 @@ export function ChannelsSettingsPanel({
     [runtimeByChannel, runtimeLoaded],
   );
   const refreshChannelState = useCallback(async () => {
-    await Promise.all([catalog.mutate(), mutateRuntimeStatuses()]);
-  }, [catalog, mutateRuntimeStatuses]);
+    await Promise.all([mutateCatalog(), mutateRuntimeStatuses()]);
+  }, [mutateCatalog, mutateRuntimeStatuses]);
+  const onQuickChanged = useCallback(async () => {
+    await Promise.all([refreshChannelState(), mutateChannelsSettingsConfig()]);
+  }, [refreshChannelState, mutateChannelsSettingsConfig]);
+  const onAdvancedSetupChanged = useCallback(async () => {
+    await Promise.all([onQuickChanged(), mutateConfig()]);
+  }, [onQuickChanged, mutateConfig]);
   const onChannelStatusEvent = useCallback((detail: unknown) => {
     const next = parseChannelStatusRealtimeDetail(detail);
     if (next) void mutateRuntimeStatuses(next, false);
@@ -694,6 +584,7 @@ export function ChannelsSettingsPanel({
   }, [headerContribution, onHeaderActionChange]);
 
   const openChannel = useCallback((id: string) => {
+    setQuickConnection(null);
     navigate(channelDetailPath(id));
     setDraft(null);
     setAgentBindingDraft(null);
@@ -833,12 +724,19 @@ export function ChannelsSettingsPanel({
             <ChannelHubCard
               key={entry.id}
               entry={entry}
-              config={channelsConfig[channelConfigKey(entry)]?.config}
               runtime={runtimeFor(entry)}
               busy={toggleBusy === entry.id}
               restarting={restartingChannelId === entry.id}
               ch={ch}
-              onOpen={() => openChannel(entry.id)}
+              onOpen={() => {
+                const test = runtimeFor(entry) === 'running';
+                if (test || (choosePrimaryChannelAction(entry) && entry.ui?.modal?.placement !== 'replace-config')) {
+                  setQuickConnection({ id: entry.id, test });
+                } else {
+                  openChannel(entry.id);
+                }
+              }}
+              onSettings={() => openChannel(entry.id)}
               onToggle={() => void toggleChannel(entry)}
               onRestart={() => void restartChannel(entry)}
             />
@@ -847,6 +745,44 @@ export function ChannelsSettingsPanel({
       )}
 
       {error ? <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+
+      <ChannelSettingsShell
+        presentation="modal"
+        open={Boolean(quickEntry) && !activeEntry}
+        onOpenChange={(open) => { if (!open) setQuickConnection(null); }}
+        closeAriaLabel={ch.close}
+        srTitle={quickEntry?.label ?? ch.connect}
+        srDescription={quickEntry?.description ?? ch.setupEmptyHint}
+        compact
+        headerExtra={quickEntry ? (
+          <div className="flex items-center justify-between gap-3 border-b border-edge py-3 pl-6 pr-14">
+            <h2 className="text-base font-semibold text-fg">{quickEntry.label}</h2>
+            <Button type="button" variant="ghost" className="size-11 shrink-0 p-0"
+              aria-label={ch.channelSettingsLabel.replace('{{channel}}', quickEntry.label)}
+              title={ch.advancedConfiguration} onClick={() => openChannel(quickEntry.id)}
+            >
+              <Settings className="size-4" />
+            </Button>
+          </div>
+        ) : null}
+      >
+        {quickEntry && quickConnection?.test ? (
+          <div className="space-y-3 text-sm text-fg-muted">
+            <p>{ch.testMessageHint}</p>
+            {quickEntry.docsPath ? (
+              <a href={channelDocsUrl(language, quickEntry.docsPath)} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1 text-accent hover:underline"
+              >
+                {ch.docs}<ExternalLink className="size-3.5" />
+              </a>
+            ) : null}
+          </div>
+        ) : quickEntry ? (
+          <ChannelSetupCard key={quickEntry.id} entry={quickEntry} locale={language} messages={ch}
+            onChanged={onQuickChanged} quick
+          />
+        ) : null}
+      </ChannelSettingsShell>
 
       <ChannelSettingsShell
         presentation="modal"
@@ -944,11 +880,7 @@ export function ChannelsSettingsPanel({
                 messages={ch}
                 compact
                 onStarted={() => setShowConnectionOptions(true)}
-                onChanged={async () => {
-                  await mutateConfig();
-                  await refreshChannelState();
-                  await mutateChannelsSettingsConfig();
-                }}
+                onChanged={onAdvancedSetupChanged}
               />
             ) : null}
 

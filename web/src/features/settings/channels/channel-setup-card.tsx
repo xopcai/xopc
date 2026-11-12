@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 import { CheckCircle2, ExternalLink, KeyRound, Loader2, QrCode, Stethoscope } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
@@ -136,6 +136,7 @@ export function ChannelSetupCard({
   onChanged,
   onStarted,
   compact = false,
+  quick = false,
 }: {
   entry: ChannelCatalogEntry;
   locale: string;
@@ -143,6 +144,7 @@ export function ChannelSetupCard({
   onChanged: () => Promise<void> | void;
   onStarted?: () => void;
   compact?: boolean;
+  quick?: boolean;
 }) {
   const zh = locale.toLowerCase().startsWith('zh');
   const [domain, setDomain] = useState<'feishu' | 'lark'>('feishu');
@@ -166,36 +168,75 @@ export function ChannelSetupCard({
     generatedQr: null,
   });
 
-  useEffect(() => {
-    setState({
-      payload: null,
-      poll: null,
-      busy: false,
-      error: null,
-      formDraft: {},
-      generatedQr: null,
+  const started = useRef(false);
+  const mounted = useRef(false);
+  const activePoll = useRef<PollTarget | null>(null);
+  const cancelPoll = useCallback(async (poll: PollTarget | null) => {
+    if (!poll?.cancelAction) return;
+    await runChannelAction({
+      channelId: entry.id,
+      actionId: poll.cancelAction,
+      locale,
+      accountId: poll.accountId,
+      input: { conversationId: poll.conversationId },
     });
-  }, [entry.id]);
+  }, [entry.id, locale]);
 
-  const runAction = useCallback(async (actionId: string, input?: unknown, accountId?: string) => {
-    setState((prev) => ({ ...prev, busy: true, error: null }));
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!quick) return;
+    return () => {
+      void cancelPoll(activePoll.current).catch(() => {});
+    };
+  }, [cancelPoll, quick]);
+
+  const runAction = useCallback(async (actionId: string, input?: unknown, accountId?: string, replace = false) => {
+    setState((prev) => ({ ...prev, busy: true, error: null, ...(replace ? { payload: null, poll: null } : {}) }));
     try {
+      if (replace) {
+        const oldPoll = activePoll.current;
+        activePoll.current = null;
+        await cancelPoll(oldPoll).catch(() => {});
+      }
       setCopiedTemplate(false);
       const payload = await runChannelAction({ channelId: entry.id, actionId, locale, input, accountId });
+      const nextPoll = pollTarget(payload);
+      if (!mounted.current) {
+        if (quick) void cancelPoll(nextPoll).catch(() => {});
+        if ('configChanged' in payload && payload.configChanged === true) await onChanged();
+        return;
+      }
+      if (nextPoll || payload.type !== 'poll' || payload.phase !== 'pending') activePoll.current = nextPoll;
       setState((prev) => ({
         ...prev,
         payload,
-        poll: pollTarget(payload) ?? (payload.type === 'poll' && payload.phase === 'pending' ? prev.poll : null),
+        poll: nextPoll ?? (payload.type === 'poll' && payload.phase === 'pending' ? prev.poll : null),
         busy: false,
         formDraft: payload.type === 'form' ? payload.values ?? {} : {},
       }));
-      if ('configChanged' in payload && payload.configChanged === true) {
-        await onChanged();
-      }
+      if ('configChanged' in payload && payload.configChanged === true) await onChanged();
     } catch (err) {
-      setState((prev) => ({ ...prev, busy: false, error: err instanceof Error ? err.message : String(err) }));
+      if (mounted.current) setState((prev) => ({ ...prev, busy: false, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [entry.id, locale, onChanged]);
+  }, [cancelPoll, entry.id, locale, onChanged, quick]);
+
+  const startPrimary = (platform = domain, replace = false) => {
+    if (!primary) return;
+    onStarted?.();
+    void runAction(primary[0], entry.id === 'feishu' ? { domain: platform } : undefined, undefined, replace);
+  };
+
+  const primaryId = primary?.[0];
+  useEffect(() => {
+    if (!quick || !primaryId || started.current) return;
+    started.current = true;
+    void runAction(primaryId, entry.id === 'feishu' ? { domain: 'feishu' } : undefined);
+  }, [entry.id, primaryId, quick, runAction]);
 
   const qrContent = payloadQrContent(state.payload, entry.id);
   useEffect(() => {
@@ -208,11 +249,13 @@ export function ChannelSetupCard({
     setState((prev) => (prev.generatedQr ? { ...prev, generatedQr: null } : prev));
     void QRCode.toDataURL(content, { width: 220, margin: 1 }).then((url) => {
       if (!cancelled) setState((prev) => ({ ...prev, generatedQr: url }));
+    }).catch(() => {
+      if (!cancelled) setState((prev) => ({ ...prev, error: ch.failed }));
     });
     return () => {
       cancelled = true;
     };
-  }, [qrContent]);
+  }, [ch.failed, qrContent]);
 
   useEffect(() => {
     const poll = state.poll;
@@ -228,17 +271,23 @@ export function ChannelSetupCard({
           locale,
           input: { conversationId: poll.conversationId },
         });
-        if (cancelled) return;
+        const nextPoll = pollTarget(next);
+        if (cancelled) {
+          if (quick && !mounted.current) void cancelPoll(nextPoll).catch(() => {});
+          if ('configChanged' in next && next.configChanged === true) await onChanged();
+          return;
+        }
+        if (nextPoll || isTerminalPoll(next)) activePoll.current = nextPoll;
         setState(prev => ({
           ...prev,
           payload: next.type === 'poll' && next.phase === 'pending' && prev.payload?.type === 'qr'
             ? { ...prev.payload, ...next, pinAction: next.pinAction, type: 'qr' }
             : next,
-          poll: pollTarget(next) ?? (isTerminalPoll(next) ? null : prev.poll),
+          poll: nextPoll ?? (isTerminalPoll(next) ? null : prev.poll),
           error: null,
         }));
         if ('configChanged' in next && next.configChanged === true) await onChanged();
-        if (pollTarget(next) || isTerminalPoll(next)) return;
+        if (nextPoll || isTerminalPoll(next)) return;
       } catch (err) {
         if (!cancelled) setState(prev => ({ ...prev, error: err instanceof Error ? err.message : String(err) }));
       }
@@ -249,7 +298,7 @@ export function ChannelSetupCard({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [entry.id, locale, onChanged, state.busy, state.poll]);
+  }, [cancelPoll, entry.id, locale, onChanged, quick, state.busy, state.poll]);
 
   const primaryLabel = primary?.[1].label ?? (entry.configured ? ch.reconnect : ch.connect);
   const doctorLabel = entry.actions?.['doctor.run']?.label ?? ch.diagnose;
@@ -271,19 +320,38 @@ export function ChannelSetupCard({
   };
   const formPayload = state.payload?.type === 'form' ? state.payload : null;
   const setupLink = state.payload?.type === 'ok' || state.payload?.type === 'form' ? state.payload.setupLink : undefined;
-  const requiredSetupFields = (formPayload?.setupTemplate || formPayload?.setupLink) && Array.isArray(formPayload.schema.required)
-    ? formPayload.schema.required
+  const formSchema = formPayload?.schema;
+  const requiredSetupFields = Array.isArray(formSchema?.required)
+    ? formSchema.required.filter((key): key is string => typeof key === 'string')
     : [];
+  const formProperties = formSchema?.properties as Record<string, JsonSchema> | undefined;
+  const quickFormSchema = formSchema && quick && formProperties && requiredSetupFields.length > 0
+    ? {
+      ...formSchema,
+      properties: Object.fromEntries(
+        [...requiredSetupFields, ...(entry.id === 'feishu' ? ['domain'] : [])]
+          .filter((key) => Object.hasOwn(formProperties, key))
+          .map((key, index) => [key, { ...formProperties[key], 'x-order': index }]),
+      ),
+    }
+    : formSchema;
+  const setupComplete = state.payload?.type === 'ok' && state.payload.configChanged === true;
+  const terminalSuccess = state.payload?.type === 'poll' && state.payload.phase === 'done' && state.payload.ok;
+  const allowManual = entry.actions?.['setup.manual'] && primary?.[0] !== 'setup.manual'
+    && !formPayload && !setupComplete && !terminalSuccess
+    && (!state.poll || (quick && state.poll.actionId === 'setup.status'));
+  const canRetry = !state.poll && !formPayload && Boolean(state.error || isTerminalPoll(state.payload)) && !terminalSuccess;
+  const scanApp = entry.id === 'feishu' ? (domain === 'lark' ? 'Lark' : zh ? '飞书' : 'Feishu') : entry.label;
   const missingSetupField = requiredSetupFields.some((field) => {
-    const value = state.formDraft[String(field)];
-    return typeof value !== 'string' || !value.trim();
+    const value = state.formDraft[field];
+    return value == null || (typeof value === 'string' && !value.trim());
   });
   const diagnostics = state.payload?.type === 'diagnostics' ? state.payload.checks : null;
 
   return (
-    <div className={compact ? 'space-y-3' : 'rounded-lg bg-surface-panel/80 p-4 shadow-surface'}>
-      <div className={cn('flex flex-wrap items-start gap-3', compact ? 'justify-end' : 'justify-between')}>
-        {!compact ? (
+    <div className={compact || quick ? 'space-y-3' : 'rounded-lg bg-surface-panel/80 p-4 shadow-surface'}>
+      <div className={cn('flex flex-wrap items-start gap-3', compact || quick ? 'justify-end' : 'justify-between')}>
+        {!compact && !quick ? (
           <div>
             <h3 className="text-sm font-semibold text-fg">{ch.setupTitle}</h3>
             <p className="mt-1 text-sm text-fg-muted">
@@ -292,45 +360,48 @@ export function ChannelSetupCard({
           </div>
         ) : null}
         <div className="flex flex-wrap items-end gap-2">
-          {entry.id === 'feishu' && !state.poll ? (
+          {entry.id === 'feishu' && (quick
+            ? !formPayload && !setupComplete && !terminalSuccess && (!state.poll || state.poll.actionId === 'setup.status')
+            : !state.poll) ? (
             <SelectField
               label={zh ? '平台' : 'Platform'}
               value={domain}
-              onChange={setDomain}
+              disabled={state.busy}
+              onChange={(platform) => {
+                setDomain(platform);
+                if (quick) startPrimary(platform, true);
+              }}
               options={[{ value: 'feishu', label: zh ? '飞书' : 'Feishu' }, { value: 'lark', label: 'Lark' }]}
             />
           ) : null}
-          {primary && !state.poll ? (
+          {primary && (quick ? canRetry : !state.poll) ? (
             <Button
               type="button"
               variant="primary"
               disabled={state.busy}
-              onClick={() => {
-                onStarted?.();
-                void runAction(primary[0], entry.id === 'feishu' ? { domain } : undefined);
-              }}
+              onClick={() => startPrimary(domain, quick)}
             >
               {state.busy ? <Loader2 className="size-4 animate-spin" /> : primary[1].result === 'qr' ? <QrCode className="size-4" /> : <KeyRound className="size-4" />}
-              {primaryLabel}
+              {quick ? (primary[1].result === 'qr' ? ch.newSetupCode : ch.retry) : primaryLabel}
             </Button>
           ) : null}
-          {entry.actions?.['setup.manual'] && primary?.[0] !== 'setup.manual' && !state.poll && !formPayload ? (
+          {!quick && allowManual ? (
             <Button
               type="button"
               variant="secondary"
               disabled={state.busy}
               onClick={() => {
                 onStarted?.();
-                void runAction('setup.manual');
+                void runAction('setup.manual', entry.id === 'feishu' ? { domain } : undefined);
               }}
             >
-              {entry.actions['setup.manual'].label}
+              {entry.actions?.['setup.manual']?.label}
             </Button>
           ) : null}
-          {state.poll?.cancelAction ? (
+          {!quick && state.poll?.cancelAction ? (
             <Button type="button" variant="secondary" disabled={state.busy} onClick={cancel}>{zh ? '取消' : 'Cancel'}</Button>
           ) : null}
-          {entry.actions?.['doctor.run'] && !state.poll ? (
+          {!quick && entry.actions?.['doctor.run'] && !state.poll ? (
             <Button
               type="button"
               variant="secondary"
@@ -344,7 +415,12 @@ export function ChannelSetupCard({
         </div>
       </div>
 
-      {message && (!isTerminalPoll(state.payload) || confirmAction) ? <p className="mt-3 text-sm text-fg-muted">{message}</p> : null}
+      {quick && !state.payload && (state.busy || !state.error) ? (
+        <div className="flex justify-center" aria-busy="true" role="status" aria-label={ch.loading}>
+          <Skeleton className={primary?.[1].result === 'qr' ? 'size-52 rounded-lg' : 'h-24 w-full rounded-lg'} />
+        </div>
+      ) : null}
+      {message && !(quick && (formPayload?.setupTemplate || (qrStageActive && primary?.[1].result === 'qr' && state.poll?.actionId !== 'setup.verify.status'))) && (!isTerminalPoll(state.payload) || confirmAction) ? <p className="mt-3 text-sm text-fg-muted">{message}</p> : null}
       {setupLink ? (
         <a className="mt-2 inline-flex items-center gap-1 text-sm text-accent hover:underline"
           href={setupLink.url} target="_blank" rel="noreferrer"
@@ -376,13 +452,14 @@ export function ChannelSetupCard({
           if (payload?.type === 'poll') void runAction(confirmAction, { conversationId: payload.conversationId }, payload.accountId);
         }}>{zh ? '确认连接' : 'Confirm connection'}</Button>
       ) : null}
-      {state.error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{state.error}</p> : null}
+      {state.error ? <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{state.error}</p> : null}
 
       {qrStageActive ? (
         <div
           className={cn(
-            'flex h-80 items-center justify-center gap-4 overflow-hidden rounded-lg bg-surface-base p-3 shadow-surface',
-            compact ? 'mt-1 flex-col text-center sm:h-64 sm:flex-row sm:text-left' : 'mt-4 flex-col sm:h-64 sm:flex-row',
+            'flex items-center justify-center gap-4 rounded-lg bg-surface-base p-3 shadow-surface',
+            quick ? 'flex-col text-center' : 'mt-4 flex-col sm:flex-row',
+            compact && !quick && 'mt-1 text-center sm:text-left',
           )}
         >
           <div className="flex size-56 shrink-0 items-center justify-center rounded-lg border border-edge bg-white p-3">
@@ -396,7 +473,8 @@ export function ChannelSetupCard({
           </div>
           <div className={cn('min-w-0 max-w-sm text-sm text-fg-muted', compact && 'w-full sm:w-auto')}>
             {qrImage ? (
-              <p className="line-clamp-3">{ch.waitingConfirmation}</p>
+              <p className="line-clamp-3">{quick && state.poll?.actionId !== 'setup.verify.status'
+                ? ch.scanLoginHint.replace('{{channel}}', scanApp) : ch.waitingConfirmation}</p>
             ) : (
               <div className="space-y-2" aria-busy="true">
                 <Skeleton className="h-4 w-48 max-w-full" />
@@ -429,8 +507,17 @@ export function ChannelSetupCard({
 
       {formPayload ? (
         <div className="mt-4 space-y-3">
+          <SchemaForm
+            schema={quickFormSchema ?? formPayload.schema}
+            values={state.formDraft}
+            onChange={(next) => setState((prev) => ({ ...prev, formDraft: next }))}
+            disabled={state.busy}
+            labels={schemaLabels}
+          />
           {formPayload.setupTemplate ? (
-            <div className="space-y-2">
+            <details open={!quick || undefined} className="space-y-2">
+              <summary className="cursor-pointer text-sm text-accent">{ch.howToGetCredentials}</summary>
+              {quick && message ? <p className="text-sm text-fg-muted">{message}</p> : null}
               <textarea
                 readOnly
                 aria-label="App Manifest"
@@ -455,24 +542,35 @@ export function ChannelSetupCard({
                   <ExternalLink className="size-3.5" />
                 </a>
               </div>
-            </div>
+            </details>
           ) : null}
-          <SchemaForm
-            schema={formPayload.schema}
-            values={state.formDraft}
-            onChange={(next) => setState((prev) => ({ ...prev, formDraft: next }))}
-            disabled={state.busy}
-            labels={schemaLabels}
-          />
           <Button
             type="button"
             variant="primary"
             disabled={state.busy || missingSetupField}
             onClick={() => void runAction(formPayload.submitAction, state.formDraft)}
           >
-            {ch.saveSetup}
+            {quick ? ch.verifyAndConnect : ch.saveSetup}
           </Button>
         </div>
+      ) : null}
+
+      {quick && allowManual ? (
+        <Button type="button" variant="ghost" className="min-h-11" disabled={state.busy}
+          onClick={() => void runAction('setup.manual', entry.id === 'feishu' ? { domain } : undefined, undefined, true)}
+        >
+          {ch.useSetupCredentials}
+        </Button>
+      ) : null}
+      {quick && formPayload && primary?.[1].result === 'qr' ? (
+        <Button type="button" variant="ghost" className="min-h-11" disabled={state.busy}
+          onClick={() => startPrimary(domain, true)}
+        >
+          {ch.scanToConnect}
+        </Button>
+      ) : null}
+      {quick && setupComplete ? (
+        <p role="status" className="text-sm text-fg-muted">{ch.setupSaved} {ch.testMessageHint}</p>
       ) : null}
 
       {diagnostics ? (

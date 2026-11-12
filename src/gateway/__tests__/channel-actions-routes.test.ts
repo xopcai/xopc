@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { feishuGatewaySetupActions } from '../../../extensions/feishu/src/adapters/gateway-setup.js';
+
 import type { ChannelPlugin } from '../../channels/plugin-types.js';
 import type { Config } from '../../config/schema.js';
 import { createHonoApp } from '../hono/app.js';
@@ -86,6 +88,32 @@ describe('channel action routes', () => {
     });
     expect(saveConfig).toHaveBeenCalledWith(nextConfig, expect.any(Object), undefined);
     expect(reloadConfig).not.toHaveBeenCalled();
+  });
+
+  it('opens the Feishu manual fallback for the selected region without saving a config', async () => {
+    const saveConfig = vi.fn();
+    const app = createHonoApp({
+      service: createMockService({ id: 'feishu', runtimeActions: feishuGatewaySetupActions }, { saveConfig }),
+      token: TOKEN,
+    });
+
+    const res = await app.request('/api/channels/feishu/actions/setup.manual?locale=en', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ input: { domain: 'lark' } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      payload: {
+        type: 'form',
+        submitAction: 'setup.manual',
+        values: { domain: 'lark' },
+        schema: { required: ['appId', 'appSecret'] },
+      },
+    });
+    expect(saveConfig).not.toHaveBeenCalled();
   });
 
   it('runs doctor.run via doctor adapter before generic runtime actions', async () => {

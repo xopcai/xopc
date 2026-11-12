@@ -98,7 +98,7 @@ function formPayload(locale?: string) {
   return {
     type: 'form' as const,
     submitAction: 'setup.save',
-    message: zh ? '粘贴 BotFather 给你的 Bot Token。' : 'Paste the Bot Token provided by BotFather.',
+    setupLink: { url: 'https://t.me/BotFather', label: zh ? '打开 BotFather' : 'Open BotFather' },
     schema: {
       type: 'object',
       properties: {

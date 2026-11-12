@@ -13,6 +13,7 @@ export type ChannelSettingsPresentation = 'modal' | 'drawer';
 function channelSettingsShellContentClass(
   presentation: ChannelSettingsPresentation,
   wide = false,
+  compact = false,
 ): string {
   if (presentation === 'drawer') {
     return cn(
@@ -24,6 +25,7 @@ function channelSettingsShellContentClass(
   return cn(
     'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(calc(100dvh-2rem),52rem)] w-[min(calc(100%-2rem),32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
     wide && 'h-[min(calc(100dvh-2rem),48rem)] w-[min(calc(100%-2rem),36rem)]',
+    compact && 'h-[min(calc(100dvh-2rem),32rem)] w-[min(calc(100%-2rem),28rem)]',
     SETTINGS_SHELL_CONTENT_Z,
     'rounded-2xl border border-edge bg-surface-overlay outline-none dark:border-edge',
   );
@@ -41,6 +43,7 @@ export function ChannelSettingsShell({
   children,
   footer,
   wide = false,
+  compact = false,
   headerExtra,
 }: {
   presentation: ChannelSettingsPresentation;
@@ -54,6 +57,7 @@ export function ChannelSettingsShell({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  compact?: boolean;
   headerExtra?: ReactNode;
 }) {
   const isDrawer = presentation === 'drawer';
@@ -70,7 +74,7 @@ export function ChannelSettingsShell({
         />
         <Dialog.Content
           ref={setPortalContainer}
-          className={channelSettingsShellContentClass(presentation, wide)}
+          className={channelSettingsShellContentClass(presentation, wide, compact)}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <SettingsShellLayerProvider layer="modal" portalContainer={portalContainer}>
