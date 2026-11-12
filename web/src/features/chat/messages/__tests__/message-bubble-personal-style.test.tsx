@@ -48,20 +48,22 @@ describe('Personal AI message styling', () => {
       inputPath: 'report.html', displayName: 'report.html', scope: 'external', exists: true,
       absolutePath: '/worker/report.html', capabilities: ['preview'],
     });
-    render({ role: 'assistant', content: [{ type: 'text', text: '[HTML](xopc://workspace/file?path=report.html)' }],
-      taskResultDelivery: { taskRunId: 'producing-run' } as never }, true, false);
+    render({
+      ...taskReply([], 'producing-run'),
+      content: [{ type: 'text', text: '[HTML](xopc://workspace/file?path=report.html)' }],
+    }, true, false);
     await act(async () => { container.querySelector<HTMLAnchorElement>('a')?.click(); });
     expect(resolveFile).toHaveBeenCalledWith('report.html', expect.objectContaining({ taskRunId: 'producing-run' }));
   });
 
-  function taskReply(deliverables: NonNullable<Message['outcome']>['deliverables'] = []): Message {
+  function taskReply(deliverables: NonNullable<Message['outcome']>['deliverables'] = [], taskRunId = 'worker'): Message {
     return {
       role: 'assistant', content: [{ type: 'text', text: 'Here is the answer.' }],
       taskResultDelivery: {
-        version: 1, deliveryId: 'reply:result', taskId: 'task', taskRunId: 'worker',
+        version: 1, deliveryId: 'reply:result', taskId: 'task', taskRunId,
         taskTitle: 'Tomorrow’s exhibitions', conversationId: 'personal-chat',
         originTranscriptId: 'transcript', assignmentEpoch: 0, resultRevision: 2, createdAt: 1,
-        outcome: { version: 1, outcomeId: 'outcome', runId: 'worker', turnId: 'worker',
+        outcome: { version: 1, outcomeId: 'outcome', runId: taskRunId, turnId: taskRunId,
           status: 'succeeded', deliverables, evidence: [], createdAt: '2026-10-17T00:00:00Z' },
       },
     };

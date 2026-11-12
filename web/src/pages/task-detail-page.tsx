@@ -260,8 +260,8 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
   const acceptanceRef = useRef<HTMLDetailsElement>(null);
   const resultsRef = useRef<HTMLElement>(null);
   const currentActionRef = useRef<HTMLElement>(null);
-  const location = useLocation();
-  const focusTaskResults = (location.state as { focusTaskResults?: string } | null)?.focusTaskResults;
+  const { key: navigationKey, state: navigationState } = useLocation();
+  const focusTaskResults = (navigationState as { focusTaskResults?: string } | null)?.focusTaskResults;
   const resultsReady = Boolean(detail);
   useEffect(() => {
     if (!resultsReady || focusTaskResults !== taskId) return;
@@ -270,7 +270,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
       resultsRef.current?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
-  }, [focusTaskResults, location.key, resultsReady, taskId]);
+  }, [focusTaskResults, navigationKey, resultsReady, taskId]);
   const splitPaneRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const [compactHeader, setCompactHeader] = useState(false);

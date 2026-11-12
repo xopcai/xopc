@@ -8,7 +8,7 @@ vi.mock('../../../tasks/task-conversation-repository.js', () => ({ TaskConversat
   resolveActiveExecutionSession() { return { taskId: 'task' }; }
 } }));
 vi.mock('../../../tasks/task-repository.js', () => ({ TaskRepository: class {
-  get() { return { title: 'Write a report', locale: 'zh', contract: { objective: 'Write a report', acceptanceCriteria: ['Complete report'] } }; }
+  get() { return { title: 'Write a report', locale: 'zh', contract: { objective: 'Write a report', acceptanceCriteria: ['Complete report'], resultPolicy: 'standard' } }; }
 } }));
 vi.mock('../../../tasks/task-collaboration-repository.js', () => ({ TaskCollaborationRepository: class {
   coordination() { return [{ kind: 'instruction', body: 'Double the amounts', deliveryStatus: 'confirmed' },
