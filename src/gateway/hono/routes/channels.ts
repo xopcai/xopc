@@ -14,6 +14,7 @@ import {
   getChannelSetupStatus,
 } from '../../../channels/catalog/channel-catalog-service.js';
 import type { Config } from '../../../config/index.js';
+import { redactEnterpriseChannelSecret } from '../../../channels/enterprise/config-surface.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { ChannelRuntimeActionPayload } from '../../../channels/plugins/types.adapters.js';
 
@@ -79,7 +80,7 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     const plugin = service.getChannelRuntimePlugin(channel);
     const value =
       plugin?.configSurface?.buildConfigSurface(service.currentConfig) ??
-      (service.currentConfig.channels as Record<string, unknown> | undefined)?.[channel] ??
+      redactEnterpriseChannelSecret(channel, service.currentConfig.channels?.[channel]) ??
       {};
     return c.json({ ok: true, payload: { config: value } });
   });

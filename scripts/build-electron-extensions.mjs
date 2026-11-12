@@ -27,7 +27,7 @@ const resolverPlugin = {
     });
     build.onResolve({ filter: /.*/ }, (args) => {
       if (builtins.has(args.path)) return { path: args.path, external: true };
-      if (args.path === 'silk-wasm') return { path: args.path, external: true };
+      if (args.path === 'silk-wasm' || args.path === 'ws') return { path: args.path, external: true };
       return undefined;
     });
   },

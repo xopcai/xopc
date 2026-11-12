@@ -143,6 +143,12 @@ it('controls built-in channel connections exclusively through Channels settings'
       expect(list.status).toBe(200);
       const listedIds = (await list.json()).extensions.map((entry: { id: string }) => entry.id);
       expect(listedIds).toContain('inventory-fixture');
+      for (const id of ['dingtalk', 'wecom']) {
+        expect(listedIds).not.toContain(id);
+        const setup = await request(`/api/channels/${id}/actions/setup.manual`, {}, 'POST');
+        expect(setup.status).toBe(200);
+        expect(await setup.json()).toMatchObject({ payload: { type: 'form', submitAction: 'setup.manual' } });
+      }
       for (const id of extensionIds) {
         expect(listedIds).not.toContain(id);
         const response = await request(`/api/extensions/${id}/activation`, { enabled: true }, 'POST');

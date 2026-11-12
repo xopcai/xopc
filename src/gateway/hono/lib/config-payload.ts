@@ -1,3 +1,4 @@
+import { redactEnterpriseChannelSecret } from '../../../channels/enterprise/config-surface.js';
 import { voiceSettingsRevisions } from './voice-settings-revisions.js';
 import {
   listAgentEntries,
@@ -119,7 +120,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
           enabled: setupStatus.enabled,
           configured: setupStatus.ready,
           setupStatus,
-          config: plugin?.configSurface?.buildConfigSurface(config) ?? channelCfg ?? {},
+          config: plugin?.configSurface?.buildConfigSurface(config) ?? redactEnterpriseChannelSecret(entry.id, channelCfg) ?? {},
           schema: entry.configSchema,
           uiHints: entry.uiHints,
         },

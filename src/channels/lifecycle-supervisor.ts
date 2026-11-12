@@ -20,6 +20,9 @@
 
 import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';
+import { resolveRoute } from '../routing/resolve-route.js';
+import { issuePairingChallenge } from './pairing/pairing-challenge.js';
+import { registerPairingChannelResolver } from './pairing/pairing-service.js';
 import { verifiedChannelBus } from './verified-inbound.js';
 
 import type {
@@ -319,6 +322,10 @@ export class ChannelLifecycleSupervisor {
         config: this.opts.getConfig(),
         channelConfig,
         sessionModel: this.opts.getSessionModelHooks?.(),
+        host: {
+          resolveRoute, issuePairingChallenge, registerPairingChannelResolver,
+          warn: (message) => log.warn({ channel: plugin.id }, message),
+        },
       };
       await plugin.init(options);
       this.initializedPluginIds.add(plugin.id);

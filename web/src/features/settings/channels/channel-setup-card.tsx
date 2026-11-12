@@ -301,6 +301,19 @@ export function ChannelSetupCard({
               {primaryLabel}
             </Button>
           ) : null}
+          {entry.actions?.['setup.manual'] && !state.poll && !formPayload ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={state.busy}
+              onClick={() => {
+                onStarted?.();
+                void runAction('setup.manual');
+              }}
+            >
+              {entry.actions['setup.manual'].label}
+            </Button>
+          ) : null}
           {state.poll?.cancelAction ? (
             <Button type="button" variant="secondary" disabled={state.busy} onClick={cancel}>{zh ? '取消' : 'Cancel'}</Button>
           ) : null}

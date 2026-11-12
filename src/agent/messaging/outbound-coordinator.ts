@@ -141,6 +141,7 @@ export class OutboundCoordinator {
         accountId: msg.metadata?.accountId,
         threadId: msg.metadata?.threadId,
         inboundMessageId: msg.metadata?.messageId,
+        ...(typeof msg.metadata?.channelReplyId === 'string' ? { channelReplyId: msg.metadata.channelReplyId } : {}),
         transcribedVoice: sessionContext.metadata?.transcribedVoice,
         sessionWebhook: msg.metadata?.sessionWebhook,
         conversationId: msg.metadata?.conversationId,
