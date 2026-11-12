@@ -24,7 +24,13 @@ import { AgentRunErrorBanner } from './agent-run-error-banner';
 import { RunFeedbackContext } from './run-feedback-context';
 import { RunRecoveryStatus } from './run-recovery-status';
 
-export interface ChatTimelineEntry { id: string; timestamp: number; content: ReactNode }
+export interface ChatTimelineEntry {
+  id: string;
+  timestamp: number;
+  content: ReactNode;
+  /** Index in the current message list, when the entry belongs to a specific reply. */
+  afterMessageIndex?: number;
+}
 
 const ignoreWelcomePrompt = (_selection: WelcomeSuggestionSelection): void => {};
 
@@ -164,11 +170,25 @@ export const MessageList = memo(function MessageList({
     lastTranscriptTime = Math.max(message.timestamp ?? lastTranscriptTime, lastTranscriptTime);
     return lastTranscriptTime;
   });
-  if (timelineEntries.length) rows.sort((a, b) => {
-    const time = (index: number) => index < list.length ? transcriptTimes[index] : timelineEntries[index - list.length].timestamp;
-    return time(a.index) - time(b.index) || a.index - b.index;
-  });
-  const previousVisibleIndex = new Map(rows.map((row, offset) => [row.index, rows[offset - 1]?.index]));
+  const entryFor = (index: number) => timelineEntries[index - list.length];
+  if (timelineEntries.length) {
+    const position = (index: number) => entryFor(index)?.afterMessageIndex ?? index;
+    const time = (index: number) => transcriptTimes[position(index)] ?? entryFor(index)?.timestamp ?? 0;
+    rows.sort((a, b) => {
+      const order = time(a.index) - time(b.index) || position(a.index) - position(b.index);
+      const left = entryFor(a.index);
+      const right = entryFor(b.index);
+      return order || (left && right ? left.timestamp - right.timestamp : 0) || a.index - b.index;
+    });
+  }
+  const previousVisibleIndex = new Map(rows.map((row, offset) => {
+    const previous = rows[offset - 1];
+    const anchor = entryFor(row.index)?.afterMessageIndex;
+    if (previous && anchor !== undefined) {
+      row.compactTop = previous.index === anchor || entryFor(previous.index)?.afterMessageIndex === anchor;
+    }
+    return [row.index, previous?.index];
+  }));
   const previousMessageIndex = new Map<number, number>();
   let lastMessageIndex: number | undefined;
   for (const { index } of rows) {
@@ -176,10 +196,11 @@ export const MessageList = memo(function MessageList({
     if (lastMessageIndex !== undefined) previousMessageIndex.set(index, lastMessageIndex);
     lastMessageIndex = index;
   }
-  const renderRow = (index: number) => {
+  const renderRow = ({ index, compactTop }: MessageRowDescriptor) => {
     if (index >= list.length) {
-      const entry = timelineEntries[index - list.length];
-      return <div key={entry.id} data-chat-timeline-entry={entry.id}>{entry.content}</div>;
+      const entry = entryFor(index);
+      return <div key={entry.id} className={compactTop && !virtualized ? '-mt-5' : undefined}
+        data-chat-timeline-entry={entry.id}>{entry.content}</div>;
     }
     const msg = list[index];
     const isStreamRow = isStreamingRow(msg, index);
@@ -277,7 +298,7 @@ export const MessageList = memo(function MessageList({
       <div ref={registerListContentRef} className={cn('w-full min-w-0 pb-8', !virtualized && 'flex flex-col gap-8')}
         data-chat-virtualized={virtualized || undefined}>
         {virtualized && scrollRef ? <VirtualMessageRows rows={rows} scrollRef={scrollRef}
-          renderRow={renderRow} footer={footer} /> : <>{rows.map(row => renderRow(row.index))}{footer}</>}
+          renderRow={renderRow} footer={footer} /> : <>{rows.map(renderRow)}{footer}</>}
       </div>
     </InlinePreviewSchedulerProvider>
     </RunFeedbackContext>

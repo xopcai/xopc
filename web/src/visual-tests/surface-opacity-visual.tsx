@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { ComposerFrame } from '@/features/chat/composer/composer-frame';
 import { ChannelsSettingsDialogFooter } from '@/features/settings/channels/channels-settings-dialog-footer';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import '@/styles/globals.css';
 
@@ -14,11 +15,13 @@ document.documentElement.dataset.colorScheme = theme;
 document.documentElement.classList.toggle('dark', dark);
 useLocaleStore.setState({ language: 'zh' });
 
-function SurfaceCase({ title, children }: { title: string; children: ReactNode }) {
+function SurfaceCase({ title, children, composer = false }: { title: string; children: ReactNode; composer?: boolean }) {
   return <section className="min-w-0">
     <h2 className="mb-2 text-sm font-semibold text-fg">{title}</h2>
-    <div className="relative h-56 overflow-hidden rounded-xl border border-edge bg-surface-base">
-      <div className="absolute inset-0 space-y-1 p-3 font-mono text-sm leading-6 text-fg" aria-hidden>
+    <div className={cn('relative h-56 overflow-hidden rounded-xl border border-edge bg-surface-base',
+      composer && '[--chat-composer-bottom-radius:1rem] [--chat-composer-bottom-space:1rem]')}>
+      <div className={cn('absolute inset-0 space-y-1 p-3 font-mono text-sm leading-6 text-fg',
+        composer && 'chat-messages--composer-fade overflow-y-auto')} aria-hidden>
         {Array.from({ length: 10 }, (_, index) => <p key={index}>背景消息 {index + 1} — 此文字不应透入前景浮层</p>)}
       </div>
       {children}
@@ -30,10 +33,10 @@ function Fixture() {
   return <main className="min-h-screen bg-surface-base p-5 sm:p-8">
     <div className="mx-auto max-w-6xl">
       <h1 className="text-lg font-semibold text-fg">浮层遮挡检查 · {theme} · {dark ? '深色' : '浅色'}</h1>
-      <p className="mt-1 text-sm text-fg-muted">输入框顶部外侧透明；浮层内部、固定底栏及提示区域不透出背景文字。</p>
+      <p className="mt-1 text-sm text-fg-muted">聊天内容在输入框下缘淡出，浮层内部、固定底栏及提示区域不透出背景文字。</p>
       <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <SurfaceCase title="聊天输入框（实际 ComposerFrame）">
-          <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 z-10 [--chat-composer-bottom-radius:1rem] [--chat-composer-bottom-space:1rem]">
+        <SurfaceCase title="聊天输入框（实际 ComposerFrame）" composer>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
             <div className="relative px-4 pt-4 pb-[var(--chat-composer-bottom-space)]">
               <ComposerFrame className="pointer-events-auto p-4">
                 <p className="min-h-16 text-sm text-fg-muted">提问或描述任务…</p>

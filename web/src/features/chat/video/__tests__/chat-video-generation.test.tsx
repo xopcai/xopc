@@ -33,7 +33,7 @@ it('starts polling when the first job appears and stops when it completes', () =
   };
   function Harness({ jobs }: { jobs: VideoGenerationJob[] }) {
     cache.data = { transcriptId: 'transcript', modelRef: SEEDANCE_VIDEO_MODEL_REF, configured: true, defaults: { duration: 5, resolution: '720P' }, jobs };
-    useChatVideoGeneration('conversation', 'en');
+    useChatVideoGeneration('conversation', 'en', []);
     return null;
   }
   try {

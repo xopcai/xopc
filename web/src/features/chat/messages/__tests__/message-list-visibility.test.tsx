@@ -6,11 +6,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Message } from '@/features/chat/messages/messages.types';
+import type { MessageRowDescriptor } from '@/features/chat/messages/virtual-message-rows';
 
 vi.mock('@/features/extensions/extension-provider', () => ({ useUiExtensions: () => [] }));
 vi.mock('@/features/chat/messages/virtual-message-rows', () => ({
-  VirtualMessageRows: ({ rows, renderRow }: { rows: { index: number }[]; renderRow: (index: number) => ReactNode }) =>
-    <div data-virtual-rows>{rows.map(row => <div key={row.index}>{renderRow(row.index)}</div>)}</div>,
+  VirtualMessageRows: ({ rows, renderRow }: { rows: MessageRowDescriptor[]; renderRow: (row: MessageRowDescriptor) => ReactNode }) =>
+    <div data-virtual-rows>{rows.map(row => <div key={row.index}>{renderRow(row)}</div>)}</div>,
 }));
 
 import { MessageList } from '@/features/chat/messages/message-list';

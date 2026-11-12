@@ -62,6 +62,7 @@ const messageActionIconButton = cn(
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
   interaction.disabled,
 );
+const assistantActionRowHeight = 'mt-1 min-h-11 shrink-0 sm:min-h-9';
 
 const RESPONSE_FEEDBACK_REASONS = [
   'misunderstood_intent',
@@ -608,6 +609,7 @@ export const MessageBubble = memo(function MessageBubble({
     <article className={cn(
       'group/msg flex w-full min-w-0',
       isUser ? 'justify-end' : 'justify-start',
+      isAssistant && '@container/assistant-message',
       message.clarificationChoice && 'flex-col items-end gap-3',
       animateUserEntry && 'xopc-chat-user-message-enter',
     )}>
@@ -630,6 +632,7 @@ export const MessageBubble = memo(function MessageBubble({
             ? 'flex w-full max-w-[min(78%,var(--max-width-chat-user))] flex-col items-end'
             : 'w-full max-w-[var(--max-width-chat-reading)]',
           readonly && 'max-w-full',
+          (reserveAssistantActions || copyMarkdown) && 'relative @min-[42rem]/assistant-message:min-h-9 @min-[42rem]/assistant-message:pe-32',
         )}
       >
         <span className="sr-only">{roleLabel}</span>
@@ -946,14 +949,17 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
 
         {reserveAssistantActions ? (
-          <div data-assistant-actions-placeholder className="mt-1 min-h-9 shrink-0" aria-hidden="true" />
+          <div data-assistant-actions-placeholder
+            className={cn(assistantActionRowHeight, '@min-[42rem]/assistant-message:hidden')} aria-hidden="true" />
         ) : null}
         {assistantActionsVisible && copyMarkdown ? (
           <ChatActionTooltipProvider>
           <div
             data-assistant-message-actions
             className={cn(
-              'mt-1 flex min-h-9 shrink-0 items-center gap-1 overflow-visible transition-opacity duration-150 ease-out motion-reduce:transition-none',
+              assistantActionRowHeight,
+              'flex items-center justify-end gap-1 overflow-visible transition-opacity duration-150 ease-out motion-reduce:transition-none',
+              '@min-[42rem]/assistant-message:absolute @min-[42rem]/assistant-message:end-0 @min-[42rem]/assistant-message:bottom-0 @min-[42rem]/assistant-message:mt-0',
               'pointer-events-none opacity-0 group-hover/msg:pointer-events-auto group-hover/msg:opacity-100',
               'group-focus-within/msg:pointer-events-auto group-focus-within/msg:opacity-100',
               '[@media(hover:none)_and_(pointer:coarse)]:pointer-events-auto [@media(hover:none)_and_(pointer:coarse)]:opacity-100',
@@ -1006,7 +1012,7 @@ export const MessageBubble = memo(function MessageBubble({
               <Popover.Portal>
                 <Popover.Content
                   side="bottom"
-                  align="start"
+                  align="end"
                   sideOffset={6}
                   className="z-[70] w-56 rounded-xl border border-edge bg-surface-overlay p-1.5 shadow-popover outline-none"
                 >

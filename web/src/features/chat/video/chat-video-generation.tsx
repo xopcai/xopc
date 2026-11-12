@@ -5,7 +5,9 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { MediaGenerationCard, MediaGenerationDetails } from '@/features/chat/media-generation-card';
+import { findMediaGenerationReplyIndexes } from '@/features/chat/media-generation-replies';
 import type { ChatTimelineEntry } from '@/features/chat/messages/message-list';
+import type { Message } from '@/features/chat/messages/messages.types';
 import { apiUrl } from '@/lib/url';
 import { fetchJson } from '@/lib/fetch';
 
@@ -42,7 +44,7 @@ function isActive(job: VideoGenerationJob): boolean {
   return !['completed', 'failed', 'submission_unknown'].includes(job.state);
 }
 
-export function useChatVideoGeneration(conversationId: string | null, language: Language, options: {
+export function useChatVideoGeneration(conversationId: string | null, language: Language, messages: readonly Message[], options: {
   chatBusy?: boolean;
   readOnly?: boolean;
   onAdjust?: () => void;
@@ -123,14 +125,17 @@ export function useChatVideoGeneration(conversationId: string | null, language: 
       <VideoJobCard key={job.id} job={job} url={`${url}/${encodeURIComponent(job.id)}/video`} language={language} />;
     const active = data.jobs.filter(job => job.transcriptId === data.transcriptId);
     const previous = data.jobs.filter(job => job.transcriptId !== data.transcriptId);
+    const replyIndexes = active.length || draft ? findMediaGenerationReplyIndexes(messages, 'video_draft') : undefined;
     const entries: ChatTimelineEntry[] = active.map(job => ({
       id: `video-generation:${job.id}`,
       timestamp: job.draftCreatedAt ?? job.createdAt,
+      afterMessageIndex: replyIndexes?.get(job.id),
       content: renderJob(job),
     }));
     if (draft) entries.push({
       id: `video-generation:${draft.id}`,
       timestamp: draft.createdAt,
+      afterMessageIndex: replyIndexes?.get(draft.id),
       content: <VideoDraftCard draft={draft} conversationId={conversationId} language={language}
         configured={configured} modelChanged={draft.modelRef !== data.modelRef}
         readOnly={readOnly} disabled={chatBusy || Boolean(submitting)} submitting={submitting === draftKey}
@@ -145,7 +150,7 @@ export function useChatVideoGeneration(conversationId: string | null, language: 
       </details>,
     });
     return entries;
-  }, [data, draft, draftKey, configured, readOnly, chatBusy, submitting, failure, onAdjust, confirmDraft, conversationId, language, url]);
+  }, [data, draft, draftKey, configured, readOnly, chatBusy, submitting, failure, onAdjust, confirmDraft, conversationId, language, messages, url]);
 
   return { draft, confirmDraft, timelineEntries };
 }

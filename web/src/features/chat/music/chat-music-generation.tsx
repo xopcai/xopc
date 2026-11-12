@@ -1,12 +1,16 @@
 import type { MusicGenerationJob, MusicGenerationSession, MusicJobErrorCode } from '@xopcai/gateway-contract';
-import { Download, Music2 } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { Ellipsis, Music2 } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
-import { MediaGenerationCard, MediaGenerationDetails } from '@/features/chat/media-generation-card';
+import { Button } from '@/components/ui/button';
+import { findMediaGenerationReplyIndexes } from '@/features/chat/media-generation-replies';
 import type { ChatTimelineEntry } from '@/features/chat/messages/message-list';
+import type { Message } from '@/features/chat/messages/messages.types';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+
+import { MusicPlayer } from './music-player';
 
 type Language = 'en' | 'zh';
 
@@ -33,20 +37,24 @@ const errorLabels = {
 
 const labels = {
   zh: {
-    song: '歌曲', instrumental: '纯音乐', lyrics: '查看歌词', download: '下载音频', details: '创作详情',
+    song: '歌曲', instrumental: '纯音乐', details: '创作详情',
+    prompt: '提示词', model: '模型',
     status: { queued: '排队中', submitting: '正在提交', submitted: '供应商排队中', running: '生成中',
       saving: '正在保存', completed: '可播放', failed: '生成失败', submission_unknown: '提交结果待确认' },
     unknown: '暂时无法确认音乐服务是否已接收请求。请先核对服务商的任务或账单，再决定是否重新生成。',
   },
   en: {
-    song: 'Song', instrumental: 'Instrumental', lyrics: 'Show lyrics', download: 'Download audio', details: 'Creation details',
+    song: 'Song', instrumental: 'Instrumental', details: 'Creation details',
+    prompt: 'Prompt', model: 'Model',
     status: { queued: 'Queued', submitting: 'Submitting', submitted: 'Queued at provider', running: 'Generating',
       saving: 'Saving', completed: 'Ready', failed: 'Generation failed', submission_unknown: 'Submission unconfirmed' },
     unknown: 'The music service may have received the request. Check the provider’s tasks or billing before generating again.',
   },
 };
 
-export function useChatMusicGeneration(conversationId: string | null, language: Language, chatBusy: boolean) {
+export function useChatMusicGeneration(
+  conversationId: string | null, language: Language, chatBusy: boolean, messages: readonly Message[],
+) {
   const url = conversationId ? apiUrl(`/api/music-generation/sessions/${encodeURIComponent(conversationId)}/jobs`) : null;
   const { data, mutate } = useSWR<MusicGenerationSession>(url, fetchJson<MusicGenerationSession>);
   const hasActiveJob = data?.jobs.some(job => !['completed', 'failed', 'submission_unknown'].includes(job.state)) ?? false;
@@ -77,52 +85,65 @@ export function useChatMusicGeneration(conversationId: string | null, language: 
   }, [conversationId, mutate]);
 
   return useMemo<ChatTimelineEntry[]>(() => {
-    if (!url || !data) return [];
+    if (!url || !data?.jobs.length) return [];
+    const replyIndexes = findMediaGenerationReplyIndexes(messages, 'music_generation');
     return data.jobs.map(job => ({
       id: `music-generation:${job.id}`,
       timestamp: job.createdAt,
+      afterMessageIndex: replyIndexes.get(job.id),
       content: <MusicJobCard key={job.id} job={job} audioUrl={`${url}/${encodeURIComponent(job.id)}/audio`} language={language} />,
     }));
-  }, [data, language, url]);
+  }, [data, language, messages, url]);
 }
 
 function MusicJobCard({ job, audioUrl, language }: { job: MusicGenerationJob; audioUrl: string; language: Language }) {
   const m = labels[language];
-  const seconds = job.durationMs ? Math.round(job.durationMs / 1000) : null;
-  const duration = seconds === null ? null : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-
+  const id = useId();
+  const [openPanel, setOpenPanel] = useState<'lyrics' | 'details' | null>(null);
   const completed = job.state === 'completed';
   const failed = job.state === 'failed';
   const version = language === 'zh' ? `第 ${job.versionNumber} 版` : `Version ${job.versionNumber}`;
-  const specs = [m[job.mode], version];
-  if (completed && duration) specs.push(duration);
   const error = job.errorCode ? errorLabels[language][job.errorCode] : undefined;
   const message = job.state === 'submission_unknown' ? m.unknown
     : error ?? (failed ? errorLabels[language].provider_failed : undefined);
+  const togglePanel = (panel: 'lyrics' | 'details') => setOpenPanel(current => current === panel ? null : panel);
 
-  return <MediaGenerationCard>
-    <div className="flex items-start justify-between gap-3 text-sm">
-      <h3 className="flex min-w-0 items-start gap-2 font-medium text-fg">
-        <Music2 className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <span className="min-w-0 wrap-anywhere">{job.title}</span>
-      </h3>
-      <span role="status" className="shrink-0 text-xs text-fg-muted">{m.status[job.state]}</span>
+  return <article className="flex w-full min-w-0 max-w-[26rem] flex-col gap-2 rounded-xl border border-edge bg-surface-panel p-3
+    [background-image:radial-gradient(ellipse_at_top_left,var(--color-accent-soft),transparent_72%)] sm:p-3.5">
+    <div className="flex items-center gap-2.5">
+      <div className="relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-lg border border-edge bg-surface-inset text-accent-fg" aria-hidden>
+        <span className="absolute size-9 rounded-full border border-current opacity-15" />
+        <span className="absolute size-6 rounded-full border border-current opacity-20" />
+        <Music2 size={18} className="relative" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="wrap-anywhere text-lg leading-tight font-semibold tracking-tight text-fg">{job.title}</h3>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
+          <span>{m[job.mode]} · {version}</span>
+          {!completed && <span role="status" className="font-medium">{m.status[job.state]}</span>}
+        </p>
+      </div>
+      <Button variant="ghost" className="size-11 shrink-0 rounded-full p-0 aria-expanded:bg-surface-active aria-expanded:text-fg"
+        aria-label={m.details} title={m.details} aria-controls={`${id}-details`} aria-expanded={openPanel === 'details'}
+        onClick={() => togglePanel('details')}>
+        <Ellipsis size={20} aria-hidden />
+      </Button>
     </div>
-    <p className="text-xs text-fg-muted">{specs.join(' · ')}</p>
     {message && <p className={failed ? 'text-xs text-danger' : 'text-xs text-fg-muted'}>{message}</p>}
-    {completed && <>
-      <audio controls preload="none" aria-label={job.title} src={audioUrl} className="w-full" />
-      <a href={`${audioUrl}?download=1`} download="music.mp3" className="inline-flex items-center gap-2 text-sm text-accent-fg hover:underline">
-        <Download size={15} aria-hidden />{m.download}
-      </a>
-    </>}
-    <p className="line-clamp-3 wrap-anywhere text-sm leading-relaxed text-fg">{job.prompt}</p>
-    {completed && job.mode === 'song' && job.lyrics && <MediaGenerationDetails label={m.lyrics}>
-      <p className="mt-1 whitespace-pre-wrap wrap-anywhere border-s border-edge px-3 text-sm leading-relaxed text-fg">{job.lyrics}</p>
-    </MediaGenerationDetails>}
-    <MediaGenerationDetails label={m.details}>
-      <p className="mt-1 whitespace-pre-wrap wrap-anywhere border-s border-edge px-3 text-sm leading-relaxed text-fg">{job.prompt}</p>
-      <p className="mt-2 wrap-anywhere">{job.modelRef}{job.errorCode === 'provider_rate_limited' && job.error?.endsWith('HTTP 429.') && ' · HTTP 429'}</p>
-    </MediaGenerationDetails>
-  </MediaGenerationCard>;
+    {completed && <MusicPlayer key={audioUrl} src={audioUrl} title={job.title} durationMs={job.durationMs}
+      lyrics={job.mode === 'song' ? job.lyrics : null} lyricsOpen={openPanel === 'lyrics'}
+      onToggleLyrics={() => togglePanel('lyrics')} language={language} />}
+    <div id={`${id}-details`} hidden={openPanel !== 'details'} className="border-t border-edge pt-3">
+      {openPanel === 'details' && <dl className="space-y-3">
+        <div>
+          <dt className="text-xs text-fg-muted">{m.prompt}</dt>
+          <dd className="mt-1 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-fg">{job.prompt}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-fg-muted">{m.model}</dt>
+          <dd className="mt-1 wrap-anywhere text-sm text-fg">{job.modelRef}{job.errorCode === 'provider_rate_limited' && job.error?.endsWith('HTTP 429.') && ' · HTTP 429'}</dd>
+        </div>
+      </dl>}
+    </div>
+  </article>;
 }
