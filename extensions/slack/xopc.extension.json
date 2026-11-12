@@ -1,0 +1,124 @@
+{
+  "id": "slack",
+  "name": "Slack",
+  "description": "Slack bot messaging over Socket Mode",
+  "version": "0.1.0",
+  "kind": "channel",
+  "main": "src/index.js",
+  "channels": [
+    "slack"
+  ],
+  "engines": {
+    "xopc": ">=0.0.465"
+  },
+  "contracts": {
+    "channels": [
+      "slack"
+    ]
+  },
+  "channelContributions": {
+    "slack": {
+      "label": "Slack",
+      "description": "Slack bot messaging over Socket Mode",
+      "order": 60,
+      "configPath": "channels.slack",
+      "docsPath": "/channels/slack",
+      "capabilities": {
+        "login": true,
+        "pairing": true,
+        "threads": true
+      },
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "dmPolicy": {
+            "type": "string",
+            "enum": [
+              "pairing",
+              "allowlist",
+              "open",
+              "disabled"
+            ],
+            "default": "pairing"
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupPolicy": {
+            "type": "string",
+            "enum": [
+              "allowlist",
+              "open",
+              "disabled"
+            ],
+            "default": "allowlist"
+          },
+          "groupAllowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "botToken": {
+            "type": "string",
+            "title": "Bot Token (xoxb-)",
+            "format": "password",
+            "pattern": "^(?:xoxe\\.)?xoxb-\\S+$",
+            "x-hidden": true
+          },
+          "appToken": {
+            "type": "string",
+            "title": "App Token (xapp-)",
+            "format": "password",
+            "pattern": "^(?:xoxe\\.)?xapp-\\S+$",
+            "x-hidden": true
+          },
+          "credentialIdentity": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9]+:[A-Z][A-Z0-9]+$",
+            "x-hidden": true
+          }
+        },
+        "required": [
+          "botToken",
+          "appToken"
+        ]
+      },
+      "uiHints": {
+        "botToken": {
+          "sensitive": true
+        },
+        "appToken": {
+          "sensitive": true
+        },
+        "groupAllowFrom": {
+          "label": "Allowed channel senders"
+        }
+      },
+      "actions": {
+        "setup.manual": {
+          "label": "Configure Slack",
+          "result": "form"
+        }
+      },
+      "i18n": {
+        "zh": {
+          "description": "通过 Socket Mode 连接 Slack 工作区",
+          "actions": {
+            "setup.manual": {
+              "label": "配置 Slack"
+            }
+          }
+        }
+      }
+    }
+  }
+}

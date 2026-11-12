@@ -1,11 +1,12 @@
 import QRCode from 'qrcode';
-import { CheckCircle2, ExternalLink, Loader2, QrCode, Stethoscope } from 'lucide-react';
+import { CheckCircle2, ExternalLink, KeyRound, Loader2, QrCode, Stethoscope } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
@@ -53,6 +54,7 @@ export type ChannelActionPayload =
       schema: JsonSchema;
       values?: Record<string, unknown>;
       submitAction: string;
+      setupTemplate?: { content: string; url: string };
       message?: string;
     };
 
@@ -144,6 +146,7 @@ export function ChannelSetupCard({
   const zh = locale.toLowerCase().startsWith('zh');
   const [domain, setDomain] = useState<'feishu' | 'lark'>('feishu');
   const [pin, setPin] = useState('');
+  const [copiedTemplate, setCopiedTemplate] = useState(false);
   const primary = useMemo(() => choosePrimaryChannelAction(entry), [entry]);
   const schemaLabels = useMemo(() => ({
     defaultBooleanLabel: ch.schemaBooleanDefault,
@@ -176,6 +179,7 @@ export function ChannelSetupCard({
   const runAction = useCallback(async (actionId: string, input?: unknown, accountId?: string) => {
     setState((prev) => ({ ...prev, busy: true, error: null }));
     try {
+      setCopiedTemplate(false);
       const payload = await runChannelAction({ channelId: entry.id, actionId, locale, input, accountId });
       setState((prev) => ({
         ...prev,
@@ -265,6 +269,13 @@ export function ChannelSetupCard({
     void runAction(poll.cancelAction, { conversationId: poll.conversationId }, poll.accountId);
   };
   const formPayload = state.payload?.type === 'form' ? state.payload : null;
+  const requiredSetupFields = formPayload?.setupTemplate && Array.isArray(formPayload.schema.required)
+    ? formPayload.schema.required
+    : [];
+  const missingSetupField = requiredSetupFields.some((field) => {
+    const value = state.formDraft[String(field)];
+    return typeof value !== 'string' || !value.trim();
+  });
   const diagnostics = state.payload?.type === 'diagnostics' ? state.payload.checks : null;
 
   return (
@@ -297,11 +308,11 @@ export function ChannelSetupCard({
                 void runAction(primary[0], entry.id === 'feishu' ? { domain } : undefined);
               }}
             >
-              {state.busy ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
+              {state.busy ? <Loader2 className="size-4 animate-spin" /> : primary[1].result === 'qr' ? <QrCode className="size-4" /> : <KeyRound className="size-4" />}
               {primaryLabel}
             </Button>
           ) : null}
-          {entry.actions?.['setup.manual'] && !state.poll && !formPayload ? (
+          {entry.actions?.['setup.manual'] && primary?.[0] !== 'setup.manual' && !state.poll && !formPayload ? (
             <Button
               type="button"
               variant="secondary"
@@ -408,6 +419,34 @@ export function ChannelSetupCard({
 
       {formPayload ? (
         <div className="mt-4 space-y-3">
+          {formPayload.setupTemplate ? (
+            <div className="space-y-2">
+              <textarea
+                readOnly
+                aria-label="App Manifest"
+                value={formPayload.setupTemplate.content}
+                className="h-28 w-full resize-y rounded-md border border-edge bg-surface-base p-2 font-mono text-xs text-fg"
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={async () => {
+                    const template = formPayload.setupTemplate;
+                    if (template) setCopiedTemplate(await copyTextToClipboard(template.content));
+                  }}
+                >
+                  {copiedTemplate ? (zh ? '已复制' : 'Copied') : (zh ? '复制 App Manifest' : 'Copy App Manifest')}
+                </Button>
+                <a className="inline-flex items-center gap-1 text-sm text-accent hover:underline"
+                  href={formPayload.setupTemplate.url} target="_blank" rel="noreferrer"
+                >
+                  {zh ? '打开 Slack 应用管理' : 'Open Slack apps'}
+                  <ExternalLink className="size-3.5" />
+                </a>
+              </div>
+            </div>
+          ) : null}
           <SchemaForm
             schema={formPayload.schema}
             values={state.formDraft}
@@ -418,7 +457,7 @@ export function ChannelSetupCard({
           <Button
             type="button"
             variant="primary"
-            disabled={state.busy}
+            disabled={state.busy || missingSetupField}
             onClick={() => void runAction(formPayload.submitAction, state.formDraft)}
           >
             {ch.saveSetup}

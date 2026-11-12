@@ -18,25 +18,30 @@ const accountId = 'default';
 export type EnterpriseMessage = {
   senderId: string;
   groupId?: string;
+  directChatId?: string;
+  threadId?: string;
   messageId: string;
   text: string;
   replyId?: string;
-  reply?: (text: string) => Promise<string>;
+  reply?: (text: string) => Promise<unknown>;
 };
 
 export type EnterpriseTransport = {
-  run: (signal: AbortSignal, online: (socket?: WebSocket) => void, onFailure: () => void) => Promise<void>;
+  run: (signal: AbortSignal, online: (socket?: WebSocket) => void, onFailure: (message?: string) => void) => Promise<void>;
   send: (target: string, group: boolean, text: string, replyId?: string) => Promise<string>;
 };
 
 export function createEnterpriseChannel(options: {
-  id: 'dingtalk' | 'wecom';
+  id: 'dingtalk' | 'wecom' | 'slack';
   label: string;
   order: number;
   credentialFields: readonly [string, string];
   credentialLabels: readonly [string, string];
-  begin: (signal: AbortSignal) => Promise<EnterpriseRegistration>;
-  verify: (credentials: EnterpriseCredentials) => Promise<void>;
+  begin?: (signal: AbortSignal) => Promise<EnterpriseRegistration>;
+  credentialIdIsSecret?: boolean;
+  threads?: boolean;
+  setupTemplate?: { content: string; url: string; instructions: { zh: string; en: string } };
+  verify: (credentials: EnterpriseCredentials) => Promise<void | string>;
   transport: (credentials: EnterpriseCredentials, receive: (message: EnterpriseMessage) => Promise<void>) => EnterpriseTransport;
 }): ChannelPlugin {
   const { id, label, credentialFields: [idField, secretField] } = options;
@@ -50,10 +55,11 @@ export function createEnterpriseChannel(options: {
   const credentialsFor = (config: Config) => ({
     id: string(section(config)[idField]),
     secret: string(section(config)[secretField]),
+    identity: options.credentialIdIsSecret ? string(section(config).credentialIdentity) || undefined : undefined,
   });
   const configured = (credentials: EnterpriseCredentials) => Boolean(credentials.id && credentials.secret);
   const pairingKey = (credentials: EnterpriseCredentials) =>
-    `${accountId}-${createHash('sha256').update(credentials.id).digest('hex').slice(0, 24)}`;
+    `${accountId}-${createHash('sha256').update(credentials.identity ?? credentials.id).digest('hex').slice(0, 24)}`;
   const stop = async () => {
     const previous = runtime;
     runtime = undefined;
@@ -65,7 +71,7 @@ export function createEnterpriseChannel(options: {
   const plugin: ChannelPlugin = {
     id,
     meta: { id, label, selectionLabel: label, docsPath: `/channels/${id}`, blurb: `${label} bot messaging`, order: options.order },
-    capabilities: { chatTypes: ['direct', 'group'], reactions: false, threads: false, media: false, nativeCommands: false, blockStreaming: false },
+    capabilities: { chatTypes: ['direct', 'group'], reactions: false, threads: options.threads === true, media: false, nativeCommands: false, blockStreaming: false },
     reload: { configPrefixes: [`channels.${id}`] },
     config: {
       listAccountIds: (config) => configured(credentialsFor(config)) ? [accountId] : [],
@@ -87,6 +93,8 @@ export function createEnterpriseChannel(options: {
       credentialFields: options.credentialFields,
       credentialLabels: options.credentialLabels,
       begin: options.begin,
+      credentialIdIsSecret: options.credentialIdIsSecret,
+      setupTemplate: options.setupTemplate,
       verify: options.verify,
     }),
     async init(init) {
@@ -105,13 +113,20 @@ export function createEnterpriseChannel(options: {
       if (runtime || (startOptions?.accountId && startOptions.accountId !== accountId)) return;
       const credentials = credentialsFor(cfg);
       if (section(cfg).enabled !== true || !configured(credentials)) return;
-      const scope = JSON.stringify([accountId, credentials.id]);
+      const scope = JSON.stringify([accountId, options.credentialIdIsSecret ? pairingKey(credentials) : credentials.id]);
       const controller = new AbortController();
+      let restored = false;
+      function restoreInbox() {
+        if (restored) return;
+        bus.restoreDurableInbound(id, scope);
+        restored = true;
+      }
       const transport = options.transport(credentials, async (message) => {
         if (controller.signal.aborted) return;
+        restoreInbox();
         const channel = section(cfg);
         const isGroup = Boolean(message.groupId);
-        const recipient = message.groupId || message.senderId;
+        const recipient = message.groupId || message.directChatId || message.senderId;
         const chatId = `${isGroup ? 'group' : 'user'}:${recipient}`;
         const dmPolicy = (channel.dmPolicy ?? 'pairing') as DmPolicy;
         const groupPolicy = (channel.groupPolicy ?? 'allowlist') as GroupPolicy;
@@ -119,7 +134,7 @@ export function createEnterpriseChannel(options: {
         const allowFrom = Array.isArray(channel.allowFrom) ? channel.allowFrom : [];
         const paired = dmPolicy === 'pairing' ? readAllowFromIdsSync(resolveStandardAllowFromPath(id, key)) : [];
         const result = evaluateAccess({
-          context: { channel: id, accountId, chatId, senderId: message.senderId, isGroup, isDm: !isGroup },
+          context: { channel: id, accountId, chatId, senderId: message.senderId, isGroup, isDm: !isGroup, threadId: message.threadId },
           dmPolicy, groupPolicy,
           allowFrom: [...allowFrom, ...paired],
           groupAllowFrom: Array.isArray(channel.groupAllowFrom) ? channel.groupAllowFrom : [],
@@ -138,20 +153,29 @@ export function createEnterpriseChannel(options: {
           return;
         }
 
+        const routingConfig = options.threads && !cfg.session?.dmScope
+          ? { session: { ...cfg.session, dmScope: 'per-account-channel-peer' as const } }
+          : cfg;
         const { conversationId } = host.resolveRoute({
-          config: cfg, channel: id, accountId, peerKind: isGroup ? 'group' : 'direct', peerId: chatId,
+          config: routingConfig, channel: id, accountId, peerKind: isGroup ? 'group' : 'direct',
+          peerId: chatId, threadId: message.threadId,
         });
         await bus.publishInbound({
           channel: id, sender_id: message.senderId, chat_id: chatId, content: message.text,
           metadata: { conversationId, accountId, messageId: message.messageId, isGroup,
+            ...(message.threadId ? { threadId: message.threadId } : {}),
             ...(message.replyId ? { channelReplyId: message.replyId } : {}),
           },
         }, { scope, id: message.messageId });
       });
-      bus.restoreDurableInbound(id, scope);
+      // A channel with a secret credential ID first verifies the stored bot identity.
+      if (!options.credentialIdIsSecret) restoreInbox();
       const task = transport.run(controller.signal, (socket) => {
-        if (runtime?.controller === controller) online = Boolean(socket);
-      }, () => host.warn('Channel connection failed; retrying'))
+        if (runtime?.controller === controller) {
+          if (socket) restoreInbox();
+          online = Boolean(socket);
+        }
+      }, (message) => host.warn(message ?? 'Channel connection failed; retrying'))
         .catch(() => host.warn('Channel transport stopped unexpectedly'));
       runtime = { controller, transport, task };
     },
@@ -168,14 +192,15 @@ export function createEnterpriseChannel(options: {
     outbound: {
       deliveryMode: 'direct',
       textChunkLimit: 1800,
-      async sendText({ to, text, accountId: targetAccount, mediaUrl, replyToId, outboundMetadata }) {
+      async sendText({ to, text, accountId: targetAccount, mediaUrl, threadId, replyToId, outboundMetadata }) {
         const separator = to.indexOf(':');
         const kind = to.slice(0, separator);
         const target = to.slice(separator + 1);
         if (!runtime || !online || (targetAccount && targetAccount !== accountId)) throw new Error(`${label} is disconnected`);
         if (!target || (kind !== 'user' && kind !== 'group')) throw new Error(`Invalid ${label} target`);
         if (mediaUrl) throw new Error(`${label} only supports text delivery`);
-        const messageId = await runtime.transport.send(target, kind === 'group', text, string(outboundMetadata?.channelReplyId) || replyToId || undefined);
+        const reply = string(outboundMetadata?.channelReplyId) || (options.threads ? string(threadId) : '') || replyToId || undefined;
+        const messageId = await runtime.transport.send(target, kind === 'group', text, reply);
         return { success: true, messageId, chatId: to };
       },
     },
