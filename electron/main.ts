@@ -17,6 +17,7 @@ import {
   shell,
   type BrowserWindowConstructorOptions,
   type IpcMainInvokeEvent,
+  type WebContents,
 } from 'electron';
 
 import { finishQuitCleanup, isInstallerQuitRequest } from './installer-quit.js';
@@ -67,7 +68,7 @@ import {
   maybeShowDesktopPetOnStartup,
   toggleDesktopPet,
 } from './desktop-pet/window.js';
-import { assertTrustedRenderer, setTrustedDesktopOrigin } from './ipc/trusted-renderer.js';
+import { assertTrustedRenderer, isTrustedElectronRendererUrl, setTrustedDesktopOrigin } from './ipc/trusted-renderer.js';
 import { setSelectedDesktopGateway } from './gateway/selected-gateway.js';
 import { DesktopEndpointHost } from './computer/desktop-host.js';
 import { registerComputerPreviewIpc } from './computer/preview-ipc.js';
@@ -1273,6 +1274,10 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   if (!gotTheLock || installerQuitRequested) return;
 
+  const canEnterFullscreen = (contents: WebContents | null, isMainFrame: boolean) =>
+    isMainFrame && contents !== null && contents === mainWindow?.webContents
+    && isTrustedElectronRendererUrl(contents.getURL());
+
   // Align Chromium media / screen capture with OS privacy before granting renderer access.
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
     const trusted = isTrustedShellPermissionRequest([
@@ -1283,6 +1288,7 @@ app.whenReady().then(async () => {
       details.embeddingOrigin,
     ]);
     if (!trusted) return false;
+    if (permission === 'fullscreen') return canEnterFullscreen(webContents, details.isMainFrame);
     if (permission === 'notifications') {
       return isShellNotificationGranted();
     }
@@ -1299,6 +1305,10 @@ app.whenReady().then(async () => {
     ]);
     if (!trusted) {
       callback(false);
+      return;
+    }
+    if (permission === 'fullscreen') {
+      callback(canEnterFullscreen(webContents, details.isMainFrame));
       return;
     }
     if (permission === 'notifications') {

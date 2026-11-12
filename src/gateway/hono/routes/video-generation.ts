@@ -151,7 +151,7 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
         if (latest?.id !== draft.id || latest.revision !== draft.revision) return { error: 'draft_changed' } as const;
       }
       return enqueueVideoJob(conversationId, { ...request, modelRef, imageName }, requestHash,
-        bytes && mime ? { bytes, mime } : undefined);
+        bytes && mime ? { bytes, mime } : undefined, draft);
     });
     if (result.error === 'draft_changed') return c.json({ error: 'The video draft changed. Review the current version before generating.' }, 409);
     if (result.error === 'budget_exhausted') return c.json({ error: 'The Gateway video generation budget for today has been reached.' }, 429);

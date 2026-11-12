@@ -168,6 +168,13 @@ export const MessageList = memo(function MessageList({
     return time(a.index) - time(b.index) || a.index - b.index;
   });
   const previousVisibleIndex = new Map(rows.map((row, offset) => [row.index, rows[offset - 1]?.index]));
+  const previousMessageIndex = new Map<number, number>();
+  let lastMessageIndex: number | undefined;
+  for (const { index } of rows) {
+    if (index >= list.length) continue;
+    if (lastMessageIndex !== undefined) previousMessageIndex.set(index, lastMessageIndex);
+    lastMessageIndex = index;
+  }
   const renderRow = (index: number) => {
     if (index >= list.length) {
       const entry = timelineEntries[index - list.length];
@@ -180,9 +187,11 @@ export const MessageList = memo(function MessageList({
     const followUpTrigger = followUpTriggerFor(msg, index);
     const previousIndex = previousVisibleIndex.get(index);
     const previousMessage = previousIndex === undefined ? undefined : list[previousIndex];
-    const previousTimestamp = previousMessage && previousIndex !== undefined
-      ? (followUpTriggerFor(previousMessage, previousIndex)
-        ? list[previousIndex - 1]?.timestamp ?? previousMessage.timestamp : previousMessage.timestamp)
+    const priorMessageIndex = previousMessageIndex.get(index);
+    const priorMessage = priorMessageIndex === undefined ? undefined : list[priorMessageIndex];
+    const previousTimestamp = priorMessage && priorMessageIndex !== undefined
+      ? (followUpTriggerFor(priorMessage, priorMessageIndex)
+        ? list[priorMessageIndex - 1]?.timestamp ?? priorMessage.timestamp : priorMessage.timestamp)
       : undefined;
     const key = messageRowKey(msg, index);
     const rowTimestamp = followUpTrigger ? precedingTask?.timestamp ?? msg.timestamp : msg.timestamp;
