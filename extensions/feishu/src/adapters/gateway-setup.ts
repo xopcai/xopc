@@ -100,6 +100,24 @@ function setupVerification(result: AppRegistrationResult, accountId: string, zh:
   };
 }
 
+function manualSetupForm(domain: ReturnType<typeof normalizeDomain>, message?: string) {
+  return {
+    type: 'form' as const,
+    submitAction: 'setup.manual',
+    message,
+    schema: {
+      type: 'object',
+      properties: {
+        appId: { type: 'string', title: 'App ID' },
+        appSecret: { type: 'string', title: 'App Secret', format: 'password' },
+        domain: { type: 'string', enum: ['feishu', 'lark'], default: domain },
+      },
+      required: ['appId', 'appSecret'],
+    },
+    values: { domain },
+  };
+}
+
 export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
   async runAction({ cfg, actionId, input, locale, accountId: requestedAccountId }) {
     const zh = isZh(locale);
@@ -119,6 +137,10 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       return { ok: true, payload: { type: 'ok' } };
     }
 
+    if (actionId === 'setup.manual' && raw.appId === undefined && raw.appSecret === undefined) {
+      return { ok: true, payload: manualSetupForm(domain) };
+    }
+
     if (actionId === 'setup.start' || actionId === 'setup.manual') {
       try {
         await ensureFeishuLarkSdk();
@@ -134,21 +156,9 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       if (!supported) {
         return {
           ok: true,
-          payload: {
-            type: 'form',
-            submitAction: 'setup.manual',
-            message: zh ? '扫码创建暂不可用，请填写应用凭据。' : 'Scan-to-create is unavailable. Enter app credentials.',
-            schema: {
-              type: 'object',
-              properties: {
-                appId: { type: 'string', title: 'App ID' },
-                appSecret: { type: 'string', title: 'App Secret', format: 'password' },
-                domain: { type: 'string', enum: ['feishu', 'lark'], default: domain },
-              },
-              required: ['appId', 'appSecret'],
-            },
-            values: { domain },
-          },
+          payload: manualSetupForm(domain, zh
+            ? '扫码创建暂不可用，请填写应用凭据。'
+            : 'Scan-to-create is unavailable. Enter app credentials.'),
         };
       }
 
