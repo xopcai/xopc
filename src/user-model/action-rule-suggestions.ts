@@ -1,5 +1,5 @@
 import { listCollaborationRules, type CollaborationRule } from '../storage/sqlite/collaboration-rule-repository.js';
-import { listUserAssertions } from './repository.js';
+import { getAssertionSlot, listUserAssertions } from './repository.js';
 
 export interface ActionRuleSuggestion {
   id: string;
@@ -26,13 +26,14 @@ export function listActionRuleSuggestions(): ActionRuleSuggestion[] {
       const category: CollaborationRule['category'] | undefined = assertion.kind === 'preference'
         ? 'communication'
         : assertion.kind === 'routine' ? 'routine' : undefined;
-      if (!category) return [];
+      const scope = getAssertionSlot(assertion.slotId)?.scope;
+      if (!category || !scope || scope.type === 'agent') return [];
       return [{
         id: `assertion:${assertion.id}`,
         sourceAssertionId: assertion.id,
         category,
         statement: assertion.statement,
-        scope: { type: 'global' as const },
+        scope,
         conditions: {
           sourceAssertionId: assertion.id,
           enforcementLevel: 'prompt',

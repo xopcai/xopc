@@ -20,6 +20,7 @@ import { memoryVersion } from '../../user-context/memory-version.js';
 import { notifyUserContextChange } from '../../user-context/changes.js';
 import { canUseAssertion, deleteUserAssertion, getAssertionSlot, getUserAssertion, reconcileAssertion,
   setAssertionStatus, setUserAssertionScope, type UserModelScope } from '../../user-model/index.js';
+import { ownerExcludesGlobalScope, ownerMemoryScope, standingToolScope } from '../../user-model/capture/evidence-policy.js';
 import { getSessionInteractionPolicy } from '../session/interaction-policy.js';
 import { inferMemorySensitivity } from '../memory/sensitivity.js';
 import { extractAgentUserPlainText } from '../memory/user-message-text.js';
@@ -63,7 +64,7 @@ function explicitRequest(text: string, quote: string, command: Input['command'])
   if (!quote.trim() || !author.includes(quote.trim())) return false;
   if (command === 'remember') return !/不要.*(?:记住|保存)|别.*(?:记住|保存)|(?:don't|do not|never)\s+(?:remember|save|store)/iu.test(author)
     && /记住|保存|记下|记着|\b(?:remember|save|store)\b/iu.test(quote);
-  return /纠正|修正|改成|改为|修改|更正|不是|仅|只(?:在|用|对)|范围|所有|全局|\b(?:correct|change|update|instead|only|scope|global|all)\b/iu.test(quote)
+  return /纠正|修正|改成|改为|修改|更正|不是|仅|只(?:在|用|对)|范围|所有|全局|跨项目|\b(?:correct|change|update|instead|only|scope|global|globally|all|across)\b/iu.test(quote)
     && !/(?:不要|别|不必)(?:再)?(?:修改|更正|纠正)|(?:don't|do not|never)\s+(?:change|correct|update)/iu.test(author);
 }
 
@@ -78,7 +79,7 @@ export function createPersonalMemoryTool(deps: {
 }): AgentTool {
   return {
     name: 'personal_memory', label: 'Manage memory', parameters: schema,
-    description: 'Remember, correct, forget, or change the scope of memory only on an explicit current owner request. Quote that request in userEvidence. User identity/preferences use target=user; project facts/decisions/lessons use knowledge. For existing items first read their id and version with user_context_read or knowledge_read. Scope IDs come from the current conversation; never guess another agent/project. Report the committed receipt status and scope: saved is durable, pending is not yet usable, forgotten keeps original sources. Changes apply to future turns, not already running prompts. Memory never grants action authority.',
+    description: 'Remember, correct, forget, or change the scope of memory only on an explicit current owner request. Quote that request and its scope qualifiers in userEvidence. User identity, preferences and standing collaboration instructions use target=user. Project facts, decisions and lessons use target=knowledge. A tool instruction for all operations of one type is not an instruction for all projects. For existing items first read their id and version with user_context_read or knowledge_read. Scope IDs come from the current conversation; never guess another agent/project. Report the committed receipt status and scope: saved is durable, pending is not yet usable, forgotten keeps original sources. Changes apply to future turns, not already running prompts. Memory never grants action authority.',
     async execute(_callId, raw) {
       const fail = (error: string) => ({ content: [{ type: 'text' as const, text: JSON.stringify({ status: 'failed', error }) }], details: { status: 'failed', error }, isError: true });
       if (!Value.Check(schema, raw)) return fail('invalid_memory_arguments');
@@ -110,13 +111,19 @@ export function createPersonalMemoryTool(deps: {
           if (!id) throw new Error(`missing_${type}_scope`);
           return { type, id };
         };
-        const requestedScope = ([
-          ['project', /(?:只|仅)(?:在|用|对|限于)?.{0,6}(?:本项目|这个项目|当前项目)|only.{0,20}(?:this|current) project/iu],
-          ['workspace', /(?:只|仅)(?:在|用|对|限于)?.{0,6}(?:本工作区|这个工作区|当前工作区)|only.{0,20}(?:this|current) workspace/iu],
-          ['session', /(?:只|仅)(?:在|用|对|限于)?.{0,6}(?:本会话|这个会话|当前会话|这次对话)|only.{0,20}(?:this|current) (?:chat|session|conversation)/iu],
-          ['agent', /(?:只|仅)(?:在|用|对|限于)?.{0,6}(?:本助手|这个助手|当前助手)|only.{0,20}(?:this|current) (?:agent|assistant)/iu],
-        ] as const).find(([, pattern]) => pattern.test(input.userEvidence))?.[0];
-        if (requestedScope && input.scope && requestedScope !== input.scope) return fail('requested_scope_mismatch');
+        const requestedScope = ownerMemoryScope(text, input.userEvidence);
+        const localScope = requestedScope === 'global' ? undefined : requestedScope;
+        if (localScope && input.scope && localScope !== input.scope) return fail('requested_scope_mismatch');
+        const toolScope = input.command === 'remember'
+          ? standingToolScope(text, input.userEvidence, Boolean(context.projectId)) : undefined;
+        if (toolScope && input.target === 'knowledge') return fail('collaboration_instruction_requires_preference');
+        if ((toolScope && input.scope && toolScope !== input.scope)
+          || (requestedScope === 'global' && input.command === 'remember' && input.scope && input.scope !== 'global')) {
+          return fail('requested_scope_mismatch');
+        }
+        if (input.command === 'scope' && input.scope === 'global' && requestedScope !== 'global') {
+          return fail('explicit_global_scope_required');
+        }
         const digest = createHash('sha256').update(JSON.stringify(input)).digest('hex');
         // Bind retries to the persisted owner utterance, even when the model changes tool-call IDs.
         const receipt = executeAtomicOperation({ principalId: 'local-owner', capabilityId: 'xopc.personal.memory',
@@ -136,8 +143,10 @@ export function createPersonalMemoryTool(deps: {
           if (input.command !== 'scope' && currentScope && requestedScope && currentScope.type !== requestedScope) throw new Error('requested_scope_mismatch');
           const scope = input.command === 'scope'
             ? (input.scope ?? requestedScope) ? resolveScope((input.scope ?? requestedScope)!) : undefined
-            : currentScope ?? resolveScope(input.scope ?? requestedScope ?? (input.target === 'user' ? 'global' : context.projectId ? 'project' : 'workspace'));
+            : currentScope ?? resolveScope(input.scope ?? requestedScope ?? toolScope
+              ?? (input.target === 'user' && !ownerExcludesGlobalScope(text, input.userEvidence) ? 'global' : context.projectId ? 'project' : 'workspace'));
           if (!scope) throw new Error('scope_required');
+          if (scope.type === 'global' && ownerExcludesGlobalScope(text, input.userEvidence)) throw new Error('requested_scope_mismatch');
           if (input.target === 'knowledge' && input.command !== 'forget'
             && (!access.knowledgePolicy.scopes.includes(scope.type) || !access.knowledgePolicy.contentSources.includes('memory'))) throw new Error('memory_scope_denied');
           if (input.command !== 'scope' && input.command !== 'remember' && input.scope) {

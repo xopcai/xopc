@@ -1,4 +1,4 @@
-import { isOwnerAuthoredSpan, isFullyOwnerAuthoredSpan } from '../user-model/capture/evidence-policy.js';
+import { isOwnerAuthoredSpan, isFullyOwnerAuthoredSpan, isStandingToolInstruction } from '../user-model/capture/evidence-policy.js';
 import { createHash } from 'node:crypto';
 
 import { projectUnadmittedForgottenFields } from './forgotten-history.js';
@@ -44,6 +44,8 @@ export function applyWorkCandidates(input: {
     const sources = candidate.evidence.map(claim => input.evidence.find(entry => entry.ref === claim.ref
       && entry.text.normalize('NFKC').includes(claim.quote.normalize('NFKC'))));
     if (sources.some(source => !source)) return reject('evidence_quote_mismatch');
+    if (!input.source && sources.every((source, index) => source?.role === 'user'
+      && isStandingToolInstruction(source.text, candidate.evidence[index].quote))) return reject('collaboration_instruction_requires_preference');
     if (!input.source && sources.some((source, index) => source?.role === 'user'
       && (!isOwnerAuthoredSpan(source.text, candidate.evidence[index].quote)
         || (/(?:翻译|润色|改写|引文|引用|\b(?:translate|rewrite|quotation|quoted)\b)/iu.test(source.text)

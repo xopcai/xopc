@@ -5,6 +5,7 @@ import {
   parseSessionForkAtTurnResponse,
   parseSessionMessagePage,
   parseSessionResetResponse,
+  sessionPreparationViewSchema,
   type LocalSessionOptions,
   type SessionCreation,
   type SessionForkAtTurnResponse,
@@ -110,6 +111,8 @@ function parseSessionAgentConfigResponse(raw: unknown): SessionAgentConfig {
 
 const _agentConfigInflight = new Map<string, Promise<SessionAgentConfig>>();
 const _materializationInflight = new Map<string, Promise<void>>();
+const PREPARATION_POLL_MS = 1_000;
+const PREPARATION_TIMEOUT_MS = 60_000;
 
 function captureScope(): () => void {
   const identity = useGatewayStore.getState().conversationId;
@@ -509,17 +512,49 @@ export class SessionManager {
     const key = JSON.stringify([useGatewayStore.getState().conversationId, conversationId]);
     const existing = _materializationInflight.get(key);
     if (existing) return existing;
-    const pending = this.materializeDraft(conversationId, purpose).finally(() => {
+    const pending = this.prepareResources(conversationId, purpose).finally(() => {
       if (_materializationInflight.get(key) === pending) _materializationInflight.delete(key);
     });
     _materializationInflight.set(key, pending);
     return pending;
   }
 
-  private async materializeDraft(conversationId: string, purpose: 'voice' | 'session_resources'): Promise<void> {
+  private async prepareResources(conversationId: string, purpose: 'voice' | 'session_resources'): Promise<void> {
     const assertScope = captureScope();
-    if (!await readLocalSessionDraft(conversationId)) return;
+    const lifecycle = await this.materializeDraft(conversationId, purpose);
     assertScope();
+    if (lifecycle === 'ready') return;
+
+    // A persisted conversation can still be preparing, including when the draft was already removed.
+    const path = `/api/sessions/${encodeURIComponent(conversationId)}/input-state`;
+    const signal = AbortSignal.timeout(PREPARATION_TIMEOUT_MS);
+    const copy = messages(useLocaleStore.getState().language).chat;
+    try {
+      for (;;) {
+        signal.throwIfAborted();
+        assertScope();
+        const response = await apiFetch(apiUrl(path), { signal });
+        if (!response.ok) throw new Error(await readErrorMessage(response));
+        const { payload } = await response.json() as { payload: { preparation?: unknown } };
+        assertScope();
+        const preparation = payload.preparation == null ? null : sessionPreparationViewSchema.parse(payload.preparation);
+        if (!preparation || preparation.state === 'ready') return;
+        if (preparation.state === 'preparation_failed') {
+          throw new Error(preparation.lastError || copy.resourcePreparationFailed);
+        }
+        await new Promise<void>(resolve => setTimeout(resolve, PREPARATION_POLL_MS));
+      }
+    } catch (error) {
+      if (signal.aborted) throw new Error(copy.resourcePreparationTimeout);
+      throw error;
+    }
+  }
+
+  private async materializeDraft(conversationId: string, purpose: 'voice' | 'session_resources'): Promise<string | undefined> {
+    const assertScope = captureScope();
+    const existing = await readLocalSessionDraft(conversationId);
+    assertScope();
+    if (!existing) return;
     await this.loadSessionAgentConfig(conversationId);
     assertScope();
     const draft = await readLocalSessionDraft(conversationId);
@@ -530,8 +565,7 @@ export class SessionManager {
     draft.materialization ??= { commandId: crypto.randomUUID(), purpose };
     await saveLocalSessionDraft(draft);
     assertScope();
-    const lifecycle = await this.submitMaterialization(draft);
-    if (lifecycle !== 'ready') throw new Error('Conversation environment is not ready yet');
+    return this.submitMaterialization(draft);
   }
 
   private async submitMaterialization(draft: LocalSessionDraft, signal?: AbortSignal): Promise<string> {

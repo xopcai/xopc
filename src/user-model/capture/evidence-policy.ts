@@ -1,4 +1,4 @@
-import type { AssertionAuthority, AssertionKind, AssertionVolatility } from '../domain.js';
+import type { AssertionAuthority, AssertionKind, AssertionVolatility, UserModelScopeType } from '../domain.js';
 
 export interface OwnerSupport {
   allowed: boolean;
@@ -15,7 +15,7 @@ export function supportsResponseApplicability(applicability: Record<string, unkn
 }
 
 const SELF = /(?:我(?:自己|本人|平时|一般|通常|长期|一直|一贯|更|比较|还是|现在|最|特别|主要|也|其实|的|经常|习惯|倾向|偏好|喜欢|希望|需要|是|叫|住|会|用|选)|对我来说)|\b(?:i|my|me|mine)\b/iu;
-const DIRECT_PREFERENCE = /我(?:自己|本人)?(?:一直|长期|一贯|平时|通常|一般|也|更|比较|最|特别)?(?:不|不太|并不|不再)?(?:喜欢|偏好|习惯|倾向|希望)|(?:我|我的).{0,12}(?:长期习惯|阅读习惯|沟通习惯|固定偏好)|以后|今后|从现在起|from now on|\bi (?:prefer|like|always|usually)\b|\b(?:works? (?:best|better) for me|my preference|keep (?:answers|responses) concise)\b/iu;
+const DIRECT_PREFERENCE = /我(?:自己|本人)?(?:一直|长期|一贯|平时|通常|一般|也|更|比较|最|特别)?(?:不|不太|并不|不再)?(?:喜欢|偏好|习惯|倾向|希望)|(?:我|我的).{0,12}(?:长期习惯|阅读习惯|沟通习惯|固定偏好)|以后|今后|从现在起|from now on|\bi (?:prefer|like|always|usually)\b|\b(?:whenever you|always (?:use|start|lead|reply|answer)|works? (?:best|better) for me|my preference|keep (?:answers|responses) concise)\b/iu;
 const FOREIGN = /客户|同事|别人|他人|朋友说|原话|原文|引用|引文|翻译|润色|改写|示例|台词|角色|假设|假如|虚构|不是我的|并非我的|\b(?:quote|quoted|translate|rewrite|example|fiction|hypothetical|suppose|customer|colleague)\b/iu;
 const HYPOTHETICAL = /假设|假如|如果我|要是我|倘若|虚构|角色设定|(?:不是|并非).{0,8}(?:我|自述|事实)|\b(?:hypothetical|suppose|if i|fictional|role.?play)\b/iu;
 const TEMPORARY = /这次|本次|今天|今晚|暂时|临时|现在先|目前先|这一轮|这周|本周|\b(?:this time|today|tonight|for now|just for|this week|this turn)\b/iu;
@@ -35,6 +35,64 @@ function maskNonOwnerSpans(raw: string): string {
     return SELF.test(prefix) && !FOREIGN.test(prefix) ? match : mask(match);
   });
   return result;
+}
+
+const SCOPE_CLAUSE = /[^。.；;!?！？\n]+/gu;
+const LOCAL_SCOPE_PREFIX = '(?:在|只|仅|限于|用于|(?:只|仅)(?:限于?|在|用于|对)?)';
+const LOCAL_SCOPE_CONTEXT = '(?:本|该|这个|当前)';
+const LOCAL_SCOPE = [
+  ['session', '(?:会话|对话)', '(?:仅|只)在?这次对话', '(?:conversation|session|chat)'],
+  ['agent', '(?:助手|智能体)', '', '(?:agent|assistant)'],
+  ['project', '项目', `${LOCAL_SCOPE_CONTEXT}项目(?:里|中|内|的|以后|今后|统一|都)`, 'project'],
+  ['workspace', '工作区', `${LOCAL_SCOPE_CONTEXT}工作区(?:里|中|内|的|以后|今后|统一|都)`, 'workspace'],
+] as const;
+const LOCAL_SCOPE_PATTERNS = LOCAL_SCOPE.map(([type, noun, additional, english]) => ({
+  type,
+  pattern: new RegExp([
+    `${LOCAL_SCOPE_PREFIX}${LOCAL_SCOPE_CONTEXT}${noun}`,
+    `\\b(?:in|for|with) (?:this|(?:the |my )?current) ${english}\\b`,
+    `\\bonly.{0,20}(?:this|current) ${english}\\b`,
+    additional,
+  ].filter(Boolean).join('|'), 'iu'),
+}));
+const GLOBAL_SCOPE = /全局(?:范围|生效|适用|默认|记忆|偏好|协作规则)|(?:改成|改为|设为)全局|跨项目(?:使用|适用|生效|通用)|(?:所有|每个|任何)\s*(?:项目|工作区|助手|会话|协作)|\b(?:globally|global (?:scope|memory|preference|rule)|(?:make|set|change) .{1,30} global|across (?:all )?(?:projects|workspaces|assistants|conversations)|(?:in|for) (?:all|every|any) (?:projects?|workspaces?|assistants?|conversations?))\b/iu;
+const NOT_GLOBAL = /(?:不要|禁止|不能|不必|不应|不)(?:再|要|得)?(?:设为|用于|适用于|在|跨)?\s*(?:全局|所有项目|跨项目)|\b(?:not|never|don't|do not)\s+(?:apply |use |share |save )?(?:it )?(?:globally|across (?:all )?projects|in (?:all|other) projects)\b/iu;
+
+function ownerClauses(text: string, quote: string): string[] {
+  const normalized = quote.normalize('NFKC').trim();
+  if (!normalized) return [];
+  const source = text.normalize('NFKC');
+  const at = source.indexOf(normalized);
+  if (at < 0) return [];
+  const end = at + normalized.length;
+  return [...maskNonOwnerSpans(source).matchAll(SCOPE_CLAUSE)]
+    .filter(match => match.index < end && match.index + match[0].length > at)
+    .map(match => match[0]);
+}
+
+/** Read scope qualifiers in the containing owner clause, including words outside the selected quote. */
+export function ownerMemoryScope(text: string, quote: string): UserModelScopeType | undefined {
+  const clauses = ownerClauses(text, quote);
+  const local = LOCAL_SCOPE_PATTERNS.find(({ pattern }) => clauses.some(clause => pattern.test(clause)));
+  if (local) return local.type;
+  return !clauses.some(clause => NOT_GLOBAL.test(clause)) && clauses.some(clause => GLOBAL_SCOPE.test(clause)) ? 'global' : undefined;
+}
+
+export function ownerExcludesGlobalScope(text: string, quote: string): boolean {
+  return ownerClauses(text, quote).some(clause => NOT_GLOBAL.test(clause));
+}
+
+export function isStandingToolInstruction(text: string, quote: string): boolean {
+  return ownerClauses(text, quote).some(clause =>
+    /记住|以后|今后|统一|一律|始终|\b(?:remember|whenever|always|from now on)\b/iu.test(clause)
+    && /(?:查询|搜索|读取|检索|\b(?:search|query|read|look up|fetch)\b)/iu.test(clause)
+    && /(?:统一走|用.{0,35}(?:工具|命令|浏览器|连接器|CLI|API)|\b(?:use|run)\b.{0,55}\b(?:tool|command|browser|connector|CLI|API)\b)/iu.test(clause));
+}
+
+/** A durable tool instruction can cover every matching operation in just one project. */
+export function standingToolScope(text: string, quote: string, hasProject: boolean): UserModelScopeType | undefined {
+  if (!isStandingToolInstruction(text, quote)) return undefined;
+  return ownerMemoryScope(text, quote) ?? (hasProject ? 'project' : 'workspace');
 }
 
 /** Inspect the source clause, not merely the extractor's chosen substring or authority label. */

@@ -186,6 +186,23 @@ describe('explicit personal memory', () => {
     expect((await execute(input)).error).toBe('memory_access_denied');
   });
 
+  it('distinguishes all Slack queries from an explicit request to apply a rule across projects', async () => {
+    projectId = 'atlas';
+    const preference = { command: 'remember', target: 'user', predicate: 'preference.tool.slack_read', content: '查询 Slack 时用 slacrawl CLI' };
+    say('请记住，所有查询 Slack 的消息统一使用 slacrawl CLI。');
+    expect(await execute({ ...preference, target: 'knowledge' }))
+      .toMatchObject({ status: 'failed', error: 'collaboration_instruction_requires_preference' });
+    expect(await execute({ ...preference, scope: 'global' }))
+      .toMatchObject({ status: 'failed', error: 'requested_scope_mismatch' });
+    const local = await execute(preference);
+    expect(local).toMatchObject({ status: 'saved', scope: { type: 'project', id: 'atlas' } });
+    say('把这条记忆改为适用于所有 Slack 查询');
+    expect(await execute({ command: 'scope', target: 'user', id: local.id, version: local.version, scope: 'global' }))
+      .toMatchObject({ status: 'failed', error: 'explicit_global_scope_required' });
+    say('请记住，在所有项目里，查询 Slack 消息统一使用 slacrawl CLI。');
+    expect(await execute(preference)).toMatchObject({ status: 'saved', scope: { type: 'global' } });
+  });
+
   it('keeps narrowed assertion scope through relearning and permits an explicit move back', async () => {
     say('记住喜欢中文回答');
     const first = await execute({ command: 'remember', target: 'user', predicate: 'preference.language', content: '喜欢中文回答' });

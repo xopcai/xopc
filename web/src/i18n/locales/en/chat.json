@@ -16,6 +16,8 @@
       "details": "View details"
     },
     "modelRequiredForResources": "Choose a configured model for this conversation, then try again.",
+    "resourcePreparationFailed": "Could not prepare the conversation environment.",
+    "resourcePreparationTimeout": "The conversation environment is taking longer than expected. Try again shortly.",
     "referenceFallback": "Reference",
     "reviewCard": {
       "running": "Reviewing changes",

@@ -777,7 +777,7 @@ function KnowledgeRow({
             {item.verification === 'tentative' ? <span>{language === 'zh' ? '证据待补充' : 'Evidence pending'}</span> : null}
             {date ? <span>{date}</span> : null}
           </div>
-          {expanded ? <KnowledgeEvidence id={item.id} language={language} /> : null}
+          {expanded ? <KnowledgeEvidence id={item.id} version={item.version} language={language} /> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" className="size-11 p-0" aria-expanded={expanded} aria-label={expanded ? t.collapse : t.expand} onClick={onToggle}>

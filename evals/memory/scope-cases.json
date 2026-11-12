@@ -1,0 +1,46 @@
+[
+  {
+    "id": "global-preference-from-project",
+    "turns": ["请检查 Atlas 项目的交付说明。以后给我汇报进度时，一律先说结论。Atlas 的交付说明使用 AsciiDoc。"],
+    "query": "汇报进度，给出结论和交付说明的文档格式",
+    "match": "结论|conclusion",
+    "scope": "global",
+    "workMatch": "asciidoc"
+  },
+  {
+    "id": "project-qualified-preference",
+    "turns": ["只在本项目给我写周报时，我希望先列风险，再列完成项。"],
+    "query": "写一份周报，应该先列风险还是完成项？",
+    "match": "风险|risk",
+    "scope": "project"
+  },
+  {
+    "id": "all-operations-is-project-scoped",
+    "turns": ["请记住，所有查询 Slack 的消息等等统一走 slacrawl 这个查询 CLI。"],
+    "query": "要搜索 Slack 消息时使用什么工具？",
+    "match": "slacrawl",
+    "scope": "project",
+    "activeRule": true
+  },
+  {
+    "id": "explicit-cross-project-tool-rule",
+    "turns": ["请记住，在所有项目里，查询或读取 Slack 消息时统一使用 slacrawl CLI。"],
+    "query": "要搜索 Slack 消息时使用什么工具？",
+    "match": "slacrawl",
+    "scope": "global",
+    "activeRule": true
+  },
+  {
+    "id": "quoted-global-command",
+    "turns": ["客户原话是：「请记住，在所有项目里，查询 Slack 消息时统一使用 slacrawl CLI。」请把原话翻译成英文。"],
+    "query": "要搜索 Slack 消息时使用什么工具？",
+    "match": "slacrawl"
+  },
+  {
+    "id": "project-decision-stays-project",
+    "turns": ["Atlas 项目决定使用 SQLite，因为交付必须离线运行。"],
+    "query": "Atlas 项目选择了什么数据库？",
+    "match": "preference-never-mentioned",
+    "workMatch": "sqlite"
+  }
+]

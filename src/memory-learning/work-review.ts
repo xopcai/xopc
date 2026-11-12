@@ -9,7 +9,7 @@ import { retrievalLexicalSimilarity } from '../retrieval/textFeatures.js';
 import { stripRuntimeContextFromUserMessage } from '../session/user-message-display.js';
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
-import { isFullyOwnerAuthoredSpan } from '../user-model/capture/evidence-policy.js';
+import { assessOwnerSupport, isFullyOwnerAuthoredSpan, ownerMemoryScope, standingToolScope } from '../user-model/capture/evidence-policy.js';
 import type { CaptureEvidence } from '../user-model/capture/semantic.js';
 import { forgottenHistoryEntries, projectUnadmittedForgottenFields } from './forgotten-history.js';
 import { isPersonalWorkClaim } from './work-capture.js';
@@ -68,6 +68,23 @@ function originalsFor(item: KnowledgeItem, context: KnowledgeVisibilityContext, 
     result.push({ ref: link.message_id, text, role: message.role, createdAt: row.created_at });
   }
   return result;
+}
+
+/** Management only. Re-read the original before suggesting any scope change. */
+export function suggestWorkMemoryReview(item: KnowledgeItem, context: KnowledgeVisibilityContext, policy: KnowledgeReadPolicy):
+  'collaboration_rule' | 'global_collaboration_rule' | undefined {
+  if (item.recordClass !== 'memory' || item.originClass !== 'agent' || item.sensitivity !== 'normal'
+    || !['decision', 'note'].includes(item.kind) || item.scope.type === 'global' || !item.sourceConversationId
+    || item.sourceConversationId !== context.conversationId || !['active', 'candidate', 'needs_review'].includes(item.status)
+    || item.verification === 'conflicted'
+    || !canUseKnowledge({ ...item, status: 'active', verification: 'supported' }, context, policy)) return undefined;
+  const originals = originalsFor(item, context, 'local_only');
+  const [source] = originals;
+  if (originals.length !== 1 || source.role !== 'user') return undefined;
+  const quote = source.text.trim();
+  const support = assessOwnerSupport({ text: source.text, quote, kind: 'preference' });
+  if (!support.allowed || !support.direct || !standingToolScope(source.text, quote, Boolean(context.projectId))) return undefined;
+  return ownerMemoryScope(source.text, quote) === 'global' ? 'global_collaboration_rule' : 'collaboration_rule';
 }
 
 function eligible(item: KnowledgeItem, plan: Pick<WorkReviewPlan, 'context' | 'policy'>): boolean {

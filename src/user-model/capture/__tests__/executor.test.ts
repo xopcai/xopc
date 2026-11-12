@@ -267,6 +267,26 @@ describe('user model capture admission', () => {
     expect(result).toMatchObject({ created: 0, deduplicated: 0, rejected: 1 });
   });
 
+  it('does not admit a global preference or rule from a quote that clips a project qualifier', () => {
+    const quote = '我希望先列风险';
+    const scope = { type: 'global' as const };
+    const evidenceQuotes = [{ ref: source.ref, quote }];
+    const result = executeUserModelInterpretation({
+      ...executionBase,
+      evidence: [{ ...source, text: `只在本项目写周报时，${quote}，再列完成项。` }],
+      interpretation: interpretation({
+        intent: 'user_assertion',
+        assertions: [{ ...interpretation().assertions[0]!, scope, evidenceQuotes }],
+        collaborationRules: [{
+          category: 'communication', priority: 10, scope, conditions: {}, statement: quote,
+          evidenceRefs: [source.ref], evidenceQuotes,
+        }],
+      }),
+    });
+    expect(result).toMatchObject({ created: 0, rejected: 2 });
+    expect(result.outputs[0].reasonCode).toBe('scope_not_supported');
+  });
+
   it('rejects sensitive inferred evidence instead of merging it into an existing assertion', () => {
     const first = executeUserModelInterpretation({ ...executionBase, interpretation: interpretation() })
       .createdAssertions[0]!;
