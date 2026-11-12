@@ -202,6 +202,15 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'music-generation',
+    match: (path) => /^\/api\/music-generation\/settings(?:\/credentials\/[^/]+)?$/.test(path)
+      || /^\/api\/music-generation\/sessions\/[^/]+\/jobs(?:\/[0-9a-f]{64}\/audio)?$/.test(path),
+    load: async () => {
+      const { registerMusicGenerationRoutes } = await import('./music-generation.js');
+      return { register: registerMusicGenerationRoutes };
+    },
+  },
+  {
     id: 'video-generation',
     match: (path) => path === '/api/video-generation/settings' || /^\/api\/video-generation\/sessions\/[^/]+\/jobs(?:\/confirm-draft|\/[^/]+\/video)?$/.test(path),
     load: async () => {

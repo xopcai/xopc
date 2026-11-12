@@ -6,6 +6,18 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps music jobs and their audio under authenticated routes', () => {
+    const jobs = '/api/music-generation/sessions/session/jobs';
+    const audio = `${jobs}/${'a'.repeat(64)}/audio`;
+    expect(findAuthenticatedLazyRouteBundle('/api/music-generation/settings')?.id).toBe('music-generation');
+    expect(findAuthenticatedLazyRouteBundle('/api/music-generation/settings/credentials/mureka-global')?.id).toBe('music-generation');
+    expect(findAuthenticatedLazyRouteBundle('/api/music-generation/settings/credentials/mureka-global/extra')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle(jobs)?.id).toBe('music-generation');
+    expect(findAuthenticatedLazyRouteBundle(audio)?.id).toBe('music-generation');
+    expect(findAuthenticatedLazyRouteBundle(`${audio}/extra`)).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle(`${jobs}/other/audio`)).toBeUndefined();
+  });
+
   it('maps conversation video jobs and their media without capturing nearby routes', () => {
     for (const path of ['/api/video-generation/settings', '/api/video-generation/sessions/session/jobs', '/api/video-generation/sessions/session/jobs/confirm-draft', '/api/video-generation/sessions/session/jobs/job/video']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('video-generation');

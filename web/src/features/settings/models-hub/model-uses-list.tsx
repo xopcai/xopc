@@ -54,7 +54,7 @@ function ModelUsePicker({ label, value, currentLabel, options, loading, disabled
 }
 
 /** Reads effective global routes rather than maintaining a separate assignment store. */
-export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disabled = false, onPendingChange, videoRow }: { videoRow?: ReactNode; data: ConnectedProvidersData; zh: boolean; onChange: (use: ModelSetupUse) => void; onSettings?: (use: ModelSetupUse) => void; onlyUse?: ModelSetupUse; disabled?: boolean; onPendingChange?: (pending: boolean) => void }) {
+export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disabled = false, onPendingChange, videoRow, musicRow }: { videoRow?: ReactNode; musicRow?: ReactNode; data: ConnectedProvidersData; zh: boolean; onChange: (use: ModelSetupUse) => void; onSettings?: (use: ModelSetupUse) => void; onlyUse?: ModelSetupUse; disabled?: boolean; onPendingChange?: (pending: boolean) => void }) {
   const { data: result, error, mutate } = useSWR('settings-agent-defaults', fetchGlobalDefaults);
   const { data: voiceConfig } = useGatewayConfigSwr(true);
   const { data: boson, mutate: mutateBoson } = useSWR(!onlyUse || onlyUse === 'conversation'
@@ -158,6 +158,7 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
         : <ModelUseGroup key={group.uses[0]} section={group.uses[0]} title={group.label[zh ? 0 : 1]}>
           {groupRows}
           {group.uses.includes('vision') && videoRow}
+          {group.uses.includes('vision') && musicRow}
         </ModelUseGroup>;
     })}</div>
     {(!onSettings || onlyUse) && (catalog?.failed || media?.failed || mediaError) ? <p role="alert" className="mt-2 text-xs text-danger">{zh ? '部分服务的模型加载失败' : 'Some model services could not be loaded'}<Button variant="ghost" onClick={() => void Promise.all([refreshMedia(), refreshCatalog()])}>{zh ? '重试' : 'Retry'}</Button></p> : null}

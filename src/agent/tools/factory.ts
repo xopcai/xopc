@@ -97,6 +97,7 @@ import { resolveUserContextSessionAccess } from '../../user-context/access-polic
 import type { SessionStore } from '../../session/store.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
+import { createMusicGenerationTool } from './music-generation-tool.js';
 import { createVideoDraftTool } from './video-draft-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { BrowserNotReadyError, checkBrowserReadiness } from '../../browser/index.js';
@@ -516,7 +517,7 @@ export class AgentToolsFactory {
         ? id : undefined;
     };
     const webMediaTools = webMediaConversation()
-      ? [createVideoDraftTool(webMediaConversation)]
+      ? [createVideoDraftTool(webMediaConversation), createMusicGenerationTool(webMediaConversation)]
       : [];
     const optionalTools = [imageTool, imageGenerateTool, ...webMediaTools].filter((t) => t != null) as any[];
 

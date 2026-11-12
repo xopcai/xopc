@@ -1,7 +1,7 @@
 export const PERSONAL_MAIN_TOOL_IDS = [
   'personal_task', 'personal_attention', 'personal_capability', 'personal_request', 'session_recall',
   'read_media', 'read_file', 'session_search', 'personal_read', 'personal_result',
-  'user_context_read', 'knowledge_read', 'personal_memory', 'video_draft',
+  'user_context_read', 'knowledge_read', 'personal_memory', 'video_draft', 'music_generation',
 ] as const;
 
 export const PERSONAL_TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = {

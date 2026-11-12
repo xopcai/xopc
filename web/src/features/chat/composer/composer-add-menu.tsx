@@ -1,9 +1,9 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Paperclip, Video } from 'lucide-react';
+import { Music2, Paperclip, Video } from 'lucide-react';
 import { useRef, type ReactElement } from 'react';
 
 const itemClass = 'touch-target flex min-h-9 cursor-default items-center gap-2 rounded-md px-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover data-[disabled]:opacity-45';
-const icons = { video: Video };
+const icons = { video: Video, music: Music2 };
 
 export type ComposerAddActions = {
   label: string;

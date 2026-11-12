@@ -121,6 +121,7 @@ import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
 import { onTaskResultQueued } from '../tasks/task-result-delivery-repository.js';
 import { TaskResultDeliveryService } from '../tasks/task-result-delivery-service.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
+import { MusicGenerationWorker } from '../music-generation/worker.js';
 import { VideoGenerationWorker } from '../video-generation/worker.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
 
@@ -1391,6 +1392,7 @@ export class GatewayService {
     }
   }
 
+  private readonly musicGenerationWorker = new MusicGenerationWorker();
   private readonly videoGenerationWorker = new VideoGenerationWorker();
 
   async start(): Promise<void> {
@@ -1666,6 +1668,7 @@ export class GatewayService {
     this.discussionLiveWorker.start();
     this.discussionSealer.start();
     this.videoGenerationWorker.start();
+    this.musicGenerationWorker.start();
     this.discussionWorker.start();
 
 
@@ -1891,7 +1894,7 @@ export class GatewayService {
     this.realtime.close();
     this.voiceRealtime.close();
 
-    await this.videoGenerationWorker.stop();
+    await Promise.all([this.videoGenerationWorker.stop(), this.musicGenerationWorker.stop()]);
     await this.discussionWorker.stop();
     await this.discussionSealer.stop();
     await this.discussionLiveWorker.stop();
