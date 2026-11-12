@@ -8,6 +8,7 @@ struct WireMessage: Decodable, Sendable {
     let role: String
     let content: MessageContent
     var deliveries: [HistoryProductDelivery]?
+    var generatedMediaIds: [String]?
     let rawContent: MessageContent?
     let toolCalls: [HistoryToolCall]?
     let attachments: [HistoryAttachment]?
@@ -179,6 +180,7 @@ struct TimelineMessage: Equatable, Identifiable, Sendable {
     var resultLinks: [HistoryResultLink] = []
     var unavailableOutputs: [String] = []
     var taskReceipts: [HistoryTaskReceipt] = []
+    var generatedMediaIds: [String] = []
 }
 
 struct TimelineDetail: Equatable, Identifiable, Sendable {
