@@ -37,6 +37,7 @@ import {
   conversationPlanFromTaskPlanState,
   extractActiveTurnConversationPlan,
 } from '@/features/chat/messages/conversation-plan';
+import { useChatMusicGeneration } from '@/features/chat/music/chat-music-generation';
 import { isVideoDraftConfirmation, useChatVideoGeneration } from '@/features/chat/video/chat-video-generation';
 import { MessageList, type ChatTimelineEntry } from '@/features/chat/messages/message-list';
 import { chatScrollBehavior, chatTimelineAnchorIndex } from '@/features/chat/scroll/chat-scroll-geometry';
@@ -217,6 +218,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   const videoGeneration = useChatVideoGeneration(videoConversationId, language, {
     chatBusy: stream.streaming || stream.sending, readOnly, onAdjust: adjustVideoDraft,
   });
+  const musicTimeline = useChatMusicGeneration(videoConversationId, language, stream.streaming || stream.sending);
   const { draft: pendingVideoDraft, confirmDraft: confirmVideoDraft } = videoGeneration;
   const automationSetupBound = Boolean((sessionMetadata?.identity?.customData?.automationSetup as { automationId?: string } | undefined)?.automationId);
   const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
@@ -545,7 +547,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
   const showConversationLoading = isLoadingHistory;
   const compactWelcomeLayout =
-    !showConversationLoading && msgSlice.items.length === 0 && !automationTimelineEntries?.length && !videoGeneration.timelineEntries.length && !stream.streaming;
+    !showConversationLoading && msgSlice.items.length === 0 && !automationTimelineEntries?.length && !videoGeneration.timelineEntries.length && !musicTimeline.length && !stream.streaming;
   const latestConversationPlan = useMemo(
     () => {
       if (stream.taskPlan) {
@@ -1201,7 +1203,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                     key={chatConversationId}
                     scrollRef={scrollRef}
                     messages={msgSlice.items}
-                    timelineEntries={[...(automationTimelineEntries ?? []), ...videoGeneration.timelineEntries]}
+                    timelineEntries={[...(automationTimelineEntries ?? []), ...videoGeneration.timelineEntries, ...musicTimeline]}
                     personal={personal}
                     authToken={token ?? undefined}
                     conversationId={session.decodedKey ?? session.conversationId}
@@ -1378,6 +1380,15 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                         welcomeDraftSeq.current += 1;
                         setWelcomeDraftSeed({ id: welcomeDraftSeq.current, preserveDraft: true,
                           text: language === 'zh' ? '帮我生成一段视频：' : 'Generate a video: ' });
+                      },
+                    },
+                    {
+                      kind: 'music',
+                      label: language === 'zh' ? '创作音乐' : 'Create music',
+                      onSelect: () => {
+                        welcomeDraftSeq.current += 1;
+                        setWelcomeDraftSeed({ id: welcomeDraftSeq.current, preserveDraft: true,
+                          text: language === 'zh' ? '帮我做一段轻快的纯音乐，适合旅行视频。' : 'Make an upbeat instrumental track for a travel video.' });
                       },
                     },
                   ],

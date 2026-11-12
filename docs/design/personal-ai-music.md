@@ -1,22 +1,16 @@
 # Personal AI 音乐创作与播放：调研、产品方案与实施规格
 
-日期：2026-10-09。状态：调研与设计完成，待实现。适用仓库：`xopc`、`xopc-platform`。
+更新日期：2026-11-12。Web 聊天首版已实现，真实模型账号待验收。适用仓库：`xopc`、`xopc-platform`。
 
-跨仓库实现契约、数据模型、异步执行与实施拆分见 [音乐创作能力技术方案](./technical/music-generation-architecture.md)。技术细节以该方案为准。
-
-> **产品方向修订（2026-10-09）**：音乐作为独立创作能力与模块，供所有 Agent 按模型配置和工具权限调用。Personal AI 的默认体验为自然语言快速创作与音乐作品交付，歌词和参数编辑进入独立音乐创作界面。下文早期的聊天内完整草稿布局不再是默认路径；最新交互定义见第 12 节。
+首版实现、Provider 接入契约、数据模型、异步执行与后续 Cloud 方案见 [音乐创作能力技术方案](./technical/music-generation-architecture.md)。技术细节以该方案为准。
 
 ## 1. 产品决策
 
-让用户对 Personal AI 说一句话，就能得到一首能听、能保存、能继续修改的音乐作品。音乐生成成为独立模型能力，作品使用现有媒体存储与鉴权链路交付。音乐模型与聊天模型、TTS 模型分别配置。
+**音乐是 Agent 可调用的创作能力，对话是默认入口。** 用户在当前聊天描述想要的音乐、先写歌词、听成品，再通过一句话生成新版本。Personal AI 先交付完整体验，其他获得授权的 Agent 使用同一能力。模型配置留在设置，日常创作按有效模型能力自动路由。
 
-第一版包含：聊天创作、歌曲／纯音乐、AI 写词／自定义歌词、生成状态、音乐作品卡、播放／暂停／拖动／下载、再次创作、音乐能力配置、XOPC Cloud 登录后自动配置可用模型。
+首版交付 Web 聊天闭环，包含一句话生成歌曲或纯音乐、先看歌词、使用用户提供的歌词、后台状态与恢复、聊天内播放和下载、从已有作品生成新版本。聊天卡片提供版本编号、歌词查看、试听与下载。独立作品库、专门编辑工作台和原生客户端入口分阶段交付。
 
-首批提供 MiniMax 适配器；云端是否默认推荐，取决于平台账号的真实调用资格和验证结果。Provider 与模型能力使用注册表，后续接入 ElevenLabs 等服务无需改变创作入口和作品格式。
-
-第一版以聊天为主入口、作品详情为编辑入口。歌曲库、跨页面持续播放、精细音轨编辑分阶段推进。用已有作品机制聚合音乐，避免第一版就增加一个与聊天割裂的大型音乐工作台。
-
-音乐模型生成的人声不自动等于 Personal AI 的固定声音。第一版可通过描述选择人声风格，不承诺用同一 TTS 音色唱歌；指定音色、克隆、翻唱须独立声明模型能力。
+用户说“给旅行视频做一段轻快的无歌词配乐”时，首版交付可试听和下载的音频。将音频混入视频、精确对齐画面节奏和导出合成视频属于后续视频制作流程。音乐模型的人声由歌曲描述和模型决定。
 
 ## 2. 调研方法与结论
 
@@ -32,22 +26,15 @@
 
 产品判断：xopc 的价值是“了解用户意图并完成创作”，让 Personal AI 写词、整理风格、调用模型、交付作品。第一版重点应是生成到试听的闭环，以及自然语言反馈后的版本管理。参数面板服务于表达意图，不要求用户先学习音乐制作术语。
 
-## 3. MiniMax 接入事实与上线条件
+## 3. 首发模型选择
 
-2026-10-09 查询的官方 API 页面包含服务调整公告：自 2026-08-20 起，付费音乐／歌词 API 不再向新用户开放，已有付费用户可继续调用；免费音乐 API 停服。文档仍保留接口和部分旧权限描述，不能把模型枚举当作实际 entitlement。[官方接口与公告](https://platform.minimax.io/docs/api-reference/music-generation)
+| 候选 | 首版用途与接入条件 |
+| --- | --- |
+| Mureka 9.5 | 优先实测。歌曲与纯音乐都有提交和查询接口，适合复用视频生成的任务恢复方式。歌曲由 Agent 提供歌词与风格，纯音乐走独立入口。显式请求 1 首，避免接口默认生成两首并按首计费。[歌曲 API](https://platform.mureka.ai/docs/api/operations/post-v1-song-generate.html) · [纯音乐 API](https://platform.mureka.ai/docs/api/operations/post-v1-instrumental-generate.html) |
+| Google Lyria 3.5 | 备选。支持完整歌曲、自定义歌词与纯音乐提示，官方标价每首 0.08 美元。纯音乐控制、目标地区可用性与响应中断后的恢复语义进入实测。[音乐生成](https://ai.google.dev/gemini-api/docs/music-generation) · [官方定价](https://ai.google.dev/gemini-api/docs/pricing#lyria-3-5) |
+| MiniMax Music 3 | Hosted API 已停止向新用户开放付费音乐生成。已有账号验证后可以作为备选，也可独立评估 fal 队列版本。fal 版本的输入要求歌词，纯音乐能力单独验证。[MiniMax 公告](https://platform.minimax.io/docs/api-reference/music-generation) · [fal API](https://fal.ai/models/minimax/music-3/api) |
 
-当前文档推荐 `music-3.0`，并列出 `music-2.6`。Hosted 接口为 `POST /v1/music_generation`，使用 Bearer API Key。文档有 `is_instrumental`、`lyrics_optimizer`、hex／URL 输出；URL 有效期为 24 小时。不能仅因 HTTP 200 就判断生成成功，必须检查 `base_resp` 并验证实际音频。[请求与响应规格](https://platform.minimax.io/docs/api-reference/music-generation)
-
-官方也提供 MiniMax Music 3 自托管参考路径，通过 `POST /v1/audio/speech` 接收歌词与音乐描述、返回 WAV。它与 Hosted Music API 是不同协议；官方未发布完整生产硬件／性能基线，因此需要单独容量验证。[自托管参考](https://platform.minimax.io/docs/guides/local-deploy-music-3)
-
-实施决策：
-
-1. Hosted MiniMax 用现有付费资格账号进行一首歌曲和一段纯音乐的真实验证。平台配置记录验证时间、模型、协议、凭据版本与支持能力。
-2. 验证通过后，XOPC Cloud 用户使用平台管理的上游凭据；用户只登录 XOPC，无需自己注册 MiniMax。还需核实账号服务范围是否覆盖平台提供的用途。
-3. 平台没有调用资格时，该服务保持不可用，不把它标为 onboarding 默认音乐模型。采用另一个经过验证的上游，或单独评估 MiniMax 自托管。
-4. MiniMax 自托管使用独立 adapter id；不能把 TTS URL 填进 Hosted MiniMax 配置就视为兼容。
-5. 不推荐免费型号，不假定旧 `music-2.5`／`music-2.5+` 今天仍可用。模型 id 来自平台发布目录和 Provider 的验证记录。
-6. 本轮没有使用真实凭据调用接口，调用资格、成本、音质、生成耗时尚未实测。
+首版实现选择 Mureka 9.5 国内 API，发布前用部署账号验证。用目标部署账号试做中文歌曲、自定义歌词和纯音乐，记录实际成品时长、生成耗时、失败费用与成品质量，并核实目标地区、套餐和分发范围。最终默认模型取决于账号和样本验证。
 
 ## 4. 用户路径与交互
 
@@ -55,40 +42,19 @@
 
 示例：“给我做一首关于周五下班的中文歌，轻松一点，吉他为主。”
 
-Personal AI 从消息推导主题、语言、人声与风格。用户直接要求生成时，AI 可写词并执行生成；用户要求“先写词给我看看”时，先交付可编辑创作草稿，用户点击“生成音乐”后再发起付费任务。模糊缺项使用合理默认值，不连续追问音乐术语。
+Personal AI 从消息推导主题、语言、人声与风格。用户明确要求生成、输入和权限齐备时，直接提交。用户要求先看歌词或想先讨论时，先在聊天里给方案或歌词草稿。用户回复“按这版做”后，Agent 将对话里的歌词提交为音乐任务。
 
-一键入口位于聊天输入区的能力菜单：“创作音乐”。打开草稿时保持当前 conversationId，与已有项目关联沿用现有机制。
+聊天输入框左侧的“＋”菜单，在“生成视频”旁提供“创作音乐”。空输入框会填入可编辑示例，已有输入时保留原草稿。歌词在对话中编辑，版本在作品卡上区分。
 
-草稿布局：
-
-```text
-创作音乐
-歌曲                 纯音乐
-
-想做什么样的音乐？
-[给周五下班写一首轻松的中文歌，木吉他，温暖的人声]
-
-歌词：AI 帮我写       使用我的歌词
-[Verse] ...          ← 选择自定义时显示编辑区域
-[Chorus] ...
-
-高级选项 ▾           ← 模型允许时显示目标时长等选项
-                     [生成音乐]
-```
-
-歌曲模式：“AI 帮我写”默认使用当前聊天模型写词，输出结构化段落后交给音乐模型；用户给了歌词则不悄悄改写。纯音乐模式不发送旧歌词，切回歌曲可恢复本地草稿。
-
-MiniMax 等不具备精确时长控制的模型，不显示精确时长选择器。用户口述的时长可作为偏好写入描述，但结果展示实际时长，不声称精确遵循。
-
-生成任务每次默认一份作品；不复制竞品“一次生成两首”的策略，避免隐含翻倍成本。再次生成是新的明确请求。
+歌曲默认由 Agent 写词。用户给了歌词时保留原文。纯音乐不发送歌词。时长按模型能力区分固定、可近似和可精确控制；结果展示实际时长。每次明确的生成请求交付一份成品。
 
 ### 4.2 等待与失败
 
 生成后立即展示任务卡，状态为“排队中”“正在生成”“正在保存”“可播放”。没有真实进度时不显示百分比；离开页面后任务仍继续，可在原对话恢复。
 
-失败保留主题、歌词和高级选项，用户可以修改再试。额度不足显示补充额度入口；未配置显示音乐设置入口；服务权限错误显示可理解的服务不可用提示。内部 trace id 供诊断，原始响应和密钥不进入产品页面。
+确定生成失败时保留创作输入，允许用户修改或明确再生成。保存失败时恢复同一音频。受理未知时先检查原任务，隐藏直接重试生成的主按钮。额度不足显示补充额度入口；未配置显示音乐设置入口；服务权限错误显示可理解的服务不可用提示。内部 trace id 供诊断，原始响应和密钥不进入产品页面。
 
-“取消”在排队阶段保证不执行；执行阶段表示请求停止，是否能停止上游计算及是否已计费取决于 Provider。网络超时不能自动重试付费生成；先查询原任务，再决定是否需要用户重新生成。
+后续加入取消时，排队任务可在提交前停止，执行中的取消和费用以 Provider 状态为准。网络超时后，有任务 ID 就查询原任务，受理状态未知时先核对供应商记录。
 
 ### 4.3 成品卡与播放
 
@@ -113,15 +79,15 @@ MiniMax 等不具备精确时长控制的模型，不显示精确时长选择器
 
 ### 4.4 修改、保存与视频复用
 
-“把副歌写得更积极一点，再生成”生成子版本，保存 parentTrackId、这次使用的歌词与风格。第一版是重新生成整首，UI 明确表达；局部替换和续写只在未来模型真实支持时开放。
+“把副歌写得更积极一点，再生成”生成子版本，保留父版本、这次使用的歌词与风格。第一版是重新生成整首，UI 明确表达；局部替换和续写只在未来模型真实支持时开放。
 
 结果自动保存到作品存储并与对话关联，刷新后可恢复；下载原始音频。后续“我的音乐”按标题、时间和风格展示作品。用于视频时传递稳定 artifactId、音频 MIME、实际时长及媒体引用，视频制作流程再决定裁剪、淡入淡出与循环。
 
 ### 4.5 能力设置与 onboarding
 
-建议新增 `#/settings/capabilities/music`，用户侧标签为“音乐”。区分：音乐生成、语音合成、语音识别、音频播放。
+在「设置 → 模型与能力」中，「创作音乐」与「生成视频」相邻。用户可以选择 Mureka 中国站或国际站，并点击服务商名称管理对应站点的 API Key。
 
-配置页面显示当前来源、默认模型、连接状态和模型支持能力。默认优先 XOPC Cloud；进阶用户可以选择 MiniMax 等自有 Provider。API Key 复用凭据管理，音乐模块不增加另一套明文存储。
+配置页面显示当前模型和凭据来源。API Key 复用网关凭据管理，环境变量仍可用于部署。Cloud 服务通过发布验收后再作为普通用户默认来源。
 
 XOPC 登录完成 → 刷新模型目录 → 查找 available 的 music + music.generate 模型 → 选择推荐项 → 只填充缺失音乐默认值 → 展示“试做一首歌”入口。
 
@@ -129,228 +95,56 @@ XOPC 登录完成 → 刷新模型目录 → 查找 available 的 music + music.
 
 页面加载使用 Skeleton；选项使用项目 PopoverSelect；复杂编辑对话框外层固定响应式尺寸、内部滚动。沿用 `globals.css` 语义 token 和 [UI 设计系统](./ui-design-system.md)。
 
-## 5. 当前代码与可复用链路
+## 5. 后续能力设计
 
-本次没有可调用的 codebase-memory-mcp 图谱工具，以下路径通过源码检索确认。xopc 工作区存在其他尚未提交的改动；本方案只新增文档。
+独立作品库、跨客户端交付、精确时长与视频合成按实际需求推进。Cloud 阶段在用户登录后推荐可用服务，保留已有音乐选择。当前 Web 内测从 Gateway 读取配置。
 
-| 现有能力 | 位置 | 音乐落地方式 |
+按 Work ID 聚合作品，以每次生成的版本为可独立播放的成品。音乐被视频流程引用时使用稳定作品 ID 和实际时长，由视频流程选择裁剪、淡入淡出或循环。接入新 Provider 时，对话入口与作品卡沿用同一契约。详见[技术架构](./technical/music-generation-architecture.md)。
+
+## 6. 实施顺序与验收
+
+| 阶段 | 交付 | 完成标准 |
 | --- | --- | --- |
-| Agent 默认／覆写模型 schema | `src/agent-config/schema.ts`、`resolver.ts` | 增加 musicGeneration，继承／null 禁用遵循 imageGeneration 模式 |
-| 云端模型目录类型 | `src/providers/model-catalog-types.ts` | 增加 music kind、music.generate operation 和音乐 capability |
-| 图像 Provider 与 runtime | `src/agent/image/generation/` | 借鉴注册表、模型选择、凭据与取消信号，不依赖图像类型 |
-| 工具生成与附件交付 | `src/agent/tools/image-generate-tool.ts`、`tool-media.ts` | music_generate 返回音频媒体引用与作品信息 |
-| 媒体持久化 | `src/media/store.ts`、`types.ts` | outbound bucket 存音频，转录中存 URI，不存 base64 |
-| 鉴权音频读取、Range | `src/gateway/hono/routes/media.ts` | 复用 conversation／task scope 与 206／416 行为 |
-| 音频附件播放 | `web/src/features/chat/composer/voice-message-bar.tsx` | 复用鉴权 fetch、Blob 生命周期及播放协调，新增音乐表现层 |
-| 通用媒体预览 | `web/src/features/preview-runtime/plugins/media-plugins.tsx` | 保留音频文件预览与下载 |
-| 云端能力自动配置 | `src/gateway/xopc-cloud-capability-setup.ts` | 音乐作为可选能力填充，不破坏旧目录 |
-| 能力设置导航 | `web/src/features/settings/models-hub/capabilities-settings-panel.tsx` | 增加音乐面板及中英文文案 |
-| 平台服务管理 | `apps/model-gateway/src/model-services.ts`、`model-service-routes.ts` | music 服务必须覆盖保存、验证、发布、启停和版本 |
-| 平台能力解析 | `apps/model-gateway/src/model-capabilities.ts` | 增加 audio 输出、music operation，避免 parser 丢弃新能力 |
-| 平台目录和调用入口 | `apps/model-gateway/src/app.ts` | `/models` 目录加入音乐；独立生成任务入口 |
-| 平台服务 UI | `apps/console/web/src/pages/ModelServicesPage.tsx` | 复用服务管理，增加音乐类型与歌曲／纯音乐测试 |
+| A 模型验证 | 真实账号和样本，明确模型能力与费用 | 选定一个可用于目标部署的 Provider |
+| B Web 内测 | Personal AI、直连模型、聊天状态与作品卡 | 从一句话到试听和再创作，刷新后可继续 |
+| C Cloud 公测 | 云端凭据、目录、额度与异步生成 | 普通用户登录即可使用已发布能力，无需配置上游 Key |
+| D 扩展 | 作品库、其他客户端、视频引用 | 各入口复用同一作品，新增模型沿用同一对话流程 |
 
-平台路径相对于 `/Users/micjoyce/develop/github/xopc-platform`。实施时还须检查各功能目录更具体的本地指引。
-
-注意：当前全局 Agent defaults 的管理通过 AgentCatalogRepository／Service，不能只修改旧 xopc.json 示例就认为运行时音乐默认值已生效。
-
-## 6. 模型、Provider 与公共协议（拟新增）
-
-以下为待实现的 xopc 契约，不是 OpenAI 标准接口，也不是 MiniMax 原生协议。
-
-模型目录统一使用 `kind: music`、`input: [text]`、`output: [audio]`、`operations: [music.generate]`，推荐键 `recommended['music-generation']`。musicGeneration capability 声明：
-
-```typescript
-interface MusicGenerationCapabilities {
-  vocals: boolean;
-  instrumental: boolean;
-  customLyrics: boolean;
-  maxPromptCharacters: number;
-  maxLyricsCharacters?: number;
-  duration?: { minSeconds: number; maxSeconds: number; exact: boolean };
-  outputFormats: Array<'mp3' | 'wav' | 'flac'>;
-  streaming: boolean;
-  cancellation: 'queued-only' | 'best-effort' | 'upstream';
-}
-
-interface MusicGenerationRequest {
-  model: string;
-  prompt: string;
-  mode: 'song' | 'instrumental';
-  lyrics?: string;
-  durationSeconds?: number;
-  outputFormat?: 'mp3' | 'wav' | 'flac';
-}
-```
-
-Provider registry 提供 id、label、credentialMode、protocol、模型列表、每模型 capability、isConfigured、generateMusic。Hosted MiniMax、MiniMax 自托管和 XOPC Cloud 各自实现 adapter。后续服务接入通过新 adapter 或显式支持的协议，避免未经验证的“通用 OpenAI 兼容音乐”。
-
-runtime 统一解析 provider/model、验证输入、解析凭据、管理 AbortSignal 和超时、规范化结果。规范结果包含音频、实际时长、实际 provider/model、traceId；不把上游 hex／URL 暴露给 LLM。
-
-歌曲需要非空歌词（由 Agent 先写或用户提供）；纯音乐不得带歌词。超长输入返回明确错误，不静默截断歌词。模型不支持的硬需求在调用前拒绝或给出可选方案，不悄悄降级成另一种作品。
-
-Agent 模型路由增加 `models.musicGeneration: { primary, fallbacks, timeoutMs? }`。Agent 覆写支持 null 禁用。默认不跨 Provider 自动回退；明确配置的 fallback 也须保持能力，并且不能在“上游可能成功但客户端超时”的情况下重新付费生成。
-
-配置示意（通过现有 defaults 管理入口保存）：
-
-```json
-{
-  "models": {
-    "musicGeneration": {
-      "primary": "xopc-cloud/music-standard",
-      "fallbacks": [],
-      "timeoutMs": 300000
-    }
-  }
-}
-```
-
-`music-standard` 是拟定的稳定公共 ID；不是已发布模型。MiniMax 上游实际型号可在平台调整，不要求所有用户同时修改配置。300 秒是待实测调整的初始工程超时，不是生成时间承诺。
-
-## 7. 持久化任务与作品
-
-第一版使用持久化任务，Provider 同步返回也由 worker 执行。请求生命周期与聊天页面生命周期分离；不要把长耗时音乐生成绑在浏览器 HTTP 连接上。
-
-```mermaid
-flowchart LR
-  A[用户描述或编辑草稿] --> B[Personal AI 整理风格与歌词]
-  B --> C[持久化音乐任务]
-  C --> D{模型来源}
-  D --> E[自有 Provider]
-  D --> F[XOPC Cloud 鉴权与额度]
-  F --> G[已验证的音乐上游]
-  E --> H[规范化并保存音频]
-  G --> H
-  H --> I[音乐作品与对话引用]
-  I --> J[鉴权读取与播放]
-  I --> K[下载或视频复用]
-```
-
-本地任务记录：jobId、conversationId、agentId、可选 projectId、发起者、idempotencyKey、输入快照、resolvedModel、状态、providerJobId、错误码、createdAt／updatedAt。
-
-状态机：queued → running → saving → succeeded；另有 failed、cancelled、unknown。unknown 表示已提交上游但结果不确定，允许查询／人工重试，不当作安全自动重试依据。
-
-作品记录：trackId、artifactId、jobId、conversationId、agentId、title、mode、prompt、lyrics、provider、model、实际 durationSeconds、mimeType、sizeBytes、稳定 mediaUri、parentTrackId、createdAt。生成输入按版本保存；播放状态不写入会话转录。
-
-音频存 outbound media store；作品与任务元数据进入 SQLite migration／repository。转录只追加工具结果与作品引用，遵循现有 embedded turn 写入路径，不新增 turn-end SessionStore.save。
-
-media scope 要在任务和对话引用保存成功后再暴露“可播放”。音乐列表也必须通过合法 task／conversation scope 读取；不能为了歌曲库新增任意 URI 读取权限。
-
-若上游返回临时 URL，在成功前下载并持久化；限制响应大小、检查真实音频格式、使用既有受限网络下载机制。URL 到期不能导致已交付作品无法播放。存储失败单独保留可恢复状态，避免重生成音频。
-
-重启恢复：排队任务重新调度；可查询上游任务继续查询；不支持查询且结果不确定的任务标为 unknown，不能盲目再调用。删除对话按既有作品保留策略处理引用；播放不会触发新生成或再次扣费。
-
-## 8. Gateway API 与 Agent 工具（拟新增）
-
-建议接口：
-
-| 路径 | 用途 |
-| --- | --- |
-| `GET /api/music/providers` | Provider、模型能力与连接状态，无密钥 |
-| `POST /api/music/jobs` | 传 conversationId、输入、idempotencyKey，快速返回 202 + jobId |
-| `GET /api/music/jobs/:jobId` | 恢复状态；检查发起者及 conversation／agent scope |
-| `POST /api/music/jobs/:jobId/cancel` | 请求取消，返回真实状态及能否停止上游 |
-| `GET /api/music/tracks/:trackId` | 作品详情与受限媒体引用 |
-
-生成默认值保存复用现有全局／Agent defaults 管理接口，不另造只在 UI 生效的配置。
-
-`music_generate` 工具与产品创作按钮调用同一 application service。工具支持 prompt、mode、lyrics、title，以及经 capability 验证的可选参数；默认模型使用当前 Agent resolved config。创建任务后通过已有任务／实时机制交付完成结果，不能让 Agent 因等待而无限循环轮询。
-
-完成结果包含 `details.media` 中的 audio MediaRef，并提供 kind=audio 的 artifact 与 music 语义元数据。若现有附件／artifact 契约无法承载音乐语义，应在共享契约中扩展，前后端一起更新；不要往普通语音转录字段硬塞歌词。
-
-所有新增鉴权路由必须更新 `lazy-bundles.ts`、mapping 测试及真实鉴权 Gateway 验证；包括 job cancel 和参数化 track 路径。请求限制、取消和完成事件使用既有项目机制。
-
-## 9. xopc-platform 云端配置与调用
-
-### 9.1 管理员配置
-
-在现有 Model Services 页面增加“音乐生成”服务类型：公共 ID、显示名、上游连接、协议、模型、定价单位、配额、优先级、支持能力。敏感凭据继续由服务端 Secrets／Provider 管理。
-
-流程：保存草稿 → 用受控的短任务验证歌曲／纯音乐 → 显示验证结果和实际音频 → 发布 → 用户目录可见 → 可以设为音乐推荐模型。沿用 revision、凭据指纹、审计与启停；编辑未验证的草稿不能直接成为用户默认模型。
-
-配置示意：公共 ID `music-standard`、显示名“音乐”、上游 `minimax-music-hosted`、模型 `music-3.0`。默认 disabled，直到真实付费账号验证通过。不要通过此次文档工作直接写生产密钥或发布服务。
-
-平台服务 schema、Repository、模型目录、诊断、管理 UI、测试／验证入口均需增加 music 分支。不能只扩展服务 kind 枚举，否则 publish／计费逻辑可能把 music 当作 STT/TTS。
-
-### 9.2 面向 xopc 的协议
-
-拟采用 `POST /v1/music/generations` 创建任务、`GET /v1/music/generations/:id` 查询、`POST /v1/music/generations/:id/cancel` 请求取消；统一鉴权和 operation=`music.generate`。结果返回短期受控下载引用与音频元数据，由 xopc 下载保存到本地作品存储。
-
-这些是 XOPC 自定义接口，需要版本化 contract 与输入限制；不能标记为 OpenAI 原生音乐 API。上游请求、返回编码、任务查询能力全部由 adapter 转换。
-
-幂等键作用域至少包括 tenant、user、operation；同一 key 不同参数返回冲突，同一 key 同一参数返回原 job。任何 fallback 都不能越过额度、权限或重复生成边界。
-
-### 9.3 额度、计费与文件
-
-第一版建议以“成功生成的作品”为用户展示单位，具体每首价格由管理员配置并根据上游成本验证。若将来按时长计费，必须目录声明单位，前端据此展示，不能复用 tokens、characters 或 STT minutes。
-
-提交任务原子预留额度；成功且音频已保存后结算一次；确定未生成的失败释放预留。超时未知状态待对账，重复查询、下载、任务重放不重复收费。取消实际成本与用户收费策略需配置明确。
-
-任务与产物按租户／用户隔离，文件设置容量、存留和受控下载策略。平台作品保存与本地作品保存分工明确：云端任务结果保留可恢复窗口，本地下载完成后长期播放依赖本地稳定媒体。
-
-### 9.4 目录与兼容
-
-`/models` 目录返回 music 模型、operation、capability、可用性及独立音乐推荐项。现有 metadata parser、缓存／ETag、刷新与不可用模型处理一起扩展。
-
-旧 xopc 客户端必须安全忽略未知 music kind；先检查旧 parser 的实际行为，必要时做 catalog schemaVersion／client feature 协商。新客户端面对旧平台没有音乐字段时，正常完成其余 onboarding。
-
-上游服务被禁用后，新生成禁用；已下载作品仍可播放。默认模型消失时展示替换入口，不自动替换用户显式指定的自有音乐模型。
-
-## 10. 实施顺序与验收
-
-| 阶段 | xopc | xopc-platform | 完成标准 |
-| --- | --- | --- | --- |
-| A：契约与资格 | music schema、能力与模型路由设计 | 上游资格、歌曲／纯音乐真实探测；公共协议与计费单位 | 明确一个可商用运营的上游；模型与能力契约对齐 |
-| B：生成链路 | registry、MiniMax／Cloud adapter、job／track 存储、music_generate | 服务配置、验证发布、任务 worker、产物、额度结算 | 幂等任务产生持久音频；失败／重启恢复可解释 |
-| C：产品闭环 | 音乐设置、onboarding、草稿、任务卡、作品播放与下载 | 管理测试、目录推荐、运维诊断 | 新用户登录后可创作；无需接触上游 Key；刷新后可播放 |
-| D：创作增强 | 我的音乐、版本比较、全局播放器、视频引用 | 第二 Provider、可选时长／编辑等能力 | 新 Provider 不改用户主流程；视频可复用音乐作品 |
-
-A–C 是第一版的完整交付；D 是后续增强。跨页面持续播放必须单独决定导航和移动端行为，第一版页面离开可暂停。
+首版产品体验以 B 为验收点。C 满足后开放普通用户。页面离开时可以暂停播放。
 
 必须验证的行为：
 
 1. 歌曲与纯音乐参数分离、自定义歌词不被改写、字符限制与不支持的参数在付费调用前处理。
-2. MiniMax HTTP 200 + 非零 base_resp、空音频、损坏 hex、错误 MIME、超限音频不会成为成功作品。
+2. 上游业务错误、空文件、无效 MP3 头或超限音频均不能成为成功作品。
 3. 断网／超时／重启不重复生成和扣费；保存失败可以恢复；取消不伪称上游已停止。
-4. 同租户跨用户和跨会话越权均拒绝；task／conversation 媒体 scope 正确；Range、Blob 回收与 seek 正常。
-5. 任务完成事件与重连后查询一致；刷新后标题、歌词、版本、播放地址恢复。
-6. 音乐和语音／TTS 不重叠播放；浏览器拒绝 autoplay 不影响已生成状态；屏幕阅读器和键盘可操作。
+4. 未认证请求与跨会话音频读取均拒绝。验证 Range、拖动进度与下载。
+5. 任务结束与页面重查结果一致，刷新后标题、歌词、版本与播放可恢复。后续加入实时事件时，再验证事件与查询一致。
+6. 作品由用户点击播放，播放器可用键盘操作。后续统一音乐与语音播放协调。
 7. 新平台配旧客户端、旧平台配新客户端兼容；音乐缺失不阻断已有 onboarding；不覆盖用户现有配置。
 8. 发布验证、禁用、模型更新、额度不足、成功结算与幂等重放覆盖集成测试。
 9. 真实 Gateway 的新增路径经过 lazy bundle 和鉴权访问，不能只有路由模块单测。
 10. 有真实凭据时完成中文歌曲、纯音乐、下载后隔日播放的端到端验收；没有凭据时明确标记 live 验证未完成。
 
-## 11. 仍需用实测解决的事项
+## 7. 仍需用实测解决的事项
 
-平台是否已有 MiniMax 付费音乐资格；不同语言的唱词质量；歌曲／纯音乐真实耗时与峰值并发；单首成本与失败收费；自托管方案的硬件成本与生产可用性。现有资料不能代替这些数据。
+目标部署账号的模型调用资格；不同语言的唱词质量；歌曲／纯音乐真实耗时与峰值并发；单首成本与失败收费；自托管方案的硬件成本与生产可用性。现有资料不能代替这些数据。
 
 第一版暂不包含声线克隆、模仿指定人物、翻唱、分轨、局部音频替换和精确歌词同步；这些功能各自需要 Provider 能力与交互设计。后续可沿用本方案的作品引用、版本和任务协议逐步扩展。
 
-## 12. 修订：独立音乐能力与 Personal AI 快速对话
+## 8. 对话意图与验收脚本
 
-### 12.1 三层分工
+| 用户怎么说 | Agent 和界面怎么响应 |
+| --- | --- |
+| “给我做首周五下班歌，轻松一点。” | 用合理的风格与语言默认值直接提交。时间线显示一张任务卡，用户可以继续聊。完成时原卡变为可播放作品。 |
+| “想给这个视频配乐，你有什么思路？” | 给一两个方向，等用户明确说开始做。 |
+| “先给我看看歌词，副歌写得更轻松一点。” | 在聊天里给可继续修改的歌词，保留草稿版本。用户说“按这版做”时，按所指歌词提交一次音乐生成。 |
+| “歌词就用这段，原文别改。” | 固化用户歌词。若超过模型限制，指出具体限制并请用户决定如何删改。 |
+| “这个版本慢一点，歌词保留。” | 以当前可确定的版本为底稿，保留已确认歌词与其余创作输入，生成整首新版本。原音频仍可播放，新版本可能产生不同旋律。 |
+| “做个纯音乐版。” | 沿用原曲的主题与风格，把模式切换为纯音乐，省略歌词与人声输入。 |
+| “把它改得更温暖。”（对话有两首可指代的作品） | 用标题与版本给出简短选择，选定后才提交。回复或引用某张卡时优先使用卡片绑定的版本。 |
+| “要正好 15 秒，画面卡点进副歌。” | 按模型能力说明可控范围。模型只能近似时，先让用户选择是否接受接近时长的版本。 |
+| “刚才做的怎么样了？” | 查询持久化任务状态。下载中断时继续保存同一结果。上游受理未知时显示“暂时无法确认是否已生成”。 |
 
-音乐能力层统一管理 Provider、模型路由、生成任务、音频产物与作品版本；music_generate 对全部 Agent 可用，但执行依赖各 Agent resolved config、工具权限与用户额度。Personal AI 不拥有专属音乐后端，也不绕过其他 Agent 的权限策略。
+确认用于目标不明确、硬性要求无法满足、额度或工具策略需要批准等情况。风格、曲名等软偏好可由 Agent 补齐。等待卡显示“排队中”“准备歌词”“生成中”“正在保存”等真实阶段。成品卡优先显示标题、实际时长、播放与拖动，歌词和版本按需展开。对话修改时 Agent 读取用户指定的作品版本。重开对话可恢复同一张卡，试听和下载均复用现成音频。
 
-音乐创作模块提供专门的歌词与风格编辑、作品列表、版本试听和下载。它直接调用同一能力层。用户可直接进入，也可从任意 Agent 交付的音乐作品打开；作品的稳定引用保持不变。
-
-Personal AI 负责理解创作意图、合理补齐风格、自动写词、调用能力、交付作品和理解修改反馈。生成需要用到的偏好明确进入创作描述，不把完整对话历史自动作为音乐 Provider 输入。
-
-### 12.2 快速对话默认路径
-
-“给我做一首轻松的周五下班歌” → 简短回应 → 音乐生成状态 → 可播放作品卡。无需展开完整歌词编辑器、选择 Provider 或逐项填写参数。
-
-作品卡保留播放／暂停／进度、歌词折叠、“再做一个版本”、“编辑作品”和下载。歌词与风格参数按需查看；点击“编辑作品”进入音乐创作模块并定位同一作品。
-
-“节奏慢一点”“做个纯音乐版”“副歌更温暖”可以直接作为后续对话发起新版本。原作保留，第一版修改为重新生成整首，不暗示局部替换。再次生成会使用一个新的用户创作请求。
-
-### 12.3 何时需要轻量确认
-
-用户明确要求生成且意图足够时直接执行。用户说“想做一首歌，帮我想想”时先讨论方向；仅展示标题、歌曲／纯音乐与少量风格标签，提供“就按这个做”和“调整歌词与风格”。用户要求先看歌词时先交付歌词。
-
-原型中的“直接创作”与“先确认方向”用于比较这两种对话节奏，不意味着所有用户都要经历确认步骤。默认推荐直接创作，确认用于意图尚未明确的场景。
-
-### 12.4 模块入口与导航
-
-
-首次使用从云端登录、音乐能力就绪到示例对话；模型配置仍由目录自动填充。进入音乐创作模块后，用户可以修改同一份主题、歌词、模式并生成新版本，结果可回到 Personal AI 对话继续讨论。
+内测观察首轮意图到成功播放的比例、需要澄清的比例、生成耗时分布，以及用户能否只靠一句反馈完成第二版。回看用户如何理解“保留歌词”与旋律变化，以及等待状态是否引起重复提交。

@@ -2,37 +2,13 @@ import type { Hono } from 'hono';
 
 import { resolveScopedMediaReference } from '../../media-access.js';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
+import { parseByteRange } from '../../../media-shared/http/byte-range.js';
 import { readMediaReference } from '../../../media/media-reference.js';
 import { MEDIA_ARTIFACT_MAX_BYTES, mimeTypeFromMediaPath, saveMediaBuffer } from '../../../media/store.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createGatewayRouteLogger('Media');
-
-type ByteRange = { start: number; end: number };
-
-function parseByteRange(header: string | undefined, size: number): ByteRange | null | 'invalid' {
-  if (!header) return null;
-  const match = /^bytes=(\d*)-(\d*)$/i.exec(header.trim());
-  if (!match || (!match[1] && !match[2]) || size <= 0) return 'invalid';
-
-  if (!match[1]) {
-    const suffixLength = Number(match[2]);
-    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return 'invalid';
-    return { start: Math.max(0, size - suffixLength), end: size - 1 };
-  }
-
-  const start = Number(match[1]);
-  const requestedEnd = match[2] ? Number(match[2]) : size - 1;
-  if (
-    !Number.isSafeInteger(start)
-    || !Number.isSafeInteger(requestedEnd)
-    || start < 0
-    || start >= size
-    || requestedEnd < start
-  ) return 'invalid';
-  return { start, end: Math.min(requestedEnd, size - 1) };
-}
 
 export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   authenticated.post('/api/media', deps.strictRateLimitMiddleware, async (c) => {

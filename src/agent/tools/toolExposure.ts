@@ -8,7 +8,7 @@ const EAGER_CORE_TOOLS = new Set([
   'review_workspace',
   // Instruction readers bootstrap task-specific discovery without loading every tool schema.
   'skill_view', 'skills_list', 'tool_manual',
-  'mcp_setup', 'video_draft',
+  'mcp_setup', 'video_draft', 'music_generation',
   'automation',
   'publish_artifacts', 'task_collaboration', 'publish_task_result',
 ]);

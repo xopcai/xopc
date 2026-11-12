@@ -71,3 +71,4 @@ export * from './local-app-delegation.js';
 export * from './follow-ups.js';
 
 export * from './video-generation.js';
+export * from './music-generation.js';

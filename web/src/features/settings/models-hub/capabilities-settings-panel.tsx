@@ -25,6 +25,7 @@ import { revalidateModelsHubCaches } from './models-hub-cache';
 import { ProviderManageDialog } from './provider-manage-dialog';
 import { ModelExecutionSettings } from './model-execution-settings';
 import { ModelCatalogStatus } from './model-catalog-status';
+import { MusicModelSettingsPanel } from './music-model-settings';
 import { VideoModelSettingsPanel } from './video-model-settings';
 import { XopcCloudAccountCard } from './xopc-cloud-account-card';
 
@@ -97,7 +98,8 @@ export function CapabilitiesSettingsPanel({ inlineUse, inlineView = 'settings', 
     {returnTo ? <p className="text-sm text-fg-muted">{returnTo === '/settings/phone-use' ? (zh ? '正在为手机控制连接模型服务；此处保存服务设置后，还需返回选择并测试手机模型。' : 'Connect a model service for phone control, then return to select and test the phone model.') : (zh ? '正在为原来的工作配置模型。服务保存、模型选择和实际运行验证分别生效。' : 'Configure models for your work. Saving a service, choosing a model and verifying a run are separate steps.')}</p> : null}
     <ModelSectionNavigation zh={zh}>
       <ModelUsesList data={providerData} zh={zh} videoRow={<VideoModelSettingsPanel zh={zh} disabled={settingsPending}
-        onManage={providerId => setManageTarget({ providerId, isCustom: false })} />} disabled={settingsPending} onPendingChange={setModelPending} onChange={openConnection} onSettings={use => { if (!settingsPending) openCapabilitySettings(use); }} />
+        onManage={providerId => setManageTarget({ providerId, isCustom: false })} />}
+        musicRow={<MusicModelSettingsPanel zh={zh} disabled={settingsPending} />} disabled={settingsPending} onPendingChange={setModelPending} onChange={openConnection} onSettings={use => { if (!settingsPending) openCapabilitySettings(use); }} />
       <section data-model-section="services" aria-labelledby="model-services-heading" className="space-y-4 scroll-mt-4 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <div><h2 id="model-services-heading" className="text-base font-semibold text-fg">{zh ? '连接的服务' : 'Connected services'}</h2><p className="mt-1 text-sm text-fg-muted">{zh ? '在这里管理账户和密钥；各项能力的模型与参数在上方调整。' : 'Manage accounts and keys here. Choose models and adjust capability settings above.'}</p></div>
         {hasCloudAccount ? <XopcCloudAccountCard labels={c.xopcCloudAccount}><ModelCatalogStatus showCapabilities={false} embedded /></XopcCloudAccountCard> : null}
