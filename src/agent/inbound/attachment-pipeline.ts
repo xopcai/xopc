@@ -322,6 +322,11 @@ export function clearPendingTranscriptUserMessage(conversationId: string, messag
   }
 }
 
+export function getActiveTranscriptUserMedia(conversationId: string): readonly MediaRef[] | undefined {
+  const message = activeTranscriptUserBySession.get(conversationId);
+  return message ? message.media ?? [] : undefined;
+}
+
 export function pendingTranscriptReferencesMediaUri(conversationId: string, uri: string): boolean {
   const pending = pendingTranscriptBySession.get(conversationId);
   return pending?.media?.some((ref) => ref.uri === uri.trim()) === true;

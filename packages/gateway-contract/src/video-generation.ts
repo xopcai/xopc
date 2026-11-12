@@ -57,12 +57,26 @@ export interface VideoGenerationDefaults {
   resolution: VideoResolution;
 }
 
+export interface VideoGenerationDraft extends VideoGenerationDefaults {
+  id: string;
+  revision: number;
+  transcriptId: string;
+  modelRef: VideoModelRef;
+  prompt: string;
+  ratio: VideoRatio;
+  imageUri: string | null;
+  imageName: string | null;
+  estimatedCostFen: number;
+  createdAt: number;
+}
+
 export interface VideoGenerationSession {
   transcriptId: string;
   configured: boolean;
   modelRef: VideoModelRef;
   defaults: VideoGenerationDefaults;
   jobs: VideoGenerationJob[];
+  draft?: VideoGenerationDraft;
 }
 
 export interface VideoModelSettings {

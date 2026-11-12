@@ -203,7 +203,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'video-generation',
-    match: (path) => path === '/api/video-generation/settings' || /^\/api\/video-generation\/sessions\/[^/]+\/jobs(?:\/[^/]+\/video)?$/.test(path),
+    match: (path) => path === '/api/video-generation/settings' || /^\/api\/video-generation\/sessions\/[^/]+\/jobs(?:\/confirm-draft|\/[^/]+\/video)?$/.test(path),
     load: async () => {
       const { registerVideoGenerationRoutes } = await import('./video-generation.js');
       return { register: registerVideoGenerationRoutes };

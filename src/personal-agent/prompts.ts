@@ -74,6 +74,9 @@ export function projectPersonalInstructions(instructions: string, toolNames: rea
     if (group.requires.every(tool => tools.has(tool))) continue;
     for (const rule of group.rules) projected = omitInstructionBlock(projected, rule);
   }
+  if (tools.has('video_draft')) {
+    projected += '\nFor video generation in this chat, use video_draft directly to prepare or revise the draft and let the user confirm it in chat.';
+  }
   return projected;
 }
 

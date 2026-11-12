@@ -37,6 +37,7 @@ const CORE_TOOL_ORDER = [
   'text_to_speech',
   'image',
   'image_generate',
+  'video_draft',
   'create_share',
 ] as const;
 
@@ -79,6 +80,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   text_to_speech: 'Send a standalone voice message',
   image: 'Analyze an image with the configured vision model',
   image_generate: 'Generate images with the configured image model',
+  video_draft: 'Prepare or revise a text-to-video or image-to-video draft for confirmation in the current chat',
   create_share: 'Create a shareable link for workspace files',
 };
 

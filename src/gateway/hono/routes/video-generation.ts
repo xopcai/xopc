@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 
 import { isVideoDurationSupported, VIDEO_IMAGE_MAX_BYTES, VIDEO_MODELS, VIDEO_MODEL_REFS, VIDEO_RESOLUTIONS, WAN_VIDEO_MODEL_REF } from '@xopcai/gateway-contract';
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 
 import { readMediaReference } from '../../../media/media-reference.js';
+import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
 import { readVideoArtifact } from '../../../video-generation/artifact.js';
+import { getVideoDraft } from '../../../video-generation/drafts.js';
 import { enqueueVideoJob, getVideoJob, listVideoJobs } from '../../../video-generation/repository.js';
 import { getConfiguredVideoProviders, getVideoProvider } from '../../../video-generation/providers.js';
 import { getVideoDefaults, getVideoModel, setVideoDefaults, setVideoModel } from '../../../video-generation/settings.js';
@@ -15,6 +17,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 const settingsPath = '/api/video-generation/settings';
 const modelSchema = z.enum(VIDEO_MODEL_REFS);
 const path = '/api/video-generation/sessions/:conversationId/jobs';
+const confirmationSchema = z.object({ id: z.string().uuid(), revision: z.number().int().positive() });
 const requestSchema = z.object({
   id: z.string().uuid(),
   modelRef: modelSchema.default(WAN_VIDEO_MODEL_REF),
@@ -69,23 +72,39 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
     if (!session?.transcriptId) return c.json({ error: 'Conversation not found' }, 404);
     const modelRef = getVideoModel();
     const configured = Boolean(await getVideoProvider(modelRef).resolveKey().catch(() => undefined));
-    return c.json({ transcriptId: session.transcriptId, modelRef, configured, defaults: getVideoDefaults(modelRef), jobs: listVideoJobs(conversationId) });
+    const jobs = listVideoJobs(conversationId);
+    const draft = getVideoDraft(conversationId, session.transcriptId);
+    return c.json({ transcriptId: session.transcriptId, modelRef, configured, defaults: getVideoDefaults(modelRef), jobs,
+      ...(draft && !jobs.some(job => job.id === draft.id) ? { draft } : {}),
+    });
   });
 
-  app.post(path, deps.strictRateLimitMiddleware, async c => {
+  app.post(path, deps.strictRateLimitMiddleware, c => submit(c, false));
+  app.post(`${path}/confirm-draft`, deps.strictRateLimitMiddleware, c => submit(c, true));
+
+  async function submit(c: Context, confirming: boolean) {
     const conversationId = c.req.param('conversationId');
     const session = await deps.service.sessionIndexInstance.getSessionMetadata(conversationId);
-    if (!session?.transcriptId) return c.json({ error: 'Conversation not found' }, 404);
-    const form = await c.req.formData().catch(() => null);
-    if (!form) return c.json({ error: 'Invalid video request' }, 400);
-    const parsed = requestSchema.safeParse({
-      id: form.get('id'), modelRef: form.get('modelRef') ?? undefined, transcriptId: form.get('transcriptId'), prompt: form.get('prompt'),
-      duration: form.get('duration'), ratio: form.get('ratio'), resolution: form.get('resolution'),
-      imageUri: form.get('imageUri'),
+    const transcriptId = session?.transcriptId;
+    if (!transcriptId) return c.json({ error: 'Conversation not found' }, 404);
+    const confirmation = confirming
+      ? confirmationSchema.safeParse(await c.req.json().catch(() => null))
+      : undefined;
+    if (confirmation && !confirmation.success) return c.json({ error: 'Invalid draft confirmation' }, 400);
+    const draft = confirmation?.success ? getVideoDraft(conversationId, transcriptId) : undefined;
+    if (confirmation?.success && (draft?.id !== confirmation.data.id || draft.revision !== confirmation.data.revision)) {
+      return c.json({ error: 'The video draft changed. Review the current version before generating.' }, 409);
+    }
+    const form = confirming ? null : await c.req.formData().catch(() => null);
+    if (!draft && !form) return c.json({ error: 'Invalid video request' }, 400);
+    const parsed = requestSchema.safeParse(draft ?? {
+      id: form?.get('id'), modelRef: form?.get('modelRef') ?? undefined, transcriptId: form?.get('transcriptId'), prompt: form?.get('prompt'),
+      duration: form?.get('duration'), ratio: form?.get('ratio'), resolution: form?.get('resolution'),
+      imageUri: form?.get('imageUri'),
     });
     if (!parsed.success) return c.json({ error: 'Invalid video settings' }, 400);
     const { imageUri, modelRef, ...request } = parsed.data;
-    const upload = form.get('image');
+    const upload = form?.get('image') ?? null;
     if (upload !== null && (!(upload instanceof File) || imageUri || !upload.size || upload.size > VIDEO_IMAGE_MAX_BYTES)) {
       return c.json({ error: 'Provide one PNG, JPEG or WebP image up to 5 MiB' }, 400);
     }
@@ -125,14 +144,22 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
     const hash = createHash('sha256').update(JSON.stringify({ ...request, imageName }));
     if (bytes) hash.update(bytes);
 
-    const result = enqueueVideoJob(conversationId, { ...request, modelRef, imageName }, hash.digest('hex'),
-      bytes && mime ? { bytes, mime } : undefined);
+    const requestHash = hash.digest('hex');
+    const result = runSqliteWriteTransaction(() => {
+      if (draft) {
+        const latest = getVideoDraft(conversationId, transcriptId);
+        if (latest?.id !== draft.id || latest.revision !== draft.revision) return { error: 'draft_changed' } as const;
+      }
+      return enqueueVideoJob(conversationId, { ...request, modelRef, imageName }, requestHash,
+        bytes && mime ? { bytes, mime } : undefined);
+    });
+    if (result.error === 'draft_changed') return c.json({ error: 'The video draft changed. Review the current version before generating.' }, 409);
     if (result.error === 'budget_exhausted') return c.json({ error: 'The Gateway video generation budget for today has been reached.' }, 429);
     if (result.error === 'queue_full') return c.json({ error: 'The video queue is full. Try again after a task completes.' }, 429);
     if (result.error === 'model_changed') return c.json({ error: 'The video model changed. Review the updated model before submitting.' }, 409);
-    if (result.error) return c.json({ error: 'The conversation or video request changed. Reopen the video form.' }, 409);
+    if (result.error) return c.json({ error: 'The conversation or video request changed. Review the current request and try again.' }, 409);
     return c.json(result.job, 202);
-  });
+  }
 
   app.get(`${path}/:jobId/video`, async c => {
     const job = getVideoJob(c.req.param('conversationId'), c.req.param('jobId'));

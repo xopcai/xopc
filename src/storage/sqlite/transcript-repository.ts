@@ -346,6 +346,17 @@ export function loadTranscriptRowsForSession(conversationId: string): Transcript
   return loadTranscriptRows(transcriptId);
 }
 
+export function loadRecentUserTranscriptRows(conversationId: string, limit: number): TranscriptStoredRow[] {
+  const transcriptId = getCurrentTranscriptId(conversationId);
+  if (!transcriptId) return [];
+  const rows = getSqliteDatabase().prepare(
+    `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
+     FROM transcript_entries WHERE transcript_id = ? AND entry_kind = 'message' AND role = 'user'
+     ORDER BY seq DESC LIMIT ?`,
+  ).all(transcriptId, limit) as TranscriptEntryRow[];
+  return rows.map(transcriptEntryRowToStoredRow);
+}
+
 export function loadTranscriptHistoryRowsForSession(conversationId: string): TranscriptStoredRow[] {
   if (!getCurrentTranscriptId(conversationId)) {
     return [];

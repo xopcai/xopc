@@ -22,6 +22,7 @@ import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attac
 import { ComposerContextChips } from '@/features/chat/composer/composer-context-chips';
 import { ComposerContextBar, type ComposerContextBarProps } from '@/features/chat/composer/composer-context-bar';
 import { takeComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
+import type { ComposerAddActions } from './composer-add-menu';
 import { ComposerToolbar } from '@/features/chat/composer/composer-toolbar';
 import { PersonalComposerActions, PersonalComposerAttachButton } from '@/features/chat/composer/personal-composer-controls';
 import { readLocalSessionDraft } from '../session/local-session-drafts';
@@ -54,7 +55,7 @@ import { useComposerActions } from '@/features/chat/composer/use-composer-action
 import { commitAcceptedSend } from '@/features/chat/composer/commit-accepted-send';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { usePersistedComposer } from './use-persisted-composer';
-import { useComposerEditor } from '@/features/chat/composer/use-composer-editor';
+import { useComposerEditor, type ComposerDraftSeed } from '@/features/chat/composer/use-composer-editor';
 import { useNextTurnSuggestion } from '@/features/chat/composer/use-next-turn-suggestion';
 import { useComposerPickers } from '@/features/chat/composer/use-composer-pickers';
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
@@ -134,6 +135,7 @@ export const ChatComposer = memo(function ChatComposer({
   onPendingFollowUpSteer, onPendingFollowUpSend,
   steeringFollowUpId,
   welcomeDraftSeed,
+  addActions,
   welcomeSuggestion,
   onAcceptWelcomeSuggestion,
   sessionModel,
@@ -166,7 +168,8 @@ export const ChatComposer = memo(function ChatComposer({
   contextRefs: ComposerContextRef[];
   setContextRefs: Dispatch<SetStateAction<ComposerContextRef[]>>;
   onDraftAttachmentsChange?: (attachments: ComposerAttachmentSummary[]) => void;
-  welcomeDraftSeed?: { id: number; text: string } | null;
+  addActions?: ComposerAddActions;
+  welcomeDraftSeed?: ComposerDraftSeed | null;
   welcomeSuggestion?: WelcomeSuggestionSelection | null;
   onAcceptWelcomeSuggestion?: (selection: WelcomeSuggestionSelection) => void;
   sessionModel: string;
@@ -873,6 +876,7 @@ export const ChatComposer = memo(function ChatComposer({
           maxAttachments={MAX_CHAT_ATTACHMENTS}
           chat={m.chat}
           onPickFiles={() => fileInputRef.current?.click()}
+          addActions={addActions}
         />}
 
         <div
@@ -995,6 +999,7 @@ export const ChatComposer = memo(function ChatComposer({
           attachmentCount={att.attachments.length}
           maxAttachments={MAX_CHAT_ATTACHMENTS}
           onPickFiles={() => fileInputRef.current?.click()}
+          addActions={addActions}
           thinkingLevel={thinkingLevel}
           onThinkingChange={onThinkingChange}
           voiceActive={voice.voiceActive}

@@ -32,7 +32,7 @@ export interface UseComposerEditorOptions {
   /** Route/session identity that should focus the editor when it changes. */
   autoFocusKey?: string | null;
   /** Fills the editor when user picks a welcome scenario. */
-  welcomeDraftSeed?: { id: number; text: string } | null;
+  welcomeDraftSeed?: ComposerDraftSeed | null;
   /** Run before full text replacement (welcome, fill) — e.g. clear attachments. */
   onExternalTextReplace?: (detail?: FillChatComposerDetail) => void;
   /**
@@ -42,6 +42,8 @@ export interface UseComposerEditorOptions {
   shouldSyncSelectionRef: MutableRefObject<boolean>;
   resolveContextRef?: ComposerContextRefResolver;
 }
+
+export type ComposerDraftSeed = { id: number; text: string; preserveDraft?: boolean };
 
 export interface UseComposerEditorReturn {
   value: string;
@@ -202,9 +204,10 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     if (!welcomeDraftSeed || welcomeDraftSeed.id === trackedWelcomeRef.current) return;
     trackedWelcomeRef.current = welcomeDraftSeed.id;
     lastWelcomeDraftIdRef.current = welcomeDraftSeed.id;
-    onExternalTextReplace?.();
+    if (!welcomeDraftSeed.preserveDraft) onExternalTextReplace?.();
     resetEditor({
-      nextText: welcomeDraftSeed.text,
+      nextText: welcomeDraftSeed.preserveDraft && valueRef.current.trim()
+        ? valueRef.current : welcomeDraftSeed.text,
       focus: typeof globalThis.matchMedia === 'function'
         && globalThis.matchMedia('(hover: hover) and (pointer: fine)').matches,
     });
