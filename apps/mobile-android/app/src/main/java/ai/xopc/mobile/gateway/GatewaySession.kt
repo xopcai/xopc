@@ -114,7 +114,19 @@ class GatewaySession(
   }
 
   @Synchronized
-  fun requestBytes(path: String): ByteArray {
+  fun requestBytes(path: String): ByteArray = readMedia { origin, bearer -> http.requestBytes(origin, path, bearer) }
+
+  fun downloadGeneratedMedia(path: String, destination: java.io.File) {
+    val (origin, bearer) = synchronized(this) {
+      val current = profile ?: throw IllegalStateException("NOT_PAIRED")
+      val route = current.routes.firstOrNull { it.id == current.activeRouteId } ?: throw IllegalStateException("NO_VERIFIED_ROUTE")
+      verifyRoute(current, route)
+      route.url to token()
+    }
+    http.downloadMedia(origin, path, bearer, destination)
+  }
+
+  private fun <T> readMedia(request: (String, String) -> T): T {
     val current = profile ?: throw IllegalStateException("NOT_PAIRED")
     var access = token()
     var last: Exception = IllegalStateException("NO_VERIFIED_ROUTE")
@@ -122,12 +134,12 @@ class GatewaySession(
       try {
         verifyRoute(current, route)
         return try {
-          http.requestBytes(route.url, path, access)
+          request(route.url, access)
         } catch (error: GatewayHttpException) {
           if (error.status != 401) throw error
           accessToken = null
           access = token()
-          http.requestBytes(route.url, path, access)
+          request(route.url, access)
         }
       } catch (error: Exception) {
         last = error
