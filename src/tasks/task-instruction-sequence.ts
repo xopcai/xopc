@@ -1,6 +1,7 @@
-import { TaskCollaborationRepository } from './task-collaboration-repository.js';
+import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 
 export function taskInstructionSequence(taskId: string): number {
-  return new TaskCollaborationRepository().coordination(taskId)
-    .filter(entry => ['main_agent', 'user'].includes(entry.authorKind) && ['answer', 'instruction'].includes(entry.kind)).at(-1)?.sequence ?? 0;
+  return (getSqliteDatabase().prepare(`SELECT COALESCE(MAX(sequence), 0) AS sequence
+    FROM task_collaboration_entries WHERE task_id = ? AND author_kind IN ('main_agent', 'user')
+      AND kind IN ('answer', 'instruction')`).get(taskId) as { sequence: number }).sequence;
 }

@@ -335,7 +335,7 @@ export class HomeFollowUps {
                     const tasks = new TaskRepository();
                     for (let i = 0; i < criteria.length; i++) {
                         const task = tasks.get(row.root_task_id)!;
-                        if (!new TaskCriterionReviewRepository().set({ task, expectedVersion: task.version, criterionIndex: i, status: 'passed', note: `${c.note}\nReviewed step: ${step.task_id}`, actor: { kind: 'user' } }))
+                        if (!new TaskCriterionReviewRepository().set({ task, expectedVersion: task.version, resultId: 'manual', criterionIndex: i, status: 'passed', note: `${c.note}\nReviewed step: ${step.task_id}`, actor: { kind: 'user' } }))
                             fail('Goal acceptance changed');
                     }
                     const root = tasks.get(row.root_task_id)!;

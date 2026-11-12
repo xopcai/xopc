@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { enqueueTaskChangedEvent } from './task-change-events.js';
 
 export type TaskCollaborationKind = 'progress' | 'question' | 'answer' | 'instruction' | 'ack' | 'result' | 'failure';
 export type TaskCollaborationAuthor = 'main_agent' | 'worker_agent' | 'user' | 'system';
@@ -97,8 +98,8 @@ export class TaskCollaborationRepository {
         }
         return fromRow(existing);
       }
-      const task = db.prepare('SELECT task_id FROM tasks WHERE task_id = ?')
-        .get(input.taskId) as { task_id: string } | undefined;
+      const task = db.prepare('SELECT version, project_id FROM tasks WHERE task_id = ?')
+        .get(input.taskId) as { version: number; project_id: string | null } | undefined;
       if (!task) throw new Error('Task not found');
       if (input.taskRunId) {
         const run = db.prepare('SELECT task_id FROM task_runs WHERE run_id = ?')
@@ -137,6 +138,11 @@ export class TaskCollaborationRepository {
         randomUUID(), input.taskId, input.causationId ?? id,
         JSON.stringify({ taskId: input.taskId, entryId: id, sequence: next.sequence, kind: input.kind }), now,
       );
+      if ((input.authorKind === 'user' || input.authorKind === 'main_agent')
+        && (input.kind === 'instruction' || input.kind === 'answer')) {
+        enqueueTaskChangedEvent(db, { taskId: input.taskId, projectId: task.project_id ?? undefined,
+          version: task.version, changedFields: ['acceptance', 'attention'], source: 'runtime', occurredAt: now });
+      }
       return this.get(id)!;
     });
   }

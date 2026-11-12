@@ -3,10 +3,10 @@ import {
   XopcSection, XopcWorkspaceItem, XopcAutomationRun, XopcMobileTaskDetail,
   XopcMobileTaskReceipt, XopcMobileTaskEvidence,
   XopcMobileTaskReview, XopcMobileTaskContext, XopcMobileTaskSession, XopcMobileTaskDependency,
-  XopcMobileTaskAttention
+  XopcMobileTaskAttention, XopcTaskAcceptanceCheck
 } from '../model/workspace';
 import type { XopcTaskPhaseChange } from '../model/workspace';
-import { taskCriterionState, taskPhaseAction } from '../common/taskManagement';
+import { taskCriterionState, taskPhaseAction, taskReviewAction, taskSignoffResult } from '../common/taskManagement';
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
@@ -154,6 +154,7 @@ export struct XopcWorkspaceView {
   }
 
   private label(action: string): ResourceStr {
+    if (action.startsWith('signoff:')) return $r('app.string.task_signoff');
     if (action.startsWith('move:') || action.startsWith('reopen:')) return this.statusLabel(action.split(':')[1]);
     if (action === 'cancel_task') return $r('app.string.task_cancel');
     if (action === 'mark_ready') return $r('app.string.mark_ready');
@@ -269,14 +270,13 @@ export struct XopcWorkspaceView {
   }
 
   private passedCount(info: XopcMobileTaskDetail): number {
-    return (info.contract?.acceptanceCriteria ?? []).filter((criterion: string, index: number): boolean =>
-      this.criterionState(info, criterion, index) === 'passed').length;
+    return (info.acceptanceChecks ?? []).filter((criterion: XopcTaskAcceptanceCheck, index: number): boolean =>
+      this.criterionState(info, criterion.criterion, index) === 'passed').length;
   }
 
   private hasHumanReview(info: XopcMobileTaskDetail, index: number): boolean {
-    return info.contract?.acceptancePolicy !== 'verified_auto' && info.criterionReviews.some(
-      (review: XopcMobileTaskReview): boolean => review.contractVersion === info.latestContractVersion
-        && review.criterionIndex === index);
+    return info.criterionReviews.some((review: XopcMobileTaskReview): boolean =>
+      review.checkId === info.acceptanceChecks?.[index]?.id);
   }
 
   private taskArtifacts(info: XopcMobileTaskDetail): XopcMobileTaskEvidence[] {
@@ -290,8 +290,10 @@ export struct XopcWorkspaceView {
   }
 
   private primaryTaskAction(item: XopcWorkspaceItem): string {
+    const resultId = taskSignoffResult(item);
+    if (resultId) return 'signoff:' + resultId;
     for (const action of ['start', 'mark_ready', 'request_review', 'close', 'reopen']) {
-      if (item.actions.includes(action)) {
+      if (item.actions.includes(action) && (action !== 'close' || item.taskDetail?.runs.length === 0)) {
         return action;
       }
     }
@@ -398,6 +400,13 @@ export struct XopcWorkspaceView {
           .fontColor(this.colors.foreground).enabled(!this.model.busy).onClick((): void => { this.model.refreshDetail(); })
       }
       List({ space: 8 }) {
+        if (taskSignoffResult(item)) {
+          ListItem() {
+            Button($r('app.string.task_signoff')).width('100%').height(48)
+              .backgroundColor(this.colors.accent).enabled(!this.model.busy)
+              .onClick((): void => { this.applySheetAction('signoff:' + taskSignoffResult(item)); })
+          }
+        }
         ForEach(['backlog', 'ready', 'active', 'review', 'closed'], (phase: string) => {
           ListItem() {
             Button({ type: ButtonType.Normal }) {
@@ -444,9 +453,11 @@ export struct XopcWorkspaceView {
         if (item.actions.includes('close')) {
           ListItem() {
             Column({ space: 8 }) {
-              Button(this.label('close')).width('100%').height(48).backgroundColor(this.colors.input)
-                .fontColor(this.colors.foreground).enabled(!this.model.busy)
-                .onClick((): void => { this.applySheetAction('close'); })
+              if (item.taskDetail?.runs.length === 0) {
+                Button(this.label('close')).width('100%').height(48).backgroundColor(this.colors.input)
+                  .fontColor(this.colors.foreground).enabled(!this.model.busy)
+                  .onClick((): void => { this.applySheetAction('close'); })
+              }
 
               Button($r('app.string.task_cancel')).width('100%').height(48).backgroundColor(Color.Transparent)
                 .fontColor(this.colors.danger).enabled(!this.model.busy)
@@ -786,35 +797,44 @@ export struct XopcWorkspaceView {
           Row({ space: 8 }) {
             Text($r('app.string.task_goal_acceptance')).fontSize(16).fontWeight(FontWeight.Medium)
               .fontColor(this.colors.foreground).layoutWeight(1)
-            if ((info.contract?.acceptanceCriteria.length ?? 0) > 0) {
-              Text(this.passedCount(info).toString() + '/' + (info.contract?.acceptanceCriteria.length ?? 0).toString())
+            if ((info.acceptanceChecks?.length ?? 0) > 0) {
+              Text(this.passedCount(info).toString() + '/' + (info.acceptanceChecks?.length ?? 0).toString())
                 .fontSize(12).fontColor(this.colors.secondary).padding({ left: 9, right: 9, top: 4, bottom: 4 })
                 .borderRadius(10).backgroundColor(this.colors.input)
             }
           }.width('100%')
           Text(info.contract?.objective || item.title).fontSize(15).lineHeight(23).fontColor(this.colors.foreground)
             .width('100%')
-          if ((info.contract?.acceptanceCriteria.length ?? 0) > 0) {
-            ForEach(info.contract?.acceptanceCriteria ?? [], (criterion: string, index: number) => {
+          if (info.presentation?.reason) {
+            Text(info.presentation?.reason ?? '').fontSize(14).fontColor(this.colors.secondary).width('100%')
+          }
+          if ((info.acceptanceChecks?.length ?? 0) > 0) {
+            ForEach(info.acceptanceChecks ?? [], (check: XopcTaskAcceptanceCheck, index: number) => {
               Row({ space: 10 }) {
-                SymbolGlyph(this.criterionState(info, criterion, index) === 'passed' ? $r('sys.symbol.checkmark_circle')
-                  : this.criterionState(info, criterion, index) === 'failed' ? $r('sys.symbol.exclamationmark_circle')
+                SymbolGlyph(this.criterionState(info, check.criterion, index) === 'passed' ? $r('sys.symbol.checkmark_circle')
+                  : this.criterionState(info, check.criterion, index) === 'failed' ? $r('sys.symbol.exclamationmark_circle')
                   : $r('sys.symbol.circle')).fontSize(18)
-                  .fontColor([this.criterionState(info, criterion, index) === 'passed' ? this.colors.accent
-                    : this.criterionState(info, criterion, index) === 'failed' ? this.colors.danger : this.colors.tertiary])
+                  .fontColor([this.criterionState(info, check.criterion, index) === 'passed' ? this.colors.accent
+                    : this.criterionState(info, check.criterion, index) === 'failed' ? this.colors.danger : this.colors.tertiary])
                 Column({ space: 3 }) {
-                  Text(criterion).fontSize(14).lineHeight(20).fontColor(this.colors.foreground).width('100%')
-                  Text(this.criterionState(info, criterion, index) === 'passed' ? $r('app.string.task_criterion_passed')
-                    : this.criterionState(info, criterion, index) === 'failed' ? $r('app.string.task_criterion_failed')
+                  Text(check.criterion).fontSize(14).lineHeight(20).fontColor(this.colors.foreground).width('100%')
+                  Text(this.criterionState(info, check.criterion, index) === 'passed' ? $r('app.string.task_criterion_passed')
+                    : this.criterionState(info, check.criterion, index) === 'failed' ? $r('app.string.task_criterion_failed')
                     : $r('app.string.task_criterion_pending')).fontSize(12).fontColor(this.colors.secondary)
                   if (this.hasHumanReview(info, index)) {
                     Text($r('app.string.task_human_review')).fontSize(11).fontColor(this.colors.tertiary)
-                  } else if (this.criterionState(info, criterion, index) === 'passed') {
+                  } else if (this.criterionState(info, check.criterion, index) === 'passed') {
                     Text($r('app.string.task_verified_evidence')).fontSize(11).fontColor(this.colors.tertiary)
                   }
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                if (taskReviewAction(item, check.id, this.criterionState(info, check.criterion, index))) {
+                  Button(this.criterionState(info, check.criterion, index) === 'passed'
+                    ? $r('app.string.task_criterion_clear_review') : $r('app.string.task_criterion_mark_passed'))
+                    .buttonStyle(ButtonStyleMode.TEXTUAL).enabled(!this.model.busy)
+                    .onClick((): void => { this.action(taskReviewAction(item, check.id, this.criterionState(info, check.criterion, index))); })
+                }
               }.width('100%').alignItems(VerticalAlign.Top)
-            }, (criterion: string, index: number): string => info.latestContractVersion.toString() + ':' + index.toString() + ':' + criterion)
+            }, (check: XopcTaskAcceptanceCheck): string => check.id)
           } else {
             Text($r('app.string.task_no_acceptance')).fontSize(13).fontColor(this.colors.secondary)
           }

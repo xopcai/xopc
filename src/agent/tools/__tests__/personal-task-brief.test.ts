@@ -14,14 +14,13 @@ describe('personal task brief', () => {
     expect(brief.objective).toBe(brief.title);
     expect(brief.body).toContain(requirement);
     expect(brief.body).toContain('## 交付物');
-    expect(brief.body).toContain('## Result for the originating conversation');
-    expect(brief.body).toContain('preserve requested content, relevant sources');
+    expect(brief.body).not.toContain('## Result for the originating conversation');
   });
 
-  it('includes direct delivery guidance even without a detailed description', () => {
+  it('keeps a simple brief concise when no additional description was provided', () => {
     const brief = buildPersonalTaskBrief({ objective: 'Draw a sunset', title: 'Sunset' });
     expect(brief.title).toBe('Sunset');
     expect(brief.objective).toBe('Draw a sunset');
-    expect(brief.body).toContain('Never substitute a progress page');
+    expect(brief.body).toBeUndefined();
   });
 });

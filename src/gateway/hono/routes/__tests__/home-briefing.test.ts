@@ -106,6 +106,7 @@ describe('home workbench', () => {
         version: 2, createdAt: 100, updatedAt: 200,
       },
       operationalState: 'idle' as const,
+      presentation: { status: 'failed' as const },
       attention: [{ kind: 'run_failed' as const, summary: 'Agent run returned no result or evidence', sourceId: 'run-1' }],
       allowedCommands: [],
     };
@@ -131,6 +132,7 @@ describe('home workbench', () => {
         updatedAt: 200,
       },
       operationalState: 'idle',
+      presentation: { status: 'review', primaryAction: { type: 'review' } },
       attention: [],
       allowedCommands: [],
     });
@@ -142,7 +144,8 @@ describe('home workbench', () => {
     });
   });
   it.each(['input_required', 'approval_required', 'dependency_blocked'] as const)('prioritizes %s over review when a task still has a wait', (kind) => {
-    const model = { task: { id: 'waiting-review', title: 'Waiting review', phase: 'review', updatedAt: 1 }, operationalState: 'waiting', attention: [{ kind, summary: 'Resolve this wait first' }], allowedCommands: ['resolve_wait', 'close'] } as Parameters<typeof decisionFromTask>[0];
+    const model = { task: { id: 'waiting-review', title: 'Waiting review', phase: 'review', updatedAt: 1 }, operationalState: 'waiting',
+      presentation: { status: 'waiting' }, attention: [{ kind, summary: 'Resolve this wait first' }], allowedCommands: ['resolve_wait', 'close'] } as Parameters<typeof decisionFromTask>[0];
     const decision = decisionFromTask(model, undefined, 'en');
     expect(decision?.reason).toBe(({ input_required: 'needs_input', approval_required: 'approval_required', dependency_blocked: 'dependency' })[kind]);
     expect(decision?.detail).toBe('Resolve this wait first');

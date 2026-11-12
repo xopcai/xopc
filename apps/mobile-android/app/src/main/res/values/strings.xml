@@ -892,4 +892,7 @@
     <string name="about_you_scope_other">Assigned context</string>
     <string name="task_chat_outputs">Expected outputs</string>
     <string name="task_chat_attention">Needs your attention</string>
+    <string name="progress_task_signoff">Accept result</string>
+    <string name="progress_task_mark_passed">Mark passed</string>
+    <string name="progress_task_clear_review">Clear review</string>
 </resources>

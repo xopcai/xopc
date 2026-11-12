@@ -217,16 +217,28 @@ extension GatewayClient {
     }
 
     func commandTask(_ task: TaskRecord, command: String, phase: String? = nil,
-                     resolution: String = "done", agentID: String? = nil) async throws
+                     resolution: String = "done", agentID: String? = nil, resultID: String? = nil) async throws
     {
         let mutation = try TaskCommandMutation(
             idempotencyKey: UUID().uuidString.lowercased(), expectedVersion: task.version,
             command: .make(type: command, phase: phase, resolution: resolution,
-                           agentID: agentID ?? task.delegateAgentId)
+                           agentID: agentID ?? task.delegateAgentId, resultID: resultID)
         )
         let body = try encoder.encode(mutation)
         let result: TaskCommandAcknowledgement = try await request(
             path: "/api/tasks/\(task.id)/commands", method: "POST", body: body
+        )
+        guard result.ok else { throw GatewayClientError.server("任务更新未完成") }
+    }
+
+    func reviewTaskCheck(_ task: TaskRecord, checkID: String, resultID: String, status: String) async throws {
+        guard let version = task.latestContractVersion, ["passed", "unverified"].contains(status) else {
+            throw GatewayClientError.invalidResponse
+        }
+        let mutation = TaskCheckMutation(expectedVersion: task.version, contractVersion: version, resultId: resultID, status: status)
+        let body = try encoder.encode(mutation)
+        let result: TaskCommandAcknowledgement = try await request(
+            path: "/api/tasks/\(task.id)/criteria/\(checkID)/review", method: "PUT", body: body
         )
         guard result.ok else { throw GatewayClientError.server("任务更新未完成") }
     }
@@ -710,9 +722,13 @@ struct TaskCommandMutation: Encodable {
         let executor: Executor?
         let resolution: String?
         let phase: String?
+        let resultId: String?
 
-        static func make(type: String, phase: String?, resolution: String, agentID: String?) throws -> Command {
-            guard ["move", "mark_ready", "start", "request_review", "close", "reopen"].contains(type) else {
+        static func make(type: String, phase: String?, resolution: String, agentID: String?, resultID: String? = nil) throws -> Command {
+            guard ["move", "mark_ready", "start", "request_review", "close", "reopen", "signoff"].contains(type) else {
+                throw GatewayClientError.invalidResponse
+            }
+            if type == "signoff", resultID?.isEmpty != false {
                 throw GatewayClientError.invalidResponse
             }
             let target = phase ?? (type == "reopen" ? "backlog" : "")
@@ -730,7 +746,8 @@ struct TaskCommandMutation: Encodable {
             }
             return Command(type: type, executor: type == "start" ? .init(kind: "agent", agentId: selectedAgent) : nil,
                            resolution: type == "close" ? resolution : nil,
-                           phase: type == "move" || type == "reopen" ? target : nil)
+                           phase: type == "move" || type == "reopen" ? target : nil,
+                           resultId: type == "signoff" ? resultID : nil)
         }
     }
 
@@ -738,6 +755,13 @@ struct TaskCommandMutation: Encodable {
         let kind: String
         let agentId: String
     }
+}
+
+private struct TaskCheckMutation: Encodable {
+    let expectedVersion: Int
+    let contractVersion: Int
+    let resultId: String
+    let status: String
 }
 
 private struct TaskCommandAcknowledgement: Decodable {

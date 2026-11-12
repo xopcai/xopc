@@ -554,6 +554,8 @@ CREATE TABLE task_contracts (
   task_id TEXT NOT NULL,
   version INTEGER NOT NULL,
   objective TEXT NOT NULL,
+  brief TEXT,
+  result_policy TEXT NOT NULL DEFAULT 'standard' CHECK (result_policy IN ('standard', 'selected', 'connected')),
   expected_outputs_json TEXT NOT NULL DEFAULT '[]',
   acceptance_criteria_json TEXT NOT NULL DEFAULT '[]',
   constraints_json TEXT NOT NULL DEFAULT '[]',
@@ -668,6 +670,7 @@ CREATE TABLE task_runs (
   causation_id TEXT,
   idempotency_key TEXT NOT NULL UNIQUE,
   contract_version INTEGER NOT NULL,
+  instruction_sequence_at_start INTEGER CHECK (instruction_sequence_at_start >= 0),
   context_snapshot_id TEXT,
   policy_snapshot_json TEXT,
   "conversation_id" TEXT,
@@ -721,6 +724,45 @@ CREATE TABLE task_run_receipts (
   context_trace_id TEXT,
   finalized_at INTEGER NOT NULL,
   FOREIGN KEY (run_id) REFERENCES task_runs(run_id) ON DELETE CASCADE
+);
+
+CREATE TABLE task_results (
+  result_id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES task_runs(run_id) ON DELETE CASCADE,
+  version INTEGER NOT NULL CHECK (version > 0),
+  assignment_epoch INTEGER NOT NULL,
+  instruction_sequence INTEGER NOT NULL,
+  outcome_id TEXT,
+  finalized_at INTEGER,
+  workspace_files_json TEXT NOT NULL DEFAULT '[]',
+  UNIQUE (run_id, version),
+  UNIQUE (run_id, outcome_id),
+  CHECK ((outcome_id IS NULL) = (finalized_at IS NOT NULL)),
+  FOREIGN KEY (run_id, outcome_id) REFERENCES task_run_outcomes(task_run_id, outcome_id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX idx_task_finalized_result ON task_results(run_id) WHERE finalized_at IS NOT NULL;
+
+CREATE TABLE task_bound_criterion_reviews (
+  task_id TEXT NOT NULL,
+  contract_version INTEGER NOT NULL,
+  result_id TEXT NOT NULL,
+  check_id TEXT NOT NULL,
+  criterion_index INTEGER NOT NULL,
+  criterion_text TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('passed', 'failed', 'unverified')),
+  note TEXT,
+  reviewed_by_json TEXT NOT NULL,
+  reviewed_at INTEGER NOT NULL,
+  PRIMARY KEY (task_id, contract_version, result_id, check_id),
+  FOREIGN KEY (task_id, contract_version) REFERENCES task_contracts(task_id, version) ON DELETE CASCADE
+);
+
+CREATE TABLE task_signoffs (
+  signoff_id TEXT PRIMARY KEY,
+  result_id TEXT NOT NULL REFERENCES task_results(result_id) ON DELETE CASCADE,
+  signed_by_json TEXT NOT NULL,
+  signed_at INTEGER NOT NULL
 );
 
 CREATE TABLE task_run_feedback (

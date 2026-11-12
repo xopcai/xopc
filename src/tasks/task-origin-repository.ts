@@ -1,4 +1,4 @@
-import type { TaskAllocation, TaskOperationalState, TaskResolution } from '@xopcai/gateway-contract';
+import type { TaskAllocation, TaskOperationalState, TaskPresentation, TaskResolution } from '@xopcai/gateway-contract';
 
 import { getClarification } from '../storage/sqlite/clarification-wait-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
@@ -11,6 +11,7 @@ export interface DelegatedTaskSummary {
   title: string;
   phase: string;
   operationalState: TaskOperationalState;
+  presentation: TaskPresentation;
   runStatus?: string;
   allocation?: TaskAllocation;
   updatedAt: number;
@@ -37,7 +38,7 @@ export class TaskOriginRepository {
       const prompt = clarification?.status === 'open' && (!clarification.expiresAt || clarification.expiresAt > Date.now())
         ? { id: clarification.id, conversationId: clarification.conversationId } : undefined;
       return [{ id, title: task.title, phase: task.phase, operationalState,
-        resolution: task.resolution, updatedAt: task.updatedAt,
+        resolution: task.resolution, updatedAt: task.updatedAt, presentation: model.presentation,
         attention: clarification && !prompt ? undefined : attention, prompt,
         artifact: task.phase === 'review' ? deliveries.fileDeliveryState(id, conversationId, true).artifact : undefined }];
     });
@@ -68,12 +69,12 @@ export class TaskOriginRepository {
       WHERE origin.conversation_id = ?
       ORDER BY ${options.order === 'recent' ? '' : "CASE WHEN task.phase = 'closed' THEN 1 ELSE 0 END,"}
         updatedAt DESC, task.task_id DESC LIMIT ? OFFSET ?`).all(conversationId,
-      Math.max(1, Math.min(100, Math.floor(limit))), Math.max(0, Math.floor(options.offset ?? 0))) as unknown as Array<Omit<DelegatedTaskSummary, 'operationalState' | 'runStatus'> & { runStatus: string | null }>;
+      Math.max(1, Math.min(100, Math.floor(limit))), Math.max(0, Math.floor(options.offset ?? 0))) as unknown as Array<Omit<DelegatedTaskSummary, 'operationalState' | 'presentation' | 'runStatus'> & { runStatus: string | null }>;
     const projector = new TaskReadModelProjector();
-    return { total, items: rows.map(({ runStatus, ...row }) => {
+    return { total, items: rows.flatMap(({ runStatus, ...row }) => {
       const model = projector.get(row.id);
-      return { ...row, allocation: model?.allocation, operationalState: model?.operationalState ?? 'idle',
-        ...(runStatus ? { runStatus } : {}) };
+      return model ? [{ ...row, allocation: model.allocation, operationalState: model.operationalState,
+        presentation: model.presentation, ...(runStatus ? { runStatus } : {}) }] : [];
     }) };
   }
 
@@ -90,6 +91,8 @@ export class TaskOriginRepository {
     const deliveries = new TaskResultDeliveryRepository();
     return { total, items: items.map(item => ({
       ...item,
+      presentation: { status: item.resolution === 'done' ? 'completed' as const : 'ended' as const,
+        primaryAction: { type: 'view_results' as const } },
       artifact: item.resolution === 'done' ? deliveries.fileDeliveryState(item.id, conversationId, true).artifact : undefined,
     })) };
   }

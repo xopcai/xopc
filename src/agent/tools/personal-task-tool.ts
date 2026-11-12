@@ -12,7 +12,6 @@ import { getSessionMetadata } from '../../storage/sqlite/index.js';
 import { getSessionInputById, getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 export { getAvailablePersonalAgentTools, personalAgentModelAvailability } from '../../personal-agent/specialist-capabilities.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
-import { PERSONAL_WORKER_RESULT_GUIDANCE } from '../../personal-agent/communication.js';
 import { getPersonalRequest } from '../../personal-agent/request-repository.js';
 import { parseTaskHandoffReferences } from '../../tasks/task-handoff.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
@@ -66,6 +65,7 @@ const PersonalTaskSchema = Type.Object({
   section: Type.Optional(Type.Union(['status', 'revision', 'task', 'waits', 'runs', 'receipts', 'context', 'conversation', 'sessions', 'authorityGrants', 'dependencies', 'dependents', 'criterionReviews'].map(value => Type.Literal(value)))),
   questionId: Type.Optional(Type.String({ description: 'Collaboration question ID to answer.' })),
   expectedOutputs: Type.Optional(Type.Array(Type.String())),
+  workspaceOutputs: Type.Optional(Type.Array(Type.String({ description: 'Only an explicitly requested output path relative to the originating workspace. Do not list previews or temporary files.' }), { maxItems: 20 })),
   acceptancePolicy: Type.Optional(Type.Union([Type.Literal('verified_auto'), Type.Literal('manual')], { description: 'Defaults to automatic verification and completion. Use manual only when the user explicitly requests human acceptance.' })),
   acceptanceCriteria: Type.Optional(Type.Array(Type.String())),
   constraints: Type.Optional(Type.Array(Type.String())),
@@ -126,12 +126,17 @@ export function buildPersonalTaskBrief(input: { title?: string; objective: strin
   const body = fullObjective !== objective
     ? [fullObjective, description].filter(Boolean).join('\n\n')
     : description;
-  return { title, objective, body: [body, PERSONAL_WORKER_RESULT_GUIDANCE].filter(Boolean).join('\n\n') };
+  return { title, objective, body: body || undefined };
 }
 
 /** A narrow Task surface for the fast personal conversation. */
 export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<typeof PersonalTaskModelSchema, Record<string, never>> {
-  const productTool = createXopcUseTool(deps);
+  const productTool = createXopcUseTool({
+    ...deps,
+    createTask: (input, actor) => deps.createTask
+      ? deps.createTask(input, actor, { resultPolicy: 'selected' })
+      : new TaskApplicationService().create(input, actor, { resultPolicy: 'selected' }),
+  });
   const matches = new Map<string, { conversationId: string; requirements: SpecialistTaskRequirements; result: ReturnType<typeof matchSpecialists> }>();
   return {
     name: 'personal_task',
@@ -207,12 +212,13 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         const submissionKey = input.idempotencyKey?.trim() || selectionRequestHash({
           sourceInput: inputId ?? toolCallId, brief, requirements, sourceRefs: modelInput.sourceRefs, conversationExcerpts: modelInput.conversationExcerpts,
           expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
-          notificationPreference: input.notificationPreference, dueAt: input.dueAt, constraints: input.constraints,
+          notificationPreference: input.notificationPreference, dueAt: input.dueAt, constraints: input.constraints, workspaceOutputs: input.workspaceOutputs,
         });
         command = 'create';
         args = { ...brief, createMode: 'allocate', requirements, dueAt: input.dueAt, notificationPreference: input.notificationPreference, sourceRefs: modelInput.sourceRefs, conversationExcerpts: modelInput.conversationExcerpts, includeConversationContext: false,
           expectedOutputs: input.expectedOutputs, acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
-          constraints: input.constraints, idempotencyKey: `personal-submit:${conversationId}:${selectionRequestHash(submissionKey)}` };
+          constraints: input.constraints, workspaceOutputs: input.workspaceOutputs,
+          idempotencyKey: `personal-submit:${conversationId}:${selectionRequestHash(submissionKey)}` };
         if (requirements.requiredSkills?.length) args.body = `${brief.body}\n\nRequired Skills: ${requirements.requiredSkills.join(', ')}. Read and follow these Skills before execution.`;
       } else if (command === 'create') {
         const objective = input.objective?.trim();
@@ -264,6 +270,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
           agentId, createMode: 'start',
           includeConversationContext: false,
           expectedOutputs: input.expectedOutputs,
+          workspaceOutputs: input.workspaceOutputs,
           acceptanceCriteria: input.acceptanceCriteria, acceptancePolicy: input.acceptancePolicy,
           constraints: input.constraints,
           idempotencyKey: key,

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { taskCheckId } from '@xopcai/gateway-contract';
 import type {
   ActorRef,
   TaskExecutorKind,
@@ -15,6 +16,9 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/
 
 import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './task-change-events.js';
 import { TaskRepository } from './task-repository.js';
+import { taskInstructionSequence } from './task-instruction-sequence.js';
+import { recordTaskResultVersion } from './task-result-versions.js';
+import { inspectTaskWorkspace } from './task-workspace-verification.js';
 
 const ACTIVE_RUN_STATUSES: TaskRunStatus[] = ['queued', 'running', 'waiting', 'verifying'];
 
@@ -47,6 +51,7 @@ type TaskRunRow = {
   causation_id: string | null;
   idempotency_key: string;
   contract_version: number;
+  instruction_sequence_at_start: number | null;
   context_snapshot_id: string | null;
   policy_snapshot_json: string | null;
   conversation_id: string | null;
@@ -116,6 +121,7 @@ function fromRow(row: TaskRunRow): TaskRun {
     ...(row.causation_id ? { causationId: row.causation_id } : {}),
     idempotencyKey: row.idempotency_key,
     contractVersion: row.contract_version,
+    ...(row.instruction_sequence_at_start === null ? {} : { instructionSequenceAtStart: row.instruction_sequence_at_start }),
     ...(row.context_snapshot_id ? { contextSnapshotId: row.context_snapshot_id } : {}),
     ...(row.policy_snapshot_json
       ? { policySnapshot: parseJson<Record<string, unknown>>(row.policy_snapshot_json) }
@@ -271,7 +277,7 @@ export class TaskRunRepository {
     const row = getSqliteDatabase().prepare(
       `SELECT * FROM task_runs WHERE task_id = ? AND parent_run_id IS NULL
        AND status IN ('queued', 'running', 'waiting', 'verifying')
-       ORDER BY queued_at DESC LIMIT 1`,
+       ORDER BY queued_at DESC, rowid DESC LIMIT 1`,
     ).get(taskId) as TaskRunRow | undefined;
     return row ? fromRow(row) : undefined;
   }
@@ -279,7 +285,7 @@ export class TaskRunRepository {
   getLatestRoot(taskId: string): TaskRun | undefined {
     const row = getSqliteDatabase().prepare(
       `SELECT * FROM task_runs WHERE task_id = ? AND parent_run_id IS NULL
-       ORDER BY queued_at DESC LIMIT 1`,
+       ORDER BY queued_at DESC, rowid DESC LIMIT 1`,
     ).get(taskId) as TaskRunRow | undefined;
     return row ? fromRow(row) : undefined;
   }
@@ -336,21 +342,27 @@ export class TaskRunRepository {
     now?: number;
   }): TaskRun | undefined {
     const now = input.now ?? Date.now();
-    return this.transition({
-      runId: input.runId,
-      expectedVersion: input.expectedVersion,
-      from: ['queued'],
-      to: 'running',
-      fields: {
-        context_snapshot_id: input.contextSnapshotId,
-        policy_snapshot_json: JSON.stringify(input.policySnapshot),
-        conversation_id: input.conversationId ?? null,
-        started_at: now,
-        heartbeat_at: now,
-        timeout_at: input.timeoutAt ?? null,
-      },
-      actor: input.actor ?? { kind: 'system' },
-      now,
+    return runSqliteWriteTransaction(() => {
+      const run = this.get(input.runId);
+      if (!run || run.version !== input.expectedVersion || run.status !== 'queued') return undefined;
+      const workspaceBaseline = inspectTaskWorkspace(new TaskRepository().require(run.taskId));
+      return this.transition({
+        runId: input.runId,
+        expectedVersion: input.expectedVersion,
+        from: ['queued'],
+        to: 'running',
+        fields: {
+          context_snapshot_id: input.contextSnapshotId,
+          policy_snapshot_json: JSON.stringify({ ...input.policySnapshot, ...(workspaceBaseline.length ? { workspaceBaseline } : {}) }),
+          instruction_sequence_at_start: taskInstructionSequence(run.taskId),
+          conversation_id: input.conversationId ?? null,
+          started_at: now,
+          heartbeat_at: now,
+          timeout_at: input.timeoutAt ?? null,
+        },
+        actor: input.actor ?? { kind: 'system' },
+        now,
+      });
     });
   }
 
@@ -458,6 +470,8 @@ export class TaskRunRepository {
     actor?: ActorRef;
     terminalCode?: string;
     terminalMessage?: string;
+    reviewedInstructionSequence?: number;
+    workspaceFiles?: unknown[];
     now?: number;
   }): TaskRun | undefined {
     const now = input.now ?? Date.now();
@@ -479,6 +493,13 @@ export class TaskRunRepository {
         input.expectedVersion,
       );
       if (result.changes === 0) return undefined;
+      const criteria = new TaskRepository().getContract(run.taskId, run.contractVersion)?.acceptanceCriteria ?? [];
+      const checks = input.receipt.verification.checks.map(check => {
+        const index = check.checkId
+          ? criteria.findIndex((text, position) => text === check.criterion && taskCheckId(run.taskId, run.contractVersion, position) === check.checkId)
+          : criteria.indexOf(check.criterion) === criteria.lastIndexOf(check.criterion) ? criteria.indexOf(check.criterion) : -1;
+        return { ...check, checkId: index >= 0 ? taskCheckId(run.taskId, run.contractVersion, index) : undefined };
+      });
       db.prepare(
         `INSERT INTO task_run_receipts (
           run_id, status, summary, changes_json, evidence_json, verification_json,
@@ -491,7 +512,7 @@ export class TaskRunRepository {
         input.receipt.summary,
         JSON.stringify(input.receipt.changes),
         JSON.stringify(input.receipt.evidence),
-        JSON.stringify(input.receipt.verification),
+        JSON.stringify({ ...input.receipt.verification, checks }),
         JSON.stringify(input.receipt.remainingWork),
         input.receipt.nextAction ?? null,
         input.receipt.needsUser ? 1 : 0,
@@ -501,6 +522,18 @@ export class TaskRunRepository {
         input.receipt.contextTraceId ?? null,
         now,
       );
+      if (!run.parentRunId && input.receipt.status === 'succeeded') {
+        const state = db.prepare('SELECT active_conversation_id, assignment_epoch FROM task_conversation_state WHERE task_id = ?')
+          .get(run.taskId) as { active_conversation_id: string | null; assignment_epoch: number } | undefined;
+        const currentSequence = taskInstructionSequence(run.taskId);
+        const sequence = input.reviewedInstructionSequence === currentSequence
+          ? currentSequence : run.instructionSequenceAtStart ?? (currentSequence === 0 ? 0 : undefined);
+        if (sequence !== undefined
+          && (!run.conversationId || !state?.active_conversation_id || state.active_conversation_id === run.conversationId)) {
+          recordTaskResultVersion({ runId: run.id, assignmentEpoch: state?.assignment_epoch ?? 0,
+            instructionSequence: sequence, finalizedAt: now, workspaceFiles: input.workspaceFiles });
+        }
+      }
       this.appendEvent(
         db,
         input.runId,
@@ -727,7 +760,7 @@ export class TaskRunRepository {
   }): TaskRun | undefined {
     const allowedColumns = new Set([
       'context_snapshot_id', 'policy_snapshot_json', 'conversation_id', 'started_at',
-      'heartbeat_at', 'timeout_at', 'lease_owner', 'lease_expires_at',
+      'heartbeat_at', 'timeout_at', 'lease_owner', 'lease_expires_at', 'instruction_sequence_at_start',
     ]);
     const entries = Object.entries(input.fields);
     for (const [column] of entries) {

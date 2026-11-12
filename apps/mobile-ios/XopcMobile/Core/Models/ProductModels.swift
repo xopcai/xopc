@@ -264,10 +264,33 @@ struct TaskDetailEnvelope: Decodable, Sendable {
     let conversation: TaskConversation?
     let attention: [TaskAttention]?
     let criterionReviews: [TaskCriterionReview]?
+    let acceptanceChecks: [TaskAcceptanceCheck]?
+    let acceptanceTarget: TaskAcceptanceTarget?
+    let presentation: TaskDetailPresentation?
     let waits: [TaskWait]?
     var phaseChanges: [TaskPhaseChange]?
 }
 
+struct TaskAcceptanceCheck: Decodable, Sendable, Identifiable {
+    let id: String
+    let criterion: String
+}
+
+struct TaskAcceptanceTarget: Decodable, Sendable {
+    let id: String
+    let runId: String?
+    let canSignOff: Bool
+}
+
+struct TaskDetailPresentation: Decodable, Sendable {
+    let reason: String?
+    let primaryAction: Action?
+
+    struct Action: Decodable, Sendable {
+        let type: String
+        let resultId: String?
+    }
+}
 struct TaskPhaseChange: Decodable, Sendable, Identifiable {
     let id: String
     let fromPhase: String
@@ -295,6 +318,7 @@ struct TaskAttention: Decodable, Sendable {
 }
 
 struct TaskCriterionReview: Decodable, Sendable {
+    let checkId: String?
     let contractVersion: Int
     let criterionIndex: Int
     let status: String
@@ -338,6 +362,7 @@ struct TaskVerification: Decodable, Sendable {
 }
 
 struct TaskCriterionCheck: Decodable, Sendable {
+    let checkId: String?
     let criterion: String
     let status: String
     let evidenceTitles: [String]

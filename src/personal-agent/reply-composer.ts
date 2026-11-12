@@ -76,10 +76,11 @@ function valid(packet: PersonalReplyPacket): boolean {
   if (!readCurrentTranscriptId(db, d.conversationId)) return false;
   const run = new TaskRunRepository().get(d.taskRunId);
   const state = new TaskConversationRepository().getState(d.taskId);
-  const task = db.prepare('SELECT version, resolution FROM tasks WHERE task_id = ?').get(d.taskId) as
-    { version: number; resolution: string | null } | undefined;
+  const task = db.prepare('SELECT version, resolution, latest_contract_version FROM tasks WHERE task_id = ?').get(d.taskId) as
+    { version: number; resolution: string | null; latest_contract_version: number } | undefined;
   if (d.instructionSequence !== undefined && d.instructionSequence !== taskInstructionSequence(d.taskId)) return false;
   if (!task || task.version !== packet.taskVersion || (task.resolution && task.resolution !== 'done')
+    || (d.contractVersion !== undefined && d.contractVersion !== task.latest_contract_version)
     || !run || !['succeeded', 'failed'].includes(run.status)
     || new TaskRunRepository().getLatestRoot(d.taskId)?.id !== run.id
     || state?.assignmentEpoch !== d.assignmentEpoch || state.activeConversationId !== run.conversationId) return false;

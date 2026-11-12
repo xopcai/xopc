@@ -17,9 +17,10 @@ export interface XopcTaskContract {
 }
 export interface XopcMobileTaskAttention { kind: string; summary: string; }
 export interface XopcMobileTaskReview {
+  checkId?: string;
   contractVersion: number; criterionIndex: number; status: string; reviewedAt: number;
 }
-export interface XopcMobileTaskCheck { criterion: string; status: string; evidenceTitles: string[]; }
+export interface XopcMobileTaskCheck { checkId?: string; criterion: string; status: string; evidenceTitles: string[]; }
 export interface XopcMobileTaskEvidence { kind: string; title: string; strength: string; verifies?: string[]; uri?: string; }
 export interface XopcMobileTaskVerification { checks: XopcMobileTaskCheck[]; }
 export interface XopcMobileTaskReceipt {
@@ -37,10 +38,16 @@ export interface XopcTaskPhaseChange {
   id: string; fromPhase: string; toPhase: string; fromResolution?: string; toResolution?: string;
   actor: XopcTaskChangeActor; source: string; createdAt: number;
 }
+export interface XopcTaskAcceptanceCheck { id: string; criterion: string; }
+export interface XopcTaskAcceptanceTarget { id: string; runId?: string; canSignOff: boolean; }
+export interface XopcTaskPrimaryAction { type: string; resultId?: string; }
+export interface XopcTaskPresentation { reason?: string; primaryAction?: XopcTaskPrimaryAction; }
+export interface XopcTaskCheckMutation { expectedVersion: number; contractVersion: number; resultId: string; status: string; }
 export interface XopcMobileTaskDetail {
   phaseChanges?: XopcTaskPhaseChange[];
   contract?: XopcTaskContract; latestContractVersion: number; operationalState?: string; waits?: XopcMobileTaskWait[];
   attention: XopcMobileTaskAttention[]; criterionReviews: XopcMobileTaskReview[];
+  acceptanceChecks?: XopcTaskAcceptanceCheck[]; acceptanceTarget?: XopcTaskAcceptanceTarget; presentation?: XopcTaskPresentation;
   receipts: XopcMobileTaskReceipt[]; context: XopcMobileTaskContext[];
   sessions: XopcMobileTaskSession[]; dependencies: XopcMobileTaskDependency[];
   dependents: XopcMobileTaskDependency[]; runs: XopcMobileTaskRun[]; activeConversationId?: string;
@@ -49,6 +56,7 @@ export interface XopcMobileTaskDetailResult extends XopcTaskResult {
   phaseChanges?: XopcTaskPhaseChange[];
   operationalState?: string; waits?: XopcMobileTaskWait[];
   attention: XopcMobileTaskAttention[]; criterionReviews: XopcMobileTaskReview[];
+  acceptanceChecks?: XopcTaskAcceptanceCheck[]; acceptanceTarget?: XopcTaskAcceptanceTarget; presentation?: XopcTaskPresentation;
   receipts: XopcMobileTaskReceipt[]; context: XopcMobileTaskContext[];
   sessions: XopcMobileTaskSession[]; dependencies: XopcMobileTaskDependency[];
   dependents: XopcMobileTaskDependency[]; runs: XopcMobileTaskRun[];
@@ -59,7 +67,7 @@ export interface XopcTaskCreate {
   idempotencyKey: string; title: string; body: string; projectId?: string; priority?: string; dueAt?: number; contract: XopcTaskContract; activation: XopcTaskActivation;
 }
 export interface XopcTaskPatch { expectedVersion: number; title: string; body: string; projectId: string | null; priority: string; dueAt: number | null; }
-export interface XopcTaskCommand { type: string; phase?: string; resolution?: string; executor?: XopcExecutor; }
+export interface XopcTaskCommand { type: string; resultId?: string; phase?: string; resolution?: string; executor?: XopcExecutor; }
 export interface XopcExecutor { kind: string; agentId: string; }
 export interface XopcTaskCommandBody { source?: string; idempotencyKey: string; expectedVersion: number; command: XopcTaskCommand; }
 export interface XopcProject {

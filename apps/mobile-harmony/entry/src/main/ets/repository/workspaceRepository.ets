@@ -7,7 +7,7 @@ import {
   XopcAutomationRuns, XopcAutomationRun, XopcMobileTaskDetailResult
 } from '../model/workspace';
 import { taskItem, taskDetailItem, projectItem, automationItem, newTask, scheduledAutomation } from '../common/workspaceProtocol';
-import { taskCommand, taskPatch } from '../common/taskManagement';
+import { taskCommand, taskPatch, taskReviewMutation } from '../common/taskManagement';
 
 export class XopcWorkspaceRepository {
   uuid(): string { return new XopcDeviceCrypto().uuid(); }
@@ -59,6 +59,12 @@ export class XopcWorkspaceRepository {
   async action(section: XopcSection, item: XopcWorkspaceItem, action: string, agentId: string, idempotencyKey: string): Promise<void> {
     const path = '/api/' + section + '/' + encodeURIComponent(item.id);
     if (section === 'tasks') {
+      if (action.startsWith('review:')) {
+        const mutation = taskReviewMutation(item, action);
+        const checkId = action.slice('review:'.length).split('|')[1];
+        await gatewaySession.request(path + '/criteria/' + encodeURIComponent(checkId) + '/review', 'PUT', JSON.stringify(mutation));
+        return;
+      }
       const command = taskCommand(item, action, agentId);
       const body: XopcTaskCommandBody = { idempotencyKey, expectedVersion: item.version, command, source: 'mobile' };
       await gatewaySession.request(path + '/commands', 'POST', JSON.stringify(body));

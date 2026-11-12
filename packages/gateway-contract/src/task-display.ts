@@ -16,12 +16,3 @@ export function taskDescriptionForDisplay(text: string): string {
     .replace(/<task_brief>\n([\s\S]*?)\n<\/task_brief>/g, '$1')
     .replace(/\n{3,}/g, '\n\n').trim();
 }
-
-/** Keep host instructions when an edited visible brief is saved. */
-export function preserveTaskExecutionInstructions(original: string, edited: string): string {
-  const normalized = original.replace(/\r\n/g, '\n');
-  if (!normalized.includes(PERSONAL_WORKER_RESULT_GUIDANCE)) return edited;
-  return [edited.trim(), PERSONAL_WORKER_RESULT_GUIDANCE,
-    ...(normalized.includes(REQUEST_RESULT_GUIDANCE) ? [REQUEST_RESULT_GUIDANCE] : [])]
-    .filter(Boolean).join('\n\n');
-}

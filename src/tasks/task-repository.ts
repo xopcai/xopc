@@ -9,6 +9,7 @@ import type {
   TaskPhase,
   TaskPriority,
   TaskResolution,
+  TaskResultPolicy,
   TaskPhaseChange,
   TaskChangeSource,
 } from '@xopcai/gateway-contract';
@@ -35,9 +36,10 @@ function taskListFilter(input: TaskListQuery): { where: string; params: Array<st
     if (value) { clauses.push(`${column} = ?`); params.push(value); }
   }
   if (input.search?.trim()) {
-    clauses.push(`(instr(lower(title), lower(?)) > 0 OR instr(lower(coalesce(body, '')), lower(?)) > 0
+    clauses.push(`(instr(lower(title), lower(?)) > 0
       OR EXISTS (SELECT 1 FROM task_contracts c WHERE c.task_id = tasks.task_id
-        AND c.version = tasks.latest_contract_version AND instr(lower(c.objective), lower(?)) > 0))`);
+        AND c.version = tasks.latest_contract_version
+        AND (instr(lower(c.objective), lower(?)) > 0 OR instr(lower(coalesce(c.brief, '')), lower(?)) > 0)))`);
     params.push(input.search.trim(), input.search.trim(), input.search.trim());
   }
   return { where: clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '', params };
@@ -50,7 +52,6 @@ type TaskRow = {
   milestone_id: string | null;
   parent_task_id: string | null;
   title: string;
-  body: string | null;
   phase: TaskPhase;
   resolution: TaskResolution | null;
   priority: TaskPriority;
@@ -71,6 +72,8 @@ type TaskContractRow = {
   task_id: string;
   version: number;
   objective: string;
+  brief: string | null;
+  result_policy: TaskResultPolicy;
   expected_outputs_json: string;
   acceptance_criteria_json: string;
   constraints_json: string;
@@ -92,6 +95,8 @@ function contractFromRow(row: TaskContractRow): TaskContract {
     taskId: row.task_id,
     version: row.version,
     objective: row.objective,
+    ...(row.brief ? { brief: row.brief } : {}),
+    resultPolicy: row.result_policy,
     expectedOutputs: parseJson<string[]>(row.expected_outputs_json),
     acceptanceCriteria: parseJson<string[]>(row.acceptance_criteria_json),
     constraints: parseJson<string[]>(row.constraints_json),
@@ -109,7 +114,7 @@ function taskFromRow(row: TaskRow, contract?: TaskContract): TaskAggregate {
   return {
     id: row.task_id,
     title: row.title,
-    ...(row.body ? { body: row.body } : {}),
+    ...(contract?.brief ? { body: contract.brief } : {}),
     phase: row.phase,
     ...(row.resolution ? { resolution: row.resolution } : {}),
     priority: row.priority,
@@ -147,6 +152,7 @@ export interface TaskCreateInput {
   source?: TaskExecutionSource;
   locale?: TaskUiLocale;
   objective: string;
+  resultPolicy?: TaskResultPolicy;
   expectedOutputs?: string[];
   acceptanceCriteria?: string[];
   constraints?: string[];
@@ -175,9 +181,9 @@ export class TaskRepository {
       db.prepare(
         `INSERT INTO tasks (
           task_id, creation_idempotency_key, project_id, milestone_id, parent_task_id,
-          title, body, phase, priority, due_at, owner_id, delegate_agent_id,
+          title, phase, priority, due_at, owner_id, delegate_agent_id,
           source, locale, latest_contract_version, board_rank, version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 1, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 1, ?, ?)`,
       ).run(
         id,
         input.idempotencyKey ?? null,
@@ -185,7 +191,6 @@ export class TaskRepository {
         input.milestoneId ?? null,
         input.parentTaskId ?? null,
         title,
-        input.body?.trim() || null,
         phase,
         input.priority ?? 'normal',
         input.dueAt ?? null,
@@ -201,6 +206,8 @@ export class TaskRepository {
         taskId: id,
         version: 1,
         objective,
+        brief: input.body?.trim() || undefined,
+        resultPolicy: input.resultPolicy ?? 'standard',
         expectedOutputs: input.expectedOutputs ?? [],
         acceptanceCriteria: input.acceptanceCriteria ?? [],
         constraints: input.constraints ?? [],
@@ -283,31 +290,42 @@ export class TaskRepository {
     dueAt?: number | null;
     ownerId?: string | null;
     now?: number;
+    actor?: ActorRef;
   }): TaskAggregate | undefined {
     const current = this.get(taskId);
     if (!current || current.version !== patch.expectedVersion) return undefined;
     const title = patch.title === undefined ? current.title : patch.title.trim();
     if (!title) throw new Error('Task title is required');
     const now = Math.max(patch.now ?? Date.now(), current.updatedAt + 1);
-    const result = getSqliteDatabase().prepare(
-      `UPDATE tasks SET title = ?, body = ?, project_id = ?, milestone_id = ?,
-       parent_task_id = ?, priority = ?, due_at = ?, owner_id = ?,
-       version = version + 1, updated_at = ?
-       WHERE task_id = ? AND version = ?`,
-    ).run(
-      title,
-      patch.body === undefined ? current.body ?? null : patch.body?.trim() || null,
-      patch.projectId === undefined ? current.projectId ?? null : patch.projectId,
-      patch.milestoneId === undefined ? current.milestoneId ?? null : patch.milestoneId,
-      patch.parentTaskId === undefined ? current.parentTaskId ?? null : patch.parentTaskId,
-      patch.priority ?? current.priority,
-      patch.dueAt === undefined ? current.dueAt ?? null : patch.dueAt,
-      patch.ownerId === undefined ? current.ownerId ?? null : patch.ownerId,
-      now,
-      taskId,
-      patch.expectedVersion,
-    );
-    return result.changes === 0 ? undefined : this.get(taskId);
+    const spec = current.contract;
+    const brief = patch.body === undefined ? spec?.brief : patch.body?.trim() || undefined;
+    const changedBrief = spec && brief !== spec.brief;
+    const specVersion = current.latestContractVersion + Number(Boolean(changedBrief));
+    return runSqliteWriteTransaction((db) => {
+      if (changedBrief && db.prepare(`SELECT 1 FROM task_runs WHERE task_id = ? AND started_at IS NOT NULL
+        AND status IN ('running', 'waiting', 'verifying') LIMIT 1`).get(taskId)) return undefined;
+      const result = db.prepare(
+        `UPDATE tasks SET title = ?, project_id = ?, milestone_id = ?,
+         parent_task_id = ?, priority = ?, due_at = ?, owner_id = ?,
+         latest_contract_version = ?, version = version + 1, updated_at = ?
+         WHERE task_id = ? AND version = ?`,
+      ).run(
+        title,
+        patch.projectId === undefined ? current.projectId ?? null : patch.projectId,
+        patch.milestoneId === undefined ? current.milestoneId ?? null : patch.milestoneId,
+        patch.parentTaskId === undefined ? current.parentTaskId ?? null : patch.parentTaskId,
+        patch.priority ?? current.priority,
+        patch.dueAt === undefined ? current.dueAt ?? null : patch.dueAt,
+        patch.ownerId === undefined ? current.ownerId ?? null : patch.ownerId,
+        specVersion,
+        now,
+        taskId,
+        patch.expectedVersion,
+      );
+      if (result.changes === 0) return undefined;
+      if (changedBrief) this.insertContract(db, { ...spec, version: specVersion, brief, createdBy: patch.actor ?? { kind: 'user' }, createdAt: now });
+      return this.get(taskId);
+    });
   }
 
   setLifecycle(input: {
@@ -421,6 +439,7 @@ export class TaskRepository {
   reviseContract(input: {
     taskId: string;
     objective: string;
+    brief?: string | null;
     expectedOutputs: string[];
     acceptanceCriteria: string[];
     constraints: string[];
@@ -444,6 +463,8 @@ export class TaskRepository {
         taskId: input.taskId,
         version: contractVersion,
         objective,
+        brief: input.brief === undefined ? current.contract?.brief : input.brief?.trim() || undefined,
+        resultPolicy: current.contract?.resultPolicy ?? 'standard',
         expectedOutputs: input.expectedOutputs,
         acceptanceCriteria: input.acceptanceCriteria,
         constraints: input.constraints,
@@ -518,14 +539,16 @@ export class TaskRepository {
   private insertContract(db: ReturnType<typeof getSqliteDatabase>, contract: TaskContract): void {
     db.prepare(
       `INSERT INTO task_contracts (
-        task_id, version, objective, expected_outputs_json, acceptance_criteria_json,
+        task_id, version, objective, brief, result_policy, expected_outputs_json, acceptance_criteria_json,
         constraints_json, approval_required_json, assumptions_json, risks_json,
         acceptance_policy, output_destinations_json, created_by_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       contract.taskId,
       contract.version,
       contract.objective,
+      contract.brief ?? null,
+      contract.resultPolicy,
       JSON.stringify(contract.expectedOutputs),
       JSON.stringify(contract.acceptanceCriteria),
       JSON.stringify(contract.constraints),

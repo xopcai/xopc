@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
-import type { TaskOperationalState, TaskResolution, TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
+import type { TaskOperationalState, TaskPresentation, TaskResolution, TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
 
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
+import { taskCopy } from '@/features/tasks/task-copy';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -14,6 +15,7 @@ export type PersonalWorkItem = {
   title: string;
   phase: string;
   operationalState?: TaskOperationalState;
+  presentation: TaskPresentation;
   resolution?: TaskResolution | null;
   updatedAt: number;
   attention?: { kind: string; summary: string };
@@ -86,7 +88,7 @@ export function usePersonalPrompt(conversationId: string | undefined) {
 }
 
 export function needsPersonalWorkAttention(item: PersonalWorkItem): boolean {
-  return Boolean(item.attention) || (item.phase === 'review' && item.operationalState === 'idle');
+  return Boolean(item.attention) || item.presentation.status === 'needsUser' || item.presentation.status === 'review';
 }
 
 export function useRefreshPersonalWork(conversationId: string | undefined, refreshWork: () => Promise<unknown>, refreshPrompt?: () => Promise<unknown>) {
@@ -138,17 +140,11 @@ export function isOpenPersonalPrompt(prompt: PersonalPrompt | null | undefined):
 }
 
 export function personalWorkStatus(item: PersonalWorkItem, zh: boolean): [string, string] {
-  if (item.attention) return [item.attention.kind === 'approval_required' ? (zh ? '待确认' : 'Needs approval') : (zh ? '待回复' : 'Needs a reply'), 'bg-warning'];
-  if (item.operationalState === 'running') return [zh ? '执行中' : 'Working', 'bg-accent'];
-  if (item.operationalState === 'verifying') return [zh ? '验证中' : 'Verifying', 'bg-accent'];
-  if (item.operationalState === 'queued' || item.operationalState === 'allocating') return [zh ? '排队中' : 'Queued', 'bg-fg-subtle'];
-  if (item.operationalState === 'waiting') return [zh ? '待继续' : 'Waiting', 'bg-warning'];
-  if (item.operationalState === 'blocked') return [zh ? '已阻塞' : 'Blocked', 'bg-warning'];
-  if (item.operationalState === 'failed') return [zh ? '执行失败' : 'Failed', 'bg-danger'];
-  if (item.operationalState === 'cancelled' || item.resolution === 'cancelled') return [zh ? '已取消' : 'Cancelled', 'bg-fg-subtle'];
-  if (item.phase === 'review') return [zh ? '待验收' : 'In review', 'bg-warning'];
-  if (item.phase === 'closed') return item.resolution === 'done' ? [zh ? '已完成' : 'Finished', 'bg-accent'] : [zh ? '已结束' : 'Ended', 'bg-fg-subtle'];
-  return [zh ? '待开始' : 'Pending', 'bg-fg-subtle'];
+  const { status } = item.presentation;
+  const tone = status === 'failed' ? 'bg-danger'
+    : ['needsUser', 'review', 'waiting', 'blocked', 'paused'].includes(status) ? 'bg-warning'
+      : ['running', 'verifying', 'completed'].includes(status) ? 'bg-accent' : 'bg-fg-subtle';
+  return [taskCopy(zh ? 'zh' : 'en').detailStatuses[status], tone];
 }
 
 export function usePersonalWorkOverview(conversationId: string | undefined, zh: boolean) {

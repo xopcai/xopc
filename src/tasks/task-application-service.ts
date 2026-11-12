@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { TaskExecutorSelectionSchema, verifiedTaskCriteria, resultReferenceId, resultReferenceVersion } from '@xopcai/gateway-contract';
+import { TaskExecutorSelectionSchema, taskCheckId, verifiedTaskCheckIds, resultReferenceId, resultReferenceVersion } from '@xopcai/gateway-contract';
 
 import type {
   ActorRef,
@@ -9,6 +9,7 @@ import type {
   TaskChangedField,
   TaskCreateRequest,
   TaskExecutorSelection,
+  TaskResultPolicy,
   TaskRunReceipt,
 } from '@xopcai/gateway-contract';
 
@@ -30,7 +31,10 @@ import { TaskCollaborationRepository } from './task-collaboration-repository.js'
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
 import { TaskResultDeliveryRepository } from './task-result-delivery-repository.js';
+import { taskInstructionSequence } from './task-instruction-sequence.js';
+import { verifyTaskWorkspace } from './task-workspace-verification.js';
 import { resolveTaskLocale } from './task-language.js';
+import type { UnconfirmedToolEffect } from '../agent/orchestration/turn-recovery.js';
 
 export type TaskApplicationResult =
   | { ok: true; model: TaskReadModel; runId?: string }
@@ -56,6 +60,7 @@ function commandChangedFields(command: TaskCommand): TaskChangedField[] {
     case 'mark_ready':
     case 'request_review':
     case 'close':
+    case 'signoff':
     case 'reopen':
       return ['phase', 'resolution', 'attention'];
     case 'retry_allocation':
@@ -76,7 +81,10 @@ export class TaskApplicationService {
   readonly #dependencies = new TaskDependencyService();
   readonly #projector = new TaskReadModelProjector();
 
-  create(input: TaskCreateRequest, actor: ActorRef = { kind: 'user' }, options?: { linkRunningOriginInput?: boolean }): TaskApplicationResult {
+  create(input: TaskCreateRequest, actor: ActorRef = { kind: 'user' }, options?: {
+    linkRunningOriginInput?: boolean;
+    resultPolicy?: TaskResultPolicy;
+  }): TaskApplicationResult {
     const existing = this.#tasks.getByIdempotencyKey(input.idempotencyKey);
     if (existing) {
       this.readCommand(input.idempotencyKey, requestHash(input));
@@ -102,6 +110,7 @@ export class TaskApplicationService {
         source: 'api',
         locale: resolveTaskLocale({ locale: input.locale, title: input.title, contract: input.contract }),
         ...input.contract,
+        resultPolicy: options?.resultPolicy ?? 'standard',
         createdBy: actor,
       });
       db.prepare(
@@ -238,10 +247,9 @@ export class TaskApplicationService {
       const contract = task.contract!;
       const originalBody = db.prepare('SELECT original_body FROM task_work_revisions WHERE task_id = ? AND original_body IS NOT NULL ORDER BY contract_version LIMIT 1').get(task.id) as { original_body: string } | undefined;
       const originalObjective = String(db.prepare('SELECT objective FROM task_contracts WHERE task_id = ? ORDER BY version LIMIT 1').get(task.id)?.objective ?? contract.objective);
+      const brief = `${originalBody?.original_body ?? contract.brief ?? contract.objective}\n\n## Work revision\nBaseline result: ${baseline.deliveryId} (${input.baselineVersion}).\n${instruction}\nRetain unaffected requirements. Publish only the selected final artifacts of this revision. Prior runs are historical.`;
       current = this.#tasks.reviseContract({ ...contract, taskId: task.id, expectedVersion: current.version,
-        objective: `${originalObjective}\nCurrent revision: ${instruction}`, acceptanceCriteria: task.contract!.acceptanceCriteria, createdBy: actor })!;
-      current = this.#tasks.update(task.id, { expectedVersion: current.version,
-        body: `${originalBody?.original_body ?? task.body ?? contract.objective}\n\n## Work revision\nBaseline result: ${baseline.deliveryId} (${input.baselineVersion}).\n${instruction}\nRetain unaffected requirements. Publish only the selected final artifacts of this revision. Prior runs are historical.` })!;
+        objective: `${originalObjective}\nCurrent revision: ${instruction}`, brief, createdBy: actor })!;
       db.prepare(`UPDATE task_origin_links SET origin_transcript_id = (SELECT active_transcript_id FROM sessions WHERE conversation_id = ?),
         request_input_id = (SELECT id FROM session_inputs WHERE conversation_id = ? AND status = 'running' ORDER BY created_at_ms DESC LIMIT 1) WHERE task_id = ?`)
         .run(input.conversationId, input.conversationId, task.id);
@@ -251,7 +259,7 @@ export class TaskApplicationService {
         if (!refs.some(item => item.kind === ref.kind && item.sourceId === ref.sourceId)) refs.push(ref);
       }
       if (refs.length > 51) throw new Error('Revision input manifest exceeds 51 sources');
-      captureTaskHandoff(task.id, input.conversationId, current.body!, refs);
+      captureTaskHandoff(task.id, input.conversationId, brief, refs);
       db.prepare(`INSERT INTO task_work_revisions (revision_id, task_id, contract_version, baseline_delivery_id, baseline_version,
         instruction_entry_id, input_id, idempotency_key, request_hash, supersedes_json, original_body, created_at)
         VALUES (?, ?, ?, ?, ?, ?, (SELECT request_input_id FROM task_origin_links WHERE task_id = ?), ?, ?, ?, ?, ?)`)
@@ -302,10 +310,11 @@ export class TaskApplicationService {
         });
       let result: TaskApplicationResult;
       switch (input.command.type) {
-        case 'move':
+        case 'move': {
+          const reviews = new TaskCriterionReviewRepository();
           if (actor.kind !== 'user' && input.command.phase === 'closed'
             && (input.command.resolution ?? 'done') === 'done'
-            && (!new TaskCriterionReviewRepository().allPassed(task)
+            && (!reviews.allPassed(task) || !reviews.workspaceVerified(task)
               || this.#runs.getActiveRoot(task.id) || this.#runs.listActiveWaits(task.id).length)) {
             result = { ok: false, reason: 'blocked', model };
             break;
@@ -314,6 +323,7 @@ export class TaskApplicationService {
             ? lifecycle(input.command.phase, input.command.phase === 'closed' ? input.command.resolution ?? 'done' : undefined)
             : { ok: false, reason: 'invalid_transition', model };
           break;
+        }
         case 'mark_ready':
           result = task.phase === 'backlog'
             ? lifecycle('ready')
@@ -350,21 +360,40 @@ export class TaskApplicationService {
             ? lifecycle('review')
             : { ok: false, reason: 'invalid_transition', model };
           break;
-        case 'close':
-          result = actor.kind !== 'user' && input.command.resolution === 'done'
-            && (!new TaskCriterionReviewRepository().allPassed(task)
-              || this.#runs.getActiveRoot(task.id) !== undefined
-              || this.#runs.listActiveWaits(task.id).length > 0)
+        case 'close': {
+          const run = this.#runs.getLatestRoot(task.id);
+          const reviews = new TaskCriterionReviewRepository();
+          const waits = this.#runs.listActiveWaits(task.id);
+          result = input.command.resolution === 'done'
+            && ((run && (task.contract?.acceptancePolicy !== 'verified_auto' || !reviews.target(task)))
+              || !reviews.workspaceVerified(task)
+              || waits.some(wait => wait.condition.type === 'run_decision')
+              || (actor.kind !== 'user' && (!reviews.allPassed(task) || waits.length > 0)))
             ? { ok: false, reason: 'blocked', model }
             : lifecycle('closed', input.command.resolution);
           break;
+        }
+        case 'signoff': {
+          const reviews = new TaskCriterionReviewRepository();
+          const target = reviews.target(task);
+          if (actor.kind !== 'user' || !target || target.id !== input.command.resultId || !reviews.canSignOff(task, target)) {
+            result = { ok: false, reason: 'blocked', model };
+            break;
+          }
+          result = lifecycle('closed', 'done');
+          if (result.ok) {
+            db.prepare('INSERT INTO task_signoffs (signoff_id, result_id, signed_by_json, signed_at) VALUES (?, ?, ?, ?)')
+              .run(randomUUID(), target.id, JSON.stringify(actor), Date.now());
+          }
+          break;
+        }
         case 'reopen':
           result = task.phase === 'closed'
             ? lifecycle(input.command.phase)
             : { ok: false, reason: 'invalid_transition', model };
           break;
         case 'add_wait': {
-          if (task.phase === 'closed') {
+          if (task.phase === 'closed' || input.command.wait.condition.type === 'run_decision') {
             result = { ok: false, reason: 'invalid_transition', model };
             break;
           }
@@ -395,7 +424,8 @@ export class TaskApplicationService {
           const wait = this.#runs.getWait(input.command.waitId);
           if (!wait || wait.taskId !== task.id) {
             result = { ok: false, reason: 'not_found', model };
-          } else if (wait.status !== 'active' || (task.phase === 'closed' && task.resolution !== 'done') || wait.condition.type === 'connection') {
+          } else if (wait.status !== 'active' || (task.phase === 'closed' && task.resolution !== 'done')
+            || wait.condition.type === 'connection' || wait.condition.type === 'run_decision') {
             result = { ok: false, reason: 'invalid_transition', model };
           } else {
             const response = input.command.resolution as { kind?: string; answer?: unknown; decision?: unknown } | undefined;
@@ -524,6 +554,8 @@ export class TaskApplicationService {
     suppressAttention?: boolean;
     resultText?: string;
     hostArtifact?: { id: string; sha256?: string };
+    reviewedInstructionSequence?: number;
+    unconfirmedEffect?: UnconfirmedToolEffect;
   }): TaskApplicationResult {
     return runSqliteWriteTransaction((db) => {
       const run = this.#runs.get(input.runId);
@@ -531,10 +563,28 @@ export class TaskApplicationService {
       if (run.version !== input.expectedRunVersion) {
         return { ok: false, reason: 'conflict', model: this.#projector.get(run.taskId) };
       }
+      const task = this.#tasks.require(run.taskId);
+      const latestInstructionSequence = taskInstructionSequence(task.id);
+      const currentInstructions = latestInstructionSequence === (run.instructionSequenceAtStart ?? 0)
+        || latestInstructionSequence === input.reviewedInstructionSequence;
+      const instructionGap = resolveTaskLocale(task) === 'zh' ? '尚未核验运行期间补充的指令。'
+        : 'Directions added during execution still need verification.';
+      const workspaceFiles = !run.parentRunId && input.receipt.status === 'succeeded'
+        ? verifyTaskWorkspace(task, run.policySnapshot?.workspaceBaseline) : [];
+      const missingWorkspaceFiles = workspaceFiles.filter(file => !file.verified);
+      const workspaceGaps = missingWorkspaceFiles.map(file => resolveTaskLocale(task) === 'zh'
+        ? `目标位置待核验：${file.relativePath || '工作区文件'}` : `Workspace target needs verification: ${file.relativePath || 'workspace file'}`);
+      const receipt = !currentInstructions && input.receipt.status === 'succeeded'
+        ? { ...input.receipt, completionVerdict: 'partial' as const, verification: { status: 'unverified' as const, checks: [] },
+          remainingWork: [...input.receipt.remainingWork, instructionGap, ...workspaceGaps] }
+        : workspaceGaps.length ? { ...input.receipt, completionVerdict: 'partial' as const,
+          remainingWork: [...input.receipt.remainingWork, ...workspaceGaps] } : input.receipt;
       const finalized = this.#runs.finalize({
         runId: run.id,
         expectedVersion: run.version,
-        receipt: input.receipt,
+        receipt,
+        reviewedInstructionSequence: input.reviewedInstructionSequence,
+        workspaceFiles,
         actor: input.actor,
         terminalCode: input.terminalCode,
         terminalMessage: input.terminalMessage,
@@ -542,14 +592,23 @@ export class TaskApplicationService {
       if (!finalized) {
         return { ok: false, reason: 'conflict', model: this.#projector.get(run.taskId) };
       }
-      const task = this.#tasks.require(run.taskId);
       const activeConversationId = new TaskConversationRepository().getState(task.id)?.activeConversationId;
+      const alreadyWaiting = this.#runs.listActiveWaits(task.id).length > 0;
+      const current = !run.parentRunId && run.contractVersion === task.latestContractVersion
+        && (!run.conversationId || !activeConversationId || run.conversationId === activeConversationId);
+      const decisionReason = input.receipt.needsUser
+        ? input.receipt.nextAction?.trim() || input.receipt.failure?.recoveryAction?.trim() || input.receipt.summary.trim()
+          || (resolveTaskLocale(task) === 'zh' ? '请核对上次执行结果' : 'Check the previous run result')
+        : undefined;
+      if (current && decisionReason && task.phase !== 'closed') {
+        const reasonCode = input.receipt.failure?.code ?? (input.unconfirmedEffect ? 'tool_outcome_unconfirmed' : undefined);
+        this.#runs.createWait({ taskId: task.id, taskRunId: run.id, kind: 'external_event', reason: decisionReason,
+          condition: { type: 'run_decision', contractVersion: run.contractVersion, ...(reasonCode ? { reasonCode } : {}),
+            ...(input.unconfirmedEffect ? { operation: input.unconfirmedEffect } : {}) } });
+      }
       // Late and child receipts cannot override a user's pause/close decision
       // or certify a newer contract.
-      if (run.parentRunId || (task.phase === 'closed' && task.resolution !== 'done')
-        || this.#runs.listActiveWaits(task.id).length > 0
-        || (run.conversationId && activeConversationId && run.conversationId !== activeConversationId)
-        || run.contractVersion !== task.latestContractVersion) {
+      if (!current || alreadyWaiting || (task.phase === 'closed' && task.resolution !== 'done')) {
         enqueueTaskChangedEvent(db, {
           taskId: task.id, projectId: task.projectId, version: task.version,
           changedFields: ['runs', 'receipts'], actor: input.actor,
@@ -559,14 +618,15 @@ export class TaskApplicationService {
       }
       new TaskCollaborationRepository().append({
         taskId: run.taskId, taskRunId: run.id, authorKind: 'system', authorId: 'task-run',
-        kind: input.receipt.status === 'succeeded' ? 'result' : 'failure',
-        body: input.receipt.summary?.slice(0, 8000) || (resolveTaskLocale(task) === 'zh'
+        kind: receipt.status === 'succeeded' && !receipt.needsUser && currentInstructions ? 'result' : 'failure',
+        body: (decisionReason ?? (!currentInstructions ? instructionGap : receipt.summary)).slice(0, 8000) || (resolveTaskLocale(task) === 'zh'
           ? input.receipt.status === 'succeeded' ? '任务执行完成' : '任务执行失败'
           : input.receipt.status === 'succeeded' ? 'TaskRun completed' : 'TaskRun failed'),
         idempotencyKey: `task-run-receipt:${run.id}`,
       });
-      if (input.receipt.status === 'succeeded' || input.receipt.status === 'failed') {
-        new TaskResultDeliveryRepository().enqueue(run.id, input.receipt.summary, input.receipt.status, input.resultText, input.hostArtifact);
+      if (currentInstructions && (receipt.status === 'succeeded' || receipt.status === 'failed')) {
+        new TaskResultDeliveryRepository().enqueue(run.id, receipt.summary, receipt.status, input.resultText, input.hostArtifact,
+          missingWorkspaceFiles.length > 0);
       }
       if (!this.#tasks.runPhaseUnchanged(task.id, run.id) || task.phase === 'closed') {
         enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: task.version,
@@ -593,16 +653,17 @@ export class TaskApplicationService {
         });
         return { ok: true, model };
       }
-      const verifiedCriteria = verifiedTaskCriteria(input.receipt);
+      const verifiedCriteria = verifiedTaskCheckIds(this.#runs.getReceipt(run.id));
       const criteria = task.contract?.acceptanceCriteria ?? [];
-      const criteriaVerified = criteria.length > 0 && criteria.every((criterion) => verifiedCriteria.has(criterion));
+      const criteriaVerified = criteria.length > 0
+        && criteria.every((_, index) => verifiedCriteria.has(taskCheckId(task.id, run.contractVersion, index)));
       const humanReviewBlocksCompletion = new TaskCriterionReviewRepository().list(task.id, task.latestContractVersion)
         .some(review => review.status !== 'passed');
       const hasWaits = this.#runs.listActiveWaits(task.id).length > 0;
-      const verified = !humanReviewBlocksCompletion && !hasWaits && criteriaVerified && input.receipt.verification.status === 'passed'
-        && input.receipt.completionVerdict === 'achieved'
-        && input.receipt.remainingWork.length === 0
-        && !input.receipt.needsUser;
+      const verified = !humanReviewBlocksCompletion && !hasWaits && criteriaVerified && receipt.verification.status === 'passed'
+        && receipt.completionVerdict === 'achieved'
+        && receipt.remainingWork.length === 0
+        && !receipt.needsUser;
       const phase = task.contract?.acceptancePolicy === 'verified_auto' && verified
         ? 'closed'
         : 'review';

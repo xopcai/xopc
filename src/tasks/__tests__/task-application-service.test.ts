@@ -315,17 +315,16 @@ describe('TaskApplicationService', () => {
     expect(new TaskCollaborationRepository().recent(run.taskId)[0].body.length).toBeLessThanOrEqual(8000);
   });
 
-  it('keeps a cleared criterion pending after a successful automatic verification', () => {
+  it('keeps a review for a different result from changing automatic verification', () => {
     const { service, task, run } = createRunningTask('cleared-criterion');
     const current = new TaskRepository().require(task.id);
     const reviews = new TaskCriterionReviewRepository();
-    reviews.set({ task: current, expectedVersion: current.version, criterionIndex: 0,
-      status: 'unverified', actor: { kind: 'user', id: 'owner' } });
+    expect(reviews.set({ task: current, expectedVersion: current.version, resultId: 'manual', criterionIndex: 0,
+      status: 'unverified', actor: { kind: 'user', id: 'owner' } })).toBeUndefined();
 
     const result = service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt });
 
-    expect(result).toMatchObject({ ok: true, model: { task: { phase: 'review' } } });
-    expect(reviews.allPassed(current)).toBe(false);
+    expect(result).toMatchObject({ ok: true, model: { task: { phase: 'closed' } } });
   });
 
   it.each(['manual', 'verified_then_review', 'verified_auto'] as const)('honors current human criterion reviews under %s before completing a task', (acceptancePolicy) => {
@@ -345,11 +344,11 @@ describe('TaskApplicationService', () => {
     expect(close('close-before-review')).toMatchObject({ ok: false, reason: 'blocked' });
     const reviews = new TaskCriterionReviewRepository();
     const failedTask = new TaskRepository().require(taskId);
-    reviews.set({ task: failedTask, expectedVersion: failedTask.version, criterionIndex: 0,
+    reviews.set({ task: failedTask, expectedVersion: failedTask.version, resultId: 'manual', criterionIndex: 0,
       status: 'failed', actor: { kind: 'user', id: 'owner' } });
     expect(close('close-after-failure')).toMatchObject({ ok: false, reason: 'blocked' });
     const passedTask = new TaskRepository().require(taskId);
-    reviews.set({ task: passedTask, expectedVersion: passedTask.version, criterionIndex: 0,
+    reviews.set({ task: passedTask, expectedVersion: passedTask.version, resultId: 'manual', criterionIndex: 0,
       status: 'passed', actor: { kind: 'user', id: 'owner' } });
     const beforeRevision = new TaskRepository().require(taskId);
     expect(reviews.allPassed(beforeRevision)).toBe(true);
@@ -360,7 +359,7 @@ describe('TaskApplicationService', () => {
     expect(revised?.latestContractVersion).toBe(2);
     expect(close('close-after-revision')).toMatchObject({ ok: false, reason: 'blocked' });
     const current = new TaskRepository().require(taskId);
-    reviews.set({ task: current, expectedVersion: current.version, criterionIndex: 0,
+    reviews.set({ task: current, expectedVersion: current.version, resultId: 'manual', criterionIndex: 0,
       status: 'passed', actor: { kind: 'user', id: 'owner' } });
     expect(close('close-after-review')).toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'done' } } });
   });
@@ -559,12 +558,12 @@ describe('TaskApplicationService', () => {
     } });
   });
 
-  it('keeps an automatic task open when a current human review rejects its result', () => {
+  it('rejects a human review while its run is still in progress', () => {
     const { service, task, run } = createRunningTask('human-rejected-auto');
-    new TaskCriterionReviewRepository().set({ task, expectedVersion: task.version, criterionIndex: 0,
-      status: 'failed', actor: { kind: 'user', id: 'owner' } });
+    expect(new TaskCriterionReviewRepository().set({ task, expectedVersion: task.version, resultId: run.id, criterionIndex: 0,
+      status: 'failed', actor: { kind: 'user', id: 'owner' } })).toBeUndefined();
     expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
-      .toMatchObject({ ok: true, model: { task: { phase: 'review' } } });
+      .toMatchObject({ ok: true, model: { task: { phase: 'closed' } } });
   });
 
   it('defaults new repository tasks to automatic acceptance and preserves explicit manual acceptance', () => {
@@ -918,6 +917,7 @@ describe('TaskApplicationService', () => {
     const review = new TaskCriterionReviewRepository().set({
       task: dependency.model.task,
       expectedVersion: dependency.model.task.version,
+      resultId: 'manual',
       criterionIndex: 0,
       status: 'passed',
       actor: { kind: 'user', id: 'owner' },

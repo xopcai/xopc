@@ -6,9 +6,23 @@ import {
   TaskChangedEventSchema,
   TaskDeletedEventSchema,
   TaskSchema,
+  verifiedTaskCriteria,
+  type TaskEvidence,
+  type TaskRunReceipt,
 } from './tasks.js';
 
 describe('Task contracts', () => {
+  it('does not certify checks with ambiguous evidence titles or duplicate checks', () => {
+    const proof: TaskEvidence = { kind: 'test', title: 'Tests', summary: 'Passed', strength: 'verified',
+      provenance: 'tool', observedAt: 1 };
+    const check = { criterion: 'Tests passed', status: 'passed' as const, evidenceTitles: ['Tests'] };
+    const verified = (evidence: TaskEvidence[], checks: TaskRunReceipt['verification']['checks']) =>
+      verifiedTaskCriteria({ evidence, verification: { status: 'passed', checks } });
+    expect(verified([proof], [check])).toEqual(new Set(['Tests passed']));
+    expect(verified([proof, { ...proof, strength: 'observed' }], [check]).size).toBe(0);
+    expect(verified([proof], [check, check]).size).toBe(0);
+  });
+
   it('defaults contract input to automatic acceptance while retaining explicit human acceptance', () => {
     const contract = { objective: 'Deliver report', expectedOutputs: ['report.md'], acceptanceCriteria: ['Report verified'],
       constraints: [], approvalRequired: [], assumptions: [], risks: [], outputDestinations: [] };

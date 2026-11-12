@@ -879,6 +879,7 @@ export function ProjectDetailPage() {
     setError(null);
     try {
       const detail = await fetchTask(task.id);
+      const signoffTarget = detail.acceptanceTarget?.canSignOff ? detail.acceptanceTarget.id : undefined;
       const command: TaskCommand = action.startsWith('move_')
         ? { type: 'move', phase: action.slice('move_'.length) as TaskPhase }
         : action.startsWith('reopen_')
@@ -899,7 +900,7 @@ export function ProjectDetailPage() {
             : action === 'review'
               ? { type: 'request_review' }
               : action === 'complete'
-                ? { type: 'close', resolution: 'done' }
+                ? signoffTarget ? { type: 'signoff', resultId: signoffTarget } : { type: 'close', resolution: 'done' }
                 : action === 'reopen'
                   ? { type: 'reopen', phase: 'ready' }
                   : { type: 'resolve_wait', waitId: detail.waits[0]?.id ?? '' };

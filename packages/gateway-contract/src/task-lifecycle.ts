@@ -47,6 +47,7 @@ export const TaskAttentionKindSchema = z.enum([
   'approval_required',
   'dependency_blocked',
   'run_failed',
+  'run_decision_required',
   'verification_failed',
   'overdue',
   'stale',

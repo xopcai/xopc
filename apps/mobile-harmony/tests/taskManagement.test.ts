@@ -19,7 +19,9 @@ function detail(): XopcMobileTaskDetailResult {
     contract: { objective: 'Ship', expectedOutputs: [], acceptanceCriteria: ['Works'], constraints: [],
       approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] } },
     operationalState: 'idle', waits: [], allowedCommands: ['move', 'start', 'close'], attention: [],
-    criterionReviews: [{ contractVersion: 2, criterionIndex: 0, status: 'passed', reviewedAt: 1 }],
+    acceptanceChecks: [{ id: 'task 1:2:0', criterion: 'Works' }],
+    acceptanceTarget: { id: 'result:2', canSignOff: false },
+    criterionReviews: [{ checkId: 'task 1:2:0', contractVersion: 2, criterionIndex: 0, status: 'passed', reviewedAt: 1 }],
     receipts: [], context: [], sessions: [], dependencies: [], dependents: [], runs: [] };
 }
 
@@ -49,11 +51,11 @@ describe('Harmony task management', () => {
     const item = taskDetailItem(detail());
     expect(taskCompletionBlock(item)).toBe('');
     expect(taskCommand(item, 'close', '')).toEqual({ type: 'close', resolution: 'done' });
-    item.taskDetail!.criterionReviews[0].contractVersion = 1;
+    item.taskDetail!.criterionReviews[0].checkId = 'task 1:1:0';
     expect(taskCompletionBlock(item)).toBe('acceptance');
     expect(taskCommand(item, 'close', '')).toEqual({ type: 'close', resolution: 'done' });
     expect(taskCommand(item, 'cancel_task', '')).toEqual({ type: 'close', resolution: 'cancelled' });
-    item.taskDetail!.criterionReviews[0].contractVersion = 2;
+    item.taskDetail!.criterionReviews[0].checkId = 'task 1:2:0';
     item.taskDetail!.runs = [{ id: 'run', contractVersion: 2, status: 'running' }];
     expect(taskCompletionBlock(item)).toBe('execution');
     item.taskDetail!.runs = [];
@@ -67,17 +69,34 @@ describe('Harmony task management', () => {
   it('requires current verified evidence for automatic acceptance and honors the latest decisive check', () => {
     const info = taskDetailItem(detail()).taskDetail!;
     info.contract!.acceptancePolicy = 'verified_auto';
+    info.criterionReviews = [];
+    info.acceptanceTarget!.runId = 'new';
     info.runs = [{ id: 'new', contractVersion: 2 }, { id: 'old', contractVersion: 1 }];
     const receipt = { runId: 'new', summary: '', status: 'succeeded', finalizedAt: 1, remainingWork: [],
-      verification: { checks: [{ criterion: 'Works', status: 'passed', evidenceTitles: ['Check'] }] },
+      verification: { checks: [{ checkId: 'task 1:2:0', criterion: 'Works', status: 'passed', evidenceTitles: ['Check'] }] },
       evidence: [{ kind: 'test', title: 'Check', strength: 'verified' }] };
     info.receipts = [{ ...receipt, runId: 'old' }];
     expect(taskCriterionState(info, 'Works', 0)).toBe('pending');
     info.receipts = [receipt];
     expect(taskCriterionState(info, 'Works', 0)).toBe('passed');
     info.receipts.unshift({ ...receipt, finalizedAt: 2,
-      verification: { checks: [{ criterion: 'Works', status: 'failed', evidenceTitles: ['Check'] }] } });
+      verification: { checks: [{ checkId: 'task 1:2:0', criterion: 'Works', status: 'failed', evidenceTitles: ['Check'] }] } });
     expect(taskCriterionState(info, 'Works', 0)).toBe('failed');
+  });
+
+  it('reviews and signs the exact version selected by the server', async () => {
+    const repository = new XopcWorkspaceRepository();
+    const response = detail();
+    response.acceptanceTarget!.canSignOff = true;
+    response.presentation = { primaryAction: { type: 'signoff', resultId: 'result:2' } };
+    const item = taskDetailItem(response);
+    await repository.action('tasks', item, 'review:result:2|task 1:2:0|passed', '', 'key');
+    expect(mocks.request).toHaveBeenCalledWith('/api/tasks/task%201/criteria/task%201%3A2%3A0/review', 'PUT',
+      JSON.stringify({ expectedVersion: 3, contractVersion: 2, resultId: 'result:2', status: 'passed' }));
+    await repository.action('tasks', item, 'signoff:result:2', '', 'key');
+    expect(TaskCommandRequestSchema.parse(JSON.parse(mocks.request.mock.calls[1][2])).command)
+      .toEqual({ type: 'signoff', resultId: 'result:2' });
+    await expect(repository.action('tasks', item, 'signoff:result:1', '', 'key')).rejects.toThrow('INVALID_ACTION');
   });
 
   it('uses versioned canonical requests and explicitly clears optional properties', async () => {

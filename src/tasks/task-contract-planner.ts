@@ -3,7 +3,6 @@ import type { UserMessage } from '@earendil-works/pi-ai';
 import { getAgentDefaultChatModelConfig } from '../config/schema.js';
 import { completeTaskModelCall } from './task-model-call.js';
 import { createLogger } from '../utils/logger.js';
-import { PERSONAL_WORKER_RESULT_GUIDANCE } from '../personal-agent/communication.js';
 import { finalReplyCharacterLimit, isChatReplyOutput } from './task-final-reply.js';
 import {
   defineTaskContract,
@@ -125,7 +124,7 @@ export class ModelTaskContractPlanner implements TaskContractPlanner {
         languageInstruction,
         '',
         `User request:\n${input.objective.trim()}`,
-        input.taskContext ? `\nUser-provided task context:\n${input.taskContext.replace(PERSONAL_WORKER_RESULT_GUIDANCE, '').trim()}` : '',
+        input.taskContext ? `\nUser-provided task context:\n${input.taskContext.trim()}` : '',
         input.projectContext ? `\nProject context:\n${input.projectContext.slice(0, 8_000)}` : '',
         input.userContext ? `\nUser context:\n${input.userContext.slice(0, 8_000)}` : '',
       ].join('\n');

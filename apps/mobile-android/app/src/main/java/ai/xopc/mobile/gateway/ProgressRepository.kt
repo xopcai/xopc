@@ -27,7 +27,11 @@ data class ProgressTask(val id: String, val title: String, val body: String, val
   val dueAt: Long? = null, val operationalState: String = "idle", val hasActiveExecution: Boolean = false,
   val activeWaitCount: Int = 0, val latestResult: String = "", val remainingWork: List<String> = emptyList(),
   val phaseChanges: List<TaskPhaseChange> = emptyList(),
-  val attention: List<String> = emptyList(), val expectedOutputs: List<String> = emptyList()) {
+  val attention: List<String> = emptyList(), val expectedOutputs: List<String> = emptyList(),
+  val latestContractVersion: Int = 0, val acceptanceResultId: String? = null, val signoffResultId: String? = null, val presentationReason: String? = null) {
+  fun reviewAction(check: TaskCriterion): String? = acceptanceResultId?.takeIf {
+    phase != "closed" && activeWaitCount == 0 && check.id.isNotBlank()
+  }?.let { "review:$it|${check.id}|${if (check.status == "passed") "unverified" else "passed"}" }
   fun phaseAction(target: String): String? {
     if (target == phase || target !in setOf("backlog", "ready", "active", "review", "closed")) return null
     val action = "move"
@@ -45,7 +49,7 @@ data class TaskPhaseChange(val id: String, val fromPhase: String, val toPhase: S
 
 data class ProgressTaskEdit(val title: String, val body: String, val projectId: String,
   val priority: String, val dueAt: Long?)
-data class TaskCriterion(val text: String, val status: String, val humanReviewed: Boolean)
+data class TaskCriterion(val text: String, val status: String, val humanReviewed: Boolean, val id: String = "")
 data class ProgressTaskPage(val items: List<ProgressTask>, val total: Int)
 data class ProgressProject(val id: String, val name: String, val description: String, val status: String,
   val brief: String, val defaultAgentId: String? = null, val workspaceRoot: String? = null,
@@ -129,13 +133,27 @@ class ProgressRepository(private val gateway: GatewaySession) {
 
   fun command(task: ProgressTask, action: String, idempotencyKey: String, agentId: String = ""): ProgressTask {
     val kind = if (action == "cancel_task") "close" else action.substringBefore(':')
-    require(task.id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && task.version > 0 &&
+    require(task.id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && task.version > 0) { "INVALID_TASK_COMMAND" }
+    if (kind == "review") {
+      val fields = action.substringAfter(':').split('|')
+      require(fields.size == 3 && task.acceptanceResultId == fields[0] && task.phase != "closed" &&
+        task.activeWaitCount == 0 && fields[2] in setOf("passed", "unverified") &&
+        task.criteria.any { it.id == fields[1] }) { "INVALID_TASK_REVIEW" }
+      val body = JSONObject().put("expectedVersion", task.version).put("contractVersion", task.latestContractVersion)
+        .put("resultId", fields[0]).put("status", fields[2])
+      val check = URLEncoder.encode(fields[1], "UTF-8")
+      val response = JSONObject(gateway.request("/api/tasks/${task.id}/criteria/$check/review", "PUT", body.toString()))
+      require(response.getBoolean("ok")) { "INVALID_TASK_REVIEW_RESPONSE" }
+      return parseTaskDetail(task.id, gateway.request("/api/tasks/${task.id}"), minimumVersion = response.getInt("version"))
+    }
+    require(kind == "signoff" && task.signoffResultId == action.substringAfter(':') ||
       kind in task.allowedCommands && kind in setOf("move", "mark_ready", "request_review", "close", "reopen", "start")) {
       "INVALID_TASK_COMMAND"
     }
     val selectedAgent = agentId.trim()
     require(kind != "start" || selectedAgent.isNotEmpty() && selectedAgent.length <= 128) { "INVALID_TASK_AGENT" }
     val command = JSONObject().put("type", kind)
+    if (kind == "signoff") command.put("resultId", task.signoffResultId)
     if (kind == "close") {
       command.put("resolution", if (action == "cancel_task") "cancelled" else "done")
     }
@@ -342,6 +360,10 @@ class ProgressRepository(private val gateway: GatewaySession) {
       val remaining = latest?.optJSONArray("remainingWork")
       val attention = root.optJSONArray("attention")
       val outputs = root.getJSONObject("task").optJSONObject("contract")?.optJSONArray("expectedOutputs")
+      val acceptance = root.optJSONObject("acceptanceTarget")
+      val presentation = root.optJSONObject("presentation")
+      val primary = presentation?.optJSONObject("primaryAction")
+      val resultId = acceptance?.optString("id")?.takeIf { it.isNotBlank() }
       return base.copy(operationalState = root.optString("operationalState", "idle"),
         hasActiveExecution = hasActiveRun, phaseChanges = history,
         attention = (0 until (attention?.length() ?: 0)).map { attention!!.getJSONObject(it).optString("summary") }.filter { it.isNotBlank() },
@@ -351,54 +373,48 @@ class ProgressRepository(private val gateway: GatewaySession) {
         remainingWork = (0 until (remaining?.length() ?: 0)).map { remaining!!.getString(it) },
         allowedCommands = (0 until commands.length()).map { commands.getString(it) },
         objective = root.getJSONObject("task").optJSONObject("contract")?.optString("objective").orEmpty(),
+        latestContractVersion = root.getJSONObject("task").optInt("latestContractVersion"),
+        acceptanceResultId = resultId,
+        signoffResultId = resultId?.takeIf { acceptance.optBoolean("canSignOff") &&
+          primary?.optString("type") == "signoff" && primary.optString("resultId") == it },
+        presentationReason = presentation?.optString("reason")?.takeIf { it.isNotBlank() },
         criteria = parseTaskCriteria(root))
     }
 
     fun parseTaskCriteria(root: JSONObject): List<TaskCriterion> {
-      val task = root.getJSONObject("task")
-      val contract = task.optJSONObject("contract") ?: return emptyList()
-      val criteria = contract.optJSONArray("acceptanceCriteria") ?: return emptyList()
+      val contract = root.getJSONObject("task").optJSONObject("contract") ?: return emptyList()
+      val criteria = root.optJSONArray("acceptanceChecks") ?: return emptyList()
       require(criteria.length() <= 100) { "INVALID_TASK_CRITERIA" }
       val policy = contract.optString("acceptancePolicy")
-      val version = task.optInt("latestContractVersion")
       val reviews = root.optJSONArray("criterionReviews")
-      val runs = root.optJSONArray("runs")
-      val currentRuns = (0 until (runs?.length() ?: 0)).map { runs!!.getJSONObject(it) }
-        .filter { it.optInt("contractVersion") == version }.map { it.optString("id") }.toSet()
+      val runId = root.optJSONObject("acceptanceTarget")?.optString("runId")?.takeIf { it.isNotBlank() }
       val receipts = root.optJSONArray("receipts")
-      val currentReceipts = (0 until (receipts?.length() ?: 0)).map { receipts!!.getJSONObject(it) }
-        .filter { it.optString("runId") in currentRuns }.sortedByDescending { it.optLong("finalizedAt") }
+      val receipt = (0 until (receipts?.length() ?: 0)).map { receipts!!.getJSONObject(it) }
+        .firstOrNull { it.optString("runId") == runId }
+      val checks = receipt?.optJSONObject("verification")?.optJSONArray("checks")
+      val evidence = receipt?.optJSONArray("evidence")
+      val uniqueEvidence = (0 until (evidence?.length() ?: 0)).map { evidence!!.getJSONObject(it) }
+        .groupBy { it.optString("title") }.filterValues { items ->
+          items.singleOrNull()?.optString("strength") == "verified"
+        }.keys
       return (0 until criteria.length()).map { index ->
-        val criterion = criteria.getString(index)
+        val entry = criteria.getJSONObject(index)
+        val id = entry.getString("id")
+        val text = entry.getString("criterion")
         val review = (0 until (reviews?.length() ?: 0)).map { reviews!!.getJSONObject(it) }
-          .firstOrNull { it.optInt("contractVersion") == version && it.optInt("criterionIndex") == index }
-        if (review?.optString("status") == "unverified") {
-          TaskCriterion(criterion, "pending", false)
-        } else if (review != null && policy != "verified_auto") {
-          TaskCriterion(criterion, review.optString("status", "pending"), true)
-        } else if (policy == "manual") {
-          TaskCriterion(criterion, "pending", false)
-        } else {
-          val receiptCheck = currentReceipts.firstNotNullOfOrNull { receipt ->
-            val checks = receipt.optJSONObject("verification")?.optJSONArray("checks")
-            val check = (0 until (checks?.length() ?: 0)).map { checks!!.getJSONObject(it) }
-              .firstOrNull { it.optString("criterion") == criterion && it.optString("status") != "unverified" }
-            if (check == null) null else receipt to check
-          }
-          if (receiptCheck == null) TaskCriterion(criterion, "pending", false)
-          else {
-            val (receipt, check) = receiptCheck
-            if (check.optString("status") == "failed") TaskCriterion(criterion, "failed", false)
-            else {
-              val titles = check.optJSONArray("evidenceTitles")
-              val accepted = (0 until (titles?.length() ?: 0)).map { titles!!.getString(it) }.toSet()
-              val evidence = receipt.optJSONArray("evidence")
-              val verified = (0 until (evidence?.length() ?: 0)).map { evidence!!.getJSONObject(it) }
-                .any { it.optString("strength") == "verified" && it.optString("title") in accepted }
-              TaskCriterion(criterion, if (verified) "passed" else "pending", false)
-            }
-          }
+          .firstOrNull { it.optString("checkId") == id }
+        val check = (0 until (checks?.length() ?: 0)).map { checks!!.getJSONObject(it) }
+          .filter { it.optString("checkId") == id }.singleOrNull()
+        val titles = check?.optJSONArray("evidenceTitles")
+        val verified = (0 until (titles?.length() ?: 0)).any { titles!!.getString(it) in uniqueEvidence }
+        val status = when {
+          review != null -> review.optString("status").let { if (it == "unverified") "pending" else it }
+          policy == "manual" -> "pending"
+          check?.optString("status") == "failed" -> "failed"
+          check?.optString("status") == "passed" && verified -> "passed"
+          else -> "pending"
         }
+        TaskCriterion(text, status, review != null, id)
       }
     }
 

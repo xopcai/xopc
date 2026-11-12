@@ -6,37 +6,27 @@ enum TaskAcceptanceStatus: String {
     case pending
 
     static func resolve(_ criterion: String, index: Int, detail: TaskDetailEnvelope) -> TaskAcceptanceStatus {
-        let version = detail.task.latestContractVersion
-        if let review = detail.criterionReviews?.first(where: {
-            $0.contractVersion == version && $0.criterionIndex == index
-        }) {
-            if review.status == "unverified" {
-                return .pending
-            }
-            if detail.task.contract?.acceptancePolicy != "verified_auto" {
-                return review.status == "passed" ? .passed : .failed
-            }
-        }
-        if detail.task.contract?.acceptancePolicy == "manual" {
-            return .pending
-        }
+        guard let checks = detail.acceptanceChecks, checks.indices.contains(index),
+              checks[index].criterion == criterion else { return .pending }
+        return resolve(checks[index], detail: detail)
+    }
 
-        let runIDs = Set((detail.runs ?? []).filter { $0.contractVersion == version }.map(\.id))
-        let receipts = (detail.receipts ?? [])
-            .filter { runIDs.contains($0.runId) }
-            .sorted { ($0.finalizedAt ?? 0) > ($1.finalizedAt ?? 0) }
-        for receipt in receipts {
-            guard let check = receipt.verification?.checks.first(where: { $0.criterion == criterion }),
-                  check.status != "unverified" else { continue }
-            if check.status == "failed" {
-                return .failed
-            }
-            let hasVerifiedEvidence = (receipt.evidence ?? []).contains {
-                $0.strength == "verified" && check.evidenceTitles.contains($0.title)
-            }
-            return hasVerifiedEvidence ? .passed : .pending
+    static func resolve(_ criterion: TaskAcceptanceCheck, detail: TaskDetailEnvelope) -> TaskAcceptanceStatus {
+        if let review = detail.criterionReviews?.first(where: { $0.checkId == criterion.id }) {
+            return TaskAcceptanceStatus(rawValue: review.status) ?? .pending
         }
-        return .pending
+        guard detail.task.contract?.acceptancePolicy != "manual",
+              let runID = detail.acceptanceTarget?.runId,
+              detail.runs?.contains(where: { $0.id == runID && $0.contractVersion == detail.task.latestContractVersion }) == true,
+              let receipt = detail.receipts?.first(where: { $0.runId == runID }),
+              let checks = receipt.verification?.checks.filter({ $0.checkId == criterion.id }),
+              checks.count == 1, let check = checks.first else { return .pending }
+        if check.status == "failed" { return .failed }
+        let byTitle = Dictionary(grouping: receipt.evidence ?? [], by: \.title)
+        let verified = check.evidenceTitles.contains { title in
+            byTitle[title]?.count == 1 && byTitle[title]?.first?.strength == "verified"
+        }
+        return check.status == "passed" && verified ? .passed : .pending
     }
 
     static func completionBlock(in detail: TaskDetailEnvelope) -> String? {
@@ -65,6 +55,12 @@ enum TaskAcceptanceStatus: String {
 }
 
 extension TaskDetailEnvelope {
+    var signoffResultID: String? {
+        guard let action = presentation?.primaryAction, action.type == "signoff",
+              let target = acceptanceTarget, target.canSignOff, action.resultId == target.id else { return nil }
+        return target.id
+    }
+
     func phaseCommand(for phase: String) -> String? {
         guard phase != task.phase, ["backlog", "ready", "active", "review", "closed"].contains(phase) else { return nil }
         let command = "move"

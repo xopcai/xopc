@@ -27,6 +27,7 @@ export const TaskRunSchema = z.object({
   causationId: z.string().optional(),
   idempotencyKey: z.string(),
   contractVersion: z.number().int().positive(),
+  instructionSequenceAtStart: z.number().int().nonnegative().optional(),
   contextSnapshotId: z.string().optional(),
   policySnapshot: z.record(z.string(), z.unknown()).optional(),
   conversationId: z.string().optional(),

@@ -2413,7 +2413,8 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     val task = current.progress.detailTask ?: return
     if (current.progress.gatewayId != gatewayId || current.progress.detailTaskId != task.id ||
       current.progress.commandBusy ||
-      (if (action == "cancel_task") "close" else action.substringBefore(':')) !in task.allowedCommands ||
+      (action.substringBefore(':') !in setOf("review", "signoff") &&
+        (if (action == "cancel_task") "close" else action.substringBefore(':')) !in task.allowedCommands) ||
       (action == "start" && agentId.trim().isEmpty())) return
     val revision = ++progressCommandRevision
     val key = UUID.randomUUID().toString()

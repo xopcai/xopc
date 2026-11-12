@@ -198,6 +198,21 @@ export function supersededTaskInstructionIds(taskId: string): Set<string> {
     .all(taskId) as Array<{ supersedes_json: string }>).flatMap(row => JSON.parse(row.supersedes_json) as string[]));
 }
 
+function applicableTaskInstructions(taskId: string) {
+  const superseded = supersededTaskInstructionIds(taskId);
+  return new TaskCollaborationRepository().coordination(taskId)
+    .filter(entry => ['main_agent', 'user'].includes(entry.authorKind)
+      && ['answer', 'instruction'].includes(entry.kind) && !superseded.has(entry.id));
+}
+
+export function verifiesTaskInstructions(taskId: string, research: TaskResearchResult): boolean {
+  if (research.review !== 'model_reviewed') return false;
+  const supported = new Set(research.claims.filter(claim => claim.support === 'supported').map(claim => claim.id));
+  return applicableTaskInstructions(taskId).every(entry => research.instructionChecks?.some(check =>
+    check.sequence === entry.sequence && check.instruction === entry.body && check.status === 'passed'
+    && check.claimIds.length > 0 && check.claimIds.every(id => supported.has(id))));
+}
+
 /** Read the execution transcript only; worker drafts, failures and other runs never become evidence. */
 export function taskResearchEvidence(conversationId: string): { rows: { payload_json: string; created_at: number }[]; tools: ToolRecord[] } {
   const link = new TaskConversationRepository().resolveActiveExecutionSession(conversationId);
@@ -247,8 +262,7 @@ export async function submitTaskResearchResult(conversationId: string, toolCallI
     instructionSequence: taskInstructionSequence(task.id), sources: bindResearchSources(input, tools),
     claims: input.claims.map(claim => ({ ...claim, support: 'unreviewed' })),
     checks: criteria.map((criterion, criterionIndex) => ({ criterionIndex, criterion, status: 'unverified', claimIds: [], note: 'Review unavailable.' })),
-    instructionChecks: new TaskCollaborationRepository().coordination(task.id)
-      .filter(entry => ['main_agent', 'user'].includes(entry.authorKind) && ['answer', 'instruction'].includes(entry.kind) && !supersededTaskInstructionIds(task.id).has(entry.id))
+    instructionChecks: applicableTaskInstructions(task.id)
       .map(entry => ({ sequence: entry.sequence, instruction: entry.body, status: 'unverified', claimIds: [], note: 'Review unavailable.' })),
     review: 'unavailable' });
   if ((result.instructionChecks?.length ?? 0) > 40) throw new Error('Instruction review exceeds 40 applicable directions; explicitly supersede obsolete directions before continuing');

@@ -7,7 +7,6 @@ import { AgentSelectionRepository, selectionRequestHash } from '../agent-matchin
 import { assertSpecialistEligible } from '../agent-matching/delegation-service.js';
 
 import { personalCapabilities } from './capability-service.js';
-import { PERSONAL_WORKER_RESULT_GUIDANCE } from './communication.js';
 import { getPersonalRequest, personalRequestForExecution, personalRequestForWait, updatePersonalRequest, type PersonalRequest } from './request-repository.js';
 import { isPersonalConversation } from './repository.js';
 import { resolveConnectionCandidate } from '../connectors/connection-candidates.js';
@@ -164,9 +163,8 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
     contract.acceptanceCriteria = connectedRequestCriteria(request, locale);
     contract.expectedOutputs = [locale === 'zh' ? '摘要包含来源链接、查询范围、覆盖情况和部分失败说明。'
       : 'Summary with source links, query range, coverage and partial failures.'];
-    const body = [request.objective, brief, ...contract.constraints, `Preserved query parameters: ${JSON.stringify(queryParameters)}.`,
-      PERSONAL_WORKER_RESULT_GUIDANCE,
-      'Before finishing, call personal_request_result with the verified summary and, for mail, message items and coverage.'].join('\n\n');
+    const body = [request.objective, brief, ...contract.constraints,
+      `Preserved query parameters: ${JSON.stringify(queryParameters)}.`].join('\n\n');
     const result = new TaskApplicationService().create(TaskCreateRequestSchema.parse({
       idempotencyKey: `personal-request:${request.requestId}`, title: request.objective.slice(0, 60), body,
       originConversationId: request.conversationId,
@@ -176,7 +174,7 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
       activation: { mode: 'allocate', requirements: { version: 1, summary: request.objective.slice(0, 300),
         requiredTools: ['tool_search', 'xopc_tool_describe', 'xopc_tool_execute'],
         connector: { connectorId: request.connectorId, accountId } } },
-    }), { kind: 'system' });
+    }), { kind: 'system' }, { resultPolicy: 'connected' });
     if (!result.ok) throw new Error('Task could not be persisted');
     getSqliteDatabase().prepare('UPDATE task_origin_links SET origin_transcript_id = ?, request_input_id = ? WHERE task_id = ?')
       .run(request.transcriptId, request.inputId, result.model.task.id);
@@ -198,14 +196,13 @@ function startPersonalRequest(request: PersonalRequest, accountId: string): Pers
   const body = [request.objective, brief, `Selected connector: ${request.connectorId}; xopcAccountId: ${accountId}.`,
     `Preserved query parameters: ${JSON.stringify(queryParameters)}.`,
     'Search and describe the external tools before executing read-only operations. Deliver results to the originating chat through the Task result. Do not claim no important mail if the query was incomplete.'].join('\n\n');
-  const deliveryBody = `${body}\n\n${PERSONAL_WORKER_RESULT_GUIDANCE}\n\nBefore finishing, call personal_request_result with the verified summary and, for mail, message items and coverage. The host composes the final explanation and preserves structured items in the main chat.`;
   const result = new TaskApplicationService().create(TaskCreateRequestSchema.parse({
-    idempotencyKey: `personal-request:${request.requestId}`, title: request.objective.slice(0, 60), body: deliveryBody,
+    idempotencyKey: `personal-request:${request.requestId}`, title: request.objective.slice(0, 60), body,
     originConversationId: request.conversationId, delegateAgentId: request.executorAgentId, dueAt: request.parameters.dueAt,
     locale,
     contract: { ...contract, acceptancePolicy: request.parameters.acceptancePolicy ?? 'verified_auto', outputDestinations: [] },
     activation: { mode: 'start', executor: { kind: 'agent', agentId: request.executorAgentId } },
-  }), { kind: 'system' });
+  }), { kind: 'system' }, { resultPolicy: 'connected' });
   selections.link(record.id, { taskId: result.model?.task.id, runId: result.ok ? result.runId : undefined,
     status: result.ok === false ? (result.reason === 'blocked' ? 'start_blocked' : 'start_failed') : 'task_linked',
     reasonCode: result.ok === false ? result.reason : undefined });

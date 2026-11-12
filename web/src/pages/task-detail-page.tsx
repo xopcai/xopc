@@ -3,7 +3,6 @@ import { TaskAcceptancePanel } from '@/features/tasks/task-acceptance-panel';
 import { TaskDeliverySummary } from '@/features/tasks/task-delivery-summary';
 import { TaskDetailDisclosure, setTaskPanelOpen } from '@/features/tasks/task-detail-disclosure';
 import { TaskExecutionReport } from '@/features/tasks/task-execution-report';
-import { taskDescriptionForDisplay, preserveTaskExecutionInstructions } from '@xopcai/gateway-contract';
 import { TaskPhaseHistory } from '@/features/tasks/task-phase-history';
 import { TaskSchedulePanel } from '@/features/tasks/task-schedule-panel';
 import { TaskScheduleDialog } from '@/features/tasks/task-schedule-dialog';
@@ -11,6 +10,7 @@ import { TaskCurrentAction } from '@/features/tasks/task-current-action';
 import { TaskHeaderTitle } from '@/features/tasks/task-header-title';
 import { findTaskScroller } from '@/features/tasks/task-section-scroll';
 import type { TaskChangedEvent, TaskCommand, TaskCriterionReview, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
+import { taskCheckId } from '@xopcai/gateway-contract';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ArrowLeft, CalendarClock, Circle, ExternalLink, FolderKanban, FolderOpen, MessageSquare, MoreHorizontal, Play, Pause } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
@@ -259,6 +259,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
   const [resizingPanels, setResizingPanels] = useState(false);
   const acceptanceRef = useRef<HTMLDetailsElement>(null);
   const resultsRef = useRef<HTMLElement>(null);
+  const currentActionRef = useRef<HTMLElement>(null);
   const location = useLocation();
   const focusTaskResults = (location.state as { focusTaskResults?: string } | null)?.focusTaskResults;
   const resultsReady = Boolean(detail);
@@ -377,12 +378,12 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
     if (!currentDetail) return;
     setOperationPending(operation, true);
     setError(null);
-    if (command.type === 'close' && command.resolution === 'done') setAcceptanceError(null);
+    if (command.type === 'signoff') setAcceptanceError(null);
     try {
       await mutateDetail(await commandTask(taskId, command, currentDetail.task.version), { revalidate: false });
     } catch {
       setError(copy.actionFailed);
-      if (command.type === 'close' && command.resolution === 'done') setAcceptanceError(copy.actionFailed);
+      if (command.type === 'signoff') setAcceptanceError(copy.actionFailed);
     } finally {
       setOperationPending(operation, false);
     }
@@ -479,7 +480,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
       setEditingDescription(false);
       return;
     }
-    if (await savePatch({ body: preserveTaskExecutionInstructions(detail.task.body ?? '', body) || null })) {
+    if (await savePatch({ body: body || null })) {
       setEditConflict(null);
       setEditingDescription(false);
     }
@@ -600,15 +601,14 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
     }
   }, [copy.actionFailed, navigate, onDeleted, returnPath, setOperationPending, taskId]);
 
-  const reviewCriterion = useCallback(async (criterionIndex: number, status: TaskCriterionReview['status']) => {
-    const currentDetail = detailRef.current;
-    if (!currentDetail) return false;
+  const reviewCriterion = useCallback(async (currentDetail: TaskDetail, criterionIndex: number, status: TaskCriterionReview['status']) => {
+    if (!currentDetail.acceptanceTarget) return false;
     setOperationPending('acceptance', true);
     setAcceptanceError(null);
     setError(null);
     try {
-      await mutateDetail(await reviewTaskCriterion(taskId, criterionIndex, status,
-        currentDetail.task.version, currentDetail.task.latestContractVersion), { revalidate: false });
+      await mutateDetail(await reviewTaskCriterion(taskId, taskCheckId(taskId, currentDetail.task.latestContractVersion, criterionIndex), status,
+        currentDetail.task.version, currentDetail.task.latestContractVersion, currentDetail.acceptanceTarget.id), { revalidate: false });
       return true;
     } catch {
       setAcceptanceError(copy.actionFailed);
@@ -662,11 +662,12 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
   const latestReceipt = currentTaskReceipt(detail);
   const statusKey = detailStatusKey(detail);
   const statusLabel = copy.detailStatuses[statusKey];
-  const objective = taskDescriptionForDisplay(detail.task.body?.trim() || detail.task.contract?.objective.trim() || '');
+  const objective = detail.task.body?.trim() || detail.task.contract?.objective.trim() || '';
   const canSchedule = detail.allowedCommands.includes('mark_ready');
   const canStart = detail.allowedCommands.includes('start');
   const canPause = detail.allowedCommands.includes('add_wait');
-  const canApprove = !activeWait && !activeRun && allCriteriaPassed && detail.task.phase === 'review' && detail.allowedCommands.includes('close');
+  const canApprove = !activeWait && !activeRun && allCriteriaPassed && detail.presentation.primaryAction?.type === 'review'
+    && detail.allowedCommands.includes('close');
   const canReopen = detail.allowedCommands.includes('reopen');
   const conversationConversationId = detail.conversation.activeConversationId;
   const conversationAgentId = detail.conversation.currentExecutorAgentId
@@ -732,16 +733,48 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
     panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
     panel.focus({ preventScroll: true });
   };
+  const primaryAction = detail.presentation.primaryAction;
+  const runTask = () => {
+    if (conversationAgentId) void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } });
+  };
+  const showResults = () => {
+    resultsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    resultsRef.current?.focus({ preventScroll: true });
+  };
+  const actionButton = (() => {
+    switch (primaryAction?.type) {
+      case 'mark_ready': return { label: copy.scheduleTask, activate: () => void execute({ type: 'mark_ready' }) };
+      case 'resume': return { label: copy.resumeTask, activate: () => void execute({ type: 'resolve_wait', waitId: primaryAction.waitId }) };
+      case 'resolve_wait': {
+        const wait = detail.waits.find(item => item.id === primaryAction.waitId);
+        const inline = wait && wait.condition.type !== 'connection'
+          && (wait.kind === 'user_input' || (wait.kind === 'approval' && typeof wait.condition.capability === 'string'));
+        return { label: language === 'zh' ? '处理待办' : 'Resolve pending item',
+          activate: () => inline ? currentActionRef.current?.focus() : navigate(taskChatHref(taskId)) };
+      }
+      case 'inspect_run': return { label: language === 'zh' ? '查看待处理事项' : 'View pending issue',
+        activate: () => currentActionRef.current?.focus() };
+      case 'review': return { label: language === 'zh' ? '去验收' : 'Review results', activate: openAcceptance };
+      case 'signoff': return { label: language === 'zh' ? '确认验收' : 'Accept result',
+        activate: () => void execute({ type: 'signoff', resultId: primaryAction.resultId }) };
+      case 'view_results': return { label: language === 'zh' ? '查看结果' : 'View results', activate: showResults };
+      case 'retry_allocation': return { label: language === 'zh' ? '重新分配' : 'Retry assignment', activate: () => void execute({ type: 'retry_allocation' }) };
+      case 'retry_run': {
+        const run = detail.runs.find(item => item.id === primaryAction.runId);
+        const agentId = run?.executorKind === 'agent' && typeof run.executorRef.agentId === 'string' ? run.executorRef.agentId : undefined;
+        return { label: language === 'zh' ? '重试任务' : 'Retry task', disabled: !agentId,
+          activate: () => { if (agentId) void execute({ type: 'start', executor: { kind: 'agent', agentId } }); } };
+      }
+      case 'start': return { label: copy.runTask, activate: runTask, disabled: !conversationAgentId };
+    }
+  })();
   const taskActions = (
     <div className="flex flex-wrap items-center gap-2">
-      {canSchedule && !canStart && !activeWait && detail.task.phase !== 'review' ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
-      {pausedWait && detail.allowedCommands.includes('resolve_wait') ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
-      {!activeWait && canStart && detail.task.phase !== 'review' && conversationAgentId ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
+      {actionButton ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="primary"
+        disabled={commandPending || actionButton.disabled} onClick={actionButton.activate}>{actionButton.label}</Button> : null}
       {canReopen ? <Button className="min-h-9 px-3 py-1.5 text-xs" variant="ghost" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
       {detail.task.phase !== 'review' && !pausedWait && canPause ? <Button variant="ghost" className="min-h-9 px-3 py-1.5 text-xs" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
-      {detail.task.phase === 'closed' ? <Button variant="primary" className="min-h-9 px-3 py-1.5 text-xs" onClick={() => { resultsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); resultsRef.current?.focus({ preventScroll: true }); }}>{language === 'zh' ? '查看结果' : 'View results'}</Button> : null}
       {!activeWait && !activeRun && detail.task.phase !== 'closed' && detail.task.phase !== 'review' ? <Button variant="ghost" className="min-h-9 px-3 py-1.5 text-xs" disabled={!automationList} onClick={openSchedule}><CalendarClock className="size-4" />{taskSchedules.length > 0 ? (language === 'zh' ? '管理执行时间' : 'Manage schedule') : (language === 'zh' ? '设置执行时间' : 'Set execution time')}</Button> : null}
-      {detail.task.phase === 'review' ? <Button variant="primary" className="min-h-9 px-3 py-1.5 text-xs" onClick={openAcceptance}>{language === 'zh' ? '去验收' : 'Review results'}</Button> : null}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button type="button" variant="ghost" className="size-9 p-0" disabled={commandPending || deletePending} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button>
@@ -857,26 +890,25 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
         </div>
 
       </header>
-      <div className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-edge-subtle bg-surface-panel px-4 py-2 sm:px-5" aria-label={language === 'zh' ? '任务操作' : 'Task actions'}>
-        <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{statusLabel}</span>
+      <div className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center justify-end gap-2 border-b border-edge-subtle bg-surface-panel px-4 py-2 sm:px-5" aria-label={language === 'zh' ? '任务操作' : 'Task actions'}>
         {taskActions}
         {error ? <p role="alert" className="basis-full text-sm text-danger">{error}</p> : null}
         <TaskDetailNavigation key={taskId} language={language} hasSchedule={taskSchedules.length > 0} />
       </div>
 
       <section className="min-w-0 space-y-4 p-4 sm:p-5">
-        {detail.task.phase !== 'review' ? <TaskCurrentAction detail={detail} executorName={activeExecutorName} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} /> : null}
+        {statusKey !== 'review' ? <TaskCurrentAction ref={currentActionRef} detail={detail} executorName={activeExecutorName} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} /> : null}
         <section data-task-section="results" data-task-section-label={language === 'zh' ? '交付结果' : 'Results'} ref={resultsRef} tabIndex={-1} aria-labelledby="task-results-heading" className="scroll-mt-24 space-y-4">
           <TaskDeliverySummary detail={detail} language={language} />
-          {detail.task.phase === 'review' && (detail.waits.length > 0 || detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) ? <TaskCurrentAction detail={detail} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} /> : null}
           <TaskDetailDisclosure panelId="acceptance" chevron data-task-section="acceptance" data-task-section-label={language === 'zh' ? '验收' : 'Acceptance'} defaultOpen ref={acceptanceRef} tabIndex={-1} aria-label={copy.successDefinition} className="scroll-mt-24 overflow-hidden rounded-2xl border border-edge-subtle bg-surface-panel" summaryClassName="min-h-12 cursor-pointer px-4 py-2 text-sm font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" title={<span className="flex items-center justify-between gap-2">
             {language === 'zh' ? '验收' : 'Acceptance'}
             <span aria-live="polite" className="rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium tabular-nums text-fg-muted">{criterionSummaries.filter((criterion) => criterion.status === 'passed').length}/{criterionSummaries.length}</span>
           </span>}>
-            <TaskAcceptancePanel key={`${taskId}:${detail.task.latestContractVersion}`} criteria={criterionSummaries} language={language} closed={detail.task.phase === 'closed'} pending={pendingOperations.has('acceptance')} error={acceptanceError}
+            <TaskAcceptancePanel key={`${taskId}:${detail.task.latestContractVersion}:${detail.acceptanceTarget?.id ?? ''}`} criteria={criterionSummaries} language={language} closed={detail.task.phase === 'closed'} pending={pendingOperations.has('acceptance')} error={acceptanceError}
+                reviewDisabled={!detail.acceptanceTarget || detail.presentation.primaryAction?.type === 'inspect_run'}
                 blockedReason={activeWait ? (language === 'zh' ? '请先处理待办事项' : 'Resolve the pending request first')
                   : activeRun ? (language === 'zh' ? '请等待当前执行结束' : 'Wait for the current run to finish') : undefined}
-                onReview={reviewCriterion} projectId={detail.task.projectId} conversationId={conversationConversationId ?? undefined} />
+                onReview={(index, status) => reviewCriterion(detail, index, status)} projectId={detail.task.projectId} conversationId={conversationConversationId ?? undefined} />
           </TaskDetailDisclosure>
         </section>
 
@@ -913,7 +945,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
                     event.preventDefault();
                     event.stopPropagation();
                     skipDescriptionSaveRef.current = true;
-                    setDescriptionDraft(taskDescriptionForDisplay(detail.task.body ?? detail.task.contract?.objective ?? ''));
+                    setDescriptionDraft(detail.task.body ?? detail.task.contract?.objective ?? '');
                     setEditingDescription(false);
                     queueMicrotask(() => { skipDescriptionSaveRef.current = false; });
                   }
@@ -925,14 +957,14 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
                 {objective && objective !== detail.task.title
                   ? <TaskExpandableContent content={objective} contentKey={`${taskId}:description`} language={language} />
                   : <p className="text-sm leading-6 text-fg-muted">{copy.noTaskDescription}</p>}
-                <button type="button" className="mt-2 rounded-md px-2 py-1 text-xs text-accent hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = taskDescriptionForDisplay(detail.task.body ?? detail.task.contract?.objective ?? ''); initialDescriptionDraftRef.current = draft; descriptionEditBaseRef.current = { value: detail.task.body ?? '', version: detail.task.version }; setEditConflict(null); setDescriptionDraft(draft); setEditingDescription(true); }}>{language === 'zh' ? '编辑说明' : 'Edit description'}</button>
+                <button type="button" className="mt-2 rounded-md px-2 py-1 text-xs text-accent hover:bg-surface-hover focus-visible:bg-surface-hover" onClick={() => { const draft = detail.task.body ?? detail.task.contract?.objective ?? ''; initialDescriptionDraftRef.current = draft; descriptionEditBaseRef.current = { value: detail.task.body ?? '', version: detail.task.version }; setEditConflict(null); setDescriptionDraft(draft); setEditingDescription(true); }}>{language === 'zh' ? '编辑说明' : 'Edit description'}</button>
               </div>
             )}
             {editConflict === 'description' ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-warning" role="alert">
                 <span>{language === 'zh' ? 'Agent 在你编辑期间更新了描述。' : 'The Agent updated the description while you were editing.'}</span>
-                <button type="button" className="rounded-md bg-surface-hover px-2 py-1 text-fg" onClick={() => { setDescriptionDraft(taskDescriptionForDisplay(detail.task.body ?? '')); setEditConflict(null); setEditingDescription(false); }}>{language === 'zh' ? '使用 Agent 版本' : 'Use Agent version'}</button>
-                <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" onClick={() => void savePatch({ body: preserveTaskExecutionInstructions(detail.task.body ?? '', descriptionDraft.trim()) || null }).then((saved) => { if (saved) { setEditConflict(null); setEditingDescription(false); } })}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
+                <button type="button" className="rounded-md bg-surface-hover px-2 py-1 text-fg" onClick={() => { setDescriptionDraft(detail.task.body ?? ''); setEditConflict(null); setEditingDescription(false); }}>{language === 'zh' ? '使用 Agent 版本' : 'Use Agent version'}</button>
+                <button type="button" className="rounded-md bg-accent-soft px-2 py-1 text-accent-fg" onClick={() => void savePatch({ body: descriptionDraft.trim() || null }).then((saved) => { if (saved) { setEditConflict(null); setEditingDescription(false); } })}>{language === 'zh' ? '保留我的修改' : 'Keep my changes'}</button>
               </div>
             ) : null}
           </details>

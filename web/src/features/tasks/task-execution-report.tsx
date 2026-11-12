@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { formatMediumDateTime } from '@/lib/date-formatters';
 
 import { submitTaskFeedback, type TaskDetail } from './home-api';
 import { taskCopy } from './task-copy';
@@ -39,5 +40,15 @@ export function TaskExecutionReport({ detail, language }: { detail: TaskDetail; 
       </div>
     </> : null}
     {history.length > 0 ? <details className="border-t border-edge-subtle pt-3"><summary className="cursor-pointer py-2 text-xs text-fg-muted">{copy.executionHistory.replace('{{count}}', String(history.length))}</summary><div className="mt-3 space-y-4">{history.map((item) => <article key={item.runId} className="space-y-2 rounded-lg bg-surface-hover p-3"><p className="text-xs text-fg-muted">{copy.receiptStatuses[item.status]}</p><TaskExpandableContent content={item.summary} contentKey={`${detail.task.id}:result:${item.runId}`} language={language} /></article>)}</div></details> : null}
+    {detail.criterionReviewHistory?.length ? <details className="border-t border-edge-subtle pt-3">
+      <summary className="cursor-pointer py-2 text-xs text-fg-muted">{zh ? '历史验收判定' : 'Past criterion reviews'}</summary>
+      <ul className="mt-2 space-y-2 text-sm">
+        {detail.criterionReviewHistory.map(review => <li key={`${review.contractVersion}:${review.resultId ?? ''}:${review.criterionIndex}`} className="rounded-lg bg-surface-hover p-3">
+          <p>{review.criterionText}</p>
+          <p className="text-xs text-fg-muted">{copy.verificationStatuses[review.status]} · {formatMediumDateTime(review.reviewedAt, language)}</p>
+          {review.note ? <p className="mt-1 text-xs text-fg-muted">{review.note}</p> : null}
+        </li>)}
+      </ul>
+    </details> : null}
   </div>;
 }

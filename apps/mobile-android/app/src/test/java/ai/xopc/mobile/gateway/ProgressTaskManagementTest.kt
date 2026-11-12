@@ -30,7 +30,8 @@ class ProgressTaskManagementTest {
       "operationalState":"running","allowedCommands":["move","close"],
       "runs":[{"id":"run","status":"running","contractVersion":1}],"waits":[],
       "receipts":[{"runId":"previous","summary":"Existing result","finalizedAt":10,"remainingWork":["Next step"]}],
-      "criterionReviews":[{"contractVersion":1,"criterionIndex":0,"status":"passed"}],
+      "acceptanceChecks":[{"id":"task:1:0","criterion":"Works"}],
+      "criterionReviews":[{"checkId":"task:1:0","contractVersion":1,"criterionIndex":0,"status":"passed"}],
       "phaseChanges":[{"id":"change","fromPhase":"review","toPhase":"active","source":"mobile",
         "actor":{"kind":"user","id":"owner"},"createdAt":20}]}
   """.trimIndent()
@@ -52,6 +53,19 @@ class ProgressTaskManagementTest {
     assertEquals("Existing result", result.latestResult)
     assertEquals(listOf("Next step"), result.remainingWork)
     assertEquals("passed", result.criteria.single().status)
+  }
+
+  @Test fun signoffAndReviewUseTheServerSelectedResultVersion() {
+    val raw = detail().replace("\"phase\":\"active\"", "\"phase\":\"review\"")
+      .replace("\"allowedCommands\"",
+        "\"acceptanceTarget\":{\"id\":\"run:2\",\"runId\":\"run\",\"canSignOff\":true}," +
+          "\"presentation\":{\"primaryAction\":{\"type\":\"signoff\",\"resultId\":\"run:2\"}}," +
+          "\"allowedCommands\"")
+    val result = ProgressRepository.parseTaskDetail("task", raw)
+    assertEquals("run:2", result.signoffResultId)
+    assertEquals("review:run:2|task:1:0|unverified", result.reviewAction(result.criteria.single()))
+    assertNull(ProgressRepository.parseTaskDetail("task", raw.replace(
+      "\"resultId\":\"run:2\"", "\"resultId\":\"run:1\"")).signoffResultId)
   }
 
   @Test fun commandDoesNotRepeatTheMutationWhenReloadFails() {

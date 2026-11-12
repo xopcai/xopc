@@ -4,13 +4,26 @@ export const ACCEPTANCE_REPAIR_READ_TOOLS = new Set(['read_file', 'find', 'grep'
   'review_workspace', 'language_diagnostics', 'session_status', 'web_fetch', 'web_extract', 'web_search', 'read_media',
   'data_batch', 'task_collaboration', 'publish_task_result']);
 
-/** A model request can be resumed only after every issued tool has a confirmed result. */
-export function canResumeAfterModelFailure(rows: readonly unknown[], options?: { allowFailedReadTools?: ReadonlySet<string> }): boolean {
+// A missing result can be retried only for tools with no external write operation.
+export const RECOVERY_READ_TOOLS = new Set(['read_file', 'list_dir', 'find', 'grep']);
+
+export type UnconfirmedToolEffect = {
+  cause: 'aborted_turn' | 'failed_tool' | 'missing_tool_result';
+  toolCallId?: string;
+  toolName?: string;
+};
+
+type RecoveryOptions = {
+  allowFailedReadTools?: ReadonlySet<string>;
+  allowMissingReadTools?: ReadonlySet<string>;
+};
+
+export function findUnconfirmedToolEffect(rows: readonly unknown[], options?: RecoveryOptions): UnconfirmedToolEffect | undefined {
   const messages = rows.filter((row): row is Record<string, unknown> => !!row && typeof row === 'object');
   const pending = new Map<string, { name?: string; arguments?: Record<string, unknown> }>();
   for (const message of messages.slice(Math.max(0, messages.findLastIndex(item => item.role === 'user')))) {
     if (message.role === 'assistant') {
-      if (message.stopReason === 'aborted') return false;
+      if (message.stopReason === 'aborted') return { cause: 'aborted_turn' };
       if (message.stopReason === 'error') continue;
       for (const block of Array.isArray(message.content) ? message.content : []) {
         if (block?.type === 'toolCall' && typeof block.id === 'string') pending.set(block.id, block);
@@ -25,11 +38,24 @@ export function canResumeAfterModelFailure(rows: readonly unknown[], options?: {
         && (message.toolName !== 'task_collaboration' || (call?.name === message.toolName
           && call.arguments?.command === 'get'
           && (call.arguments.materialize === undefined || call.arguments.materialize === false)));
-      if (message.isError && !recordedReplay && !readOnly) return false;
+      if (message.isError && !recordedReplay && !readOnly) {
+        return { cause: 'failed_tool',
+          ...(typeof message.toolCallId === 'string' ? { toolCallId: message.toolCallId } : {}),
+          ...(typeof message.toolName === 'string' ? { toolName: message.toolName } : {}),
+        };
+      }
       if (typeof message.toolCallId === 'string') pending.delete(message.toolCallId);
     }
   }
-  return pending.size === 0;
+  for (const [toolCallId, call] of pending) {
+    if (call.name && options?.allowMissingReadTools?.has(call.name)) continue;
+    return { cause: 'missing_tool_result', toolCallId, ...(call.name ? { toolName: call.name } : {}) };
+  }
+  return undefined;
+}
+
+export function canResumeAfterModelFailure(rows: readonly unknown[], options?: RecoveryOptions): boolean {
+  return findUnconfirmedToolEffect(rows, options) === undefined;
 }
 
 export function recoveryToolKey(name: string, args: unknown): string {
