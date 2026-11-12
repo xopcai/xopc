@@ -26,7 +26,9 @@
     "src/**/*",
     "extensions/telegram/src/**/*",
     "extensions/weixin/src/**/*",
-    "extensions/feishu/src/**/*"
+    "extensions/feishu/src/**/*",
+    "extensions/dingtalk/src/**/*",
+    "extensions/wecom/src/**/*"
   ],
   "exclude": ["node_modules", "dist", "**/__tests__/**/*"]
 }

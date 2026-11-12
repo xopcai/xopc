@@ -8,6 +8,9 @@
 import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { Migration } from '../migrations/types.js';
+import type { resolveRoute } from '../routing/resolve-route.js';
+import type { issuePairingChallenge } from './pairing/pairing-challenge.js';
+import type { registerPairingChannelResolver } from './pairing/pairing-service.js';
 
 import type { ChannelId, ChannelMeta, ChannelCapabilities } from './plugins/types.core.js';
 import type {
@@ -89,6 +92,12 @@ export interface ChannelPluginInitOptions {
   config: Config;
   channelConfig: Record<string, unknown>;
   sessionModel?: ChannelPluginSessionModelHooks;
+  host?: {
+    resolveRoute: typeof resolveRoute;
+    issuePairingChallenge: typeof issuePairingChallenge;
+    registerPairingChannelResolver: typeof registerPairingChannelResolver;
+    warn: (message: string) => void;
+  };
 }
 
 export interface ChannelPluginStartOptions {

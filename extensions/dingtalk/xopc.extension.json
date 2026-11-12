@@ -1,0 +1,131 @@
+{
+  "id": "dingtalk",
+  "name": "DingTalk",
+  "description": "DingTalk bot messaging over WebSocket",
+  "version": "0.1.0",
+  "kind": "channel",
+  "main": "src/index.js",
+  "channels": [
+    "dingtalk"
+  ],
+  "engines": {
+    "xopc": ">=0.0.465"
+  },
+  "contracts": { "channels": ["dingtalk"] },
+  "channelContributions": {
+    "dingtalk": {
+      "label": "DingTalk",
+      "description": "DingTalk bot messaging over WebSocket",
+      "order": 40,
+      "configPath": "channels.dingtalk",
+      "docsPath": "/channels/dingtalk",
+      "capabilities": {
+        "login": true,
+        "pairing": true
+      },
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "clientId": {
+            "type": "string",
+            "title": "Client ID",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "clientSecret": {
+            "type": "string",
+            "title": "Client Secret",
+            "format": "password",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "dmPolicy": {
+            "type": "string",
+            "enum": [
+              "pairing",
+              "allowlist",
+              "open",
+              "disabled"
+            ],
+            "default": "pairing"
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupPolicy": {
+            "type": "string",
+            "enum": [
+              "allowlist",
+              "open",
+              "disabled"
+            ],
+            "default": "allowlist"
+          },
+          "groupAllowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "clientId",
+          "clientSecret"
+        ]
+      },
+      "uiHints": {
+        "clientSecret": {
+          "sensitive": true
+        },
+        "groupAllowFrom": {
+          "label": "Allowed group senders"
+        }
+      },
+      "actions": {
+        "setup.start": {
+          "label": "Set up by QR",
+          "result": "qr"
+        },
+        "setup.status": {
+          "label": "Setup status",
+          "result": "poll"
+        },
+        "setup.manual": {
+          "label": "Enter credentials",
+          "result": "form"
+        },
+        "setup.cancel": {
+          "label": "Cancel setup",
+          "result": "ok"
+        }
+      },
+      "i18n": {
+        "zh": {
+          "label": "钉钉",
+          "description": "钉钉机器人消息通道",
+          "uiHints": {
+            "groupAllowFrom": {
+              "label": "允许在群聊中触发的成员"
+            }
+          },
+          "actions": {
+            "setup.start": {
+              "label": "扫码连接"
+            },
+            "setup.manual": {
+              "label": "手动填写凭据"
+            }
+          }
+        }
+      }
+    }
+  }
+}
