@@ -121,6 +121,7 @@ export type ChannelRuntimeActionPayload =
       schema: Record<string, unknown>;
       values?: Record<string, unknown>;
       submitAction: string;
+      setupTemplate?: { content: string; url: string };
       message?: string;
       [key: string]: unknown;
     };

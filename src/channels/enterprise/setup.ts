@@ -5,7 +5,7 @@ import type { Config } from '../../config/schema.js';
 import type { ChannelRuntimeActionAdapter } from '../plugins/types.adapters.js';
 import { record, string } from './socket.js';
 
-export type EnterpriseCredentials = { id: string; secret: string };
+export type EnterpriseCredentials = { id: string; secret: string; identity?: string };
 
 export type EnterpriseRegistration = {
   qrPayload: string;
@@ -18,8 +18,10 @@ export function createEnterpriseSetup(options: {
   channel: string;
   credentialFields: readonly [string, string];
   credentialLabels: readonly [string, string];
-  begin: (signal: AbortSignal) => Promise<EnterpriseRegistration>;
-  verify: (credentials: EnterpriseCredentials) => Promise<void>;
+  begin?: (signal: AbortSignal) => Promise<EnterpriseRegistration>;
+  credentialIdIsSecret?: boolean;
+  setupTemplate?: { content: string; url: string; instructions: { zh: string; en: string } };
+  verify: (credentials: EnterpriseCredentials) => Promise<void | string>;
 }): ChannelRuntimeActionAdapter {
   const { channel, credentialFields: [idField, secretField], credentialLabels: [idLabel, secretLabel] } = options;
   type SetupSession = {
@@ -36,7 +38,8 @@ export function createEnterpriseSetup(options: {
 
   function complete(cfg: Config, credentials: EnterpriseCredentials): Config {
     const current = record(cfg.channels?.[channel]);
-    const sameBot = !current[idField] || current[idField] === credentials.id;
+    const sameBot = !current[idField] || current[idField] === credentials.id ||
+      Boolean(credentials.identity && current.credentialIdentity === credentials.identity);
     return {
       ...cfg,
       channels: {
@@ -46,6 +49,7 @@ export function createEnterpriseSetup(options: {
           enabled: true,
           [idField]: credentials.id,
           [secretField]: credentials.secret,
+          ...(credentials.identity ? { credentialIdentity: credentials.identity } : {}),
         },
       },
     };
@@ -60,11 +64,15 @@ export function createEnterpriseSetup(options: {
       const manual = {
         type: 'form' as const,
         submitAction: 'setup.manual',
+        ...(options.setupTemplate ? {
+          setupTemplate: { content: options.setupTemplate.content, url: options.setupTemplate.url },
+          message: copy(options.setupTemplate.instructions.zh, options.setupTemplate.instructions.en),
+        } : {}),
         schema: {
           type: 'object',
           required: [idField, secretField],
           properties: {
-            [idField]: { type: 'string', title: idLabel },
+            [idField]: { type: 'string', title: idLabel, ...(options.credentialIdIsSecret ? { format: 'password' } : {}) },
             [secretField]: { type: 'string', title: secretLabel, format: 'password' },
           },
         },
@@ -72,12 +80,13 @@ export function createEnterpriseSetup(options: {
       if (accountId && accountId !== 'default') return { ok: false, message: 'Only the default account is supported.' };
 
       if (actionId === 'setup.manual') {
-        const credentials = { id: string(raw[idField]), secret: string(raw[secretField]) };
+        const credentials: EnterpriseCredentials = { id: string(raw[idField]), secret: string(raw[secretField]) };
         if (!credentials.id || !credentials.secret) return { ok: true, payload: manual };
         try {
           const current = record(cfg.channels?.[channel]);
-          if (current[idField] !== credentials.id || current[secretField] !== credentials.secret || current.enabled !== true) {
-            await options.verify(credentials);
+          if (options.credentialIdIsSecret || current[idField] !== credentials.id || current[secretField] !== credentials.secret || current.enabled !== true) {
+            const identity = await options.verify(credentials);
+            if (typeof identity === 'string') credentials.identity = identity;
           }
         } catch {
           return { ok: false, message: copy('凭据校验失败，请确认机器人配置后重试。', 'Credential validation failed. Check the bot settings and retry.') };
@@ -89,7 +98,7 @@ export function createEnterpriseSetup(options: {
           onConfigSaved: () => { session?.controller.abort(); session = undefined; },
         };
       }
-      if (actionId === 'setup.start') {
+      if (actionId === 'setup.start' && options.begin) {
         starting?.abort();
         session?.controller.abort();
         session = undefined;

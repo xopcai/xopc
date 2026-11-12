@@ -11,6 +11,7 @@ Channels let people talk to an xopc Agent from another application. Configure th
 | Feishu / Lark | QR app setup or app credentials | [Feishu](./feishu.md) |
 | DingTalk | QR bot setup or Client ID and Secret | [DingTalk](./dingtalk.md) |
 | WeCom | QR bot setup or Bot ID and Secret | [WeCom](./wecom.md) |
+| Slack | App Manifest, Bot Token and App Token | [Slack](./slack.md) |
 | Web console | Gateway URL and token | [Web console](./webui.md) |
 
 Extensions may add more channel types.

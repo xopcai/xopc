@@ -23,6 +23,8 @@ export default defineConfig({
     '!./extensions/dingtalk/src/**/__tests__/**/*.ts',
     './extensions/wecom/src/**/*.ts',
     '!./extensions/wecom/src/**/__tests__/**/*.ts',
+    './extensions/slack/src/**/*.ts',
+    '!./extensions/slack/src/**/__tests__/**/*.ts',
   ],
   outDir: 'dist',
   root: '.',
