@@ -133,6 +133,40 @@ describe('Personal AI message styling', () => {
     expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
   });
 
+  it('keeps the live opening visible while a Personal task is created and confirmed', () => {
+    const opening = { type: 'text', text: '我先看看视频。', segmentId: 'opening', presentation: 'pending' } as const;
+    const narration = { ...opening, presentation: 'narration' } as const;
+    const task = { type: 'tool_use', id: 'submit', name: 'personal_task', status: 'running' } as const;
+    const privateThought = { type: 'thinking', text: 'Private reasoning', streaming: true } as const;
+    const markdown = () => container.querySelector('.assistant-markdown-content');
+
+    render({ role: 'assistant', content: [opening] }, true, true);
+    const openingNode = markdown();
+    expect(openingNode?.textContent).toBe(opening.text);
+
+    for (const content of [[narration], [narration, task], [narration, { ...task, status: 'done' as const }, privateThought]]) {
+      render({ role: 'assistant', content }, true, true);
+      expect(markdown()).toBe(openingNode);
+      expect(markdown()?.textContent).toBe(opening.text);
+      expect(container.querySelector('.xopc-personal-thinking')).toBeNull();
+      expect(container.querySelector('[data-chat-streaming-cursor]')).toBeNull();
+      expect(container.textContent).not.toContain(privateThought.text);
+    }
+
+    const confirmation = { type: 'text', text: '任务已提交。', segmentId: 'confirmation', presentation: 'pending' } as const;
+    const completedTool = { ...task, status: 'done' as const };
+    for (const text of [' ', 'NO_', 'NO_REPLY']) {
+      render({ role: 'assistant', content: [narration, completedTool, { ...confirmation, text }] }, true, true);
+      expect(markdown()?.textContent).toBe(opening.text);
+    }
+    render({ role: 'assistant', content: [narration, completedTool, confirmation] }, true, true);
+    expect(markdown()?.textContent).toBe(confirmation.text);
+    render({ role: 'assistant', content: [narration, completedTool, { ...confirmation, presentation: 'answer' }] }, true, false);
+    expect(markdown()?.textContent).toBe(confirmation.text);
+    render({ role: 'assistant', content: [narration, completedTool] }, true, false);
+    expect(markdown()).toBeNull();
+  });
+
   it.each([false, true])('uses only dots during Personal activity with raw tool data=%s', (showRawToolData) => {
     useDevViewStore.setState({ showRawToolData });
     const opening: Message = { role: 'assistant', content: [{ type: 'text', text: '我先核对论文里的数值。', segmentId: 'first', presentation: 'pending' }] };
