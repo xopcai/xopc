@@ -330,7 +330,7 @@ function ChannelHubCard({
 
   return (
     <article className={cn(
-      'relative flex items-center justify-between gap-2 rounded-xl border border-edge bg-surface-panel p-4 transition-colors',
+      'relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_1fr] items-center gap-x-3 rounded-xl border border-edge bg-surface-panel p-4 transition-colors',
       !pending && 'hover:border-edge-strong hover:bg-surface-hover',
     )}>
       <button
@@ -342,21 +342,21 @@ function ChannelHubCard({
         onClick={runtime === 'disabled' ? onToggle : runtime === 'stopped' ? onRestart : onOpen}
         disabled={pending}
       />
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="col-start-1 row-span-2 row-start-1">
         <ChannelIcon entry={entry} />
-        <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold text-fg">{entry.label}</h2>
-          <span id={statusId} className={cn(
-            'mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-            runtimeStatusClass(pending ? 'checking' : runtime),
-          )}>
-            {pending ? <Loader2 aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" /> : null}
-            {status}
-          </span>
-          {description ? <p id={descriptionId} className="mt-1 truncate text-xs text-fg-muted">{description}</p> : null}
-        </div>
       </div>
-      <Button type="button" variant="ghost" className="relative size-11 shrink-0 p-0"
+      <div className="col-span-2 col-start-2 row-start-1 flex min-w-0 items-center justify-between gap-2">
+        <h2 className="truncate text-base font-semibold text-fg">{entry.label}</h2>
+        <span id={statusId} className={cn(
+          'inline-flex max-w-[65%] shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+          runtimeStatusClass(pending ? 'checking' : runtime),
+        )}>
+          {pending ? <Loader2 aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" /> : null}
+          <span className="truncate">{status}</span>
+        </span>
+      </div>
+      {description ? <p id={descriptionId} className="col-start-2 row-start-2 truncate text-xs text-fg-muted">{description}</p> : null}
+      <Button type="button" variant="ghost" className="relative col-start-3 row-start-2 size-11 justify-self-end p-0"
         aria-label={settingsLabel} title={settingsLabel} onClick={onSettings}
       >
         <Settings className="size-4" />
