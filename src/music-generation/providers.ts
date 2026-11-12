@@ -1,10 +1,11 @@
-import type { MusicModelSettings } from '@xopcai/gateway-contract';
+import { TENCENT_MPS_MUSIC_PROVIDER, type MusicModelSettings } from '@xopcai/gateway-contract';
 
 import { murekaGlobalProvider, murekaProvider } from './mureka.js';
 import type { MusicProvider } from './provider.js';
 import { getMusicDefaults, musicCredentials, storedMusicModel } from './settings.js';
+import { parseTencentMpsCredentials, tencentMpsProvider } from './tencent-mps.js';
 
-const providers = new Map<string, MusicProvider>([murekaProvider, murekaGlobalProvider].map(provider => [provider.id, provider]));
+const providers = new Map<string, MusicProvider>([murekaProvider, murekaGlobalProvider, tencentMpsProvider].map(provider => [provider.id, provider]));
 export const DEFAULT_MUSIC_MODEL = 'mureka-cn/mureka-9.5';
 
 export function resolveMusicModel(ref: string) {
@@ -24,7 +25,12 @@ export function hasMusicProvider(id: string): boolean {
 }
 
 export async function resolveMusicKey(provider: MusicProvider): Promise<string | undefined> {
-  return await musicCredentials().revealGatewayStoredApiKey(provider.id) ?? provider.environmentKey();
+  return await readSavedMusicKey(provider.id) ?? provider.environmentKey();
+}
+
+async function readSavedMusicKey(providerId: string): Promise<string | null> {
+  const saved = await musicCredentials().revealGatewayStoredApiKey(providerId);
+  return providerId === TENCENT_MPS_MUSIC_PROVIDER && !parseTencentMpsCredentials(saved) ? null : saved;
 }
 
 export async function configuredMusicModel() {
@@ -36,10 +42,10 @@ export async function configuredMusicModel() {
 
 export async function readMusicModelSettings(): Promise<MusicModelSettings> {
   const models = [...providers.values()].flatMap(provider => Object.entries(provider.models).map(([name, definition]) => ({
-    ref: `${provider.id}/${name}`, name, providerId: provider.id, modes: definition.modes,
+    ref: `${provider.id}/${name}`, name: definition.name ?? name, providerId: provider.id, modes: definition.modes,
   })));
   const credentials = Object.fromEntries(await Promise.all([...providers.values()].map(async provider => {
-    const saved = await musicCredentials().revealGatewayStoredApiKey(provider.id);
+    const saved = await readSavedMusicKey(provider.id);
     return [provider.id, saved ? 'saved' : provider.environmentKey() ? 'environment' : 'missing'] as const;
   })));
   const modelRef = selectedMusicModel();

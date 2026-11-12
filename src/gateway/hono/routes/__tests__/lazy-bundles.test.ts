@@ -11,6 +11,7 @@ describe('lazy route bundles', () => {
     const audio = `${jobs}/${'a'.repeat(64)}/audio`;
     expect(findAuthenticatedLazyRouteBundle('/api/music-generation/settings')?.id).toBe('music-generation');
     expect(findAuthenticatedLazyRouteBundle('/api/music-generation/settings/credentials/mureka-global')?.id).toBe('music-generation');
+    expect(findAuthenticatedLazyRouteBundle('/api/music-generation/settings/credentials/tencent-mps')?.id).toBe('music-generation');
     expect(findAuthenticatedLazyRouteBundle('/api/music-generation/settings/credentials/mureka-global/extra')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle(jobs)?.id).toBe('music-generation');
     expect(findAuthenticatedLazyRouteBundle(audio)?.id).toBe('music-generation');

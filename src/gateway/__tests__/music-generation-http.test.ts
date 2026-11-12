@@ -108,6 +108,30 @@ it('serves jobs created by the Agent and scoped audio through the authenticated 
     const download = await fetch(`${audio}?download=1`, { headers });
     expect(download.headers.get('content-disposition')).toContain('attachment');
     expect(await download.text()).toBe('0123456789');
+
+    const tencent = `${settings}/credentials/tencent-mps`;
+    const pair = { secretId: 'fixture-tencent-id', secretKey: 'fixture-tencent-key' };
+    const revealRequest = { method: 'POST', body: JSON.stringify({ field: 'secretId' }) };
+    expect((await fetch(tencent, revealRequest)).status).toBe(401);
+    expect((await fetch(tencent, { method: 'PUT', headers, body: JSON.stringify({ secretId: pair.secretId }) })).status).toBe(400);
+    const savedTencent = await fetch(tencent, { method: 'PUT', headers, body: JSON.stringify(pair) });
+    expect(savedTencent.status).toBe(200);
+    const tencentBody = await savedTencent.text();
+    expect(tencentBody).not.toContain(pair.secretId);
+    expect(tencentBody).not.toContain(pair.secretKey);
+    expect(JSON.parse(tencentBody)).toMatchObject({ credentials: { 'tencent-mps': 'saved' } });
+    const selectedTencent = await fetch(settings, {
+      method: 'PUT', headers, body: JSON.stringify({ modelRef: 'tencent-mps/minimax-music-3.0' }),
+    });
+    expect(await selectedTencent.json()).toMatchObject({ modelRef: 'tencent-mps/minimax-music-3.0' });
+    const revealedTencent = await fetch(tencent, { ...revealRequest, headers });
+    expect(revealedTencent.headers.get('cache-control')).toBe('no-store');
+    expect(await revealedTencent.json()).toEqual({ value: pair.secretId });
+    const genericReveal = `http://127.0.0.1:${address.port}/api/providers/tencent-mps/reveal-api-key`;
+    expect((await fetch(genericReveal, { method: 'POST', headers })).status).toBe(403);
+    expect((await fetch(tencent, { method: 'DELETE', headers })).status).toBe(200);
+    expect(await (await fetch(tencent, { ...revealRequest, headers })).json()).toEqual({ value: null });
+
     resetSessionRecord(session.key, dir);
     expect(await (await fetch(jobs, { headers })).json()).toMatchObject({ jobs: [] });
     expect((await fetch(audio, { headers })).status).toBe(404);

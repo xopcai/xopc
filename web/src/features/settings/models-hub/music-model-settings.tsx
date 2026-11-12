@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { MusicMode, MusicModelSettings } from '@xopcai/gateway-contract';
+import { TENCENT_MPS_MUSIC_PROVIDER, type MusicMode, type MusicModelSettings } from '@xopcai/gateway-contract';
 import { ArrowUpRight } from 'lucide-react';
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
@@ -20,10 +20,14 @@ const apiKeyPortals = new Map([
   ['mureka-cn', 'https://platform.mureka.cn/'],
   ['mureka-global', 'https://platform.mureka.ai/'],
 ]);
+const tencentFields = { secretId: 'SecretId', secretKey: 'SecretKey' } as const;
+const tencentFieldNames = ['secretId', 'secretKey'] as const;
+type TencentField = typeof tencentFieldNames[number];
 
 function providerLabel(provider: string, zh: boolean): string {
   if (provider === 'mureka-cn') return zh ? 'Mureka 中国站' : 'Mureka China';
   if (provider === 'mureka-global') return zh ? 'Mureka 国际站' : 'Mureka Global';
+  if (provider === TENCENT_MPS_MUSIC_PROVIDER) return zh ? '腾讯云媒体处理（MPS）' : 'Tencent Cloud MPS';
   return provider;
 }
 
@@ -33,6 +37,7 @@ export function MusicModelSettingsPanel({ zh, disabled }: { zh: boolean; disable
   const [provider, setProvider] = useState<string>();
   const [defaults, setDefaults] = useState<{ modelRef: string; mode: MusicMode }>();
   const [apiKey, setApiKey] = useState<string>();
+  const [tencentKeys, setTencentKeys] = useState<Partial<Record<TencentField, string>>>({});
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState('');
   const selected = data?.models.find(model => model.ref === data.modelRef);
@@ -40,12 +45,17 @@ export function MusicModelSettingsPanel({ zh, disabled }: { zh: boolean; disable
   const modeLabel = (mode: MusicMode) => mode === 'song' ? (zh ? '歌曲' : 'Song') : (zh ? '纯音乐' : 'Instrumental');
   const credential = provider ? data?.credentials[provider] : undefined;
   const apiKeyPortal = provider ? apiKeyPortals.get(provider) : undefined;
+  const isTencent = provider === TENCENT_MPS_MUSIC_PROVIDER;
+  const credentialUrl = provider ? `${settingsUrl()}/credentials/${encodeURIComponent(provider)}` : '';
   const displayedKey = apiKey ?? (credential === 'saved' ? '••••••••••••' : '');
   const replacementKey = apiKey?.trim() ?? '';
-  const canSaveKey = Boolean(replacementKey && !isMaskedSecret(replacementKey));
+  const canSaveKey = isTencent ? tencentFieldNames.every(field => {
+    const value = tencentKeys[field]?.trim() ?? '';
+    return value && !isMaskedSecret(value);
+  }) : Boolean(replacementKey && !isMaskedSecret(replacementKey));
   const credentialLabel = (source: MusicModelSettings['credentials'][string] | undefined) => {
-    if (source === 'saved') return zh ? '已保存 API Key' : 'API key saved';
-    if (source === 'environment') return zh ? '使用环境变量' : 'Using an environment variable';
+    if (source === 'saved') return zh ? '已保存密钥' : 'Credentials saved';
+    if (source === 'environment') return zh ? '使用环境变量' : 'Using environment variables';
     return zh ? '待连接' : 'Connection needed';
   };
 
@@ -70,6 +80,7 @@ export function MusicModelSettingsPanel({ zh, disabled }: { zh: boolean; disable
     setProvider(undefined);
     setDefaults(undefined);
     setApiKey(undefined);
+    setTencentKeys({});
     setFailure('');
   }
 
@@ -136,7 +147,7 @@ export function MusicModelSettingsPanel({ zh, disabled }: { zh: boolean; disable
     <Dialog.Root open={Boolean(provider)} onOpenChange={open => { if (!open && !pending) close(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[150] bg-scrim" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[151] flex h-[min(20rem,calc(100dvh-2rem))] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[151] flex h-[min(23rem,calc(100dvh-2rem))] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay">
           <header className="border-b border-edge px-5 py-4">
             <Dialog.Title className="font-semibold text-fg">{provider && providerLabel(provider, zh)}</Dialog.Title>
             <Dialog.Description className="mt-1 text-sm text-fg-muted">{credentialLabel(credential)}</Dialog.Description>
@@ -144,35 +155,66 @@ export function MusicModelSettingsPanel({ zh, disabled }: { zh: boolean; disable
           {provider && <form className="flex min-h-0 flex-1 flex-col" onSubmit={async event => {
             event.preventDefault();
             if (!canSaveKey) return;
-            if (await save(`${settingsUrl()}/credentials/${encodeURIComponent(provider)}`, 'PUT', { apiKey: replacementKey })) close();
+            if (await save(credentialUrl, 'PUT', isTencent ? tencentKeys : { apiKey: replacementKey })) close();
           }}>
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <label className="text-sm font-medium text-fg" htmlFor="music-provider-api-key">API Key</label>
-                {apiKeyPortal && <a href={apiKeyPortal} target="_blank" rel="noreferrer"
-                  className="inline-flex min-h-8 items-center gap-1 rounded-sm text-xs text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                  {zh ? '获取 API Key' : 'Get an API key'}<ArrowUpRight className="size-3.5" aria-hidden />
-                </a>}
-              </div>
-              <SecretInput key={provider} id="music-provider-api-key" autoComplete="new-password"
-                value={displayedKey} disabled={disabled || pending}
-                onChange={next => setApiKey(isMaskedSecret(displayedKey) ? next.replace(/^•+/, '') : next)}
-                placeholder={zh ? '粘贴 API Key' : 'Paste your API key'}
-                labels={zh ? { show: '显示密钥', hide: '隐藏密钥', copy: '复制密钥', copied: '已复制' }
-                  : { show: 'Show key', hide: 'Hide key', copy: 'Copy key', copied: 'Copied' }}
-                reveal={credential === 'saved' ? () => revealProviderApiKey(provider).then(result => result.apiKey) : undefined}
-                allowUnrevealedCopy
-                loadFailedLabel={zh ? '无法读取已保存的 API Key。' : 'Could not load the saved API key.'}
-                notInConfigFile={zh ? '网关中没有可查看的密钥。' : 'No saved key is available to show.'} />
-              {apiKeyPortal && <p className="text-xs leading-relaxed text-fg-muted">
-                {zh ? '登录对应站点的 Mureka 开放平台，在「API Keys」创建密钥，然后粘贴到这里并保存。'
-                  : 'Sign in to this region’s Mureka API platform, create a key under API Keys, then paste it here and save.'}
-              </p>}
+              {isTencent ? <>
+                {tencentFieldNames.map(field => {
+                  const value = tencentKeys[field] ?? (credential === 'saved' ? '••••••••••••' : '');
+                  const name = tencentFields[field];
+                  return <div key={field} className="space-y-1.5">
+                    <label htmlFor={`music-provider-${field}`} className="block text-sm font-medium text-fg">{name}</label>
+                    <SecretInput id={`music-provider-${field}`} autoComplete="new-password" value={value}
+                      disabled={disabled || pending}
+                      onChange={next => setTencentKeys(current => ({
+                        ...current, [field]: isMaskedSecret(value) ? next.replace(/^•+/, '') : next,
+                      }))}
+                      labels={zh ? { show: `显示 ${name}`, hide: `隐藏 ${name}`, copy: `复制 ${name}`, copied: '已复制' }
+                        : { show: `Show ${name}`, hide: `Hide ${name}`, copy: `Copy ${name}`, copied: 'Copied' }}
+                      reveal={credential === 'saved' ? () => fetchJson<{ value: string | null }>(credentialUrl, {
+                        method: 'POST', body: JSON.stringify({ field }),
+                      }).then(result => result.value) : undefined}
+                      allowUnrevealedCopy
+                      loadFailedLabel={zh ? '无法读取已保存的密钥。' : 'Could not load the saved credential.'} />
+                  </div>;
+                })}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                  <a href="https://console.cloud.tencent.com/mps" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent-fg hover:underline">
+                    {zh ? '开通腾讯云 MPS' : 'Activate Tencent Cloud MPS'}<ArrowUpRight className="size-3.5" aria-hidden />
+                  </a>
+                  <a href="https://console.cloud.tencent.com/cam/capi" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent-fg hover:underline">
+                    {zh ? '管理腾讯云 API 密钥' : 'Manage Tencent Cloud API keys'}<ArrowUpRight className="size-3.5" aria-hidden />
+                  </a>
+                </div>
+                <p className="text-xs text-fg-muted">{zh ? '请填写同一对密钥。更新时需重新填写两项。' : 'Enter a matching pair. Fill in both fields when replacing credentials.'}</p>
+              </> : <>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <label className="text-sm font-medium text-fg" htmlFor="music-provider-api-key">API Key</label>
+                  {apiKeyPortal && <a href={apiKeyPortal} target="_blank" rel="noreferrer"
+                    className="inline-flex min-h-8 items-center gap-1 rounded-sm text-xs text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                    {zh ? '获取 API Key' : 'Get an API key'}<ArrowUpRight className="size-3.5" aria-hidden />
+                  </a>}
+                </div>
+                <SecretInput key={provider} id="music-provider-api-key" autoComplete="new-password"
+                  value={displayedKey} disabled={disabled || pending}
+                  onChange={next => setApiKey(isMaskedSecret(displayedKey) ? next.replace(/^•+/, '') : next)}
+                  placeholder={zh ? '粘贴 API Key' : 'Paste your API key'}
+                  labels={zh ? { show: '显示密钥', hide: '隐藏密钥', copy: '复制密钥', copied: '已复制' }
+                    : { show: 'Show key', hide: 'Hide key', copy: 'Copy key', copied: 'Copied' }}
+                  reveal={credential === 'saved' ? () => revealProviderApiKey(provider).then(result => result.apiKey) : undefined}
+                  allowUnrevealedCopy
+                  loadFailedLabel={zh ? '无法读取已保存的 API Key。' : 'Could not load the saved API key.'}
+                  notInConfigFile={zh ? '网关中没有可查看的密钥。' : 'No saved key is available to show.'} />
+                {apiKeyPortal && <p className="text-xs leading-relaxed text-fg-muted">
+                  {zh ? '登录对应站点的 Mureka 开放平台，在「API Keys」创建密钥，然后粘贴到这里并保存。'
+                    : 'Sign in to this region’s Mureka API platform, create a key under API Keys, then paste it here and save.'}
+                </p>}
+              </>}
               {failure && <p role="alert" className="break-words text-xs text-danger">{failure}</p>}
             </div>
             <footer className="flex items-center justify-end gap-2 border-t border-edge px-5 py-3">
               {credential === 'saved' && <Button variant="ghost" type="button" className="mr-auto" disabled={pending} onClick={async () => {
-                if (await save(`${settingsUrl()}/credentials/${encodeURIComponent(provider)}`, 'DELETE')) close();
+                if (await save(credentialUrl, 'DELETE')) close();
               }}>{zh ? '移除密钥' : 'Remove key'}</Button>}
               <Dialog.Close asChild><Button variant="ghost" disabled={pending}>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close>
               <Button type="submit" variant="primary" disabled={disabled || pending || !canSaveKey}>{pending ? (zh ? '正在保存…' : 'Saving…') : (zh ? '保存' : 'Save')}</Button>

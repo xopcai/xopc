@@ -1,3 +1,4 @@
+import { TENCENT_MPS_MUSIC_PROVIDER } from '@xopcai/gateway-contract';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -5,6 +6,7 @@ import { readMusicArtifact } from '../../../music-generation/artifact.js';
 import { configuredMusicModel, hasMusicProvider, readMusicModelSettings, resolveMusicModel } from '../../../music-generation/providers.js';
 import { getMusicJob, listMusicJobs } from '../../../music-generation/repository.js';
 import { musicCredentials, saveMusicDefaults, saveMusicModel } from '../../../music-generation/settings.js';
+import { parseTencentMpsCredentials, tencentMpsCredentialsSchema } from '../../../music-generation/tencent-mps.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerMusicGenerationRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
@@ -33,10 +35,28 @@ export function registerMusicGenerationRoutes(app: Hono, deps: AuthenticatedRout
 
   app.put(`${settings}/credentials/:providerId`, deps.strictRateLimitMiddleware, async c => {
     const providerId = c.req.param('providerId');
-    const input = z.object({ apiKey: z.string().trim().min(1).max(4096).regex(/^[!-~]+$/) }).safeParse(await c.req.json().catch(() => null));
-    if (!hasMusicProvider(providerId) || !input.success) return c.json({ error: 'Invalid music provider or API key' }, 400);
-    await musicCredentials().saveApiKey(providerId, input.data.apiKey);
+    if (!hasMusicProvider(providerId)) return c.json({ error: 'Unknown music provider' }, 400);
+    const body = await c.req.json().catch(() => null);
+    if (providerId === TENCENT_MPS_MUSIC_PROVIDER) {
+      const input = tencentMpsCredentialsSchema.safeParse(body);
+      if (!input.success) return c.json({ error: 'Enter a valid Tencent Cloud SecretId and SecretKey' }, 400);
+      await musicCredentials().saveApiKey(providerId, JSON.stringify(input.data));
+    } else {
+      const input = z.object({ apiKey: z.string().trim().min(1).max(4096).regex(/^[!-~]+$/) }).safeParse(body);
+      if (!input.success) return c.json({ error: 'Invalid music API key' }, 400);
+      await musicCredentials().saveApiKey(providerId, input.data.apiKey);
+    }
     return c.json(await readMusicModelSettings());
+  });
+
+  app.post(`${settings}/credentials/:providerId`, deps.strictRateLimitMiddleware, async c => {
+    const providerId = c.req.param('providerId');
+    if (providerId !== TENCENT_MPS_MUSIC_PROVIDER) return c.json({ error: 'Unknown music provider' }, 404);
+    const input = z.object({ field: z.enum(['secretId', 'secretKey']) }).safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ error: 'Unknown credential field' }, 400);
+    const stored = parseTencentMpsCredentials(await musicCredentials().revealGatewayStoredApiKey(providerId));
+    c.header('Cache-Control', 'no-store');
+    return c.json({ value: stored?.[input.data.field] ?? null });
   });
 
   app.delete(`${settings}/credentials/:providerId`, deps.strictRateLimitMiddleware, async c => {
