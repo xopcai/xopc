@@ -468,7 +468,7 @@ export struct XopcChatView {
       || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory) || state === ScrollState.Idle) return;
     this.atBottom = this.messagesScroller.isAtEnd();
     if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }
-    else this.showJumpBottom = true;
+    else if (offset !== 0) this.showJumpBottom = offset > 0;
     if (offset < 0 && this.messagesScroller.currentOffset().yOffset < 960 && !this.olderFailed) this.loadOlder();
   }
   private updateReplySpace(): void {
@@ -1437,6 +1437,7 @@ export struct XopcChatView {
           this.initialScrollPending = false;
           this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false;
           this.jumpingToBottom = true;
+          this.showJumpBottom = false;
           const last = this.presentationRows.length + (this.chat.hasOlder ? 1 : 0);
           this.messagesScroller.scrollToIndex(last, true, ScrollAlign.END);
         })

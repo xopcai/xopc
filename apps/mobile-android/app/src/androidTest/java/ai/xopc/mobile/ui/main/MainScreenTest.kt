@@ -80,8 +80,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsFocused
@@ -213,6 +215,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
     composeTestRule.runOnIdle {
       state.value = state.value.copy(messages = messages +
         ConversationMessage("message-30", "assistant", "Reply 30"))
@@ -243,6 +246,10 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput {
+      swipeUp(startY = height * 0.55f, endY = height * 0.45f, durationMillis = 400)
+    }
     composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
     val jumpBounds = composeTestRule.onNodeWithTag("assistant-jump-bottom")
       .fetchSemanticsNode().boundsInRoot
@@ -255,7 +262,7 @@ class MainScreenTest {
       state.value = state.value.copy(messages = state.value.messages +
         ConversationMessage("message-31", "assistant", "Reply 31"))
     }
-    composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.onNodeWithText("Reply 31").assertIsNotDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-bottom").performClick()
     composeTestRule.onNodeWithText("Reply 31").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
@@ -283,6 +290,10 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.runOnIdle { state.value = state.value.copy(liveMessages = listOf(ConversationMessage("live:run-1", "assistant", stream + "\n\nMore output", "run-1"))) }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput {
+      swipeUp(startY = height * 0.55f, endY = height * 0.45f, durationMillis = 400)
+    }
     composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-jump-working", useUnmergedTree = true).assertExists()
     composeTestRule.onNodeWithTag("assistant-jump-arrow", useUnmergedTree = true).assertDoesNotExist()

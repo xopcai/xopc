@@ -3,10 +3,20 @@ import SwiftUI
 struct ChatScrollInteraction: ViewModifier {
     let onStart: () -> Void
     let onEnd: () -> Void
+    let onDirectionChange: (Bool) -> Void
+    @State private var previousDragTranslation = CGSize.zero
 
     func body(content: Content) -> some View {
         if #available(iOS 18, *) {
-            content.onScrollPhaseChange { previous, phase in
+            content.onScrollGeometryChange(for: ScrollGeometry.self) { $0 } action: { old, new in
+                guard old.contentSize == new.contentSize, old.containerSize == new.containerSize,
+                      old.contentInsets == new.contentInsets else { return }
+                let previous = max(-old.contentInsets.top, old.contentOffset.y)
+                let current = max(-new.contentInsets.top, new.contentOffset.y)
+                if current != previous {
+                    onDirectionChange(current > previous)
+                }
+            }.onScrollPhaseChange { previous, phase in
                 if phase == .tracking || phase == .interacting {
                     onStart()
                 }
@@ -15,9 +25,16 @@ struct ChatScrollInteraction: ViewModifier {
                 }
             }
         } else {
-            content.simultaneousGesture(DragGesture().onChanged { _ in
+            content.simultaneousGesture(DragGesture().onChanged { value in
                 onStart()
+                let dy = value.translation.height - previousDragTranslation.height
+                let dx = value.translation.width - previousDragTranslation.width
+                previousDragTranslation = value.translation
+                if abs(dy) > 1, abs(dy) > abs(dx) {
+                    onDirectionChange(dy < 0)
+                }
             }.onEnded { _ in
+                previousDragTranslation = .zero
                 onEnd()
             })
         }

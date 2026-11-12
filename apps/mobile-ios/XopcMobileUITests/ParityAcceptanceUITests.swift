@@ -2149,6 +2149,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         expand.tap()
         app.buttons["conversation-child-task-child"].tap()
         let jump = app.buttons["chat-jump-bottom"]
+        XCTAssertTrue(app.buttons["chat-audio-voice"].waitForExistence(timeout: 10))
+        revealJumpToLatest(jump)
         XCTAssertTrue(jump.waitForExistence(timeout: 10))
         XCTAssertEqual(jump.value as? String, "正在回答")
         XCTAssertEqual(jump.frame.midX, app.frame.midX, accuracy: 3)
@@ -2157,6 +2159,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         let second = jump.screenshot().pngRepresentation
         XCTAssertNotEqual(first, second)
         capture("working-logo-animation")
+        jump.tap()
         let voice = app.buttons["chat-audio-voice"]
         XCTAssertTrue(voice.waitForExistence(timeout: 5))
         XCTAssertEqual(voice.frame.height, 48, accuracy: 2)
@@ -2203,12 +2206,13 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label == %@", "高")).firstMatch.tap()
         XCTAssertTrue(app.navigationBars["会话选项"].waitForExistence(timeout: 5))
         app.buttons.matching(NSPredicate(format: "label == %@", "关闭")).firstMatch.tap()
-        app.swipeDown()
         let jump = app.buttons["chat-jump-bottom"]
+        revealJumpToLatest(jump)
         XCTAssertTrue(jump.waitForExistence(timeout: 5))
         XCTAssertEqual(jump.frame.midX, app.frame.midX, accuracy: 3)
         capture("message-jump-centered")
         jump.tap()
+        XCTAssertFalse(jump.exists)
         app.buttons["assistant-options"].tap()
         app.staticTexts["新建会话"].tap()
         let confirmation = app.buttons.matching(NSPredicate(format: "label == %@", "开始新对话")).firstMatch
@@ -2220,6 +2224,15 @@ final class MobileLayoutParityUITests: XCTestCase {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
         XCTAssertEqual(app.textFields["assistant-chat-composer"].value as? String, "请整理移动端布局")
+    }
+
+    private func revealJumpToLatest(_ jump: XCUIElement) {
+        app.swipeDown()
+        app.swipeDown()
+        XCTAssertFalse(jump.exists)
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.58))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.47))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
     }
 
     func testProgressNotesAndProfileLayout() {

@@ -58,7 +58,7 @@ class ChatKeyboardScrollTest {
       rule.onNodeWithTag("assistant-input").performClick()
     }
     rule.onNodeWithText("Reply 29").assertIsNotDisplayed()
-    rule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
+    rule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
     Espresso.pressBack()
   }
 

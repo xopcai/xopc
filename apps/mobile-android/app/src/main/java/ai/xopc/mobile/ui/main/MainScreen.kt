@@ -155,6 +155,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -2650,6 +2654,17 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val messageDragged by messageListState.interactionSource.collectIsDraggedAsState()
   var positionedAtLatest by readingPosition.positionedAtLatest
   var followBottom by readingPosition.followBottom
+  var showJumpBottom by remember(messageListState) { mutableStateOf(false) }
+  val messageScrollDirection = remember(messageListState) {
+    object : NestedScrollConnection {
+      override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (source == NestedScrollSource.UserInput && consumed.y != 0f) {
+          showJumpBottom = consumed.y < 0f && messageListState.canScrollBackward
+        }
+        return Offset.Zero
+      }
+    }
+  }
   var replySpace by remember(connection.selectedConversationId) { mutableStateOf(ChatReplySpace()) }
   var messageViewportHeight by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
   var replyAnchorId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -2711,6 +2726,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   LaunchedEffect(messageListState, connection.historyLoadingOlder) {
     snapshotFlow { messageListState.isScrollInProgress to messageListState.canScrollBackward }
       .collect { (scrolling, canScrollToLatest) ->
+        if (!canScrollToLatest) showJumpBottom = false
         if (scrolling && jumpJob == null && positionedAtLatest &&
           !connection.historyLoadingOlder && olderAnchor == null) followBottom = !canScrollToLatest
       }
@@ -2822,6 +2838,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           }
         }
       } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list")
+        .nestedScroll(messageScrollDirection)
         .onSizeChanged { messageViewportHeight = it.height },
         state = messageListState, reverseLayout = true,
         contentPadding = ChatMessagePadding(bottomChromeInsets, chatTopInset + 88.dp,
@@ -2964,10 +2981,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
     ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
   }
-  if (positionedAtLatest && !followBottom && messageListState.canScrollBackward) {
+  if (showJumpBottom && positionedAtLatest && !followBottom && messageListState.canScrollBackward) {
     val jumpLabel = stringResource(R.string.assistant_jump_bottom)
     IconButton(onClick = {
       if (jumpJob == null && !messageDragged) {
+        showJumpBottom = false
         olderAnchor = null
         val job = jumpScope.launch(start = CoroutineStart.LAZY) {
           try {

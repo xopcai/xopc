@@ -92,6 +92,49 @@ describe('useChatScrollViewport', () => {
     );
   }
 
+  it.each(['wheel', 'touch', 'scrollbar', 'keyboard'] as const)('only shows the bottom button when scrolling toward newer messages by %s', (input) => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    Object.defineProperties(el, {
+      clientHeight: { value: 400 },
+      clientWidth: { value: 300 },
+      scrollHeight: { value: 2000 },
+    });
+    const gesture = (delta: number, top: number) => {
+      act(() => {
+        if (input === 'wheel') {
+          el.dispatchEvent(new WheelEvent('wheel', { deltaY: delta }));
+        } else if (input === 'touch') {
+          el.dispatchEvent(new TouchEvent('touchstart', { touches: [{ clientX: 20, clientY: 200 } as Touch] }));
+          el.dispatchEvent(new TouchEvent('touchmove', { touches: [{ clientX: 20, clientY: 200 - delta } as Touch] }));
+        } else if (input === 'scrollbar') {
+          el.dispatchEvent(new MouseEvent('pointerdown', { clientX: 305 }));
+        } else {
+          el.dispatchEvent(new KeyboardEvent('keydown', { key: delta > 0 ? 'PageDown' : 'PageUp' }));
+        }
+        el.scrollTop = top;
+        viewport?.onScroll();
+        window.dispatchEvent(new Event('pointerup'));
+      });
+    };
+
+    act(() => {
+      el.scrollTop = 800;
+      viewport?.onScroll();
+    });
+    expect(viewport?.showScrollToBottom).toBe(false);
+    gesture(-200, 600);
+    expect(viewport?.showScrollToBottom).toBe(false);
+    gesture(200, 800);
+    expect(viewport?.showScrollToBottom).toBe(true);
+    gesture(-100, 700);
+    expect(viewport?.showScrollToBottom).toBe(false);
+    gesture(200, 900);
+    expect(viewport?.showScrollToBottom).toBe(true);
+    gesture(700, 1600);
+    expect(viewport?.showScrollToBottom).toBe(false);
+  });
+
   it('reserves space for the floating dock as it grows without moving a history reader', () => {
     let dockHeight = 120;
     const original = HTMLElement.prototype.getBoundingClientRect;
