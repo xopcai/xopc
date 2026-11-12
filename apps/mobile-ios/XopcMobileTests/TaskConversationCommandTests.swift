@@ -5,7 +5,7 @@ import Testing
 struct TaskConversationCommandTests {
     @Test func signoffEncodesExactResultAndRequiresIt() throws {
         let command = try TaskCommandMutation.Command.make(type: "signoff", phase: nil,
-                                                            resolution: "done", agentID: nil, resultID: "run:3")
+                                                           resolution: "done", agentID: nil, resultID: "run:3")
         let body = try JSONEncoder().encode(command)
         let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
         #expect(json == ["type": "signoff", "resultId": "run:3"])

@@ -21,7 +21,9 @@ enum TaskAcceptanceStatus: String {
               let receipt = detail.receipts?.first(where: { $0.runId == runID }),
               let checks = receipt.verification?.checks.filter({ $0.checkId == criterion.id }),
               checks.count == 1, let check = checks.first else { return .pending }
-        if check.status == "failed" { return .failed }
+        if check.status == "failed" {
+            return .failed
+        }
         let byTitle = Dictionary(grouping: receipt.evidence ?? [], by: \.title)
         let verified = check.evidenceTitles.contains { title in
             byTitle[title]?.count == 1 && byTitle[title]?.first?.strength == "verified"

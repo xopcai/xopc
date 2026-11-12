@@ -167,13 +167,16 @@ struct AssistantView<Dock: View>: View {
                 await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
             }
             .task(id: GeneratedMediaObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                                  transcriptID: conversation?.transcriptId, busy: state.isRunActive,
-                                                  visible: isActive && scenePhase == .active)) {
+                                                   transcriptID: conversation?.transcriptId, busy: state.isRunActive,
+                                                   visible: isActive && scenePhase == .active))
+            {
                 await generatedMedia.observe(isActive && scenePhase == .active && conversation?.isDraft == false ? conversation?.id : nil,
                                              client: GatewayClient(configuration: configuration), busy: state.isRunActive)
             }
             .sheet(item: $playingGeneratedMedia) { card in
-                if let id = conversation?.id { GeneratedMediaPlayerSheet(card: card, conversationID: id, configuration: configuration) }
+                if let id = conversation?.id {
+                    GeneratedMediaPlayerSheet(card: card, conversationID: id, configuration: configuration)
+                }
             }
             .onChange(of: scenePhase) {
                 if scenePhase != .active {
@@ -514,7 +517,9 @@ struct AssistantView<Dock: View>: View {
                     updateReplySpace()
                 }
                 .onChange(of: isAtBottom) {
-                    if isAtBottom { showJumpBottom = false }
+                    if isAtBottom {
+                        showJumpBottom = false
+                    }
                 }
                 .onChange(of: viewport.size.height) {
                     updateReplySpace()
@@ -537,7 +542,7 @@ struct AssistantView<Dock: View>: View {
                     showJumpBottom = towardLatest && !isAtBottom
                 }))
                 .overlay(alignment: .bottom) {
-                    if showJumpBottom && !isAtBottom {
+                    if showJumpBottom, !isAtBottom {
                         Button {
                             guard bottomJumpID == nil else { return }
                             showJumpBottom = false
@@ -586,12 +591,12 @@ struct AssistantView<Dock: View>: View {
                 GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
                                   submitting: generatedMedia.submitting, error: card.isDraft ? generatedMedia.error : nil,
                                   onPlay: {
-                    readAloud.stop()
-                    assistantAudio.stop()
-                    playingGeneratedMedia = card
-                }, onConfirm: {
-                    Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
-                })
+                                      readAloud.stop()
+                                      assistantAudio.stop()
+                                      playingGeneratedMedia = card
+                                  }, onConfirm: {
+                                      Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
+                                  })
             }
         }
     }
