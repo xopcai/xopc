@@ -12,7 +12,7 @@ import { createConversation } from '../../storage/sqlite/conversation-repository
 import { closeXopcDatabase, openXopcDatabase, getSqliteDatabase } from '../../storage/sqlite/index.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
 import { archiveSpaceTaskDelivery } from '../ingest.js';
-import { changeSpaceItem, findSpaceTaskDelivery, getSpaceItem, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply } from '../repository.js';
+import { changeSpaceItem, findSpaceArtifact, findSpaceTaskDelivery, getSpaceItem, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply, saveSpaceVersion } from '../repository.js';
 import { SpaceWorker } from '../worker.js';
 
 function pdfWithText(text: string): Buffer {
@@ -113,6 +113,46 @@ describe('Space', () => {
     await vi.waitFor(() => {
       expect(listSpaceItems({ view: 'all', q: 'Searchable PDF phrase' }).items[0]?.hit?.locator).toEqual({ kind: 'page', page: 1 });
     }, { timeout: 10_000, interval: 100 });
+  });
+
+  it('moves a delivered file into an existing result without duplicating it on retry or replay', async () => {
+    async function deliver(fileName: string, body: string) {
+      const media = await saveMediaBuffer(Buffer.from(body), {
+        bucket: 'outbound', originalFilename: fileName, contentType: 'text/markdown',
+      });
+      const outcome: TurnOutcome = {
+        version: 1, outcomeId: media.id, turnId: media.id, runId: media.id, status: 'succeeded',
+        deliverables: [{ artifactId: media.id, title: fileName, kind: 'document', uri: media.uri,
+          location: 'artifact_store', availability: 'available', sizeBytes: media.size, capabilities: ['preview', 'download'] }],
+        evidence: [], createdAt: new Date().toISOString(),
+      };
+      const publish = () => appendTranscriptEntry(conversationId, {
+        type: 'custom', customType: 'turn_outcome', data: outcome, timestamp: new Date().toISOString(),
+      });
+      publish();
+      return { media, publish, link: findSpaceArtifact(media.id)! };
+    }
+
+    const original = await deliver('Report.md', 'Original report');
+    const edited = await deliver('Report revised.md', 'Revised report');
+    const target = getSpaceItem(original.link.id)!;
+    expect(listSpaceItems({ view: 'all', versionTargetFor: edited.link.versionId }).items.map(item => item.id)).toEqual([target.id]);
+    expect(saveSpaceVersion(target.id, edited.link.versionId, target.revision + 1)).toBe('conflict');
+    const result = { id: target.id, versionId: edited.link.versionId };
+    expect(saveSpaceVersion(target.id, edited.link.versionId, target.revision)).toEqual(result);
+    expect(saveSpaceVersion(target.id, edited.link.versionId, target.revision)).toEqual(result);
+    edited.publish();
+
+    expect(getSpaceItem(edited.link.id)).toBeNull();
+    expect(findSpaceArtifact(edited.media.id)).toEqual({ ...result, canSaveAsVersion: false });
+    expect(listSpaceItems({ view: 'all', versionTargetFor: edited.link.versionId }).items).toEqual([]);
+    const updated = getSpaceItem(target.id)!;
+    expect(updated.title).toBe('Report.md');
+    expect(updated.currentVersion.id).toBe(edited.link.versionId);
+    expect(updated.versions.map(version => version.id)).toEqual([edited.link.versionId, original.link.versionId]);
+    expect(updated.origins.some(origin => origin.versionId === edited.link.versionId)).toBe(true);
+    expect(await new Response((await readSpaceContent(target.id, original.link.versionId))!.body).text()).toBe('Original report');
+    expect(await new Response((await readSpaceContent(target.id, edited.link.versionId))!.body).text()).toBe('Revised report');
   });
 
   it('saves the selected reply idempotently and keeps task versions readable', async () => {

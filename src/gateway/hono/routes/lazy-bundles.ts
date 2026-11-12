@@ -25,7 +25,7 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
     id: 'space',
-    match: path => /^\/api\/spaces\/(?:items(?:\/[^/]+(?:\/(?:restore|purge|versions\/[^/]+\/content))?)?|(?:artifacts|deliveries)\/[^/]+)$/.test(path),
+    match: path => /^\/api\/spaces\/(?:items(?:\/[^/]+(?:\/(?:restore|purge|versions(?:\/[^/]+\/content)?))?)?|(?:artifacts|deliveries)\/[^/]+)$/.test(path),
     load: async () => {
       const { registerSpaceRoutes } = await import('./space.js');
       return { register: registerSpaceRoutes };

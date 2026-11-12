@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
-import { constants } from 'node:fs';
+import { constants, lstatSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import type { SQLInputValue } from 'node:sqlite';
 
-import type { SpaceDetail, SpaceItem, SpaceList, SpaceOrigin, SpaceVersion } from '@xopcai/gateway-contract';
+import type { SpaceArtifactLink, SpaceDetail, SpaceItem, SpaceList, SpaceOrigin, SpaceVersion, SpaceVersionLink } from '@xopcai/gateway-contract';
 
 import { parseByteRange } from '../media-shared/http/byte-range.js';
 import { MEDIA_ARTIFACT_MAX_BYTES, resolveMediaBufferPath } from '../media/store.js';
@@ -65,7 +65,18 @@ export function getSpaceItem(id: string): SpaceDetail | null {
     versions: (db.prepare('SELECT * FROM space_versions WHERE item_id = ? ORDER BY created_at DESC, ordinal DESC').all(id) as VersionRow[]).map(version) };
 }
 
-type ListInput = { view: 'all' | 'favorites' | 'trash'; q?: string; kind?: string; projectId?: string; taskId?: string; cursor?: string };
+type ListInput = { view: 'all' | 'favorites' | 'trash'; q?: string; kind?: string; projectId?: string; taskId?: string; cursor?: string; versionTargetFor?: string };
+
+function versionKind(kind: string): string {
+  return kind === 'pdf' ? 'document' : kind;
+}
+
+function versionSource(versionId: string) {
+  return getSqliteDatabase().prepare(`SELECT v.item_id, v.media_id, v.size_bytes, i.kind, i.favorite,
+    NOT EXISTS(SELECT 1 FROM space_versions other WHERE other.item_id = v.item_id AND other.id != v.id) AS standalone
+    FROM space_versions v JOIN space_items i ON i.id = v.item_id
+    WHERE v.id = ? AND v.media_id IS NOT NULL AND i.trashed_at IS NULL`).get(versionId);
+}
 
 export function spaceHanPairs(text: string): string {
   const terms = new Set<string>();
@@ -82,6 +93,12 @@ export function listSpaceItems(input: ListInput): SpaceList {
   const pattern = `%${escapeSqlLike(q)}%`;
   const filters = [input.view === 'trash' ? 'i.trashed_at IS NOT NULL' : 'i.trashed_at IS NULL'];
   const params: SQLInputValue[] = [];
+  if (input.versionTargetFor) {
+    const source = versionSource(input.versionTargetFor);
+    if (!source?.standalone || input.view === 'trash') return { items: [] };
+    filters.push("i.id != ? AND CASE i.kind WHEN 'pdf' THEN 'document' ELSE i.kind END = ?");
+    params.push(source.item_id, versionKind(String(source.kind)));
+  }
   if (input.view === 'favorites') filters.push('i.favorite = 1');
   if (input.kind === 'document') filters.push("i.kind IN ('document', 'pdf')");
   else if (input.kind === 'file') filters.push("i.kind IN ('file', 'site')");
@@ -133,10 +150,42 @@ export function listSpaceItems(input: ListInput): SpaceList {
 
 type SpaceLink = { id: string; versionId?: string };
 
-export function findSpaceArtifact(mediaId: string): SpaceLink | null {
-  const row = getSqliteDatabase().prepare(`SELECT i.id, v.id AS version_id FROM space_versions v JOIN space_items i ON i.id = v.item_id
+export function findSpaceArtifact(mediaId: string): SpaceArtifactLink | null {
+  const row = getSqliteDatabase().prepare(`SELECT i.id, v.id AS version_id,
+    NOT EXISTS(SELECT 1 FROM space_versions other WHERE other.item_id = v.item_id AND other.id != v.id) AS standalone
+    FROM space_versions v JOIN space_items i ON i.id = v.item_id
     WHERE v.media_id = ? AND i.trashed_at IS NULL LIMIT 1`).get(mediaId);
-  return typeof row?.id === 'string' ? { id: row.id, versionId: String(row.version_id) } : null;
+  return typeof row?.id === 'string'
+    ? { id: row.id, versionId: String(row.version_id), canSaveAsVersion: Boolean(row.standalone) } : null;
+}
+
+export function saveSpaceVersion(id: string, sourceVersionId: string, revision: number): SpaceVersionLink | 'missing' | 'conflict' {
+  return runSqliteWriteTransaction(db => {
+    const source = versionSource(sourceVersionId);
+    const target = db.prepare(`SELECT i.kind, i.revision, v.created_at FROM space_items i
+      JOIN space_versions v ON v.id = i.current_version_id WHERE i.id = ? AND i.trashed_at IS NULL`).get(id);
+    if (!source || !target) return 'missing';
+    if (source.item_id === id) {
+      // A retry after a successful move must not promote an old version again.
+      return source.standalone ? 'conflict' : { id, versionId: sourceVersionId };
+    }
+    if (!source.standalone || target.revision !== revision || versionKind(String(source.kind)) !== versionKind(String(target.kind))) return 'conflict';
+    try {
+      const stat = lstatSync(resolveMediaBufferPath(String(source.media_id), 'outbound'), { throwIfNoEntry: false });
+      if (!stat?.isFile() || stat.size !== source.size_bytes) return 'missing';
+    } catch { return 'missing'; }
+
+    const updatedAt = Math.max(Date.now(), Number(target.created_at));
+    const nextOrdinal = db.prepare('SELECT MAX(ordinal) + 1 AS ordinal FROM space_versions WHERE item_id = ?').get(id)?.ordinal ?? 1;
+    db.prepare('UPDATE space_versions SET item_id = ?, ordinal = ?, created_at = ? WHERE id = ?')
+      .run(id, nextOrdinal, updatedAt, sourceVersionId);
+    db.prepare('UPDATE space_origins SET item_id = ? WHERE version_id = ?').run(id, sourceVersionId);
+    db.prepare(`UPDATE space_items SET current_version_id = ?, kind = ?, favorite = MAX(favorite, ?),
+      updated_at = ?, revision = revision + 1 WHERE id = ?`)
+      .run(sourceVersionId, source.kind, source.favorite, updatedAt, id);
+    db.prepare('DELETE FROM space_items WHERE id = ?').run(source.item_id);
+    return { id, versionId: sourceVersionId };
+  });
 }
 
 export function findSpaceTaskDelivery(deliveryId: string): SpaceLink | null {
