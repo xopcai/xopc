@@ -234,7 +234,9 @@ struct AssistantView<Dock: View>: View {
                                              visible: key.visible, busy: key.busy)
             }
             .onChange(of: scenePhase) {
-                if scenePhase != .active { playingGeneratedMedia = nil }
+                if scenePhase != .active {
+                    playingGeneratedMedia = nil
+                }
             }
             .onChange(of: conversation?.transcriptId) { playingGeneratedMedia = nil }
             .onChange(of: configuration.baseURL) { playingGeneratedMedia = nil }
