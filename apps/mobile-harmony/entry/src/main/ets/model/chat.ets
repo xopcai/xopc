@@ -47,6 +47,7 @@ export interface XopcOpenAiToolCall { id: string; function: XopcToolFunction; }
 export interface XopcToolFunction { name: string; arguments?: string; }
 export interface XopcMessage { display?: boolean; id?: string; messageId?: string; role: string; content: string | XopcContentBlock[];
   deliveries?: XopcProductDelivery[];
+  generatedMediaIds?: string[];
   rawContent?: XopcContentBlock[]; media?: XopcHistoryMedia[]; attachments?: XopcHistoryMedia[]; metadata?: XopcMessageMetadata;
   toolCalls?: XopcHistoryToolCall[]; tool_calls?: XopcOpenAiToolCall[];
   toolCallId?: string; tool_call_id?: string; isError?: boolean; details?: Object; turnId?: string;
@@ -85,6 +86,7 @@ export interface XopcExecutionDetail { turnId: string; steps: XopcExecutionStep[
 export interface XopcLiveActivityTool { id: string; kind: string; status: string; }
 export interface XopcChatRow { id: string; role: string; text: string; thinking?: string; tools?: string; media?: XopcHistoryMedia[]; refs?: XopcContextRef[];
   deliveries?: XopcProductDelivery[];
+  generatedMediaIds?: string[];
   sendState?: string;
   toolCalls?: XopcChatTool[]; toolResultId?: string; toolResultError?: boolean; toolResultDetails?: Object;
   blocks?: XopcChatBlock[]; outcome?: XopcTurnOutcome; turnId?: string; live?: boolean; progress?: string; sourceIds?: string[];

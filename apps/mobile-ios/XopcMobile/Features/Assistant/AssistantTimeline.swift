@@ -42,7 +42,7 @@ extension AssistantState {
                 .filter { $0.availability != "available" }.map(\.title) ?? []
             let receipts = taskReceipts(from: message.deliveries)
             guard !text.isEmpty || !attachments.isEmpty || !references.isEmpty || !receipts.isEmpty
-                || !resultLinks.isEmpty || !unavailableOutputs.isEmpty,
+                || !resultLinks.isEmpty || !unavailableOutputs.isEmpty || message.generatedMediaIds?.isEmpty == false,
                 message.role == "user" || message.role == "assistant"
             else {
                 return nil

@@ -19,6 +19,10 @@ import { XopcChatRepository } from '../repository/chatRepository';
 import { chatAnswerText, chatAnswerStarted, chatAttachments } from '../common/chatRichContent';
 import { extractMarkdownCodeBlocks } from '../common/chatDisplay';
 import { XopcChatMediaView } from './ChatMediaView';
+import { XopcGeneratedMediaRow, XopcGeneratedMediaPlayer } from './GeneratedMediaView';
+import { XopcGeneratedMediaViewModel } from '../viewmodel/generatedMediaViewModel';
+import { XopcGeneratedMediaCard } from '../model/generatedMedia';
+import { generatedMediaByReply } from '../common/generatedMedia';
 import { advanceChatAutoRead, latestChatAutoRead, XopcAutoReadState } from '../common/chatAutoRead';
 import { common } from '@kit.AbilityKit';
 import { voiceCapture, XopcVoiceCapture } from '../service/voiceCapture';
@@ -80,6 +84,14 @@ interface XopcChatMessageMenuAction {
 export struct XopcChatView {
   @Local phone: XopcPhoneViewModel = new XopcPhoneViewModel();
   @Local phonePage: number = 0;
+  @Local generatedMedia: XopcGeneratedMediaViewModel = new XopcGeneratedMediaViewModel();
+  @Local generatedPlayerOpen: boolean = false;
+  @Local generatedPlaying: XopcGeneratedMediaCard | undefined = undefined;
+  private generatedPlaybackScope: string = '';
+  @Computed get generatedMediaGroups(): Map<string, XopcGeneratedMediaCard[]> {
+    return generatedMediaByReply(this.generatedMedia.cards, this.presentationRows);
+  }
+  @Computed get generatedMediaChinese(): boolean { return appSettings.effectiveLanguage().startsWith('zh'); }
   @Local colors: XopcThemeColors = appThemeColors;
   @Param requestedId: string = '';
   @Param taskId: string = '';
@@ -853,6 +865,16 @@ export struct XopcChatView {
   onSelectedConversation(): void {
     if (this.activePage && this.chat.selectedId) this.onConversationChange(this.chat.selectedId);
   }
+  @Monitor('chat.selectedId', 'chat.transcriptId', 'chat.runId', 'chat.cachedHistory', 'activePage', 'layout.foreground', 'phonePage')
+  onGeneratedMediaScopeChange(): void {
+    const id = this.chat.selectedId;
+    const profile = gatewaySession.currentProfile();
+    const scope = JSON.stringify([profile?.gatewayId, profile?.deviceId, id, this.chat.transcriptId]);
+    if (!this.activePage || this.phonePage !== 0 || this.generatedPlaybackScope !== scope) this.generatedPlayerOpen = false;
+    this.generatedPlaybackScope = scope;
+    this.generatedMedia.observe(id, scope, this.activePage && this.phonePage === 0 && this.layout.foreground
+      && !this.chat.cachedHistory && !!this.chat.transcriptId, !!this.chat.runId);
+  }
   @Monitor('chat.loading', 'chat.agentId')
   onHistoryReady(): void {
     if (this.visible && !this.chat.loading && this.chat.selectedId) void this.connectionWait.refresh();
@@ -916,7 +938,7 @@ export struct XopcChatView {
     this.setPanel(true);
     this.chooseAction(this.requestedAction);
   }
-  aboutToDisappear(): void { this.composerNotice.clear(); this.phone.dispose(); this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+  aboutToDisappear(): void { this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
 
   private async newConversation(agentId: string = this.options.agentId, projectId: string | null = this.chat.projectId || null, executionMode?: string): Promise<void> {
     if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
@@ -1273,11 +1295,38 @@ export struct XopcChatView {
   }
 
   @Builder
+  generatedMediaRows(replyId: string) {
+    if (this.generatedMediaGroups.has(replyId)) {
+      Column({ space: 8 }) {
+        Repeat<XopcGeneratedMediaCard>(this.generatedMediaGroups.get(replyId) ?? []).each((entry: RepeatItem<XopcGeneratedMediaCard>) => {
+          XopcGeneratedMediaRow({ card: entry.item, zh: this.generatedMediaChinese, submitting: this.generatedMedia.submitting,
+            confirmationFailed: this.generatedMedia.failedDraftId === entry.item.item.id,
+            onPlay: (): void => {
+              void this.reader.stop();
+              void assistantAudioAutoplay.interrupt();
+              this.generatedPlaying = entry.item;
+              this.generatedPlayerOpen = true;
+            },
+            onConfirm: (): void => { void this.generatedMedia.confirm(entry.item); } })
+        }).key((card: XopcGeneratedMediaCard): string => card.kind + ':' + card.item.id)
+      }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 6 })
+    }
+  }
+
+  @Builder
+  generatedPlayerSheet() {
+    if (this.generatedPlaying) {
+      XopcGeneratedMediaPlayer({ card: this.generatedPlaying, conversationId: this.chat.selectedId,
+        zh: this.generatedMediaChinese })
+    }
+  }
+
+  @Builder
   conversation() {
     Stack({ alignContent: Alignment.Bottom }) {
     Column() {
     if (this.chat.loading && !this.chat.rows.length) { this.skeleton() }
-    if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId) {
+    if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId && !this.generatedMedia.cards.length) {
       XopcChatWelcome({ activePage: this.activePage, scope: this.context.summary, language: appSettings.effectiveLanguage(),
         contextPending: this.context.loading || this.options.loading,
         personal: this.personalConversation, personalName: this.personalAgent?.displayName ?? 'Ada',
@@ -1375,6 +1424,7 @@ export struct XopcChatView {
                   connection: this.chat.connection,
                   animateDots: this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion })
               }
+              this.generatedMediaRows(item.item.id)
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
             Column({ space: 2 }) {
@@ -1387,6 +1437,9 @@ export struct XopcChatView {
           this.recordReplyRowHeight(item.item.id, Number(current.height));
         })
       }).key((row: XopcChatRow): string => this.renderKeys.key(row)).virtualScroll({ totalCount: this.presentationRows.length })
+      if (this.generatedMediaGroups.has('')) {
+        ListItem() { this.generatedMediaRows('') }
+      }
       ListItem() {
         Column().id('chat-reply-clearance').width('100%')
           .height(this.bottomRegionHeight + 48 + this.replySpaceHeight - 20)
@@ -1828,6 +1881,9 @@ export struct XopcChatView {
       }.width('100%').padding({ top: this.embedded ? 0 : 62 + this.chatTopInset })
       }
       this.conversation()
+      Column().id('chat-generated-media-sheet-host').width('100%').height(0)
+        .bindSheet($$this.generatedPlayerOpen, this.generatedPlayerSheet, { height: '72%', dragBar: true,
+          showClose: true, backgroundColor: this.colors.surface })
       Column().width('100%').height(0)
         .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '65%', dragBar: false,
           keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, showClose: false, backgroundColor: this.colors.panel })

@@ -68,6 +68,12 @@ export class XopcChatMediaPlayback {
     } catch (error) { this.fail(error as Error, generation); }
   }
 
+  seek(seconds: number): void {
+    if (!['prepared', 'playing', 'paused', 'completed'].includes(this.state)) return;
+    try { this.player?.seek(Math.round(Math.max(0, Math.min(seconds, this.duration)) * 1000)); }
+    catch (error) { this.fail(error as Error, this.generation); }
+  }
+
   private fail(error: Error, generation: number): void {
     if (generation !== this.generation) return;
     this.settle('failed');

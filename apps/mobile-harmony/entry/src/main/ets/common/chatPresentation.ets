@@ -13,7 +13,7 @@ export function chatNeedsWideBubble(row: XopcChatRow): boolean {
 function copyPresentationRow(row: XopcChatRow): XopcChatRow {
   return { id: row.id, role: row.role, text: row.text, thinking: row.thinking, tools: row.tools,
     media: row.media?.slice(), refs: row.refs, deliveries: row.deliveries?.slice(), toolCalls: row.toolCalls, blocks: row.blocks?.slice(),
-    outcome: row.outcome, turnId: row.turnId, live: row.live, progress: row.progress, sourceIds: row.sourceIds?.slice(),
+    generatedMediaIds: row.generatedMediaIds?.slice(), outcome: row.outcome, turnId: row.turnId, live: row.live, progress: row.progress, sourceIds: row.sourceIds?.slice(),
     activity: row.activity, activityUpdatedAtMs: row.activityUpdatedAtMs, activityTools: row.activityTools?.slice(),
     executionActivity: row.executionActivity, runStatus: row.runStatus,
     toolResultId: row.toolResultId, toolResultError: row.toolResultError, toolResultDetails: row.toolResultDetails };
@@ -45,6 +45,7 @@ export function chatPresentationRows(history: XopcChatRow[], live: XopcChatRow |
   }
   return rows.filter((row: XopcChatRow): boolean => row.role !== 'assistant' || !!row.live
     || !!chatAnswerText(row) || (row.media || []).length > 0 || (row.deliveries || []).length > 0
+    || (row.generatedMediaIds?.length ?? 0) > 0
     || (row.outcome?.deliverables || []).length > 0 || !!chatStageStatus(row)
     || (row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'review'));
 }

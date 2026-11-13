@@ -56,7 +56,7 @@ export class XopcChatViewModel {
   private olderPending: boolean = false;
   private prefetchKey: string = '';
   private prefetchedHistory?: Promise<XopcHistory | undefined>;
-  private transcriptId?: string;
+  @Trace transcriptId?: string;
   private before: string = '';
   private search: string = '';
   private snapshotMode: boolean = false;

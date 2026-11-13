@@ -6,7 +6,7 @@ import { reduceChatLiveActivity } from './chatLiveActivity';
 export function reduceChatStream(previous: XopcChatRow | undefined, event: string, payload: XopcStreamPayload, runId: string): XopcChatRow {
   const row: XopcChatRow = previous ? { id: previous.id, role: previous.role, text: previous.text,
     refs: previous.refs, outcome: previous.outcome, turnId: previous.turnId, live: previous.live,
-    progress: previous.progress, sourceIds: previous.sourceIds, deliveries: previous.deliveries, runStatus: previous.runStatus,
+    progress: previous.progress, sourceIds: previous.sourceIds, deliveries: previous.deliveries, generatedMediaIds: previous.generatedMediaIds, runStatus: previous.runStatus,
     activity: previous.activity, activityUpdatedAtMs: previous.activityUpdatedAtMs,
     executionActivity: previous.executionActivity,
     activityTools: event === 'tool_start' || event === 'tool_end'

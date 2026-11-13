@@ -5,6 +5,16 @@ import UIKit
 @testable import XopcMobile
 
 struct ChatRenderingTests {
+    @Test func generatedMediaKeepsRepliesWithoutText() throws {
+        let messages = try JSONDecoder().decode([WireMessage].self, from: Data(#"""
+        [{"id":"media","role":"assistant","content":"","generatedMediaIds":["song","video"]},
+         {"id":"empty","role":"assistant","content":""}]
+        """#.utf8))
+        let rows = AssistantState.timeline(from: messages)
+        #expect(rows.map(\.id) == ["media"])
+        #expect(rows.first?.generatedMediaIds == ["song", "video"])
+    }
+
     @Test func publicStagesRemainOrderedUntilTheAnswerStarts() {
         var progress = AssistantRunProgress(runID: "run")
         for index in 1 ... 4 {

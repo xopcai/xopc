@@ -1216,7 +1216,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         val targets = parseMessageTargets(item.optJSONArray("deliveries"))
         val ids = item.optJSONArray("generatedMediaIds")
         val generatedMediaIds = (0 until (ids?.length() ?: 0)).mapNotNull { part -> ids?.optString(part)?.takeIf(String::isNotBlank) }
-        val hasNonTextContent = narration || hasToolCall || (item.optJSONArray("media")?.length() ?: 0) > 0 ||
+        val hasNonTextContent = narration || hasToolCall || generatedMediaIds.isNotEmpty() || (item.optJSONArray("media")?.length() ?: 0) > 0 ||
           (metadata?.optJSONArray("sourceContexts")?.length() ?: 0) > 0 ||
           outcome != null || targets.isNotEmpty() ||
           (raw != null && (0 until raw.length()).any { part ->

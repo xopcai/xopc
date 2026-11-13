@@ -15,6 +15,7 @@ struct GeneratedMediaPayload: Decodable, Equatable, Sendable {
     let ratio: String?
     let revision: Int?
     let estimatedCostFen: Int?
+    let estimatedCreditMicro: Int?
     let versionNumber: Int?
     let error: String?
     let modelRef: String?
@@ -99,31 +100,40 @@ final class GeneratedMediaState {
     private(set) var canConfirm = false
     private(set) var submitting = false
     private(set) var error: String?
-    private var scope: String?
+    private struct Scope: Equatable {
+        let id: String?
+        let transcriptID: String?
+        let gateway: URL
+        let identity: String?
+    }
+
+    private var scope: Scope?
     private var videoRequest = 0
 
-    func observe(_ id: String?, client: GatewayClient, busy: Bool) async {
-        if id != scope {
-            scope = id
+    func observe(_ id: String?, transcriptID: String?, client: GatewayClient, visible: Bool, busy: Bool) async {
+        let next = Scope(id: id, transcriptID: transcriptID, gateway: client.configuration.baseURL,
+                         identity: client.configuration.localIdentity)
+        if next != scope {
+            scope = next
             cards = []
             error = nil
             canConfirm = false
             submitting = false
             videoRequest += 1
         }
-        guard let id else { return }
+        guard visible, let id else { return }
         while !Task.isCancelled {
-            await refresh(id, client: client)
+            await refresh(id, scope: next, client: client)
             try? await Task.sleep(for: .seconds(busy || cards.contains(where: \.active) ? 3 : 20))
         }
     }
 
-    private func refresh(_ id: String, client: GatewayClient) async {
+    private func refresh(_ id: String, scope: Scope, client: GatewayClient) async {
         let request = videoRequest
         async let music = fetch(.music, id: id, client: client)
         async let video = fetch(.video, id: id, client: client)
         let (musicResult, videoResult) = await (music, video)
-        guard !Task.isCancelled, scope == id else { return }
+        guard !Task.isCancelled, self.scope == scope else { return }
         if let musicResult {
             replace(.music, with: musicResult.jobs)
         }
@@ -151,13 +161,14 @@ final class GeneratedMediaState {
     }
 
     func confirm(_ card: GeneratedMediaCard, conversationID: String, client: GatewayClient) async {
-        guard !submitting, scope == conversationID, card.isDraft, canConfirm, let revision = card.item.revision else { return }
+        guard !submitting, let scope, scope.id == conversationID, card.isDraft, canConfirm,
+              let revision = card.item.revision else { return }
         submitting = true
         error = nil
         videoRequest += 1
         let request = videoRequest
         defer {
-            if scope == conversationID, videoRequest == request {
+            if self.scope == scope, videoRequest == request {
                 submitting = false
             }
         }
@@ -166,13 +177,13 @@ final class GeneratedMediaState {
                 path: card.jobsPath(conversationID) + "/confirm-draft", method: "POST",
                 body: client.encoder.encode(GeneratedDraftConfirmation(id: card.id, revision: revision))
             )
-            guard scope == conversationID, videoRequest == request else { return }
+            guard self.scope == scope, videoRequest == request else { return }
             replace(.video, with: cards.filter { $0.kind == .video && $0.id != job.id && !$0.isDraft }.map(\.item) + [job])
         } catch {
-            guard scope == conversationID, videoRequest == request else { return }
+            guard self.scope == scope, videoRequest == request else { return }
             self.error = error.localizedDescription
             if let response = await fetch(.video, id: conversationID, client: client),
-               scope == conversationID, videoRequest == request
+               self.scope == scope, videoRequest == request
             {
                 applyVideo(response)
             }
@@ -230,7 +241,10 @@ struct GeneratedMediaRow: View {
             }
             if card.isDraft {
                 Text(verbatim: card.item.summary ?? card.item.prompt ?? "").font(.subheadline).lineLimit(3)
-                if let estimate = card.item.estimatedCostFen {
+                if let estimate = card.item.estimatedCreditMicro {
+                    Text("预计 \(Double(estimate) / 1_000_000, format: .number.precision(.fractionLength(2))) 积分")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else if let estimate = card.item.estimatedCostFen {
                     Text("预计 ¥\(Double(estimate) / 100, format: .number.precision(.fractionLength(2)))")
                         .font(.caption).foregroundStyle(.secondary)
                 }

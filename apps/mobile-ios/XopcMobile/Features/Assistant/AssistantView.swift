@@ -166,18 +166,6 @@ struct AssistantView<Dock: View>: View {
                 guard scenePhase == .active, isActive, let conversation, !conversation.isDraft else { return }
                 await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
             }
-            .task(id: GeneratedMediaObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                                   transcriptID: conversation?.transcriptId, busy: state.isRunActive,
-                                                   visible: isActive && scenePhase == .active))
-            {
-                await generatedMedia.observe(isActive && scenePhase == .active && conversation?.isDraft == false ? conversation?.id : nil,
-                                             client: GatewayClient(configuration: configuration), busy: state.isRunActive)
-            }
-            .sheet(item: $playingGeneratedMedia) { card in
-                if let id = conversation?.id {
-                    GeneratedMediaPlayerSheet(card: card, conversationID: id, configuration: configuration)
-                }
-            }
             .onChange(of: scenePhase) {
                 if scenePhase != .active {
                     state.pauseConversation()
@@ -235,8 +223,30 @@ struct AssistantView<Dock: View>: View {
             }
     }
 
+    private var generatedMediaLifecycle: some View {
+        let key = GeneratedMediaObservationKey(configuration: configuration, conversationID: conversation?.id,
+                                               transcriptID: conversation?.transcriptId, busy: state.isRunActive,
+                                               visible: isActive && scenePhase == .active && !showingPhone)
+        return chatLifecycle
+            .task(id: key) {
+                await generatedMedia.observe(conversation?.isDraft == false ? key.conversationID : nil,
+                                             transcriptID: key.transcriptID, client: GatewayClient(configuration: key.configuration),
+                                             visible: key.visible, busy: key.busy)
+            }
+            .sheet(item: $playingGeneratedMedia) { card in
+                if let id = conversation?.id {
+                    GeneratedMediaPlayerSheet(card: card, conversationID: id, configuration: configuration)
+                }
+            }
+            .onChange(of: conversation?.transcriptId) { playingGeneratedMedia = nil }
+            .onChange(of: configuration.baseURL) { playingGeneratedMedia = nil }
+            .onChange(of: showingPhone) {
+                if showingPhone { playingGeneratedMedia = nil }
+            }
+    }
+
     private var chatBody: some View {
-        chatLifecycle
+        generatedMediaLifecycle
             .onChange(of: assistantAudioObservation, initial: true) { _, observation in
                 assistantAudio.observe(observation, configuration: configuration)
             }
@@ -364,7 +374,7 @@ struct AssistantView<Dock: View>: View {
         } else if state.isLoadingHistory {
             ProgressView("正在读取消息…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if state.messages.isEmpty, !showsStagedProgress {
+        } else if state.messages.isEmpty, generatedMedia.cards.isEmpty, !showsStagedProgress {
             GeometryReader { viewport in
                 ScrollView {
                     LazyVStack(spacing: 16) {

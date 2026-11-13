@@ -222,6 +222,9 @@ export function mergeAssistantRows(rows: XopcChatRow[]): XopcChatRow[] {
     previous.blocks = blocks; previous.outcome = row.outcome || previous.outcome; previous.turnId = row.turnId || previous.turnId;
     previous.executionActivity = previous.executionActivity || row.executionActivity;
     if (previous.deliveries || row.deliveries) previous.deliveries = (previous.deliveries || []).concat(row.deliveries || []);
+    if (previous.generatedMediaIds || row.generatedMediaIds) {
+      previous.generatedMediaIds = Array.from(new Set<string>((previous.generatedMediaIds ?? []).concat(row.generatedMediaIds ?? [])));
+    }
     previous.sourceIds = Array.from(new Set<string>((previous.sourceIds || [previous.id]).concat(row.sourceIds)));
     const media = previous.media || [];
     previous.media = media.concat((row.media || []).filter((file: XopcHistoryMedia): boolean => !media.some((old: XopcHistoryMedia): boolean => old.uri === file.uri && old.id === file.id)));

@@ -22,6 +22,10 @@ import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.ConversationTaskChild
 import ai.xopc.mobile.gateway.ConversationTaskGroup
 import ai.xopc.mobile.gateway.ConversationMedia
+import ai.xopc.mobile.gateway.GeneratedMediaAccess
+import ai.xopc.mobile.gateway.GeneratedMediaItem
+import ai.xopc.mobile.gateway.GeneratedMediaKind
+import ai.xopc.mobile.gateway.generatedMediaByReply
 import ai.xopc.mobile.gateway.ConversationTarget
 import ai.xopc.mobile.gateway.CameraCaptureStore
 import ai.xopc.mobile.gateway.CameraTakePictureContract
@@ -48,6 +52,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -477,6 +482,7 @@ fun MainScreen(
   onSaveMessageAsNote: (String) -> Unit = {},
   onReuseMessage: (String) -> Boolean = { false },
   onRegenerateMessage: (String) -> Boolean = { false },
+  generatedMediaAccess: GeneratedMediaAccess? = null,
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
@@ -810,6 +816,7 @@ fun MainScreen(
     onSaveMessageAsNote = onSaveMessageAsNote, onReuseMessage = onReuseMessage,
     onRegenerateMessage = onRegenerateMessage,
     onLoadMessageMedia = onLoadMessageMedia,
+    generatedMediaAccess = generatedMediaAccess,
     onSpeechChunk = onSpeechChunk,
     onTranscribeAudio = onTranscribeAudio,
     onCreateVoiceCall = onCreateVoiceCall, onCancelVoiceCall = onCancelVoiceCall,
@@ -1008,6 +1015,7 @@ internal fun MainContent(
   onSaveMessageAsNote: (String) -> Unit = {},
   onReuseMessage: (String) -> Boolean = { false },
   onRegenerateMessage: (String) -> Boolean = { false },
+  generatedMediaAccess: GeneratedMediaAccess? = null,
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
@@ -1644,6 +1652,7 @@ internal fun MainContent(
           onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, personalModelRequestRevision, { personalModelRequestRevision = 0 },
           phoneAvailable = phoneUi.summary?.available == true, phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.attention,
           onOpenPhone = { phonePage = true },
+          generatedMediaAccess = generatedMediaAccess.takeUnless { phonePage },
           taskChrome = { search, options ->
             TaskConversationChrome(connection, taskNavigation, onSelectConversation, onSelectTab,
               onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, onSaveProgressTask,
@@ -2556,6 +2565,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadAvatar: suspend (ByteArray) -> Unit = {}, personalModelRequestRevision: Int = 0, onPersonalModelRequestHandled: () -> Unit = {},
   phoneAvailable: Boolean = false, phoneNeedsUser: Boolean = false, onOpenPhone: () -> Unit = {},
+  generatedMediaAccess: GeneratedMediaAccess? = null,
   taskChrome: @Composable (() -> Unit, () -> Unit) -> Unit = { _, _ -> }) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -2628,6 +2638,39 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     it.answerConfirmed && it.text.isNotBlank() }
   val latestConnection by rememberUpdatedState(connection)
   val selectedMessageConversationId = connection.selectedConversationId
+  val mediaScope = Triple(connection.profile?.gatewayId, selectedMessageConversationId, connection.historyTranscriptId)
+  val generatedMedia = remember(mediaScope) { GeneratedMediaChatState() }
+  val mediaCoroutine = rememberCoroutineScope()
+  val mediaLifecycle = LocalLifecycleOwner.current.lifecycle
+  val mediaRunActive = connection.activeRunId != null || connection.sending
+  LaunchedEffect(generatedMedia, generatedMediaAccess, mediaRunActive, mediaLifecycle) {
+    val access = generatedMediaAccess ?: return@LaunchedEffect
+    val id = mediaScope.second ?: return@LaunchedEffect
+    if (mediaScope.third == null) return@LaunchedEffect
+    mediaLifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+      generatedMedia.observe(access, id, mediaRunActive)
+    }
+  }
+  val generatedCards = remember(generatedMedia.items, displayMessages) {
+    generatedMediaByReply(generatedMedia.items, displayMessages)
+  }
+  val playGeneratedMedia: (GeneratedMediaItem) -> Unit = {
+    reader.stop()
+    generatedMedia.playing = it
+  }
+  val confirmGeneratedMedia: (GeneratedMediaItem) -> Unit = { card ->
+    if (!mediaRunActive && selectedMessageConversationId != null && generatedMediaAccess != null) {
+      mediaCoroutine.launch { generatedMedia.confirm(generatedMediaAccess, selectedMessageConversationId, card) }
+    }
+  }
+  LaunchedEffect(generatedMediaAccess) {
+    if (generatedMediaAccess == null) generatedMedia.playing = null
+  }
+  if (generatedMediaAccess != null && selectedMessageConversationId != null) {
+    generatedMedia.playing?.let { item ->
+      GeneratedMediaPlayer(item, selectedMessageConversationId, generatedMediaAccess) { generatedMedia.playing = null }
+    }
+  }
   val externalLinkFailure = stringResource(R.string.message_open_link_failed)
   var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var messageDetailId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -2824,7 +2867,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
       if (connection.historyLoading && displayMessages.isEmpty()) {
         Box(modifier = Modifier.weight(1f).padding(top = chatTopInset + 88.dp)) { AssistantHistorySkeleton() }
-      } else if (!connection.historyLoading && displayMessages.isEmpty() &&
+      } else if (!connection.historyLoading && displayMessages.isEmpty() && generatedCards.isEmpty() &&
         connection.historyBefore == null && connection.activeRunId == null &&
         connection.liveText.isBlank() && connection.optimisticText.isBlank() && !showStagedProgress) {
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()
@@ -2869,11 +2912,17 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
               connected = connection.realtimeStatus == "connected")
           }
         }
+        generatedCards[""]?.let { cards ->
+          item(key = "generated-media-unanchored") {
+            GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
+              playGeneratedMedia, confirmGeneratedMedia)
+          }
+        }
         val latestMessageId = displayMessages.lastOrNull {
           it.role == "user" || it.role == "assistant"
         }?.id
         items(displayMessages.asReversed(), key = { it.renderId }) { message ->
-          Box(Modifier.then(if (connection.liveMessages.any { it.id in message.sourceIds })
+          Column(Modifier.then(if (connection.liveMessages.any { it.id in message.sourceIds })
             Modifier.testTag("assistant-live-output") else Modifier)
             .onSizeChanged { replyRowHeights[message.renderId] = it.height }) {
           ChatMessageCard(message, onReading = { followBottom = false }, streaming = followBottom && !messageListState.isScrollInProgress && connection.activeRunId != null && connection.liveMessages.any { it.id in message.sourceIds }, actionsEnabled = connection.messages.any { it.id == message.id }, onMore = { messageActionsId = message.id },
@@ -2885,6 +2934,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             onViewMore = { messageDetailId = message.id },
             revealAnswer = connection.liveMessages.any { it.answerConfirmed && it.id in message.sourceIds },
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
+            generatedCards[message.renderId]?.let { cards ->
+              GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
+                playGeneratedMedia, confirmGeneratedMedia)
+            }
           }
         }
         if (connection.historyBefore != null) item(key = "assistant-older") {
