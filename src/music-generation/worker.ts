@@ -90,7 +90,7 @@ export class MusicGenerationWorker {
         case 'completed':
           if (!updateMusicJob(id, token, 'saving', { durationMs: result.durationMs, keepLease: true })) return;
           saving = true;
-          await saveMusicArtifact(id, provider, result.url, () => updateMusicJob(id, token, 'saving', { keepLease: true }));
+          await saveMusicArtifact(id, provider, result.url, () => updateMusicJob(id, token, 'saving', { keepLease: true }), key);
           if (await musicArtifactExists(id)) updateMusicJob(id, token, 'completed');
           if (!getMusicJob(row.conversation_id, id)) await deleteMusicArtifact(id);
       }

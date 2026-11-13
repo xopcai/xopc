@@ -24,6 +24,7 @@ export interface MusicProvider {
   submit(key: string, model: string, input: MusicInput): Promise<string>;
   query(key: string, mode: MusicMode, taskId: string): Promise<MusicProviderStatus>;
   allowsAudioHost(host: string): boolean;
+  downloadAudio?(key: string, url: URL): Promise<Response>;
 }
 
 export class MusicRequestRejected extends Error {

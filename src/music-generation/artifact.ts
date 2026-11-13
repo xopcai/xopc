@@ -27,9 +27,12 @@ export async function deleteMusicArtifact(id: string): Promise<void> {
   await deleteMediaUris([buildMediaUri('outbound', `music-${id}.mp3`)], { strict: true });
 }
 
-export async function saveMusicArtifact(id: string, provider: MusicProvider, source: string, canPublish: () => boolean): Promise<void> {
+export async function saveMusicArtifact(id: string, provider: MusicProvider, source: string, canPublish: () => boolean, key?: string): Promise<void> {
   const url = new URL(source);
-  if (url.protocol !== 'https:' || url.username || url.password || url.port || !provider.allowsAudioHost(url.hostname)) {
+  const download = provider.downloadAudio && key
+    ? () => provider.downloadAudio!(key, url)
+    : undefined;
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || (!download && !provider.allowsAudioHost(url.hostname))) {
     throw new Error('Music provider returned an untrusted audio URL.');
   }
   await assertSafeUrl(url);
@@ -37,7 +40,9 @@ export async function saveMusicArtifact(id: string, provider: MusicProvider, sou
   const temporary = `${path}.${randomUUID()}.part`;
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(45_000), redirect: 'error' });
+  const response = download
+    ? await download()
+    : await fetch(url, { signal: AbortSignal.timeout(45_000), redirect: 'error' });
   if (!response.ok || !response.body || Number(response.headers.get('content-length')) > MAX_AUDIO_BYTES) {
     await response.body?.cancel().catch(() => undefined);
     throw new Error('Music download failed or exceeded the size limit.');
