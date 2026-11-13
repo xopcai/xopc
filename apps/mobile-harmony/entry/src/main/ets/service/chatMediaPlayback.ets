@@ -41,6 +41,7 @@ export class XopcChatMediaPlayback {
         if (state === 'completed') this.settle('completed');
       });
       player.on('timeUpdate', (time: number): void => { if (generation === this.generation) this.position = time / 1000; });
+      player.on('seekDone', (time: number): void => { if (generation === this.generation) this.position = time / 1000; });
       player.on('error', (error: Error): void => { this.fail(error, generation); });
       player.fdSrc = { fd: file.fd, offset: 0, length };
     } catch (error) { this.fail(error as Error, generation); }
@@ -70,8 +71,11 @@ export class XopcChatMediaPlayback {
 
   seek(seconds: number): void {
     if (!['prepared', 'playing', 'paused', 'completed'].includes(this.state)) return;
-    try { this.player?.seek(Math.round(Math.max(0, Math.min(seconds, this.duration)) * 1000)); }
-    catch (error) { this.fail(error as Error, this.generation); }
+    const position = Math.max(0, Math.min(seconds, this.duration));
+    try {
+      this.player?.seek(Math.round(position * 1000));
+      this.position = position;
+    } catch (error) { this.fail(error as Error, this.generation); }
   }
 
   private fail(error: Error, generation: number): void {

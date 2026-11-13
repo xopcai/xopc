@@ -2656,19 +2656,21 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   }
   val playGeneratedMedia: (GeneratedMediaItem) -> Unit = {
     reader.stop()
-    generatedMedia.playing = it
+    generatedMedia.playingId = it.id.takeUnless { id -> id == generatedMedia.playingId }
   }
   val confirmGeneratedMedia: (GeneratedMediaItem) -> Unit = { card ->
     if (!mediaRunActive && selectedMessageConversationId != null && generatedMediaAccess != null) {
       mediaCoroutine.launch { generatedMedia.confirm(generatedMediaAccess, selectedMessageConversationId, card) }
     }
   }
-  LaunchedEffect(generatedMediaAccess) {
-    if (generatedMediaAccess == null) generatedMedia.playing = null
-  }
-  if (generatedMediaAccess != null && selectedMessageConversationId != null) {
-    generatedMedia.playing?.let { item ->
-      GeneratedMediaPlayer(item, selectedMessageConversationId, generatedMediaAccess) { generatedMedia.playing = null }
+  DisposableEffect(generatedMedia, generatedMediaAccess, mediaLifecycle) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_STOP) generatedMedia.playingId = null
+    }
+    mediaLifecycle.addObserver(observer)
+    onDispose {
+      mediaLifecycle.removeObserver(observer)
+      generatedMedia.playingId = null
     }
   }
   val externalLinkFailure = stringResource(R.string.message_open_link_failed)
@@ -2915,7 +2917,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         generatedCards[""]?.let { cards ->
           item(key = "generated-media-unanchored") {
             GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
-              playGeneratedMedia, confirmGeneratedMedia)
+              playGeneratedMedia, confirmGeneratedMedia, generatedMedia.playingId, selectedMessageConversationId, generatedMediaAccess)
           }
         }
         val latestMessageId = displayMessages.lastOrNull {
@@ -2936,7 +2938,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
             generatedCards[message.renderId]?.let { cards ->
               GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
-                playGeneratedMedia, confirmGeneratedMedia)
+                playGeneratedMedia, confirmGeneratedMedia, generatedMedia.playingId, selectedMessageConversationId, generatedMediaAccess)
             }
           }
         }

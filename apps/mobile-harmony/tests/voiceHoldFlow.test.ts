@@ -23,7 +23,7 @@ function setup() {
     voice, voiceHeld: true, voiceFinishing: false, voiceDestination: 'send', voiceRetryDestination: 'send',
     voicePointerId: 1, voiceHoldGeneration: 0, voiceStartX: 200, voiceStartY: 500,
     visible: true, disposed: false, chat: { selectedId: 'chat', sending: false, runId: '' },
-    reader: { stop: vi.fn(async () => {}) }, getUIContext: () => ({ getHostContext: () => ({}) }),
+    reader: { stop: vi.fn(async () => {}) }, stopGeneratedMediaPlayback: vi.fn(async () => {}), getUIContext: () => ({ getHostContext: () => ({}) }),
     sendVoice: vi.fn(async () => { voice.state = 'idle'; }),
     transcribe: vi.fn(async () => { voice.state = 'idle'; }),
   });
@@ -83,6 +83,7 @@ describe('voice hold release flow', () => {
     let stopped!: () => void;
     handler.reader.stop.mockImplementation(() => new Promise<void>((resolve) => { stopped = resolve; }));
     const pending = handler.beginVoiceHold({ id: 1, windowX: 200, windowY: 500 });
+    expect(handler.stopGeneratedMediaPlayback).toHaveBeenCalledOnce();
     await handler.finishVoiceHold(); stopped(); await pending;
     expect(handler.voice.start).not.toHaveBeenCalled();
   });
