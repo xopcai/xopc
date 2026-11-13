@@ -224,6 +224,10 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     chatBusy: stream.streaming || stream.sending, readOnly, onAdjust: adjustVideoDraft,
   });
   const musicTimeline = useChatMusicGeneration(videoConversationId, language, stream.streaming || stream.sending, msgSlice.items);
+  const chatTimelineEntries = useMemo(() => [...(automationTimelineEntries ?? []), ...videoGeneration.timelineEntries, ...musicTimeline],
+    [automationTimelineEntries, videoGeneration.timelineEntries, musicTimeline]);
+  const mediaSource = personalSourceTurnId?.startsWith('music-generation:') || personalSourceTurnId?.startsWith('video-generation:');
+  const mediaSourceIndex = mediaSource ? chatTimelineEntries.findIndex(entry => entry.id === personalSourceTurnId) : -1;
   const { draft: pendingVideoDraft, confirmDraft: confirmVideoDraft } = videoGeneration;
   const automationSetupBound = Boolean((sessionMetadata?.identity?.customData?.automationSetup as { automationId?: string } | undefined)?.automationId);
   const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
@@ -410,22 +414,22 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
       const root = scrollRef.current;
       if (!root) return false;
       const target = root.querySelector<HTMLElement>(
-        `[data-chat-message-index="${localMessageIndex}"]`,
+        `[data-chat-message-index="${localMessageIndex}"], [data-chat-timeline-index="${localMessageIndex}"]`,
       );
       if (!target) {
         const revealed = chatVirtualScroll(root)?.reveal(localMessageIndex) ?? false;
-        if (revealed) setActiveMessageIndex(localMessageIndex);
+        if (revealed && localMessageIndex < msgSlice.items.length) setActiveMessageIndex(localMessageIndex);
         return revealed;
       }
       pauseChatTailFollowing(root);
-      setActiveMessageIndex(localMessageIndex);
+      if (localMessageIndex < msgSlice.items.length) setActiveMessageIndex(localMessageIndex);
       const rootRect = root.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
       const scrollTop = root.scrollTop + targetRect.top - rootRect.top - 16;
       root.scrollTo({ top: Math.max(0, scrollTop), behavior: chatScrollBehavior() });
       return true;
     },
-    [scrollRef],
+    [msgSlice.items.length, scrollRef],
   );
 
   const updateActiveMessageIndex = useCallback(() => {
@@ -471,12 +475,20 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     ],
   );
   useInitialTurnNavigation({
-    conversationId: session.conversationId, turnId: personalSourceTurnId ?? initialTurnId,
+    conversationId: session.conversationId, turnId: mediaSource ? undefined : personalSourceTurnId ?? initialTurnId,
     requestKey: personalSourceTurnId ? location.key : undefined, assistantOnly: Boolean(personalSourceTurnId),
     messages: msgSlice.items, ready: readableHistoryReady,
     hasMore: session.hasMore, loadingMore: session.loadingMore, loadMore: session.loadMoreMessages,
     reveal: scrollToLocalMessageIndex, onLocated: onInitialTurnLocated,
   });
+  const locatedMediaSource = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!readableHistoryReady || mediaSourceIndex < 0 || locatedMediaSource.current === location.key) return;
+    const frame = requestAnimationFrame(() => {
+      if (scrollToLocalMessageIndex(msgSlice.items.length + mediaSourceIndex)) locatedMediaSource.current = location.key;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location.key, mediaSourceIndex, msgSlice.items.length, readableHistoryReady, scrollToLocalMessageIndex]);
   const chatFind = useChatFind({
     conversationId: session.conversationId,
     taskId,
@@ -1225,7 +1237,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                     key={chatConversationId}
                     scrollRef={scrollRef}
                     messages={msgSlice.items}
-                    timelineEntries={[...(automationTimelineEntries ?? []), ...videoGeneration.timelineEntries, ...musicTimeline]}
+                    timelineEntries={chatTimelineEntries}
                     personal={personal}
                     authToken={token ?? undefined}
                     conversationId={session.decodedKey ?? session.conversationId}

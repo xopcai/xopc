@@ -202,7 +202,7 @@ export const MessageList = memo(function MessageList({
     if (index >= list.length) {
       const entry = entryFor(index);
       return <div key={entry.id} className={compactTop && !virtualized ? '-mt-5' : undefined}
-        data-chat-timeline-entry={entry.id}>{entry.content}</div>;
+        data-chat-timeline-entry={entry.id} data-chat-timeline-index={index}>{entry.content}</div>;
     }
     const msg = list[index];
     const isStreamRow = isStreamingRow(msg, index);

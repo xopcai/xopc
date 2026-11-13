@@ -1,9 +1,9 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { signedDeviceHeaders } from '../../gateway/security/__tests__/signed-device-headers.js';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { serve } from '@hono/node-server';
 import { TASK_RESULT_DELIVERY_TYPE, type TurnOutcome, type TurnOutcomeDeliverable } from '@xopcai/gateway-contract';
@@ -19,6 +19,7 @@ import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js'
 import { TaskRepository } from '../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { taskOutcomeReferencesMediaUri } from '../../media/session-references.js';
+import { resolveMediaBufferPath } from '../../media/store.js';
 import { listDeliverables } from '../../tasks/task-deliverables.js';
 import { AutomationService } from '../../automations/service/automation-service.js';
 import { applyUserProfilePatch } from '../../user-model/profile.js';
@@ -45,6 +46,7 @@ describe('personal Agent identity', () => {
 
   it('keeps one identity and conversation and serves it through the authenticated Gateway', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-personal-agent-'));
+    vi.stubEnv('XOPC_STATE_DIR', dir);
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(dir, 'xopc.db') });
     const token = 'personal-agent-test-token';
@@ -58,6 +60,7 @@ describe('personal Agent identity', () => {
       refreshAgentCatalog: vi.fn(),
       agentService: { evictSessionAgent: vi.fn() },
       automationServiceInstance: automationService,
+      sessionIndexInstance: { getSessionMetadata },
     } as unknown as GatewayService });
     const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
     try {
@@ -239,6 +242,47 @@ describe('personal Agent identity', () => {
       expect((await oldestDeliverables.json()).payload).toMatchObject({ nextOffset: null, items: [
         { artifact: { artifactId: 'worker-only' }, task: { id: recent.id, conversationId: execution } },
       ] });
+      const db = getSqliteDatabase();
+      const musicId = 'a'.repeat(64);
+      const videoId = randomUUID();
+      const music = db.prepare(`INSERT INTO music_generation_jobs
+        (id, conversation_id, transcript_id, work_id, version_number, model_ref, request_hash, title, mode, prompt, state, next_attempt_at, created_at)
+        VALUES (?, ?, ?, ?, 1, 'test', 'test', 'Rain', 'instrumental', 'Piano', ?, 0, ?)`);
+      const video = db.prepare(`INSERT INTO video_generation_jobs
+        (id, conversation_id, transcript_id, request_hash, prompt, duration, ratio, resolution, state, next_attempt_at, created_at)
+        VALUES (?, ?, ?, 'test', 'Rain on a window', 5, '16:9', '720P', ?, 0, ?)`);
+      const transcript = getSessionMetadata(conversationId)!.transcriptId!;
+      const ordinaryTranscript = getSessionMetadata(ordinary)!.transcriptId!;
+      const now = Date.now() + 100;
+      music.run(musicId, conversationId, transcript, musicId, 'completed', now + 1);
+      music.run('b'.repeat(64), conversationId, transcript, 'pending-work', 'running', now + 4);
+      music.run('c'.repeat(64), ordinary, ordinaryTranscript, 'other-work', 'completed', now + 3);
+      video.run(videoId, conversationId, transcript, 'completed', now);
+      video.run(randomUUID(), conversationId, transcript, 'failed', now + 2);
+      for (const name of [`music-${musicId}.mp3`, `wan-${videoId}.mp4`]) {
+        const path = resolveMediaBufferPath(name, 'outbound');
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, '0123456789');
+      }
+      const generationPage = await (await fetch(deliverablesUrl, { headers })).json();
+      expect(generationPage.payload).toMatchObject({ nextOffset: 2, items: [
+        { turnId: `music-generation:${musicId}`, artifact: { artifactId: musicId, kind: 'audio', title: 'Rain' } },
+        { turnId: `video-generation:${videoId}`, artifact: { artifactId: videoId, kind: 'video', title: 'Rain on a window' } },
+      ] });
+      for (const { artifact } of generationPage.payload.items) {
+        const mediaUrl = new URL(artifact.uri, url);
+        expect((await fetch(mediaUrl)).status).toBe(401);
+        const media = await fetch(mediaUrl, { headers: { ...headers, Range: 'bytes=2-5' } });
+        expect(media.status).toBe(206);
+        expect(media.headers.get('content-type')).toBe(artifact.mimeType);
+        expect(await media.text()).toBe('2345');
+        mediaUrl.searchParams.set('download', '1');
+        const download = await fetch(mediaUrl, { headers });
+        expect(download.headers.get('content-disposition')).toContain('attachment');
+        expect(await download.text()).toBe('0123456789');
+      }
+      expect((await (await fetch(`${deliverablesUrl}&offset=2`, { headers })).json()).payload.items[0])
+        .toMatchObject({ reference: { id: 'worker-note' } });
       await automationService.initialize();
       const scheduleUrl = `${url}/schedules`;
       expect((await fetch(scheduleUrl)).status).toBe(401);
@@ -320,6 +364,7 @@ describe('personal Agent identity', () => {
       if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
       closeXopcDatabase();
       resetXopcDatabaseSingletonForTest();
+      vi.unstubAllEnvs();
       rmSync(dir, { recursive: true, force: true });
     }
   }, 30_000);

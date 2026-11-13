@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { PersonalDeliverable, PersonalDeliverablesPage } from '@xopcai/gateway-contract';
-import { FileText, Globe } from 'lucide-react';
+import { FileText, Globe, Music2, Video } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import useSWRInfinite from 'swr/infinite';
 
@@ -23,12 +23,14 @@ function DeliverableRow({ item, scope, zh, sourceHref, onSource }: {
   const { artifact, reference, task } = item;
   const title = artifact?.title ?? reference?.title ?? item.id;
   const site = artifact?.kind === 'site' || artifact?.mimeType === 'text/html' || reference?.kind === 'local_app' || reference?.kind === 'chat_preview';
+  const media = artifact?.kind === 'audio' ? { Icon: Music2, label: zh ? '音频' : 'Audio' }
+    : artifact?.kind === 'video' ? { Icon: Video, label: zh ? '视频' : 'Video' } : undefined;
   const kind = site ? (zh ? '网页' : 'Web page')
     : artifact?.kind === 'document' || reference?.kind === 'note' ? (zh ? '文档' : 'Document')
-      : (title.match(/\.([a-z0-9]{1,8})$/i)?.[1].toUpperCase() ?? (zh ? '文件' : 'File'));
+      : (media?.label ?? title.match(/\.([a-z0-9]{1,8})$/i)?.[1].toUpperCase() ?? (zh ? '文件' : 'File'));
   const body = <>
     <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-inset text-fg-muted" aria-hidden>
-      {site ? <Globe className="size-4" /> : <FileIcon name={title} />}
+      {site ? <Globe className="size-4" /> : media ? <media.Icon className="size-4" /> : <FileIcon name={title} />}
     </span>
     <span className="min-w-0 flex-1">
       <span className="block truncate text-sm font-semibold text-fg" title={title}>{title}</span>
