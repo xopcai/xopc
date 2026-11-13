@@ -48,14 +48,14 @@ function openMore(): HTMLButtonElement {
 }
 
 describe('product primary navigation', () => {
-  it('pins Space before the three default shortcuts', () => {
+  it('places Space below Work by default', () => {
     renderAt('/projects/example', <SidebarNavItems />);
 
     const links = [...container.querySelectorAll('a')];
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/personal',
-      '/space',
       '/',
+      '/space',
       '/capabilities/extensions',
       '/automations',
     ]);
@@ -102,13 +102,13 @@ describe('product primary navigation', () => {
     expect(document.body.textContent).not.toContain('Run history');
   });
 
-  it('shows all four domains when the shortcut area expands', () => {
-    renderAt('/', <SidebarNavItems visibleLimit={4} />);
+  it('shows all five shortcuts when the shortcut area expands', () => {
+    renderAt('/', <SidebarNavItems visibleLimit={5} />);
 
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
       '/personal',
-      '/space',
       '/',
+      '/space',
       '/capabilities/extensions',
       '/automations',
       '/local-apps',
@@ -119,7 +119,7 @@ describe('product primary navigation', () => {
   it('allows the visible shortcut area to shrink to one item', () => {
     renderAt('/', <SidebarNavItems visibleLimit={1} />);
 
-    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/personal', '/space', '/']);
+    expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/personal', '/']);
     expect(container.querySelector('button[aria-label="More navigation items"]')).not.toBeNull();
   });
 
@@ -198,7 +198,7 @@ describe('product primary navigation', () => {
     drag(work, 'dragover');
     drag(work, 'drop');
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
-      '/personal', '/space', '/extensions/reading/list', '/', '/capabilities/extensions',
+      '/personal', '/extensions/reading/list', '/', '/space', '/capabilities/extensions',
     ]);
     const saved = JSON.parse(localStorage.getItem('xopc-web-sidebar-nav-order')!);
     expect(saved[0]).toBe('ext:reading:list');
@@ -217,11 +217,39 @@ describe('product primary navigation', () => {
     expect(document.body.querySelector('a[href="/extensions/reading/list"]')).not.toBeNull();
   });
 
+  it('moves Space above Work and preserves its position on remount', () => {
+    useNavOrderStore.getState().setOrder(['builtin:capabilities', 'builtin:work']);
+    renderAt('/space', <SidebarNavItems />);
+    const space = container.querySelector<HTMLAnchorElement>('a[href="/space"]')!;
+    const work = container.querySelector<HTMLAnchorElement>('a[href="/"]')!;
+    expect(work.nextElementSibling).toBe(space);
+    expect(space.draggable).toBe(true);
+    expect(space.getAttribute('aria-current')).toBe('page');
+
+    const data = new Map<string, string>();
+    const dataTransfer = {
+      setData: (type: string, value: string) => data.set(type, value),
+      getData: (type: string) => data.get(type) ?? '',
+    };
+    for (const [target, type] of [[space, 'dragstart'], [work, 'dragover'], [work, 'drop']] as const) {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientY: -1 });
+      Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
+      act(() => target.dispatchEvent(event));
+    }
+    expect(JSON.parse(localStorage.getItem('xopc-web-sidebar-nav-order')!).slice(0, 3))
+      .toEqual(['builtin:capabilities', 'builtin:space', 'builtin:work']);
+
+    act(unmount);
+    container.remove();
+    renderAt('/space', <SidebarNavItems collapsed />);
+    expect(container.querySelector('a[href="/space"]')?.nextElementSibling?.getAttribute('href')).toBe('/');
+  });
+
   it('ignores unrelated drops and safely reconciles unavailable and duplicate entries', () => {
     useNavOrderStore.getState().setOrder(['ext:missing:page', 'builtin:automations', 'builtin:automations']);
     renderAt('/', <SidebarNavItems />);
     expect([...container.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
-      '/personal', '/space', '/automations', '/', '/capabilities/extensions',
+      '/personal', '/automations', '/', '/space', '/capabilities/extensions',
     ]);
     const work = container.querySelector('a[href="/"]')!;
     const event = new Event('drop', { bubbles: true, cancelable: true });

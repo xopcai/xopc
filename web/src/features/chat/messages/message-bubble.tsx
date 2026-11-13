@@ -414,7 +414,7 @@ export const MessageBubble = memo(function MessageBubble({
     try {
       const { id } = await saveReplyToSpace(conversationId, spaceReference);
       setSavedSpaceItem({ entryId: spaceReferenceKey, id });
-      showComposerNotification('success', language === 'zh' ? '已保存到 Space' : 'Saved to Space', undefined, { href: `/space?item=${encodeURIComponent(id)}` });
+      showComposerNotification('success', language === 'zh' ? '已保存到资料库' : 'Saved to Space', undefined, { href: `/space?item=${encodeURIComponent(id)}` });
     } catch {
       showComposerNotification('error', language === 'zh' ? '保存失败，请重试' : 'Could not save to Space. Try again.');
     } finally { setSavingToSpace(false); }
@@ -793,7 +793,7 @@ export const MessageBubble = memo(function MessageBubble({
             {!isUser && (spaceId || message.taskResultDelivery || spaceDeliverables?.length) ? (
               <div className="flex flex-wrap items-center gap-1">
                 {spaceId ? <Link to={`/space?item=${encodeURIComponent(spaceId)}`} className="rounded-lg px-2 py-1 text-xs text-accent-fg hover:bg-surface-hover">
-                  {language === 'zh' ? '在 Space 中查看回复' : 'View reply in Space'}
+                  {language === 'zh' ? '在资料库中查看回复' : 'View reply in Space'}
                 </Link> : null}
                 {message.taskResultDelivery && !spaceDeliverables?.length ? (
                   <SpaceTaskResultLink deliveryId={message.taskResultDelivery.deliveryId} title={message.taskResultDelivery.taskTitle} zh={language === 'zh'} />
@@ -1080,7 +1080,7 @@ export const MessageBubble = memo(function MessageBubble({
                   {conversationId && spaceReference && !spaceId ? (
                     <Popover.Close asChild><button type="button" disabled={savingToSpace} onClick={() => void saveToSpace()}
                       className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left text-xs text-fg-muted hover:bg-surface-hover hover:text-fg">
-                      <Archive className="size-4" aria-hidden />{language === 'zh' ? '保存到 Space' : 'Save to Space'}
+                      <Archive className="size-4" aria-hidden />{language === 'zh' ? '保存到资料库' : 'Save to Space'}
                     </button></Popover.Close>
                   ) : null}
                   {onSaveAssistantAsNote ? (

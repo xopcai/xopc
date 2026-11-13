@@ -8,14 +8,14 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
 
 import { SidebarFooter } from '@/components/shell/sidebar-footer';
-import { SidebarNavItems } from '@/components/shell/sidebar-nav-items';
+import { DEFAULT_VISIBLE_NAV_ITEMS, SidebarNavItems } from '@/components/shell/sidebar-nav-items';
 import { SidebarTaskList } from '@/components/shell/sidebar-task-list';
 
 const NAV_ITEM_PITCH_PX = 42;
 const MIN_VISIBLE_NAV_ITEMS = 1;
-const MAX_VISIBLE_NAV_ITEMS = 4;
-const DEFAULT_VISIBLE_NAV_ITEMS = 3;
-const VISIBLE_APP_COUNT_STORAGE_KEY = 'xopc-web-sidebar-visible-app-count-v2';
+const MAX_VISIBLE_NAV_ITEMS = 5;
+const VISIBLE_APP_COUNT_STORAGE_KEY = 'xopc-web-sidebar-visible-app-count-v3';
+const PREVIOUS_VISIBLE_APP_COUNT_STORAGE_KEY = 'xopc-web-sidebar-visible-app-count-v2';
 
 function clampVisibleAppCount(value: number): number {
   return Math.min(MAX_VISIBLE_NAV_ITEMS, Math.max(MIN_VISIBLE_NAV_ITEMS, value));
@@ -27,7 +27,10 @@ function readVisibleAppCount(): number {
       globalThis.localStorage?.getItem(VISIBLE_APP_COUNT_STORAGE_KEY) ?? '',
       10,
     );
-    return Number.isFinite(stored) ? clampVisibleAppCount(stored) : DEFAULT_VISIBLE_NAV_ITEMS;
+    if (Number.isFinite(stored)) return clampVisibleAppCount(stored);
+    // Space previously occupied a row outside the adjustable shortcuts.
+    const previous = Number.parseInt(globalThis.localStorage?.getItem(PREVIOUS_VISIBLE_APP_COUNT_STORAGE_KEY) ?? '', 10);
+    return Number.isFinite(previous) ? clampVisibleAppCount(previous + 1) : DEFAULT_VISIBLE_NAV_ITEMS;
   } catch {
     return DEFAULT_VISIBLE_NAV_ITEMS;
   }

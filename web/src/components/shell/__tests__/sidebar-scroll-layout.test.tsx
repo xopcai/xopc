@@ -58,7 +58,7 @@ describe('sidebar scroll layout', () => {
     expect(newChat?.parentElement?.className).not.toContain('border-b');
     expect(scrollRegion?.querySelector('.bg-edge-subtle')).toBeNull();
     expect(scrollRegion?.querySelector('[role="separator"] span')?.className).toContain('bg-transparent');
-    expect(scrollRegion?.querySelector('[role="separator"]')?.getAttribute('aria-valuenow')).toBe('3');
+    expect(scrollRegion?.querySelector('[role="separator"]')?.getAttribute('aria-valuenow')).toBe('4');
     expect(menu?.querySelector('a[href="/personal"]')).not.toBeNull();
     expect(menu?.querySelector('a[href="/space"]')).not.toBeNull();
     expect(menu?.querySelectorAll('a:not([href="/personal"], [href="/space"])')).toHaveLength(3);
@@ -77,7 +77,7 @@ describe('sidebar scroll layout', () => {
     expect(container.querySelector('[data-testid="sidebar-footer"]')).not.toBeNull();
   });
 
-  it('allows the shortcut area to expand from three to four with the keyboard', () => {
+  it('allows the shortcut area to expand from four to five with the keyboard', () => {
     container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -90,7 +90,7 @@ describe('sidebar scroll layout', () => {
     const separator = container.querySelector<HTMLElement>('[role="separator"]')!;
     act(() => separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
 
-    expect(separator.getAttribute('aria-valuenow')).toBe('4');
+    expect(separator.getAttribute('aria-valuenow')).toBe('5');
     expect(container.querySelectorAll('nav[aria-label="Main"] a:not([href="/personal"], [href="/space"])')).toHaveLength(4);
   });
 });
