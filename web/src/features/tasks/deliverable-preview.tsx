@@ -26,10 +26,12 @@ export function DeliverablePreview({ item, workspaceScope, conversationId, backg
   const sourceHash = reference?.kind === 'chat_preview' ? reference.revision : undefined;
   const url = externalUrl(artifact?.uri) ?? externalUrl(artifact?.shareUrl);
   const fileUri = artifact?.uri;
+  const generatedMediaUrl = fileUri && /^\/api\/(?:music-generation\/sessions\/[^/]+\/jobs\/[a-f0-9]{64}\/audio|video-generation\/sessions\/[^/]+\/jobs\/[a-fA-F0-9-]+\/video)$/.test(fileUri)
+    ? url : undefined;
   const filePreview = Boolean(fileUri?.startsWith('media://') || (fileUri && parseFileResourceArtifactUri(fileUri)) || artifact?.workspaceRelativePath);
   const desktopBrowser = Boolean(url && window.electronAPI?.browser);
   return (productHref ? <Link to={chatProductHref(backgroundPath, productHref)} className={className}>{children}</Link>
-    : reference && sourceHash ? <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
+    : generatedMediaUrl || (reference && sourceHash) ? <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
       <Dialog.Trigger className={className}>{children}</Dialog.Trigger>
       {previewOpen ? <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[90] bg-black/45" />
@@ -37,12 +39,20 @@ export function DeliverablePreview({ item, workspaceScope, conversationId, backg
           className="xopc-dialog-content fixed left-1/2 top-1/2 z-[91] flex h-[min(42rem,calc(100dvh-2rem))] w-[min(56rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge">
           <header className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
             <Dialog.Title className="truncate font-medium text-fg">{title}</Dialog.Title>
-            <Dialog.Description className="sr-only">{zh ? '预览网页交付物' : 'Preview web deliverable'}</Dialog.Description>
+            <Dialog.Description className="sr-only">{zh ? '预览交付物' : 'Preview deliverable'}</Dialog.Description>
             <Dialog.Close aria-label={zh ? '关闭预览' : 'Close preview'} className="grid size-8 shrink-0 place-items-center rounded-lg hover:bg-surface-hover"><X className="size-4" /></Dialog.Close>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-            <InlineChatPreview leaseId={`personal-deliverable:${item.id}`} reference={reference}
-              sourceHash={sourceHash} preferredHeight={480} language={zh ? 'zh' : 'en'} />
+            {generatedMediaUrl ? <div className="flex h-full flex-col items-center justify-center gap-4 py-4">
+              {artifact?.kind === 'audio'
+                ? <audio controls preload="metadata" src={generatedMediaUrl} aria-label={title} className="w-full max-w-xl" />
+                : <video controls playsInline preload="metadata" src={generatedMediaUrl} aria-label={title}
+                  className="min-h-0 max-w-full rounded-lg bg-black" />}
+              <a href={`${generatedMediaUrl}?download=1`} download className="shrink-0 text-sm text-accent-fg hover:underline">
+                {zh ? '下载' : 'Download'}
+              </a>
+            </div> : reference && sourceHash ? <InlineChatPreview leaseId={`personal-deliverable:${item.id}`} reference={reference}
+              sourceHash={sourceHash} preferredHeight={480} language={zh ? 'zh' : 'en'} /> : null}
           </div>
         </Dialog.Content>
       </Dialog.Portal> : null}

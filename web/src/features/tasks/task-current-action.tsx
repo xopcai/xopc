@@ -48,7 +48,9 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated, r
       const hasInlineControl = actionableWaits.some((wait) => (item.kind === 'input_required' && wait.kind === 'user_input')
         || (item.kind === 'approval_required' && wait.kind === 'approval'));
       return <li key={`${item.kind}-${index}`} className="text-sm leading-6 text-fg-muted">
-        <TaskExpandableContent content={item.summary} contentKey={`${detail.task.id}:attention:${item.kind}:${index}`} language={language} markdown={false} previewHeight={72} />
+        <TaskExpandableContent content={item.summary} contentKey={`${detail.task.id}:attention:${item.kind}:${index}`} language={language} previewHeight={72}>
+          <ChatMarkdownRenderer content={taskDescriptionForDisplay(item.summary)} compact breaks />
+        </TaskExpandableContent>
         {!hasInlineControl && (item.kind === 'input_required' || item.kind === 'approval_required') ? <Link className="mt-2 inline-flex min-h-11 items-center rounded-lg bg-accent-soft px-3 font-medium text-accent-fg" to={taskChatHref(detail.task.id)}>{zh ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}
       </li>;
     })}

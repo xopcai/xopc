@@ -206,4 +206,31 @@ describe('Personal AI header', () => {
     expect(container.querySelector('[data-personal-task-identity]')?.textContent).toContain('Just delivered');
     expect(headerContainer.textContent).not.toContain('Just delivered');
   });
+
+  it.each([
+    ['audio', 'Rain', `music-generation/sessions/conversation-1/jobs/${'a'.repeat(64)}/audio`],
+    ['video', 'Rain on a window', 'video-generation/sessions/conversation-1/jobs/7c3ed84c-9a9b-4ac8-8479-738197a2816a/video'],
+  ])('previews and downloads completed %s from Deliverables', async (kind, title, path) => {
+    const uri = `/api/${path}`;
+    const turnId = `${path.split('/')[0]}:${path.split('/')[4]}`;
+    const fetchPersonal = vi.mocked(fetchJson).getMockImplementation()!;
+    vi.mocked(fetchJson).mockImplementation(async (url, options) => {
+      if (!String(url).includes('view=deliverables')) return fetchPersonal(url, options);
+      return { payload: { items: [{ id: uri, turnId, createdAt: Date.now(), artifact: { uri, kind, title } }], nextOffset: null } };
+    });
+    function Source() { return <output>{useLocation().state?.personalSourceTurnId}</output>; }
+    await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}>
+      <MemoryRouter initialEntries={['/personal']}><PersonalTaskPanel scope="conversation-1" zh={false} /><Source /></MemoryRouter>
+    </SWRConfig>));
+    await act(async () => container.querySelectorAll<HTMLButtonElement>('[role="tab"]')[1].click());
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes(title));
+    expect(trigger).toBeDefined();
+    act(() => trigger!.click());
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.querySelector(kind)?.getAttribute('src')).toBe(new URL(uri, window.location.origin).href);
+    expect(dialog?.querySelector('a[download]')?.getAttribute('href')).toBe(new URL(`${uri}?download=1`, window.location.origin).href);
+    act(() => dialog?.querySelector<HTMLButtonElement>('[aria-label="Close preview"]')?.click());
+    await act(async () => container.querySelector<HTMLAnchorElement>(`[aria-label="Go to source · ${title}"]`)?.click());
+    expect(container.querySelector('output')?.textContent).toBe(turnId);
+  });
 });

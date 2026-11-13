@@ -85,6 +85,19 @@ describe('task detail action-first layout', () => {
     expect(container.querySelector('textarea[aria-label="任务留言"]')).not.toBeNull();
   });
 
+  it('renders Markdown in current progress when the latest run failed', async () => {
+    const summary = '[查看报告](https://example.com/report)\n\n**建议：**优先选择宁海。\n\n| 方案 | 交通 |\n| --- | --- |\n| 宁海 | 高铁 |';
+    state.detail.presentation = { status: 'failed', reason: summary };
+    state.detail.attention = [{ kind: 'run_failed', summary }];
+    await render();
+
+    const progress = container.querySelector('[aria-label="当前需要处理"]')!;
+    expect(progress.querySelector('h2')?.textContent).toBe('当前进展');
+    expect(progress.querySelector('a')?.getAttribute('href')).toBe('https://example.com/report');
+    expect(progress.querySelector('strong')?.textContent).toBe('建议：');
+    expect(progress.querySelector('table tbody td')?.textContent).toBe('宁海');
+  });
+
   it('moves the task name into the dialog header after the large title scrolls away', async () => {
     let update: ((isIntersecting: boolean, bottom: number) => void) | undefined;
     vi.stubGlobal('IntersectionObserver', class {
