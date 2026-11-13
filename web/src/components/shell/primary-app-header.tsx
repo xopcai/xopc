@@ -35,7 +35,8 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
     <header
       data-app-header-overlay={chatOverlay}
       className={cn(
-        'app-header-gradient grid min-w-0 shrink-0 items-center gap-1',
+        'grid min-w-0 shrink-0 items-center gap-1',
+        chatOverlay && 'app-header-gradient',
         chatOverlay && 'pointer-events-none absolute inset-x-0 top-0 z-30 [&_:is(button,a)]:pointer-events-auto',
         personal ? '@container/personal-header grid-cols-[minmax(5.5rem,1fr)_minmax(0,2fr)_minmax(5.5rem,1fr)] @max-[26rem]/personal-chat:grid-cols-[minmax(2.5rem,1fr)_minmax(6rem,2fr)_auto] @max-[26rem]/personal-chat:gap-1 @max-[26rem]/personal-chat:px-2.5' : 'grid-cols-[auto_minmax(0,1fr)_auto]',
         APP_CHROME_BAR_CLASS,

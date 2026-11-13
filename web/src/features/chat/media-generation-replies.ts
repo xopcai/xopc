@@ -21,10 +21,10 @@ export function findMediaGenerationReplyIndexes(messages: readonly Message[], to
   messages.forEach((message, index) => {
     if (message.role !== 'assistant') return;
     for (const block of message.content) {
-      if (block.type !== 'tool_use' || block.name !== toolName) continue;
+      if (block.type !== 'tool_use' || block.name !== toolName || block.status === 'error') continue;
       const id = generationId(block);
-      // Video draft updates reuse the ID. Keep the card below its first reply.
-      if (id && !indexes.has(id)) indexes.set(id, index);
+      // Video draft updates reuse the ID and move the card to the reply that updated it.
+      if (id && (toolName === 'video_draft' || !indexes.has(id))) indexes.set(id, index);
     }
   });
   return indexes;

@@ -9,7 +9,6 @@ import {
   type CapabilityHeaderContribution,
 } from '@/features/capabilities/capability-header-actions';
 import { messages } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
 import {
   CAPABILITY_SECTIONS,
   capabilityPath,
@@ -75,7 +74,7 @@ export function CapabilitiesPage() {
   if (!parsedSection) return <Navigate to={capabilityPath(CAPABILITY_SECTIONS[0])} replace />;
 
   return (
-    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', section === 'channels' ? 'bg-surface-base' : 'bg-surface-panel')}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Reset the boundary so route transitions show the new section's skeleton immediately. */}
       <Suspense key={section} fallback={<CapabilityContentFallback label={copy.discoverLoading} />}>
         {section === 'agents' ? <AgentsPage agentId={detailId} onHeaderActionChange={onHeaderActionChange} /> : null}

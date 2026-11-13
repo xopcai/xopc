@@ -94,7 +94,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
   return (
     <>
       <SkillsPageHeaderRegistration vm={vm} embedded={embedded} onHeaderActionChange={onHeaderActionChange} />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
+      <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'bg-surface-panel')}>
       <div className={cn(
         'mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8',
         embedded ? 'pb-7 pt-3 lg:pb-9 lg:pt-4' : 'py-7 lg:py-9',

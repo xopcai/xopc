@@ -258,7 +258,7 @@ export function SpacePage() {
     : row.origin?.kind === 'automation' ? (zh ? '定时任务' : 'Automation') : (zh ? '对话' : 'Chat'));
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <nav aria-label={zh ? '资料库' : 'Space'} className={cn('flex shrink-0 items-center gap-1 border-b border-edge-subtle bg-surface-inset p-2 md:my-4 md:ms-4 md:w-40 md:flex-col md:items-stretch md:rounded-xl md:border-b-0 md:p-3', selected && 'hidden md:flex')}>
           {views.map(({ key, label, Icon }) => <button key={key} type="button" aria-pressed={view === key}
@@ -292,7 +292,7 @@ export function SpacePage() {
                   onKeyDown={event => onRowKey(event, index)} aria-pressed={selected === row.id} onClick={() => select(row.id)}
                   className={cn('flex min-h-14 w-full items-center gap-3 rounded-xl px-2.5 py-2 text-start focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
                     selected === row.id ? 'bg-accent-soft' : 'hover:bg-surface-hover')}>
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-inset text-accent-fg"><Icon className="size-4" aria-hidden /></span>
+                  <span className={cn('grid size-9 shrink-0 place-items-center rounded-lg bg-surface-inset', selected === row.id ? 'text-accent-fg' : 'text-fg-muted')}><Icon className="size-4" aria-hidden /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-fg"><MarkedText text={row.title} query={query.trim()} /></span>
                     <span className="block truncate text-xs text-fg-muted">{row.currentVersion.fileName.split('.').at(-1)?.toUpperCase()} · {sourceLabel(row)}</span>
