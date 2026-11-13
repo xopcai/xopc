@@ -115,10 +115,12 @@ describe('Personal connected-app requests', () => {
     const validate = new Ajv({ strict: false }).compile(tool.parameters);
     expect(validate({ command: 'submit', connectorId: 'composio-gmail', objective: 'Summarize mail' })).toBe(false);
     const description = 'Preserve this complete staged requirement. '.repeat(80) + 'FINAL_REQUIREMENT';
-    const input = { command: 'submit', connectorId: 'composio-gmail', objective: 'Summarize mail', description };
+    expect(validate({ command: 'get', requestId: 'existing-request' })).toBe(false);
+    const input = { command: 'submit', connectorId: 'Gmail', objective: 'Summarize mail', description };
     expect(validate(input)).toBe(true);
     const first = JSON.parse((await tool.execute('submit', input)).content[0].text);
-    await tool.execute('uncertain-retry', input);
+    await tool.execute('uncertain-retry', { ...input, connectorId: 'composio-gmail' });
+    expect(first.connectorId).toBe('composio-gmail');
     expect(first).not.toHaveProperty('requiresSpecialist');
     expect(first).not.toHaveProperty('truncated');
     expect(first.parameters).not.toHaveProperty('brief');
@@ -210,12 +212,23 @@ describe('Personal connected-app requests', () => {
   it('cancels and replays a connected request through the actual Personal tool', async () => {
     connection();
     const request = submit();
-    const tool = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
     const result = await tool.execute('cancel-request-tool', { command: 'cancel', requestId: request.requestId });
     expect(JSON.parse((result.content[0] as { text: string }).text)).toMatchObject({ state: 'cancelled', executionStopConfirmed: true });
     expect(getPersonalRequest(request.requestId)?.state).toBe('cancelled');
-    const replay = await tool.execute('cancel-request-replay', { command: 'cancel', requestId: request.requestId });
+    const replay = await tool.execute('cancel-request-replay', { command: 'cancel', taskId: request.taskId });
     expect(JSON.parse((replay.content[0] as { text: string }).text)).toMatchObject({ state: 'cancelled', executionStopConfirmed: true });
+  });
+
+  it('cancels the existing authorization wait through the unified task tool', async () => {
+    const request = submit();
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
+    const input = { command: 'cancel', requestId: request.requestId };
+    expect(new Ajv({ strict: false }).compile(tool.parameters)(input)).toBe(true);
+    const cancelled = await tool.execute('cancel-wait', input);
+    expect(JSON.parse(cancelled.content[0].text)).toMatchObject({ state: 'cancelled', executionStopConfirmed: true });
+    expect(getActiveConnectionWait(conversationId)).toBeUndefined();
+    expect(new TaskRepository().list()).toHaveLength(0);
   });
 
   it('persists request cancellation after the task control plane has already cancelled its run', async () => {
@@ -320,7 +333,7 @@ describe('Personal connected-app requests', () => {
 
   it('automatically resumes after OAuth polling, immediately shows feedback and dispatches the worker', async () => {
     const request = submit();
-    const requestTool = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const requestTool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
     const preference = await requestTool.execute('request-preference', { command: 'notifications',
       requestId: request.requestId, notificationPreference: 'final_only' });
     expect(JSON.parse(preference.content[0].text)).toMatchObject({ state: 'waiting_connection', notificationPreference: 'final_only' });
@@ -382,13 +395,28 @@ describe('Personal connected-app requests', () => {
     expect(loadTranscriptRowsForSession(conversationId).filter(row => 'customType' in row && row.customType === 'personal_request_status')).toHaveLength(1);
   });
 
-  it('requires account selection and honours installation permissions', () => {
-    connection(); connection('gmail-personal');
-    expect(personalCapabilities(conversationId, 'gmail')[0].status).toBe('needs_account_selection');
-    const waiting = submit();
-    expect(waiting.state).toBe('waiting_connection');
+  it('routes a direct submission through account selection and honours installation permissions', async () => {
+    connection();
+    const selected = connection('gmail-personal');
+    const submitTool = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const input = { command: 'submit', connectorId: 'Gmail', objective: 'Summarize mail', description: 'List urgent messages.' };
+    await expect(submitTool.execute('ambiguous-app', { ...input, connectorId: 'email' })).rejects.toThrow('personal_capability');
+    expect(listPersonalRequests(conversationId)).toHaveLength(0);
+    const waiting = JSON.parse((await submitTool.execute('direct-gmail', input)).content[0].text);
+    expect(waiting).toMatchObject({ connectorId: 'composio-gmail', state: 'waiting_connection' });
+    expect(waiting.taskId).toBeUndefined();
+    expect(waiting.accountId).toBeUndefined();
+    const wait = getActiveConnectionWait(conversationId)!;
+    const ready = updateConnectionWait({ ...wait, needs: wait.needs.map(need => ({
+      ...need, accountId: selected.accountId, connectionId: selected.id,
+    })) }, wait.version);
+    queueConnectionResolution(ready, 'continued', resolvePersonalRequestConnection);
+    expect(getPersonalRequest(waiting.requestId)).toMatchObject({
+      state: 'queued', taskId: expect.any(String), accountId: selected.accountId,
+    });
     upsertConnectorInstallation({ ...installation(), allowedAgentIds: [agentId] });
-    expect(personalCapabilities(conversationId, 'gmail')[0].status).toBe('unavailable');
+    await expect(submitTool.execute('blocked-gmail', { ...input, idempotencyKey: 'blocked' })).rejects.toThrow();
+    expect(listPersonalRequests(conversationId)).toHaveLength(1);
   });
 
   it('does not place delayed connection feedback into a reset transcript', () => {
@@ -624,7 +652,7 @@ describe('Personal connected-app requests', () => {
     const ack = new Promise<void>(resolve => { releaseAck = resolve; });
     const stop = vi.fn(async () => { await ack; });
     await old.attach({} as never, stop);
-    const tool = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
     const taskTool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
     const repeatCancellation = () => path === 'task'
       ? taskTool.execute('old-worker-cancel', { command: 'cancel', taskId: request.taskId! })
@@ -834,7 +862,7 @@ describe('Personal connected-app requests', () => {
     openXopcDatabase({ path: join(directory, 'xopc.db') });
     cancelPersonalRequest(getPersonalRequest(request.requestId)!);
     expect(new TaskRunRepository().getActiveRoot(request.taskId!)).toEqual(next);
-    const replay = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const replay = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
     await replay.execute('late-old-cancel', { command: 'cancel', requestId: request.requestId });
     await replay.execute('late-old-cancel', { command: 'cancel', requestId: request.requestId });
     expect(new TaskRunRepository().getActiveRoot(request.taskId!)).toEqual(next);
@@ -879,8 +907,8 @@ describe('Personal connected-app requests', () => {
     const runId = runs.getActiveRoot(request.taskId!)!.id;
     const executor = createTaskCollaborationTool({ getCurrentConversationId: () => chat.key,
       getCurrentAgentId: () => 'mail-worker', dispatchTaskRuns: vi.fn() });
-    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId,
-      getCurrentAgentId: () => agentId, dispatchTaskRuns: vi.fn() }).find(tool => tool.name === 'personal_request')!;
+    const personal = createPersonalTaskTool({ getCurrentConversationId: () => conversationId,
+      getCurrentAgentId: () => agentId, dispatchTaskRuns: vi.fn() });
     expect(resolveExecutionToolPolicy(chat.key).surface).toBe('personal_request_worker');
     expect(buildTaskExecutionDirective(chat.key)).toContain('task_collaboration command post');
     await executor.execute('ask', { command: 'post', kind: 'question', body: 'Which label?', idempotencyKey: 'question' });
@@ -892,7 +920,7 @@ describe('Personal connected-app requests', () => {
     expect(mainUpdate).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining(request.requestId) }));
     expect(decide).not.toHaveBeenCalled();
     const snapshot = JSON.parse((await personal.execute('read', { command: 'get', requestId: request.requestId })).content[0].text);
-    expect(snapshot.coordination.waits[0].condition.collaborationEntryId).toBe(question.id);
+    expect(snapshot.waits[0].condition.collaborationEntryId).toBe(question.id);
     const answer = { command: 'answer', requestId: request.requestId, questionId: question.id,
       instruction: 'Work report', idempotencyKey: 'owner-answer' };
     await personal.execute('answer', answer); await personal.execute('answer-replay', answer);
@@ -925,7 +953,7 @@ describe('Personal connected-app requests', () => {
     const question = board.latest(request.taskId!)!;
     upsertConnectorConnection({ ...account, status: 'expired' });
     const waiting = requirePersonalWorkerConnection(chat.key);
-    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId }).find(tool => tool.name === 'personal_request')!;
+    const personal = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
     await personal.execute('answer', { command: 'answer', requestId: request.requestId, questionId: question.id,
       instruction: 'Work label; this text does not reconnect', idempotencyKey: 'label-answer' });
     await personal.execute('instruct', { command: 'instruct', requestId: request.requestId,
@@ -940,8 +968,16 @@ describe('Personal connected-app requests', () => {
 
   it('saves a supplemental brief while awaiting initial authorization without creating another Request', async () => {
     const request = submit();
-    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId }).find(tool => tool.name === 'personal_request')!;
+    const personal = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
+    const validate = new Ajv({ strict: false }).compile(personal.parameters);
     const input = { command: 'instruct', requestId: request.requestId, instruction: 'Only urgent items', idempotencyKey: 'before-auth' };
+    expect(validate(input)).toBe(true);
+    const status = { command: 'get', section: 'status', requestId: request.requestId };
+    expect(validate(status)).toBe(true);
+    expect(JSON.parse((await personal.execute('status', status)).content[0].text)).toMatchObject({ state: 'waiting_connection' });
+    expect(JSON.parse((await personal.execute('list', { command: 'list' })).content[0].text)).toMatchObject({
+      items: [{ requestId: request.requestId, state: 'waiting_connection' }],
+    });
     await personal.execute('change', input); await personal.execute('change-replay', input);
     expect(listPersonalRequests(conversationId)).toHaveLength(1);
     expect(getPersonalRequest(request.requestId)?.objective.match(/Only urgent items/g)).toHaveLength(1);
@@ -956,12 +992,12 @@ describe('Personal connected-app requests', () => {
 
   it('preserves an explicitly revised absolute query range for final coverage checks', async () => {
     const { request, worker: chat } = worker();
-    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId }).find(tool => tool.name === 'personal_request')!;
+    const personal = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
     const range = { from: '2026-10-07T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', timezone: 'Asia/Shanghai', expression: 'Only October 7' };
     await expect(personal.execute('bad-range', { command: 'instruct', requestId: request.requestId, instruction: 'Change range',
       timeRange: { ...range, from: range.to } })).rejects.toThrow('valid absolute time range');
     expect(new TaskCollaborationRepository().coordination(request.taskId!)).toHaveLength(0);
-    await personal.execute('range', { command: 'instruct', requestId: request.requestId, instruction: 'Only October 7', timeRange: range });
+    await personal.execute('range', { command: 'instruct', taskId: request.taskId, instruction: 'Only October 7', timeRange: range });
     expect(getPersonalRequest(request.requestId)?.parameters.timeRange).toEqual(range);
     expect(new TaskCollaborationRepository().latest(request.taskId!)?.body).toContain(range.from);
     await createPersonalRequestResultTool(() => chat.key).execute('latest-result', { summary: 'New range covered', items: [],
@@ -994,7 +1030,7 @@ describe('Personal connected-app requests', () => {
     const publish = createPersonalRequestResultTool(() => chat.key);
     const coverage = { from: '2026-10-01T00:00:00+08:00', to: '2026-10-08T00:00:00+08:00', scannedCount: 2, partial: false };
     await publish.execute('initial', { summary: 'Old report', items: [], coverage });
-    const personal = createPersonalRequestTools({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId }).find(tool => tool.name === 'personal_request')!;
+    const personal = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId });
     await personal.execute('new-requirement', { command: 'instruct', requestId: request.requestId,
       instruction: 'Use new title and only urgent mail', idempotencyKey: 'latest-brief' });
     const board = new TaskCollaborationRepository();

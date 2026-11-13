@@ -57,6 +57,25 @@ export function connectionCandidates(query: string) {
   return [...managed, ...composio, ...aliases]
     .filter((candidate, index, all) => all.findIndex(item => item.candidateRef === candidate.candidateRef) === index);
 }
+export function resolveExactConnectionCandidate(app: string): string {
+  const name = app.trim();
+  if (getConnectorDefinition(name)) {
+    resolveConnectionCandidate(name);
+    return name;
+  }
+  const identity = normalizedIdentity(name);
+  const matches = listConnectorCatalog().filter(definition => {
+    const runtime = definition.runtime;
+    if (runtime.type === 'composio' && runtime.role === 'toolkit') {
+      return [definition.id, definition.displayName, runtime.toolkit].some(value => normalizedIdentity(value) === identity);
+    }
+    return runtime.type === 'cli'
+      && [definition.id, definition.displayName].some(value => normalizedIdentity(value) === identity);
+  });
+  if (matches.length !== 1) throw new Error('Use personal_capability to identify the exact supported app or connector ID');
+  return matches[0].id;
+}
+
 export function resolveConnectionCandidate(ref: string) {
   const definition = getConnectorDefinition(ref);
   if (definition?.runtime.type === 'cli') return { key: `${ref}:default`, target: { type: 'connector' as const, connectorId: ref }, label: definition.displayName,

@@ -67,6 +67,17 @@ export function listPersonalRequests(conversationId: string, limit = 50, offset 
   return (getSqliteDatabase().prepare('SELECT * FROM personal_requests WHERE conversation_id = ? ORDER BY created_at DESC, request_id DESC LIMIT ? OFFSET ?')
     .all(conversationId, Math.max(1, Math.min(50, limit)), Math.max(0, offset)) as Row[]).map(fromRow);
 }
+export function listPersonalRequestsWithoutTask(conversationId: string, limit: number, offset: number, query = '') {
+  const db = getSqliteDatabase();
+  const filter = `FROM personal_requests WHERE conversation_id = ? AND task_id IS NULL
+    AND (? = '' OR instr(lower(objective), lower(?)) > 0 OR instr(lower(connector_id), lower(?)) > 0)`;
+  const bindings = [conversationId, query, query, query];
+  const { total } = db.prepare(`SELECT count(*) AS total ${filter}`).get(...bindings) as { total: number };
+  const rows = db.prepare(`SELECT * ${filter} ORDER BY updated_at DESC, request_id DESC LIMIT ? OFFSET ?`)
+    .all(...bindings, limit, offset) as Row[];
+  return { total, items: rows.map(fromRow) };
+}
+
 export function updatePersonalRequest(request: PersonalRequest, patch: Partial<Pick<PersonalRequest,
   'executorAgentId' | 'state' | 'connectionWaitId' | 'accountId' | 'taskId' | 'objective' | 'connectorId' | 'parameters'>>): PersonalRequest {
   const next = { ...request, ...patch, version: request.version + 1, updatedAt: Date.now() };
