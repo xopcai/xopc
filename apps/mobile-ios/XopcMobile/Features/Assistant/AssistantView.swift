@@ -51,7 +51,7 @@ struct AssistantView<Dock: View>: View {
     @State private var readAloud = ChatReadAloud()
     @State private var assistantAudio = AssistantAudioAutoplay()
     @State private var generatedMedia = GeneratedMediaState()
-    @State private var playingGeneratedMedia: GeneratedMediaCard?
+    @State private var playingGeneratedMedia: String?
     @State private var startingVoice = false
     @State private var voiceStartError: String?
     @State private var voiceMaterializationIDs: [String: String] = [:]
@@ -233,10 +233,8 @@ struct AssistantView<Dock: View>: View {
                                              transcriptID: key.transcriptID, client: GatewayClient(configuration: key.configuration),
                                              visible: key.visible, busy: key.busy)
             }
-            .sheet(item: $playingGeneratedMedia) { card in
-                if let id = conversation?.id {
-                    GeneratedMediaPlayerSheet(card: card, conversationID: id, configuration: configuration)
-                }
+            .onChange(of: scenePhase) {
+                if scenePhase != .active { playingGeneratedMedia = nil }
             }
             .onChange(of: conversation?.transcriptId) { playingGeneratedMedia = nil }
             .onChange(of: configuration.baseURL) { playingGeneratedMedia = nil }
@@ -602,10 +600,14 @@ struct AssistantView<Dock: View>: View {
             ForEach(cards) { card in
                 GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
                                   submitting: generatedMedia.submitting, error: card.isDraft ? generatedMedia.error : nil,
+                                  conversationID: id, configuration: configuration, isPlayingInline: playingGeneratedMedia == card.id,
                                   onPlay: {
                                       readAloud.stop()
                                       assistantAudio.stop()
-                                      playingGeneratedMedia = card
+                                      bottomScrollTask?.cancel()
+                                      bottomScrollTask = nil
+                                      followingBottom = false
+                                      playingGeneratedMedia = playingGeneratedMedia == card.id ? nil : card.id
                                   }, onConfirm: {
                                       Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
                                   })

@@ -16,18 +16,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -62,6 +57,7 @@ internal fun GeneratedMediaCard(
   confirmationFailed: Boolean,
   onPlay: () -> Unit,
   onConfirm: () -> Unit,
+  player: (@Composable () -> Unit)? = null,
 ) {
   val zh = LocalConfiguration.current.locales[0].language == "zh"
   var details by remember(item.id) { mutableStateOf(false) }
@@ -99,11 +95,12 @@ internal fun GeneratedMediaCard(
           Text(metadata, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (item.state == "completed") {
-          val play = label(zh, "播放", "Play")
+          val play = if (player == null) label(zh, "播放", "Play") else label(zh, "关闭播放", "Close player")
           FilledTonalIconButton(onClick = onPlay, modifier = Modifier.testTag("generated-media-play-${item.id}")
-            .semantics { contentDescription = play }) { Text("▶") }
+            .semantics { contentDescription = play }) { Text(if (player == null) "▶" else "×") }
         }
       }
+      player?.invoke()
       if (item.isDraft) {
         val credit = item.creditMicro
         val cost = item.costFen
@@ -133,13 +130,11 @@ internal fun GeneratedMediaCard(
   }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun GeneratedMediaPlayer(
   item: GeneratedMediaItem,
   conversationId: String,
   access: GeneratedMediaAccess,
-  onDismiss: () -> Unit,
 ) {
   val context = LocalContext.current
   val configuration = LocalConfiguration.current
@@ -163,33 +158,28 @@ internal fun GeneratedMediaPlayer(
     }
   }
 
-  ModalBottomSheet(onDismissRequest = onDismiss) {
-    Column(Modifier.fillMaxWidth().heightIn(max = (configuration.screenHeightDp * 0.72f).dp)
-      .verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Text(item.title ?: if (item.kind == GeneratedMediaKind.Music) label(zh, "音乐", "Music") else label(zh, "视频", "Video"),
-        style = MaterialTheme.typography.headlineSmall)
-      val local = file
-      when {
-        failed -> {
-          Text(label(zh, "无法播放这份媒体", "Unable to play this media"), color = MaterialTheme.colorScheme.error)
-          TextButton(onClick = { retry++ }) { Text(label(zh, "重试", "Try again")) }
-        }
-        local == null -> CircularProgressIndicator(Modifier.size(32.dp).align(Alignment.CenterHorizontally))
-        item.kind == GeneratedMediaKind.Music -> GeneratedAudio(local, item.lyrics, zh) { failed = true }
-        else -> AndroidView(
-          factory = { ctx ->
-            VideoView(ctx).apply {
-              setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
-              setOnErrorListener { _, _, _ -> failed = true; true }
-              setOnPreparedListener { start() }
-              setVideoPath(local.absolutePath)
-            }
-          },
-          onRelease = { it.stopPlayback() },
-          modifier = Modifier.fillMaxWidth().aspectRatio(if (item.ratio == "9:16") 1f else 16f / 9f),
-        )
+  Column(Modifier.fillMaxWidth().testTag("generated-media-inline-${item.id}"),
+    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val local = file
+    when {
+      failed -> {
+        Text(label(zh, "无法播放这份媒体", "Unable to play this media"), color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = { retry++ }) { Text(label(zh, "重试", "Try again")) }
       }
+      local == null -> CircularProgressIndicator(Modifier.size(32.dp).align(Alignment.CenterHorizontally))
+      item.kind == GeneratedMediaKind.Music -> GeneratedAudio(local, item.lyrics, zh) { failed = true }
+      else -> AndroidView(
+        factory = { ctx ->
+          VideoView(ctx).apply {
+            setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
+            setOnErrorListener { _, _, _ -> failed = true; true }
+            setOnPreparedListener { start() }
+            setVideoPath(local.absolutePath)
+          }
+        },
+        onRelease = { it.stopPlayback() },
+        modifier = Modifier.fillMaxWidth().aspectRatio(if (item.ratio == "9:16") 1f else 16f / 9f),
+      )
     }
   }
 }
@@ -256,11 +246,15 @@ private fun mediaTime(seconds: Int) = "${seconds / 60}:${(seconds % 60).toString
 
 @Composable
 internal fun GeneratedMediaRows(items: List<GeneratedMediaItem>, submitting: Boolean, failedDraftId: String?,
-  onPlay: (GeneratedMediaItem) -> Unit, onConfirm: (GeneratedMediaItem) -> Unit) {
+  onPlay: (GeneratedMediaItem) -> Unit, onConfirm: (GeneratedMediaItem) -> Unit,
+  playingId: String? = null, conversationId: String? = null, access: GeneratedMediaAccess? = null) {
   Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     for (item in items) {
       androidx.compose.runtime.key(item.kind, item.id) {
-        GeneratedMediaCard(item, submitting, failedDraftId == item.id, { onPlay(item) }, { onConfirm(item) })
+        val player: (@Composable () -> Unit)? = if (playingId == item.id && conversationId != null && access != null) {
+          { GeneratedMediaPlayer(item, conversationId, access) }
+        } else null
+        GeneratedMediaCard(item, submitting, failedDraftId == item.id, { onPlay(item) }, { onConfirm(item) }, player)
       }
     }
   }
@@ -273,7 +267,7 @@ internal class GeneratedMediaChatState {
     private set
   var failedDraftId by mutableStateOf<String?>(null)
     private set
-  var playing by mutableStateOf<GeneratedMediaItem?>(null)
+  var playingId by mutableStateOf<String?>(null)
   private var videoRevision = 0
 
   suspend fun observe(access: GeneratedMediaAccess, conversationId: String, busy: Boolean) {

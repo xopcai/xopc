@@ -52,11 +52,20 @@ export class XopcGeneratedMediaViewModel {
   }
 
   private replace(kind: XopcGeneratedMediaKind, cards: XopcGeneratedMediaCard[]): void {
-    const next = this.cards.filter((card: XopcGeneratedMediaCard): boolean => card.kind !== kind).concat(cards)
+    const previousById = new Map<string, XopcGeneratedMediaCard>();
+    for (const card of this.cards) {
+      if (card.kind === kind) previousById.set(card.item.id, card);
+    }
+    const updated = cards.map((card: XopcGeneratedMediaCard): XopcGeneratedMediaCard => {
+      const previous = previousById.get(card.item.id);
+      return previous && JSON.stringify(previous) === JSON.stringify(card) ? previous : card;
+    });
+    const next = this.cards.filter((card: XopcGeneratedMediaCard): boolean => card.kind !== kind).concat(updated)
       .sort((left: XopcGeneratedMediaCard, right: XopcGeneratedMediaCard): number =>
         (left.item.draftCreatedAt ?? left.item.createdAt) - (right.item.draftCreatedAt ?? right.item.createdAt)
         || left.item.id.localeCompare(right.item.id));
-    if (JSON.stringify(next) !== JSON.stringify(this.cards)) this.cards = next;
+    if (next.length !== this.cards.length
+      || next.some((card: XopcGeneratedMediaCard, index: number): boolean => card !== this.cards[index])) this.cards = next;
   }
 
   async confirm(card: XopcGeneratedMediaCard): Promise<void> {

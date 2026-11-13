@@ -19,7 +19,8 @@ import { XopcChatRepository } from '../repository/chatRepository';
 import { chatAnswerText, chatAnswerStarted, chatAttachments } from '../common/chatRichContent';
 import { extractMarkdownCodeBlocks } from '../common/chatDisplay';
 import { XopcChatMediaView } from './ChatMediaView';
-import { XopcGeneratedMediaRow, XopcGeneratedMediaPlayer } from './GeneratedMediaView';
+import { XopcGeneratedMediaRow } from './GeneratedMediaView';
+import { XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcGeneratedMediaViewModel } from '../viewmodel/generatedMediaViewModel';
 import { XopcGeneratedMediaCard } from '../model/generatedMedia';
 import { generatedMediaByReply } from '../common/generatedMedia';
@@ -85,11 +86,17 @@ export struct XopcChatView {
   @Local phone: XopcPhoneViewModel = new XopcPhoneViewModel();
   @Local phonePage: number = 0;
   @Local generatedMedia: XopcGeneratedMediaViewModel = new XopcGeneratedMediaViewModel();
-  @Local generatedPlayerOpen: boolean = false;
-  @Local generatedPlaying: XopcGeneratedMediaCard | undefined = undefined;
+  @Local generatedPlayingId: string = '';
+  @Local generatedMusic: XopcGeneratedMusicPlayback = new XopcGeneratedMusicPlayback();
   private generatedPlaybackScope: string = '';
   @Computed get generatedMediaGroups(): Map<string, XopcGeneratedMediaCard[]> {
-    return generatedMediaByReply(this.generatedMedia.cards, this.presentationRows);
+    const cards = this.generatedMedia.cards;
+    if (!cards.length) return new Map<string, XopcGeneratedMediaCard[]>();
+    return generatedMediaByReply(cards, this.generatedMediaAnchorRows);
+  }
+  // Streaming deltas must not relocate existing cards.
+  @Computed get generatedMediaAnchorRows(): XopcChatRow[] {
+    return chatPresentationRows(this.chat.rows, undefined, '');
   }
   @Computed get generatedMediaChinese(): boolean { return appSettings.effectiveLanguage().startsWith('zh'); }
   @Local colors: XopcThemeColors = appThemeColors;
@@ -301,12 +308,13 @@ export struct XopcChatView {
   @Local sendFlightScale: number = 1;
   @Local sendFlightOpacity: number = 1;
 
-  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'reader.continuousConversationId', 'voice.state')
+  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'reader.continuousConversationId', 'voice.state', 'generatedMusic.songId', 'generatedPlayingId')
   onAutoReadChange(): void {
     if (!this.activePage && this.reader.continuousConversationId) this.reader.leaveForeground();
     else if (this.voice.state !== 'idle' && this.reader.continuousConversationId) this.reader.disableContinuous();
     const enabled = this.activePage && !this.disposed && !this.chat.loading && this.voice.state === 'idle'
-      && this.reader.continuousConversationId === this.chat.selectedId && !!this.chat.selectedId;
+      && this.reader.continuousConversationId === this.chat.selectedId && !!this.chat.selectedId
+      && !this.generatedMusic.songId && !this.generatedPlayingId;
     const next = advanceChatAutoRead(this.autoReadState, this.chat.selectedId, enabled, !!this.chat.runId,
       latestChatAutoRead(this.chat.rows, this.chat.selectedId));
     this.autoReadState = next.state;
@@ -314,10 +322,11 @@ export struct XopcChatView {
     if (next.candidate && context) this.reader.speak(context, next.candidate.text, 'auto-read-aloud:' + next.candidate.key, appSettings.effectiveLanguage());
   }
 
-  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'voice.state', 'call.phase', 'reader.state')
+  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'voice.state', 'call.phase', 'reader.state', 'generatedMusic.songId', 'generatedPlayingId')
   onAssistantAudioChange(): void {
     const enabled = this.activePage && !this.disposed && !this.chat.loading && !!this.chat.selectedId
-      && this.voice.state === 'idle' && this.call.phase === 'idle' && this.reader.state === 'idle';
+      && this.voice.state === 'idle' && this.call.phase === 'idle' && this.reader.state === 'idle'
+      && !this.generatedMusic.songId && !this.generatedPlayingId;
     const next = advanceAssistantAudio(this.assistantAudioState, this.chat.selectedId, enabled, !!this.chat.runId,
       latestAssistantAudio(this.chat.rows, this.chat.selectedId));
     this.assistantAudioState = next.state;
@@ -407,7 +416,7 @@ export struct XopcChatView {
     const conversationId = this.chat.selectedId;
     this.scrollTimer = setTimeout((): void => {
       this.scrollTimer = -1;
-      if (this.visible && conversationId === this.chat.selectedId && (this.atBottom || this.initialScrollPending) && !this.loadingOlder) {
+      if (this.visible && conversationId === this.chat.selectedId && (this.atBottom || this.initialScrollPending) && !this.loadingOlder && !this.messageScrollFromUser) {
         if (this.initialScrollPending) {
           // Virtual rows above the viewport need an explicit index before edge alignment is reliable.
           const last = this.presentationRows.length + (this.chat.hasOlder ? 1 : 0);
@@ -473,7 +482,7 @@ export struct XopcChatView {
   }
   private onMessageScroll(offset: number, state: ScrollState): void {
     if (this.messageScrollFromUser) this.jumpingToBottom = false;
-    if (this.messageScrollFromUser && offset < 0) {
+    if (this.messageScrollFromUser && offset !== 0) {
       clearTimeout(this.scrollTimer); this.scrollTimer = -1; this.initialScrollPending = false;
     }
     if (!this.messageScrollFromUser
@@ -620,6 +629,8 @@ export struct XopcChatView {
           const context = this.getUIContext().getHostContext();
           if (context) {
             await this.voice.cancel();
+            if (!this.visible || this.disposed || conversationId !== this.chat.selectedId || generation !== this.draftGeneration) return;
+            await this.stopGeneratedMediaPlayback();
             if (!this.visible || this.disposed || conversationId !== this.chat.selectedId || generation !== this.draftGeneration) return;
             await this.reader.speak(context, chatAnswerText(row), row.id, appSettings.effectiveLanguage());
           }
@@ -870,7 +881,9 @@ export struct XopcChatView {
     const id = this.chat.selectedId;
     const profile = gatewaySession.currentProfile();
     const scope = JSON.stringify([profile?.gatewayId, profile?.deviceId, id, this.chat.transcriptId]);
-    if (!this.activePage || this.phonePage !== 0 || this.generatedPlaybackScope !== scope) this.generatedPlayerOpen = false;
+    if (!this.activePage || !this.layout.foreground || this.phonePage !== 0 || this.generatedPlaybackScope !== scope) {
+      this.stopGeneratedMediaPlayback();
+    }
     this.generatedPlaybackScope = scope;
     this.generatedMedia.observe(id, scope, this.activePage && this.phonePage === 0 && this.layout.foreground
       && !this.chat.cachedHistory && !!this.chat.transcriptId, !!this.chat.runId);
@@ -938,7 +951,7 @@ export struct XopcChatView {
     this.setPanel(true);
     this.chooseAction(this.requestedAction);
   }
-  aboutToDisappear(): void { this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+  aboutToDisappear(): void { this.generatedMusic.stop(); this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
 
   private async newConversation(agentId: string = this.options.agentId, projectId: string | null = this.chat.projectId || null, executionMode?: string): Promise<void> {
     if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
@@ -1087,7 +1100,7 @@ export struct XopcChatView {
     this.voicePointerId = point.id;
     const generation = ++this.voiceHoldGeneration;
     this.voiceStartX = point.windowX; this.voiceStartY = point.windowY;
-    await this.reader.stop();
+    await Promise.all([this.stopGeneratedMediaPlayback(), this.reader.stop()]);
     if (generation !== this.voiceHoldGeneration || !this.voiceHeld || !this.visible || this.disposed) return;
     await this.voice.start(context as common.UIAbilityContext);
   }
@@ -1294,30 +1307,43 @@ export struct XopcChatView {
     }.id('chat-assistant-menu').width('100%').height('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 })
   }
 
+  private stopGeneratedMediaPlayback(): Promise<void> {
+    this.generatedPlayingId = '';
+    return this.generatedMusic.stop();
+  }
+
+  private playGeneratedMedia(card: XopcGeneratedMediaCard): void {
+    const id = card.item.id;
+    if (card.kind === 'video' && this.generatedPlayingId === id) { this.generatedPlayingId = ''; return; }
+    const context = this.getUIContext().getHostContext();
+    if (!context) return;
+    this.initialScrollPending = false;
+    this.atBottom = false;
+    clearTimeout(this.scrollTimer); this.scrollTimer = -1;
+    void this.reader.stop();
+    void assistantAudioAutoplay.interrupt();
+    if (card.kind === 'music') {
+      this.generatedPlayingId = '';
+      void this.generatedMusic.play(context.cacheDir, this.chat.selectedId, id);
+    } else {
+      this.generatedMusic.stop();
+      this.generatedPlayingId = id;
+    }
+  }
+
   @Builder
   generatedMediaRows(replyId: string) {
     if (this.generatedMediaGroups.has(replyId)) {
       Column({ space: 8 }) {
         Repeat<XopcGeneratedMediaCard>(this.generatedMediaGroups.get(replyId) ?? []).each((entry: RepeatItem<XopcGeneratedMediaCard>) => {
           XopcGeneratedMediaRow({ card: entry.item, zh: this.generatedMediaChinese, submitting: this.generatedMedia.submitting,
-            confirmationFailed: this.generatedMedia.failedDraftId === entry.item.item.id,
-            onPlay: (): void => {
-              void this.reader.stop();
-              void assistantAudioAutoplay.interrupt();
-              this.generatedPlaying = entry.item;
-              this.generatedPlayerOpen = true;
-            },
+            confirmationFailed: entry.item.draft && this.generatedMedia.failedDraftId === entry.item.item.id,
+            playbackId: this.generatedPlayingId, conversationId: this.chat.selectedId, music: this.generatedMusic,
+            onPlay: (): void => { this.playGeneratedMedia(entry.item); },
+            onCloseMusic: (): void => { this.generatedMusic.stop(); },
             onConfirm: (): void => { void this.generatedMedia.confirm(entry.item); } })
         }).key((card: XopcGeneratedMediaCard): string => card.kind + ':' + card.item.id)
       }.width('100%').alignItems(HorizontalAlign.Start).padding({ top: 6 })
-    }
-  }
-
-  @Builder
-  generatedPlayerSheet() {
-    if (this.generatedPlaying) {
-      XopcGeneratedMediaPlayer({ card: this.generatedPlaying, conversationId: this.chat.selectedId,
-        zh: this.generatedMediaChinese })
     }
   }
 
@@ -1437,12 +1463,12 @@ export struct XopcChatView {
           this.recordReplyRowHeight(item.item.id, Number(current.height));
         })
       }).key((row: XopcChatRow): string => this.renderKeys.key(row)).virtualScroll({ totalCount: this.presentationRows.length })
-      if (this.generatedMediaGroups.has('')) {
-        ListItem() { this.generatedMediaRows('') }
-      }
       ListItem() {
-        Column().id('chat-reply-clearance').width('100%')
-          .height(this.bottomRegionHeight + 48 + this.replySpaceHeight - 20)
+        Column() {
+          this.generatedMediaRows('')
+          Column().id('chat-reply-clearance').width('100%')
+            .height(this.bottomRegionHeight + 48 + this.replySpaceHeight - 20)
+        }.width('100%')
       }.onAreaChange((previous: Area, current: Area): void => {
         if (Number(previous.height) !== Number(current.height)) this.onMessageChange();
       })
@@ -1458,6 +1484,7 @@ export struct XopcChatView {
       })
       .onDidScroll((offset: number, state: ScrollState): void => { this.onMessageScroll(offset, state); })
       .onScrollStop((): void => {
+        this.messageScrollFromUser = false;
         if (!this.jumpingToBottom) return;
         this.jumpingToBottom = false;
         this.atBottom = true; this.showJumpBottom = false;
@@ -1820,6 +1847,7 @@ export struct XopcChatView {
     else if (id === 'record-voice' && !this.showVoice) this.toggleVoice();
     else if (id === 'voice-call' && this.chat.selectedId) {
       const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      this.stopGeneratedMediaPlayback();
       this.reader.stop(); this.voice.cancel();
       this.call.start(context, { conversationId: this.chat.selectedId,
         mode: 'auto', background: true,
@@ -1881,9 +1909,6 @@ export struct XopcChatView {
       }.width('100%').padding({ top: this.embedded ? 0 : 62 + this.chatTopInset })
       }
       this.conversation()
-      Column().id('chat-generated-media-sheet-host').width('100%').height(0)
-        .bindSheet($$this.generatedPlayerOpen, this.generatedPlayerSheet, { height: '72%', dragBar: true,
-          showClose: true, backgroundColor: this.colors.surface })
       Column().width('100%').height(0)
         .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '65%', dragBar: false,
           keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, showClose: false, backgroundColor: this.colors.panel })

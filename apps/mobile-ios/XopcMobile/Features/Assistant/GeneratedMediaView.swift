@@ -212,6 +212,9 @@ struct GeneratedMediaRow: View {
     let canConfirm: Bool
     let submitting: Bool
     let error: String?
+    let conversationID: String
+    let configuration: GatewayConfiguration
+    let isPlayingInline: Bool
     let onPlay: () -> Void
     let onConfirm: () -> Void
 
@@ -232,12 +235,15 @@ struct GeneratedMediaRow: View {
                 Spacer(minLength: 0)
                 if card.completed {
                     Button(action: onPlay) {
-                        Image(systemName: "play.fill").frame(width: 44, height: 44)
+                        Image(systemName: isPlayingInline ? "xmark" : "play.fill").frame(width: 44, height: 44)
                             .background(.tint.opacity(0.12), in: .circle)
-                    }.buttonStyle(.plain).accessibilityLabel("播放")
+                    }.buttonStyle(.plain).accessibilityLabel(isPlayingInline ? "关闭播放" : "播放")
                 } else if card.active {
                     ProgressView().controlSize(.small).accessibilityHidden(true)
                 }
+            }
+            if isPlayingInline, card.completed {
+                GeneratedMediaInlinePlayer(card: card, conversationID: conversationID, configuration: configuration)
             }
             if card.isDraft {
                 Text(verbatim: card.item.summary ?? card.item.prompt ?? "").font(.subheadline).lineLimit(3)
@@ -274,12 +280,11 @@ struct GeneratedMediaRow: View {
     }
 }
 
-struct GeneratedMediaPlayerSheet: View {
+private struct GeneratedMediaInlinePlayer: View {
     let card: GeneratedMediaCard
     let conversationID: String
     let configuration: GatewayConfiguration
 
-    @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer?
     @State private var localURL: URL?
     @State private var error: String?
@@ -287,50 +292,44 @@ struct GeneratedMediaPlayerSheet: View {
     @State private var showLyrics = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if let player {
-                        if card.kind == .video {
-                            VideoPlayer(player: player).aspectRatio(card.item.ratio == "9:16" ? 9.0 / 16 : 16.0 / 9, contentMode: .fit)
-                                .clipShape(.rect(cornerRadius: 16))
-                        } else {
-                            musicControls(player)
-                            if let lyrics = card.item.lyrics, !lyrics.isEmpty {
-                                DisclosureGroup("歌词", isExpanded: $showLyrics) {
-                                    Text(verbatim: lyrics).font(.body).textSelection(.enabled)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.top, 8)
-                                }
-                            }
+        VStack(alignment: .leading, spacing: 8) {
+            if let player {
+                if card.kind == .video {
+                    VideoPlayer(player: player)
+                        .aspectRatio(card.item.ratio == "9:16" ? 1 : 16.0 / 9, contentMode: .fit)
+                        .clipShape(.rect(cornerRadius: 12))
+                } else {
+                    musicControls(player)
+                    if let lyrics = card.item.lyrics, !lyrics.isEmpty {
+                        DisclosureGroup("歌词", isExpanded: $showLyrics) {
+                            Text(verbatim: lyrics).font(.body).textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, 8)
                         }
-                    } else if let error {
-                        Text(verbatim: error).foregroundStyle(.secondary)
-                        Button("重试") { retry += 1 }
-                    } else {
-                        ProgressView("正在加载媒体").frame(maxWidth: .infinity, minHeight: 120)
-                    }
-                }.padding(20)
-            }
-            .navigationTitle(card.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } }
-                if let localURL {
-                    ToolbarItem(placement: .primaryAction) {
-                        ShareLink(item: localURL) { Image(systemName: "square.and.arrow.up").accessibilityLabel("分享媒体") }
                     }
                 }
-            }
-            .task(id: retry) { await load() }
-            .onDisappear {
-                player?.pause()
-                player?.replaceCurrentItem(with: nil)
                 if let localURL {
-                    try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent())
+                    ShareLink(item: localURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
+                        .font(.caption)
                 }
+            } else if let error {
+                Text(verbatim: error).foregroundStyle(.secondary)
+                Button("重试") { retry += 1 }
+            } else {
+                ProgressView("正在加载媒体").frame(maxWidth: .infinity, minHeight: 44)
             }
-        }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
+        .accessibilityIdentifier("generated-media-inline-\(card.id)")
+        .task(id: retry) { await load() }
+        .onDisappear {
+            player?.pause()
+            player?.replaceCurrentItem(with: nil)
+            player = nil
+            if let localURL {
+                try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent())
+                self.localURL = nil
+            }
+        }
     }
 
     private func musicControls(_ player: AVPlayer) -> some View {
