@@ -241,7 +241,9 @@ struct AssistantView<Dock: View>: View {
             .onChange(of: conversation?.transcriptId) { playingGeneratedMedia = nil }
             .onChange(of: configuration.baseURL) { playingGeneratedMedia = nil }
             .onChange(of: showingPhone) {
-                if showingPhone { playingGeneratedMedia = nil }
+                if showingPhone {
+                    playingGeneratedMedia = nil
+                }
             }
     }
 
