@@ -379,8 +379,8 @@ export class SessionIndex extends EventEmitter {
     return this.store.saveMessages(key, messages, options);
   }
 
-  async deleteUserRound(key: string, userRoundIndex: number) {
-    const result = await this.store.deleteUserRound(key, userRoundIndex);
+  async deleteUserRound(key: string, target: number | { steerId: string }) {
+    const result = await this.store.deleteUserRound(key, target);
     if (result) {
       this.emit('sessionUpdated', { key });
     }

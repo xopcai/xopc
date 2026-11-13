@@ -4,6 +4,19 @@ import { computeTranscriptUserRoundDeleteRange } from '../user-round-delete.js';
 import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 
 describe('computeTranscriptUserRoundDeleteRange', () => {
+  it('deletes a steering message and its reply by stable input ID', () => {
+    const rows = [
+      { role: 'user', content: 'Request' },
+      { role: 'assistant', content: 'Progress' },
+      { role: 'user', content: 'Same text', metadata: { steered: true, clientMessageId: 'first' } },
+      { role: 'user', content: 'Same text', metadata: { steered: true, clientMessageId: 'second' } },
+      { role: 'assistant', content: 'Updated answer' },
+    ] as Parameters<typeof computeTranscriptUserRoundDeleteRange>[0];
+    expect(computeTranscriptUserRoundDeleteRange(rows, { steerId: 'second' })).toEqual({ startIndex: 3, count: 2 });
+    expect(computeTranscriptUserRoundDeleteRange(rows, { steerId: 'first' })).toEqual({ startIndex: 2, count: 1 });
+    expect(computeTranscriptUserRoundDeleteRange(rows, { steerId: 'missing' })).toBeNull();
+  });
+
   it('deletes user plus plain assistant reply', () => {
     const messages: TranscriptStoredRow[] = [
       { role: 'user', content: 'hi' },

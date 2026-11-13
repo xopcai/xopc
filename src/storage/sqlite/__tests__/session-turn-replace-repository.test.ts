@@ -91,6 +91,26 @@ describe('session turn replacement repository', () => {
     expect(getSessionInputState(conversationId).inputs).toHaveLength(1);
   });
 
+  it('replaces only the latest steering input and its reply within a shared run', () => {
+    appendTurn('run', 'Original request', 'Progress');
+    appendTranscriptEntry(conversationId, { role: 'user', content: 'First update', turnId: 'run',
+      metadata: { steered: true, clientMessageId: 'first' } } as never);
+    appendTranscriptEntry(conversationId, { role: 'user', content: 'Second update', turnId: 'run',
+      metadata: { steered: true, clientMessageId: 'second' } } as never);
+    appendTranscriptEntry(conversationId, { role: 'assistant', content: 'Updated answer', turnId: 'run' } as never);
+    const request = { conversationId, clientMessageId: 'replacement', content: 'Revised update', origin };
+    expect(replaceLatestSessionTurnAndQueueInput({ ...request, targetTurnId: 'run' }))
+      .toEqual({ ok: false, code: 'NOT_LATEST' });
+    expect(replaceLatestSessionTurnAndQueueInput({ ...request, targetTurnId: 'steer:first' }))
+      .toEqual({ ok: false, code: 'NOT_LATEST' });
+    expect(replaceLatestSessionTurnAndQueueInput({ ...request, targetTurnId: 'steer:second' })).toMatchObject({ ok: true });
+    expect(loadTranscriptRowsForSession(conversationId)).toEqual([
+      expect.objectContaining({ role: 'user', content: 'Original request' }),
+      expect.objectContaining({ role: 'assistant', content: 'Progress' }),
+      expect.objectContaining({ role: 'user', content: 'First update' }),
+    ]);
+  });
+
   it('rejects historical turns and leaves the transcript unchanged', () => {
     appendTurn('turn-1', 'first', 'answer one');
     appendTurn('turn-2', 'second', 'answer two');

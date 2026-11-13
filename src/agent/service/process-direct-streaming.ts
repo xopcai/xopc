@@ -43,6 +43,7 @@ import {
   type AgentSourceContextResolver,
 } from '../source-context/types.js';
 import type { ReviewOutput } from '../../review/review-types.js';
+import { onSessionTranscriptUpdate } from '../../session/transcript-events.js';
 
 import { AsyncQueue, AsyncQueueOverflowError } from './async-queue.js';
 import { getTaskContinuation } from '../../tasks/task-continuation.js';
@@ -321,6 +322,19 @@ async function* runProcessDirectStreamingInner(
   if (channel === 'webchat') {
     deps.registerWebchatStreamPublisher(conversationId, pushVisible);
   }
+  const stopSteerEvents = channel === 'webchat' && input.runId
+    ? onSessionTranscriptUpdate(update => {
+        if (update.conversationId !== conversationId) return;
+        const message = update.message as (TranscriptUserMessage & {
+          turnId?: string;
+          metadata?: { steered?: boolean; clientMessageId?: string };
+        }) | undefined;
+        if (message?.role !== 'user' || message.turnId !== input.runId
+          || !message.metadata?.steered || !message.metadata.clientMessageId) return;
+        pushVisible({ type: 'user_message', content: message.content, timestamp: message.timestamp,
+          media: message.media, metadata: message.metadata });
+      })
+    : undefined;
 
   const signal = input.signal;
   let userAborted = false;
@@ -665,6 +679,7 @@ async function* runProcessDirectStreamingInner(
 
     deps.recordTaskReviewStreamHint?.(conversationId, { skipTaskReview: ranSlashCommand });
   } finally {
+    stopSteerEvents?.();
     if (channel === 'webchat') {
       deps.unregisterWebchatStreamPublisher(conversationId);
     }

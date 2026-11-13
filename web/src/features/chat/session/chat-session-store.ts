@@ -23,13 +23,13 @@ import {
 import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
-import { cloneMessageForRender } from '@/features/chat/messages/streaming';
+import { cloneMessageForRender, hasRenderableAssistantContent } from '@/features/chat/messages/streaming';
 import { assistantAnswerContent } from '@/features/chat/messages/assistant-turn-content';
 
 /** Per-session chat UI and agent config. @see docs/web/chat-session-semantics.md */
 export type SessionHistoryStatus = 'unknown' | 'loading' | 'ready';
 
-export type SessionSnapshotRequest = { messages: Message[] | undefined; completedRunId?: string };
+export type SessionSnapshotRequest = { messages: Message[] | undefined; completedRunId?: string; recoveringRunId?: string };
 
 export function shouldShowHistoryLoading(status: SessionHistoryStatus | undefined): boolean {
   return status !== 'ready';
@@ -140,6 +140,7 @@ type ChatSessionStoreActions = {
     serverMessages: Message[],
     hasMore?: boolean,
     completedRunId?: string,
+    recoveringRunId?: string,
   ) => void;
 };
 
@@ -244,7 +245,7 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
       const sameCompletedAnswer = existing.runStatus && message.fromHistory && samePersistedRow(existing, message)
         && (!existing.outcome || !message.outcome || existing.outcome.runId === message.outcome.runId)
         && Boolean(finalText(existing)) && finalText(existing) === finalText(message);
-      if (sameCompletedAnswer || assistantTurnVisuallyEquivalent(existing, message)) {
+      if ((existing.beforeSteer && message.beforeSteer) || sameCompletedAnswer || assistantTurnVisuallyEquivalent(existing, message)) {
         nextMessage.startedAt = existing.startedAt ?? (existing.completedAt != null ? existing.timestamp : undefined)
           ?? nextMessage.startedAt;
         nextMessage.completedAt ??= existing.completedAt;
@@ -305,20 +306,6 @@ function preserveOptimisticMessages(current: Message[], incoming: Message[]): Me
   return preservePendingSteers(current, missing.length ? [...incoming, ...missing] : incoming);
 }
 
-/** Live history can skip newly persisted users that share the active run ID. */
-function reconcileLiveSteers(current: Message[], server: Message[]): Message[] {
-  const byClientId = new Map(server.flatMap(message => message.clientMessageId
-    ? [[message.clientMessageId, message] as const] : []));
-  let changed = false;
-  const next = current.map(message => {
-    const persisted = message.pendingSteer && message.clientMessageId ? byClientId.get(message.clientMessageId) : undefined;
-    if (!persisted) return message;
-    changed = true;
-    return preserveLocalUserDisplayPayload(message, persisted);
-  });
-  return changed ? next : current;
-}
-
 export function findHistoryPageStart(current: Message[], incoming: Message[]): number {
   const first = incoming[0];
   return first ? current.findIndex(message => samePersistedRow(message, first)) : -1;
@@ -338,6 +325,34 @@ function appendFinalAssistantMessage(current: Message[], message: Message): Mess
   }
   const mergedTail = mergeConsecutiveAssistantMessages([last, finalMessage]);
   return [...current.slice(0, -1), ...mergedTail];
+}
+
+function appendDeliveredSteer(current: ChatSessionSlice, message: Message): ChatSessionSlice {
+  const existing = current.messages.find(row => row.clientMessageId === message.clientMessageId);
+  if (existing && !existing.pendingSteer) return current;
+  const boundary = current.messages.findLastIndex(row => !row.pendingSteer) + 1;
+  const prefix = current.messages.slice(0, boundary);
+  const bubble = current.streamingMsg;
+  const messages = bubble && (hasRenderableAssistantContent(bubble) || bubble.attachments?.length)
+    ? appendFinalAssistantMessage(prefix, { ...bubble, beforeSteer: true, completedAt: Date.now() })
+    : prefix;
+  const previous = messages.at(-1);
+  if (previous?.role === 'assistant' && previous.turnId === message.turnId && !previous.beforeSteer) {
+    messages[messages.length - 1] = { ...previous, beforeSteer: true };
+  }
+  return {
+    ...current,
+    messages: [...messages, cloneSessionMessage(existing ? preserveLocalUserDisplayPayload(existing, message) : message),
+      ...current.messages.slice(boundary).filter(row => row.clientMessageId !== message.clientMessageId)],
+    streamingMsg: {
+      role: 'assistant',
+      turnId: message.turnId,
+      content: [],
+      timestamp: message.timestamp,
+      textSurface: bubble?.textSurface,
+      renderKey: `assistant-stream:${++nextMessageRenderKey}`,
+    },
+  };
 }
 
 function attachmentKey(att: MessageAttachment): string {
@@ -538,7 +553,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             [key]: {
               ...meta,
               historyStatus: 'ready',
-              messages: appendFinalAssistantMessage(current?.messages ?? [], message),
+              messages: appendFinalAssistantMessage(current?.messages.filter(row => !row.pendingSteer) ?? [], message),
               hasMore,
               ...IDLE_STREAM,
             },
@@ -703,7 +718,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         const shell = produce(base, draft => {
           delete draft.fromHistory;
           delete draft.runStatus;
-          draft.renderKey ??= `assistant-stream:${key}:${timestamp}`;
+          draft.renderKey ??= `assistant-stream:${key}:${++nextMessageRenderKey}`;
           draft.progressiveRender = true;
           delete draft.pendingResponseStatus;
           mutator(draft);
@@ -806,7 +821,11 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           };
         }
-        const last = current.messages[current.messages.length - 1];
+        if (message.clientMessageId) {
+          const next = appendDeliveredSteer(current, message);
+          return next === current ? state : { sessions: { ...state.sessions, [key]: next } };
+        }
+        const last = current.messages.findLast(message => !message.pendingSteer);
         if (last && shouldReplaceOptimisticUserRow(last, message)) {
           const replacement = preserveLocalUserDisplayPayload(last, message);
           return {
@@ -815,7 +834,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
               [key]: {
                 ...current,
                 messages: cloneMessages(
-                  mergeConsecutiveAssistantMessages([...current.messages.slice(0, -1), replacement]),
+                  current.messages.map(row => row === last ? replacement : row),
                 ),
               },
             },
@@ -829,7 +848,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             [key]: {
               ...current,
               messages: cloneMessages(
-                mergeConsecutiveAssistantMessages([...current.messages, message]),
+                [...current.messages.filter(row => !row.pendingSteer), message, ...current.messages.filter(row => row.pendingSteer)],
               ),
             },
           },
@@ -837,7 +856,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    mergeCommittedFromServer: (conversationId, serverMessages, hasMore, completedRunId) => {
+    mergeCommittedFromServer: (conversationId, serverMessages, hasMore, completedRunId, recoveringRunId) => {
       const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
@@ -861,9 +880,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
         const retained = retainLoadedHistory(current.messages, serverMessages, nextHasMore);
         const mergedHasMore = retained !== serverMessages ? current.hasMore : nextHasMore;
         const bubble = current.streamingMsg;
-        const recoveredIndex = completedRunId && bubble
-          && (bubble.turnId === completedRunId || (!bubble.turnId && bubble.pendingResponseStatus))
-          ? retained.findIndex(message => message.role === 'assistant' && message.turnId === completedRunId) : -1;
+        const recoveredIndex = completedRunId && (bubble?.turnId === completedRunId || (bubble && !bubble.turnId && bubble.pendingResponseStatus))
+          ? retained.findLastIndex(message => message.role === 'assistant' && message.turnId === completedRunId) : -1;
         if (!isSessionSliceLive(current) || recoveredIndex >= 0) {
           // Install the durable answer and retire its placeholder in the same store update.
           const recovered = bubble?.renderKey && recoveredIndex >= 0
@@ -878,22 +896,32 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           };
         }
-        const withPersistedSteers = reconcileLiveSteers(current.messages, serverMessages);
-        const settled = withPersistedSteers.some(message => message.pendingSteer)
-          ? withPersistedSteers.filter(message => !message.pendingSteer)
-          : withPersistedSteers;
+        // The ordered run stream confirms steer delivery after the preceding tool events.
+        // A routine REST refresh can see that row before the client has received the boundary.
+        const settled = current.messages.some(message => message.pendingSteer)
+          ? current.messages.filter(message => !message.pendingSteer) : current.messages;
+        const known = new Set(settled.map(message => message.clientMessageId));
+        const missedBoundary = recoveringRunId && (!bubble?.turnId || bubble.turnId === recoveringRunId)
+          ? retained.findLastIndex(message => message.turnId === recoveringRunId
+            && message.clientMessageId && !known.has(message.clientMessageId)) : -1;
+        if (missedBoundary >= 0) {
+          const prefix = retained.slice(0, missedBoundary + 1);
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: { ...current, ...meta, historyStatus: 'ready', hasMore: mergedHasMore,
+                messages: reconcileMessages(current.messages, preservePendingSteers(current.messages, prefix)),
+                streamingMsg: null },
+            },
+          };
+        }
+        const throughKnownSteers = retained.filter(message => !message.clientMessageId || known.has(message.clientMessageId));
         const recovered = mergeMissingUserMessagesFromServer(
           settled,
-          retained,
+          throughKnownSteers,
           current.streamingMsg?.turnId,
         );
-        let merged = recovered === settled ? withPersistedSteers : preservePendingSteers(withPersistedSteers, recovered);
-        if (current.streamingMsg?.turnId) {
-          const seen = new Set(merged.map(message => message.clientMessageId));
-          const unseenSteers = serverMessages.filter(message => message.clientMessageId
-            && message.turnId === current.streamingMsg?.turnId && !seen.has(message.clientMessageId));
-          if (unseenSteers.length) merged = [...merged, ...unseenSteers];
-        }
+        const merged = recovered === settled ? current.messages : preservePendingSteers(current.messages, recovered);
         if (
           merged === current.messages &&
           mergedHasMore === current.hasMore &&

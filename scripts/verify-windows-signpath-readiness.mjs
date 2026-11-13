@@ -87,6 +87,11 @@ try {
   report.checks.explicitManualUpdateCheck = manualState.state;
   report.checks.updaterObserved = runtimeLogs.includes('Automatic desktop updates disabled');
   await app.close(); app = undefined;
+  const upgradeUi = run(ps, ['-NoProfile', '-File', join(root, 'scripts/verify-windows-installer-ui.ps1'),
+    '-Installer', installer, '-UpgradeInstallDirectory', installed], 180_000);
+  assert(upgradeUi.includes('PASS: assisted upgrade opened xopc from the finish page'));
+  assert.equal(await automaticDesktopUpdatesEnabled(), false);
+  report.checks.assistedUpgradeLaunch = true;
   const uninstaller = join(installed, 'Uninstall xopc.exe'); assert(existsSync(uninstaller)); run(uninstaller, ['/S']);
   report.checks.uninstall = true;
   report.installerSha256 = createHash('sha256').update(await readFile(installer)).digest('hex');

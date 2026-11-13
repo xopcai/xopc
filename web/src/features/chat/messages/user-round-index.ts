@@ -4,6 +4,11 @@ export function isUiUserMessage(role: Message['role'] | string): boolean {
   return role === 'user';
 }
 
+export function userMessageTurnTarget(message: Message): string | undefined {
+  if (message.role !== 'user' || message.pendingSteer) return undefined;
+  return message.clientMessageId ? `steer:${message.clientMessageId}` : message.turnId;
+}
+
 /** 0-based index among user messages only (matches server `userRoundIndex`). */
 export function userRoundIndexFromUiMessageIndex(
   messages: readonly Message[],

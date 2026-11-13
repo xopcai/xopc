@@ -145,6 +145,8 @@ export interface Message {
   /** Durable input identity shared by a queued steer and its transcript row. */
   clientMessageId?: string;
   pendingSteer?: boolean;
+  /** Assistant output before a steering input in the same run. */
+  beforeSteer?: boolean;
   /** Client-only frozen page context retained only while an optimistic send can be retried. */
   pendingAppContext?: AppContextEnvelope;
   /** Stable server run identifier used to attribute context and feedback. */

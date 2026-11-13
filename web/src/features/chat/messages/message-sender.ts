@@ -709,7 +709,11 @@ export class MessageSender {
     } catch { /* Cancellation remains best effort when the transport is unavailable. */ }
   }
 
-  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks, options?: { replayFromStart: boolean; recoverTerminal?: (status: AgentStreamRunStatus | undefined, signal: AbortSignal) => Promise<AgentStreamRunStatus> }): Promise<boolean> {
+  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks, options?: {
+    replayFromStart: boolean;
+    afterSteerId?: string;
+    recoverTerminal?: (status: AgentStreamRunStatus | undefined, signal: AbortSignal) => Promise<AgentStreamRunStatus>;
+  }): Promise<boolean> {
     // A resumed successor owns its own controller and subscription. A predecessor's
     // completion must never dispose or clear the successor's recovery cursor.
     this._abort?.abort();
@@ -747,18 +751,28 @@ export class MessageSender {
         }
       } : undefined;
       const afterSeq = readPendingAgentRunCursor(chatId, runId);
+      let afterSteerId = options?.afterSteerId;
       cleanup = subscribeRealtimeTopic(`run:${runId}`, {
         onEvent: message => {
           if (this._abort !== controller) return;
           const event = message.data && typeof message.data === 'object'
             ? { ...(message.data as Record<string, unknown>), seq: message.seq }
             : { type: message.event, seq: message.seq, payload: message.data };
+          if (afterSteerId && message.event !== 'run_end' && message.event !== 'error') {
+            const payload = event.payload as { message?: { metadata?: { clientMessageId?: string } } } | undefined;
+            if (message.event === 'user_message' && payload?.message?.metadata?.clientMessageId === afterSteerId) {
+              afterSteerId = undefined;
+              advancePendingAgentRunCursor(chatId, runId, message.seq);
+            }
+            return;
+          }
           this._dispatchStreamEvent(message.event, event, terminal.wrapped);
           advancePendingAgentRunCursor(chatId, runId, message.seq);
           if (message.event === 'run_end' || message.event === 'error') finish(true);
         },
         onGap: gap => {
           if (this._abort !== controller) return;
+          afterSteerId = undefined;
           if (gap.recoverable) return terminal.wrapped?.onReplayGap?.({ runId, signal: controller.signal });
           if (this._streamRecover) return this._streamRecover();
           finish(false);

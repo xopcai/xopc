@@ -23,6 +23,7 @@ import { hasVisibleMessageRow } from './message-row-visibility';
 import { AgentRunErrorBanner } from './agent-run-error-banner';
 import { RunFeedbackContext } from './run-feedback-context';
 import { RunRecoveryStatus } from './run-recovery-status';
+import { userMessageTurnTarget } from './user-round-index';
 
 export interface ChatTimelineEntry {
   id: string;
@@ -141,14 +142,15 @@ export const MessageList = memo(function MessageList({
   const running = streaming || sending;
   const retry = !running && onRetryUserMessageRound && lastUserIndex >= 0
     && !list[lastUserIndex].clarificationChoice
-    && Boolean(list[lastUserIndex].turnId || (list[lastUserIndex].deliveryStatus === 'failed' && list[lastUserIndex].clientSubmissionId))
+    && Boolean(userMessageTurnTarget(list[lastUserIndex]) || (list[lastUserIndex].deliveryStatus === 'failed' && list[lastUserIndex].clientSubmissionId))
     && !currentRound.some(message => message.content.some(part => part.type === 'tool_use'))
     ? () => onRetryUserMessageRound(lastUserIndex) : undefined;
   const feedback = { turnId: currentOutcome?.turnId, running, error: runError, onRetry: retry };
   const recovering = running && (progress?.stage === 'model_retry' || progress?.stage === 'model_fallback');
+  const lastCommittedIndex = list.findLastIndex(message => !message.pendingSteer);
 
   const isStreamingRow = (msg: Message, index: number) => Boolean(
-    (streaming || sending || msg.pendingResponseStatus) && index === list.length - 1 && msg.role === 'assistant',
+    (streaming || sending || msg.pendingResponseStatus) && index === lastCommittedIndex && msg.role === 'assistant',
   );
   const followUpTriggerFor = (msg: Message, index: number) => msg.role === 'assistant'
     && Boolean(msg.turnId) && list[index - 1]?.role === 'task' && list[index - 1]?.turnId === msg.turnId
@@ -272,7 +274,7 @@ export const MessageList = memo(function MessageList({
           onEditUserMessage={onEditUserMessage}
           userMessageCanEdit={
             !msg.pendingSteer && !msg.clarificationChoice && (!editLatestUserOnly || isLastUserRow)
-            && (!editRequiresTurnId || Boolean(msg.turnId))
+            && (!editRequiresTurnId || Boolean(userMessageTurnTarget(msg)))
             && msg.deliveryStatus !== 'sending'
           }
           responseFeedbackEnabled={responseFeedbackEnabled}

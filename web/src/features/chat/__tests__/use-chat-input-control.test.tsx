@@ -10,6 +10,7 @@ import { useChatSessionStore } from '../session/chat-session-store';
 import { showComposerNotification } from '../composer/composer-notifications';
 import { apiFetch } from '@/lib/fetch';
 import { sessionWireToUiMessages } from '../messages/agent-messages';
+import { selectDisplayMessages } from '../session/chat-session-view';
 
 vi.mock('../composer/composer-notifications', () => ({ showComposerNotification: vi.fn() }));
 vi.mock('@/lib/fetch', () => ({ apiFetch: vi.fn() }));
@@ -51,7 +52,10 @@ it('shows accepted steers immediately, merges each by input ID, and returns unde
   const original = { role: 'user', content: 'Same text', turnId: 'active', timestamp: 1 };
   store.mergeCommittedFromServer(id, sessionWireToUiMessages([original]));
   store.setSessionFlags(id, { streaming: true });
-  store.mutateSessionStreaming(id, message => { message.turnId = 'active'; });
+  store.mutateSessionStreaming(id, message => {
+    message.turnId = 'active';
+    message.content = [{ type: 'text', text: 'Working on the original request' }];
+  });
   const accepted = (clientMessageId: string) => ({
     id: clientMessageId, clientMessageId, content: 'Same text', status: 'injecting',
     effectiveDelivery: 'steer', origin: { type: 'endpoint', endpointId: 'browser' }, targetRunId: 'active',
@@ -60,6 +64,10 @@ it('shows accepted steers immediately, merges each by input ID, and returns unde
   const first = accepted('first');
   const second = accepted('second');
   const messages = () => useChatSessionStore.getState().sessions[id].messages;
+  const displayed = () => {
+    const { messages, streamingMsg } = useChatSessionStore.getState().sessions[id];
+    return selectDisplayMessages({ viewConversationId: id, conversationId: id, messages, streamingMsg });
+  };
   const publish = async (inputs: unknown[], revision: number) => {
     state = { ...state, inputs, revision };
     await act(async () => { window.dispatchEvent(new CustomEvent('session-input-state', { detail: state })); });
@@ -68,21 +76,33 @@ it('shows accepted steers immediately, merges each by input ID, and returns unde
   const keys = messages().map(row => row.renderKey);
   expect(messages().map(row => row.pendingSteer)).toEqual([undefined, true, true]);
   expect(hook.pendingFollowUps).toEqual([]);
+  expect(displayed().map(row => row.role)).toEqual(['user', 'assistant', 'user', 'user']);
 
   const persisted = { ...original, timestamp: 3, metadata: { clientMessageId: 'first', steered: true } };
-  store.mergeCommittedFromServer(id, sessionWireToUiMessages([original, persisted]));
+  const previousReply = { role: 'assistant', content: 'Working on the original request', turnId: 'active', timestamp: 2 };
+  store.mergeCommittedFromServer(id, sessionWireToUiMessages([original, previousReply, persisted]));
   expect(messages().map(row => row.renderKey)).toEqual(keys);
-  expect(messages().map(row => row.pendingSteer)).toEqual([undefined, undefined, true]);
+  const [delivered] = sessionWireToUiMessages([persisted]);
+  store.appendUserMessageIfMissing(id, delivered);
+  store.appendUserMessageIfMissing(id, delivered);
+  expect(messages().map(row => row.pendingSteer)).toEqual([undefined, undefined, undefined, true]);
+  expect(messages()[2].renderKey).toBe(keys[1]);
   await publish([{ ...second, status: 'interrupted', version: 3 }], 2);
-  expect(messages().map(row => row.renderKey)).toEqual(keys.slice(0, 2));
+  expect(messages().map(row => row.clientMessageId)).toEqual([undefined, undefined, 'first']);
   expect(hook.pendingFollowUps).toMatchObject([{ id: 'second', status: 'interrupted' }]);
 
   const third = { ...original, timestamp: 4, metadata: { clientMessageId: 'third', steered: true } };
-  store.mergeCommittedFromServer(id, sessionWireToUiMessages([original, persisted, third]));
+  store.appendUserMessageIfMissing(id, sessionWireToUiMessages([third])[0]);
   await publish([accepted('third')], 3);
+  const reply = { role: 'assistant', content: 'Continuing with both updates', turnId: 'active', timestamp: 5 };
+  store.finalizeStreamingTurn(id, sessionWireToUiMessages([reply])[0]);
   expect(messages().map(row => [row.clientMessageId, row.pendingSteer])).toEqual([
-    [undefined, undefined], ['first', undefined], ['third', undefined],
+    [undefined, undefined], [undefined, undefined], ['first', undefined], ['third', undefined], [undefined, undefined],
   ]);
+  const visibleText = () => displayed().map(row => [row.role, row.content.map(part => part.type === 'text' ? part.text : part.type)]);
+  const expected = visibleText();
+  store.mergeCommittedFromServer(id, sessionWireToUiMessages([original, previousReply, persisted, third, reply]));
+  expect(visibleText()).toEqual(expected);
   useChatSessionStore.setState({ sessions: {} });
 });
 

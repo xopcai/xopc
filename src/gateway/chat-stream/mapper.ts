@@ -4,6 +4,7 @@ import { isUserTurnDocument, parseTurnOutcome, resolveToolActivity } from '@xopc
 
 import type { EmbeddedStreamEvent } from '../../agent/embedded/types.js';
 import { productDeliveries } from '../../session/compact-history.js';
+import { stripRuntimeContextFromUserContent } from '../../session/user-message-display.js';
 import { createPetFeedback } from './pet-feedback.js';
 import type { ChatStreamEvent, ChatStreamStatus } from './protocol.js';
 import type { TaskUpdateTrigger } from '../../storage/sqlite/session-input-repository.js';
@@ -508,10 +509,11 @@ export class ChatStreamMapper {
 }
 
 function userMessageFromEvent(event: { [key: string]: unknown }, turnId: string): unknown {
+  const content = event.content;
   return {
     role: 'user',
     turnId,
-    content: event.content ?? [],
+    content: typeof content === 'string' || Array.isArray(content) ? stripRuntimeContextFromUserContent(content) : [],
     attachments: event.media,
     metadata: userMessageDisplayMetadata(event.metadata),
     timestamp: typeof event.timestamp === 'number' ? event.timestamp : Date.now(),
@@ -524,8 +526,10 @@ function userMessageDisplayMetadata(value: unknown): unknown {
   const userTurnDocument = isUserTurnDocument(metadata?.userTurnDocument)
     ? metadata.userTurnDocument
     : undefined;
-  if (!Array.isArray(rows)) return userTurnDocument ? { userTurnDocument } : undefined;
-  const sourceContexts = rows.flatMap((value) => {
+  const steer = metadata?.steered === true && typeof metadata.clientMessageId === 'string'
+    ? { steered: true, clientMessageId: metadata.clientMessageId }
+    : undefined;
+  const sourceContexts = (Array.isArray(rows) ? rows : []).flatMap((value) => {
     const row = asRecord(value);
     if (
       (row?.kind !== 'note' && row?.kind !== 'task' && row?.kind !== 'file'
@@ -547,8 +551,8 @@ function userMessageDisplayMetadata(value: unknown): unknown {
         : {}),
     }];
   });
-  return sourceContexts.length > 0 || userTurnDocument
-    ? { ...(sourceContexts.length > 0 ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
+  return sourceContexts.length > 0 || userTurnDocument || steer
+    ? { ...steer, ...(sourceContexts.length > 0 ? { sourceContexts } : {}), ...(userTurnDocument ? { userTurnDocument } : {}) }
     : undefined;
 }
 

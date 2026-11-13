@@ -94,7 +94,8 @@ export function createAgentStreamMessagingCallbacks(opts: {
 
   const reloadSessionSnapshot: NonNullable<MessagingCallbacks['onReplayGap']> = (recovery) => {
     const runId = recovery?.runId;
-    const request = { messages: store().sessions[chatId]?.messages, completedRunId: recovery?.terminal ? runId : undefined };
+    const request = { messages: store().sessions[chatId]?.messages, completedRunId: recovery?.terminal ? runId : undefined,
+      recoveringRunId: recovery?.terminal ? undefined : runId };
     return sessionMgrRef.current
       .loadSession(chatId, 0, undefined, undefined, request.messages)
       .then(data => {
@@ -153,7 +154,9 @@ export function createAgentStreamMessagingCallbacks(opts: {
     },
     onReplayGap: reloadSessionSnapshot,
     onUserMessage: (message) => {
-      if (!shouldApplyStreamUpdate(chatId)) return;
+      if (message.clientMessageId) {
+        flushReviewDeltas();
+      } else if (!shouldApplyStreamUpdate(chatId)) return;
       store().appendUserMessageIfMissing(chatId, message);
     },
     onStreamStart: (turnId, startsNewBubble, taskTrigger) => {

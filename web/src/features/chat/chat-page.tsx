@@ -47,6 +47,7 @@ import {
   extractUserMessagePlainText,
   messageAttachmentsToWire,
 } from '@/features/chat/messages/user-message-plain-text';
+import { userMessageTurnTarget } from '@/features/chat/messages/user-round-index';
 import { ScrollToBottomDock } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import { ChatFindBar } from '@/features/chat/find/chat-find-bar';
@@ -725,10 +726,11 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   });
 
   const handleEditUserMessage = useCallback((message: Message) => {
-    if (!message.turnId || !session.conversationId) return;
+    const target = userMessageTurnTarget(message);
+    if (!target || !session.conversationId) return;
     const generation = chatRunManager.getGeneration(session.conversationId);
     const runId = chatRunManager.getResumeRunId(session.conversationId);
-    void followUp.beginEditTurn(message.turnId, {
+    void followUp.beginEditTurn(target, {
       text: message.userTurnDocument ? serializeUserTurnDocument(message.userTurnDocument) : extractUserMessagePlainText(message.content),
       attachments: messageAttachmentsToWire(message.attachments) ?? [],
       contextRefs: message.contextRefs?.flatMap(ref => ref.kind === 'mcp_resource' ? [] : [{

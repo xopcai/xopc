@@ -16,6 +16,7 @@
  */
 
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
+import type { UserTurnDocument } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
 import type { ContextualLogger } from '../../utils/logger/types.js';
@@ -187,6 +188,7 @@ export class TurnDispatcher {
     sourceContexts?: AgentSourceContext[];
     voiceAgentInstruction?: boolean;
     clientMessageId?: string;
+    userTurnDocument?: UserTurnDocument;
     onHandled?: () => void;
   }): Promise<boolean> {
     const trimmed = text.trim();
@@ -207,6 +209,7 @@ export class TurnDispatcher {
           ...message,
           metadata: {
             ...(options.clientMessageId ? { clientMessageId: options.clientMessageId, steered: true } : {}),
+            ...(options.userTurnDocument ? { userTurnDocument: options.userTurnDocument } : {}),
             ...(options.sourceContexts?.length ? { sourceContexts: options.sourceContexts.map(summarizeSourceContext) } : {}),
           },
         };
@@ -219,7 +222,8 @@ export class TurnDispatcher {
       }
       if (options?.clientMessageId) {
         const transcriptMessage = { role: 'user' as const, content: trimmed, timestamp: Date.now(),
-          metadata: { clientMessageId: options.clientMessageId, steered: true } };
+          metadata: { clientMessageId: options.clientMessageId, steered: true,
+            ...(options.userTurnDocument ? { userTurnDocument: options.userTurnDocument } : {}) } };
         return await queueEmbeddedSteer(conversationId, trimmed, expectedRunId, { transcriptMessage, onHandled: options.onHandled });
       }
       return await queueEmbeddedSteer(conversationId, trimmed, expectedRunId);

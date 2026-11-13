@@ -82,10 +82,12 @@ export function buildAssistantTurnViewModel({
   reasoningLevel: ReasoningLevel;
   personal?: boolean;
 }): AssistantTurnViewModel {
-  const answerContent = assistantAnswerContent(message.content ?? [], {
-    // Pending text is an answer candidate, never private reasoning or tool output.
-    includePending: true,
-  });
+  const answerContent = message.beforeSteer
+    ? message.content.filter(block => block.type === 'text' || block.type === 'review')
+    : assistantAnswerContent(message.content ?? [], {
+      // Pending text is an answer candidate, never private reasoning or tool output.
+      includePending: true,
+    });
   const answerBlocks = new Set(answerContent);
   const allActivityBlocks = filterVisibleSteps(collectTurnActivityBlocks(message.content ?? []));
   const workLogItems = (message.content ?? []).filter(

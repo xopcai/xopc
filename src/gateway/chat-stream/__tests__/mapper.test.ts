@@ -115,6 +115,17 @@ describe('ChatStreamMapper', () => {
     });
   });
 
+  it('keeps the steering input identity and removes runtime context from its live message', () => {
+    const [event] = mapper().map({
+      type: 'user_message',
+      content: '<source_contexts>\nInternal context\n</source_contexts>\n\n<user_message>\nChange course\n</user_message>',
+      metadata: { steered: true, clientMessageId: 'update-1' },
+    });
+    expect(event).toMatchObject({ type: 'user_message', payload: { message: {
+      role: 'user', content: 'Change course', metadata: { steered: true, clientMessageId: 'update-1' },
+    } } });
+  });
+
   it.each(['note', 'task'])('maps Note context summaries to the realtime user message', (kind) => {
     const m = mapper();
     const sourceContexts = [{

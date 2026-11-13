@@ -824,7 +824,7 @@ export class SessionStore {
 
   async deleteUserRound(
     key: string,
-    userRoundIndex: number,
+    target: number | { steerId: string },
   ): Promise<{
     deleted: number;
     removedMessages: AgentMessage[];
@@ -836,7 +836,7 @@ export class SessionStore {
       const canonicalRows = rows.filter(
         (row) => !isTranscriptCompactionEntry(row) && !isRuntimeOnlyTranscriptMessage(row),
       );
-      const range = computeTranscriptUserRoundDeleteRange(canonicalRows, userRoundIndex);
+      const range = computeTranscriptUserRoundDeleteRange(canonicalRows, target);
       if (!range) return null;
 
       const removedRows = canonicalRows.slice(range.startIndex, range.startIndex + range.count);

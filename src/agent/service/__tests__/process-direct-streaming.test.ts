@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { contextRefWireToken } from '@xopcai/gateway-contract';
+import { emitSessionTranscriptUpdate } from '../../../session/transcript-events.js';
 
 const mocks = vi.hoisted(() => ({
   resume: vi.fn(),
@@ -117,6 +118,27 @@ describe('direct stream input visibility', () => {
     expect(mocks.pending).toHaveBeenCalledOnce();
     expect(mocks.clearPending).toHaveBeenCalledOnce();
     expect(mocks.run).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ requireVisibleReply: false }));
+  });
+
+  it('streams delivered steer messages between the previous and next assistant responses', async () => {
+    const conversationId = 'conversation';
+    const runId = 'active-run';
+    const steer = { role: 'user', content: 'Change course', turnId: runId, timestamp: 2,
+      metadata: { steered: true, clientMessageId: 'update-1' } };
+    const { deps } = setup();
+    mocks.run.mockImplementationOnce(async (_deps, input) => {
+      input.onEvent({ type: 'message_end', message: { role: 'assistant', content: 'Started' } });
+      emitSessionTranscriptUpdate({ conversationId, message: { ...steer, turnId: 'old-run' } });
+      emitSessionTranscriptUpdate({ conversationId, message: steer });
+      input.onEvent({ type: 'message_end', message: { role: 'assistant', content: 'Continuing' } });
+      return { ok: true, lastAssistantText: 'Continuing' };
+    });
+    const events = [];
+    for await (const event of runProcessDirectStreaming(deps, {
+      content: 'Start work', conversationId, runId, origin: { type: 'endpoint', endpointId: 'web-ui' },
+    })) events.push(event);
+    expect(events.map(event => event.type)).toEqual(['user_message', 'message_end', 'user_message', 'message_end']);
+    expect(events[2]).toMatchObject({ content: steer.content, metadata: steer.metadata });
   });
 
   it.each([

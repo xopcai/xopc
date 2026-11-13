@@ -153,7 +153,7 @@ export function useChatSessionLoad(deps: {
       // Applying that older snapshot would briefly remove the completed turn.
       if (request && snap?.messages !== request.messages && !isSessionSliceLive(snap)) return false;
       const retainedPrefix = data.hasMore && findHistoryPageStart(snap?.messages ?? [], data.messages) > 0;
-      store().mergeCommittedFromServer(chatId, data.messages, data.hasMore, request?.completedRunId);
+      store().mergeCommittedFromServer(chatId, data.messages, data.hasMore, request?.completedRunId, request?.recoveringRunId);
       if (data.name !== undefined) {
         store().patchSessionMeta(chatId, { name: data.name || null });
       }

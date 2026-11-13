@@ -59,7 +59,12 @@ function validateTargetRows(
   targetTurnId: string,
 ): { ok: true; targetIndex: number } | { ok: false; code: 'TARGET_NOT_FOUND' | 'NOT_LATEST' } {
   const targetIndex = rows.findIndex(
-    (row) => (row as { role?: unknown }).role === 'user' && rowTurnId(row) === targetTurnId,
+    (row) => {
+      const { role, metadata } = row as { role?: unknown; metadata?: { steered?: boolean; clientMessageId?: string } };
+      if (role !== 'user') return false;
+      if (metadata?.steered && metadata.clientMessageId) return `steer:${metadata.clientMessageId}` === targetTurnId;
+      return rowTurnId(row) === targetTurnId;
+    },
   );
   if (targetIndex < 0) return { ok: false, code: 'TARGET_NOT_FOUND' };
   if (rows.slice(targetIndex + 1).some(isUserRow)) return { ok: false, code: 'NOT_LATEST' };

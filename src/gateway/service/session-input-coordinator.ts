@@ -172,6 +172,7 @@ export class SessionInputCoordinator {
       sourceContexts?: AgentSourceContext[];
       voiceAgentInstruction?: boolean;
       clientMessageId?: string;
+      userTurnDocument?: NonNullable<ReturnType<typeof parseUserTurnDocument>>;
       onHandled?: () => void;
     }) => Promise<boolean>;
     emit: (type: string, payload: unknown) => void;
@@ -378,7 +379,9 @@ export class SessionInputCoordinator {
       const target = validateLatestSessionTurnTarget(conversationId, targetTurnId);
       if (target.ok === false) return target;
 
-      const original = findSessionInputByRunId(conversationId, targetTurnId);
+      const original = targetTurnId.startsWith('steer:')
+        ? findSessionInput(conversationId, targetTurnId.slice('steer:'.length))
+        : findSessionInputByRunId(conversationId, targetTurnId);
       if (original) {
         input.origin = original.origin;
         input.sourceContexts = [...(input.sourceContexts ?? []).filter(source => source.kind !== 'device_context'),
@@ -533,6 +536,7 @@ export class SessionInputCoordinator {
 
   private steerInput(row: SessionInput, runId?: string): Promise<boolean> {
     const text = steeringText(row.content, row.contextSnapshots);
+    const userTurnDocument = parseUserTurnDocument(row.content);
     const voiceAgentInstruction = isNaturalVoiceDelegation(row);
     const trackDelivery = row.origin.type === 'endpoint';
     if (!trackDelivery && !voiceAgentInstruction && !row.attachments?.length && !row.contextSnapshots?.length) return this.deps.steer(row.conversationId, text, runId);
@@ -541,6 +545,7 @@ export class SessionInputCoordinator {
       ...(voiceAgentInstruction ? { voiceAgentInstruction: true } : {}),
       ...(trackDelivery ? {
         clientMessageId: row.clientMessageId,
+        ...(userTurnDocument ? { userTurnDocument } : {}),
         onHandled: () => {
           const current = getSessionInputById(row.conversationId, row.id);
           if (current?.status === 'injecting' && current.targetRunId === runId) setSessionInputStatus(row.id, 'completed');

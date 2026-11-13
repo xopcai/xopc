@@ -242,6 +242,25 @@ describe('MessageSender terminal state', () => {
     sender.abort(false); await pending;
   });
 
+  it('replays only the assistant output after the last steer already in history', async () => {
+    const sender = new MessageSender();
+    const onToken = vi.fn();
+    const onUserMessage = vi.fn();
+    const callbacks = { onToken, onUserMessage, onResult: vi.fn(), onError: vi.fn() } as unknown as MessagingCallbacks;
+    const pending = sender.resume('reload-run', conversationId, callbacks, { replayFromStart: true, afterSteerId: 'saved-steer' });
+    const event = (seq: number, name: string, payload: unknown) => realtimeState.listener!.onEvent({
+      topic: 'run:reload-run', seq, event: name, data: { runId: 'reload-run', payload },
+    });
+    event(1, 'assistant_delta', { delta: 'Already in history' });
+    event(2, 'user_message', { message: { role: 'user', content: 'Saved update', metadata: { steered: true, clientMessageId: 'saved-steer' } } });
+    event(3, 'assistant_delta', { delta: 'New output' });
+    expect(onUserMessage).not.toHaveBeenCalled();
+    expect(onToken).toHaveBeenCalledExactlyOnceWith('New output', undefined, undefined);
+    expect(readPendingAgentRunCursor(conversationId, 'reload-run')).toBe(3);
+    sender.abort(false);
+    await pending;
+  });
+
   it('keeps a successor subscription intact when the predecessor promise finishes', async () => {
     const sender = new MessageSender();
     const oldResult = vi.fn(); const newResult = vi.fn();

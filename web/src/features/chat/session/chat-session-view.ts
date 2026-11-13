@@ -46,12 +46,17 @@ export function selectDisplayMessages(params: {
     return [];
   }
   if (!params.streamingMsg) return params.messages;
-  const last = params.messages[params.messages.length - 1];
+  const boundary = params.messages.findLastIndex(message => !message.pendingSteer) + 1;
+  const pending = params.messages.slice(boundary);
+  const last = params.messages[boundary - 1];
+  if (pending.length && !params.streamingMsg.content.length && !params.streamingMsg.attachments?.length) {
+    return [...params.messages, params.streamingMsg];
+  }
   if (last?.role === 'assistant' && params.streamingMsg.role === 'assistant') {
     const mergedTail = mergeConsecutiveAssistantMessages([last, params.streamingMsg]);
-    return [...params.messages.slice(0, -1), ...mergedTail];
+    return [...params.messages.slice(0, boundary - 1), ...mergedTail, ...pending];
   }
-  return [...params.messages, params.streamingMsg];
+  return [...params.messages.slice(0, boundary), params.streamingMsg, ...pending];
 }
 
 /** Extract only a persisted assistant tail that belongs to the run being resumed. */
@@ -59,9 +64,10 @@ export function extractResumeTailForRun(
   messages: Message[],
   runId: string,
 ): { messagesWithoutTail: Message[]; tail: Message } | null {
-  const last = messages[messages.length - 1];
+  const index = messages.findLastIndex(message => !message.pendingSteer);
+  const last = messages[index];
   if (last?.role !== 'assistant' || last.turnId !== runId) return null;
-  return { messagesWithoutTail: messages.slice(0, -1), tail: last };
+  return { messagesWithoutTail: [...messages.slice(0, index), ...messages.slice(index + 1)], tail: last };
 }
 
 /** Reset visible React chat shell only; does not stop background agent runs. */

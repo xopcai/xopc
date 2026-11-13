@@ -144,6 +144,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       if (m.transcriptEntryId && m.content.some(block => block.type === 'text' && block.presentation !== 'narration' && block.text?.trim())) prev.transcriptEntryId = m.transcriptEntryId;
       if (!prev.turnId && m.turnId) prev.turnId = m.turnId;
       if (m.progressiveRender) prev.progressiveRender = true;
+      if (m.beforeSteer) prev.beforeSteer = true;
       if (m.usage) prev.usage = m.usage;
       if (m.outcome) prev.outcome = m.outcome;
       if (m.runStatus) prev.runStatus = m.runStatus;
@@ -311,7 +312,16 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
     }
   }
 
-  return mergeConsecutiveAssistantMessages(dedupeTaskTriggerMessages(out));
+  const messages = mergeConsecutiveAssistantMessages(dedupeTaskTriggerMessages(out));
+  for (let index = 1; index < messages.length; index++) {
+    const steer = messages[index];
+    const previous = messages[index - 1];
+    if (steer.role === 'user' && steer.clientMessageId && previous.role === 'assistant'
+      && previous.turnId === steer.turnId) {
+      messages[index - 1] = { ...previous, beforeSteer: true };
+    }
+  }
+  return messages;
 }
 
 export function normalizeTaskTrigger(value: unknown): NonNullable<Message['taskTrigger']> | null {

@@ -15,7 +15,7 @@ export function assistantProcessState(message: Message, isStreaming: boolean) {
   const historyAnswer = message.fromHistory && hasAnswer;
   const outcome = message.outcome ?? message.taskResultDelivery?.outcome;
   const settled = !isStreaming && message.runStatus !== 'suspended'
-    && Boolean(message.runStatus || outcome || historyAnswer);
+    && Boolean(message.runStatus || outcome || historyAnswer || message.beforeSteer);
   const interrupted = message.runStatus === 'error' || message.runStatus === 'cancelled' || outcome?.status === 'failed';
   return { settled, defaultCollapsed: settled && hasAnswer && !interrupted, outcome };
 }

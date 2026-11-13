@@ -919,11 +919,16 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const body = await c.req.json().catch(() => ({}));
     const userRoundIndex =
       typeof body.userRoundIndex === 'number' ? body.userRoundIndex : undefined;
-    if (userRoundIndex === undefined || !Number.isInteger(userRoundIndex) || userRoundIndex < 0) {
+    const steerId = typeof body.steerId === 'string' ? body.steerId.trim() : '';
+    if (steerId && (steerId.length > 128 || body.userRoundIndex !== undefined)) {
+      return c.json({ error: 'Specify one valid message target' }, 400);
+    }
+    const target = steerId ? { steerId } : userRoundIndex;
+    if (target === undefined || (typeof target === 'number' && (!Number.isInteger(target) || target < 0))) {
       return c.json({ error: 'userRoundIndex must be a non-negative integer' }, 400);
     }
 
-    const result = await service.sessionIndexInstance.deleteUserRound(key, userRoundIndex);
+    const result = await service.sessionIndexInstance.deleteUserRound(key, target);
     if (!result) {
       return c.json({ error: 'User round index out of range' }, 400);
     }

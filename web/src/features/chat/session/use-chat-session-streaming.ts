@@ -24,6 +24,7 @@ import {
   isUiUserMessage,
   uiDeleteCountForUserRound,
   userRoundIndexFromUiMessageIndex,
+  userMessageTurnTarget,
 } from '@/features/chat/messages/user-round-index';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import {
@@ -235,6 +236,16 @@ export function useChatSessionStreaming(deps: {
       markChatRunRunning(chatId);
 
       let hydratedResumeTail = false;
+      const replayFromStart = responseAtLookup?.turnId !== runId || !hasRenderableAssistantContent(responseAtLookup);
+      // Replay only the portion after the last steer already present in history.
+      const lastSteerId = replayFromStart ? seedMessages.findLast(message => message.turnId === runId
+        && message.clientMessageId && !message.pendingSteer)?.clientMessageId : undefined;
+      if (lastSteerId) {
+        const resumeTail = extractResumeTailForRun(seedMessages, runId);
+        store().applyHydratedTail(chatId, resumeTail?.messagesWithoutTail ?? seedMessages, resumeTail?.tail ?? null);
+        if (!resumeTail) store().mutateSessionStreaming(chatId, message => { message.turnId = runId; });
+        hydratedResumeTail = true;
+      }
       const hydrateResumeTailAssistant = () => {
         if (hydratedResumeTail) return;
         if (!shouldApplyStreamUpdate(chatId)) return;
@@ -281,7 +292,8 @@ export function useChatSessionStreaming(deps: {
         const resumed = await chatRunManager.senderFor(chatId).resume(runId, chatId, resumeStreamCallbacks, {
           // A persisted cursor is useful only with the corresponding in-memory
           // bubble. After a page reload, replay the missing presentation too.
-          replayFromStart: responseAtLookup?.turnId !== runId || !hasRenderableAssistantContent(responseAtLookup),
+          replayFromStart,
+          ...(lastSteerId ? { afterSteerId: lastSteerId } : {}),
         });
         if (!sameBrowserScope() || chatRunManager.getGeneration(chatId) !== resumeGeneration) return;
         if (!resumed) {
@@ -385,7 +397,7 @@ export function useChatSessionStreaming(deps: {
         : storedMessages;
       const replaceIndex = replaceTurnId
         ? currentMessages.findIndex(
-            (message) => message.role === 'user' && message.turnId === replaceTurnId,
+            (message) => userMessageTurnTarget(message) === replaceTurnId,
           )
         : -1;
       if (replaceTurnId && replaceIndex < 0) return false;
@@ -596,7 +608,7 @@ export function useChatSessionStreaming(deps: {
 
       const messages = getSessionMessages(key);
       const msg = messages[messageIndex];
-      if (!msg || !isUiUserMessage(msg.role)) return;
+      if (!msg || !isUiUserMessage(msg.role) || msg.pendingSteer) return;
 
       if (msg.deliveryStatus === 'failed') {
         const updated = [...messages];
@@ -614,7 +626,8 @@ export function useChatSessionStreaming(deps: {
 
       store().updateSessionMessages(key, () => updated);
 
-      void sessionMgrRef.current.deleteMessages(key, { userRoundIndex }).catch(() => {
+      const target = msg.clientMessageId ? { steerId: msg.clientMessageId } : { userRoundIndex };
+      void sessionMgrRef.current.deleteMessages(key, target).catch(() => {
         void loadSessionById(key, 0);
       });
     },
@@ -629,7 +642,7 @@ export function useChatSessionStreaming(deps: {
 
       const messages = getSessionMessages(key);
       const msg = messages[messageIndex];
-      if (!msg || !isUiUserMessage(msg.role)) return;
+      if (!msg || !isUiUserMessage(msg.role) || msg.pendingSteer) return;
       for (let j = messageIndex + 1; j < messages.length; j++) {
         const nextMsg = messages[j];
         if (nextMsg && isUiUserMessage(nextMsg.role)) return;
@@ -650,7 +663,8 @@ export function useChatSessionStreaming(deps: {
         fileKind: ref.fileKind,
       }]);
       const failedSubmissionId = msg.deliveryStatus === 'failed' ? msg.clientSubmissionId : undefined;
-      if (!failedSubmissionId && !msg.turnId) {
+      const target = userMessageTurnTarget(msg);
+      if (!failedSubmissionId && !target) {
         return;
       }
       void sendMessageRef.current(
@@ -658,7 +672,7 @@ export function useChatSessionStreaming(deps: {
         wireAtt,
         undefined,
         contextRefs,
-        msg.turnId,
+        target,
         msg.pendingAppContext,
         undefined,
         failedSubmissionId,

@@ -14,9 +14,9 @@ describe('Windows signing readiness build configuration', () => {
     expect(result.stderr).toContain('no PFX fallback');
     expect(result.stdout).not.toContain('Staged');
   });
-  it('uses assisted per-user installation and retains the privacy document', () => {
+  it('offers to launch xopc from the assisted per-user installer and retains the privacy document', () => {
     const config = load(readFileSync(new URL('../electron-builder.pack.yml', import.meta.url), 'utf8')) as any;
-    expect(config.nsis).toMatchObject({ oneClick: false, perMachine: false, allowElevation: false, runAfterFinish: false });
+    expect(config.nsis).toMatchObject({ oneClick: false, perMachine: false, allowElevation: false, runAfterFinish: true });
     expect(config.extraResources).toContainEqual({ from: '_pack-resources/compliance', to: 'compliance', filter: ['**/*'] });
   });
 });

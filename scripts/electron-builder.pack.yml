@@ -212,7 +212,7 @@ nsis:
   oneClick: false
   perMachine: false
   allowElevation: false
-  runAfterFinish: false
+  runAfterFinish: true
   buildUniversalInstaller: false
   include: _pack-resources/build-resources/external-intake.nsh
 
