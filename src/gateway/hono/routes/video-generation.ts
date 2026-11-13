@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { isVideoDurationSupported, VIDEO_IMAGE_MAX_BYTES, VIDEO_MODELS, VIDEO_MODEL_REFS, VIDEO_RESOLUTIONS, WAN_VIDEO_MODEL_REF } from '@xopcai/gateway-contract';
+import { isVideoDurationSupported, VIDEO_IMAGE_MAX_BYTES, VIDEO_MODEL_REFS, VIDEO_RESOLUTIONS, WAN_VIDEO_MODEL_REF } from '@xopcai/gateway-contract';
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 
@@ -10,7 +10,7 @@ import { readVideoArtifact } from '../../../video-generation/artifact.js';
 import { getVideoDraft } from '../../../video-generation/drafts.js';
 import { enqueueVideoJob, getVideoJob, listVideoJobs } from '../../../video-generation/repository.js';
 import { getAvailableVideoModelRefs, getConfiguredVideoProviders, getVideoProvider } from '../../../video-generation/providers.js';
-import { getVideoDefaults, getVideoModel, setVideoDefaults, setVideoModel } from '../../../video-generation/settings.js';
+import { getVideoDefaults, getVideoModel, getVideoModelDefinition, setVideoDefaults, setVideoModel } from '../../../video-generation/settings.js';
 import { resolveScopedMediaReference } from '../../media-access.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -39,7 +39,8 @@ function imageMime(bytes: Buffer): string | undefined {
 async function videoSettings() {
   const configured = await getConfiguredVideoProviders();
   const modelRef = getVideoModel();
-  return { modelRef, defaults: getVideoDefaults(modelRef), configured, modelRefs: [...new Set([...getAvailableVideoModelRefs(), modelRef])] };
+  return { modelRef, defaults: getVideoDefaults(modelRef), configured, modelRefs: [...new Set([...getAvailableVideoModelRefs(), modelRef])],
+    models: Object.fromEntries(getAvailableVideoModelRefs().map(ref => [ref, getVideoModelDefinition(ref)])) };
 }
 
 export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
@@ -61,7 +62,7 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
     }).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: 'Invalid video defaults' }, 400);
     const { modelRef, duration, resolution } = parsed.data;
-    const model = VIDEO_MODELS[modelRef];
+    const model = getVideoModelDefinition(modelRef);
     if (!isVideoDurationSupported(model, duration) || !model.resolutions.includes(resolution)) {
       return c.json({ error: 'The selected model does not support these video defaults' }, 400);
     }
@@ -112,7 +113,7 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
       return c.json({ error: 'Provide one PNG, JPEG or WebP image up to 5 MiB' }, 400);
     }
 
-    const model = VIDEO_MODELS[modelRef];
+    const model = getVideoModelDefinition(modelRef);
     const hasImage = Boolean(upload || imageUri);
     if (!isVideoDurationSupported(model, request.duration) || !model.resolutions.includes(request.resolution) || (hasImage && !model.imageRatios.includes(request.ratio))) {
       return c.json({ error: 'The selected model does not support these video settings' }, 400);

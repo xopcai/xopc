@@ -19,8 +19,12 @@ export function resolveMusicModel(ref: string) {
 
 function selectedMusicModel(): string {
   const ref = storedMusicModel() ?? process.env.XOPC_MUSIC_MODEL?.trim();
-  if (ref && resolveMusicModel(ref)) return ref;
   const cloud = getCloudMediaDefault('music');
+  if (ref && resolveMusicModel(ref)) {
+    if (cloud === 'xopc-cloud/music' && ref.startsWith('xopc-cloud/')
+      && !getCloudMediaModels('music').some(item => `xopc-cloud/${item.id}` === ref)) return cloud;
+    return ref;
+  }
   return cloud && resolveMusicModel(cloud) ? cloud : DEFAULT_MUSIC_MODEL;
 }
 

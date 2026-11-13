@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  estimateVideoCostFen, VIDEO_AUTO_DURATION, isVideoDurationSupported, VIDEO_MODELS,
+  estimateVideoCostFen, VIDEO_AUTO_DURATION, isVideoDurationSupported,
   type VideoGenerationDraft, type VideoRatio, type VideoResolution,
 } from '@xopcai/gateway-contract';
 
@@ -12,7 +12,7 @@ import { DurableState } from '../storage/sqlite/durable-state.js';
 import { getCurrentTranscriptId } from '../storage/sqlite/session-repository.js';
 import { loadRecentUserTranscriptRows } from '../storage/sqlite/transcript-repository.js';
 import { getVideoJob } from './repository.js';
-import { getVideoDefaults, getVideoModel } from './settings.js';
+import { getVideoDefaults, getVideoModel, getVideoModelDefinition } from './settings.js';
 
 const drafts = new DurableState<VideoGenerationDraft>('video-generation-drafts');
 const supportedImage = (media: MediaRef) => media.uri.startsWith('media://') && /^image\/(png|jpeg|webp)$/i.test(media.mimeType);
@@ -54,7 +54,7 @@ export function prepareVideoDraft(conversationId: string, input: {
     if (input.action === 'create' && previous && !job) throw new Error('A video draft is already pending. Update it instead.');
     const base = input.action === 'create' ? undefined : previous;
     const modelRef = getVideoModel();
-    const model = VIDEO_MODELS[modelRef];
+    const model = getVideoModelDefinition(modelRef);
     const defaults = getVideoDefaults(modelRef);
     const prompt = (input.prompt ?? base?.prompt ?? '').trim();
     if (!prompt || prompt.length > 1_000) throw new Error('Provide a video description of 1–1000 characters.');

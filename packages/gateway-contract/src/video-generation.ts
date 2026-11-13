@@ -99,6 +99,7 @@ export interface VideoModelSettings {
   defaults: VideoGenerationDefaults;
   configured: Record<Exclude<VideoModelDefinition['provider'], 'xopc-cloud'>, boolean> & { 'xopc-cloud'?: boolean };
   modelRefs?: VideoModelRef[];
+  models?: Partial<Record<VideoModelRef, VideoModelDefinition>>;
 }
 
 export function estimateVideoCostFen(modelRef: VideoModelRef, duration: number, resolution: VideoResolution): number {

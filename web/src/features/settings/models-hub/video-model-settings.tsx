@@ -22,7 +22,8 @@ export function VideoModelSettingsPanel({ zh, disabled, onManage }: {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [draft, setDraft] = useState<(VideoGenerationDefaults & { modelRef: VideoModelRef }) | null>(null);
-  const selected = data && VIDEO_MODELS[data.modelRef];
+  const definition = (ref: VideoModelRef) => data?.models?.[ref] ?? VIDEO_MODELS[ref];
+  const selected = data && definition(data.modelRef);
   const connected = selected && data?.configured[selected.provider];
   const providerLabel = (provider: VideoModelDefinition['provider']) => provider === 'dashscope-cn'
     ? (zh ? '阿里云百炼' : 'Alibaba Cloud Bailian')
@@ -62,7 +63,7 @@ export function VideoModelSettingsPanel({ zh, disabled, onManage }: {
             value={data.modelRef} triggerClassName="min-h-11" allowEmpty={false}
             disabled={disabled || saving} onChange={ref => { if (ref !== data.modelRef) void save('PUT', { modelRef: ref }); }}
             options={(data.modelRefs ?? LOCAL_VIDEO_MODEL_REFS).map(ref => {
-              const model = VIDEO_MODELS[ref];
+              const model = definition(ref);
               return { value: ref, label: model.name, group: providerLabel(model.provider) };
             })} />
           <ModelUseService name={providerLabel(selected.provider)} manageLabel={zh ? '管理服务' : 'Manage services'}
@@ -92,7 +93,7 @@ export function VideoModelSettingsPanel({ zh, disabled, onManage }: {
         <header className="border-b border-edge px-5 py-4">
           <Dialog.Title className="font-semibold text-fg">{zh ? '视频生成设置' : 'Video generation settings'}</Dialog.Title>
           <Dialog.Description className="mt-1 text-sm text-fg-muted">
-            {draft && VIDEO_MODELS[draft.modelRef].name} · {zh ? '新任务的默认参数' : 'Defaults for new jobs'}
+            {draft && definition(draft.modelRef).name} · {zh ? '新任务的默认参数' : 'Defaults for new jobs'}
           </Dialog.Description>
         </header>
         {draft && <form className="flex min-h-0 flex-1 flex-col" onSubmit={async event => {
@@ -104,7 +105,7 @@ export function VideoModelSettingsPanel({ zh, disabled, onManage }: {
               <p>{zh ? '默认时长' : 'Default duration'}</p>
               <Select aria-label={zh ? '默认时长' : 'Default duration'} value={String(draft.duration)} disabled={saving}
                 onChange={event => setDraft({ ...draft, duration: Number(event.target.value) })}>
-                {getVideoDurationOptions(VIDEO_MODELS[draft.modelRef]).map(duration =>
+                {getVideoDurationOptions(definition(draft.modelRef)).map(duration =>
                   <SelectOption key={duration} value={String(duration)}>{duration === VIDEO_AUTO_DURATION ? (zh ? '自动' : 'Auto') : `${duration}s`}</SelectOption>)}
               </Select>
             </div>
@@ -112,7 +113,7 @@ export function VideoModelSettingsPanel({ zh, disabled, onManage }: {
               <p>{zh ? '默认分辨率' : 'Default resolution'}</p>
               <Select aria-label={zh ? '默认分辨率' : 'Default resolution'} value={draft.resolution} disabled={saving}
                 onChange={event => setDraft({ ...draft, resolution: event.target.value as VideoResolution })}>
-                {VIDEO_MODELS[draft.modelRef].resolutions.map(resolution => <SelectOption key={resolution} value={resolution}>{resolution.toLowerCase()}</SelectOption>)}
+                {definition(draft.modelRef).resolutions.map(resolution => <SelectOption key={resolution} value={resolution}>{resolution.toLowerCase()}</SelectOption>)}
               </Select>
             </div>
             {saveError && <p role="alert" className="text-xs text-danger">{saveError}</p>}
