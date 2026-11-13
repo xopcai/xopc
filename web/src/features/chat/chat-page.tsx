@@ -482,13 +482,14 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     reveal: scrollToLocalMessageIndex, onLocated: onInitialTurnLocated,
   });
   const locatedMediaSource = useRef<string | undefined>(undefined);
+  const mediaSourceNavigationKey = location.key;
   useEffect(() => {
-    if (!readableHistoryReady || mediaSourceIndex < 0 || locatedMediaSource.current === location.key) return;
+    if (!readableHistoryReady || mediaSourceIndex < 0 || locatedMediaSource.current === mediaSourceNavigationKey) return;
     const frame = requestAnimationFrame(() => {
-      if (scrollToLocalMessageIndex(msgSlice.items.length + mediaSourceIndex)) locatedMediaSource.current = location.key;
+      if (scrollToLocalMessageIndex(msgSlice.items.length + mediaSourceIndex)) locatedMediaSource.current = mediaSourceNavigationKey;
     });
     return () => cancelAnimationFrame(frame);
-  }, [location.key, mediaSourceIndex, msgSlice.items.length, readableHistoryReady, scrollToLocalMessageIndex]);
+  }, [mediaSourceNavigationKey, mediaSourceIndex, msgSlice.items.length, readableHistoryReady, scrollToLocalMessageIndex]);
   const chatFind = useChatFind({
     conversationId: session.conversationId,
     taskId,
