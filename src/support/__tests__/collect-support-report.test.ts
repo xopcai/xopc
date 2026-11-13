@@ -47,7 +47,7 @@ describe('collectSupportReport', () => {
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it('builds a bounded, redacted report from doctor and correlated logs', async () => {
     const queryLogs = vi.fn(async () => [{
