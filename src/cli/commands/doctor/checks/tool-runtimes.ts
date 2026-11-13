@@ -1,9 +1,21 @@
 import { loadConfig } from '../../../../config/loader.js';
 import { ManagedRuntimeManager } from '../../../../runtime-tools/manager.js';
+import type { Config } from '../../../../config/schema.js';
 import type { CheckResult, DoctorContext } from '../types.js';
 
 export async function checkToolRuntimes(ctx: DoctorContext): Promise<CheckResult> {
-  const config = loadConfig(ctx.configPath);
+  let config: Config;
+  try {
+    config = loadConfig(ctx.configPath);
+  } catch {
+    return {
+      id: 'tool-runtimes',
+      label: 'Agent tool runtimes',
+      status: 'skip',
+      message: 'Config could not be loaded; skipped.',
+      hints: [],
+    };
+  }
   const statuses = await new ManagedRuntimeManager({
     stateDir: ctx.stateDir,
     config: config.runtimeTools,

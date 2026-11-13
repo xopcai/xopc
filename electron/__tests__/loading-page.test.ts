@@ -88,9 +88,12 @@ describe('getStartupRecoveryPageDataUrl', () => {
     expect(en).toContain('Minimum supported upgrade version');
     expect(en).toContain('<dd>202</dd>');
     expect(en).toContain('Do not delete xopc.db');
+    expect(en).toContain('https://xopcai.github.io/xopc/update#database-upgrades');
+    expect(en).not.toContain('class="notice update-guidance"');
     expect(zh).toContain('数据库需要更早版本的升级路径');
     expect(zh).toContain('最低可升级版本');
     expect(zh).toContain('请勿删除 xopc.db');
+    expect(zh).toContain('查看数据库恢复步骤');
     expect(decodePage(getStartupRecoveryPageDataUrl('en', { ...failure, kind: 'database_migration_failed' }))).toContain('The database upgrade was rolled back');
     expect(decodePage(getStartupRecoveryPageDataUrl('zh-CN', { ...failure, kind: 'database_migration_failed' }))).toContain('数据库升级已回滚');
   });
@@ -106,7 +109,7 @@ describe('getStartupRecoveryPageDataUrl', () => {
     expect(html).toMatch(/main\s*\{[^}]*-webkit-app-region: no-drag;/s);
   });
 
-  it('guides packaged users to download the latest version for every startup failure', () => {
+  it('guides packaged users to download the latest version for an unknown startup failure', () => {
     const failure = {
       kind: 'unknown' as const,
       message: 'startup failed',

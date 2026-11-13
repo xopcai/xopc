@@ -657,7 +657,6 @@ function registerStartupRecoveryIpc(): void {
         lastGatewayConsoleHref = load.href;
       }
       await loadMainWindowUrl(win, load.href);
-      attachExternalUrlHandlers(win);
       markMainWindowNavigationReady(win);
       return { ok: true };
     } catch (err) {
@@ -1262,6 +1261,7 @@ function createWindow(): void {
       const msg = e instanceof Error ? e.message : String(e);
       if (embed && !win.isDestroyed()) {
         await loadStartupRecoveryPage(win, startupFailureFromError(e));
+        attachExternalUrlHandlersOnce();
         return;
       }
       void dialog.showErrorBox('xopc', buildStartupFailureMessage(msg));
