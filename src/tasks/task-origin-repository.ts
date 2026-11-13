@@ -9,6 +9,7 @@ import { TaskRunRepository } from './task-run-repository.js';
 export interface DelegatedTaskSummary {
   id: string;
   title: string;
+  objective?: string;
   phase: string;
   operationalState: TaskOperationalState;
   presentation: TaskPresentation;
@@ -55,20 +56,24 @@ export class TaskOriginRepository {
     return row?.conversation_id;
   }
 
-  list(conversationId: string, limit = 20, options: { offset?: number; order?: 'active-first' | 'recent' } = {}): { items: DelegatedTaskSummary[]; total: number } {
+  list(conversationId: string, limit = 20, options: { offset?: number; order?: 'active-first' | 'recent'; query?: string } = {}): { items: DelegatedTaskSummary[]; total: number } {
     const db = getSqliteDatabase();
-    const total = (db.prepare(`SELECT count(*) AS count FROM task_origin_links
-      WHERE conversation_id = ?`).get(conversationId) as { count: number }).count;
-    const rows = db.prepare(`SELECT task.task_id AS id, task.title, task.phase,
+    const query = options.query?.trim() ?? '';
+    const selection = `FROM task_origin_links origin JOIN tasks task ON task.task_id = origin.task_id
+      LEFT JOIN task_contracts contract ON contract.task_id = task.task_id AND contract.version = task.latest_contract_version
+      WHERE origin.conversation_id = ? AND (? = '' OR instr(lower(task.title), lower(?)) > 0
+        OR instr(lower(coalesce(contract.objective, '')), lower(?)) > 0)`;
+    const bindings = [conversationId, query, query, query];
+    const total = (db.prepare(`SELECT count(*) AS count ${selection}`).get(...bindings) as { count: number }).count;
+    const rows = db.prepare(`SELECT task.task_id AS id, task.title, contract.objective, task.phase,
         MAX(task.updated_at, COALESCE((SELECT COALESCE(run.completed_at, run.started_at, run.queued_at)
           FROM task_runs run WHERE run.task_id = task.task_id AND run.parent_run_id IS NULL
           ORDER BY run.queued_at DESC LIMIT 1), task.updated_at)) AS updatedAt,
         (SELECT run.status FROM task_runs run WHERE run.task_id = task.task_id
           AND run.parent_run_id IS NULL ORDER BY run.queued_at DESC LIMIT 1) AS runStatus
-      FROM task_origin_links origin JOIN tasks task ON task.task_id = origin.task_id
-      WHERE origin.conversation_id = ?
+      ${selection}
       ORDER BY ${options.order === 'recent' ? '' : "CASE WHEN task.phase = 'closed' THEN 1 ELSE 0 END,"}
-        updatedAt DESC, task.task_id DESC LIMIT ? OFFSET ?`).all(conversationId,
+        updatedAt DESC, task.task_id DESC LIMIT ? OFFSET ?`).all(...bindings,
       Math.max(1, Math.min(100, Math.floor(limit))), Math.max(0, Math.floor(options.offset ?? 0))) as unknown as Array<Omit<DelegatedTaskSummary, 'operationalState' | 'presentation' | 'runStatus'> & { runStatus: string | null }>;
     const projector = new TaskReadModelProjector();
     return { total, items: rows.flatMap(({ runStatus, ...row }) => {
