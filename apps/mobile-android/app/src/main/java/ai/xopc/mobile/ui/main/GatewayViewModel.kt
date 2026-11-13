@@ -9,6 +9,7 @@ import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.gateway.GatewayProbe
 import ai.xopc.mobile.gateway.GatewaySession
+import ai.xopc.mobile.gateway.GeneratedMediaAccess
 import ai.xopc.mobile.gateway.GatewayHttpException
 import ai.xopc.mobile.gateway.VoiceCallConnection
 import ai.xopc.mobile.gateway.voiceConversationRequest
@@ -414,6 +415,7 @@ private data class RestoredGateway(val profile: GatewayProfile?, val conversatio
 
 class GatewayViewModel(application: Application) : AndroidViewModel(application) {
   private val session = GatewaySession(application)
+  val generatedMediaAccess = GeneratedMediaAccess(session)
   private var phoneRepositoryGateway: String? = null
   private var cachedPhoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null
   val phoneRepository: ai.xopc.mobile.gateway.PhoneRepository

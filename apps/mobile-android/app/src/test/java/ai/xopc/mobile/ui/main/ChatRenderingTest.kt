@@ -65,6 +65,14 @@ class ChatRenderingTest {
     assertTrue(chatPresentationMessages(listOf(process), emptyList()).isEmpty())
   }
 
+  @Test fun generatedMediaOnlyReplyStaysInChatAfterLiveTextArrives() {
+    val saved = ConversationMessage("media", "assistant", "", "turn", generatedMediaIds = listOf("song"))
+    val live = ConversationMessage("answer", "assistant", "Ready", "turn")
+    val row = chatPresentationMessages(listOf(saved), listOf(live)).single()
+    assertEquals("media", row.renderId)
+    assertEquals(listOf("song"), row.generatedMediaIds)
+  }
+
   @Test fun historyAndLiveSegmentsShareOnePresentationRow() {
     val saved = ConversationMessage("a", "assistant", "First", "r")
     val live = ConversationMessage("b", "assistant", "Second", "r")

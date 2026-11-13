@@ -176,6 +176,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onReuseMessage = gateway::reuseMessage,
             onRegenerateMessage = gateway::regenerateMessage,
             onLoadMessageMedia = gateway::readMessageMedia,
+            generatedMediaAccess = gateway.generatedMediaAccess,
             onSpeechChunk = gateway::speechChunk,
             onTranscribeAudio = gateway::transcribeAudio,
             onCreateVoiceCall = gateway::createVoiceCall,

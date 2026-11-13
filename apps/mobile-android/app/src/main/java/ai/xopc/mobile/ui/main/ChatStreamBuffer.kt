@@ -61,13 +61,14 @@ internal class ChatStreamBuffer {
 internal fun chatPresentationMessages(history: List<ConversationMessage>, live: List<ConversationMessage>): List<ConversationMessage> {
   val saved = history.flatMapTo(hashSetOf()) { it.sourceIds }
   val rows = history.filter { it.role != "assistant" || it.text.isNotBlank() || it.media.isNotEmpty() ||
-    it.references.isNotEmpty() || it.targets.isNotEmpty() || it.outcome != null }.toMutableList()
+    it.references.isNotEmpty() || it.targets.isNotEmpty() || it.generatedMediaIds.isNotEmpty() || it.outcome != null }.toMutableList()
   live.filter { it.answerConfirmed }.filterNot { it.id in saved }.forEach { part ->
     val previous = rows.lastOrNull()
     if (previous?.role == "assistant" && part.turnId != null && part.turnId == previous.turnId) {
       rows[rows.lastIndex] = previous.copy(id = part.id, renderId = previous.renderId,
         text = listOf(previous.text, part.text).filter(String::isNotBlank).joinToString("\n"),
-        sourceIds = previous.sourceIds + part.sourceIds)
+        sourceIds = previous.sourceIds + part.sourceIds,
+        generatedMediaIds = (previous.generatedMediaIds + part.generatedMediaIds).distinct())
     } else rows += part
   }
   return rows
