@@ -72,10 +72,16 @@ Both checks gate the patch-release script and npm publishing. CI tests the exact
 
 ## Database upgrades
 
-This release opens existing SQLite schema v202–v258 and upgrades it to v259, covering the releases from September 24 through October 24, 2026, including v257. You do not need to delete `xopc.db` or reset your configuration. Fresh installations initialize directly at v259.
+xopc 0.0.472 opens existing SQLite schemas v202–v279 and upgrades them to v280. Fresh installations initialize directly at v280.
 
 Stop other xopc/Gateway processes using the same database before starting the updated app. Before changing the database, xopc writes a consistent snapshot beside it as `xopc.db.pre-upgrade-v<version>-<uuid>.bak`. The snapshot includes committed WAL data. The complete upgrade chain runs in one transaction and checks database integrity and foreign keys before committing. If a migration fails, xopc rolls it back and keeps the backup for recovery. Retired feature data may remain in installed databases or the pre-upgrade snapshot; those features are not re-enabled.
 
 Back up the entire state directory and external workspaces as described in [Back up and restore](./backup.md); the automatic SQLite snapshot contains only the database. Keep enough free disk space for the snapshot and migration. Do not replace a live database with a backup or mix it with unrelated WAL/SHM files.
 
-The desktop recovery screen distinguishes an unsupported old database, a missing migration, a failed upgrade, and a database newer than the app. For schemas below v202, keep the state directory and contact support for a supported upgrade path. Do not edit the schema version or delete the database.
+### Recover a v180 database
+
+1. Quit xopc and stop any standalone Gateway using the same state directory. Back up the entire state directory, including `xopc.json`, `xopc.db`, and any SQLite WAL/SHM files. Back up external workspaces separately.
+2. Start [xopc 0.0.332](https://github.com/xopcai/xopc/releases/tag/v0.0.332) with the same state directory. On an Intel Mac, choose `xopc-0.0.332-x64.dmg`. Wait for the app to open. This release upgrades the database to v208, imports legacy Agent settings and bindings into SQLite, and resets retired experimental scene data. Its configuration migration converts the legacy ordinary memory write policy `confirm` to `allow`.
+3. Quit 0.0.332 completely, then start 0.0.472 to finish the database upgrade. Check that your conversations and Agent settings are present. Keep the original backup until you have verified your data.
+
+If the intermediate release fails or you have another schema below v202, retain the full backup and collect the startup report for support.

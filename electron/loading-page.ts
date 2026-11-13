@@ -79,6 +79,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
       dbPathLabel: 'Database path',
       configPathLabel: 'Config path',
       updateGuidance: 'Install the latest xopc version before retrying. A newer release may already include a fix for this startup issue.',
+      databaseRecoveryGuide: 'View database recovery steps',
       safetyNote: schemaTooOld || migrationFailed ? 'Do not delete xopc.db, change its schema version, or separate it from its WAL/SHM files. Back up the entire data folder before recovery.' : incompatible ? 'Do not delete your data, reset device identity, or change model keys. For a packaged install, stop the separately running Gateway so xopc can start its bundled service.' : schemaTooNew
         ? 'Your data has not been downgraded or modified. Update xopc, then retry opening it.'
         : migrationGap
@@ -146,6 +147,7 @@ function recoveryCopy(lang: 'en' | 'zh', failure: GatewayStartupFailure): Record
     dbPathLabel: '数据库路径',
     configPathLabel: '配置路径',
     updateGuidance: '请先安装最新版本的 xopc 再重试，新版本可能已经修复了此次启动问题。',
+    databaseRecoveryGuide: '查看数据库恢复步骤',
     safetyNote: schemaTooOld || migrationFailed ? '请勿删除 xopc.db、修改数据库版本号，或将其与 WAL/SHM 文件拆开。恢复前请备份整个数据目录。' : incompatible ? '无需删除数据、重置设备身份或更换模型 Key。正式安装时，可先停止独立运行的 Gateway，再重试，让 xopc 启动随应用附带的服务。' : schemaTooNew
       ? '你的数据没有被降级或修改。升级 xopc 后重试即可继续打开。'
       : migrationGap
@@ -346,7 +348,9 @@ export function getStartupRecoveryPageDataUrl(
     <p class="eyebrow">${escapeHtml(copy.eyebrow)}</p>
     <h1>${escapeHtml(copy.title)}</h1>
     <p>${escapeHtml(copy.body)}</p>
-    ${failure.isPackaged ? `<div class="notice update-guidance">${escapeHtml(copy.updateGuidance)}</div>` : ''}
+    ${failure.kind === 'database_schema_too_old'
+      ? `<p><a href="https://xopcai.github.io/xopc/update#database-upgrades" target="_blank" rel="noopener noreferrer">${escapeHtml(copy.databaseRecoveryGuide)}</a></p>`
+      : failure.isPackaged ? `<div class="notice update-guidance">${escapeHtml(copy.updateGuidance)}</div>` : ''}
     <div class="notice">${escapeHtml(copy.safetyNote)}</div>
     <dl>
       ${detailRow(copy.kindLabel, failure.kind)}

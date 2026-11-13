@@ -6,6 +6,7 @@ import pkg from '../../package.json' with { type: 'json' };
 import { resolveCommandName, tryLoadCommand, loadAllCommands } from './command-loaders.js';
 import { isHelpOrVersionInvocation } from './argv.js';
 import { bootstrapApplicationStateSync } from '../bootstrap/application-state.js';
+import { DatabaseSchemaTooOldError } from '../storage/sqlite/schema-errors.js';
 import type { CLIContext } from './registry.js';
 
 // Lazy logger flush so that pure parameter-parsing paths (--help, --version,
@@ -57,7 +58,12 @@ function buildProgram(ctx: CLIContext): Command {
     Object.assign(parsedOpts, next);
     // Backup inspects the database before writes; a device host has its own private state.
     if (['backup', 'device-host'].includes(actionCommand?.name() ?? '') || actionCommand?.parent?.name() === 'backup') return;
-    bootstrapApplicationStateSync();
+    try {
+      bootstrapApplicationStateSync();
+    } catch (error) {
+      const isDiagnostic = actionCommand?.name() === 'doctor' || actionCommand?.parent?.name() === 'support';
+      if (!isDiagnostic || !(error instanceof DatabaseSchemaTooOldError)) throw error;
+    }
   });
 
   // Hook to ensure process exits after command completion.
@@ -78,7 +84,7 @@ function buildProgram(ctx: CLIContext): Command {
       }
       return;
     }
-    await flushLoggerAndExit(0);
+    await flushLoggerAndExit(typeof process.exitCode === 'number' ? process.exitCode : 0);
   });
 
   return program;

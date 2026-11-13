@@ -1,4 +1,5 @@
 import { printJsonResults, printResults } from './format.js';
+import { isXopcDatabaseOpen } from '../../../storage/sqlite/connection.js';
 import type { CheckResult, DoctorCheck, DoctorContext } from './types.js';
 import { checkNodeVersion } from './checks/node-version.js';
 import { checkConfigHealth } from './checks/config-health.js';
@@ -27,16 +28,18 @@ const DOCTOR_CHECKS: DoctorCheck[] = [
   checkMigrations,
   checkConfigHealth,
   checkStateIntegrity,
-  checkDatabaseSchema,
-  checkDatabaseRelations,
-  checkProviderAuth,
   checkImageProviders,
   checkChannelConfig,
   checkChannelPairingPending,
   checkSecurityAudit,
-  checkWorkspaceStatus,
   checkGatewayService,
   checkGatewayHealth,
+];
+
+const DATABASE_CHECKS: DoctorCheck[] = [
+  checkDatabaseRelations,
+  checkProviderAuth,
+  checkWorkspaceStatus,
   checkSessionIntegrity,
   checkAutomationIntegrity,
 ];
@@ -49,10 +52,17 @@ export async function collectDoctorResults(ctx: DoctorContext): Promise<CheckRes
     return [await checkSecurityAudit(ctx)];
   }
 
-  const results: CheckResult[] = [];
+  const databaseSchema = await checkDatabaseSchema(ctx);
+  const results: CheckResult[] = [databaseSchema];
 
   for (const check of DOCTOR_CHECKS) {
     results.push(await check(ctx));
+  }
+
+  if (databaseSchema.status === 'pass' && isXopcDatabaseOpen()) {
+    for (const check of DATABASE_CHECKS) {
+      results.push(await check(ctx));
+    }
   }
 
   results.push(...(await checkChannelPlugins(ctx)));

@@ -1,8 +1,54 @@
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ensureSchemaMetaTable, setSchemaVersion } from '../../storage/sqlite/schema-version.js';
 import { collectSupportReport } from '../collect-support-report.js';
 
 describe('collectSupportReport', () => {
+  it('reports an old database and invalid config in the same startup report', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'xopc-support-v180-'));
+    const configPath = join(stateDir, 'xopc.json');
+    const dbPath = join(stateDir, 'xopc.db');
+    const config = JSON.stringify({
+      agents: {}, bindings: [], tui: {},
+      userContext: {
+        userModel: { writePolicy: 'confirm' },
+        knowledgeMemory: { writePolicy: 'confirm', sources: ['session'] },
+      },
+    });
+
+    try {
+      await writeFile(configPath, config);
+      const db = new DatabaseSync(dbPath);
+      try {
+        ensureSchemaMetaTable(db);
+        setSchemaVersion(db, 180);
+      } finally {
+        db.close();
+      }
+      const before = await readFile(dbPath);
+
+      const report = await collectSupportReport({ problem: 'Gateway startup failed' }, {
+        paths: { stateDir, configPath },
+        queryLogs: async () => [],
+      });
+
+      expect(report.doctor).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'database-schema', status: 'fail', message: expect.stringMatching(/v180.*v202/) }),
+        expect.objectContaining({ id: 'config-health', status: 'fail' }),
+        expect.objectContaining({ id: 'tool-runtimes', status: 'skip' }),
+      ]));
+      expect(report.markdown).not.toContain('Doctor collection');
+      expect(await readFile(dbPath)).toEqual(before);
+      expect(await readFile(configPath, 'utf8')).toBe(config);
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it('builds a bounded, redacted report from doctor and correlated logs', async () => {
     const queryLogs = vi.fn(async () => [{
       timestamp: '2026-09-02T02:00:00.000Z',
