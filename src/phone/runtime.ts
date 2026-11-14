@@ -6,7 +6,6 @@ import { phoneAllowsApp, phoneAppAccess } from './app-access.js';
 import { nativePhoneOutput, updatePhoneFeedback } from './task-feedback.js';
 import { PhoneFrameCache, PhoneOperationBudget } from './live-state.js';
 import { PhoneInteractiveSession } from './interactive-session.js';
-import { LocalScrcpyProvider } from './scrcpy.js';
 import type { PhoneInteractiveProvider } from './live-provider.js';
 
 import { createLogger } from '../utils/logger.js';
@@ -17,7 +16,6 @@ import { resolveEffectiveAgentConfigForAgent } from '../config/agent-profile.js'
 import { CloudPhones } from './cloud-phones.js';
 import { PhoneLocationEnvironment } from './location-environment.js';
 import { WirelessPhones } from './wireless.js';
-import { HdcVideoProvider } from './hdc-video.js';
 import { resolveHdcVideoTools } from './hdc-video-tools.js';
 import { HdcPhoneDriver, resolveHdcPath } from './hdc-driver.js';
 import { AdbPhoneDriver, resolveAdbPath, type PhoneDriver } from './adb-driver.js';
@@ -114,10 +112,16 @@ export class PhoneRuntime {
     readonly repository = new PhoneRepository(),
     private driverFactory: (path: string) => PhoneDriver = path => new AdbPhoneDriver(path),
     private modelFactory = createPhoneModel,
-    private interactiveFactory: (adb: string, serial: string, failed: () => void) => PhoneInteractiveProvider = (adb, serial, failed) => new LocalScrcpyProvider(adb, serial, failed),
+    private interactiveFactory: (adb: string, serial: string, failed: () => void) => PhoneInteractiveProvider | Promise<PhoneInteractiveProvider> = async (adb, serial, failed) => {
+      const { LocalScrcpyProvider } = await import('./scrcpy.js');
+      return new LocalScrcpyProvider(adb, serial, failed);
+    },
     readonly wireless = new WirelessPhones(),
     private harmonyDriverFactory: (path: string) => PhoneDriver = path => new HdcPhoneDriver(path),
-    private harmonyVideoFactory: (serial: string, config: Config['phone'], failed: () => void, validateScreen: (app: string) => void) => PhoneInteractiveProvider = (serial, config, failed, validateScreen) => new HdcVideoProvider(serial, config, failed, { validateScreen }),
+    private harmonyVideoFactory: (serial: string, config: Config['phone'], failed: () => void, validateScreen: (app: string) => void) => PhoneInteractiveProvider | Promise<PhoneInteractiveProvider> = async (serial, config, failed, validateScreen) => {
+      const { HdcVideoProvider } = await import('./hdc-video.js');
+      return new HdcVideoProvider(serial, config, failed, { validateScreen });
+    },
   ) {}
 
   async driverFor(device: PhoneDevice, config: Config): Promise<PhoneDriver> {
@@ -1238,13 +1242,13 @@ export class PhoneRuntime {
         void this.stop(session.report.owner, 'pause');
       };
       const provider = session.device.platform === 'harmonyos'
-        ? this.harmonyVideoFactory(session.device.serial, session.context.config.phone, failed, app => {
+        ? await this.harmonyVideoFactory(session.device.serial, session.context.config.phone, failed, app => {
           this.guard(session, session.context, false);
           if (!phoneAllowsApp(session.device, app)) throw new PhoneError('PHONE_APP_DENIED', 'Current page is outside the authorized applications', 403);
         })
         : session.device.connection
         ? await this.cloud.interactive(session.device, failed)
-        : this.interactiveFactory(session.adbPath, session.device.serial, failed);
+        : await this.interactiveFactory(session.adbPath, session.device.serial, failed);
       if (terminal.has(session.report.status)) {
         await provider.close();
         throw new PhoneError('PHONE_VIDEO_ENDED', 'Phone session ended', 409);

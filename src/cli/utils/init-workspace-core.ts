@@ -6,7 +6,6 @@ import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { saveConfig } from '../../config/loader.js';
 import { readConfigFileSnapshot } from '../../config/config-file.js';
-import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../agent-catalog/service.js';
 import { bootstrapApplicationStateSync } from '../../bootstrap/application-state.js';
@@ -36,15 +35,6 @@ async function assertChannelPluginsIfNeeded(
   assert?: InitWorkspaceCoreOptions['assertChannelPlugins'],
 ): Promise<void> {
   if (assert) await assert(cfg);
-}
-
-async function serializeConfig(
-  cfg: Config,
-  assertChannelPlugins?: InitWorkspaceCoreOptions['assertChannelPlugins'],
-): Promise<string> {
-  const validated = ConfigSchema.parse(cfg);
-  await assertChannelPluginsIfNeeded(validated, assertChannelPlugins);
-  return JSON.stringify(validated, null, 2);
 }
 
 async function readDiskConfig(
@@ -109,6 +99,10 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
     }
   }
 
+  if (hadToken && !configCreated && config.gateway.port === port) {
+    return { config, token, configCreated, workspaceCreated };
+  }
+
   const nextConfig: Config = {
     ...config,
     gateway: {
@@ -122,18 +116,10 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
     },
   };
 
-  ensureStarterAgentsInitialized();
   const nextFinal = ConfigSchema.parse(nextConfig);
   await assertChannelPluginsIfNeeded(nextFinal, assertChannelPlugins);
 
-  let needsWrite = configCreated;
-  if (!needsWrite) {
-    const disk = await readDiskConfig(configPath, assertChannelPlugins);
-    needsWrite =
-      (await serializeConfig(disk, assertChannelPlugins)) !==
-      (await serializeConfig(nextFinal, assertChannelPlugins));
-  }
-
+  const needsWrite = configCreated || JSON.stringify(config) !== JSON.stringify(nextFinal);
   if (needsWrite) {
     if (assertChannelPlugins) {
       await saveConfig(nextFinal, configPath);

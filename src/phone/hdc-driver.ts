@@ -5,7 +5,6 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import sharp from 'sharp';
 
 import { managedHdcPath } from '../runtime-tools/harmony-paths.js';
 
@@ -137,6 +136,7 @@ export class HdcPhoneDriver implements PhoneDriver {
       await this.shell(serial, ['uitest', 'dumpLayout', '-p', `${prefix}.json`], signal);
       await this.run(['-t', serial, 'file', 'recv', `${prefix}.json`, join(directory, 'layout.json')], signal);
       const native = parseHarmonyLayout(await readFile(join(directory, 'layout.json'), 'utf8'), windowId);
+      const { default: sharp } = await import('sharp');
       const capturedAt = Date.now();
       try {
         await this.shell(serial, ['uitest', 'screenCap', '-p', `${prefix}.png`], signal);

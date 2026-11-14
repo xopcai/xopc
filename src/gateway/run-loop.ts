@@ -2,8 +2,11 @@
  * Gateway Run Loop - Core run loop for gateway process management
  */
 
+import { flushCompileCache } from 'node:module';
+
 import { isRestartEnabled } from '../config/commands.flags.js';
 import { loadConfig } from '../config/loader.js';
+import type { Config } from '../config/schema.js';
 import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import type { GatewayServer } from './server.js';
 import { acquireGatewayLock } from './lock.js';
@@ -22,12 +25,15 @@ type GatewayRunSignalAction = 'stop' | 'restart';
 export type RunGatewayLoopOptions = {
   start: () => Promise<GatewayServer>;
   configPath: string;
+  validatedConfig?: Config;
   port: number;
 };
 
 export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void> {
-  runBootstrapMigrationsSync(opts.configPath);
-  const config = loadConfig(opts.configPath);
+  const migrations = runBootstrapMigrationsSync(opts.configPath);
+  const config = opts.validatedConfig && !migrations.changed
+    ? opts.validatedConfig
+    : loadConfig(opts.configPath);
   setGatewaySigusr1RestartPolicy({ allowExternal: isRestartEnabled(config) });
 
   let lock = await acquireGatewayLock(opts.configPath, { port: opts.port });
@@ -44,6 +50,7 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
 
   const exitProcess = (code: number) => {
     cleanupSignals();
+    flushCompileCache();
     process.exit(code);
   };
 
@@ -210,5 +217,6 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
   } finally {
     await releaseLock();
     cleanupSignals();
+    flushCompileCache();
   }
 }

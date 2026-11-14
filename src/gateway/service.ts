@@ -156,6 +156,8 @@ import {
 } from './startup-readiness.js';
 import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-trace.js';
 import { closeXopcDatabase } from '../storage/sqlite/index.js';
+import { ImportRepository } from '../storage/sqlite/import-repository.js';
+import { ImportSelectionRepository } from '../storage/sqlite/import-selection-repository.js';
 import { startConnectorSupervisor, type ConnectorSupervisor } from '../connectors/supervisor.js';
 import {
   startConnectorLearningCoordinator,
@@ -171,7 +173,6 @@ import { enqueueTaskDelayNotices } from '../tasks/task-delay-notice.js';
 import { TaskMainUpdateDecisionService } from '../tasks/task-main-update-decision-service.js';
 import { selectTaskMainUpdateAttempt, submitAndConfirmTaskMainUpdate } from '../tasks/task-main-update-input.js';
 import { TaskMainUpdateExhaustedError } from '../tasks/task-main-update-retry.js';
-import { createProductDispatcher } from '../capabilities/runtime/product.js';
 import { prepareAppContext, checkAppContextAccess } from './service/app-context-access.js';
 import type { GatewayPrincipal } from './security/gateway-principal.js';
 import { ManagedComposioEventPoller } from '../connectors/composio-managed-events.js';
@@ -633,7 +634,7 @@ export class GatewayService {
         if (!this.mcpSetup.permitsContinuation(input)) return false;
         for (const source of input.contextSnapshots ?? []) {
           if (source.kind === 'app_context') {
-            await checkAppContextAccess(source, this.appContextDispatcher(), this.auth);
+            await checkAppContextAccess(source, await this.appContextDispatcher(), this.auth);
           }
         }
         return this.connectionRecovery.preflight(input);
@@ -1192,15 +1193,16 @@ export class GatewayService {
     return this.agentRunner.inputs.dispatchAcceptedInput(conversationId, inputId);
   }
 
-  private appContextDispatcher() {
+  private async appContextDispatcher() {
+    const { createProductDispatcher } = await import('../capabilities/runtime/product.js');
     return createProductDispatcher(() => this.notesService, {
       getProjects: () => this.projects, getLocalApps: () => this.localApps,
     });
   }
 
-  prepareSessionAppContext(input: unknown, principal: GatewayPrincipal, conversationId: string, clientMessageId: string) {
+  async prepareSessionAppContext(input: unknown, principal: GatewayPrincipal, conversationId: string, clientMessageId: string) {
     const previous = findSessionInput(conversationId, clientMessageId)?.contextSnapshots?.find(source => source.kind === 'app_context');
-    return prepareAppContext(input, principal, this.auth, this.appContextDispatcher(), previous);
+    return prepareAppContext(input, principal, this.auth, await this.appContextDispatcher(), previous);
   }
 
   replaceLatestSessionTurn(...args: Parameters<GatewayAgentRunner['replaceLatestSessionTurn']>) {
@@ -1356,12 +1358,16 @@ export class GatewayService {
   }
 
   private schedulePostReadySidecars(): void {
-    queueMicrotask(() => {
-      void this.runPostReadySidecars();
-    });
+    setImmediate(() => {
+      if (this.running && !this.stopping) void this.runPostReadySidecars();
+    }).unref();
   }
 
   private async runPostReadySidecars(): Promise<void> {
+    void import('../browser/providers/browser-ext-install.js')
+      .then(({ ensureBrowserExtensionOnStartup }) => ensureBrowserExtensionOnStartup(this.config))
+      .catch((err) => log.warn({ err }, 'Browser extension artifact ensure failed'));
+
     const trace = this.startupTrace;
     try {
       if (trace) {
@@ -1413,6 +1419,7 @@ export class GatewayService {
 
   private async startRuntime(): Promise<void> {
     if (this.running) return;
+    this.startupTrace = createGatewayStartupTrace();
     this.stopping = false;
     this.taskAllocationDispatcher = null;
     this.taskRunDispatcher = null;
@@ -1461,8 +1468,12 @@ export class GatewayService {
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
     });
     await this.localApps.recoverPendingReleases();
-    const { recoverCapabilityImports } = await import('../imports/runtime.js');
-    await recoverCapabilityImports();
+    const importOwners = ImportRepository.owners();
+    const selectionOwners = ImportSelectionRepository.owners();
+    if (importOwners.length || selectionOwners.length) {
+      const { recoverCapabilityImports } = await import('../imports/runtime.js');
+      await recoverCapabilityImports(importOwners, selectionOwners);
+    }
     const pendingPhoneLocation = getSqliteDatabase().prepare("SELECT 1 FROM durable_state WHERE namespace = 'phone.location-environment' LIMIT 1").get();
     if (pendingPhoneLocation) {
       const { getPhoneRuntime } = await import('../phone/runtime.js');
@@ -1478,9 +1489,9 @@ export class GatewayService {
       this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
       this.taskRunDispatchTimer.unref?.();
     }
-    this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
+    trace.mark('service.restore-state');
 
     const catalogCoordinator = getXopcCloudCatalogCoordinator();
     const catalog = await trace.measure('model-catalog.hydrate', () => catalogCoordinator.hydrate());
@@ -1697,10 +1708,6 @@ export class GatewayService {
         workspaceId: this.currentWorkspacePath,
       }),
     });
-
-    void import('../browser/providers/browser-ext-install.js')
-      .then(({ ensureBrowserExtensionOnStartup }) => ensureBrowserExtensionOnStartup(this.config))
-      .catch((err) => log.warn({ err }, 'Browser extension artifact ensure failed'));
 
     // Start agent service (runs in background)
     this.agentService.start().catch((err) => {

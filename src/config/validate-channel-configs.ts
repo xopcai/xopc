@@ -3,14 +3,7 @@ import Ajv from 'ajv';
 import type { Config } from './schema.js';
 import { buildChannelCatalogForConfig } from '../channels/catalog/channel-catalog-service.js';
 
-const ajv = new Ajv({
-  allErrors: true,
-  strict: false,
-  useDefaults: false,
-});
-
-// `password` is a UI hint used by extension manifests, not a validation constraint.
-ajv.addFormat('password', true);
+let ajv: Ajv | undefined;
 
 function formatAjvError(channelId: string, err: { instancePath?: string; message?: string }): string {
   const path = err.instancePath ? err.instancePath.replaceAll('/', '.') : '';
@@ -20,10 +13,17 @@ function formatAjvError(channelId: string, err: { instancePath?: string; message
 
 export function validateChannelPluginConfigs(config: Config): string[] {
   const errors: string[] = [];
-  const channelsCfg = config.channels ?? {};
-  const catalog = buildChannelCatalogForConfig(config);
+  const channels = Object.entries(config.channels ?? {});
+  if (!channels.length) return errors;
 
-  for (const [rawChannelId, raw] of Object.entries(channelsCfg)) {
+  const catalog = buildChannelCatalogForConfig(config);
+  if (!ajv) {
+    ajv = new Ajv({ allErrors: true, strict: false, useDefaults: false });
+    // `password` is a UI hint used by extension manifests, not a validation constraint.
+    ajv.addFormat('password', true);
+  }
+
+  for (const [rawChannelId, raw] of channels) {
     const channelId = rawChannelId.trim().toLowerCase();
     const entry = catalog.byId.get(channelId);
     if (!entry) {

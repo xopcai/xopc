@@ -4,7 +4,6 @@ import { relative, resolve } from 'node:path';
 
 import type { Context, Hono } from 'hono';
 import { LocalAppSourceHashSchema } from '@xopcai/gateway-contract';
-import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
 import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
 
 import { extensionAssetMimeType } from '../lib/extension-assets.js';
@@ -15,7 +14,7 @@ import {
   LOCAL_APP_RUNTIME_BRIDGE_HASH,
 } from '../../../local-apps/preview-runtime-bridge.js';
 import { readLocalAppAcceptanceConfig } from '../../../local-apps/acceptance.js';
-import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
+import { CapabilityError, type CapabilityDispatcher } from '../../../capabilities/runtime/dispatcher.js';
 import { parseLocalAppFixGuidanceInput } from '../../../local-apps/fix-guidance.js';
 import type { LocalAppPreviewTarget } from '../../../local-apps/types.js';
 
@@ -102,9 +101,11 @@ export function registerPublicLocalAppPreviewRoutes(app: Hono, service: GatewayS
 }
 
 export function registerLocalAppsRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
-  const capabilities = createProductDispatcher(undefined, { getLocalApps: () => deps.service.localApps });
+  let dispatcher: Promise<CapabilityDispatcher> | undefined;
+  const getCapabilities = () => dispatcher ??= import('../../../capabilities/runtime/product.js')
+    .then(({ createProductDispatcher }) => createProductDispatcher(undefined, { getLocalApps: () => deps.service.localApps }));
   app.get('/api/local-apps', async (c) => {
-    try { return c.json(await capabilities.call('xopc.local_apps.list', {}, capabilityHttpContext(c))); }
+    try { return c.json(await (await getCapabilities()).call('xopc.local_apps.list', {}, capabilityHttpContext(c))); }
     catch (error) { return capabilityHttpError(c, error); }
   });
 
@@ -122,7 +123,7 @@ export function registerLocalAppsRoutes(app: Hono, deps: AuthenticatedRouteDeps)
   });
 
   app.get('/api/local-apps/:id', async (c) => {
-    try { return c.json(await capabilities.call('xopc.local_apps.get', { id: c.req.param('id') }, capabilityHttpContext(c))); }
+    try { return c.json(await (await getCapabilities()).call('xopc.local_apps.get', { id: c.req.param('id') }, capabilityHttpContext(c))); }
     catch (error) { return capabilityHttpError(c, error); }
   });
 
@@ -134,7 +135,7 @@ export function registerLocalAppsRoutes(app: Hono, deps: AuthenticatedRouteDeps)
   });
 
   app.post('/api/local-apps/:id/validate', async (c) => {
-    try { return c.json(await capabilities.call('xopc.local_apps.validate', { id: c.req.param('id') }, capabilityHttpContext(c))); }
+    try { return c.json(await (await getCapabilities()).call('xopc.local_apps.validate', { id: c.req.param('id') }, capabilityHttpContext(c))); }
     catch (error) { return capabilityHttpError(c, error); }
   });
 
@@ -158,6 +159,7 @@ export function registerLocalAppsRoutes(app: Hono, deps: AuthenticatedRouteDeps)
       const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
       const caller = capabilityHttpContext(c);
       const operation = 'xopc.local_apps.record_acceptance';
+      const capabilities = await getCapabilities();
       return c.json(await capabilities.call(operation, { ...body, id: c.req.param('id') }, caller, {
         ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID(),
       }), 201);

@@ -1,5 +1,5 @@
 import { InMemoryModelsStore } from '@earendil-works/pi-ai';
-import { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { CredentialResolver } from '../../auth/credentials.js';
 import { XopcModelCredentialStore } from '../../auth/model-credential-store.js';
@@ -16,7 +16,8 @@ export function resolveEmbeddedProviderApiKeySync(providerId: string): string | 
 
 export async function createEmbeddedModelRuntime(providerId: string): Promise<ModelRuntime> {
   assertCurrentModelProvider(providerId);
-  registerBundledOAuthFlows();
+  const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
+  await registerBundledOAuthFlows();
   const resolver = new CredentialResolver();
   const credentials = new XopcModelCredentialStore(resolver);
 

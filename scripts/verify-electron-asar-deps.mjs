@@ -63,9 +63,12 @@ function verifyUnpackedRuntimeDeps(asarPath) {
 
 function verifyUnpackedAppLayout(asarPath) {
   const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
+  const runtimeFiles = JSON.parse(readFileSync(join(unpackedDir, 'out/server/runtime-files.json'), 'utf8'));
   const required = [
     'out/server/index.js',
+    'out/server/gateway.js',
     'out/server/codemode-worker.js',
+    ...runtimeFiles.map(name => `out/server/runtime/${name}`),
     'node_modules/quickjs-wasi/quickjs.wasm',
     'dist/electron/extensions',
     'dist/gateway/static/root/index.html',

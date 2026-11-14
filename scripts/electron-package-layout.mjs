@@ -7,7 +7,8 @@ export const DESKTOP_PACKAGE_PATHS = [
   'out/main/index.js', 'out/main/main.js',
   'out/preload/index.cjs',
   'out/preload/computer-preview.cjs', 'out/preload/computer-preview.html',
-  'out/server/index.js', 'out/server/result-extraction.js', 'out/server/codemode-worker.js',
+  'out/server/index.js', 'out/server/gateway.js', 'out/server/result-extraction.js', 'out/server/codemode-worker.js',
+  'out/server/runtime-files.json',
   'out/server/schema.sql', 'out/server/workspace-templates/AGENTS.md',
   'dist/gateway/static/root/index.html',
 ];
@@ -23,6 +24,12 @@ export function verifyDesktopPackageLayout(read, upgradeFiles) {
     return bytes.toString('utf8');
   };
   for (const path of required) check(path);
+  const runtimeFiles = JSON.parse(check('out/server/runtime-files.json'));
+  assert(Array.isArray(runtimeFiles) && runtimeFiles.length > 0, 'Missing Gateway runtime files');
+  for (const name of runtimeFiles) {
+    assert(typeof name === 'string' && /^[\w.-]+\.(?:js|cjs|json)$/.test(name), 'Invalid Gateway runtime file');
+    check(posix.join('out/server/runtime', name));
+  }
   // Vite chunks are content-addressed; checking index.html alone misses broken staged assets.
   const html = check('dist/gateway/static/root/index.html');
   const assets = [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)]

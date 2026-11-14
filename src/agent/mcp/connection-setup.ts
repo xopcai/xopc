@@ -2,7 +2,6 @@ import { resolveMcpSetupConfig } from './effective-server.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns';
 import { Agent } from 'undici';
-import { buildAuthorizationServerDiscoveryUrls, parseWwwAuthenticate, selectResource } from '@earendil-works/pi-mcp/oauth';
 
 import type { Config } from '../../config/schema.js';
 import { isManagedConnectorServer } from '../../connectors/materialize.js';
@@ -11,7 +10,7 @@ import { checkUrlSafety } from '../tools/url-safety.js';
 import { classifyMcpConnectionError, type McpConnectionErrorCode } from './connection-errors.js';
 import { prepareNativeMcpConfig } from './native-mcp.js';
 import { discoverMcpTools, McpAuthenticationRequiredError, signInNativeMcp, type McpSessionOptions } from './tool-catalog.js';
-import { retryAfter, type McpObservation } from './transport.js';
+import type { McpObservation } from './transport.js';
 
 const log = createLogger('McpConnectionSetup');
 export type McpMetadataState = 'valid' | 'absent' | 'unreachable' | 'invalid' | 'not_checked';
@@ -30,6 +29,8 @@ function httpUrl(value: string): URL {
 async function metadata(url: URL, endpoint: URL, signal?: AbortSignal, publicOnly = false): Promise<{ state: McpMetadataState; data?: Record<string, unknown>; retryAt?: number }> {
   const sameOrigin = endpoint.origin === url.origin && !publicOnly;
   if (!sameOrigin && !checkUrlSafety(url.href).safe) return { state: 'invalid' };
+  const { retryAfter } = await import('./transport.js');
+  signal?.throwIfAborted();
   const dispatcher = new Agent({ connect: { lookup(host, options, callback) {
     lookup(host, { all: true }, (error, addresses) => {
       if (error) { callback(error, '', 4); return; }
@@ -56,6 +57,8 @@ async function authentication(config: Config, workspace: string, serverId: strin
   const loaded = await prepareNativeMcpConfig(config, workspace);
   const entry = loaded.servers.find(s => s.name === serverId);
   if (!entry || !('url' in entry.config)) return { method: 'unknown' as const, metadata: 'not_checked' as McpMetadataState };
+  const { buildAuthorizationServerDiscoveryUrls, parseWwwAuthenticate, selectResource } = await import('@earendil-works/pi-mcp/oauth');
+  options?.signal?.throwIfAborted();
   const url = httpUrl(entry.config.url);
   const publicOnly = config.mcp?.servers?.[serverId]?.xopcPublicOnly === true;
   const allowedIssuer = (value: unknown) => {

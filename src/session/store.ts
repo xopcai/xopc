@@ -89,7 +89,7 @@ import { transcriptRowsToClientHistory } from './client-history.js';
 import { compactHistory } from './compact-history.js';
 import { backfillStructuredTurnOutcomes } from './turn-outcome-projector.js';
 import { computeTranscriptUserRoundDeleteRange } from './user-round-delete.js';
-import { findSessionMessages, type SessionFindResult } from './session-find.js';
+import type { SessionFindResult } from './session-find.js';
 import { ACCEPTANCE_REPAIR_READ_TOOLS, canResumeAfterModelFailure } from '../agent/orchestration/turn-recovery.js';
 import { archiveFailedModelAttempts } from '../storage/sqlite/transcript-repository.js';
 
@@ -1057,6 +1057,7 @@ export class SessionStore {
   async findInSession(key: string, query: string, limit?: number): Promise<SessionFindResult | null> {
     const metadata = await this.getMetadata(key);
     if (!metadata) return null;
+    const { findSessionMessages } = await import('./session-find.js');
     const messages = transcriptRowsToClientHistory(await this.loadTranscriptRows(key), {
       startsNewBubbleTurnIds: listTaskUpdateRunIds(key),
       taskUpdateTriggers: listTaskUpdateTriggers(key),

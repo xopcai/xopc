@@ -1,11 +1,11 @@
 /** GitHub Copilot OAuth adapter for pi-ai's provider-auth API. */
 
-import { githubCopilotProvider } from '@earendil-works/pi-ai/providers/github-copilot';
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from '@earendil-works/pi-ai';
 
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
-function getCopilotOAuth(): OAuthAuth {
+async function getCopilotOAuth(): Promise<OAuthAuth> {
+  const { githubCopilotProvider } = await import('@earendil-works/pi-ai/providers/github-copilot');
   const oauth = githubCopilotProvider().auth.oauth;
   if (!oauth) {
     throw new Error('GitHub Copilot OAuth is unavailable');
@@ -58,11 +58,13 @@ export const githubCopilotOAuthProvider: OAuthProviderInterface = {
   name: 'GitHub Copilot',
   usesCallbackServer: false,
   async login(callbacks) {
-    return fromPiCredential(await getCopilotOAuth().login(toAuthInteraction(callbacks)));
+    const oauth = await getCopilotOAuth();
+    return fromPiCredential(await oauth.login(toAuthInteraction(callbacks)));
   },
   async refreshToken(credentials) {
+    const oauth = await getCopilotOAuth();
     return fromPiCredential(
-      await getCopilotOAuth().refresh(toPiCredential(credentials), new AbortController().signal),
+      await oauth.refresh(toPiCredential(credentials), new AbortController().signal),
     );
   },
   getApiKey(credentials) {

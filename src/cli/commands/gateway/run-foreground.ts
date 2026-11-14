@@ -1,8 +1,10 @@
 import { dirname, join } from 'node:path';
+import { config as loadDotenv } from 'dotenv';
 
 import { installProcessDiagnostics } from '../../../infra/process-diagnostics.js';
 
 import type { CLIContext } from '../../registry.js';
+import type { Config } from '../../../config/schema.js';
 
 export type GatewayRunCliOptions = {
   bind?: string;
@@ -18,8 +20,8 @@ export type GatewayRunCliOptions = {
 async function ensureGatewayReady(
   configPath: string,
   workspacePath: string,
-  port: number,
-): Promise<void> {
+  port?: number,
+): Promise<Config> {
   const { initWorkspace } = await import('../../utils/init-workspace.js');
   const result = await initWorkspace({
     configPath,
@@ -39,6 +41,7 @@ async function ensureGatewayReady(
     console.log('💡 Tip: run `xopc onboard` anytime to configure models, channels, and more.');
     console.log('');
   }
+  return result.config;
 }
 
 export async function runGatewayFromCliOptions(
@@ -47,6 +50,7 @@ export async function runGatewayFromCliOptions(
 ): Promise<void> {
   installProcessDiagnostics(process.env.XOPC_GATEWAY_DIAGNOSTIC_PATH
     ?? join(process.env.XOPC_LOG_DIR ?? join(dirname(ctx.configPath), 'logs'), 'gateway-process.log'));
+  loadDotenv({ quiet: true });
 
   const tailscaleModes = new Set(['off', 'serve', 'funnel']);
   const tailscaleRaw =
@@ -67,16 +71,13 @@ export async function runGatewayFromCliOptions(
     process.env.XOPC_GATEWAY_TAILSCALE_RESET_ON_EXIT = '1';
   }
 
-  const [{ loadConfig }, { resolveConfigPath }, { runGatewayLoop }, gatewayPorts, bootstrap] = await Promise.all([
-    import('../../../config/loader.js'),
+  const [{ resolveConfigPath }, { runGatewayLoop }, gatewayPorts, { resolveGatewayListenPlan }] = await Promise.all([
     import('../../../config/paths.js'),
     import('../../../gateway/run-loop.js'),
     import('../../../gateway/ports.js'),
-    import('../../../bootstrap/application-state.js'),
+    import('../../../gateway/listen.js'),
   ]);
   const { checkPortAvailable, forceFreePortAndWait } = gatewayPorts;
-  bootstrap.bootstrapApplicationStateSync();
-  const config = loadConfig(ctx.configPath);
 
   const bindFromFlagRaw =
     typeof options.bind === 'string' && options.bind.trim().length > 0
@@ -97,22 +98,18 @@ export async function runGatewayFromCliOptions(
       ? parseInt(String(portRaw), 10)
       : undefined;
 
-  const { resolveGatewayListenPlan } = await import('../../../gateway/listen.js');
+  const explicitPort = portFromFlag !== undefined && Number.isFinite(portFromFlag) ? portFromFlag : undefined;
+  const effectiveConfig = await ensureGatewayReady(ctx.configPath, ctx.workspacePath, explicitPort);
   const listenPlan = resolveGatewayListenPlan({
-    cfg: config,
+    cfg: effectiveConfig,
     bindOverride: bindFromFlag,
   });
   const bindHost = listenPlan.bindHost;
-  const port =
-    portFromFlag !== undefined && Number.isFinite(portFromFlag)
-      ? portFromFlag
-      : (typeof config.gateway.port === 'number' ? config.gateway.port : 18790);
-
-  await ensureGatewayReady(ctx.configPath, ctx.workspacePath, port);
-
-  const effectiveConfig = loadConfig(ctx.configPath);
-  const { resolveGatewayAuth, assertGatewayAuthConfigured } = await import('../../../gateway/auth.js');
-  const { assertGatewayRuntimeConfig } = await import('../../../gateway/runtime-config.js');
+  const port = explicitPort ?? effectiveConfig.gateway.port ?? 18790;
+  const [{ resolveGatewayAuth, assertGatewayAuthConfigured }, { assertGatewayRuntimeConfig }] = await Promise.all([
+    import('../../../gateway/auth.js'),
+    import('../../../gateway/runtime-config.js'),
+  ]);
 
   let auth = resolveGatewayAuth({ authConfig: effectiveConfig.gateway?.auth });
   if (typeof options.token === 'string' && options.token.trim().length > 0) {
@@ -166,6 +163,7 @@ export async function runGatewayFromCliOptions(
 
   await runGatewayLoop({
     configPath: ctx.configPath || resolveConfigPath(),
+    validatedConfig: effectiveConfig,
     port,
     start: async () => {
       const { GatewayServer } = await import('../../../gateway/server.js');
@@ -174,7 +172,7 @@ export async function runGatewayFromCliOptions(
         bind: listenPlan.bindMode,
         customBindHost: listenPlan.customBindHost,
         port,
-        token: options.token || config?.gateway?.auth?.token,
+        token: options.token || effectiveConfig.gateway.auth?.token,
         verbose: ctx.isVerbose,
         configPath: ctx.configPath,
         enableHotReload: options.hotReload,

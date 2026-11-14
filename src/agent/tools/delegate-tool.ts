@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-import { createDelegateChildHandle, type BuildChildToolsOptions } from '../child-agent-factory.js';
+import type { BuildChildToolsOptions } from '../child-agent-factory.js';
 import { EXTERNAL_TOOL_NAMES } from '../external-tools/index.js';
 import { readWorkspaceRevision } from '../coding/workspace-revision.js';
 import { LocalWorktreeManager } from '../../execution-environments/local-worktree-manager.js';
@@ -110,6 +110,7 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
         details: { status: 'failed', stopReason: 'parent_policy', mode, grantedTools: tools, rejectedTools: access.rejected,
           ...(research ? { resumeId: research.id, checkpoint: research.checkpoint } : {}) } };
       const model = deps.getSubagentModel();
+      const { createDelegateChildHandle } = await import('../child-agent-factory.js');
       const attemptLimit = research ? Math.min(3, Math.max(1, input.maxAttempts ?? 2)) : 1;
       let attempt = 0;
       const attemptBudgets: Array<import('../child-agent-factory.js').DelegateChildRunResult['budget']> = [];

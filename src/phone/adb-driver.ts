@@ -4,8 +4,6 @@ import { delimiter, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { DOMParser } from 'linkedom';
-import sharp from 'sharp';
 
 import { PhoneUiSession, openLocalPhoneUi } from './ui-session.js';
 import { measurePhonePhase } from './execution-trace.js';
@@ -42,7 +40,8 @@ export function parseAdbDevices(text: string): DiscoveredPhone[] {
   });
 }
 
-export function parsePhoneUi(xml: string): PhoneElement[] {
+export async function parsePhoneUi(xml: string): Promise<PhoneElement[]> {
+  const { DOMParser } = await import('linkedom');
   const document = new DOMParser().parseFromString(xml.slice(xml.indexOf('<?xml') >= 0 ? xml.indexOf('<?xml') : xml.indexOf('<hierarchy')), 'text/xml');
   return Array.from(document.querySelectorAll('node')).slice(0, 500).flatMap(node => {
     // XML getAttribute re-escapes &, < and > in linkedom; Attr.value is decoded exactly once.
@@ -223,9 +222,10 @@ export class AdbPhoneDriver implements PhoneDriver {
     const observer = await this.observer(serial, signal);
     if (observer || this.readHierarchy) {
       const xml = observer ? await observer.snapshot(signal) : await this.readHierarchy!(signal);
+      const { DOMParser } = await import('linkedom');
       const app = new DOMParser().parseFromString(xml, 'text/xml').querySelector('node')?.getAttribute('package');
       if (!app) throw new PhoneError('PHONE_FRAME_CHANGED', 'Unable to identify the UI hierarchy application');
-      return { app, elements: parsePhoneUi(xml) };
+      return { app, elements: await parsePhoneUi(xml) };
     }
     // Dump first: screenshots represent the UI after the accessibility snapshot.
     let elements: PhoneElement[] = [];
@@ -249,7 +249,7 @@ export class AdbPhoneDriver implements PhoneDriver {
           if (!result.includes(path)) throw new Error('UI hierarchy dump did not complete');
           const xml = await this.shell(serial, ['cat', path], signal);
           if (!xml.includes('<hierarchy') || (!xml.includes('</hierarchy>') && !/<hierarchy\b[^>]*\/>/.test(xml))) throw new Error('UI hierarchy dump is incomplete');
-          elements = parsePhoneUi(xml);
+          elements = await parsePhoneUi(xml);
         } finally { await this.shell(serial, ['rm', '-f', path], signal).catch(() => {}); }
         break;
       } catch (error) {
@@ -295,6 +295,7 @@ export class AdbPhoneDriver implements PhoneDriver {
     try {
       if (display.status === 'rejected') throw display.reason;
       if (await foreground() !== app) throw new PhoneError('PHONE_FRAME_CHANGED', 'Application changed while capturing the screen; retry');
+      const { default: sharp } = await import('sharp');
       const info = await sharp(frame, { limitInputPixels: 16_000_000 }).metadata();
       if (info.format !== 'png' || !info.width || !info.height) throw new Error('Invalid frame');
       const rotation = Number(/SurfaceOrientation:\s*(\d)/.exec(display.value)?.[1] ?? 0);

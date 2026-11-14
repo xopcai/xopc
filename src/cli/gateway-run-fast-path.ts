@@ -1,4 +1,4 @@
-import type { Command } from 'commander';
+import { Command } from 'commander';
 
 import { ROOT_COMMAND_DESCRIPTION } from './command-manifest.js';
 import { createDefaultContext, type CLIContext } from './registry.js';
@@ -32,7 +32,6 @@ export async function tryRunGatewayRunFastPath(argv: string[] = process.argv): P
     return false;
   }
 
-  const { Command } = await import('commander');
   const { runGatewayFromCliOptions } = await import('./commands/gateway/run-foreground.js');
 
   const program = new Command()

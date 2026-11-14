@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from '@earendil-works/pi-ai';
 
 import { resolveCredentialsDir } from '../../config/paths.js';
@@ -29,8 +28,9 @@ async function getDeviceId(signal?: AbortSignal): Promise<string> {
   }, { signal });
 }
 
-function getOpenaiOAuth(): OAuthAuth {
-  registerBundledOAuthFlows();
+async function getOpenaiOAuth(): Promise<OAuthAuth> {
+  const { openaiProvider } = await import('@earendil-works/pi-ai/providers/openai');
+  await registerBundledOAuthFlows();
   const oauth = openaiProvider().auth.oauth;
   if (!oauth) throw new Error('OpenAI ChatGPT OAuth is unavailable');
   return oauth;
@@ -64,13 +64,15 @@ export const openaiOAuthProvider: OAuthProviderInterface = {
   loginMethods: ['browser'],
   async login(callbacks) {
     const deviceId = await getDeviceId(callbacks.signal);
-    return fromPiCredential(await getOpenaiOAuth().login(toAuthInteraction(callbacks), {
+    const oauth = await getOpenaiOAuth();
+    return fromPiCredential(await oauth.login(toAuthInteraction(callbacks), {
       getDeviceId: () => deviceId,
       agentName: 'xopc',
     }));
   },
   async refreshToken(credentials, signal) {
-    return fromPiCredential(await getOpenaiOAuth().refresh(
+    const oauth = await getOpenaiOAuth();
+    return fromPiCredential(await oauth.refresh(
       { ...credentials, type: 'oauth' }, signal ?? new AbortController().signal,
     ));
   },

@@ -4,11 +4,12 @@
  * (Bundlers may reorder imports in `index.ts`; this file stays dependency-minimal.)
  */
 import './cli-log-level-preset.js';
-import '../infra/http-proxy-env.js';
 
+import { enableCompileCache } from 'node:module';
 import pkg from '../../package.json' with { type: 'json' };
 import { ensureXopcCliOnPath } from '../infra/path-env.js';
 import { formatRootHelp } from './command-manifest.js';
+import { isGatewayRunFastPathArgv } from './gateway-run-argv.js';
 
 ensureXopcCliOnPath();
 
@@ -31,9 +32,14 @@ const filteredArgv = process.argv.filter((arg, index) => {
   return index < 2;
 });
 
-const { tryRunGatewayRunFastPath } = await import('./gateway-run-fast-path.js');
-if (await tryRunGatewayRunFastPath(filteredArgv)) {
-  process.exit(typeof process.exitCode === 'number' ? process.exitCode : 0);
+const foregroundGateway = isGatewayRunFastPathArgv(filteredArgv);
+if (foregroundGateway) enableCompileCache();
+await import('../infra/http-proxy-env.js');
+if (foregroundGateway) {
+  const { tryRunGatewayRunFastPath } = await import('./gateway-run-fast-path.js');
+  if (await tryRunGatewayRunFastPath(filteredArgv)) {
+    process.exit(typeof process.exitCode === 'number' ? process.exitCode : 0);
+  }
 }
 
 const { runCli } = await import('./index.js');

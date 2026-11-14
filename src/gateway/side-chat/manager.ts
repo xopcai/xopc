@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 
-import { InMemoryTranscriptRuntime } from '../../agent/embedded/transcript-runtime.js';
+import type { InMemoryTranscriptRuntime } from '../../agent/embedded/transcript-runtime.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
 import type { SessionAgentConfig } from '../../session/config-types.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
@@ -122,6 +122,7 @@ export class EphemeralSideChatManager {
     if (!metadata || !metadata.transcriptId) throw new SideChatError('Parent session not found', 'PARENT_NOT_FOUND');
     const parentMessages = await this.options.loadParentMessages(parentConversationId);
     const parentConfig = await this.options.getParentConfig?.(parentConversationId) ?? null;
+    const { InMemoryTranscriptRuntime } = await import('../../agent/embedded/transcript-runtime.js');
     if (this.stopped) throw new SideChatError('Gateway is stopping', 'CAPACITY_REACHED');
     let selections;
     try {

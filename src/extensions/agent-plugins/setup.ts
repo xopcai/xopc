@@ -81,7 +81,7 @@ export class PluginSetupService {
   async reusableConnections(id: string, owner: string, config: Config): Promise<Record<string, Array<{ id: string; name: string }>>> {
     const job = this.get(id, owner); if (!job) return {};
     const plugin = this.store.pending(id) ?? this.store.get(id); if (!plugin) return {};
-    getNativePiAgentDir();
+    await getNativePiAgentDir();
     const credentials = await createNativeMcpCredentials();
     const result: Record<string, Array<{ id: string; name: string }>> = {};
     for (const [name, target] of Object.entries(plugin.servers)) {

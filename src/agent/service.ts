@@ -36,7 +36,6 @@ import { ErrorPatternMatcher } from './tools/error-pattern-matcher.js';
 import { ContextMiddleware } from './middleware/index.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { resolveCompactionPolicy } from './memory/compaction-policy.js';
-import { runXopcEmbeddedTurn } from './embedded/run-turn.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnResult } from './embedded/types.js';
 import type { EmbeddedTranscriptRuntime } from './embedded/transcript-runtime.js';
 import { runWithEmbeddedExecutionSession } from './embedded/execution-context.js';
@@ -768,6 +767,7 @@ export class AgentService {
       agentManager: this.agentManager,
     });
     const llmTurn = await hydrateUserTurnForLlm({ message: userMessage, modelRef: params.modelRef });
+    const { runXopcEmbeddedTurn } = await import('./embedded/run-turn.js');
     return runWithEmbeddedExecutionSession(params.executionConversationId, () =>
       runXopcEmbeddedTurn({
         conversationId: params.executionConversationId,
