@@ -17,6 +17,8 @@ export interface InitWorkspaceCoreOptions {
   gatewayPort?: number;
   /** When true, sets the default agent workspace to `workspacePath`. */
   persistWorkspacePath?: boolean;
+  /** GatewayServer initializes application state itself after acquiring the lock. */
+  deferApplicationBootstrap?: boolean;
   /** Optional channel plugin validator (CLI/gateway only; Electron omits). */
   assertChannelPlugins?: (cfg: Config) => void | Promise<void>;
 }
@@ -61,12 +63,20 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
   mkdirSync(dirname(configPath), { recursive: true });
 
   const configExisted = existsSync(configPath);
-  bootstrapApplicationStateSync();
+  let applicationBootstrapped = false;
+  const bootstrap = () => {
+    if (!applicationBootstrapped) bootstrapApplicationStateSync();
+    applicationBootstrapped = true;
+  };
+  if (!options.deferApplicationBootstrap || persistWorkspacePath) bootstrap();
   const workspaceExisted = existsSync(workspacePath);
 
   let config: Config;
   if (configExisted) {
-    config = await readDiskConfig(configPath, assertChannelPlugins);
+    config = await readDiskConfig(configPath, async (cfg) => {
+      if (assertChannelPlugins && Object.keys(cfg.channels ?? {}).length) bootstrap();
+      await assertChannelPluginsIfNeeded(cfg, assertChannelPlugins);
+    });
   } else {
     config = ConfigSchema.parse(undefined);
     await assertChannelPluginsIfNeeded(config, assertChannelPlugins);

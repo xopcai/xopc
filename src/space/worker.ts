@@ -148,7 +148,10 @@ export class SpaceWorker {
   }
 
   private async index(row: PendingVersion): Promise<void> {
-    const compiled = new URL('../personal-agent/result-extraction.js', import.meta.url);
+    const bundled = new URL('./result-extraction.js', import.meta.url);
+    const compiled = existsSync(fileURLToPath(bundled))
+      ? bundled
+      : new URL('../personal-agent/result-extraction.js', import.meta.url);
     const source = existsSync(fileURLToPath(compiled)) ? compiled.href : new URL('../personal-agent/result-extraction.ts', import.meta.url).href;
     const input = { title: row.file_name, mimeType: row.mime_type, text: row.body ?? undefined,
       file: row.media_id ? resolveMediaBufferPath(row.media_id, 'outbound') : undefined, expectedSha256: row.sha256 ?? undefined };

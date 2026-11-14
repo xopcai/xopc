@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { copySqliteAssets } from './sqlite-assets.mjs';
+import { buildGatewayBundle } from './build-gateway-bundle.mjs';
 import { buildPersonalResultWorker } from './build-personal-result-worker.mjs';
 
 const logLevel = process.env.XOPC_BUILD_VERBOSE === '1' ? 'info' : 'warn';
@@ -101,4 +102,4 @@ if (existsSync(extensionsRoot) && existsSync(distExtensionsRoot)) {
   }
 }
 
-process.exit(0);
+await buildGatewayBundle({ cliBuild: true });

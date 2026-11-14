@@ -6,6 +6,7 @@
 import './cli-log-level-preset.js';
 
 import { enableCompileCache } from 'node:module';
+import { existsSync } from 'node:fs';
 import pkg from '../../package.json' with { type: 'json' };
 import { ensureXopcCliOnPath } from '../infra/path-env.js';
 import { formatRootHelp } from './command-manifest.js';
@@ -33,6 +34,13 @@ const filteredArgv = process.argv.filter((arg, index) => {
 });
 
 const foregroundGateway = isGatewayRunFastPathArgv(filteredArgv);
+const bundles = new URL('../../gateway/server/', import.meta.url);
+if (foregroundGateway && existsSync(new URL('chunks.json', bundles))) {
+  const { runGatewayBundle } = await import('./gateway-bundle-loader.js');
+  if (await runGatewayBundle(bundles, filteredArgv)) {
+    process.exit(typeof process.exitCode === 'number' ? process.exitCode : 0);
+  }
+}
 if (foregroundGateway) enableCompileCache();
 await import('../infra/http-proxy-env.js');
 if (foregroundGateway) {
