@@ -28,23 +28,27 @@ const token403Only = stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_TOKEN
 const onlineFlow = stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_ONLINE === '1';
 const nameFlow = stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_NAME_FLOW === '1';
 const taskRoutingCaseId = process.env.XOPC_CONFIGURATION_E2E_TASK_ROUTING_CASE;
+const pointsReplay = taskRoutingCaseId === 'R14';
+if (pointsReplay) assert(process.env.DEEPSEEK_API_KEY, 'Set DEEPSEEK_API_KEY for the deepseek-flash replay');
+const points = 738214;
+const deepseekModel = 'deepseek-flash';
 assert(!taskRoutingCaseId || (stage === 'mcp' && (
-  nameFlow ? taskRoutingCaseId === 'R05' : ['R02', 'R07', 'R10'].includes(taskRoutingCaseId)
-)), 'Select R05 with fixture name discovery, or R02, R07, R10 with the MCP fixtures');
+  nameFlow ? ['R05', 'R14'].includes(taskRoutingCaseId) : ['R02', 'R07', 'R10'].includes(taskRoutingCaseId)
+)), 'Select R05 or R14 with fixture name discovery, or R02, R07, R10 with the MCP fixtures');
 const recordDemo = process.env.XOPC_CONFIGURATION_E2E_RECORD_DEMO === '1';
 assert(!recordDemo || ['automations', 'weixin'].includes(stage), 'Recording demo uses the automations or Weixin environment');
 assert(['skills', 'mcp', 'automations', 'weixin'].includes(stage), 'Choose skills, mcp or automations');
 const weixin = stage === 'weixin' ? await createWeixinConfigurationTestServer() : undefined;
-const testServers = stage !== 'skills' ? await createConfigurationTestServers({ rotateCodes: stage === 'automations', ...(token403Only || nameFlow ? { tokenRefusalStatus: 403 } : {}), ...(nameFlow ? { publicOrigin: 'https://mcp-fixture.example', oauthOrigin: 'https://auth-fixture.example' } : {}) }) : undefined;
+const testServers = stage !== 'skills' ? await createConfigurationTestServers({ rotateCodes: stage === 'automations', ...(pointsReplay ? { loyaltyPoints: points } : {}), ...(token403Only || nameFlow ? { tokenRefusalStatus: 403 } : {}), ...(nameFlow ? { publicOrigin: 'https://mcp-fixture.example', oauthOrigin: 'https://auth-fixture.example' } : {}) }) : undefined;
 const deniedServers = weixin ? await createConfigurationTestServers() : undefined;
 const root = await mkdtemp(join(tmpdir(), 'xopc-conversation-config-'));
-const discoveryFixtures = nameFlow ? await createDiscoveryFixtures(root, testServers!) : undefined;
+const discoveryFixtures = nameFlow ? await createDiscoveryFixtures(root, testServers!, pointsReplay ? { tokenServiceName: '麦当劳' } : undefined) : undefined;
 if (discoveryFixtures) await writeFile(join(root, 'network-routes.json'), JSON.stringify(discoveryFixtures.routes));
 const evidence = resolve(process.env.XOPC_CONFIGURATION_E2E_OUT ?? `.xopc-evals/conversation-configuration/${stage}`);
 await mkdir(evidence, { recursive: true });
 const credentials = process.env.XOPC_CREDENTIALS_DIR ?? join(homedir(), '.xopc/credentials');
 const credentialFile = join(credentials, 'oauth/xopc-cloud.json');
-assert(existsSync(credentialFile), 'A signed-in XOPC Cloud account is required');
+assert(pointsReplay || existsSync(credentialFile), 'A signed-in XOPC Cloud account is required');
 const modelRequests: Array<{ status: number; elapsedMs: number; mcpSetupDeclared: boolean; toolSearchDeclared: boolean }> = [];
 let refreshing: Promise<void> | undefined;
 async function refreshCloudLogin() {
@@ -60,15 +64,19 @@ const proxy = createServer(async (request, response) => {
   try {
     let raw = ''; for await (const chunk of request) raw += chunk;
     assert(![...(testServers?.sensitive ?? [])].some(secret => raw.includes(secret)), 'A credential leaked into a model request');
-    const body = JSON.parse(raw); body.model = 'openai-codex/gpt-5.6-sol';
+    const body = JSON.parse(raw); body.model = pointsReplay ? deepseekModel : 'openai-codex/gpt-5.6-sol';
     if (stage === 'mcp') await writeFile(join(evidence, `request-${randomUUID()}.private.json`), JSON.stringify(body), { mode: 0o600 });
     assert(modelRequests.length < (nameFlow ? 450 : stage === 'skills' ? 160 : 260), 'Inference budget exceeded');
-    let credential = JSON.parse(await readFile(credentialFile, 'utf8'));
-    if (credential.expiresAt <= Date.now() + 60000) { await refreshCloudLogin(); credential = JSON.parse(await readFile(credentialFile, 'utf8')); }
-    assert(credential.expiresAt > Date.now(), 'Cloud login expired; reconnect before running acceptance');
+    let apiKey = process.env.DEEPSEEK_API_KEY;
+    if (!pointsReplay) {
+      let credential = JSON.parse(await readFile(credentialFile, 'utf8'));
+      if (credential.expiresAt <= Date.now() + 60000) { await refreshCloudLogin(); credential = JSON.parse(await readFile(credentialFile, 'utf8')); }
+      assert(credential.expiresAt > Date.now(), 'Cloud login expired; reconnect before running acceptance');
+      apiKey = credential.access;
+    }
     const before = Date.now();
-    const upstream = await fetch('https://router.xopc.ai/v1/chat/completions', { method: 'POST',
-      headers: { Authorization: `Bearer ${credential.access}`, 'Content-Type': 'application/json' },
+    const upstream = await fetch(pointsReplay ? 'https://api.deepseek.com/chat/completions' : 'https://router.xopc.ai/v1/chat/completions', { method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body), signal: AbortSignal.timeout(150_000) });
     const names = (body.tools ?? []).map((tool: any) => tool.function?.name ?? tool.name);
     modelRequests.push({ status: upstream.status, elapsedMs: Date.now() - before,
@@ -117,6 +125,9 @@ await writeFile(join(root, 'xopc.json'), JSON.stringify({
   ...(taskRoutingCaseId === 'R02' ? { mcp: { servers: { acme_desk: {
     type: 'http', url: testServers!.tokenExplicitUrl, description: 'Acme Desk work account profile and verification marker',
     headers: { Authorization: 'Bearer ' + testServers!.token }, exposure: 'deferred',
+  } } } } : {}),
+  ...(pointsReplay ? { mcp: { servers: { unrelated_feedback: {
+    type: 'http', url: testServers!.publicUrl, description: 'Unrelated feedback account verification', exposure: 'deferred',
   } } } } : {}),
   gateway: { bind: 'loopback', port, auth: { mode: 'token', token }, ...(weixin ? { publicUrl: base } : {}) },
   ...(discoveryFixtures ? { tools: { web: { search: { providers: [{ type: 'searxng', url: discoveryFixtures.local }] } } } } : {}),
@@ -180,7 +191,7 @@ async function api(path: string) {
 let browser: Browser | undefined, page: Page, conversationId: string | undefined;
 let recordingContext: BrowserContext | undefined, recordedVideo: Video | null = null;
 const observedConversations = new Set<string>();
-const report: any = { stage, taskRoutingCase: taskRoutingCaseId, model: 'xopc-cloud/openai-codex/gpt-5.6-sol', inference: 'real', entry: 'production Web Chat, 390px',
+const report: any = { stage, taskRoutingCase: taskRoutingCaseId, model: pointsReplay ? 'deepseek/deepseek-flash' : 'xopc-cloud/openai-codex/gpt-5.6-sol', inference: 'real', entry: 'production Web Chat, 390px',
   fixture: 'Local archive with deterministic sales instructions; no mocked model or direct management API writes', root, cases: [], passed: false };
 async function send(id: string, prompt: string, verify: (answer: string) => Promise<Record<string, boolean>>, fresh = false) {
   if (fresh || !conversationId) { await page.goto(base + '/#/chat/new'); conversationId = undefined; }
@@ -607,12 +618,41 @@ async function verifyNameDiscovery() {
             ? `帮我连接${fixtures.names[key]}，只连接，不读取我的资料。`
             : `帮我连接${fixtures.names[key]}并查询我资料中的标记码。`;
         report.taskRoutingStage = 'discovery';
-        await send(`name-${round}-${kind}`, prompt, async () => ({
+        if (pointsReplay) {
+          await send('R14-first-turn', '帮我查询下麦当劳积分', async () => ({ noReadBeforeApproval: servers.calls.length === 0 }), true);
+        }
+        await send(`name-${round}-${kind}`, pointsReplay ? '我需要你帮我查询' : prompt, async () => ({
           searchedFromName: fixtures.searchLog.length > beforeSearch,
           noReadBeforeApproval: servers.calls.length === beforeCalls && await fixtures.stdioReads() === beforeStdio && await fixtures.packageReads() === beforePackage,
-        }), true);
+        }), !pointsReplay);
         report.taskRoutingStage = 'source_review';
         const current = goal();
+        if (pointsReplay) {
+          const timeline = observer.prepare("SELECT seq,payload_json FROM transcript_entries WHERE transcript_id=? AND role IN ('assistant','toolResult') ORDER BY seq")
+            .all(current.transcriptId) as Array<{ seq: number; payload_json: string }>;
+          const messages = timeline.map(row => ({ seq: row.seq, ...JSON.parse(row.payload_json) }));
+          const toolCalls = messages.filter(message => message.role === 'assistant').flatMap(message =>
+            (message.content ?? []).filter((block: { type: string }) => block.type === 'toolCall'));
+          const firstDiscovery = toolCalls.findIndex(call => call.name === 'mcp_setup' && call.arguments?.command === 'discover');
+          const browserCalls = toolCalls.filter(call => call.name === 'browser_use' || call.name.startsWith('device__web_page_')
+            || call.name === 'xopc_use' && call.arguments?.mode === 'browser_setup');
+          const browserResults = browserCalls.map(call => messages.find(message => message.toolCallId === call.id));
+          const allBrowserAttemptsBlocked = browserResults.every(result =>
+            result?.isError && result.content.some((block: any) => block.text?.includes('Browser fallback')
+              || block.text?.includes('Browser fallback has not been established')));
+          const unmatchedSearch = messages.some(message => {
+            if (message.toolName !== 'tool_search') return false;
+            const text = message.content?.[0]?.text;
+            if (!text?.startsWith('{')) return false;
+            const result = JSON.parse(text);
+            return result.loadedTools?.length > 0 && !result.loadedTools.some((tool: { name: string }) => /麦当劳|mcdonald/i.test(tool.name))
+              && !result.connectionCandidates?.length && !result.installCandidates?.length;
+          });
+          assert(firstDiscovery >= 0 && unmatchedSearch, 'Expected unrelated tool results and MCP discovery');
+          assert(allBrowserAttemptsBlocked, 'Browser fallback must not dispatch while the MCP route is unresolved');
+          report.route = { firstDiscovery, unmatchedSearch, browserAttempts: browserCalls.length, allBrowserAttemptsBlocked,
+            toolNames: toolCalls.map(call => call.name) };
+        }
         if (taskRoutingCaseId) {
           const card = setupCard();
           await card.waitFor();
@@ -650,7 +690,7 @@ async function verifyNameDiscovery() {
         }
         report.taskRoutingStage = 'continuation_and_delivery';
         await page.waitForURL(new RegExp(`#/chat/${conversationId}`), { timeout: 120000 });
-        const expectedCode = kind === 'stdio' ? fixtures.stdioCode : kind === 'package' ? fixtures.packageCode : servers.codes[(kind === 'unknown' ? 'token' : key) as keyof typeof servers.codes];
+        const expectedCode = pointsReplay ? String(points) : kind === 'stdio' ? fixtures.stdioCode : kind === 'package' ? fixtures.packageCode : servers.codes[(kind === 'unknown' ? 'token' : key) as keyof typeof servers.codes];
         await until(async () => {
           const state = await api(`/api/sessions/${conversationId}/input-state`); const h = await api(`/api/sessions/${conversationId}?include=transcriptRows`);
           return !state.activeRunId && !state.inputs?.some((i: any) => ['queued', 'running'].includes(i.status)) && goal().resumed && (kind === 'public-only' || JSON.stringify(h.messages).includes(expectedCode));
@@ -659,13 +699,13 @@ async function verifyNameDiscovery() {
         if (taskRoutingCaseId) {
           const answer = historyData.messages.filter((message: { role: string }) => message.role === 'assistant').at(-1);
           assert(JSON.stringify(answer)?.includes(expectedCode), 'Final assistant message must deliver the actual result');
-          assert.equal(servers.calls.slice(beforeCalls).filter(call => call.code === expectedCode).length, 1, 'Expected one business read');
+          assert.equal(servers.calls.slice(beforeCalls).filter(call => pointsReplay ? call.tool === 'query_my_account' : call.code === expectedCode).length, 1, 'Expected one business read');
           const resumed = observer.prepare('SELECT COUNT(*) AS total FROM session_inputs WHERE client_message_id=?')
             .get(`mcp-setup:${current.id}`) as { total: number };
           assert.equal(resumed.total, 1, 'Expected exactly one continuation input');
         }
         const history = JSON.stringify(historyData), stored = JSON.stringify(await configuredServers());
-        await check(`name-${round}-${kind}-verified`, { sameConversation: page.url().includes(conversationId!), ready: goal().phase === 'ready', actualExpectedRead: kind === 'public-only' ? servers.calls.length === beforeCalls : kind === 'package' ? await fixtures.packageReads() > beforePackage && fixtures.packageDownloads > 0 : kind === 'stdio' ? await fixtures.stdioReads() > beforeStdio : servers.calls.slice(beforeCalls).some(call => call.code === expectedCode), noSecretInTranscript: ![...servers.sensitive].some(secret => history.includes(secret)), noSecretInConfig: ![...servers.sensitive].some(secret => stored.includes(secret)) });
+        await check(`name-${round}-${kind}-verified`, { sameConversation: page.url().includes(conversationId!), ready: goal().phase === 'ready', actualExpectedRead: kind === 'public-only' ? servers.calls.length === beforeCalls : kind === 'package' ? await fixtures.packageReads() > beforePackage && fixtures.packageDownloads > 0 : kind === 'stdio' ? await fixtures.stdioReads() > beforeStdio : servers.calls.slice(beforeCalls).some(call => pointsReplay ? call.tool === 'query_my_account' : call.code === expectedCode), noSecretInTranscript: ![...servers.sensitive].some(secret => history.includes(secret)), noSecretInConfig: ![...servers.sensitive].some(secret => stored.includes(secret)) });
         report.taskRoutingStage = 'delivered';
         await captureScreenshot(`name-${round}-${kind}-verified.png`);
       }

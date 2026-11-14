@@ -6,12 +6,13 @@ import { createServer } from 'node:http';
 import { join } from 'node:path';
 import type { createConfigurationTestServers } from './conversation-configuration-test-server.mts';
 
-export async function createDiscoveryFixtures(root: string, servers: Awaited<ReturnType<typeof createConfigurationTestServers>>) {
+export async function createDiscoveryFixtures(root: string, servers: Awaited<ReturnType<typeof createConfigurationTestServers>>, options?: { tokenServiceName: string }) {
   const suffix = randomUUID().slice(0, 6);
   const syllables = ['青', '碧', '明', '晴', '竹', '岩', '星', '南', '夏', '秋', '晨', '溪', '远', '岭'];
   const brand = `杉木${[...suffix.slice(0, 3)].map(char => syllables[parseInt(char, 16) % syllables.length]).join('')}`;
   const labels = ['溪流', '松果', '海风', '云朵', '湖水', '山谷', '月光', '林间', '雪原'];
   const names = Object.fromEntries(['public-only', 'public', 'token', 'unknown', 'header', 'legacy', 'stdio', 'oauth', 'package'].map((kind, index) => [kind, `${brand}${labels[index]}资料服务`]));
+  if (options) names.token = options.tokenServiceName;
   const readsFile = join(root, 'stdio-reads.txt'), program = join(root, 'fixture-stdio.mjs');
   const stdioCode = `STDIO-${randomUUID()}`, packageCode = `PACKAGE-${randomUUID()}`, packageReadsFile = join(root, 'package-reads.txt');
   await writeFile(program, `import{createInterface}from'node:readline';import{appendFileSync}from'node:fs';import{createHash}from'node:crypto';
@@ -37,6 +38,7 @@ else if(m.method==='tools/call'){if(createHash('sha256').update(process.env.FIXT
     stdio: `Local stdio transport. Run this configuration on the Gateway host: ${JSON.stringify({ command: process.execPath, args: [program], cwd: root })}. A secret environment variable FIXTURE_ACCESS_KEY is required. Source URL: ${docs}/guide/stdio.`,
     oauth: `Streamable HTTP. Endpoint: ${servers.oauthUrl}. OAuth 2.1 authorization. The server publishes protected resource and authorization server metadata.`,
   };
+  const foundAlias = (query: string, name: string) => options?.tokenServiceName === name && /mcdonald|麦当劳/u.test(query);
   const searchLog: string[] = [], documentLog: string[] = [];
   const server = createServer((request, response) => {
     const url = new URL(request.url!, 'http://localhost');
@@ -45,7 +47,7 @@ else if(m.method==='tools/call'){if(createHash('sha256').update(process.env.FIXT
     if (url.pathname === '/search') {
       const query = url.searchParams.get('q') ?? ''; searchLog.push(query);
       const normalized = query.replace(/\s+/g, '').toLowerCase();
-      const found = Object.entries(names).find(([, name], index) => normalized.includes(name.toLowerCase()) || normalized.includes(labels[index]) && normalized.includes('资料'));
+      const found = Object.entries(names).find(([, name], index) => normalized.includes(name.toLowerCase()) || foundAlias(normalized, name) || normalized.includes(labels[index]) && normalized.includes('资料'));
       response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ results: found ? [
         { title: 'Unrelated community proxy', url: `${docs}/community`, content: 'Independent third-party proxy, not published by the requested service.' },
         { title: `${found[1]} integration guide`, url: `${docs}/guide/${found[0]}`, content: 'Service integration details and supported authentication.' },

@@ -160,4 +160,17 @@ export const cases = [
     },
     unverified: '真实模型是否只查第二个来源，并合并两个来源的可验证结果。',
   },
+  {
+    id: 'R14',
+    prompt: '帮我查询下麦当劳积分\n我需要你帮我查询',
+    environment: '两个用户回合；已注册工具与麦当劳无关；MCP 发现返回需审核并授权的 Token 连接。',
+    criteria: '跟进请求沿用麦当劳积分目标；浏览器路由在有效发现前被阻止；授权后原会话返回测试积分。',
+    checks: {
+      'src/agent/mcp/__tests__/browser-fallback-guard.test.ts': [
+        'blocks browser and page dispatch', 'releases browser fallback only', 'keeps browser blocked after discovery',
+        'preserves browser dispatch outside',
+      ],
+    },
+    unverified: '线上商家账号未参与评测；路由与交付证据见 deepseek-flash 回放。',
+  },
 ] as const;

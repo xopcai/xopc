@@ -8,7 +8,7 @@ const opaque = () => randomBytes(24).toString('base64url');
 async function body(request: IncomingMessage) { let value = ''; for await (const chunk of request) value += chunk; return value; }
 function json(response: ServerResponse, value: unknown, status = 200) { response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(value)); }
 
-export async function createConfigurationTestServers(options: { rotateCodes?: boolean; tokenRefusalStatus?: 401 | 403; publicOrigin?: string; oauthOrigin?: string } = {}) {
+export async function createConfigurationTestServers(options: { loyaltyPoints?: number; rotateCodes?: boolean; tokenRefusalStatus?: 401 | 403; publicOrigin?: string; oauthOrigin?: string } = {}) {
   const token = opaque(), sensitive = new Set([token]);
   const calls: Array<{ service: string; account: string; tool: string; code: string; atMs: number }> = [];
   const codes = { public: `PUBLIC-${opaque().slice(0, 8)}`, publicOnly: `ONLY-${opaque().slice(0, 8)}`, plain: `PLAIN-${opaque().slice(0, 8)}`, token: `TOKEN-${opaque().slice(0, 8)}`, oauth: `OAUTH-${opaque().slice(0, 8)}`, header: `HEADER-${opaque().slice(0, 8)}`, legacy: `SSE-${opaque().slice(0, 8)}` };
@@ -24,15 +24,18 @@ export async function createConfigurationTestServers(options: { rotateCodes?: bo
       return;
     }
     if (request.method !== 'POST') { response.writeHead(405).end(); return; }
+    const points = service === 'token' ? options.loyaltyPoints : undefined;
+    const toolName = points === undefined ? 'read_profile' : 'query_my_account';
+    const description = points === undefined ? 'Read the test account profile and its unique verification code. No arguments or side effects.' : '查询麦当劳会员账号和当前积分。Read the current loyalty points balance.';
     const message = JSON.parse(await body(request));
     if (message.id === undefined) { response.writeHead(202).end(); return; }
     let result: unknown;
     if (message.method === 'initialize') result = { protocolVersion: message.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: `${service}-profile`, version: '1' } };
-    else if (message.method === 'tools/list') result = { tools: [{ name: 'read_profile', description: 'Read the test account profile and its unique verification code. No arguments or side effects.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false } }] };
-    else if (message.method === 'tools/call' && message.params.name === 'read_profile') {
+    else if (message.method === 'tools/list') result = { tools: [{ name: toolName, description, inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false } }] };
+    else if (message.method === 'tools/call' && message.params.name === toolName) {
       if (options.rotateCodes) codes[service] = `${service.toUpperCase()}-${opaque().slice(0, 8)}`;
       calls.push({ service, account: 'fixture-reader', tool: message.params.name, code: codes[service], atMs: Date.now() });
-      result = { content: [{ type: 'text', text: JSON.stringify({ account: 'fixture-reader', verificationCode: codes[service] }) }], isError: false };
+      result = { content: [{ type: 'text', text: JSON.stringify({ account: 'fixture-reader', ...(points === undefined ? { verificationCode: codes[service] } : { points }) }) }], isError: false };
     } else if (message.method === 'ping') result = {};
     else { json(response, { jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Unknown method' } }); return; }
     json(response, { jsonrpc: '2.0', id: message.id, result });

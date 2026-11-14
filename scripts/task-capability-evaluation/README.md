@@ -1,8 +1,8 @@
 # 任务能力路由基线
 
-[设计与完整通过标准](../../docs/design/task-capability-routing.md)定义 R01–R13。`cases.mts` 保存业务请求、条件、验收标准与当前可执行探针的对应关系。
+[设计与完整通过标准](../../docs/design/task-capability-routing.md)定义 R01–R13，R14 复现实际两轮积分查询。`cases.mts` 保存业务请求、条件、验收标准与当前可执行探针的对应关系。
 
-## 运行 13 组探针
+## 运行 14 组探针
 
 ```sh
 node --import tsx scripts/task-capability-evaluation/run.mts
@@ -50,3 +50,19 @@ node --import tsx scripts/benchmark-playwright-browser.mts 1
 如有需要，用 `XOPC_BENCH_CHROMIUM_PATH` 指定本地 Chromium 兼容浏览器的可执行文件。该入口使用真实网页夹具测导航、筛选和会话隔离，动作由脚本发起。
 
 [首轮结果](../../docs/design/technical/task-capability-routing-baseline-2026-11-14.md)
+
+## R14 深度回归
+
+使用 `DEEPSEEK_API_KEY` 和真实 `deepseek-flash`。在隔离 Gateway 重放「帮我查询下麦当劳积分」和「我需要你帮我查询」，已注册工具包含无关结果，麦当劳 Token 接入和积分由本地测试服务提供。评测检查可用 MCP 路径优先、提前的浏览器调用被宿主拦截，以及原会话拿到模拟服务的积分。
+
+```sh
+XOPC_CONFIGURATION_E2E_LIVE=1 \
+XOPC_CONFIGURATION_E2E_STAGE=mcp \
+XOPC_CONFIGURATION_E2E_NAME_FLOW=1 \
+XOPC_CONFIGURATION_E2E_TASK_ROUTING_CASE=R14 \
+XOPC_CONFIGURATION_E2E_NAME_KINDS=token \
+XOPC_CONFIGURATION_E2E_OUT=.xopc-evals/task-capability-r14-final \
+node --import tsx scripts/verify-conversation-configuration-e2e.mts
+```
+
+2026-11-14 实测通过。首次运行在第二轮尝试直调设备网页导航，执行层在实际导航前拒绝了它，随后创建 MCP 授权，原会话读到测试余额 738214。使用补全后的评分复跑，发现先于浏览器，且模型未再尝试浏览器。14 组组件和集成探针共 265 条测试通过，包含同服务无匹配放行、过期或错会话结果拒绝、认证不确定时继续等待。最终截图超时，工具回执、续跑队列和实际读取结果均已校验。
