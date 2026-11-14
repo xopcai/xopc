@@ -166,7 +166,7 @@ export function mergeActivationContext(
       ? ext!.disabled.filter((x): x is string => typeof x === 'string')
       : undefined,
     requestedModelId: getAgentDefaultModelRef(),
-    configuredProviderIds: collectConfiguredProviderIds(appConfig),
+    configuredProviderIds: partial?.configuredProviderIds ?? collectConfiguredProviderIds(appConfig),
     configuredChannelIds: collectConfiguredChannelIds(appConfig),
     env: process.env,
   };
@@ -177,10 +177,7 @@ export function mergeActivationContext(
     disabledIds: partial?.disabledIds !== undefined ? partial.disabledIds : base.disabledIds,
     requestedModelId:
       partial?.requestedModelId !== undefined ? partial.requestedModelId : base.requestedModelId,
-    configuredProviderIds:
-      partial?.configuredProviderIds !== undefined
-        ? partial.configuredProviderIds
-        : base.configuredProviderIds,
+    configuredProviderIds: base.configuredProviderIds,
     configuredChannelIds:
       partial?.configuredChannelIds !== undefined
         ? partial.configuredChannelIds

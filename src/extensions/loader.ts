@@ -36,6 +36,7 @@ import {
   discoverExtensionsFromDisk,
   type DiscoverConfig,
   type ExtensionLoaderOptions,
+  type ExtensionSourceOrigin,
 } from './discover-extensions.js';
 import type { ExtensionMetadataSnapshot } from './extension-metadata-snapshot.js';
 import { ManifestRegistry } from './manifest-registry.js';
@@ -47,6 +48,7 @@ import { validateSpeechProviderContracts } from './speech-provider-contracts.js'
 import { validateMediaUnderstandingProviderContracts } from './media-provider-contracts.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
 import { validateExtensionConfig } from './config-validation.js';
+import { loadBundledStartupModule } from './bundled-startup-modules.js';
 import {
   checkExtensionApiCompatibility,
   EXTENSION_API_VERSION,
@@ -311,7 +313,13 @@ export class ExtensionLoader {
 
     const registry = this.buildManifestRegistry();
     const planner = new ActivationPlanner(registry);
-    const fullContext = mergeActivationContext(this._appConfig, context);
+    // Resolving provider credentials can touch disk; only do it for provider-triggered manifests.
+    const needsProviderIds = registry.getAllEntries().some(({ manifest }) =>
+      manifest.autoEnableWhenConfiguredProviders?.length || manifest.activation?.onProviders?.length,
+    );
+    const fullContext = mergeActivationContext(this._appConfig, needsProviderIds
+      ? context
+      : { ...context, configuredProviderIds: [] });
     let activatedIds = planner.getActivatedIds(fullContext).sort((a, b) => a.localeCompare(b));
 
     const phase = context?.phase ?? 'all';
@@ -567,7 +575,7 @@ export class ExtensionLoader {
       const api = this.createExtensionApi(manifest, config, extensionDir);
 
       // Load extension module
-      const module = await this.loadModule(extensionPath, manifest);
+      const module = await this.loadModule(extensionPath, manifest, source);
       if (!module) {
         log.error({ extensionId: config.id }, `Failed to load module for extension`);
         this.diagnostics.error(config.id, `Failed to load module`);
@@ -716,6 +724,7 @@ export class ExtensionLoader {
   private async loadModule(
     extensionPath: string,
     manifest: ExtensionManifest,
+    source: ExtensionSourceOrigin,
   ): Promise<ExtensionModule | null> {
     const entryPoints = this.moduleEntryCandidates(manifest);
 
@@ -727,7 +736,8 @@ export class ExtensionLoader {
           if (!/\.(js|mjs|cjs)$/.test(fullPath)) {
             throw new Error(`Extension runtime entry must be built JavaScript: ${entry}`);
           }
-          const mod = await import(pathToFileURL(fullPath).href);
+          const bundled = source === 'bundled' ? loadBundledStartupModule(fullPath, manifest.id) : undefined;
+          const mod = await (bundled ?? import(pathToFileURL(fullPath).href));
           return mod.default || mod;
         } catch (error) {
           log.warn({ err: error, path: fullPath }, `Failed to load module`);

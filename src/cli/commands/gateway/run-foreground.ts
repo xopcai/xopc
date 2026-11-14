@@ -27,6 +27,7 @@ async function ensureGatewayReady(
     configPath,
     workspacePath,
     gatewayPort: port,
+    deferApplicationBootstrap: true,
   });
 
   if (result.configCreated || result.workspaceCreated) {

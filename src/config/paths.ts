@@ -325,6 +325,7 @@ export function resolveSkillsCachePath(agentId: string): string {
  * - `XOPC_BUNDLED_EXTENSIONS_ROOT` (Electron packaged gateway override)
  * - `dist/src/config` → `dist/extensions` (npm / gateway)
  * - `src/config` → `dist/extensions` when built, else `extensions/` (dev, tsx)
+ * - `dist/gateway/server` → `dist/extensions` (bundled CLI)
  * - `out/server` → `dist/electron/extensions` (Electron extension bundles)
  */
 export function hasBundledExtensionManifest(dir: string): boolean {
@@ -350,16 +351,18 @@ export function resolveBundledExtensionsDir(): string | null {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
     const isElectronServerBundle = srcDir.endsWith(`${sep}out${sep}server`);
-    const candidates = isElectronServerBundle
-      ? [join(srcDir, '..', '..', 'dist', 'electron', 'extensions')]
-      : [
-          // In source-tree dev, prefer compiled bundled extensions when present: manifests point
-          // at built JavaScript entries (for example src/index.js), while source folders contain TS.
-          join(srcDir, '..', '..', 'dist', 'extensions'),
-          join(srcDir, '..', '..', 'extensions'),
-          join(srcDir, '..', '..', '..', 'dist', 'extensions'),
-          join(srcDir, '..', '..', '..', 'extensions'),
-        ];
+    const isCliServerBundle = srcDir.endsWith(`${sep}dist${sep}gateway${sep}server`);
+    const candidates = isCliServerBundle
+      ? [join(srcDir, '..', '..', 'extensions')]
+      : isElectronServerBundle
+        ? [join(srcDir, '..', '..', 'dist', 'electron', 'extensions')]
+        : [
+            // Prefer compiled extensions in dev because manifests point at built JS.
+            join(srcDir, '..', '..', 'dist', 'extensions'),
+            join(srcDir, '..', '..', 'extensions'),
+            join(srcDir, '..', '..', '..', 'dist', 'extensions'),
+            join(srcDir, '..', '..', '..', 'extensions'),
+          ];
     for (const dir of candidates) {
       // A partial direct tsdown build can create dist/extensions without copying manifests.
       // Ignore that incomplete directory so source-tree development falls back to extensions/.
@@ -387,7 +390,9 @@ export function resolveBundledSkillsDir(): string | null {
     const srcDir = dirname(currentFile);
     
     // Production (npm): dist/config/paths.js -> ../../ -> package root -> skills
-    const packageRoot = join(srcDir, '..', '..');
+    const packageRoot = srcDir.endsWith(`${sep}dist${sep}gateway${sep}server`)
+      ? join(srcDir, '..', '..', '..')
+      : join(srcDir, '..', '..');
     const skillsDir = join(packageRoot, 'skills');
     if (existsSync(skillsDir)) {
       return skillsDir;

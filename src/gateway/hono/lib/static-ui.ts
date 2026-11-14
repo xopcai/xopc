@@ -23,6 +23,9 @@ function resolveUiStaticRoot(): string {
   if (normalized.includes('/out/server')) {
     return resolve(here, '../../dist/gateway/static/root');
   }
+  if (normalized.endsWith('/dist/gateway/server')) {
+    return resolve(here, '../static/root');
+  }
   const fromLib = /\/gateway\/hono\/lib(?:\/|$)/.test(normalized);
   return resolve(here, fromLib ? '../../../../dist/gateway/static/root' : '../../../dist/gateway/static/root');
 }
