@@ -35,7 +35,7 @@ it('persists fatal stderr after exit when pipes close, with exit code and signal
   child.emit('exit', 1, null);
   child.stderr.emit('data', Buffer.from('Error: fatal after exit\n    at timer\n'));
   child.emit('close', 1, null);
-  expect(onUnexpectedExit).toHaveBeenCalledWith(1, null);
+  expect(onUnexpectedExit).not.toHaveBeenCalled();
   const log = readFileSync(join(root, 'gateway-supervisor.log'), 'utf8');
   expect(log).toContain('fatal after exit');
   expect(log).toContain('gateway_closed');

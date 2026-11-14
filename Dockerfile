@@ -144,7 +144,7 @@ USER node
 EXPOSE 18790
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
-  CMD node -e "fetch('http://127.0.0.1:18790/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:18790/api/health').then(async response => process.exit(response.ok && (await response.json()).ready === true ? 0 : 1)).catch(() => process.exit(1))"
 
 ENTRYPOINT ["tini", "-s", "--"]
 CMD ["node", "dist/src/cli/bin.js", "gateway", "--bind", "lan", "--port", "18790"]

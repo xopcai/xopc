@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-import { spawnGatewayProcess, stopGatewayProcessAndWait } from '../gateway-process.js';
+import { registerEmbeddedGatewayRuntime, registerGatewayConnection, spawnGatewayProcess, stopGatewayProcessAndWait } from '../gateway-process.js';
 
 class FakeChildProcess extends EventEmitter {
   pid = 12345;
@@ -41,13 +41,14 @@ class FakeChildProcess extends EventEmitter {
   }
 }
 
-function spawnFakeGateway(child: FakeChildProcess): void {
+function spawnFakeGateway(child: FakeChildProcess, onUnexpectedExit?: () => void): void {
   mocks.spawn.mockReturnValue(child as unknown as ChildProcess);
   spawnGatewayProcess({
     configPath: '/tmp/xopc-test/xopc.json',
     workspacePath: '/tmp/xopc-test/workspace',
     port: 18790,
     bind: 'loopback',
+    onUnexpectedExit,
   });
 }
 
@@ -57,7 +58,47 @@ describe('embedded gateway shutdown', () => {
     mocks.spawnSync.mockReset();
     vi.stubGlobal('process', { ...process, platform: 'darwin' });
   });
-  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+  afterEach(() => {
+    registerGatewayConnection({ port: 18790, token: 'test' });
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('cancels pending crash recovery when the desktop stops the Gateway', async () => {
+    vi.useFakeTimers();
+    const child = new FakeChildProcess(true);
+    const onUnexpectedExit = vi.fn();
+    spawnFakeGateway(child, onUnexpectedExit);
+    registerEmbeddedGatewayRuntime({ port: 18790, authToken: 'test', bind: 'loopback',
+      configPath: '/tmp/xopc-test/xopc.json', workspacePath: '/tmp/xopc-test/workspace', onUnexpectedExit });
+    child.signalCode = 'SIGKILL';
+    child.emit('exit', null, 'SIGKILL');
+
+    await stopGatewayProcessAndWait();
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    expect(mocks.spawn).toHaveBeenCalledOnce();
+    expect(onUnexpectedExit).not.toHaveBeenCalled();
+  });
+
+  it('reports the crash only after three failed recovery attempts', async () => {
+    vi.useFakeTimers();
+    const child = new FakeChildProcess(true);
+    const onUnexpectedExit = vi.fn();
+    spawnFakeGateway(child, onUnexpectedExit);
+    registerEmbeddedGatewayRuntime({ port: 18790, authToken: 'test', bind: 'loopback',
+      configPath: '/tmp/xopc-test/xopc.json', workspacePath: '/tmp/xopc-test/workspace', onUnexpectedExit });
+    mocks.spawn.mockImplementation(() => { throw new Error('spawn failed'); });
+    child.signalCode = 'SIGKILL';
+    child.emit('exit', null, 'SIGKILL');
+
+    await vi.advanceTimersByTimeAsync(13_999);
+    expect(mocks.spawn).toHaveBeenCalledTimes(3);
+    expect(onUnexpectedExit).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.spawn).toHaveBeenCalledTimes(4);
+    expect(onUnexpectedExit).toHaveBeenCalledExactlyOnceWith(null, 'SIGKILL');
+  });
 
   it('rejects an unconfirmed shutdown and retains the owned handle for cleanup', async () => {
     vi.useFakeTimers();

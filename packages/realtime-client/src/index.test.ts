@@ -53,6 +53,28 @@ function issuedTicket(overrides: Partial<RealtimeTicket['realtime']> = {}): Real
 }
 
 describe('RealtimeClient', () => {
+  it('keeps a healthy socket on resume and leaves a terminal error stopped', async () => {
+    const socket = new FakeSocket();
+    const issueTicket = vi.fn(async () => issuedTicket());
+    const onStateChange = vi.fn();
+    const client = new RealtimeClient({ clientId: 'c1', clientKind: 'web',
+      getWebSocketUrl: () => 'ws://gateway/realtime', issueTicket, onStateChange,
+      createWebSocket: () => socket,
+    });
+    client.connect();
+    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
+    socket.open();
+    socket.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
+    client.resume();
+    expect(socket.readyState).toBe(1);
+    expect(issueTicket).toHaveBeenCalledOnce();
+    socket.onclose?.({ code: 4401 });
+    client.resume();
+    expect(onStateChange).toHaveBeenLastCalledWith('error', 'WebSocket closed (4401)');
+    expect(issueTicket).toHaveBeenCalledOnce();
+    client.disconnect();
+  });
+
   it('forwards a device connection proof in browser hello without putting it in the URL', async () => {
     const socket = new FakeSocket();
     const client = new RealtimeClient({ clientId: 'browser', clientKind: 'browser_extension',
