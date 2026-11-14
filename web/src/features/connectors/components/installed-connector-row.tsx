@@ -34,10 +34,9 @@ export function InstalledConnectorRow({
     <button
       type="button"
       className={cn(
-        'flex min-h-[8.75rem] w-full min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4 text-left hover:bg-surface-hover/45',
+        'flex min-h-[8.75rem] w-full min-w-0 flex-col rounded-xl bg-surface-panel p-4 text-left hover:bg-surface-panel-hover',
         interaction.transition,
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-        connectionState === 'needs_setup' && 'border-amber-500/25',
         highlighted && 'bg-accent-soft',
       )}
       onClick={() => onOpenDetails(instance)}

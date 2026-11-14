@@ -99,7 +99,7 @@ export function ServiceRecommendationList({ initialCount = 3, showAll = false, q
           return (
             <article key={`${item.kind}:${item.id}`} className={cn(
               layout === 'cards'
-                ? 'group relative flex min-h-[8.75rem] min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4 transition-colors hover:bg-surface-hover/45 focus-within:ring-2 focus-within:ring-accent/30 [content-visibility:auto] [contain-intrinsic-size:auto_8.75rem]'
+                ? 'group relative flex min-h-[8.75rem] min-w-0 flex-col rounded-xl bg-surface-panel p-4 transition-colors hover:bg-surface-panel-hover focus-within:ring-2 focus-within:ring-accent/30 [content-visibility:auto] [contain-intrinsic-size:auto_8.75rem]'
                 : 'flex min-h-20 items-center gap-3 px-3 py-3 sm:px-4',
             )}>
               {layout === 'cards' ? (

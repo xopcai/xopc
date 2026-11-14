@@ -36,7 +36,7 @@ export function CustomMcpServerCard({ row, lastCheck, t, cs, onEdit, onRemove }:
     : null;
 
   return (
-    <li className="flex min-h-[8.75rem] min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4 transition-colors hover:bg-surface-hover/45 focus-within:ring-2 focus-within:ring-accent/30">
+    <li className="flex min-h-[8.75rem] min-w-0 flex-col rounded-xl bg-surface-panel p-4 transition-colors hover:bg-surface-panel-hover focus-within:ring-2 focus-within:ring-accent/30">
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex min-w-0 items-start gap-3">
           <div title={t.transportLabels[row.transport]} className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-edge-subtle bg-surface-inset text-fg-muted">

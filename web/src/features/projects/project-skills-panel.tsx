@@ -378,7 +378,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
                       ));
                       const installing = installingMarketplaceSkill === packageName;
                       return (
-                        <article key={`${provider ?? 'default'}:${row.id}`} className="group flex min-h-32 gap-3 rounded-lg border border-edge bg-surface-base p-3">
+                        <article key={`${provider ?? 'default'}:${row.id}`} className="group flex min-h-32 gap-3 rounded-lg bg-surface-base p-3">
                           <SkillCardIcon name={row.name} className="size-10" />
                           <div className="flex min-w-0 flex-1 flex-col">
                             <h4 className="truncate text-sm font-semibold text-fg">{presentation.displayName}</h4>

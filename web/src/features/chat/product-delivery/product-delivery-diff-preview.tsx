@@ -11,7 +11,7 @@ export function ProductDeliveryDiffPreview({ presentation }: { presentation: Dif
   const t = messages(language).chat.productDelivery;
 
   return (
-    <section className="mt-2 rounded-lg border border-edge bg-surface-panel p-3" aria-label={t.diffPreview}>
+    <section className="mt-2 rounded-lg bg-surface-inset p-3" aria-label={t.diffPreview}>
       <h3 className="text-sm font-medium text-fg">{t.proposedChanges}</h3>
       <p className="mt-1 whitespace-pre-wrap break-words text-sm text-fg-muted">{presentation.title}</p>
       <div className="mt-2 max-h-80 space-y-2 overflow-y-auto">

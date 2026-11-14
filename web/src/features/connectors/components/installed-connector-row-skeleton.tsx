@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export function InstalledConnectorRowSkeleton() {
   return (
-    <div className="flex min-h-[8.75rem] min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4" aria-hidden>
+    <div className="flex min-h-[8.75rem] min-w-0 flex-col rounded-xl bg-surface-panel p-4" aria-hidden>
       <div className="flex items-start gap-3">
         <Skeleton className="size-9 shrink-0 rounded-lg" />
         <div className="min-w-0 flex-1 space-y-2">

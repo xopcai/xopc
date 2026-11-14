@@ -29,7 +29,7 @@ export function LocalAppsPage() {
   }, [clearPageHeader, setPageHeader, zh]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-surface-panel px-3 pb-8 pt-3 sm:px-5 lg:pt-4 xl:px-6">
+    <div className="min-h-0 flex-1 overflow-y-auto bg-surface-base px-3 pb-8 pt-3 sm:px-5 lg:pt-4 xl:px-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-7 max-w-2xl">
           <h2 className="text-2xl font-semibold tracking-tight text-fg">{zh ? '创建属于你的 XOPC 应用' : 'Build your own apps for XOPC'}</h2>
@@ -43,7 +43,7 @@ export function LocalAppsPage() {
         ) : data?.length ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {data.map((app) => (
-              <Link key={app.id} to={`/local-apps/${encodeURIComponent(app.id)}`} className="group flex min-h-44 flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 shadow-surface transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              <Link key={app.id} to={`/local-apps/${encodeURIComponent(app.id)}`} className="group flex min-h-44 flex-col rounded-xl bg-surface-panel p-4 transition-colors hover:bg-surface-panel-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex size-10 items-center justify-center rounded-xl bg-accent-soft text-accent-fg"><Box className="size-5" /></div>
                   <span className="rounded-full bg-surface-hover px-2 py-1 text-[11px] font-medium text-fg-muted">

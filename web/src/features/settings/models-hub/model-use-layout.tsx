@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 
 export function ModelUseGroup({ section, title, children }: { section: string; title: string; children: ReactNode }) {
   return <section data-model-section={section} className="min-w-0 border-t border-edge first:border-t-0">
-    <h3 className="border-b border-edge-subtle bg-surface-inset/40 px-4 py-1.5 text-xs font-medium text-fg-muted">{title}</h3>
+    <h3 className="bg-surface-panel px-4 py-1.5 text-xs font-medium text-fg-muted">{title}</h3>
     <div className="divide-y divide-edge-subtle px-4">{children}</div>
   </section>;
 }

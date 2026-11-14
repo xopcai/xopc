@@ -37,7 +37,7 @@ export function SkillGridCard({
   const Icon = categoryIcons[category as keyof typeof categoryIcons] ?? Layers;
 
   return (
-    <article className="flex min-w-0 flex-col gap-3 rounded-lg border border-edge bg-surface-panel p-4 transition-colors hover:bg-surface-hover/40 motion-reduce:transition-none [content-visibility:auto] [contain-intrinsic-size:auto_128px]">
+    <article className="flex min-w-0 flex-col gap-3 rounded-lg bg-surface-panel p-4 transition-colors hover:bg-surface-panel-hover motion-reduce:transition-none [content-visibility:auto] [contain-intrinsic-size:auto_128px]">
       <div className="flex min-w-0 items-center gap-2">
         <CapabilityIcon
           iconUrl={iconUrl}

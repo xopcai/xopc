@@ -124,7 +124,7 @@ export function InlineLocalApp({
 
   if (!lease.active) {
     return (
-      <section ref={lease.containerRef} className="content-block-action-scope mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={reference.id}>
+      <section ref={lease.containerRef} className="content-block-action-scope mt-3 overflow-hidden rounded-2xl bg-surface-inset" data-inline-local-app={reference.id}>
         <header className="flex min-w-0 flex-wrap items-center gap-3 border-b border-edge-subtle px-4 py-3">
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-sm font-semibold text-fg" title={reference.title}>{reference.title}</h3>
@@ -150,7 +150,7 @@ export function InlineLocalApp({
 
   if (snapshotQuery.isLoading) {
     return (
-      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" aria-label={messages(language).chat.productDelivery.loadingAppPreview}>
+      <section ref={lease.containerRef} className="mt-3 overflow-hidden rounded-2xl bg-surface-inset" aria-label={messages(language).chat.productDelivery.loadingAppPreview}>
         <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-3">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-9 w-24" />
@@ -216,7 +216,7 @@ export function InlineLocalApp({
   };
 
   return (
-    <section ref={lease.containerRef} className="content-block-action-scope mt-3 overflow-hidden rounded-2xl border border-edge bg-surface-panel" data-inline-local-app={reference.id}>
+    <section ref={lease.containerRef} className="content-block-action-scope mt-3 overflow-hidden rounded-2xl bg-surface-inset" data-inline-local-app={reference.id}>
       <header className="flex min-w-0 flex-wrap items-center gap-3 border-b border-edge-subtle px-4 py-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-fg" title={reference.title}>{reference.title}</h3>

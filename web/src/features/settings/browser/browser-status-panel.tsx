@@ -90,7 +90,7 @@ export function BrowserStatusPanel(props: {
   const StateIcon = effectiveState === 'ready' ? CheckCircle2 : effectiveState === 'syncing' ? Loader2 : AlertTriangle;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-edge bg-surface-panel">
+    <section className="overflow-hidden rounded-2xl bg-surface-base">
       <div className="p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">

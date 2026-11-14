@@ -10,7 +10,7 @@ export function BrowserSettingsDisclosure({ name, title, summary, icon, inset = 
   const contentId = useId();
   const key = `browser-${name}`;
   const open = params.get(key) === '1';
-  return <section className={inset ? 'border-t border-edge-subtle' : 'rounded-2xl border border-edge bg-surface-panel'}>
+  return <section className={inset ? 'border-t border-edge-subtle' : 'rounded-2xl bg-surface-base'}>
     <h2><button type="button" aria-expanded={open} aria-controls={contentId}
       className="flex min-h-16 w-full items-center gap-3 rounded-2xl p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:p-5"
       onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.set(key, open ? '0' : '1'); return next; })}>

@@ -585,14 +585,14 @@ export function LocalAppWorkbenchPage() {
     );
   }
 
-  if (isLoading) return <div className="grid min-h-0 flex-1 gap-3 bg-surface-panel p-3 lg:grid-cols-[280px_minmax(0,1fr)_260px]"><Skeleton className="rounded-xl" /><Skeleton className="rounded-xl" /><Skeleton className="rounded-xl" /></div>;
+  if (isLoading) return <div className="grid min-h-0 flex-1 gap-3 bg-surface-base p-3 lg:grid-cols-[280px_minmax(0,1fr)_260px]"><Skeleton className="rounded-xl" /><Skeleton className="rounded-xl" /><Skeleton className="rounded-xl" /></div>;
   if (error || !app) return <ResourceUnavailable kind="app" missing={!error || /not found|404/i.test(String(error))} backTo="/local-apps" retry={() => void mutateApp()} />;
 
   return (
-    <div className="grid min-h-0 flex-1 gap-3 overflow-hidden bg-surface-panel p-3 lg:grid-cols-[280px_minmax(0,1fr)_300px]">
-      <aside className="min-h-0 min-w-0 overflow-y-auto rounded-xl border border-edge-subtle bg-surface-base p-4 shadow-surface">
+    <div className="grid min-h-0 flex-1 gap-3 overflow-hidden bg-surface-base p-3 lg:grid-cols-[280px_minmax(0,1fr)_300px]">
+      <aside className="min-h-0 min-w-0 overflow-y-auto rounded-xl bg-surface-panel p-4">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-accent"><Sparkles className="size-4" />{zh ? '创作对话' : 'Build conversation'}</div>
-        <div className="mt-4 min-w-0 rounded-xl bg-surface-panel p-3 text-sm leading-6 text-fg [overflow-wrap:anywhere]">{app.idea}</div>
+        <div className="mt-4 min-w-0 rounded-xl bg-surface-inset p-3 text-sm leading-6 text-fg [overflow-wrap:anywhere]">{app.idea}</div>
         <div className="mt-4 rounded-xl bg-accent-soft p-3">
           <p className="flex items-center gap-2 text-sm font-medium text-accent-fg"><CircleCheck className="size-4" />{zh ? '草稿已准备好' : 'Draft is ready'}</p>
           <p className="mt-1 text-xs leading-5 text-fg-muted">{zh ? '继续开发会打开对应项目的对话，编程智能体可以参考当前应用继续修改。' : 'Continue in the Project where Coder has the app context and dedicated skill.'}</p>
@@ -614,7 +614,7 @@ export function LocalAppWorkbenchPage() {
         <Button variant="ghost" className="mt-2 w-full" onClick={() => void onContinueDevelopment()} disabled={chatBusy}><FolderKanban className="size-4" />{zh ? '打开已有开发对话' : 'Open development chat'}</Button>
       </aside>
 
-      <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
+      <section className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-surface-panel">
         <div className="flex h-11 shrink-0 items-center justify-between border-b border-edge-subtle px-3"><div className="flex items-center gap-2 text-xs font-medium text-fg-muted"><span className={`size-2 rounded-full ${validation?.status === 'failed' || runtimeHealth === 'failed' || runtimeHealth === 'timeout' || acceptanceResult?.status === 'failed' ? 'bg-danger' : validation?.status === 'healthy' && runtimeHealth === 'healthy' && acceptanceResult?.status === 'passed' && currentAcceptanceRun?.sourceHash === validation.sourceHash && !savingAcceptance ? 'bg-success' : 'bg-fg-subtle'}`} />{runtimeHealth === 'failed' || runtimeHealth === 'timeout' ? (zh ? '预览运行异常' : 'Preview runtime issue') : validation?.status === 'failed' || acceptanceResult?.status === 'failed' ? (zh ? '自动验收未通过' : 'Acceptance needs attention') : runtimeHealth === 'booting' || !acceptanceResult ? (zh ? '自动验收中' : 'Running acceptance') : savingAcceptance || currentAcceptanceRun?.sourceHash !== validation?.sourceHash ? (zh ? '正在保存验收快照' : 'Saving acceptance snapshot') : (zh ? '草稿已通过验收' : 'Draft accepted')}</div><Button variant="ghost" className="h-8 px-2" onClick={() => void runDraftChecks(true)} disabled={checkingDraft}>{checkingDraft ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}{zh ? '重新验收' : 'Run again'}</Button></div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-subtle px-3 py-2">
           <div className="w-44 shrink-0"><Select aria-label={zh ? '预览数据' : 'Preview data'} value={effectivePreviewMode} onChange={event => {
@@ -652,7 +652,7 @@ export function LocalAppWorkbenchPage() {
         </Dialog.Root>
       </section>
 
-      <aside className="min-h-0 overflow-y-auto rounded-xl border border-edge-subtle bg-surface-base p-4 shadow-surface">
+      <aside className="min-h-0 overflow-y-auto rounded-xl bg-surface-panel p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-fg">{zh ? '发布状态' : 'Release status'}</h2>

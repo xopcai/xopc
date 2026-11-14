@@ -47,7 +47,7 @@ export function ConnectorCard({
   );
   return (
     <div
-      className="group flex min-h-[8.75rem] flex-col rounded-xl border border-edge bg-surface-panel p-4 transition-colors hover:bg-surface-hover/45 focus-within:ring-2 focus-within:ring-accent/30"
+      className="group flex min-h-[8.75rem] flex-col rounded-xl bg-surface-panel p-4 transition-colors hover:bg-surface-panel-hover focus-within:ring-2 focus-within:ring-accent/30"
     >
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-start justify-between gap-3">

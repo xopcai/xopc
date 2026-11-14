@@ -95,7 +95,7 @@ export function HomeTaskReview({ taskId, language, onComplete, onUpdated }: {
   const unverified = criteria.length - passed - failed;
   const automatic = detail?.task.contract?.acceptancePolicy === 'verified_auto';
   const taskHref = taskDetailModalHref(backgroundPath, taskId);
-  return <section className="mt-4 space-y-4 rounded-xl border border-edge bg-surface-panel p-4" aria-label={zh ? '任务结果与处理' : 'Task result and actions'} aria-busy={busy}>
+  return <section className="mt-4 space-y-4 rounded-xl bg-surface-inset p-4" aria-label={zh ? '任务结果与处理' : 'Task result and actions'} aria-busy={busy}>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 className="text-sm font-semibold text-fg">{zh ? '执行结果' : 'Result'}</h3>
       <div className="flex items-center gap-2">

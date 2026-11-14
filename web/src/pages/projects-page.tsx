@@ -80,7 +80,7 @@ function ProjectCard({
   const management = t.management;
 
   return (
-    <article className="flex h-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4">
+    <article className="flex h-full flex-col rounded-xl bg-surface-base p-4">
       <Link
         to={`/projects/${encodeURIComponent(project.id)}`}
         className="group flex min-w-0 flex-1 flex-col rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

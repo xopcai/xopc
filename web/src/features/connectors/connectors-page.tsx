@@ -577,13 +577,13 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
   ];
 
   return (
-    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'bg-surface-panel')}>
+    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'bg-surface-base')}>
       <div className={cn(
         'mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8',
         embedded ? 'pb-7 pt-3 lg:pb-9 lg:pt-4' : 'py-7 lg:py-9',
       )}>
         {!hasToken ? (
-          <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">{cs.tokenHint}</p>
+          <p className="rounded-xl bg-surface-panel px-4 py-3 text-sm text-fg-muted">{cs.tokenHint}</p>
         ) : null}
 
         {understandingIntent ? (
@@ -615,7 +615,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
         ) : null}
 
         <section className="flex flex-col gap-4">
-          <div className="border-b border-edge-subtle pb-3 dark:border-edge-subtle">
+          <div>
             <PageTabs
               items={tabItems}
               activeTab={tab}

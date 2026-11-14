@@ -327,8 +327,8 @@ export function HomeWorkbenchLayout({ cards, editing, language }: {
                 'relative min-w-0',
                 split && 'absolute',
                 dragged === card.id && 'opacity-50',
-                editing && 'rounded-xl bg-surface-panel pb-3 shadow-surface ring-1 ring-inset ring-edge pointer-coarse:pb-8',
-                editing && '[&_[data-workbench-panel]]:border-transparent [&_[data-workbench-panel]]:bg-transparent [&_[data-workbench-panel]]:shadow-none',
+                editing && 'rounded-xl bg-surface-panel pb-3 pointer-coarse:pb-8',
+                editing && '[&_[data-workbench-panel]]:bg-transparent',
                 resizingThisCard && 'ring-2 ring-accent',
               )}
               style={split ? { ...position, width: width ?? position?.width } : { width }}
