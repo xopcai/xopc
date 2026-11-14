@@ -395,6 +395,8 @@
         "publish": { "running": "Publishing artifacts…", "completed": "Published artifacts" },
         "planning": { "running": "Updating plan…", "completed": "Updated plan" },
         "review": { "running": "Reviewing workspace…", "completed": "Reviewed workspace" },
+        "connectedAppLookup": { "running": "Checking app connections…", "completed": "Checked app connections" },
+        "workspaceRecordsRead": { "running": "Reading notes, projects, or automations…", "completed": "Read notes, projects, or automations" },
         "sessionRecall": { "running": "Recalling conversation…", "completed": "Recalled conversation" },
         "sessionSearch": { "running": "Searching conversations…", "completed": "Searched conversations" },
         "sessionStatus": { "running": "Checking conversation status…", "completed": "Checked conversation status" },

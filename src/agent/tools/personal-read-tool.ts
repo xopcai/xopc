@@ -63,8 +63,8 @@ export function createPersonalReadTool(deps: XopcUseToolDeps): AgentTool {
   const automations = deps.getAutomationService?.();
   if (automations) registerAutomationReadCapabilities(dispatcher, automations, projects);
   return {
-    name: 'personal_read', label: 'Read local objects',
-    description: 'Read local notes, projects or automation state. Only list/get; bounded excerpts, no network or model calls. Use personal_task for delegated tasks.',
+    name: 'personal_read', label: 'Read notes, projects, and automations',
+    description: 'List local notes, projects, or automations, or get one record by ID. Use for questions such as “What does this note say?”, “What is this project’s status?”, or “Is this automation enabled?” Returns bounded excerpts using local data only.',
     parameters: schema, supportsParallel: true, idempotent: true,
     async execute(_id, raw, signal) {
       const conversationId = getEmbeddedExecutionSession() ?? deps.getCurrentConversationId?.();
