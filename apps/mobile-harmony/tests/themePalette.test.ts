@@ -72,20 +72,13 @@ describe('Harmony color schemes', () => {
         for (const dark of [false, true]) {
           appThemeColors.apply(scheme, dark);
           const mode = dark ? 'dark' : 'light';
-          const { canvas, assistant, card, bubble, action, onAction, secondary } = appThemeColors.chat;
+          const { canvas, card, bubble, action, onAction, secondary } = appThemeColors.chat;
           expect(canvas).toBe(appThemeColors.surface);
-          for (const [role, resource] of Object.entries({ assistant, card, bubble, action })) {
+          for (const [role, resource] of Object.entries({ card, bubble, action })) {
             expect(resource).toBe(`app.color.chat_${scheme}_${role}_${mode}`);
           }
-          expect(new Set([canvas, assistant, card, bubble].map(color)).size).toBe(4);
-          if (!dark) {
-            expect(color(assistant)).toBe('#FFFFFF');
-            expect(contrast(color(assistant), color(bubble))).toBeGreaterThan(1.2);
-          }
-          for (const surface of [canvas, bubble, card]) {
-            expect(luminance(color(surface))).toBeLessThan(luminance(color(assistant)));
-          }
-          for (const surface of [canvas, assistant, card, bubble]) {
+          expect(new Set([canvas, card, bubble].map(color)).size).toBe(3);
+          for (const surface of [canvas, card, bubble]) {
             for (const foreground of [appThemeColors.foreground, secondary, action]) {
               expect(contrast(color(surface), color(foreground)), `${scheme} ${mode} ${surface} ${foreground}`)
                 .toBeGreaterThanOrEqual(4.5);

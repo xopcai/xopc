@@ -46,7 +46,7 @@ struct XopcIndex {
       this.closeSecondary(); return true;
     }
     if (layoutState.dismissChatOverlay?.()) return true;
-    return layoutState.dismissTabNavigation?.() ?? false;
+    return layoutState.dismissSidebar?.() ?? false;
   }
 
   private closeSecondary(): void {

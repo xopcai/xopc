@@ -47,28 +47,4 @@ export class XopcFileTransfer {
       return result.resource;
     } finally { request.destroy(); }
   }
-
-  async download(context: common.Context, file: XopcFile): Promise<void> {
-    if (file.size > 16 * 1024 * 1024) throw new Error('DOWNLOAD_LIMIT_16_MB');
-    const auth = await gatewaySession.transferAuth();
-    const request = http.createHttp();
-    let data: ArrayBuffer;
-    try {
-      const headers: XopcTransferHeaders = { Authorization: 'Bearer ' + auth.token };
-      const options: http.HttpRequestOptions = { method: http.RequestMethod.GET, header: headers,
-        expectDataType: http.HttpDataType.ARRAY_BUFFER, maxLimit: 16 * 1024 * 1024,
-        maxRedirects: 0, connectTimeout: 8000, readTimeout: 60000, usingCache: false };
-      const response = await signedHttpRequest(request, auth.origin + '/api/files/' + encodeURIComponent(file.id) + '/content', options);
-      if (response.responseCode !== 200) throw new XopcHttpError(response.responseCode);
-      data = response.result as ArrayBuffer;
-      if (data.byteLength !== file.size) throw new Error('FILE_CHANGED_REFRESH_FIRST');
-    } finally { request.destroy(); }
-    const options = new picker.DocumentSaveOptions(); options.newFileNames = [file.name.replace(/[\\/]/g, '_')];
-    const uris = await new picker.DocumentViewPicker(context).save(options);
-    if (!uris.length) return;
-    const destination = await fs.open(uris[0], fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
-    try {
-      if (await fs.write(destination.fd, data) !== data.byteLength) throw new Error('INCOMPLETE_FILE_WRITE');
-    } finally { await fs.close(destination); }
-  }
 }

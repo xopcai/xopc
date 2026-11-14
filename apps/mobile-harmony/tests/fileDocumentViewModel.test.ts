@@ -5,10 +5,11 @@ const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { request: vi.fn() };
 });
-vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request, connectionRevision: () => 0, assertConnection: () => undefined } }));
+vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class { uuid() { return 'version-request'; } } }));
 import { managedFileMedia, XopcFileDocumentViewModel } from '../entry/src/main/ets/viewmodel/fileDocumentViewModel.ets';
 const resource = { id: 'f/a', spaceId: 's', name: 'page.html', relativePath: 'page.html', parentPath: '',
-  kind: 'file', mimeType: 'text/html', size: 20, modifiedAt: 1, revision: 'r1', capabilities: ['preview', 'edit', 'download'] };
+  kind: 'file', mimeType: 'text/html', size: 20, modifiedAt: 1, revision: 'r1', capabilities: ['preview', 'edit', 'download', 'save_version'] };
 const response = (file = resource) => JSON.stringify({ resource: file });
 
 describe('shared file document editing', () => {
@@ -50,11 +51,21 @@ describe('shared file document editing', () => {
   it('resolves workspace paths in the originating conversation and never resolves external links', async () => {
     const model = new XopcFileDocumentViewModel();
     mocks.request.mockResolvedValueOnce(JSON.stringify({ space: { id: 'space' } })).mockResolvedValueOnce(response());
-    await model.inspect({ ...managedFileMedia(resource), uri: '', workspaceRelativePath: 'out/page.html' }, 'chat/id');
+    await model.inspect({ ...managedFileMedia(resource), fileId: undefined, uri: '', workspaceRelativePath: 'out/page.html' }, 'chat/id');
     expect(mocks.request.mock.calls[0][0]).toBe('/api/files/contexts/session/chat%2Fid');
     expect(JSON.parse(mocks.request.mock.calls[1][2])).toEqual({ spaceId: 'space', path: 'out/page.html' });
-    mocks.request.mockClear(); await model.inspect({ ...managedFileMedia(resource), uri: 'https://example.org/page.html' }, '');
+    mocks.request.mockClear(); await model.inspect({ ...managedFileMedia(resource), fileId: undefined, uri: 'https://example.org/page.html' }, '');
     expect(mocks.request).not.toHaveBeenCalled(); expect(model.canEdit()).toBe(false);
+  });
+  it('reuses the version request after a lost response and keeps the source revision', async () => {
+    const model = new XopcFileDocumentViewModel(); model.resource = resource;
+    mocks.request.mockRejectedValueOnce(new Error('OFFLINE')).mockResolvedValueOnce(JSON.stringify({ version: { id: 'version-request' } }));
+    expect(await model.saveVersion()).toBe(false);
+    expect(await model.saveVersion()).toBe(true);
+    expect(mocks.request.mock.calls[0]).toEqual(mocks.request.mock.calls[1]);
+    expect(mocks.request.mock.calls[1]).toEqual(['/api/files/f%2Fa/versions', 'POST',
+      JSON.stringify({ id: 'version-request', revision: 'r1' })]);
+    expect(model.resource?.revision).toBe('r1');
   });
   it('routes library files through the same preview and editor as chat attachments', () => {
     const view = readFileSync(new URL('../entry/src/main/ets/view/FilesView.ets', import.meta.url), 'utf8');

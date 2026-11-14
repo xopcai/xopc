@@ -1,6 +1,6 @@
 import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
-import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload } from '../model/chat';
+import { XopcChatRow, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload } from '../model/chat';
 import { dedupeChatHistory, chatHistoryOverlap } from '../common/chatHistory';
 import { XopcEvent } from '../model/realtime';
 import { historyRows } from '../common/chatProtocol';
@@ -25,7 +25,6 @@ interface XopcChatHttpFailure { status?: number; }
 @ObservedV2
 export class XopcChatViewModel {
   private static owner?: XopcChatViewModel;
-  @Trace sessions: XopcSessionItem[] = [];
   @Trace rows: XopcChatRow[] = [];
   @Trace selectedId: string = '';
   @Trace title: string = '';
@@ -45,7 +44,7 @@ export class XopcChatViewModel {
   @Trace tool: string = '';
   @Trace liveRow?: XopcChatRow;
   @Trace liveActivityRow?: XopcChatRow;
-  @Trace hasMore: boolean = false;
+  @Trace localDraft: boolean = false;
   @Trace hasOlder: boolean = false;
   @Trace auxiliaryRevision: number = 0;
   private repository: XopcChatRepository = new XopcChatRepository();
@@ -58,24 +57,22 @@ export class XopcChatViewModel {
   private prefetchedHistory?: Promise<XopcHistory | undefined>;
   @Trace transcriptId?: string;
   private before: string = '';
-  private search: string = '';
   private snapshotMode: boolean = false;
   private refreshTimer: number = -1;
   private streamTimer: number = -1;
   private streamBuffer: XopcChatStreamBuffer = new XopcChatStreamBuffer();
-  private main: boolean = false;
+  private onUnavailable?: (id: string) => void;
   private disposed: boolean = false;
-  private listRequest: number = 0;
   private recoveryRequest: number = 0;
   private hasNetworkHistory: boolean = false;
   private completedActivityRunId: string = '';
   private executionInputIds: Set<string> = new Set<string>();
   private executionAssistantIds: Set<string> = new Set<string>();
 
-  start(initialId: string = '', main: boolean = !initialId): void {
-    this.main = main;
+  start(initialId: string, onUnavailable?: (id: string) => void): void {
+    this.onUnavailable = onUnavailable;
     this.activate();
-    if (initialId) this.open(initialId); else this.restoreMain();
+    void this.open(initialId);
   }
 
   activate(): void {
@@ -88,7 +85,7 @@ export class XopcChatViewModel {
     };
     realtimeClient.onEvent = (event: XopcEvent): void => { this.event(event); };
     realtimeClient.onGap = (topic: string): void => {
-      if (!this.loading) this.recover(false, topic === 'run:' + this.runId);
+      if (!this.loading) this.recover(topic === 'run:' + this.runId);
     };
     try { realtimeClient.turnClaim(); this.connection = 'connected'; } catch (_) {}
     realtimeClient.start();
@@ -119,44 +116,23 @@ export class XopcChatViewModel {
 
   pause(): void { this.flushStream(); clearTimeout(this.refreshTimer); this.refreshTimer = -1; }
 
-  private async restoreMain(): Promise<void> {
-    this.loading = true;
-    const selection = this.selection;
-    try {
-      const id = await this.repository.mainConversation();
-      if (this.disposed || selection !== this.selection) return;
-      this.loading = false;
-      if (id) await this.open(id); else await this.create();
-    } catch (error) { if (!this.disposed && selection === this.selection) { this.error = (error as Error).message; this.loading = false; } }
-  }
-
   dispose(): void {
     this.prefetchKey = ''; this.prefetchedHistory = undefined;
-    this.deactivate(); this.disposed = true; this.listRequest++;
+    this.deactivate(); this.disposed = true;
     this.selection++; clearTimeout(this.refreshTimer);
   }
 
-  async loadList(search: string = this.search, more: boolean = false): Promise<void> {
-    if (this.loading) return;
-    this.loading = true; this.error = ''; this.search = search;
-    const request = ++this.listRequest;
-    try {
-      const page = await this.repository.list(search, more ? this.sessions.length : 0);
-      if (request !== this.listRequest || this.disposed) return;
-      this.sessions = more ? this.sessions.concat(page.items.filter((item): boolean => !this.sessions.some((old): boolean => old.key === item.key))) : page.items;
-      this.hasMore = page.hasMore;
-    } catch (error) { if (request === this.listRequest && !this.disposed) this.error = (error as Error).message; }
-    finally { if (request === this.listRequest && !this.disposed) this.loading = false; }
-  }
-
-  async create(agentId: string = this.agentId, projectId: string | null = this.projectId || null, executionMode?: string): Promise<void> {
+  async create(agentId: string = this.agentId, projectId: string | null = this.projectId || null, executionMode?: string,
+    onCreated?: (id: string) => void): Promise<void> {
     if (this.loading || this.sending || this.disposed) return;
     this.loading = true;
     const selection = this.selection;
     try {
       const id = await this.repository.create(projectId, agentId || undefined, executionMode);
-      if (this.disposed || selection !== this.selection) return;
-      this.loading = false; await this.open(id);
+      if (this.disposed || selection !== this.selection || this.sending) return;
+      this.loading = false;
+      onCreated?.(id);
+      await this.open(id);
     } catch (error) { if (!this.disposed && selection === this.selection) this.error = (error as Error).message; }
     finally { if (!this.disposed && selection === this.selection) this.loading = false; }
   }
@@ -171,15 +147,10 @@ export class XopcChatViewModel {
     this.liveRow = undefined; this.liveActivityRow = undefined; this.historyMessages = []; this.rows = this.pendingRows();
     this.completedActivityRunId = ''; this.snapshotMode = false;
     this.executionInputIds.clear(); this.executionAssistantIds.clear();
-    this.cachedHistory = false; this.hasNetworkHistory = false;
+    this.cachedHistory = false; this.hasNetworkHistory = false; this.localDraft = false;
     this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
     this.before = ''; this.error = ''; this.loading = true;
     const selection = this.selection;
-    if (this.main && !this.taskId) {
-      this.repository.saveMainConversation(id).catch((_error: Error): void => {
-        if (!this.disposed && selection === this.selection) this.error = 'CHAT_SELECTION_SAVE_FAILED';
-      });
-    }
     try {
       void this.restoreCachedHistory(id, selection);
       const local = await this.repository.draft(id);
@@ -190,17 +161,10 @@ export class XopcChatViewModel {
       await this.repository.reconcile(id);
       const draft = await this.repository.draft(id);
       if (this.disposed || selection !== this.selection) return;
-      if (draft) return;
-      await this.recover(true);
+      if (draft) { this.localDraft = true; return; }
+      await this.recover();
     } catch (error) {
       if (!this.disposed && selection === this.selection) {
-        if (this.main && (error as XopcChatHttpFailure).status === 404) {
-          await this.repository.saveMainConversation('');
-          if (this.disposed || selection !== this.selection) return;
-          this.loading = false;
-          await this.create();
-          return;
-        }
         this.error = (error as Error).message;
         await this.restoreCachedHistory(id, selection);
       }
@@ -222,18 +186,7 @@ export class XopcChatViewModel {
     } catch (_) { /* Cache is optional; network recovery remains authoritative. */ }
   }
 
-  back(): void {
-    if (this.sending) return;
-    this.prefetchKey = ''; this.prefetchedHistory = undefined;
-    this.selection++; clearTimeout(this.refreshTimer); this.refreshTimer = -1;
-    if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
-    this.selectedId = ''; this.runId = ''; this.runStartedAtMs = 0; this.rows = []; this.loading = false;
-    this.liveRow = undefined; this.liveActivityRow = undefined;
-    this.completedActivityRunId = '';
-    this.executionInputIds.clear(); this.executionAssistantIds.clear();
-  }
-
-  private async recover(propagateMissing: boolean = false, gap: boolean = false): Promise<void> {
+  private async recover(gap: boolean = false): Promise<void> {
     this.flushStream();
     const id = this.selectedId; const selection = this.selection;
     if (!id) return;
@@ -241,7 +194,7 @@ export class XopcChatViewModel {
     if (gap) this.snapshotMode = true;
     const previousRun = this.runId;
     try {
-      await this.loadHistory(false, (): void => {}, propagateMissing);
+      await this.loadHistory(false, (): void => {}, !!this.onUnavailable);
       if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
       const run = await this.repository.activeRun(id);
       if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
@@ -260,15 +213,15 @@ export class XopcChatViewModel {
         this.trackRun(run.active ? run.runId ?? '' : '');
       }
     } catch (error) {
-      if (request === this.recoveryRequest && selection === this.selection && !this.disposed) this.error = (error as Error).message;
-      if (propagateMissing && (error as XopcChatHttpFailure).status === 404) throw error as Error;
+      if (request === this.recoveryRequest && selection === this.selection && !this.disposed) {
+        this.error = (error as Error).message;
+      }
     }
   }
 
   async retryHistory(): Promise<void> {
     if (this.loading || this.disposed) return;
     this.error = '';
-    if (!this.selectedId && this.main) { await this.restoreMain(); return; }
     this.loading = true;
     try { await this.recover(); } finally { this.loading = false; }
   }
@@ -287,7 +240,7 @@ export class XopcChatViewModel {
       .catch((_error: Error): undefined => undefined);
   }
 
-  async loadHistory(older: boolean, beforePrepend: () => void = (): void => {}, propagateMissing: boolean = false): Promise<void> {
+  async loadHistory(older: boolean, beforePrepend: () => void = (): void => {}, handleMissing: boolean = false): Promise<void> {
     if (!this.selectedId || (older && (this.olderPending || !this.hasOlder))) return;
     if (older) this.olderPending = true;
     const request = ++this.historyRequest;
@@ -303,8 +256,12 @@ export class XopcChatViewModel {
       historyRows(result, before || 'latest');
       if (result.session.key !== this.selectedId) throw new Error('INVALID_HISTORY_SESSION');
       if (older) beforePrepend();
-      if (!older) { this.hasNetworkHistory = true; this.cachedHistory = false; }
-      if (!older && !this.runId) this.repository.rememberHistory(this.selectedId, result).catch((_error: Error): void => {});
+      if (!older) {
+        this.localDraft = result.localDraft === true;
+        this.hasNetworkHistory = !this.localDraft;
+        this.cachedHistory = false;
+      }
+      if (!older && this.hasNetworkHistory && !this.runId) this.repository.rememberHistory(this.selectedId, result).catch((_error: Error): void => {});
       const sameTranscript = !!this.transcriptId && this.transcriptId === result.session.transcriptId;
       if (!older && this.transcriptId && !sameTranscript) {
         this.executionInputIds.clear(); this.executionAssistantIds.clear();
@@ -380,8 +337,13 @@ export class XopcChatViewModel {
         this.hasOlder = result.pagination.hasMore && this.before.length > 0;
       }
     } catch (error) {
-      if (selection === this.selection && request === this.historyRequest) this.error = (error as Error).message;
-      if (propagateMissing && (error as XopcChatHttpFailure).status === 404) throw error as Error;
+      if (selection === this.selection && request === this.historyRequest && !this.disposed) {
+        this.error = (error as Error).message;
+        if (handleMissing && (error as XopcChatHttpFailure).status === 404) {
+          this.onUnavailable?.(this.selectedId);
+          throw error as Error;
+        }
+      }
     }
     finally { if (older && selection === this.selection) this.olderPending = false; }
   }
@@ -587,7 +549,7 @@ export class XopcChatViewModel {
         const segment = payload.messageId || this.runId;
         const displayed = this.liveRow?.blocks?.find((block): boolean => block.segmentId === segment)?.text || '';
         const result = this.streamBuffer.append(segment, displayed, payload);
-        if (result === 'gap') this.recover(false, true);
+        if (result === 'gap') this.recover(true);
         else if (result === 'accepted' && !this.liveRow?.text) this.flushStream();
         else if (result === 'accepted' && this.streamTimer === -1) {
           this.streamTimer = setTimeout((): void => { this.flushStream(); }, 32);
@@ -603,20 +565,5 @@ export class XopcChatViewModel {
   async abort(): Promise<void> {
     try { if (this.runId) await this.repository.abort(this.runId); await this.recover(); }
     catch (error) { this.error = (error as Error).message; }
-  }
-
-  async rename(name: string): Promise<void> {
-    try { await this.repository.rename(this.selectedId, name); this.title = name; }
-    catch (error) { this.error = (error as Error).message; }
-  }
-
-  async action(action: string): Promise<void> {
-    try {
-      await this.repository.action(this.selectedId, action);
-      if (action === 'delete' || action === 'archive') {
-        this.back();
-        if (this.main) { await this.repository.saveMainConversation(''); this.loading = false; await this.create(); }
-      } else await this.recover();
-    } catch (error) { this.error = (error as Error).message; }
   }
 }

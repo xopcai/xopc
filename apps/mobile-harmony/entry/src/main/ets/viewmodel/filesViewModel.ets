@@ -94,9 +94,9 @@ export class XopcFilesViewModel {
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.busy = false; }
   }
-  choose(space: XopcFileSpace): void {
+  async choose(space: XopcFileSpace): Promise<void> {
     if (this.busy) return;
-    this.space = space; this.directory = ''; this.selected = undefined; this.items = []; this.load();
+    this.space = space; this.directory = ''; this.selected = undefined; this.items = []; await this.load();
   }
   parent(): void {
     if (this.busy) return;
@@ -136,12 +136,5 @@ export class XopcFilesViewModel {
     catch (error) { this.error = (error as Error).message; }
     finally { this.busy = false; }
     if (succeeded) await this.load();
-  }
-  async download(context: common.Context): Promise<void> {
-    if (!this.selected?.capabilities.includes('download') || this.busy) return;
-    this.busy = true; this.error = '';
-    try { await this.transfer.download(context, this.selected); }
-    catch (error) { this.error = (error as Error).message; }
-    finally { this.busy = false; }
   }
 }

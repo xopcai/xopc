@@ -13,6 +13,7 @@ export class XopcWorkspaceViewModel {
   @Trace title: string = '';
   @Trace body: string = '';
   @Trace cron: string = '';
+  @Trace automationTimeZone: string = '';
   @Trace projectId: string = '';
   @Trace priority: string = 'normal';
   @Trace dueAt?: number;
@@ -59,6 +60,7 @@ export class XopcWorkspaceViewModel {
   private copyFields(item: XopcWorkspaceItem): void {
     this.title = item.title; this.body = item.body; this.cron = item.cron ?? ''; this.projectId = item.projectId ?? '';
     this.priority = item.priority || 'normal'; this.dueAt = item.dueAt;
+    this.automationTimeZone = item.automationTimeZone ?? '';
     this.mutationId = ''; this.mutationSignature = '';
   }
   create(projectId: string = ''): void {
@@ -89,20 +91,36 @@ export class XopcWorkspaceViewModel {
     }
     return this.mutationId;
   }
-  async save(): Promise<void> {
+  async save(): Promise<string> {
     const selected = this.selected;
-    if (!selected || this.busy || !this.title.trim()) return;
+    if (!selected || this.busy || !this.title.trim()) return '';
     this.busy = true; this.error = '';
     const item: XopcWorkspaceItem = { id: selected.id, title: this.title, body: this.body, status: selected.status,
       version: selected.version, projectId: this.projectId.trim() || undefined, priority: this.priority, dueAt: this.dueAt, cron: this.cron,
-      editable: selected.editable, actions: selected.actions, automation: selected.automation };
+      editable: selected.editable, actions: selected.actions, automation: selected.automation, automationTimeZone: this.automationTimeZone };
     try {
-      await this.repository.save(this.section, item, this.idempotency(JSON.stringify(item)));
+      const id = await this.repository.save(this.section, item, this.idempotency(JSON.stringify(item)));
       this.busy = false;
-      if (selected.id) { this.editing = false; await this.refreshDetail(); } else this.back();
-    } catch (error) { this.error = (error as Error).message; }
+      if (selected.id) { this.editing = false; await this.refreshDetail(); }
+      return id;
+    } catch (error) { this.error = (error as Error).message; return ''; }
     finally { this.busy = false; }
   }
+  async startAutomation(): Promise<string> {
+    const id = this.selected?.id;
+    if (!id || this.busy) return '';
+    const generation = this.generation;
+    this.busy = true; this.error = '';
+    try {
+      const runId = await this.repository.startAutomation(id, this.idempotency(id + ':run'));
+      this.mutationId = ''; this.mutationSignature = '';
+      return generation === this.generation ? runId : '';
+    } catch (error) {
+      if (generation === this.generation) this.error = (error as Error).message;
+      return '';
+    } finally { if (generation === this.generation) this.busy = false; }
+  }
+
   async action(action: string, agentId: string): Promise<void> {
     const selected = this.selected;
     if (!selected?.id || this.busy) return;

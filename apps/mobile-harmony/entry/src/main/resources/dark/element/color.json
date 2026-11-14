@@ -1,5 +1,6 @@
 {
   "color": [
+    { "name": "chat_attention_dot", "value": "#FFBC63" },
     {
       "name": "surface",
       "value": "#101113"

@@ -1,6 +1,6 @@
 import type { XopcWorkspaceItem, XopcMobileTaskDetail, XopcMobileTaskReview,
   XopcMobileTaskRun, XopcMobileTaskReceipt, XopcMobileTaskCheck, XopcMobileTaskEvidence,
-  XopcMobileTaskWait, XopcTaskAcceptanceCheck, XopcTaskCheckMutation, XopcTaskCommand, XopcTaskPatch } from '../model/workspace';
+  XopcMobileTaskWait, XopcTaskAcceptanceCheck, XopcTaskCheckMutation, XopcTaskCommand, XopcTaskPatch, XopcMobileTaskDetailResult } from '../model/workspace';
 
 export function taskCriterionState(info: XopcMobileTaskDetail, criterion: string, index: number): string {
   const id = info.acceptanceChecks?.[index]?.id;
@@ -82,6 +82,23 @@ export function taskCommand(item: XopcWorkspaceItem, action: string, agentId: st
     command.resolution = action === 'cancel_task' ? 'cancelled' : 'done';
   } else if (!['mark_ready', 'request_review'].includes(kind)) throw new Error('INVALID_ACTION');
   return command;
+}
+
+export function taskRetryCommand(detail: XopcMobileTaskDetailResult): XopcTaskCommand {
+  const latest = detail.runs.filter((run: XopcMobileTaskRun): boolean => !run.parentRunId)
+    .sort((left: XopcMobileTaskRun, right: XopcMobileTaskRun): number => (right.queuedAt ?? 0) - (left.queuedAt ?? 0))[0];
+  if (!detail.allowedCommands?.includes('start') || latest?.status !== 'failed') throw new Error('TASK_RETRY_UNAVAILABLE');
+  const ref = latest.executorRef;
+  if (latest.executorKind === 'agent' && ref?.agentId) {
+    return { type: 'start', executor: { kind: 'agent', agentId: ref.agentId } };
+  }
+  if (latest.executorKind === 'human' && ref?.actorId) {
+    return { type: 'start', executor: { kind: 'human', actorId: ref.actorId } };
+  }
+  if (latest.executorKind === 'external' && ref?.provider) {
+    return { type: 'start', executor: { kind: 'external', provider: ref.provider, config: ref.config } };
+  }
+  throw new Error('TASK_RETRY_UNAVAILABLE');
 }
 
 export function taskPatch(item: XopcWorkspaceItem): XopcTaskPatch {

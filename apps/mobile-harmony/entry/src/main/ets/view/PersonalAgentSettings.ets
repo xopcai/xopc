@@ -25,10 +25,12 @@ const PERSONAL_CALL_MODES: XopcPersonalCallMode[] = ['auto', 'natural', 'assista
 @ComponentV2
 export struct XopcPersonalAgentSettings {
   @Param chatOptions: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
+  @Param showSearch: boolean = true;
   @Param modelBusy: boolean = false;
   @Event onReloadModels: () => void = (): void => {};
   @Param record: XopcPersonalAgentRecord | null = null;
   @Event onSaved: (record: XopcPersonalAgentRecord) => void = (_record: XopcPersonalAgentRecord): void => {};
+  @Event onSearch: () => void = (): void => {};
   @Event onClose: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcPersonalAgentSettingsViewModel = new XopcPersonalAgentSettingsViewModel();
@@ -136,6 +138,12 @@ export struct XopcPersonalAgentSettings {
           onRetry: (): void => { this.onReloadModels(); } })
       } else {
         Row() {
+          if (this.showSearch) {
+            Button($r('app.string.chat_search_in_conversation')).id('personal-setting-search').height(44)
+              .backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+              .enabled(!this.model.saving && !this.uploading)
+              .onClick((): void => { this.onSearch(); })
+          }
           Blank().layoutWeight(1)
           Button('×').width(44).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
             .id('personal-setting-close').accessibilityText(this.label('关闭', 'Close'))

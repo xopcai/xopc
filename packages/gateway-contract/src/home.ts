@@ -78,6 +78,7 @@ export const HomeWorkbenchItemSchema = z.object({
   kind: z.enum(['decision', 'failure', 'running', 'scheduled']),
   title: z.string(),
   summary: z.string(),
+  projectId: z.string().optional(),
   projectName: z.string().optional(),
   recommendation: z.string().optional(),
   dueAt: z.number().int().nonnegative().optional(),

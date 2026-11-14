@@ -1,5 +1,4 @@
 import { XopcHomeAction, XopcHomeCommand, XopcHomeDecision, XopcHomeResponse, XopcMobileRoute } from '../model/home';
-import { XopcTask, XopcTaskResult } from '../model/workspace';
 
 export function mobileRoute(href: string): XopcMobileRoute | undefined {
   // Only known internal routes are allowed; never load server-provided external URLs.
@@ -69,16 +68,13 @@ export async function dispatchHomeAction(action: XopcHomeAction, handlers: XopcH
     handlers.navigate(route);
     return;
   }
-  // Validate before confirmation so unsupported actions cannot produce an inert dialog.
-  homeCommand(action);
+  if (action.type === 'retry_task') {
+    if (typeof action.taskId !== 'string' || !action.taskId.trim()) throw new Error('INVALID_HOME_ACTION');
+  } else {
+    homeCommand(action);
+  }
   return handlers.confirm(action).then((confirmed: boolean): Promise<void> => {
     if (confirmed) return handlers.mutate(action);
     return Promise.resolve();
   });
-}
-
-export function recentClosed(items: XopcTaskResult[]): XopcTask[] {
-  return items.map((item: XopcTaskResult): XopcTask => item.task)
-    .filter((task: XopcTask): boolean => task.phase === 'closed')
-    .sort((left: XopcTask, right: XopcTask): number => (right.closedAt ?? right.updatedAt ?? 0) - (left.closedAt ?? left.updatedAt ?? 0)).slice(0, 5);
 }

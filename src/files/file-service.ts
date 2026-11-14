@@ -181,6 +181,7 @@ function capabilities(name: string, directory: boolean, writable: boolean, textF
   const result: FileCapability[] = ['download', 'share'];
   if (MIME_TYPES[extension] || textFile) result.unshift('preview');
   if (writable) {
+    if (result.includes('preview')) result.push('save_version');
     if (textFile) result.push('edit');
     result.push('delete');
   }

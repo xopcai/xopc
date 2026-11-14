@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeActionSchema } from '../../../packages/gateway-contract/src/home';
 
 const mocks = vi.hoisted(() => {
-  Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
+  Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined, Computed: () => undefined });
   return { request: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
+vi.mock('../entry/src/main/ets/repository/workspaceRepository.ets', () => ({ XopcWorkspaceRepository: class {} }));
 vi.mock('../entry/src/main/ets/service/settings.ets', () => ({ appSettings: { effectiveLanguage: () => 'en-US' } }));
-import { dispatchHomeAction, homeCommand, mobileRoute, parseHome, recentClosed } from '../entry/src/main/ets/common/homeProtocol.ets';
+import { dispatchHomeAction, homeCommand, mobileRoute, parseHome } from '../entry/src/main/ets/common/homeProtocol.ets';
 import { XopcProgressViewModel } from '../entry/src/main/ets/viewmodel/homeViewModel.ets';
 
 describe('mobile home protocol', () => {
@@ -35,33 +36,26 @@ describe('mobile home protocol', () => {
     expect(result.needsUser[0].secondaryActions).toEqual([]);
     expect(() => parseHome('{"needsUser":[{}],"background":[]}')).toThrow('INVALID_HOME_ITEM');
   });
-  it('orders all closed resolutions without treating cancelled work as done', () => {
-    const items = ['done', 'cancelled', 'wont_do', 'duplicate', 'done', 'done'].map((resolution, index) => ({
-      task: { id: String(index), title: 'Task', phase: 'closed', resolution, closedAt: index, version: 1, priority: 'normal' },
-    }));
-    expect(recentClosed(items).map((task) => task.id)).toEqual(['5', '4', '3', '2', '1']);
-    expect(recentClosed(items).at(-1)?.resolution).toBe('cancelled');
-  });
 });
 
 describe('home loading isolation', () => {
   beforeEach(() => vi.resetAllMocks());
-  it('keeps recent tasks usable if the attention feed fails', async () => {
+  it('reports an attention feed failure without querying the task list', async () => {
     mocks.request.mockImplementation(async (path: string) => {
       if (path.startsWith('/api/home')) throw new Error('OFFLINE_HOME');
-      return JSON.stringify({ items: [{ task: { id: 't', phase: 'closed', closedAt: 1, resolution: 'done' } }] });
+      return '{}';
     });
     const model = new XopcProgressViewModel(); await model.refresh();
-    expect(model.homeError).toBe('OFFLINE_HOME'); expect(model.tasksError).toBe('');
-    expect(model.closed[0].id).toBe('t'); expect(model.loading).toBe(false);
-    expect(mocks.request).toHaveBeenCalledWith('/api/home?locale=en-US');
+    expect(model.homeError).toBe('OFFLINE_HOME'); expect(model.loading).toBe(false);
+    expect(mocks.request).not.toHaveBeenCalledWith('/api/tasks');
+    expect(mocks.request).toHaveBeenCalledWith('/api/home?locale=en-US&attention=all');
   });
   it('ignores responses after disposal', async () => {
     const finish: ((value: string) => void)[] = [];
     mocks.request.mockImplementation(() => new Promise<string>((resolve) => finish.push(resolve)));
     const model = new XopcProgressViewModel(); const loading = model.refresh(); model.dispose();
     finish[0](JSON.stringify({ needsUser: [{ id: 'late', title: 'Late', summary: '' }], background: [] }));
-    finish[1](JSON.stringify({ items: [] })); await loading;
+    finish[1](JSON.stringify({})); await loading;
     expect(model.needsUser).toEqual([]);
   });
   it('does not POST invalid attention actions', async () => {
@@ -116,6 +110,14 @@ describe('progress action dispatch', () => {
     await dispatchHomeAction(action, handlers);
     expect(handlers.mutate).toHaveBeenCalledExactlyOnceWith(action);
     expect(handlers.navigate).not.toHaveBeenCalled();
+  });
+
+  it('passes a real task retry through confirmation', async () => {
+    const action = HomeActionSchema.parse({ type: 'retry_task', label: '重试', taskId: 'failed-task' });
+    const handlers = { navigate: vi.fn(), confirm: vi.fn().mockResolvedValue(true), mutate: vi.fn() };
+    await dispatchHomeAction(action, handlers);
+    expect(handlers.confirm).toHaveBeenCalledExactlyOnceWith(action);
+    expect(handlers.mutate).toHaveBeenCalledExactlyOnceWith(action);
   });
 
   it('propagates dispatch failures for visible feedback', async () => {

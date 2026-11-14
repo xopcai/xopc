@@ -104,7 +104,7 @@ export class XopcSessionsViewModel {
     } catch (error) { if (this.current()) this.actionError = (error as Error).message; return false; }
     finally { this.busy = false; }
   }
-  async act(targets: XopcSessionItem[], action: string): Promise<void> {
+  async act(targets: XopcSessionItem[], action: string, onDeleted?: (id: string) => void): Promise<void> {
     if (!this.current() || this.busy || !targets.length || !['pin', 'unpin', 'archive', 'delete'].includes(action)) return;
     this.busy = true; this.actionError = ''; this.generation++;
     const failed: string[] = [];
@@ -117,6 +117,7 @@ export class XopcSessionsViewModel {
         if (action !== 'pin' || item.status !== 'pinned') {
           await this.repository.action(item.key, action === 'archive' && item.status === 'archived' ? 'unarchive' : action);
         }
+        if (action === 'delete' && gatewaySession.currentProfile()?.gatewayId === this.gatewayId) onDeleted?.(item.key);
         if (this.current()) {
           this.selected = this.selected.filter((id: string): boolean => id !== item.key);
           this.items = action === 'delete' ? this.items.filter((row: XopcSessionItem): boolean => row.key !== item.key)
@@ -143,10 +144,10 @@ export class XopcSessionsViewModel {
   selectedItems(): XopcSessionItem[] {
     return this.items.filter((item: XopcSessionItem): boolean => this.selected.includes(item.key) && !this.hidden.includes(item.key));
   }
-  scheduleDelete(id: string): void {
+  scheduleDelete(id: string, onDeleted?: (id: string) => void): void {
     if (!this.current() || this.busy || this.hidden.includes(id)) return;
     this.hidden = this.hidden.concat(id); this.undoId = id; this.actionError = '';
-    this.deletes.set(id, setTimeout((): void => { this.commitDelete(id); }, 5000));
+    this.deletes.set(id, setTimeout((): void => { void this.commitDelete(id, onDeleted); }, 5000));
   }
   undoDelete(): void {
     const id = this.undoId;
@@ -155,11 +156,12 @@ export class XopcSessionsViewModel {
     clearTimeout(timer); this.deletes.delete(id);
     this.hidden = this.hidden.filter((key: string): boolean => key !== id); this.undoId = '';
   }
-  private async commitDelete(id: string): Promise<void> {
+  private async commitDelete(id: string, onDeleted?: (id: string) => void): Promise<void> {
     this.deletes.delete(id); if (this.undoId === id) this.undoId = '';
     try {
       if (gatewaySession.currentProfile()?.gatewayId !== this.gatewayId) throw new Error('GATEWAY_CHANGED');
       await this.repository.action(id, 'delete');
+      if (gatewaySession.currentProfile()?.gatewayId === this.gatewayId) onDeleted?.(id);
       if (this.current()) await this.load();
     } catch (error) {
       this.hidden = this.hidden.filter((key: string): boolean => key !== id);

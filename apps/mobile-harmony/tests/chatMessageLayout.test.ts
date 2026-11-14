@@ -28,18 +28,18 @@ describe('chat message layout parity', () => {
     expect(chat).toContain("this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }");
   });
 
-  it('uses a separate surface for left-aligned assistant replies and their preview fades', () => {
+  it('uses the conversation canvas for full-width assistant replies with compact actions', () => {
     const start = chat.indexOf("} else if (item.item.role === 'assistant') {");
     const end = chat.indexOf("} else {", start);
     const assistantLayout = chat.slice(start, end);
 
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id)");
-    expect(assistantLayout).toContain('.width(this.assistantBubbleWidth(item.item))');
-    expect(assistantLayout).toContain('.constraintSize({ minWidth: 44, maxWidth: CHAT_MESSAGE_MAX_WIDTH }).alignItems(HorizontalAlign.Start)');
-    expect(assistantLayout).toContain('.padding({ left: 14, right: 14, top: 10, bottom: 10 })');
+    expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width('100%')");
+    expect(assistantLayout).toContain('.constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)');
+    expect(assistantLayout).toContain('this.assistantReplyActions(item.item)');
     expect(chat).toContain(".width(CHAT_MESSAGE_MAX_WIDTH).alignItems(HorizontalAlign.Start).padding({ top: 6 })");
-    expect(assistantLayout).toContain('.borderRadius(18).backgroundColor(this.colors.chat.assistant)');
-    expect(content).toContain("this.row.role === 'assistant' ? this.colors.chat.assistant : this.colors.chat.canvas");
+    expect(assistantLayout).not.toContain('.backgroundColor(this.colors.chat.assistant)');
+    expect(content).toContain(": this.colors.chat.canvas;");
     expect(chat).toContain('Repeat<XopcChatRow>(this.presentationRows)');
     expect(chat).not.toContain(".id('chat-assistant-live-card')");
     expect(chat).not.toContain(".id('chat-assistant-running-card')");

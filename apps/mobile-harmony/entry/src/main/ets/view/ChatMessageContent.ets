@@ -70,7 +70,7 @@ export struct XopcChatMessageContent {
 
   private previewFadeColor(alpha: string): string {
     const background = this.row.role === 'user' ? this.colors.chat.bubble
-      : this.row.role === 'assistant' ? this.colors.chat.assistant : this.colors.chat.canvas;
+      : this.colors.chat.canvas;
     const color = this.getUIContext().getHostContext()?.resourceManager.getColorSync(background) ?? 0xFFFFFFFF;
     return '#' + alpha + (color >>> 0).toString(16).padStart(8, '0').slice(2);
   }

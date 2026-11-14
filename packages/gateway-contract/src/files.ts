@@ -6,7 +6,7 @@ export const FileSpaceBindingSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session'), id: z.string().min(1) }),
 ]);
 
-export const FileCapabilitySchema = z.enum(['preview', 'edit', 'download', 'share', 'upload', 'delete']);
+export const FileCapabilitySchema = z.enum(['preview', 'edit', 'download', 'share', 'upload', 'delete', 'save_version']);
 
 export const FileSpaceSchema = z.object({
   id: z.string().min(1),
@@ -34,8 +34,19 @@ export const FileResourceSchema = z.object({
 export const FileResourceResponseSchema = z.object({ resource: FileResourceSchema });
 export const FileSpacesResponseSchema = z.object({ spaces: z.array(FileSpaceSchema) });
 export const FileResourcesResponseSchema = z.object({ items: z.array(FileResourceSchema) });
+export const FileVersionSchema = z.object({
+  id: z.uuid(),
+  revision: z.string().min(1),
+  name: z.string().min(1),
+  size: z.number().int().nonnegative(),
+  createdAt: z.number().int().nonnegative(),
+});
+export const FileVersionRequestSchema = z.object({ id: z.uuid(), revision: z.string().min(1) });
+export const FileVersionResponseSchema = z.object({ version: FileVersionSchema });
+export const FileVersionsResponseSchema = z.object({ versions: z.array(FileVersionSchema) });
 
 export type FileSpaceBinding = z.infer<typeof FileSpaceBindingSchema>;
 export type FileCapability = z.infer<typeof FileCapabilitySchema>;
 export type FileSpace = z.infer<typeof FileSpaceSchema>;
 export type FileResource = z.infer<typeof FileResourceSchema>;
+export type FileVersion = z.infer<typeof FileVersionSchema>;

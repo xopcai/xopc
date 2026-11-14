@@ -37,7 +37,7 @@ describe('workspace list loading layout', () => {
 
   it('keeps note content primary and moves secondary actions into a sheet', () => {
     expect(notes).toContain('List({ space: 0 })');
-    expect(notes).toContain("this.detailAction('note-more', $r('app.string.more')");
+    expect(notes).toContain(".id('note-more')");
     expect(notes).toContain('.bindSheet($$this.sheetOpen, this.activeSheetContent');
     expect(notes).not.toContain("Button($r('app.string.note_manage_tags')).width('100%')");
   });

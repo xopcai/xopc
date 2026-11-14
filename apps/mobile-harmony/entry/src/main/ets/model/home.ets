@@ -3,7 +3,7 @@ export interface XopcHomeAction {
   decision?: string; subjectKind?: string; runId?: string;
 }
 export interface XopcHomeItem {
-  id: string; kind: string; title: string; summary: string; statusLabel?: string; recommendation?: string;
+  id: string; kind: string; title: string; summary: string; projectId?: string; statusLabel?: string; recommendation?: string;
   updatedAt?: number; reviewDetail?: string;
   openAction?: XopcHomeAction; primaryAction?: XopcHomeAction; secondaryActions: XopcHomeAction[];
 }

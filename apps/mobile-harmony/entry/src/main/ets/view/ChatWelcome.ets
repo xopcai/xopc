@@ -14,6 +14,9 @@ export struct XopcChatWelcome {
   @Param language: string = 'en';
   @Param contextPending: boolean = false;
   @Param personal: boolean = false;
+  @Param projectName: string = '';
+  @Param standaloneDraft: boolean = false;
+  @Param showPersonalAvatar: boolean = true;
   @Param personalName: string = 'Ada';
   @Param personalAgentId: string = '';
   @Param personalAppearance: string = 'loopi';
@@ -77,18 +80,28 @@ export struct XopcChatWelcome {
   build() {
     Scroll() {
       Column({ space: 18 }) {
-        if (this.personal) {
+        if (this.personal && this.showPersonalAvatar) {
           XopcPersonalAgentAvatar({ extent: this.logoSize(), activePage: this.activePage,
             agentId: this.personalAgentId, appearance: this.personalAppearance }).id('chat-welcome-personal-avatar')
-        } else {
+        } else if (this.standaloneDraft) {
+          Image($r('app.media.brand_logo')).width(52).height(52).accessibilityLevel('no')
+        } else if (this.projectName) {
+          SymbolGlyph($r('sys.symbol.folder')).fontSize(43).fontColor([this.colors.accent])
+        } else if (!this.personal) {
           XopcLoopi({ extent: this.logoSize(), activePage: this.activePage, interactive: true,
             mood: this.loadError ? 'care' : this.contextPending ? 'work' : 'listen' }).id('chat-welcome-loopi')
         }
-        Text(this.personal ? $r('app.string.personal_chat_greeting', this.personalName) : this.headline())
-          .fontSize(20).lineHeight(28).fontWeight(FontWeight.Medium)
+        Text(this.personal ? $r('app.string.personal_chat_greeting', this.personalName) : this.standaloneDraft ? $r('app.string.chat_draft_greeting')
+            : this.projectName ? $r('app.string.project_chat_greeting') : this.headline())
+          .fontSize(this.standaloneDraft ? 27 : 20).lineHeight(this.standaloneDraft ? 38 : 28)
+          .fontWeight(this.standaloneDraft ? FontWeight.Bold : FontWeight.Medium)
           .fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Center)
         if (this.personal) {
           Text($r('app.string.personal_chat_invitation')).fontSize(14).lineHeight(22)
+            .fontColor(this.colors.secondary).width('100%').textAlign(TextAlign.Center)
+        }
+        if (this.projectName) {
+          Text($r('app.string.project_chat_scope', this.projectName)).fontSize(14).lineHeight(22)
             .fontColor(this.colors.secondary).width('100%').textAlign(TextAlign.Center)
         }
         if (!this.personal && this.model.model?.recommendation) {

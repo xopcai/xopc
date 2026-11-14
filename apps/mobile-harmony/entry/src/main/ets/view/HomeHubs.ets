@@ -1,17 +1,15 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
-import { XopcPageHeader, XopcHubRow, XopcSectionLabel, XopcListSkeleton } from './MobileComponents';
+import { XopcPageHeader, XopcHubRow, XopcListSkeleton, XopcEmptyHint } from './MobileComponents';
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcHomeAction, XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
-import { XopcTask } from '../model/workspace';
 import { dispatchHomeAction } from '../common/homeProtocol';
 
 @ComponentV2
 export struct XopcProgressView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param activePage: boolean = false;
-  @Param bottomInset: number = 0;
-  @Local model: XopcProgressViewModel = new XopcProgressViewModel();
+  @Param model: XopcProgressViewModel = new XopcProgressViewModel();
   @Local pulling: boolean = false;
   @Local actionInFlight: boolean = false;
   @Computed get runningItems(): XopcHomeItem[] {
@@ -20,37 +18,14 @@ export struct XopcProgressView {
   @Computed get scheduledItems(): XopcHomeItem[] {
     return this.model.background.filter((item: XopcHomeItem): boolean => item.kind === 'scheduled');
   }
-  @Computed get pendingCount(): number { return this.model.loading || this.model.homeError ? 0 : this.model.needsUser.length; }
-  @Computed get runningCount(): number { return this.model.loading || this.model.homeError ? 0 : this.runningItems.length; }
+  @Event onExit: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
-  private refreshTimer: number = -1;
-  private contentScroller: Scroller = new Scroller();
-  aboutToAppear(): void { this.updateActivity(); }
-  aboutToDisappear(): void { this.stopTimer(); this.model.dispose(); }
-  @Monitor('activePage')
-  updateActivity(): void {
-    this.stopTimer();
-    if (this.activePage) { this.model.refresh(); this.refreshTimer = setInterval((): void => { this.model.refresh(); }, 15000); }
-  }
-  private stopTimer(): void { if (this.refreshTimer >= 0) clearInterval(this.refreshTimer); this.refreshTimer = -1; }
-  private jumpToNeedsUser(): void { this.contentScroller.scrollToIndex(1, true, ScrollAlign.START); }
-  private jumpToRunning(): void {
-    const deliveryRows = this.model.deliveries.length > 0 ? Math.min(5, this.model.deliveries.length) + 1 : 0;
-    this.contentScroller.scrollToIndex(1 + (this.pendingCount > 0 ? this.pendingCount + 1 : 0) + deliveryRows,
-      true, ScrollAlign.START);
-  }
+  aboutToAppear(): void { if (this.activePage) void this.model.refresh(); }
   private openPage(page: string, itemId: string = ''): void { this.onNavigate({ page, itemId }); }
   private automationTime(timestamp: number): string {
     const date = new Date(timestamp);
     const pad = (value: number): string => value.toString().padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  }
-  private resolutionLabel(value: string): ResourceStr {
-    if (value === 'done') return $r('app.string.closed_done');
-    if (value === 'cancelled') return $r('app.string.closed_cancelled');
-    if (value === 'wont_do') return $r('app.string.closed_wont_do');
-    if (value === 'duplicate') return $r('app.string.closed_duplicate');
-    return value;
   }
   private async runAction(action: XopcHomeAction): Promise<void> {
     if (this.model.pending || this.actionInFlight) return;
@@ -77,9 +52,9 @@ export struct XopcProgressView {
       Button({ type: ButtonType.Normal }) {
         Column({ space: 8 }) {
           Row({ space: 6 }) {
-            Column().width(7).height(7).borderRadius(4).backgroundColor(this.colors.accent)
+            Column().width(7).height(7).borderRadius(4).backgroundColor($r('app.color.chat_attention_dot'))
             Text($r('app.string.progress_action_required')).fontSize(12).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.accent)
+              .fontColor($r('app.color.chat_attention_dot'))
           }.width('100%')
           Text(item.title).width('100%').fontSize(16).lineHeight(23).fontWeight(FontWeight.Medium)
             .fontColor(this.colors.foreground).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -118,145 +93,95 @@ export struct XopcProgressView {
       .margin({ bottom: 14 }).alignItems(HorizontalAlign.Start)
   }
   @Builder
-  workTool(label: ResourceStr, icon: Resource, page: string) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 10 }) {
-        Row() { SymbolGlyph(icon).fontSize(20).fontColor([this.colors.accent]) }
-          .width(34).height(34).justifyContent(FlexAlign.Center).borderRadius(17).backgroundColor(this.colors.accentSoft)
-        Text(label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1).maxLines(1)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
-      }.width('100%').height(64).padding({ left: 12, right: 12 })
-    }.layoutWeight(1).padding(0).borderRadius(16).backgroundColor(this.colors.panel)
-      .onClick((): void => { this.openPage(page); })
+  sectionHeading(heading: ResourceStr, trailing: ResourceStr = '', page: string = '') {
+    Row({ space: 12 }) {
+      Text(heading).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1)
+      if (page) {
+        Button(trailing, { type: ButtonType.Normal }).fontSize(13).fontColor(this.colors.accent)
+          .height(44).padding({ left: 8, right: 8 }).backgroundColor(Color.Transparent)
+          .onClick((): void => { this.openPage(page); })
+      } else if (trailing !== '') {
+        Text(trailing).fontSize(13).fontColor(this.colors.secondary)
+      }
+    }.width('100%').constraintSize({ minHeight: 44 }).margin({ top: 16, bottom: 6 })
   }
+
   build() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.progress'), actionLabel: $r('app.string.all_work'), actionIcon: $r('sys.symbol.checkmark_circle'),
+      XopcPageHeader({ heading: $r('app.string.progress'), backVisible: true, onBack: (): void => { this.onExit(); }, actionLabel: $r('app.string.all_work'), actionIcon: $r('sys.symbol.square_grid_2x2'),
         onAction: (): void => { this.openPage('all-work'); } })
       if (this.model.actionError) {
         Text(this.model.actionError === 'UNSUPPORTED_ROUTE' ? $r('app.string.unsupported_route')
+          : this.model.actionError === 'TASK_RETRY_UNAVAILABLE' ? $r('app.string.progress_retry_unavailable')
           : userErrorMessage(this.model.actionError, 'save')).fontColor(this.colors.danger).fontSize(14).lineHeight(20)
           .width('100%').padding({ left: 20, right: 20, bottom: 12 })
       }
       Refresh({ refreshing: this.pulling }) {
-        List({ scroller: this.contentScroller }) {
+        List() {
           ListItem() {
             Column({ space: 8 }) {
-              Row() {
-                Button({ type: ButtonType.Normal }) {
-                  Row({ space: 8 }) {
-                    Column({ space: 2 }) {
-                      Text(this.pendingCount.toString()).fontSize(24).fontWeight(FontWeight.Bold)
-                        .fontColor(this.pendingCount > 0 ? this.colors.accent : this.colors.secondary)
-                      Text($r('app.string.progress_action_required')).fontSize(13).fontColor(this.colors.secondary)
-                    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                    if (this.pendingCount > 0) {
-                      SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.accent])
-                    }
-                  }.width('100%')
-                }.layoutWeight(1).height(64).padding(10).borderRadius(12).backgroundColor(Color.Transparent)
-                  .enabled(this.pendingCount > 0)
-                  .onClick((): void => { this.jumpToNeedsUser(); })
-                Column().width(1).height(42).backgroundColor(this.colors.border)
-                Button({ type: ButtonType.Normal }) {
-                  Row({ space: 8 }) {
-                    Column({ space: 2 }) {
-                      Text(this.runningCount.toString()).fontSize(24).fontWeight(FontWeight.Bold)
-                        .fontColor(this.runningCount > 0 ? this.colors.accent : this.colors.secondary)
-                      Text($r('app.string.ongoing')).fontSize(13).fontColor(this.colors.secondary)
-                    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                    if (this.runningCount > 0) {
-                      SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.accent])
-                    }
-                  }.width('100%')
-                }.layoutWeight(1).height(64).padding(10).borderRadius(12).backgroundColor(Color.Transparent)
-                  .enabled(this.runningCount > 0)
-                  .onClick((): void => { this.jumpToRunning(); })
-              }.width('100%').alignItems(VerticalAlign.Center)
-              Text($r('app.string.progress_hint')).fontSize(12).lineHeight(18).fontColor(this.colors.secondary)
-                .width('100%').padding({ left: 10, right: 10 })
-            }.width('100%').padding(12).borderRadius(20).backgroundColor(this.colors.accentSoft)
-              .alignItems(HorizontalAlign.Start)
+              Text($r('app.string.progress_title')).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)
+                .fontColor(this.colors.foreground)
+              Text($r('app.string.progress_intro')).fontSize(14).lineHeight(21).fontColor(this.colors.secondary)
+            }.width('100%').alignItems(HorizontalAlign.Start).margin({ top: 16, bottom: 4 })
           }
-            if (this.model.loading) { ListItem() { XopcListSkeleton() } }
-            else {
-              if (this.model.homeError) {
-                ListItem() {
-                  XopcHubRow({ heading: $r('app.string.load_failed'), summary: this.model.homeError, symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => { this.model.refresh(); } })
-                }
-              } else {
-                if (this.model.needsUser.length) {
-                  ListItem() { XopcSectionLabel({ heading: $r('app.string.needs_you') }) }
-                  ForEach(this.model.needsUser, (item: XopcHomeItem) => {
-                    ListItem() { this.attention(item) }
-                  }, (item: XopcHomeItem): string => item.id + JSON.stringify(item))
-                }
-                if (this.model.deliveries.length) {
-                  ListItem() { XopcSectionLabel({ heading: $r('app.string.progress_delivered') }) }
-                  ForEach(this.model.deliveries.slice(0, 5), (item: XopcHomeDelivery) => {
-                    ListItem() {
-                      XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.checkmark_circle'),
-                        onOpen: (): void => { this.runAction({ type: 'open', label: item.title, href: item.href }); } })
-                    }
-                  }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
-                }
-                if (this.runningItems.length) {
-                  ListItem() { XopcSectionLabel({ heading: $r('app.string.ongoing') }) }
-                  ForEach(this.runningItems.slice(0, 5), (item: XopcHomeItem) => {
-                    ListItem() {
-                      XopcHubRow({ heading: item.title, summary: [item.statusLabel ?? '', item.summary].filter((text: string): boolean => Boolean(text)).join(' · '),
-                        symbol: $r('sys.symbol.clock'), navigable: Boolean(item.openAction),
-                        onOpen: (): void => { if (item.openAction) this.runAction(item.openAction); } })
-                    }
-                  }, (item: XopcHomeItem): string => item.id + JSON.stringify(item))
-                }
+          if (this.model.loading) { ListItem() { XopcListSkeleton() } }
+          else {
+            if (this.model.homeError) {
+              ListItem() {
+                XopcHubRow({ heading: $r('app.string.load_failed'), summary: this.model.homeError, symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => { this.model.refresh(); } })
               }
-              if (this.scheduledItems.length) {
-                ListItem() { XopcSectionLabel({ heading: $r('app.string.upcoming') }) }
-                ForEach(this.scheduledItems.slice(0, 5), (item: XopcHomeItem) => {
+            } else {
+              if (this.model.needsUser.length) {
+                ListItem() { this.sectionHeading($r('app.string.needs_you'), $r('app.string.progress_item_count', this.model.pendingCount)) }
+                ForEach(this.model.needsUser, (item: XopcHomeItem) => {
+                  ListItem() { this.attention(item) }
+                }, (item: XopcHomeItem): string => item.id + JSON.stringify(item))
+              }
+              if (this.model.deliveries.length) {
+                ListItem() { this.sectionHeading($r('app.string.progress_delivered'), $r('app.string.progress_view_library'), 'library') }
+                ForEach(this.model.deliveries.slice(0, 5), (item: XopcHomeDelivery) => {
+                  ListItem() {
+                    XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.checkmark_circle'),
+                      onOpen: (): void => { this.runAction({ type: 'open', label: item.title, href: item.href }); } })
+                  }
+                }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
+              }
+              if (this.runningItems.length) {
+                ListItem() { this.sectionHeading($r('app.string.ongoing')) }
+                ForEach(this.runningItems.slice(0, 5), (item: XopcHomeItem) => {
                   ListItem() {
                     XopcHubRow({ heading: item.title, summary: [item.statusLabel ?? '', item.summary].filter((text: string): boolean => Boolean(text)).join(' · '),
                       symbol: $r('sys.symbol.clock'), navigable: Boolean(item.openAction),
                       onOpen: (): void => { if (item.openAction) this.runAction(item.openAction); } })
                   }
                 }, (item: XopcHomeItem): string => item.id + JSON.stringify(item))
-              } else if (this.model.automationMetrics?.nextRun) {
-                ListItem() { XopcSectionLabel({ heading: $r('app.string.upcoming') }) }
-                ListItem() {
-                  XopcHubRow({ heading: this.model.automationMetrics.nextRun.name,
-                    summary: this.automationTime(this.model.automationMetrics.nextRun.runAtMs), symbol: $r('sys.symbol.clock'),
-                    onOpen: (): void => {
-                      if (this.model.automationMetrics?.nextRun) this.openPage('automations', this.model.automationMetrics.nextRun.automationId);
-                    } })
-                }
-              }
-              if (this.model.tasksError) {
-                ListItem() {
-                  XopcHubRow({ heading: $r('app.string.load_failed'), summary: this.model.tasksError, symbol: $r('sys.symbol.arrow_clockwise'), onOpen: (): void => { this.model.refresh(); } })
-                }
-              } else if (this.model.closed.length) {
-                ListItem() { XopcSectionLabel({ heading: $r('app.string.progress_history') }) }
-                ForEach(this.model.closed.slice(0, 2), (task: XopcTask) => {
-                  ListItem() {
-                    XopcHubRow({ heading: task.title, summary: this.resolutionLabel(task.resolution ?? ''), symbol: $r('sys.symbol.checkmark_circle'),
-                      onOpen: (): void => { this.openPage('tasks', task.id); } })
-                  }
-                }, (task: XopcTask): string => task.id + ':' + (task.updatedAt ?? 0))
               }
             }
-            ListItem() { XopcSectionLabel({ heading: $r('app.string.frequent_tools') }) }
-            ListItem() {
-              Row({ space: 12 }) {
-                this.workTool($r('app.string.tasks'), $r('sys.symbol.checkmark_circle'), 'tasks')
-                this.workTool($r('app.string.projects'), $r('sys.symbol.folder'), 'projects')
-              }.width('100%')
+            if (this.scheduledItems.length) {
+              ListItem() { this.sectionHeading($r('app.string.upcoming'), $r('app.string.progress_view_automations'), 'automations') }
+              ForEach(this.scheduledItems.slice(0, 5), (item: XopcHomeItem) => {
+                ListItem() {
+                  XopcHubRow({ heading: item.title, summary: [item.statusLabel ?? '', item.summary].filter((text: string): boolean => Boolean(text)).join(' · '),
+                    symbol: $r('sys.symbol.clock'), navigable: Boolean(item.openAction),
+                    onOpen: (): void => { if (item.openAction) this.runAction(item.openAction); } })
+                }
+              }, (item: XopcHomeItem): string => item.id + JSON.stringify(item))
+            } else if (this.model.automationMetrics?.nextRun) {
+              ListItem() { this.sectionHeading($r('app.string.upcoming'), $r('app.string.progress_view_automations'), 'automations') }
+              ListItem() {
+                XopcHubRow({ heading: this.model.automationMetrics.nextRun.name,
+                  summary: this.automationTime(this.model.automationMetrics.nextRun.runAtMs), symbol: $r('sys.symbol.clock'),
+                  onOpen: (): void => {
+                    if (this.model.automationMetrics?.nextRun) this.openPage('automations', this.model.automationMetrics.nextRun.automationId);
+                  } })
+              }
             }
-            ListItem() {
-              Row({ space: 12 }) {
-                this.workTool($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
-              }.width('100%').margin({ top: 12 })
+            if (!this.model.homeError && this.model.needsUser.length === 0 && this.model.deliveries.length === 0
+              && this.model.background.length === 0 && !this.model.automationMetrics?.nextRun) {
+              ListItem() { XopcEmptyHint({ message: $r('app.string.progress_empty') }) }
             }
-            ListItem() { Column().height(this.bottomInset) }
+          }
         }.width('100%').height('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
       }.layoutWeight(1).onRefreshing((): void => {
         this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });

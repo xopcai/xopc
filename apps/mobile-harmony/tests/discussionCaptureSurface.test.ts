@@ -6,13 +6,11 @@ function source(path: string): string {
 }
 
 describe('HarmonyOS voice note surface', () => {
-  it('keeps the composer in Library alongside note creation and recording status', () => {
+  it('keeps note creation and recording status reachable from Library', () => {
     const home = source('../entry/src/main/ets/view/HomeView.ets');
     const notes = source('../entry/src/main/ets/view/NotesTabView.ets');
-    expect(home).toContain("this.tabItem(3, $r('app.string.library_title')");
+    expect(home).toContain("page === 'library'");
     expect(home).not.toContain(".id('note-capture-start')");
-    expect(home).not.toContain('if (this.tab !== 3) {');
-    expect(home).toContain('this.quickComposer()');
     expect(home).toContain('XopcDiscussionRecordingPanelView({ panel: this.recordingPanel');
     expect(home).not.toContain('this.noteCaptureBar()');
     expect(home).toContain('onStartVoice: (): void => { void this.startNoteCapture(); }');

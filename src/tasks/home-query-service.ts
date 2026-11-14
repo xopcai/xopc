@@ -288,6 +288,7 @@ export function buildHomeWorkbench(input: {
       kind: 'decision',
       title: decision.title,
       summary: decision.detail || copy.review,
+      projectId: decision.projectId,
       projectName: decision.projectName,
       recommendation: decisionRecommendation(decision, copy),
       dueAt: decision.dueAt,

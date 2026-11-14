@@ -1,14 +1,14 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcMobileRoute } from '../model/home';
-import { XopcHubRow, XopcListSkeleton, XopcSectionLabel } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcSectionLabel, XopcPageHeader } from './MobileComponents';
 import { XopcMarkdownView } from './MarkdownView';
 import { userErrorMessage } from '../common/userError';
 
 interface XopcRunDetail {
   id: string; automationId: string; automationName: string; status: string;
   summary?: string; error?: string; conversationId?: string;
-  createdAtMs?: number; startedAtMs?: number; durationMs?: number;
+  createdAtMs?: number; startedAtMs?: number; durationMs?: number; manual?: boolean;
 }
 interface XopcRunEnvelope { run: XopcRunDetail; }
 interface XopcRunEvent { id: string; message: string; createdAtMs?: number; }
@@ -18,6 +18,7 @@ interface XopcRunEvents { events: XopcRunEvent[]; }
 export struct XopcAutomationRunView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param runId: string = '';
+  @Event onExit: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local run: XopcRunDetail | undefined = undefined;
   @Local events: XopcRunEvent[] = [];
@@ -91,21 +92,28 @@ export struct XopcAutomationRunView {
   build() {
     NavDestination() {
       Column() {
+        XopcPageHeader({ heading: $r('app.string.automation_run_title'), backVisible: true, onBack: this.onExit,
+          actionLabel: $r('app.string.refresh'), actionIcon: $r('sys.symbol.arrow_clockwise'),
+          onAction: (): void => { void this.load(); } })
         Scroll() {
           Column({ space: 12 }) {
             if (this.busy && !this.run) { XopcListSkeleton() }
             if (this.error) { Text(userErrorMessage(this.error, 'detail')).fontColor(this.colors.danger) }
             if (this.run) {
-              Column({ space: 12 }) {
-                Row({ space: 12 }) {
-                  SymbolGlyph(this.problem(this.run.status) ? $r('sys.symbol.exclamationmark_circle')
-                    : this.run.status === 'succeeded' ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.clock'))
-                    .fontSize(26).fontColor([this.problem(this.run.status) ? this.colors.danger : this.colors.accent])
-                  Column({ space: 4 }) {
-                    Text(this.statusLabel(this.run.status)).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-                    Text(this.timeLabel(this.run.startedAtMs ?? this.run.createdAtMs)).fontSize(13).fontColor(this.colors.tertiary)
-                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                }.width('100%')
+              Column({ space: 8 }) {
+                Text(this.run.automationName).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)
+                  .fontColor(this.colors.foreground).width('100%')
+                Row({ space: 8 }) {
+                  Text(this.timeLabel(this.run.startedAtMs ?? this.run.createdAtMs)).fontSize(13).fontColor(this.colors.secondary)
+                  Text(this.run.manual ? $r('app.string.automation_manual_run') : $r('app.string.automation_scheduled_run'))
+                    .fontSize(13).fontColor(this.colors.secondary)
+                }
+                Text(this.statusLabel(this.run.status)).fontSize(13).fontWeight(FontWeight.Medium)
+                  .fontColor(this.problem(this.run.status) ? this.colors.danger : this.colors.accent)
+                  .padding({ left: 11, right: 11, top: 5, bottom: 5 }).borderRadius(12).backgroundColor(this.colors.accentSoft)
+              }.width('100%').alignItems(HorizontalAlign.Start)
+              XopcSectionLabel({ heading: $r('app.string.result') })
+              Column({ space: 10 }) {
                 if (this.run.summary) { XopcMarkdownView({ content: this.run.summary }) }
                 if (this.run.error) { Text(userErrorMessage(this.run.error, 'detail')).fontSize(14).lineHeight(21).fontColor(this.colors.danger).width('100%') }
                 if (this.active(this.run.status)) {
@@ -118,7 +126,6 @@ export struct XopcAutomationRunView {
                     .onClick((): void => { this.rerun(); })
                 }
               }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(18).backgroundColor(this.colors.panel)
-              XopcSectionLabel({ heading: $r('app.string.result') })
               if (this.run.conversationId) {
                 XopcHubRow({ heading: $r('app.string.open_chat'), symbol: $r('sys.symbol.message'), onOpen: (): void => {
                   if (this.run?.conversationId) this.onNavigate({ page: 'chat', itemId: this.run.conversationId });
@@ -143,6 +150,6 @@ export struct XopcAutomationRunView {
           }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
         }.layoutWeight(1).width('100%').align(Alignment.Top)
       }.width('100%').height('100%')
-    }.title(this.run?.automationName ?? $r('app.string.automation_run')).backgroundColor(this.colors.surface)
+    }.hideTitleBar(true).backgroundColor(this.colors.surface)
   }
 }

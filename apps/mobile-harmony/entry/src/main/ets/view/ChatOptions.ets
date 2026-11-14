@@ -34,6 +34,7 @@ export struct XopcChatOptions {
   @Param modelBusy: boolean = false;
   @Param rememberModel: boolean = true;
   @Event onMode: (mode: string) => void = (_mode: string): void => {};
+  @Event onSearch: () => void = (): void => {};
   @Event onContext: () => void = (): void => {};
   @Event onAgent: (id: string) => void = (_id: string): void => {};
   @Event onFiles: () => void = (): void => {};
@@ -151,6 +152,7 @@ export struct XopcChatOptions {
             .onMove((from: number, to: number): void => { this.model.moveQueued(from, to); })
           if (!this.model.queued.length && !this.model.queueError) { ListItem() { Text($r('app.string.chat_queue_empty')).fontColor(this.colors.secondary).padding(24) } }
         } else {
+          ListItem() { XopcHubRow({ heading: $r('app.string.chat_search_in_conversation'), compact: true, symbol: $r('sys.symbol.magnifyingglass'), onOpen: (): void => { this.onSearch(); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_context'), summary: this.contextSummary,
             compact: true, symbol: $r('sys.symbol.link'), onOpen: (): void => { this.onContext(); } }) }
           if (!this.personal) {

@@ -1,5 +1,37 @@
 {
   "string": [
+    {"name": "project_chat_greeting", "value": "为项目开始对话"},
+    {"name": "project_chat_scope", "value": "发送后，对话会保存在「%s」中。"},
+    {"name": "project_chat_placeholder", "value": "和项目助理聊聊"},
+    {"name": "settings_privacy_memory", "value": "隐私与记忆"},
+    {"name": "settings_about_xopc", "value": "关于 xopc"},
+    {"name": "personalization", "value": "个性化"},
+    {"name": "personal_agent_summary", "value": "个性、模型与语音"},
+    {"name": "personal_app_section", "value": "应用"},
+    {"name": "personal_work_computer", "value": "工作电脑"},
+    {"name": "personal_memory_summary", "value": "个人资料与助理记忆"},
+    {"name": "edit_note", "value": "编辑笔记"},
+    {"name": "automation_timezone", "value": "时区"},
+    {"name": "automation_gateway_timezone", "value": "工作电脑时区"},
+    {"name": "automation_delivery", "value": "交付到哪里"},
+    {"name": "automation_save_rule", "value": "保存规则"},
+    {"name": "project_new_chat", "value": "新建项目对话"},
+    {"name": "project_continue_work", "value": "继续工作"},
+    {"name": "project_chat_cta", "value": "在项目中对话"},
+    {"name": "automation_detail_title", "value": "自动化详情"},
+    {"name": "automation_pause_notice", "value": "已暂停 · 不会自动运行"},
+    {"name": "automation_run_title", "value": "运行详情"},
+    {"name": "automation_scheduled_run", "value": "定时运行"},
+    {"name": "automation_manual_run", "value": "手动运行"},
+    {"name": "library_list_view", "value": "列表视图"},
+    {"name": "library_grid_view", "value": "网格视图"},
+    {"name": "library_recently_used", "value": "最近使用"},
+    {"name": "library_create_import", "value": "新建或导入"},
+    {"name": "file_save_version", "value": "保存为新版本"},
+    {"name": "file_version_saved", "value": "已保存新版本"},
+    {"name": "file_version_history", "value": "版本历史"},
+    {"name": "file_no_versions", "value": "暂无已保存的版本"},
+    {"name": "file_view_in_library", "value": "在资料库中查看"},
     { "name": "library_empty", "value": "没有匹配的资料" },
     { "name": "library_title", "value": "资料" },
     { "name": "library_search", "value": "搜索资料" },
@@ -9,7 +41,6 @@
     { "name": "library_recent_results", "value": "近期成果" },
     { "name": "library_no_results", "value": "没有匹配的近期成果" },
     { "name": "progress_delivered", "value": "已交付" },
-    { "name": "progress_history", "value": "历史" },
     {"name":"voice_input_permission","value":"请在系统设置中允许麦克风访问后，再录制语音。"},
     {"name":"voice_input_too_short","value":"录音时间太短，请按住说话后重试。"},
     {"name":"voice_input_recording_failed","value":"录音失败，请重新尝试。"},
@@ -171,10 +202,6 @@
     {"name": "capture_foreground_only", "value": "暂不支持后台录音，请保持应用在前台。"},
     {"name": "capture_sync_pending", "value": "原音已保存在本机，联网后可重试同步。"},
     {"name": "capture_storage_failed", "value": "存储无法继续写入，录音已停止；可恢复已保存部分。"},
-    { "name": "personal_chat_entry_title", "value": "来找我的 AI 聊聊" },
-    { "name": "personal_chat_entry_subtitle", "value": "想法、烦恼和要推进的事，都可以从这里开始。" },
-    { "name": "personal_chat_resume_title", "value": "继续和%s聊聊" },
-    { "name": "personal_chat_resume_subtitle", "value": "上次的对话还在，我们接着说。" },
     { "name": "personal_chat_greeting", "value": "你好，我是%s。" },
     { "name": "personal_chat_invitation", "value": "想到什么就告诉我。下次回来，我们还会在这里接着聊。" },
     { "name": "connection_wait_title", "value": "等待连接" },
@@ -349,10 +376,16 @@
     { "name": "chat_last_week", "value": "上周" },
     { "name": "chat_this_month", "value": "本月" },
     { "name": "chat_earlier", "value": "更早" },
+    { "name": "chat_ask_personal", "value": "问问%s" },
+    { "name": "chat_add_content", "value": "添加内容" },
+    { "name": "chat_add_references", "value": "引用资料" },
+    { "name": "chat_search_in_conversation", "value": "在对话中查找" },
+    { "name": "chat_open_drawer", "value": "打开侧栏" },
+    { "name": "chat_recent_conversations", "value": "最近对话" },
+    { "name": "chat_profile_settings", "value": "我的与设置" },
+    { "name": "chat_personal_agent", "value": "个人助理" },
+    { "name": "chat_attention_count", "value": "有 %d 项待你处理" },
     { "name": "chat_close_drawer", "value": "关闭会话抽屉" },
-    { "name": "chat_profile_hint", "value": "你的个人工作空间" },
-    { "name": "chat_automation_hint", "value": "让 xopc 定时为你工作" },
-    { "name": "chat_history_failed", "value": "无法加载会话" },
     { "name": "chat_models_empty", "value": "暂无可用模型" },
     { "name": "chat_model", "value": "模型" },
     { "name": "chat_agent", "value": "对话对象" },
@@ -674,7 +707,7 @@
     },
     {
       "name": "new_chat",
-      "value": "新建会话"
+      "value": "新对话"
     },
     {
       "name": "reconnecting",
@@ -884,15 +917,14 @@
       "name": "loading",
       "value": "加载中"
     },
-    {
-      "name": "progress_hint",
-      "value": "先处理待办，再查看进行中和接下来的安排。"
-    },
-    { "name": "progress_summary", "value": "%d 项待处理 · %d 项进行中" },
+    { "name": "progress_title", "value": "工作进展" },
+    { "name": "progress_intro", "value": "查看助理的工作、需要你的决定和最新交付。" },
+    { "name": "progress_item_count", "value": "%d 项" },
+    { "name": "progress_view_library", "value": "查看资料" },
+    { "name": "progress_view_automations", "value": "查看自动化" },
+    { "name": "progress_retry_unavailable", "value": "任务状态已变化，请刷新后查看当前状态。" },
+    { "name": "progress_empty", "value": "暂时没有待处理事项或新的工作进展。" },
     { "name": "progress_action_required", "value": "待处理" },
-    { "name": "work_tools", "value": "工作工具" },
-    { "name": "quick_access", "value": "快速入口" },
-    { "name": "frequent_tools", "value": "常用工作" },
     { "name": "upcoming", "value": "接下来" },
     { "name": "new_automation", "value": "新建自动化" },
     { "name": "new_task", "value": "新建任务" },
@@ -901,19 +933,13 @@
     { "name": "project_manage", "value": "项目设置" },
     { "name": "project_add_item", "value": "添加到项目" },
     { "name": "project_load_more", "value": "加载更多" },
-    { "name": "project_empty_description", "value": "在这里集中管理项目任务、笔记与自动化。" },
     { "name": "project_load_error", "value": "项目加载失败，请检查连接后重试。" },
     { "name": "project_section_error", "value": "内容加载失败，点击刷新重试。" },
     { "name": "project_no_tasks", "value": "还没有任务，添加任务开始推进。" },
     { "name": "project_no_sessions", "value": "还没有项目会话，发起对话讨论这个项目。" },
-    { "name": "project_session_messages", "value": "%d 条消息" },
     { "name": "task_open_conversation", "value": "进入任务对话" },
     { "name": "project_no_notes", "value": "还没有笔记，在这里记录想法和决策。" },
     { "name": "project_no_automations", "value": "还没有自动化，可以设置定期执行的工作。" },
-    { "name": "workspace_task_hint", "value": "集中查看待办、执行中与已完成的工作" },
-    { "name": "workspace_project_hint", "value": "按项目组织目标、任务与交付结果" },
-    { "name": "workspace_automation_hint", "value": "管理定时运行、状态与最近结果" },
-    { "name": "workspace_item_count", "value": "已加载 %d 项" },
     { "name": "filter_all", "value": "全部" },
     { "name": "filter_open", "value": "进行中" },
     { "name": "filter_closed", "value": "已关闭" },
@@ -936,21 +962,10 @@
     { "name": "workspace_priority", "value": "优先级" },
     { "name": "workspace_updated", "value": "最近更新" },
     { "name": "workspace_next_run", "value": "下次运行" },
-    { "name": "workspace_last_run", "value": "上次运行" },
     { "name": "workspace_details", "value": "详细信息" },
     { "name": "workspace_description", "value": "说明" },
     { "name": "workspace_no_description", "value": "暂无说明" },
     { "name": "workspace_no_matches", "value": "当前筛选下没有内容" },
-    { "name": "create_task_chat_prompt", "value": "在「项目名称」下创建任务：任务内容" },
-    { "name": "create_project_chat_prompt", "value": "创建一个「项目名称」项目，用来：项目目标" },
-    { "name": "create_automation_chat_prompt", "value": "每天早上 9 点检索 AI 新闻，并把摘要发给我" },
-    { "name": "quick_chat_conversations_placeholder", "value": "开始一个新对话" },
-    { "name": "quick_chat_progress_placeholder", "value": "询问进展，或推进下一步" },
-    { "name": "quick_chat_library_placeholder", "value": "查找、整理或引用资料" },
-    { "name": "quick_chat_personal_placeholder", "value": "告诉 xopc 你的偏好和习惯" },
-    { "name": "ai_create", "value": "AI 创建" },
-    { "name": "ai_create_hint", "value": "编辑需求后直接发送" },
-    { "name": "continue_in_chat", "value": "完整对话" },
     { "name": "new_note", "value": "新建笔记" },
     { "name": "note_text_option", "value": "文字笔记" },
     { "name": "note_voice_option", "value": "语音记录" },
@@ -965,8 +980,6 @@
     { "name": "status_timeout", "value": "已超时" },
     { "name": "manual_trigger", "value": "手动触发" },
     { "name": "automation_definition", "value": "运行方式" },
-    { "name": "automation_show_definition", "value": "展开完整内容" },
-    { "name": "automation_hide_definition", "value": "收起完整内容" },
     { "name": "schedule", "value": "计划" },
     { "name": "edit_automation", "value": "编辑自动化" },
     { "name": "recent_runs", "value": "最近运行" },
@@ -989,15 +1002,11 @@
     },
     {
       "name": "needs_you",
-      "value": "需要你"
+      "value": "待我处理"
     },
     {
       "name": "ongoing",
-      "value": "正在进行"
-    },
-    {
-      "name": "recent_closed",
-      "value": "最近关闭"
+      "value": "进行中"
     },
     {
       "name": "nothing_needed",
@@ -1055,6 +1064,7 @@
       "name": "about",
       "value": "关于"
     },
+    { "name": "chat_draft_greeting", "value": "今天想聊点什么？" },
     {
       "name": "chat_welcome",
       "value": "今天想一起做点什么？"
@@ -1066,22 +1076,6 @@
     {
       "name": "back_to_chat",
       "value": "返回聊天"
-    },
-    {
-      "name": "closed_done",
-      "value": "已完成"
-    },
-    {
-      "name": "closed_cancelled",
-      "value": "已取消"
-    },
-    {
-      "name": "closed_wont_do",
-      "value": "不再处理"
-    },
-    {
-      "name": "closed_duplicate",
-      "value": "重复事项"
     },
     {
       "name": "close",
@@ -1240,7 +1234,7 @@
     { "name": "note_version_history", "value": "版本历史" },
     { "name": "note_restore_version", "value": "恢复到编辑器" },
     { "name": "note_continue_chat", "value": "引用笔记继续对话" },
-    { "name": "about_you", "value": "关于你" },
+    { "name": "about_you", "value": "关于我" },
     { "name": "about_you_subtitle", "value": "记住你的偏好。记错了，随时改。" },
     { "name": "about_you_overview", "value": "概览" },
     { "name": "about_you_understanding", "value": "记住的你" },
@@ -1310,7 +1304,7 @@
     { "name": "personal_view_all", "value": "查看全部" },
     { "name": "settings_connection_notifications", "value": "连接与通知" },
     { "name": "settings_data_sharing", "value": "数据与共享" },
-    { "name": "personal_goals", "value": "近期目标" },
+    { "name": "personal_goals", "value": "我的目标" },
     { "name": "personal_goal_add", "value": "添加目标" },
     { "name": "personal_goal_edit", "value": "编辑目标" },
     { "name": "personal_goal_help", "value": "把期望结果写具体，xopc 才能持续规划、跟进并帮助你达成。" },

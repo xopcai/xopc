@@ -185,7 +185,10 @@ export class XopcChatRepository {
     gatewaySession.assertConnection(connection);
     const draft = await this.draft(id);
     gatewaySession.assertConnection(connection);
-    if (draft) return { session: { key: id, agentId: draft.creation.agentId, projectId: draft.creation.projectId || undefined, messages: [] }, pagination: { hasMore: false } };
+    if (draft) return {
+      session: { key: id, agentId: draft.creation.agentId, projectId: draft.creation.projectId || undefined, messages: [] },
+      pagination: { hasMore: false }, localDraft: true
+    };
     const revision = chatHistoryCache.revision();
     const gatewayId = gatewaySession.currentProfile()?.gatewayId || '';
     if (before && transcriptId) {
