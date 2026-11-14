@@ -1,19 +1,28 @@
 import { fetchPersonalAgentAvatar } from '../service/personalAgentAvatar';
 import { XopcLoopi } from './Loopi';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { agentDefaultAvatar } from '../common/agentPresentation';
+import { XopcLoopiMood } from '../common/loopiMotion';
 
 @ComponentV2
 export struct XopcPersonalAgentAvatar {
   @Param agentId: string = '';
   @Param appearance: string = 'loopi';
   @Param avatarReference: string = '';
+  @Param fallbackLabel: string = '';
   @Param revision: number = 0;
   @Param extent: number = 48;
   @Param activePage: boolean = true;
   @Param compact: boolean = false;
+  @Param interactive: boolean = false;
+  @Param moodOverride: XopcLoopiMood | undefined = undefined;
   @Local picture: string = '';
   @Local colors: XopcThemeColors = appThemeColors;
   private generation: number = 0;
+
+  @Computed get defaultAvatar(): Resource | undefined {
+    return this.appearance === 'configured' ? agentDefaultAvatar(this.agentId) : undefined;
+  }
 
   aboutToAppear(): void { void this.loadPicture(); }
   aboutToDisappear(): void { this.generation++; }
@@ -30,16 +39,16 @@ export struct XopcPersonalAgentAvatar {
   }
 
   build() {
-    if (this.picture && (this.appearance === 'custom' || this.appearance === 'configured')) {
-      Image(this.picture).width(this.extent).height(this.extent).objectFit(ImageFit.Cover)
-        .borderRadius(this.extent / 2).accessibilityLevel('no-hide-descendants')
+    if (this.picture || this.defaultAvatar) {
+      Image(this.picture || this.defaultAvatar).width(this.extent).height(this.extent).objectFit(ImageFit.Cover)
+        .borderRadius(this.extent / 2).backgroundColor(this.colors.accentSoft).accessibilityLevel('no-hide-descendants')
     } else if (this.appearance === 'configured') {
-      Text(this.agentId.slice(0, 1).toUpperCase()).fontSize(this.extent * 0.4)
+      Text((this.fallbackLabel || this.agentId).slice(0, 1).toUpperCase()).fontSize(this.extent * 0.4)
         .width(this.extent).height(this.extent).textAlign(TextAlign.Center).borderRadius(this.extent / 2)
         .backgroundColor(this.colors.accentSoft).fontColor(this.colors.foreground).accessibilityLevel('no-hide-descendants')
     } else {
-      XopcLoopi({ extent: this.extent, compact: this.compact, activePage: this.activePage,
-        mood: this.appearance === 'loopi-care' ? 'care' : 'listen' })
+      XopcLoopi({ extent: this.extent, compact: this.compact, activePage: this.activePage, interactive: this.interactive,
+        mood: this.moodOverride ?? (this.appearance === 'loopi-care' ? 'care' : 'listen') })
     }
   }
 }

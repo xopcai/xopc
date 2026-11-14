@@ -315,8 +315,9 @@ export class XopcChatRepository {
     if (!result.payload || !Array.isArray(result.payload.models ?? result.payload.items)) throw new Error('INVALID_MODELS');
     return result.payload;
   }
-  async agents(): Promise<XopcChatAgents> {
-    const result = JSON.parse(await gatewaySession.request('/api/agents')) as XopcPayload<XopcChatAgents>;
+  async agents(locale: string = ''): Promise<XopcChatAgents> {
+    const path = locale ? '/api/agents?locale=' + encodeURIComponent(locale) : '/api/agents';
+    const result = JSON.parse(await gatewaySession.request(path)) as XopcPayload<XopcChatAgents>;
     if (!Array.isArray(result.payload?.agents)) throw new Error('INVALID_AGENTS');
     return result.payload;
   }

@@ -38,6 +38,7 @@ export struct XopcLoopi {
           .translate({ x: this.pose.gaze * this.extent / 304, y: -2 * this.extent / 304 })
       }.width(this.extent).height(this.extent).translate({ y: this.pose.lift * this.extent / 200 })
     }.width(this.extent).height(this.extent).accessibilityLevel('no-hide-descendants')
+      .hitTestBehavior(this.interactive ? HitTestMode.Block : HitTestMode.None)
       .onVisibleAreaChange([0, 0.5], (_expanding: boolean, ratio: number): void => {
         this.areaVisible = ratio >= 0.5; this.syncMotion();
       })

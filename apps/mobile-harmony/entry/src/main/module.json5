@@ -22,7 +22,7 @@
       "skills": [
         { "entities": ["entity.system.home"], "actions": ["ohos.want.action.home"] },
         { "entities": ["entity.system.browsable"], "actions": ["ohos.want.action.viewData"],
-          "uris": [{ "scheme": "xopc", "host": "notification" }] },
+          "uris": [{ "scheme": "xopc", "host": "notification" }, { "scheme": "xopc", "host": "music", "path": "player" }] },
         { "actions": ["ohos.want.action.viewData"], "uris": [
           { "scheme": "file", "type": "image/*" },
           { "scheme": "file", "type": "application/pdf" },

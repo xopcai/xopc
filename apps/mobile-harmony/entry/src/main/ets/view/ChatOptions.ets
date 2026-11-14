@@ -4,6 +4,9 @@ import { XopcChatModel, XopcChatAgent, XopcQueuedInput } from '../model/chat';
 import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { appSettings } from '../service/settings';
 import { userErrorMessage } from '../common/userError';
+import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
+import { XopcPersonalAgentRecord } from '../model/personalAgent';
+import { agentDisplayDescription, agentDisplayName } from '../common/agentPresentation';
 
 function chatThinkingLabel(level: string): ResourceStr {
   if (level === 'off') return $r('app.string.chat_thinking_off');
@@ -28,6 +31,7 @@ export struct XopcChatOptions {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param model: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Param personal: boolean = false;
+  @Param personalRecord: XopcPersonalAgentRecord | null = null;
   @Param mode: string = 'actions';
   @Param contextSummary: ResourceStr = '';
   @Param thinkingBusy: boolean = false;
@@ -52,6 +56,47 @@ export struct XopcChatOptions {
   }
   private thinkingSummary(): ResourceStr {
     return chatThinkingSummary(this.model);
+  }
+
+  private agentText(label: ResourceStr): string {
+    return typeof label === 'string' ? label : this.getUIContext().getHostContext()?.resourceManager.getStringSync(label) ?? '';
+  }
+
+  private matchesAgent(agent: XopcChatAgent): boolean {
+    const query = this.query.trim().toLowerCase();
+    if (!query) return true;
+    const name = this.agentText(agentDisplayName(agent));
+    const description = this.agentText(agentDisplayDescription(agent));
+    return (name + ' ' + description + ' ' + (agent.name ?? '') + ' ' + agent.id).toLowerCase().includes(query);
+  }
+
+  private appearance(agent: XopcChatAgent): string {
+    if (this.personalRecord?.agentId === agent.id) return this.personalRecord.appearance;
+    if (agent.avatar?.startsWith('xopc:loopi:')) return agent.avatar.endsWith(':care') ? 'loopi-care' : 'loopi';
+    return 'configured';
+  }
+
+  @Builder agentRow(agent: XopcChatAgent) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        XopcPersonalAgentAvatar({ agentId: agent.id, appearance: this.appearance(agent), avatarReference: agent.avatar ?? '',
+          revision: this.personalRecord?.agentId === agent.id ? this.personalRecord.revision ?? 0 : 0,
+          fallbackLabel: this.agentText(agentDisplayName(agent)), extent: 40, activePage: false, compact: true })
+        Column({ space: 3 }) {
+          Text(agentDisplayName(agent)).width('100%').fontSize(15).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (agentDisplayDescription(agent)) {
+            Text(agentDisplayDescription(agent)).width('100%').fontSize(12).fontColor(this.colors.secondary)
+              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        if (agent.id === this.model.agentId) {
+          SymbolGlyph($r('sys.symbol.checkmark')).fontSize(16).fontColor([this.colors.accent]).accessibilityLevel('no')
+        }
+      }.width('100%').padding(10)
+    }.id('chat-agent-option-' + agent.id).width('100%').constraintSize({ minHeight: 60 }).padding(0)
+      .borderRadius(14).backgroundColor(this.colors.chat.card)
+      .onClick((): void => { if (agent.id === this.model.agentId) this.onClose(); else this.onAgent(agent.id); })
   }
 
   build() {
@@ -99,9 +144,8 @@ export struct XopcChatOptions {
             ListItem() { Text(this.thinkingSummary()).fontColor(this.colors.secondary).padding(12) }
           }
         } else if (this.mode === 'agent') {
-          ForEach(this.model.agents.filter((item: XopcChatAgent): boolean => (item.name + ' ' + item.id).toLowerCase().includes(this.query.toLowerCase())), (item: XopcChatAgent) => {
-            ListItem() { XopcHubRow({ heading: (item.id === this.model.agentId ? '✓ ' : '') + (item.name || item.id), summary: item.description || item.id,
-              onOpen: (): void => { this.onAgent(item.id); } }) }
+          ForEach(this.model.agents.filter((item: XopcChatAgent): boolean => this.matchesAgent(item)), (item: XopcChatAgent) => {
+            ListItem() { this.agentRow(item) }
           }, (item: XopcChatAgent): string => item.id)
         } else if (this.mode === 'queue') {
           if (this.model.queueError) {

@@ -3,6 +3,7 @@ import { generatedMediaTime } from '../common/generatedMedia';
 import { XopcGeneratedMediaCard } from '../model/generatedMedia';
 import { downloadGeneratedMedia, removeGeneratedMediaFile } from '../service/generatedMediaFile';
 import { XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
+import { XopcMusicPlayButton, XopcMusicProgress } from './MusicPlaybackView';
 
 function mediaTitle(card: XopcGeneratedMediaCard, zh: boolean): string {
   return card.item.title || card.item.summary || (card.kind === 'music' ? (zh ? '音乐' : 'Music')
@@ -39,7 +40,9 @@ export struct XopcGeneratedMediaRow {
   @Event onLyricsExpanded: () => void = (): void => {};
   @Event onConfirm: () => void = (): void => {};
 
-  @Computed get musicSelected(): boolean { return this.card.kind === 'music' && this.music.songId === this.card.item.id; }
+  @Computed get musicSelected(): boolean {
+    return this.card.kind === 'music' && this.music.matches(this.conversationId, this.card.item.id);
+  }
   @Computed get videoSelected(): boolean { return this.card.kind === 'video' && this.playbackId === this.card.item.id; }
 
   private metadata(): string {
@@ -47,7 +50,7 @@ export struct XopcGeneratedMediaRow {
     if (this.card.kind === 'music') {
       const parts: string[] = [];
       if (item.versionNumber) parts.push(this.zh ? '第 ' + item.versionNumber + ' 版' : 'Version ' + item.versionNumber);
-      const duration = this.music.durationFor(item.id, item.durationMs);
+      const duration = this.music.durationFor(this.conversationId, item.id, item.durationMs);
       if (duration > 0) parts.push(generatedMediaTime(duration));
       return parts.join(' · ');
     }
@@ -74,7 +77,7 @@ export struct XopcGeneratedMediaRow {
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         if (this.card.item.state === 'completed') {
           if (this.musicSelected) {
-            XopcGeneratedMusicButton({ music: this.music, zh: this.zh, onAction: this.onPlay })
+            XopcMusicPlayButton({ primary: true, buttonId: 'generated-media-toggle-' + this.card.item.id })
           } else {
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph(this.videoSelected ? $r('sys.symbol.xmark') : $r('sys.symbol.play_fill')).fontSize(17).fontColor([this.colors.chat.action])
@@ -189,68 +192,20 @@ struct XopcGeneratedVideoPlayer {
 }
 
 @ComponentV2
-struct XopcGeneratedMusicButton {
-  @Require @Param music: XopcGeneratedMusicPlayback;
-  @Param zh: boolean = false;
-  @Local colors: XopcThemeColors = appThemeColors;
-  @Event onAction: () => void = (): void => {};
-
-  build() {
-    Button({ type: ButtonType.Circle }) {
-      if (this.music.loading || ['loading', 'initialized'].includes(this.music.player.state)) {
-        LoadingProgress().width(20).height(20).color(this.colors.chat.action)
-      } else if (this.music.failed || this.music.player.state === 'error') {
-        Text('↻').fontSize(21).fontColor(this.colors.chat.action)
-      } else {
-        SymbolGlyph(this.music.player.state === 'playing' ? $r('sys.symbol.pause_fill') : $r('sys.symbol.play_fill'))
-          .fontSize(17).fontColor([this.colors.chat.action])
-      }
-    }.id('generated-media-toggle-' + this.music.songId).width(44).height(44).padding(0)
-      .backgroundColor(this.colors.chat.bubble)
-      .enabled(!this.music.loading && !['loading', 'initialized'].includes(this.music.player.state))
-      .accessibilityText(this.music.failed || this.music.player.state === 'error' ? (this.zh ? '重试' : 'Retry')
-        : this.music.player.state === 'playing' ? (this.zh ? '暂停' : 'Pause') : (this.zh ? '播放' : 'Play'))
-      .onClick((): void => { this.onAction(); })
-  }
-}
-
-@ComponentV2
 struct XopcGeneratedMusicControls {
   @Require @Param card: XopcGeneratedMediaCard;
   @Require @Param music: XopcGeneratedMusicPlayback;
   @Param zh: boolean = false;
   @Local colors: XopcThemeColors = appThemeColors;
   @Local lyricsOpen: boolean = false;
-  @Local scrubPosition: number = -1;
   @Event onClose: () => void = (): void => {};
   @Event onLyricsExpanded: () => void = (): void => {};
 
-  @Computed get displayPosition(): number {
-    return this.scrubPosition >= 0 ? this.scrubPosition : this.music.player.position;
-  }
-
   build() {
     Column({ space: 4 }) {
-      if (this.music.failed || this.music.player.state === 'error') {
-        Text(this.zh ? '无法播放这首歌，点击重试。' : 'Unable to play this song. Tap to retry.')
-          .fontSize(13).fontColor(this.colors.danger)
-      } else {
-        Slider({ value: this.displayPosition, min: 0, max: Math.max(1, this.music.player.duration), step: 1 })
-          .width('100%').enabled(this.music.player.duration > 0)
-          .selectedColor(this.colors.chat.action).blockColor(this.colors.chat.action)
-          .accessibilityText(this.zh ? '播放进度' : 'Playback progress')
-          .onChange((position: number, mode: SliderChangeMode): void => {
-            if (mode === SliderChangeMode.Begin || mode === SliderChangeMode.Moving) this.scrubPosition = position;
-            if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-              this.music.player.seek(position);
-              this.scrubPosition = -1;
-            }
-          })
-        Row() {
-          Text(generatedMediaTime(this.displayPosition)).fontSize(13).fontColor(this.colors.chat.secondary)
-          Text(generatedMediaTime(this.music.durationFor(this.card.item.id, this.card.item.durationMs)))
-            .fontSize(13).fontColor(this.colors.chat.secondary)
-        }.justifyContent(FlexAlign.SpaceBetween).width('100%')
+      XopcMusicProgress()
+      if (this.music.failed) {
+        Text($r('app.string.music_retry_hint')).fontSize(13).fontColor(this.colors.danger)
       }
       Row() {
         if (this.card.item.lyrics) {
@@ -261,6 +216,9 @@ struct XopcGeneratedMusicControls {
             .onClick((): void => { this.lyricsOpen = !this.lyricsOpen; })
         }
         Blank()
+        Button($r('app.string.music_now_playing')).id('generated-music-expand-' + this.card.item.id)
+          .height(44).padding({ left: 8, right: 8 }).fontSize(13).backgroundColor(Color.Transparent)
+          .fontColor(this.colors.chat.action).onClick((): void => { this.music.open(); })
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([this.colors.chat.secondary])
         }.id('generated-music-close-' + this.card.item.id)

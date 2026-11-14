@@ -1,3 +1,4 @@
+import { agentDisplayName } from '../common/agentPresentation';
 import { XopcAgentConfig, XopcChatModel, XopcChatAgent, XopcQueuedInput, XopcSessionPreparation, XopcQueueState, XopcQueueUpdate } from '../model/chat';
 import { XopcLocalSession } from '../model/sessionCommand';
 import { XopcChatRepository } from '../repository/chatRepository';
@@ -30,7 +31,7 @@ export class XopcChatOptionsViewModel {
     if (!this.conversationId || this.timer !== -1) return;
     this.refreshQueue(); this.timer = setInterval((): void => { this.refreshQueue(); }, 15000);
   }
-  async load(id: string, agentId: string = ''): Promise<void> {
+  async load(id: string, agentId: string = '', locale: string = ''): Promise<void> {
     this.pause(); const generation = ++this.generation;
     this.queueRequest++; this.conversationId = id; this.agentId = agentId; this.queued = [];
     this.configVersion = undefined;
@@ -41,7 +42,7 @@ export class XopcChatOptionsViewModel {
       // materialize the draft while those requests are in flight.
       const draft: XopcLocalSession | undefined = await this.repository.draft(id);
       if (generation !== this.generation) return;
-      const agents = await this.repository.agents();
+      const agents = await this.repository.agents(locale);
       if (generation !== this.generation) return;
       this.agents = agents.agents; this.agentId = agentId || agents.defaultId;
       const models = await this.repository.models(this.agentId);
@@ -71,7 +72,10 @@ export class XopcChatOptionsViewModel {
     if (!model?.thinking) return level || 'off';
     return model.thinking.options.includes(level || '') ? level || 'off' : model.thinking.initialValue;
   }
-  agentName(): string { return this.agents.find((item: XopcChatAgent): boolean => item.id === this.agentId)?.name || this.agentId; }
+  agentName(): ResourceStr {
+    const agent = this.agents.find((item: XopcChatAgent): boolean => item.id === this.agentId);
+    return agent ? agentDisplayName(agent) : this.agentId;
+  }
   async selectModel(id: string, remember: boolean = true): Promise<boolean> {
     if (this.loading || this.saving || !this.conversationId || !this.models.some((item: XopcChatModel): boolean => item.id === id)) return false;
     const model = this.models.find((item: XopcChatModel): boolean => item.id === id);

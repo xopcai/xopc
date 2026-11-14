@@ -528,6 +528,8 @@
     { "name": "chat_default_card_light", "value": "#E2E8F1" },
     { "name": "chat_default_bubble_light", "value": "#E4E7EC" },
     { "name": "chat_default_action_light", "value": "#2453D6" },
+    { "name": "chat_default_composer_light", "value": "#D5DDE8" },
+    { "name": "chat_default_composer_placeholder_light", "value": "#535D6D" },
     { "name": "chat_default_card_dark", "value": "#222730" },
     { "name": "chat_default_bubble_dark", "value": "#252F40" },
     { "name": "chat_default_action_dark", "value": "#A8BCFF" },

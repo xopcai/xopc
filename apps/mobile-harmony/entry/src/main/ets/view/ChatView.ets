@@ -20,7 +20,8 @@ import { chatAnswerText, chatAnswerStarted, chatAttachments } from '../common/ch
 import { extractMarkdownCodeBlocks } from '../common/chatDisplay';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcGeneratedMediaRow } from './GeneratedMediaView';
-import { XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
+import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
+import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { XopcGeneratedMediaViewModel } from '../viewmodel/generatedMediaViewModel';
 import { XopcGeneratedMediaCard } from '../model/generatedMedia';
 import { generatedMediaByReply } from '../common/generatedMedia';
@@ -88,7 +89,8 @@ export struct XopcChatView {
   @Local phonePage: number = 0;
   @Local generatedMedia: XopcGeneratedMediaViewModel = new XopcGeneratedMediaViewModel();
   @Local generatedPlayingId: string = '';
-  @Local generatedMusic: XopcGeneratedMusicPlayback = new XopcGeneratedMusicPlayback();
+  @Local generatedMusic: XopcGeneratedMusicPlayback = generatedMusicPlayback;
+  private locatedMusicRevision: number = 0;
   private generatedPlaybackScope: string = '';
   @Computed get generatedMediaGroups(): Map<string, XopcGeneratedMediaCard[]> {
     const cards = this.generatedMedia.cards;
@@ -100,6 +102,31 @@ export struct XopcChatView {
     return chatPresentationRows(this.chat.rows, undefined, '');
   }
   @Computed get generatedMediaChinese(): boolean { return appSettings.effectiveLanguage().startsWith('zh'); }
+  @Monitor('generatedMusic.sourceRevision', 'generatedMediaGroups', 'chat.selectedId', 'activePage')
+  locateMusicSource(): void {
+    const revision = this.generatedMusic.sourceRevision;
+    const track = this.generatedMusic.track;
+    if (!this.activePage || !track || this.chat.selectedId !== track.conversationId
+      || revision === this.locatedMusicRevision) return;
+    for (const row of this.generatedMediaGroups.keys()) {
+      const cards = this.generatedMediaGroups.get(row);
+      if (!cards?.some((card: XopcGeneratedMediaCard): boolean => card.item.id === track.id)) continue;
+      const index = this.presentationRows.findIndex((entry: XopcChatRow): boolean => entry.id === row);
+      if (index < 0) return;
+      this.locatedMusicRevision = revision;
+      this.atBottom = false;
+      this.initialScrollPending = false;
+      clearTimeout(this.scrollTimer);
+      this.scrollTimer = -1;
+      this.messagesScroller.scrollToIndex(index + (this.chat.hasOlder ? 1 : 0), false, ScrollAlign.START);
+      return;
+    }
+  }
+  @Computed get showMusicMiniPlayer(): boolean {
+    const track = this.generatedMusic.track;
+    return this.activePage && !!track && (track.conversationId !== this.chat.selectedId ||
+      !this.generatedMedia.cards.some((card: XopcGeneratedMediaCard): boolean => card.item.id === track.id));
+  }
   @Local colors: XopcThemeColors = appThemeColors;
   @Param requestedId: string = '';
   @Param taskId: string = '';
@@ -111,6 +138,7 @@ export struct XopcChatView {
   @Param intakeText: string = '';
   @Param activePage: boolean = true;
   @Param embedded: boolean = false;
+  @Param automationSetup: boolean = false;
   @Param scopedProjectName: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Event onPersonalAgentSaved: (record: XopcPersonalAgentRecord) => void = (_record: XopcPersonalAgentRecord): void => {};
@@ -125,6 +153,14 @@ export struct XopcChatView {
   @Computed get personalConversation(): boolean {
     return this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
   }
+  @Local floatingHeaderHeight: number = 0;
+  @Computed get showConnectionBanner(): boolean {
+    return this.hasConnectionIssue() || this.chat.cachedHistory || !!this.chat.error;
+  }
+  @Computed get headerCanvasRgb(): string {
+    const color = this.getUIContext().getHostContext()?.resourceManager.getColorSync(this.colors.chat.canvas) ?? 0xFFFFFFFF;
+    return (color >>> 0).toString(16).padStart(8, '0').slice(2);
+  }
   @Param pendingAttention: number = 0;
   @Event onOpenSidebar: () => void = (): void => {};
   @Param sidebarSwipeWidth: number = 0;
@@ -134,10 +170,12 @@ export struct XopcChatView {
   @Event onSidebarDragEnd: (offsetX: number, velocityX: number) => void = (_offsetX: number, _velocityX: number): void => {};
   @Event onSidebarDragCancel: () => void = (): void => {};
   @Event onNewOrdinaryChat: () => void = (): void => {};
+  @Event onOpenPersonalAgent: () => void = (): void => {};
   @Event onLocalChatCreated: (id: string) => void = (_id: string): void => {};
   @Event onConversationUnavailable: (id: string) => void = (_id: string): void => {};
   @Computed get overlayHeaderHeight(): number {
-    return this.taskId ? 72 + this.chatTopInset : 0;
+    if (this.taskId) return 72 + this.chatTopInset;
+    return this.embedded || this.showConnectionBanner ? 0 : this.floatingHeaderHeight;
   }
   @Event onConversationChange: (id: string) => void = (_id: string): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -320,13 +358,13 @@ export struct XopcChatView {
   @Local sendFlightScale: number = 1;
   @Local sendFlightOpacity: number = 1;
 
-  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'reader.continuousConversationId', 'voice.state', 'generatedMusic.songId', 'generatedPlayingId')
+  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'reader.continuousConversationId', 'voice.state', 'generatedMusic.track', 'generatedMusic.player.state', 'generatedMusic.loading', 'generatedPlayingId')
   onAutoReadChange(): void {
     if (!this.activePage && this.reader.continuousConversationId) this.reader.leaveForeground();
     else if (this.voice.state !== 'idle' && this.reader.continuousConversationId) this.reader.disableContinuous();
     const enabled = this.activePage && !this.disposed && !this.chat.loading && this.voice.state === 'idle'
       && this.reader.continuousConversationId === this.chat.selectedId && !!this.chat.selectedId
-      && !this.generatedMusic.songId && !this.generatedPlayingId;
+      && !this.generatedMusic.loading && this.generatedMusic.player.state !== 'playing' && !this.generatedPlayingId;
     const next = advanceChatAutoRead(this.autoReadState, this.chat.selectedId, enabled, !!this.chat.runId,
       latestChatAutoRead(this.chat.rows, this.chat.selectedId));
     this.autoReadState = next.state;
@@ -334,11 +372,11 @@ export struct XopcChatView {
     if (next.candidate && context) this.reader.speak(context, next.candidate.text, 'auto-read-aloud:' + next.candidate.key, appSettings.effectiveLanguage());
   }
 
-  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'voice.state', 'call.phase', 'reader.state', 'generatedMusic.songId', 'generatedPlayingId')
+  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'voice.state', 'call.phase', 'reader.state', 'generatedMusic.track', 'generatedMusic.player.state', 'generatedMusic.loading', 'generatedPlayingId')
   onAssistantAudioChange(): void {
     const enabled = this.activePage && !this.disposed && !this.chat.loading && !!this.chat.selectedId
       && this.voice.state === 'idle' && this.call.phase === 'idle' && this.reader.state === 'idle'
-      && !this.generatedMusic.songId && !this.generatedPlayingId;
+      && !this.generatedMusic.loading && this.generatedMusic.player.state !== 'playing' && !this.generatedPlayingId;
     const next = advanceAssistantAudio(this.assistantAudioState, this.chat.selectedId, enabled, !!this.chat.runId,
       latestAssistantAudio(this.chat.rows, this.chat.selectedId));
     this.assistantAudioState = next.state;
@@ -448,7 +486,7 @@ export struct XopcChatView {
     // A pending prepend may still update rows, but must not restore an obsolete reading anchor.
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false;
   }
-  @Monitor('bottomRegionHeight')
+  @Monitor('bottomRegionHeight', 'overlayHeaderHeight')
   onMessageLayoutChange(): void {
     this.updateReplySpace();
     if (!this.visible || !this.atBottom || this.loadingOlder || this.chat.loading) return;
@@ -642,7 +680,8 @@ export struct XopcChatView {
           if (context) {
             await this.voice.cancel();
             if (!this.visible || this.disposed || conversationId !== this.chat.selectedId || generation !== this.draftGeneration) return;
-            await this.stopGeneratedMediaPlayback();
+            this.generatedPlayingId = '';
+            await this.generatedMusic.pause();
             if (!this.visible || this.disposed || conversationId !== this.chat.selectedId || generation !== this.draftGeneration) return;
             await this.reader.speak(context, chatAnswerText(row), row.id, appSettings.effectiveLanguage());
           }
@@ -879,9 +918,8 @@ export struct XopcChatView {
     const profile = gatewaySession.currentProfile();
     const scope = JSON.stringify([profile?.gatewayId, profile?.deviceId, id, this.chat.transcriptId]);
     if (!this.activePage || !this.layout.foreground || this.phonePage !== 0 || this.generatedPlaybackScope !== scope) {
-      this.stopGeneratedMediaPlayback();
+      this.generatedPlayingId = '';
     }
-    if (this.generatedPlaybackScope !== scope) this.generatedMusic.clearDurations();
     this.generatedPlaybackScope = scope;
     this.generatedMedia.observe(id, scope, this.activePage && this.phonePage === 0 && this.layout.foreground
       && !this.chat.cachedHistory && !!this.chat.transcriptId, !!this.chat.runId);
@@ -891,7 +929,8 @@ export struct XopcChatView {
     if (this.visible && !this.chat.loading && this.chat.selectedId) void this.connectionWait.refresh();
     const id = this.chat.selectedId + ':' + this.chat.agentId;
     if (this.visible && !this.chat.loading && this.chat.selectedId && this.optionsId !== id) {
-      this.optionsId = id; this.options.load(this.chat.selectedId, this.chat.agentId); this.context.load(this.chat.selectedId); this.prompt.start(this.chat.selectedId);
+      this.optionsId = id; this.options.load(this.chat.selectedId, this.chat.agentId, appSettings.effectiveLanguage());
+      this.context.load(this.chat.selectedId); this.prompt.start(this.chat.selectedId);
     }
   }
   @Monitor('chat.auxiliaryRevision')
@@ -941,10 +980,17 @@ export struct XopcChatView {
     this.focusComposerOnMount = true;
     this.focusMountedComposer();
   }
-  aboutToDisappear(): void { this.generatedMusic.stop(); this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+  aboutToDisappear(): void { this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.clearSendFlight(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+
+  private async switchAgent(agentId: string): Promise<void> {
+    if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
+    this.sheetOpen = false;
+    this.dismissComposer();
+    await this.chat.create(agentId, this.chat.projectId || null, undefined, this.onLocalChatCreated);
+  }
 
   private async newConversation(agentId: string = this.options.agentId, projectId: string | null = this.chat.projectId || null, executionMode?: string): Promise<void> {
-    if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
+    if (this.automationSetup || this.chat.loading || this.chat.sending || this.restoringDraft) return;
     if (this.draft.trim() || this.attachments.length || this.refs.length) {
       try {
         const result = await this.getUIContext().getPromptAction().showDialog({ message: $r('app.string.discard_changes'),
@@ -1083,7 +1129,8 @@ export struct XopcChatView {
     this.voicePointerId = point.id;
     const generation = ++this.voiceHoldGeneration;
     this.voiceStartX = point.windowX; this.voiceStartY = point.windowY;
-    await Promise.all([this.stopGeneratedMediaPlayback(), this.reader.stop()]);
+    this.generatedPlayingId = '';
+    await Promise.all([this.generatedMusic.pause(), this.reader.stop()]);
     if (generation !== this.voiceHoldGeneration || !this.voiceHeld || !this.visible || this.disposed) return;
     await this.voice.start(context as common.UIAbilityContext);
   }
@@ -1230,27 +1277,8 @@ export struct XopcChatView {
         Column() {}.width(index % 2 === 0 ? '90%' : '70%').height(64).borderRadius(12)
           .backgroundColor(this.colors.panel)
       }, (index: number): string => index.toString())
-    }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  assistantReplyActions(row: XopcChatRow) {
-    Row({ space: 3 }) {
-      if (chatAnswerText(row)) {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.square_on_square_fill')).fontSize(19).fontColor([this.colors.chat.secondary])
-        }.id('chat-reply-copy-' + row.id).width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.chat_copy')).onClick((): void => { void this.messageAction('copy', row); })
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.speaker_wave_2')).fontSize(19).fontColor([this.colors.chat.secondary])
-        }.id('chat-reply-read-' + row.id).width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.chat_read_aloud')).onClick((): void => { void this.messageAction('read', row); })
-      }
-      Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(19).fontColor([this.colors.chat.secondary])
-      }.id('chat-reply-more-' + row.id).width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.more')).onClick((): void => { this.assistantMessageMore(row); })
-    }.width('100%').justifyContent(FlexAlign.End)
+    }.width('100%').padding({ top: 16 + this.overlayHeaderHeight, left: 16, right: 16, bottom: 16 })
+      .alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -1312,11 +1340,6 @@ export struct XopcChatView {
     }.id('chat-assistant-menu').width('100%').height('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 })
   }
 
-  private stopGeneratedMediaPlayback(): Promise<void> {
-    this.generatedPlayingId = '';
-    return this.generatedMusic.stop();
-  }
-
   private playGeneratedMedia(card: XopcGeneratedMediaCard): void {
     const id = card.item.id;
     if (card.kind === 'video' && this.generatedPlayingId === id) { this.generatedPlayingId = ''; return; }
@@ -1329,10 +1352,17 @@ export struct XopcChatView {
     void assistantAudioAutoplay.interrupt();
     if (card.kind === 'music') {
       this.generatedPlayingId = '';
-      void this.generatedMusic.play(context.cacheDir, this.chat.selectedId, id);
+      void this.generatedMusic.play(context.cacheDir, {
+        id, conversationId: this.chat.selectedId,
+        title: card.item.title || card.item.summary || (this.generatedMediaChinese ? '音乐' : 'Music'),
+        sourceTitle: this.personalConversation ? this.personalAgent?.displayName ?? 'Ada' : this.chat.title,
+        lyrics: card.item.lyrics, durationMs: card.item.durationMs, versionNumber: card.item.versionNumber
+      });
     } else {
-      this.generatedMusic.stop();
-      this.generatedPlayingId = id;
+      const conversationId = this.chat.selectedId;
+      void this.generatedMusic.pause().then((): void => {
+        if (this.visible && this.chat.selectedId === conversationId) this.generatedPlayingId = id;
+      });
     }
   }
 
@@ -1387,7 +1417,15 @@ export struct XopcChatView {
     Stack({ alignContent: Alignment.Bottom }) {
     Column() {
     if (this.chat.loading && !this.chat.rows.length) { this.skeleton() }
-    if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId && !this.generatedMedia.cards.length) {
+    if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId && !this.generatedMedia.cards.length && this.automationSetup) {
+      Column({ space: 8 }) {
+        Text($r('app.string.automation_setup_heading')).fontSize(22).fontWeight(FontWeight.Bold)
+          .fontColor(this.colors.foreground).textAlign(TextAlign.Center)
+        Text($r('app.string.automation_setup_hint')).fontSize(14).lineHeight(21)
+          .fontColor(this.colors.secondary).textAlign(TextAlign.Center)
+      }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
+        .padding({ left: 28, right: 28, bottom: this.bottomRegionHeight })
+    } else if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId && !this.generatedMedia.cards.length) {
       XopcChatWelcome({ activePage: this.activePage, showPersonalAvatar: this.embedded || !!this.taskId, standaloneDraft: this.isStandaloneDraft(), projectName: this.scopedProjectName, scope: this.context.summary, language: appSettings.effectiveLanguage(),
         contextPending: this.context.loading || this.options.loading,
         personal: this.personalConversation, personalName: this.personalAgent?.displayName ?? 'Ada',
@@ -1397,7 +1435,7 @@ export struct XopcChatView {
           if (this.restoringDraft) return;
           this.draft = text; this.cursor = text.length;
           this.getUIContext().getFocusController().requestFocus('chat-composer'); this.editor.caretPosition(text.length);
-        } }).layoutWeight(1).width('100%').padding({ bottom: this.bottomRegionHeight })
+        } }).layoutWeight(1).width('100%').padding({ top: this.overlayHeaderHeight, bottom: this.bottomRegionHeight })
     } else {
     Stack({ alignContent: Alignment.Bottom }) {
     List({ space: 20, scroller: this.messagesScroller }) {
@@ -1465,7 +1503,6 @@ export struct XopcChatView {
                   showFailure: this.personalConversation,
                   reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
                   onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
-              if (!item.item.live) { this.assistantReplyActions(item.item) }
               }.id('chat-assistant-card-' + item.item.id).width('100%')
                 .constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)
                 .onClick((): void => {
@@ -1662,6 +1699,7 @@ export struct XopcChatView {
           .accessibilityText($r('app.string.chat_continuous_stop')).onClick((): void => { this.reader.disableContinuous(); })
       }.id('chat-continuous-reading').padding({ left: 16, right: 16 }).width('100%')
     }
+    if (this.showMusicMiniPlayer) { XopcMusicMiniPlayer() }
     if (this.reader.state !== 'idle') {
       Row({ space: 4 }) {
         if (this.reader.state === 'loading') {
@@ -1730,6 +1768,7 @@ export struct XopcChatView {
         }.width('100%').height(Math.min(3, this.palette.items.length) * 56)
       }.id('chat-command-palette').width('92%').padding(8).borderRadius(16).backgroundColor(this.colors.panel).margin({ bottom: 4 })
     }
+    Column() {
     Column() {
       if (this.attachments.length) {
         Scroll() {
@@ -1811,7 +1850,9 @@ export struct XopcChatView {
             .id('chat-composer').layoutWeight(1).constraintSize({ minHeight: COMPOSER_INPUT_MIN, maxHeight: this.expandedComposer ? COMPOSER_INPUT_MAX : COMPOSER_INPUT_MIN })
             .padding({ left: 4, right: 4, top: this.expandedComposer ? 5 : 10, bottom: this.expandedComposer ? 5 : 10 }).lineHeight(20)
             .enabled(!this.restoringDraft).backgroundColor(Color.Transparent)
-            .fontSize(16).fontColor(this.colors.foreground).placeholderColor(this.colors.chat.secondary)
+            .fontSize(16).fontColor(this.colors.foreground)
+            .placeholderColor(this.panelOpen ? this.colors.chat.secondary
+              : this.colors.chat.composer?.placeholder ?? this.colors.chat.secondary)
             .onAppear((): void => { this.focusMountedComposer(); })
             .onEditChange((editing: boolean): void => { if (editing) { this.setPanel(false); this.taskOverviewOpen = false; } })
             .onChange((value: string): void => { this.draft = value; this.cursor = value.length; this.palette.update(value, this.cursor, this.chat.selectedId, appSettings.effectiveLanguage()); })
@@ -1829,11 +1870,13 @@ export struct XopcChatView {
           this.composerRightActions()
         }.width('100%').padding({ left: 8, right: 8, bottom: 8 })
       }
-    }.id('chat-composer-shell').width('calc(100% - 24vp)').backgroundColor(this.colors.input)
+    }.id('chat-composer-shell').width('100%')
+      .backgroundColor(this.panelOpen ? Color.Transparent : this.colors.chat.composer?.fill ?? this.colors.input)
       .borderRadius(28).clip(true).margin({ bottom: 6, top: 8 })
       .onAreaChange((_previous: Area, current: Area): void => { this.sendFlightComposer = this.sendFlightRect(current); })
     XopcChatActionPanel({ open: this.panelOpen, disabledIds: this.disabledActionIds(),
       onSelect: (id: string): void => { this.chooseAction(id); } })
+    }.width('calc(100% - 24vp)').borderRadius(28).backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent)
     }.id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)
       .borderRadius(24).clip(true)
     }.id('chat-bottom-region').width('100%')
@@ -1910,12 +1953,15 @@ export struct XopcChatView {
     if (!this.visible || !this.canStartVoiceCall()) return;
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     this.dismissComposer();
-    this.stopGeneratedMediaPlayback();
-    this.reader.stop(); this.voice.cancel();
-    this.call.start(context, { conversationId: this.chat.selectedId,
+    this.generatedPlayingId = '';
+    const conversationId = this.chat.selectedId;
+    void Promise.all([this.generatedMusic.pause(), this.reader.stop(), this.voice.cancel()]).then((): void => {
+      if (!this.visible || this.chat.selectedId !== conversationId || !this.canStartVoiceCall()) return;
+      void this.call.start(context, { conversationId,
       mode: 'auto', background: true,
       name: this.personalConversation ? this.personalAgent?.displayName ?? 'Ada'
         : this.chat.title || this.options.modelName(appSettings.effectiveLanguage()) });
+    });
   }
 
   @Monitor('chat.selectedId', 'chat.connection', 'activePage', 'layout.foreground', 'phonePage')
@@ -1931,7 +1977,12 @@ export struct XopcChatView {
       this.chatWorkspace()
       if (this.phone.summary?.available || this.phonePage === 1) {
         Column() {
-          XopcPhoneView({ phone: this.phone, onReturn: (): void => { this.phonePage = 0; } })
+          Column() {
+            XopcPhoneView({ phone: this.phone, onReturn: (): void => { this.phonePage = 0; } })
+          }.width('100%').layoutWeight(1)
+          if (this.phonePage === 1 && this.generatedMusic.track) {
+            XopcMusicMiniPlayer()
+          }
         }.width('100%').height('100%').padding({ top: this.chatTopInset + 8 })
       }
     }.index(this.phonePage).loop(false).indicator(false).cachedCount(1)
@@ -1996,9 +2047,15 @@ export struct XopcChatView {
             Blank().layoutWeight(1)
             this.conversationActions()
           }.width('100%').padding({ left: 12, right: 12, top: 3 })
-          XopcPersonalAgentAvatar({ extent: 62, compact: true, activePage: this.activePage,
-            agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
-            revision: this.personalAgent?.revision ?? 0 })
+          Button({ type: ButtonType.Circle }) {
+            XopcPersonalAgentAvatar({ extent: 62,
+              activePage: this.activePage && this.phonePage === 0 && !this.searchOpen && !this.sheetOpen && !this.personalSettingsOpen,
+              moodOverride: this.prompt.prompt ? 'care' : this.chat.runId || this.chat.sending ? 'work' : undefined,
+              agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
+              revision: this.personalAgent?.revision ?? 0 })
+          }.id('chat-personal-overview').width(62).height(62).padding(0).backgroundColor(Color.Transparent)
+            .accessibilityText($r('app.string.personal_overview_open'))
+            .onClick((): void => { this.dismissComposer(); this.onNavigate({ page: 'personal-agent-overview', itemId: '' }); })
         }.width('100%').height(64)
         if (this.pendingAttention > 0) {
           Button({ type: ButtonType.Normal }) {
@@ -2024,10 +2081,11 @@ export struct XopcChatView {
         Row() {
           this.sidebarButton()
           Button({ type: ButtonType.Normal }) {
-            Text($r('app.string.new_chat')).id('chat-ordinary-title').fontSize(17).fontWeight(FontWeight.Bold)
+            Text(this.options.agentId && this.options.agentId !== 'main' ? this.options.agentName() : $r('app.string.new_chat'))
+              .id('chat-ordinary-title').fontSize(17).fontWeight(FontWeight.Bold)
               .fontColor(this.colors.foreground).textAlign(TextAlign.Center).width('100%')
           }.height(44).padding(0).layoutWeight(1).backgroundColor(Color.Transparent)
-            .onClick((): void => { this.openSheet('actions'); })
+            .onClick((): void => { this.dismissComposer(); this.openSheet('agent'); })
           Row({ space: 3 }) {
             this.voiceCallButton()
             Button({ type: ButtonType.Circle }) {
@@ -2040,7 +2098,7 @@ export struct XopcChatView {
         Row({ space: 8 }) {
           this.sidebarButton()
           Button({ type: ButtonType.Normal }) {
-            Text(this.chat.title || $r('app.string.new_chat')).id('chat-ordinary-title').fontSize(16)
+            Text(this.chat.title || this.options.agentName() || $r('app.string.new_chat')).id('chat-ordinary-title').fontSize(16)
               .fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%').textAlign(TextAlign.Center)
           }.layoutWeight(1).height(44).padding(0).backgroundColor(Color.Transparent)
@@ -2049,15 +2107,18 @@ export struct XopcChatView {
         }.width('100%').padding({ left: 12, right: 12 })
       }
     }.id('chat-floating-header').width('100%').padding({ top: this.chatTopInset + 8, bottom: 8 })
-      .backgroundColor(this.colors.chat.canvas)
+      .backgroundColor(Color.Transparent).hitTestBehavior(HitTestMode.None)
+      .onAreaChange((_previous: Area, current: Area): void => {
+        const height = Number(current.height);
+        if (height !== this.floatingHeaderHeight) this.floatingHeaderHeight = height;
+      })
   }
 
   @Builder
   chatWorkspace() {
     Stack({ alignContent: Alignment.TopStart }) {
     Column() {
-      if (!this.embedded && !this.taskId) { this.conversationHeader() }
-      if (this.hasConnectionIssue() || this.chat.cachedHistory || this.chat.error) {
+      if (this.showConnectionBanner) {
       Column() {
       if (this.hasConnectionIssue()) {
         Row({ space: 8 }) {
@@ -2081,7 +2142,7 @@ export struct XopcChatView {
           Button($r('app.string.refresh')).height(44).onClick((): void => { this.chat.retryHistory(); })
         }.padding({ left: 16, right: 16 })
       }
-      }.width('100%').padding({ top: this.overlayHeaderHeight })
+      }.width('100%').padding({ top: this.taskId ? this.overlayHeaderHeight : this.embedded ? 0 : this.floatingHeaderHeight })
       }
       this.conversation()
       Column().width('100%').height(0)
@@ -2106,6 +2167,14 @@ export struct XopcChatView {
         })
     }.width('100%').height('100%').backgroundColor(this.colors.chat.canvas)
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
+    if (!this.embedded && !this.taskId) {
+      Column().width('100%').height(this.floatingHeaderHeight + 12)
+        .linearGradient({ direction: GradientDirection.Bottom, colors: [
+          [this.colors.chat.canvas, 0], ['#F0' + this.headerCanvasRgb, 0.3],
+          ['#D6' + this.headerCanvasRgb, 0.72], ['#00' + this.headerCanvasRgb, 1]
+        ] }).hitTestBehavior(HitTestMode.None).accessibilityLevel('no')
+      this.conversationHeader()
+    }
     if (this.taskId) {
       XopcTaskChatHeader({ taskId: this.taskId, expanded: this.taskOverviewOpen, topInset: this.chatTopInset,
         bottomClearance: this.bottomRegionHeight,
@@ -2233,7 +2302,6 @@ export struct XopcChatView {
         }
       },
       onSaved: (record: XopcPersonalAgentRecord): void => { this.onPersonalAgentSaved(record); },
-      onSearch: (): void => { this.personalSettingsOpen = false; this.openMessageSearch(); },
       onClose: (): void => { this.personalSettingsOpen = false; } })
   }
 
@@ -2347,14 +2415,23 @@ export struct XopcChatView {
         onReference: (item: XopcReferenceItem): void => { this.addReference(item); },
         onClose: (): void => { this.sheetOpen = false; }, onRetry: (): void => { this.context.load(this.chat.selectedId); } })
     } else {
-    XopcChatOptions({ model: this.options, mode: this.sheetMode, personal: this.personalConversation,
+    XopcChatOptions({ model: this.options, mode: this.sheetMode, personal: this.personalConversation, personalRecord: this.personalAgent,
       contextSummary: this.contextMenuSummary(),
       thinkingBusy: this.chat.sending || !!this.chat.runId || !!this.options.queued.length,
       onSearch: (): void => { this.sheetOpen = false; this.openMessageSearch(); },
       onContext: (): void => { this.sheetMode = 'context'; },
       onMode: (mode: string): void => { this.sheetMode = mode; }, onClose: (): void => { this.sheetOpen = false; },
       onRetry: (): void => { this.options.load(this.chat.selectedId, this.chat.agentId); },
-      onAgent: (id: string): void => { this.newConversation(id); }, onNewChat: (): void => {
+      onAgent: (id: string): void => {
+        this.saveDraft();
+        if (id === this.personalAgent?.agentId) {
+          this.sheetOpen = false;
+          this.onOpenPersonalAgent();
+        } else {
+          void this.switchAgent(id);
+        }
+      }, onNewChat: (): void => {
+        if (this.automationSetup) return;
         if (this.embedded || this.taskId) { void this.newConversation(); return; }
         this.sheetOpen = false;
         this.onNewOrdinaryChat();

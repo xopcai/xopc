@@ -58,7 +58,9 @@ describe('chat bottom region composition', () => {
   it('keeps the composer inside the chat safe-area surface', () => {
     expect(chat.match(/TextArea\(\{ text: this.draft/g)).toHaveLength(1);
     expect(chat).toContain("Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.chat.canvas)");
-    expect(chat).toContain(".id('chat-composer-shell').width('calc(100% - 24vp)').backgroundColor(this.colors.input)");
+    expect(chat).toContain(".id('chat-composer-shell').width('100%')");
+    expect(chat).toContain(".backgroundColor(this.panelOpen ? Color.Transparent : this.colors.chat.composer?.fill ?? this.colors.input)");
+    expect(chat).toContain(".width('calc(100% - 24vp)').borderRadius(28).backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent)");
     expect(chat).toContain(".id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)");
     expect(chat).toContain(".id('chat-bottom-region').width('100%')");
     expect(chat).toContain(".id('chat-reply-clearance')");
@@ -70,8 +72,8 @@ describe('chat bottom region composition', () => {
     expect(home).not.toContain("id('main-tab-dock')");
     expect(home).not.toContain("id('home-quick-composer')");
     expect(chat).toContain('XopcChatActionPanel({ open: this.panelOpen,');
-    expect(actionPanel).toContain("this.attachmentTile('photos', $r('app.string.chat_photos')");
-    expect(actionPanel).toContain("this.actionRow('reference-note', $r('app.string.chat_reference_note')");
+    expect(actionPanel).toContain("this.actionTile('photos', $r('app.string.chat_photos')");
+    expect(actionPanel).toContain("this.actionTile('reference-note', $r('app.string.chat_reference_note')");
     expect(chat).not.toContain(".id('chat-composer-voice-call')");
   });
 
@@ -160,7 +162,7 @@ describe('chat bottom region composition', () => {
     expect(header).toContain('this.personalAgent?.displayName');
     expect(header).toContain("$r('app.string.chat_attention_count', this.pendingAttention)");
     expect(header).toContain("this.onNavigate({ page: 'progress', itemId: '' })");
-    expect(header).toContain("this.chat.title || $r('app.string.new_chat')");
+    expect(header).toContain("this.chat.title || this.options.agentName() || $r('app.string.new_chat')");
     expect(home).toContain('pendingAttention: this.pendingAttention');
     expect(home).toContain('return this.attention.pendingCount;');
     expect(home).toContain('XopcProgressView({ activePage: true, model: this.attention');
@@ -246,18 +248,14 @@ describe('chat bottom region composition', () => {
     expect(sessions).not.toContain('gatewaySession.currentProfile()');
   });
 
-  it('groups attachments and references in one accessible add panel', () => {
-    const sourcePicker = actionPanel.indexOf("$r('app.string.chat_add_references')");
-    expect(actionPanel).toContain('Scroll()');
+  it('fits capture and references into a two-row icon panel', () => {
     expect(actionPanel).toContain(".id('chat-action-panel')");
-    for (const action of ['camera', 'photos', 'document']) {
-      const tile = actionPanel.indexOf(`this.attachmentTile('${action}'`);
-      expect(tile).toBeGreaterThan(0);
-      expect(tile).toBeLessThan(sourcePicker);
-    }
-    for (const action of ['reference-file', 'reference-note', 'reference-task', 'record-voice']) {
-      expect(actionPanel.indexOf(`this.actionRow('${action}'`)).toBeGreaterThan(sourcePicker);
-    }
+    expect(actionPanel).toContain(".width('25%').height(84)");
+    expect(Array.from(actionPanel.matchAll(/this\.actionTile\('([^']+)'/g), match => match[1])).toEqual([
+      'photos', 'camera', 'document', 'record-voice', 'reference-note', 'reference-task', 'reference-file',
+    ]);
+    expect(actionPanel).toContain(".accessibilityLevel(this.open ? 'auto' : 'no-hide-descendants')");
+    expect(actionPanel).not.toContain('Scroll()');
     expect(actionPanel).not.toContain('Swiper(');
     expect(options).toContain("$r('app.string.chat_search_in_conversation')");
   });

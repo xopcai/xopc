@@ -15,6 +15,7 @@ import { XopcMobileRoute } from '../model/home';
 import { userErrorMessage } from '../common/userError';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { XopcChatAgent, XopcChatAgents } from '../model/chat';
+import { XopcAutomationIdeas } from './AutomationIdeas';
 
 @ComponentV2
 export struct XopcWorkspaceView {
@@ -183,9 +184,9 @@ export struct XopcWorkspaceView {
     return $r('app.string.new_task');
   }
 
-  private openCreateForm(): void {
+  private openCreate(prompt: string = ''): void {
     if (!this.model.busy) this.onNavigate({ page: this.section === 'projects' ? 'project-create'
-      : this.section === 'automations' ? 'automation-create' : 'task-create', itemId: '', projectId: this.projectId });
+      : this.section === 'automations' ? 'automation-setup' : 'task-create', itemId: '', projectId: this.projectId, prompt });
   }
 
   private statusLabel(status: string): ResourceStr {
@@ -617,7 +618,21 @@ export struct XopcWorkspaceView {
             .fontColor(this.colors.foreground).onClick((): void => { this.model.list(this.search, true); })
         }
       }
-      if (!this.model.busy && this.filteredItems().length === 0) {
+      if (!this.model.busy && this.section === 'automations' && !this.model.error && !this.model.items.length
+        && this.filter === 'all' && !this.search.trim() && !this.model.loadedSearch) {
+        ListItem() {
+          Column({ space: 14 }) {
+            Column({ space: 7 }) {
+              SymbolGlyph($r('sys.symbol.clock')).fontSize(30).fontColor([this.colors.secondary])
+              Text($r('app.string.automation_setup_heading')).fontSize(20).fontWeight(FontWeight.Bold)
+                .fontColor(this.colors.foreground).textAlign(TextAlign.Center)
+              Text($r('app.string.automation_setup_hint')).fontSize(14).lineHeight(20)
+                .fontColor(this.colors.secondary).textAlign(TextAlign.Center)
+            }.width('100%').padding({ top: 20, bottom: 10 })
+            XopcAutomationIdeas({ projectScoped: !!this.projectId, onChoose: (prompt: string): void => { this.openCreate(prompt); } })
+          }.width('100%')
+        }
+      } else if (!this.model.busy && this.filteredItems().length === 0) {
         ListItem() {
           Column({ space: 10 }) {
             SymbolGlyph($r('sys.symbol.list_bullet')).fontSize(30).fontColor([this.colors.tertiary])
@@ -982,7 +997,8 @@ export struct XopcWorkspaceView {
         }
         ListItem() {
           Column({ space: 8 }) {
-            Text($r('app.string.workspace_description')).fontSize(13).fontColor(this.colors.secondary).width('100%')
+            Text($r('app.string.workspace_description'))
+              .fontSize(13).fontColor(this.colors.secondary).width('100%')
             TextArea({ text: this.model.body, placeholder: $r('app.string.description') }).height(220)
               .backgroundColor(this.colors.input).borderRadius(14).padding(14)
               .onChange((text: string): void => { this.model.body = text; })
@@ -1209,7 +1225,7 @@ export struct XopcWorkspaceView {
             SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.accent])
           }.width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
             .accessibilityText(this.createLabel()).enabled(!this.model.busy)
-            .onClick((): void => { this.openCreateForm(); })
+            .onClick((): void => { this.openCreate(); })
         }
         if (this.model.selected?.id && !this.model.editing && this.section === 'automations') {
           Button() { SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.secondary]) }
@@ -1239,7 +1255,9 @@ export struct XopcWorkspaceView {
         height: '70%', dragBar: true, showClose: true, backgroundColor: this.colors.panel,
         onDisappear: (): void => { this.agentQuery = ''; this.projectQuery = ''; }
       })
-    }.hideTitleBar(true).onBackPressed((): boolean => {
+    }.hideTitleBar(true).onShown((): void => {
+      if (this.section === 'automations' && !this.model.selected && !this.model.openingId) void this.model.list(this.search);
+    }).onBackPressed((): boolean => {
       if (!this.model.busy || !!this.model.openingId) this.goBack(); return true;
     })
   }

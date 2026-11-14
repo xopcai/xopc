@@ -36,6 +36,11 @@ class XopcThemeTokens {
   }
 }
 
+interface XopcChatComposerColors {
+  fill: Resource;
+  placeholder: Resource;
+}
+
 export interface XopcChatThemeColors {
   canvas: Resource;
   card: Resource;
@@ -43,6 +48,7 @@ export interface XopcChatThemeColors {
   action: Resource;
   onAction: Resource;
   secondary: Resource;
+  composer?: XopcChatComposerColors;
 }
 
 @ObservedV2
@@ -331,6 +337,10 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
         card: $r('app.color.chat_default_card_light'),
         bubble: $r('app.color.chat_default_bubble_light'),
         action: $r('app.color.chat_default_action_light'),
+        composer: {
+          fill: $r('app.color.chat_default_composer_light'),
+          placeholder: $r('app.color.chat_default_composer_placeholder_light')
+        },
         onAction: $r('app.color.theme_default_panel_light'), secondary,
       };
   }

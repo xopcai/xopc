@@ -28,7 +28,7 @@ describe('chat message layout parity', () => {
     expect(chat).toContain("this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }");
   });
 
-  it('uses the conversation canvas for full-width assistant replies with compact actions', () => {
+  it('uses the conversation canvas for full-width assistant replies', () => {
     const start = chat.indexOf("} else if (item.item.role === 'assistant') {");
     const end = chat.indexOf("} else {", start);
     const assistantLayout = chat.slice(start, end);
@@ -36,7 +36,6 @@ describe('chat message layout parity', () => {
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id)");
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width('100%')");
     expect(assistantLayout).toContain('.constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)');
-    expect(assistantLayout).toContain('this.assistantReplyActions(item.item)');
     expect(chat).toContain(".width(CHAT_MESSAGE_MAX_WIDTH).alignItems(HorizontalAlign.Start).padding({ top: 6 })");
     expect(assistantLayout).not.toContain('.backgroundColor(this.colors.chat.assistant)');
     expect(content).toContain(": this.colors.chat.canvas;");
@@ -128,10 +127,15 @@ describe('chat message layout parity', () => {
   });
 
   it('keeps assistant actions out of the reading flow and opens them on long press', () => {
+    const cardStart = chat.indexOf(".id('chat-assistant-card-' + item.item.id)");
+    const cardEnd = chat.indexOf('this.generatedMediaRows(item.item.id)', cardStart);
+    const assistantCard = chat.slice(cardStart, cardEnd);
+
     expect(chat).not.toContain('assistantMessageActions(row: XopcChatRow)');
-    expect(chat).toContain('assistantMessageMore(row: XopcChatRow)');
-    expect(chat).toContain('LongPressGesture({ repeat: false, duration: 500 })');
-    expect(chat).toContain('if (!item.item.live)');
+    expect(chat).not.toContain('assistantReplyActions');
+    expect(chat).not.toMatch(/chat-reply-(copy|read|more)-/);
+    expect(assistantCard).toMatch(/LongPressGesture\(\{ repeat: false, duration: 500 \}\)[\s\S]*if \(!item\.item\.live\)[\s\S]*this\.assistantMessageMore\(item\.item\)/);
+    expect(chat).toContain('.bindSheet($$this.assistantMenuOpen, this.assistantMessageMenuSheet');
   });
 
 });
