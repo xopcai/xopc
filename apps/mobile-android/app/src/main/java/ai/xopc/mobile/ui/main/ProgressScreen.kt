@@ -3,6 +3,12 @@ package ai.xopc.mobile.ui.main
 import ai.xopc.mobile.gateway.ProgressTaskEdit
 
 import ai.xopc.mobile.R
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
+import ai.xopc.mobile.gateway.ProjectMutation
 import ai.xopc.mobile.gateway.ProgressItem
 import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressTask
@@ -71,6 +77,7 @@ internal fun progressDestination(href: String): Pair<String, String>? {
   return match.groupValues[1] to match.groupValues[2]
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onRefreshHome: () -> Unit, onRefreshTasks: () -> Unit, onLoadMore: () -> Unit,
@@ -84,6 +91,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onOpenTaskChat: (String) -> Unit,
   onSaveTask: (String, Int, ProgressTaskEdit) -> Unit,
   onOpenChat: (String) -> Unit,
+  onOpenProjectChat: (ProgressProjectSession) -> Unit = { onOpenChat(it.id) },
   onOpenNote: (String) -> Unit = {},
   onCreateProjectChat: (String) -> Unit = {},
   onHomeAction: (ProgressHomeAction) -> Unit = {},
@@ -91,7 +99,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
-  onCreateAutomation: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+  onArrangeAutomation: (String?, String) -> Unit = { _, _ -> },
+  onWriteProject: suspend (ProjectMutation) -> ProgressProject = { error("UNAVAILABLE") },
+  onCreateProjectNote: (String) -> Unit = {},
   onUpdateAutomation: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
   onDeleteAutomation: (String, String) -> Unit = { _, _ -> },
   onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
@@ -112,7 +122,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     })
   }
   var selectedTaskId by rememberSaveable(state.gatewayId) {
-    mutableStateOf(initialDeliveryId.takeIf { initialDeliveryKind == "task" })
+    mutableStateOf(initialDeliveryId.takeIf { initialDeliveryKind == "task" } ?: initialItemId.takeIf { initialPage == "detail" })
   }
   var detailReturnPage by rememberSaveable(state.gatewayId) {
     mutableStateOf(if (initialDeliveryKind == "task") "delivery" else "overview")
@@ -147,16 +157,16 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var editStartedRevision by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf(0) }
   var discardEditOpen by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf(false) }
   var selectedProjectId by rememberSaveable(state.gatewayId) { mutableStateOf(initialItemId.takeIf { initialPage == "project" }) }
+  var projectMenuOpen by rememberSaveable(state.gatewayId, selectedProjectId) { mutableStateOf(false) }
+  var projectEditorMode by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
+  var projectWriteBusy by remember(state.gatewayId) { mutableStateOf(false) }
+  var projectWriteError by remember(state.gatewayId) { mutableStateOf(false) }
+  val projectWriteScope = rememberCoroutineScope()
   var selectedAutomationId by rememberSaveable(state.gatewayId) { mutableStateOf(initialItemId.takeIf { initialPage == "automation" }) }
   var automationReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf("automations") }
   var selectedRunId by rememberSaveable(state.gatewayId) {
     mutableStateOf(initialDeliveryId.takeIf { initialDeliveryKind == "automation" })
   }
-  var automationName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
-  var automationInstruction by rememberSaveable(state.gatewayId) { mutableStateOf("") }
-  var automationCron by rememberSaveable(state.gatewayId) { mutableStateOf("0 9 * * *") }
-  var automationCreateKey by rememberSaveable(state.gatewayId) { mutableStateOf(UUID.randomUUID().toString()) }
-  var automationCreateStartedId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var automationEditName by rememberSaveable(state.gatewayId, selectedAutomationId) { mutableStateOf("") }
   var automationEditInstruction by rememberSaveable(state.gatewayId, selectedAutomationId) { mutableStateOf("") }
   var automationEditCron by rememberSaveable(state.gatewayId, selectedAutomationId) { mutableStateOf("") }
@@ -168,7 +178,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   }
   var automationEditStartedRevision by rememberSaveable(state.gatewayId, selectedAutomationId) { mutableStateOf(0) }
   var discardAutomationEditOpen by rememberSaveable(state.gatewayId, selectedAutomationId) { mutableStateOf(false) }
-  var discardAutomationOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var createTitle by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var createBody by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var createProjectId by rememberSaveable(state.gatewayId) { mutableStateOf("") }
@@ -184,13 +193,17 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   }
   var openedFromAllWork by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   fun goBack() {
-    if (state.commandBusy || state.editBusy || state.createBusy || state.automations.createBusy ||
+    if (projectWriteBusy || state.commandBusy || state.editBusy || state.createBusy ||
       state.automations.editBusy || state.automations.deleteBusy) return
     when (page) {
       "edit" -> if (editDirty) discardEditOpen = true else page = "detail"
       "create" -> if (createTitle.isNotBlank() || createBody.isNotBlank() ||
         createProjectId != selectedProjectId) discardCreateOpen = true else page = "project"
-      "detail" -> if (detailReturnPage == "delivery") onCloseDelivery() else page = detailReturnPage
+      "detail" -> when {
+        detailReturnPage == "delivery" -> onCloseDelivery()
+        initialPage == "detail" && selectedTaskId == initialItemId -> onExit?.invoke()
+        else -> page = detailReturnPage
+      }
       "project" -> if (initialPage == "project" && selectedProjectId == initialItemId) onExit?.invoke() else page = "projects"
       "tasks", "projects", "automations" -> {
         if (page == initialPage && onExit != null) onExit()
@@ -201,8 +214,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       "automation" -> if (initialPage == "automation" && selectedAutomationId == initialItemId &&
         automationReturnPage == "automations") onExit?.invoke() else page = automationReturnPage
       "automation-edit" -> if (automationEditDirty) discardAutomationEditOpen = true else page = "automation"
-      "automation-create" -> if (automationName.isNotBlank() || automationInstruction.isNotBlank() ||
-        automationCron != "0 9 * * *") discardAutomationOpen = true else page = "automations"
       else -> onExit?.invoke()
     }
   }
@@ -248,15 +259,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       page = "project"
     }
   }
-  LaunchedEffect(page, state.automations.createdId) {
-    if (page == "automation-create") state.automations.createdId?.takeIf {
-      it != automationCreateStartedId
-    }?.let { openId ->
-      selectedAutomationId = openId
-      page = "automation"
-      onOpenAutomation(openId)
-    }
-  }
   LaunchedEffect(page, state.automations.editedRevision) {
     if (page == "automation-edit" &&
       state.automations.editedRevision > automationEditStartedRevision) {
@@ -282,6 +284,31 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     selectedProjectId = id
     page = "project"
     onOpenProject(id)
+  }
+  fun createProjectTask(projectId: String) {
+    createTitle = ""
+    createBody = ""
+    createProjectId = projectId
+    createStartedRevision = state.createSavedRevision
+    page = "create"
+  }
+  fun openProjectEditor(mode: String) {
+    projectWriteError = false
+    projectEditorMode = mode
+  }
+  fun writeProject(mutation: ProjectMutation) {
+    if (projectWriteBusy) return
+    projectWriteBusy = true
+    projectWriteError = false
+    projectWriteScope.launch {
+      try {
+        val updated = onWriteProject(mutation)
+        projectEditorMode = null
+        openProject(updated.id)
+      } catch (e: CancellationException) { throw e }
+      catch (_: Exception) { projectWriteError = true }
+      finally { projectWriteBusy = false }
+    }
   }
   fun openAutomation(id: String) {
     automationReturnPage = page
@@ -317,18 +344,31 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         "project" -> state.project?.takeIf { it.id == selectedProjectId }?.name ?: stringResource(R.string.progress_projects)
         "create" -> stringResource(R.string.progress_new_task)
         "automations" -> stringResource(R.string.progress_automations)
-        "automation-create" -> stringResource(R.string.automation_new)
         "automation-edit" -> stringResource(R.string.automation_edit)
         "automation" -> state.automations.detail?.takeIf { it.id == selectedAutomationId }?.name
           ?: stringResource(R.string.progress_automations)
         "automation-run" -> state.automations.run?.automationName ?: stringResource(R.string.automation_run)
         else -> stringResource(R.string.tab_progress)
-      }, style = if (page == "overview") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
+      }, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+        style = if (page == "overview") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Bold)
       if (page == "overview") IconButton(onClick = { page = "work"; openedFromAllWork = true },
         modifier = Modifier.testTag("progress-all-work")) {
         Icon(painterResource(R.drawable.action_task_list), contentDescription = stringResource(R.string.progress_all_work),
           modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
+      }
+      else if (page == "automations") IconButton(onClick = { onArrangeAutomation(null, "") },
+        modifier = Modifier.testTag("automation-create")) {
+        Icon(painterResource(R.drawable.action_add), stringResource(R.string.automation_new))
+      }
+      else if (page == "projects") IconButton(onClick = { openProjectEditor("create") },
+        modifier = Modifier.testTag("project-create")) {
+        Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_new))
+      }
+      else if (page == "project") IconButton(onClick = { projectMenuOpen = true },
+        enabled = state.project?.id == selectedProjectId && selectedProjectId != null,
+        modifier = Modifier.testTag("project-open-actions")) {
+        Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_add_item))
       }
       else if (page == "tasks") Row {
         if (!taskSearchOpen) IconButton(onClick = { taskSearchOpen = true },
@@ -374,14 +414,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
           state.projectNotes, state.projectNotesLoading, state.projectNotesError,
           state.projectAutomations, state.projectAutomationsLoading, state.projectAutomationsError,
-          onCreate = {
-            createTitle = ""
-            createBody = ""
-            createProjectId = selectedProjectId.orEmpty()
-            createStartedRevision = state.createSavedRevision
-            page = "create"
-          }, onOpenTask = ::openTask, onOpenChat = onOpenChat,
+          onCreate = { createProjectTask(state.project.id) }, onOpenTask = ::openTask, onOpenChat = onOpenProjectChat,
           onOpenNote = onOpenNote, onOpenAutomation = ::openAutomation,
+          onSchedule = { prompt -> onArrangeAutomation(state.project.id, prompt) },
           onCreateChat = { onCreateProjectChat(state.project.id) }, chatBusy = chatBusy,
           onRetrySessions = { selectedProjectId?.let(onOpenProject) },
           deliveries = state.deliveries.filter { it.projectId == state.project.id },
@@ -424,22 +459,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       "tasks" -> ProgressTaskList(state, taskFilter, { taskFilter = it }, onRefreshTasks,
         onLoadMore, onSearchChange, onSubmitSearch, taskSearchOpen, ::closeTaskSearch) { task -> openTask(task.id) }
       "automations" -> AutomationListContent(state.automations, state.gatewayId, onLoadAutomations,
-        ::openAutomation) {
-        automationName = ""
-        automationInstruction = ""
-        automationCron = "0 9 * * *"
-        automationCreateKey = UUID.randomUUID().toString()
-        automationCreateStartedId = state.automations.createdId
-        page = "automation-create"
-      }
-      "automation-create" -> AutomationCreateContent(automationName,
-        { automationName = it; automationCreateKey = UUID.randomUUID().toString() },
-        automationInstruction,
-        { automationInstruction = it; automationCreateKey = UUID.randomUUID().toString() },
-        automationCron, { automationCron = it; automationCreateKey = UUID.randomUUID().toString() },
-        state.automations.createBusy, state.automations.createError) {
-        onCreateAutomation(automationName, automationInstruction, automationCron, automationCreateKey)
-      }
+        ::openAutomation) { prompt -> onArrangeAutomation(null, prompt) }
       "automation" -> AutomationDetailContent(state.automations.takeIf { it.selectedId == selectedAutomationId }
         ?: AutomationUiState(detailLoading = true),
         { selectedAutomationId?.let(onOpenAutomation) }, ::openRun,
@@ -484,17 +504,30 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         }, ::openRun)
     }
   }
-  if (discardAutomationOpen) AlertDialog(onDismissRequest = { discardAutomationOpen = false },
-    title = { Text(stringResource(R.string.progress_discard_title)) },
-    text = { Text(stringResource(R.string.automation_discard_message)) },
-    confirmButton = { TextButton(onClick = {
-      discardAutomationOpen = false
-      page = "automations"
-    }, modifier = Modifier.testTag("automation-discard-confirm")) {
-      Text(stringResource(R.string.progress_discard))
-    } }, dismissButton = { TextButton(onClick = { discardAutomationOpen = false }) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
+  val activeProject = state.project?.takeIf { it.id == selectedProjectId }
+  if (projectMenuOpen && activeProject != null) ModalBottomSheet(onDismissRequest = { projectMenuOpen = false }) {
+    ProjectActions(activeProject.name, onChat = {
+      projectMenuOpen = false
+      onCreateProjectChat(activeProject.id)
+    }, onTask = {
+      projectMenuOpen = false
+      createProjectTask(activeProject.id)
+    }, onNote = {
+      projectMenuOpen = false
+      onCreateProjectNote(activeProject.id)
+    }, onAutomation = {
+      projectMenuOpen = false
+      onArrangeAutomation(activeProject.id, "")
+    }, onManage = {
+      projectMenuOpen = false
+      openProjectEditor("edit")
+    })
+  }
+  if (projectEditorMode == "create" || projectEditorMode == "edit" && activeProject != null)
+    ModalBottomSheet(onDismissRequest = { if (!projectWriteBusy) projectEditorMode = null }) {
+      ProjectEditor(activeProject.takeIf { projectEditorMode == "edit" }, projectWriteBusy,
+        projectWriteError, ::writeProject)
+    }
   if (discardAutomationEditOpen) AlertDialog(onDismissRequest = { discardAutomationEditOpen = false },
     title = { Text(stringResource(R.string.progress_discard_title)) },
     text = { Text(stringResource(R.string.automation_discard_edit_message)) },
@@ -611,9 +644,9 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
   notes: List<ai.xopc.mobile.gateway.NoteSummary>, notesLoading: Boolean, notesError: Boolean,
   automations: List<ai.xopc.mobile.gateway.AutomationSummary>,
   automationsLoading: Boolean, automationsError: Boolean,
-  onCreate: () -> Unit, onOpenTask: (String) -> Unit, onOpenChat: (String) -> Unit,
+  onCreate: () -> Unit, onOpenTask: (String) -> Unit, onOpenChat: (ProgressProjectSession) -> Unit,
   onOpenNote: (String) -> Unit, onOpenAutomation: (String) -> Unit,
-  onCreateChat: () -> Unit, chatBusy: Boolean,
+  onSchedule: (String) -> Unit, onCreateChat: () -> Unit, chatBusy: Boolean,
   onRetrySessions: () -> Unit,
   deliveries: List<ai.xopc.mobile.gateway.ProgressDelivery>, onOpenRun: (String) -> Unit) {
   var section by rememberSaveable(project.id) { mutableStateOf("overview") }
@@ -681,7 +714,7 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
       }
       else if (sessions.isEmpty()) item { Text(stringResource(R.string.progress_project_no_sessions)) }
       items(if (section == "overview") sessions.take(3) else sessions, key = { "session-${it.id}" }) { session ->
-        Card(onClick = { onOpenChat(session.id) },
+        Card(onClick = { onOpenChat(session) },
           modifier = Modifier.fillMaxWidth().testTag("progress-project-session-${session.id}")) {
           Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(if (session.isLocalDraft) stringResource(R.string.assistant_new_conversation) else session.title,
@@ -744,7 +777,7 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
           Text(stringResource(R.string.progress_project_automations_error))
         }
       }
-      else if (automations.isEmpty()) item { Text(stringResource(R.string.progress_project_no_automations)) }
+      else if (section == "automations" && automations.isEmpty()) item { AutomationIdeas(projectScoped = true, onSelect = onSchedule) }
       items(if (section == "overview") automations.take(3) else automations,
         key = { "automation-${it.id}" }) { automation ->
         Card(onClick = { onOpenAutomation(automation.id) },

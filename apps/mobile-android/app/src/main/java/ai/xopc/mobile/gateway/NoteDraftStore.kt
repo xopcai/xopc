@@ -15,7 +15,7 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
 data class NoteDraft(val id: String, val title: String, val markdown: String,
-  val mutationId: String, val version: Long, val baseRemoteVersion: Long = 0)
+  val mutationId: String, val version: Long, val baseRemoteVersion: Long = 0, val projectId: String? = null)
 
 /** Gateway-scoped encrypted SQLite drafts; only opaque IDs and update times are indexed in cleartext. */
 class NoteDraftStore(context: Context) {
@@ -40,8 +40,8 @@ class NoteDraftStore(context: Context) {
   }
 
   @Synchronized
-  fun create(gatewayId: String): NoteDraft = NoteDraft("local-${UUID.randomUUID()}", "", "",
-    UUID.randomUUID().toString(), 1).also { save(gatewayId, it) }
+  fun create(gatewayId: String, projectId: String? = null): NoteDraft = NoteDraft("local-${UUID.randomUUID()}", "", "",
+    UUID.randomUUID().toString(), 1, projectId = projectId).also { save(gatewayId, it) }
 
   @Synchronized
   fun save(gatewayId: String, draft: NoteDraft) {
@@ -84,7 +84,7 @@ class NoteDraftStore(context: Context) {
     validate(draft)
     val json = JSONObject().put("id", draft.id).put("title", draft.title)
       .put("markdown", draft.markdown).put("mutationId", draft.mutationId)
-      .put("version", draft.version).put("baseRemoteVersion", draft.baseRemoteVersion).toString()
+      .put("version", draft.version).put("baseRemoteVersion", draft.baseRemoteVersion).put("projectId", draft.projectId).toString()
     return ContentValues().apply {
       put("gateway_id", gatewayId)
       put("note_id", draft.id)
@@ -96,7 +96,8 @@ class NoteDraftStore(context: Context) {
   private fun decode(gatewayId: String, id: String, payload: ByteArray): NoteDraft {
     val row = JSONObject(decrypt(gatewayId, id, payload).toString(Charsets.UTF_8))
     return NoteDraft(row.getString("id"), row.getString("title"), row.getString("markdown"),
-      row.getString("mutationId"), row.getLong("version"), row.optLong("baseRemoteVersion", 0)).also {
+      row.getString("mutationId"), row.getLong("version"), row.optLong("baseRemoteVersion", 0),
+      row.optString("projectId").takeIf { !row.isNull("projectId") && it.isNotBlank() }).also {
       validate(it)
       require(it.id == id) { "MISMATCHED_NOTE_DRAFT" }
     }
@@ -134,6 +135,7 @@ class NoteDraftStore(context: Context) {
   private fun validate(draft: NoteDraft) {
     require(draft.id.matches(ID_PATTERN) && draft.mutationId.matches(GATEWAY_PATTERN) &&
       draft.version > 0 && draft.baseRemoteVersion >= 0 && draft.title.length <= 1000 &&
+      (draft.projectId == null || draft.projectId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) &&
       draft.markdown.length <= 2_000_000 &&
       draft.markdown.toByteArray(Charsets.UTF_8).size <= 4_500_000) { "INVALID_NOTE_DRAFT" }
   }

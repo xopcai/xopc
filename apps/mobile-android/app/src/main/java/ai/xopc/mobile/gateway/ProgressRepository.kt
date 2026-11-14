@@ -53,7 +53,12 @@ data class TaskCriterion(val text: String, val status: String, val humanReviewed
 data class ProgressTaskPage(val items: List<ProgressTask>, val total: Int)
 data class ProgressProject(val id: String, val name: String, val description: String, val status: String,
   val brief: String, val defaultAgentId: String? = null, val workspaceRoot: String? = null,
-  val executionMode: String = "local_checkout")
+  val executionMode: String = "local_checkout", val version: Int = 0, val pinnedAt: Long? = null)
+sealed interface ProjectMutation {
+  data class Save(val project: ProgressProject?, val name: String, val description: String, val key: String) : ProjectMutation
+  data class SetArchived(val project: ProgressProject, val archived: Boolean) : ProjectMutation
+  data class SetPinned(val project: ProgressProject, val pinned: Boolean) : ProjectMutation
+}
 data class ProgressProjectSession(val id: String, val title: String, val messageCount: Int,
   val isLocalDraft: Boolean = false)
 
@@ -102,6 +107,41 @@ class ProgressRepository(private val gateway: GatewaySession) {
   fun project(id: String): ProgressProject {
     require(id.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "INVALID_PROJECT_ID" }
     return parseProjectDetail(id, gateway.request("/api/projects/$id"))
+  }
+
+  fun writeProject(mutation: ProjectMutation): ProgressProject {
+    val root: JSONObject
+    val expectedId = when (mutation) {
+      is ProjectMutation.Save -> {
+        val name = mutation.name.trim()
+        require(name.isNotEmpty() && name.length <= 160 && mutation.description.length <= 4000)
+        val project = mutation.project
+        val body = JSONObject().put("name", name).put("description", mutation.description)
+        root = if (project == null) JSONObject(gateway.request("/api/projects", "POST", body.toString(),
+          mapOf("Idempotency-Key" to mutation.key))) else {
+          if (project.version > 0) body.put("expectedVersion", project.version)
+          JSONObject(gateway.request("/api/projects/${project.id}", "PATCH", body.toString()))
+        }
+        project?.id
+      }
+      is ProjectMutation.SetArchived -> {
+        val body = JSONObject().put("status", if (mutation.archived) "archived" else "active")
+        if (mutation.project.version > 0) body.put("expectedVersion", mutation.project.version)
+        root = JSONObject(gateway.request("/api/projects/${mutation.project.id}", "PATCH", body.toString()))
+        mutation.project.id
+      }
+      is ProjectMutation.SetPinned -> {
+        val body = JSONObject()
+        if (mutation.project.version > 0) body.put("expectedVersion", mutation.project.version)
+        val action = if (mutation.pinned) "pin" else "unpin"
+        root = JSONObject(gateway.request("/api/projects/${mutation.project.id}/$action", "POST", body.toString()))
+        mutation.project.id
+      }
+    }
+    require(root.getBoolean("ok")) { "INVALID_PROGRESS_PROJECT" }
+    return parseProject(root.getJSONObject("project")).also {
+      require(expectedId == null || expectedId == it.id) { "MISMATCHED_PROGRESS_PROJECT" }
+    }
   }
 
   fun projectTasks(id: String): ProgressTaskPage {
@@ -248,7 +288,8 @@ class ProgressRepository(private val gateway: GatewaySession) {
       return ProgressProject(id, name.take(160), row.optString("description").take(4000),
         row.optString("status"), row.optString("brief").take(4000),
         row.optString("defaultAgentId").takeIf { !row.isNull("defaultAgentId") && it.isNotBlank() },
-        row.optString("workspaceRoot").takeIf { !row.isNull("workspaceRoot") && it.isNotBlank() }, mode)
+        row.optString("workspaceRoot").takeIf { !row.isNull("workspaceRoot") && it.isNotBlank() }, mode,
+        row.optInt("version"), row.optLong("pinnedAt").takeIf { it > 0 })
     }
 
     fun parseHome(raw: String): ProgressHome {

@@ -1725,6 +1725,36 @@ class MainScreenTest {
     assertEquals("auto-1", openedAutomation)
   }
 
+  @Test fun projectChatsReturnToTheProjectAndRestoreTheMainConversation() {
+    val project = ProgressProject("project-1", "Alpha", "", "active", "")
+    val existing = ai.xopc.mobile.gateway.ProgressProjectSession("project-chat-1", "Planning", 4)
+    val progress = ProgressUiState(gatewayId = "gateway", projects = listOf(project), projectSessions = listOf(existing))
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    var selectedTab by mutableStateOf(HomeTab.Projects)
+    var connection by mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = "main-chat",
+      progress = progress))
+    var createdFor = ""
+    composeTestRule.setContent {
+      MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it }, connection = connection,
+        onOpenProgressProject = { connection = connection.copy(progress = progress.copy(projectId = it, project = project)) },
+        onRestoreConversation = { connection = connection.copy(selectedConversationId = it) },
+        onCreateProjectConversation = { createdFor = it; "new-project-chat" })
+    }
+    composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
+    composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").performClick()
+    composeTestRule.onNodeWithTag("project-chat-close").assertExists().performClick()
+    composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").assertExists()
+    composeTestRule.runOnIdle { assertEquals("main-chat", connection.selectedConversationId) }
+    composeTestRule.onNodeWithTag("progress-project-new-chat").performClick()
+    composeTestRule.onNodeWithTag("project-chat-close").assertExists().performClick()
+    composeTestRule.onNodeWithTag("progress-project-detail").assertExists()
+    composeTestRule.runOnIdle {
+      assertEquals(project.id, createdFor)
+      assertEquals("main-chat", connection.selectedConversationId)
+    }
+  }
+
   @Test fun progressTaskAllowsDirectManualCompletionWithoutConfirmation() {
     val task = ProgressTask("task-ready", "Ready work", "", "ready", null, 10, null, null,
       version = 2, allowedCommands = listOf("move", "close", "mark_ready"),
@@ -2397,22 +2427,54 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-input").assertIsFocused()
   }
 
-  @Test fun assistantActionNewChatClosesPanelAndCallsExistingCreationPath() {
-    var creates = 0
-    val id = "11111111-2222-3333-4444-555555555555"
+  @Test fun personalChatAvatarOpensOverviewAndClosesBackToTheSameConversation() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val agent = ai.xopc.mobile.gateway.PersonalAgentRecord("ada", "personal", "ready", "Ada", "loopi", null)
     composeTestRule.setContent {
-      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
-        connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
-          selectedConversationId = id), onCreateConversation = { creates++ })
+      XopcTheme {
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+          connection = ConnectionUiState(profile = profile, selectedConversationId = "personal",
+            personal = PersonalUiState(gatewayId = "gateway", agent = agent), draftText = "Keep this draft"))
+      }
     }
-    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
-    composeTestRule.onNodeWithTag("assistant-action-new-chat").assertIsEnabled().performClick()
-    assert(creates == 1)
-    composeTestRule.onNodeWithTag("assistant-action-panel").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("chat-header-sidebar").assertExists()
+    composeTestRule.onNodeWithTag("chat-personal-overview").performClick()
+    composeTestRule.onNodeWithTag("personal-overview").assertExists()
+    composeTestRule.onNodeWithTag("assistant-composer-shell").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("personal-overview-close").performClick()
+    composeTestRule.onNodeWithTag("assistant-input").assertTextContains("Keep this draft")
   }
 
-  @Test fun assistantMovesSearchToSecondActionPageAndVoiceCallToHeader() {
+  @Test fun scheduleIdeaOpensUnsentConfigurationAndReturnsToList() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = "source",
+      progress = ProgressUiState(gatewayId = "gateway", automations = AutomationUiState(listLoaded = true))))
+    val tab = mutableStateOf(HomeTab.Automations)
+    var sends = 0
+    composeTestRule.setContent {
+      XopcTheme {
+        MainContent(selectedTab = tab.value, onSelectTab = { tab.value = it }, connection = state.value,
+          onRequestAutomationConfiguration = { project, personal ->
+            assertEquals(null, project)
+            assertEquals(null, personal)
+            "schedule-conversation"
+          }, onShowAutomationConfiguration = { id, prompt ->
+            state.value = state.value.copy(selectedConversationId = id, automationConfigurationChat = true, draftText = prompt)
+          }, onRestoreConversation = { id ->
+            state.value = state.value.copy(selectedConversationId = id, automationConfigurationChat = false, draftText = "")
+          }, onSendMessage = { sends++ })
+      }
+    }
+    composeTestRule.onNodeWithTag("automation-idea-morning").performClick()
+    composeTestRule.onNodeWithTag("automation-configuration-close").assertExists()
+    composeTestRule.onNodeWithTag("assistant-input").assertTextContains(
+      composeTestRule.activity.getString(R.string.automation_idea_morning_prompt))
+    assertEquals(0, sends)
+    composeTestRule.onNodeWithTag("automation-configuration-close").performClick()
+    composeTestRule.onNodeWithTag("automation-ideas").assertExists()
+    assertEquals("source", state.value.selectedConversationId)
+  }
+
+  @Test fun assistantActionGridMatchesHarmonyAndKeepsCallInHeader() {
     val id = "11111111-2222-3333-4444-555555555555"
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
@@ -2420,12 +2482,11 @@ class MainScreenTest {
           selectedConversationId = id))
     }
     composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
-    val firstRowTop = composeTestRule.onNodeWithTag("assistant-action-photos").fetchSemanticsNode().boundsInRoot.top
-    composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
-    composeTestRule.waitForIdle()
-    val secondRowTop = composeTestRule.onNodeWithTag("assistant-action-search").fetchSemanticsNode().boundsInRoot.top
-    org.junit.Assert.assertEquals(firstRowTop, secondRowTop, 1f)
-    composeTestRule.onNodeWithTag("assistant-action-voice-call").assertDoesNotExist()
+    listOf("photos", "camera", "local-files", "voice", "reference-note", "reference-task", "reference-file").forEach {
+      composeTestRule.onNodeWithTag("assistant-action-$it").assertExists()
+    }
+    composeTestRule.onNodeWithTag("assistant-action-new-chat").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-action-search").assertDoesNotExist()
     composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsEnabled()
   }
 
@@ -2460,11 +2521,16 @@ class MainScreenTest {
                 ConversationMedia("png", "diagram.png", "image", "image/png", 10, "image"))))))
       }
     }
-    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
-    composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
-    composeTestRule.onNodeWithTag("assistant-action-search").performClick()
+    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("assistant-search").performClick()
     val input = composeTestRule.onNodeWithTag("chat-message-search-input")
     input.assertIsFocused()
+    val firstCategory = composeTestRule.onNodeWithTag("chat-search-category-messages")
+    composeTestRule.waitUntil(5_000) {
+      val categoryBounds = firstCategory.fetchSemanticsNode().boundsInRoot
+      val inputBounds = input.fetchSemanticsNode().boundsInRoot
+      categoryBounds.height > 0 && inputBounds.height > 0 && categoryBounds.bottom <= inputBounds.top
+    }
     val resolver = composeTestRule.activity.contentResolver
     val screenshot = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
       ContentValues().apply {
@@ -2481,7 +2547,6 @@ class MainScreenTest {
       composeTestRule.onNodeWithTag("chat-search-category-$it").fetchSemanticsNode().boundsInRoot
     }
     tabs.zipWithNext().forEach { (left, right) -> assertTrue(left.right <= right.left) }
-    assertTrue(tabs.first().bottom <= input.fetchSemanticsNode().boundsInRoot.top)
     input.performTextInput("project")
     composeTestRule.onNodeWithTag("chat-search-result-text").assertExists()
     composeTestRule.onNodeWithTag("chat-search-result-file").assertDoesNotExist()
@@ -2497,9 +2562,8 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-detail-panel").assertExists()
     Espresso.closeSoftKeyboard()
     Espresso.pressBack()
-    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
-    composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
-    composeTestRule.onNodeWithTag("assistant-action-search").performClick()
+    composeTestRule.onNodeWithTag("assistant-options").performClick()
+    composeTestRule.onNodeWithTag("assistant-search").performClick()
     composeTestRule.onNodeWithTag("chat-search-close").performClick()
     composeTestRule.onNodeWithTag("chat-message-search-screen").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-composer-shell").assertExists()

@@ -35,6 +35,7 @@ internal class VoiceMemoRecorder(private val context: Context) {
 
   @SuppressLint("MissingPermission")
   fun start() {
+    ai.xopc.mobile.playback.MusicPlayback.pause()
     cancel()
     try {
       require(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -108,6 +109,7 @@ internal class VoiceMemoRecorder(private val context: Context) {
   }
 
   fun play() {
+    ai.xopc.mobile.playback.MusicPlayback.pause()
     val saved = file ?: return
     if (phase != "ready") return
     try {

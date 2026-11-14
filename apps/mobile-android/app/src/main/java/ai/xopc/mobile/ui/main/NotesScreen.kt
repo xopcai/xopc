@@ -129,6 +129,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
   onExit: (() -> Unit)? = null,
   initialNoteId: String? = null,
+  initialProjectDraft: Boolean = false,
   onSaveFileVersion: suspend (ManagedFile, String) -> Unit = { _, _ -> },
   deliveries: List<ProgressDelivery> = emptyList(),
   deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
@@ -183,7 +184,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     }
   }
   var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf(initialNoteId) }
-  var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(initialProjectDraft) }
   var creationSheetOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var fileSpaceId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
@@ -258,11 +259,13 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   val closeEditor = {
     val draft = state.draft
     if (draft == null || (draft.id.startsWith("local-") &&
-      draft.title.isBlank() && draft.markdown.isBlank())) editorOpen = false
+      draft.title.isBlank() && draft.markdown.isBlank())) {
+      if (initialProjectDraft && onExit != null) onExit() else editorOpen = false
+    }
     else onSaveDraft()
   }
   val closeNote = {
-    if (initialNoteId != null && selectedId == initialNoteId && onExit != null) onExit()
+    if ((initialProjectDraft || initialNoteId != null && selectedId == initialNoteId) && onExit != null) onExit()
     else selectedId = null
   }
   val closeFile = {
