@@ -9,7 +9,6 @@ import { XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
-import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 
 interface XopcSessionDisplayRow {
   key: string;
@@ -132,19 +131,13 @@ struct XopcSessionManagerRow {
 @ComponentV2
 export struct XopcSessionsView {
   @Local colors: XopcThemeColors = appThemeColors;
-  @Param embedded: boolean = false;
-  @Param bottomInset: number = 0;
-  @Param activePage: boolean = true;
   @Param currentId: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
-  @Param personalBusy: boolean = false;
   @Event onExit: () => void = (): void => {};
   @Event onOpen: (id: string) => void = (_id: string): void => {};
   @Event onTask: (id: string) => void = (_id: string): void => {};
   @Event onNew: (id: string) => void = (_id: string): void => {};
   @Event onDelete: (id: string) => void = (_id: string): void => {};
-  @Event onUndoDelete: (id: string) => void = (_id: string): void => {};
-  @Event onOpenPersonal: () => void = (): void => {};
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel();
   @Local searchOpen: boolean = true;
   @Local expandedTaskParents: string[] = [];
@@ -160,21 +153,16 @@ export struct XopcSessionsView {
   @Local shareBusy: boolean = false;
   private scroller: Scroller = new Scroller();
   private opening: boolean = false;
-  private loaded: boolean = false;
 
-  aboutToAppear(): void { if (this.activePage) this.activate(); }
   aboutToDisappear(): void { this.sessions.dispose(); }
-  @Monitor('activePage')
-  onActivityChange(): void { if (this.activePage) this.activate(); }
   private activate(): void {
     this.opening = false;
     this.sessions.load();
-    this.loaded = true;
   }
   @Computed
   get rows(): XopcSessionDisplayRow[] {
     const result: XopcSessionDisplayRow[] = [];
-    groupChatSessions(this.sessions.items.filter((item: XopcSessionItem): boolean => !this.sessions.hidden.includes(item.key)))
+    groupChatSessions(this.sessions.items.filter((item: XopcSessionItem): boolean => !this.sessions.hidden.includes(item.key) && item.key !== this.personalAgent?.conversationId))
       .forEach((group: XopcSessionGroup): void => {
         result.push({ key: 'section:' + group.id, label: group.label, first: false, last: false });
         group.items.forEach((item: XopcSessionItem, index: number): void => {
@@ -261,7 +249,7 @@ export struct XopcSessionsView {
     else if (action === 'rename') this.renameItem(item);
     else if (action === 'pin') this.sessions.act([item], item.status === 'pinned' ? 'unpin' : 'pin');
     else if (action === 'archive') this.sessions.act([item], 'archive');
-    else if (action === 'delete') { this.sessions.scheduleDelete(item.key); this.onDelete(item.key); }
+    else if (action === 'delete') this.sessions.scheduleDelete(item.key, this.onDelete);
     else if (action === 'select') this.sessions.select(item.key);
   }
   private async shareSession(item: XopcSessionItem): Promise<void> {
@@ -284,13 +272,7 @@ export struct XopcSessionsView {
     this.getUIContext().showAlertDialog({ title: $r('app.string.delete'), message: $r('app.string.sessions_delete_confirm', targets.length),
       primaryButton: { value: $r('app.string.cancel'), action: (): void => {} },
       secondaryButton: { value: $r('app.string.delete'), fontColor: this.colors.danger,
-        action: (): void => { void this.deleteSelected(targets); } } });
-  }
-  private async deleteSelected(targets: XopcSessionItem[]): Promise<void> {
-    await this.sessions.act(targets, 'delete');
-    targets.forEach((item: XopcSessionItem): void => {
-      if (!this.sessions.items.some((remaining: XopcSessionItem): boolean => remaining.key === item.key)) this.onDelete(item.key);
-    });
+        action: (): void => { void this.sessions.act(targets, 'delete', this.onDelete); } } });
   }
   @Builder
   sessionMenuSheet() {
@@ -383,9 +365,13 @@ export struct XopcSessionsView {
   content() {
     Column() {
         Row({ space: 8 }) {
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground])
+          }.id('sessions-back').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+            .accessibilityText($r('app.string.back')).onClick((): void => { if (!this.back()) this.onExit(); })
           Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length)
-            : this.embedded ? $r('app.string.conversations') : $r('app.string.history'))
-            .fontSize(this.embedded ? 30 : 24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
+            : $r('app.string.history'))
+            .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
           if (!this.sessions.selecting) {
             if (!this.searchOpen) {
               Button() { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.foreground]) }
@@ -398,30 +384,7 @@ export struct XopcSessionsView {
               .accessibilityText($r('app.string.new_chat')).enabled(!this.sessions.busy)
               .onClick(async (): Promise<void> => { await this.createConversation(); })
           }
-        }.width('100%').padding({ left: this.embedded ? 20 : 12, right: 12, top: 12, bottom: 12 })
-        if (this.embedded && !this.sessions.selecting) {
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 14 }) {
-              XopcPersonalAgentAvatar({ extent: 54, activePage: this.activePage,
-                agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi' })
-              Column({ space: 5 }) {
-                Text(this.personalAgent?.state === 'ready'
-                  ? $r('app.string.personal_chat_resume_title', this.personalAgent.displayName)
-                  : $r('app.string.personal_chat_entry_title')).fontSize(16).fontWeight(FontWeight.Medium)
-                  .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                Text(this.personalAgent?.state === 'ready' ? $r('app.string.personal_chat_resume_subtitle')
-                  : $r('app.string.personal_chat_entry_subtitle')).fontSize(12).lineHeight(18)
-                  .fontColor(this.colors.secondary).maxLines(2)
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(17).fontColor([this.colors.accent])
-            }.width('100%').padding({ left: 18, right: 16, top: 14, bottom: 14 })
-          }.id('sessions-personal-ai-entry').width('calc(100% - 40vp)').padding(0).borderRadius(22)
-            .backgroundColor(this.colors.accentSoft).margin({ left: 20, right: 20, bottom: 12 })
-            .accessibilityText(this.personalAgent?.state === 'ready'
-              ? $r('app.string.personal_chat_resume_title', this.personalAgent.displayName)
-              : $r('app.string.personal_chat_entry_title'))
-            .enabled(!this.personalBusy).onClick((): void => { this.onOpenPersonal(); })
-        }
+        }.width('100%').padding({ left: 12, right: 12, top: 12, bottom: 12 })
         if (this.searchOpen && !this.sessions.selecting) {
           Row({ space: 4 }) {
             TextInput({ text: this.sessions.search, placeholder: $r('app.string.sessions_search') }).id('sessions-search')
@@ -467,15 +430,12 @@ export struct XopcSessionsView {
                 .onClick((): void => { this.sessions.load(true); }) }
             }
           }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20 }).cachedCount(5)
-            .contentEndOffset(this.bottomInset)
             .onReachEnd((): void => { if (!this.sessions.error && !this.sessions.busy) this.sessions.load(true); })
         }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(false, true); })
         if (this.sessions.undoId) {
           Row() {
             Text($r('app.string.sessions_deleted')).fontColor(this.colors.foreground).layoutWeight(1)
-            Button($r('app.string.sessions_undo')).id('sessions-undo').height(44).onClick((): void => {
-              const id = this.sessions.undoId; this.sessions.undoDelete(); this.onUndoDelete(id);
-            })
+            Button($r('app.string.sessions_undo')).id('sessions-undo').height(44).onClick((): void => { this.sessions.undoDelete(); })
           }.padding(12).backgroundColor(this.colors.panel)
         }
         if (this.sessions.selecting) { this.batchBar() }
@@ -488,13 +448,9 @@ export struct XopcSessionsView {
       .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
   }
   build() {
-    if (this.embedded) {
-      this.content()
-    } else {
-      NavDestination() { this.content() }
-        .hideTitleBar(true).backgroundColor(this.colors.surface)
-        .onShown((): void => { this.opening = false; if (!this.loaded) this.activate(); })
-        .onBackPressed((): boolean => this.back())
-    }
+    NavDestination() { this.content() }
+      .hideTitleBar(true).backgroundColor(this.colors.surface)
+      .onShown((): void => { this.activate(); })
+      .onBackPressed((): boolean => { if (!this.back()) this.onExit(); return true; })
   }
 }

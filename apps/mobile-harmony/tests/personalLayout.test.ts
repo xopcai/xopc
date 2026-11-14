@@ -6,16 +6,12 @@ const settings = readFileSync(new URL('../entry/src/main/ets/view/SettingsView.e
 const components = readFileSync(new URL('../entry/src/main/ets/view/MobileComponents.ets', import.meta.url), 'utf8');
 
 describe('personal page card layout', () => {
-  it('keeps high-value personal understanding on the tab and moves system controls out', () => {
-    expect(personal).toContain("Text($r('app.string.personal_goals'))");
-    expect(personal).toContain('this.goalRow(goal)');
+  it('links the configured assistant, personal information and goals from the profile page', () => {
+    expect(personal).toContain('this.record?.displayName');
+    expect(personal).toContain("page: 'personal-agent-profile'");
+    expect(personal).toContain("page: 'about-you'");
+    expect(personal).toContain("page: 'personal-goals'");
     expect(personal).toContain('.bindSheet($$this.goalEditorOpen, this.goalEditor');
-    expect(personal).toContain("this.sectionHeading($r('app.string.personal_understanding_title'))");
-    expect(personal).toContain("XopcSectionLabel({ heading: $r('app.string.about_you_recent') })");
-    expect(personal).toContain("XopcSectionLabel({ heading: $r('app.string.about_you_rules') })");
-    expect(personal).not.toContain("XopcSectionLabel({ heading: $r('app.string.device_status') })");
-    expect(personal).not.toContain("heading: $r('app.string.notifications')");
-    expect(personal).not.toContain("heading: $r('app.string.share_center')");
   });
 
   it('groups low-frequency controls under settings', () => {

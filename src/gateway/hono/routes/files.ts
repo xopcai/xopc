@@ -1,11 +1,13 @@
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
-import type { FileResource, FileSpace } from '@xopcai/gateway-contract';
+import { FileVersionRequestSchema, type FileResource, type FileSpace } from '@xopcai/gateway-contract';
 import type { Context, Hono } from 'hono';
+import { z } from 'zod';
 
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { FileServiceError, type FileSpaceService, fileResourceFromPath, parseFileResourceId, resolveFilePath } from '../../../files/file-service.js';
+import { listFileVersions, loadFileVersion, saveFileVersion } from '../../../files/file-versions.js';
 import { buildFilePathClassifierContext, resolveFileReferenceCandidate } from '../../file-path-classifier.js';
 import { getGatewayFileSpaceService } from '../../file-space-service.js';
 import { fuzzySubsequenceScore, fuzzySearchWorkspaceFiles } from '../../workspace-file-search.js';
@@ -181,6 +183,38 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
         return (await files.resource(id)).resource;
       });
       return c.json({ resource });
+    } catch (error) { return errorResponse(c, error); }
+  });
+
+  authenticated.get('/api/files/:id/versions', async (c) => {
+    try {
+      const { absolutePath } = await files.resource(c.req.param('id'));
+      return c.json({ versions: await listFileVersions(absolutePath) });
+    } catch (error) { return errorResponse(c, error); }
+  });
+
+  authenticated.post('/api/files/:id/versions', async (c) => {
+    try {
+      const payload = FileVersionRequestSchema.safeParse(await c.req.json().catch(() => null));
+      if (!payload.success) throw new FileServiceError(400, 'Version id and revision are required');
+      const id = c.req.param('id');
+      const { absolutePath, space } = await files.resource(id);
+      if (!space.writable) throw new FileServiceError(403, 'File space is read-only');
+      const version = await withMutationLock(absolutePath, () =>
+        saveFileVersion(files, id, absolutePath, payload.data.revision, payload.data.id));
+      return c.json({ version }, 201);
+    } catch (error) { return errorResponse(c, error); }
+  });
+
+  authenticated.get('/api/files/:id/versions/:versionId/content', async (c) => {
+    try {
+      const id = z.uuid().safeParse(c.req.param('versionId'));
+      if (!id.success) throw new FileServiceError(400, 'Invalid version id');
+      const { absolutePath, resource } = await files.resource(c.req.param('id'));
+      const { version, content } = await loadFileVersion(absolutePath, id.data);
+      c.header('Content-Type', resource.mimeType);
+      c.header('Content-Disposition', contentDisposition('attachment', version.name));
+      return c.body(content);
     } catch (error) { return errorResponse(c, error); }
   });
 

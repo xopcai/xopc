@@ -1,3 +1,4 @@
+import { xopcAppVersion } from '../common/appInfo';
 import {
   appThemeColors,
   XopcColorScheme,
@@ -124,33 +125,43 @@ export struct XopcSettingsView {
     XopcSectionLabel({ heading: $r('app.string.settings_data_sharing') })
     XopcHubRow({ heading: $r('app.string.share_center'), summary: $r('app.string.share_center_help'),
       symbol: $r('sys.symbol.share'), onOpen: (): void => { this.onNavigate({ page: 'sharing', itemId: '' }); } })
+    XopcHubRow({ heading: $r('app.string.settings_privacy_memory'),
+      symbol: $r('sys.symbol.info_circle'), onOpen: (): void => { this.onNavigate({ page: 'about-you', itemId: '' }); } })
     XopcSectionLabel({ heading: $r('app.string.preferences') })
     XopcHubRow({ heading: $r('app.string.language'), summary: this.languageLabel(),
       symbol: $r('sys.symbol.doc_text'), onOpen: (): void => { this.openSection('language'); } }).id('open-language')
     XopcHubRow({ heading: $r('app.string.appearance'), summary: this.themeLabel(),
       symbol: $r('sys.symbol.sun_max'), onOpen: (): void => { this.openSection('appearance'); } }).id('open-appearance')
-    XopcSectionLabel({ heading: $r('app.string.about') })
-    XopcHubRow({ heading: 'xopc', summary: '0.1.0', symbol: $r('sys.symbol.info_circle'), navigable: false })
+    XopcHubRow({ heading: $r('app.string.settings_about_xopc'), summary: xopcAppVersion(),
+      symbol: $r('sys.symbol.info_circle'), onOpen: (): void => { this.openSection('about'); } })
   }
 
   build() {
     Column() {
-      if (this.section) {
-        Row({ space: 8 }) {
-          Text(this.section === 'language' ? $r('app.string.language') : this.section === 'appearance' ? $r('app.string.appearance') :
-            this.section === 'connection' ? $r('app.string.connection') : $r('app.string.notifications'))
-            .fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-        }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
-      } else if (this.useNavigation) {
-        Row({ space: 8 }) {
-          Text($r('app.string.settings')).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-        }.id('settings-navigation-title').width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
-      } else {
-        XopcPageHeader({ heading: $r('app.string.settings') }).id('settings-title')
-      }
+      XopcPageHeader({ heading: this.section === 'language' ? $r('app.string.language')
+        : this.section === 'appearance' ? $r('app.string.appearance')
+          : this.section === 'connection' ? $r('app.string.connection')
+            : this.section === 'about' ? $r('app.string.settings_about_xopc')
+              : this.section === 'notifications' ? $r('app.string.notifications') : $r('app.string.settings'),
+        backVisible: this.useNavigation || !!this.section,
+        onBack: (): void => {
+          if (this.useNavigation) this.onExit();
+          else this.section = '';
+        } })
       Scroll() {
         Column() {
           if (!this.section) { this.rootSettings() }
+          else if (this.section === 'about') {
+            Column({ space: 8 }) {
+              Image($r('app.media.brand_logo')).width(74).height(74).accessibilityLevel('no')
+              Text('xopc').fontSize(26).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+              Text(xopcAppVersion()).fontSize(14).fontColor(this.colors.secondary)
+            }.width('100%').padding({ top: 24, bottom: 26 })
+            XopcHubRow({ heading: $r('app.string.connection'), symbol: $r('sys.symbol.link'),
+              onOpen: (): void => { this.openSection('connection'); } })
+            XopcHubRow({ heading: $r('app.string.settings_privacy_memory'), symbol: $r('sys.symbol.info_circle'),
+              onOpen: (): void => { this.onNavigate({ page: 'about-you', itemId: '' }); } })
+          }
           else if (this.section === 'language') {
             XopcPreferenceOption({ label: $r('app.string.system'), selected: !this.selectedLanguage,
               optionId: 'language-system', onSelect: (): void => { this.choose('', this.selectedTheme); } })

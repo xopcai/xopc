@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('routes file versions through the authenticated files bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/files/file-id/versions')?.id).toBe('files');
+    expect(findAuthenticatedLazyRouteBundle('/api/files/file-id/versions/version-id/content')?.id).toBe('files');
+    expect(findAuthenticatedLazyRouteBundle('/api/files-other/file-id/versions')?.id).not.toBe('files');
+  });
+
   it('maps music jobs and their audio under authenticated routes', () => {
     const jobs = '/api/music-generation/sessions/session/jobs';
     const audio = `${jobs}/${'a'.repeat(64)}/audio`;

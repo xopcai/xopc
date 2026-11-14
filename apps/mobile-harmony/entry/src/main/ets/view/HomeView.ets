@@ -1,8 +1,11 @@
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { XopcPersonalAgentSettings } from './PersonalAgentSettings';
+import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcChatView } from './ChatView';
-import { CHAT_ACTION_PANEL_CLOSE_MS, CHAT_ACTION_PANEL_OPEN_MS, XopcChatActionPanel } from './ChatActionPanel';
 import { XopcSessionsView } from './SessionsView';
+import { XopcChatSidebar } from './ChatSidebar';
+import { chatSidebarDragProgress, shouldOpenChatSidebar } from '../common/chatSidebarGesture';
 import { XopcWorkspaceView } from './WorkspaceView';
 import { XopcProjectSpaceView } from './ProjectSpaceView';
 import { XopcNotesView } from './NotesView';
@@ -11,8 +14,6 @@ import { XopcFilesView } from './FilesView';
 import { XopcSettingsView } from './SettingsView';
 import { XopcProgressView } from './HomeHubs';
 import { XopcPersonalView } from './PersonalView';
-import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
-import { XopcLoopi } from './Loopi';
 import { XopcAutomationRunView } from './AutomationRunView';
 import { XopcShareCenterView } from './ShareCenterView';
 import { XopcAboutYouView } from './AboutYouView';
@@ -28,15 +29,10 @@ import { notificationNavigation } from '../service/notificationNavigation';
 import { XopcNotificationRoute } from '../common/notificationRoute';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
-import { XopcSection } from '../model/workspace';
 import { accessibility } from '@kit.AccessibilityKit';
-import { COMPOSER_INPUT_MIN, COMPOSER_TOOL_SIZE } from '../common/composerLayout';
-import { XopcChatAttachment, XopcContextRef, XopcSessionItem } from '../model/chat';
-import { quickChatIntake } from '../service/quickChatIntake';
-import { pickChatAttachment } from '../service/chatAttachmentPicker';
-import { pickChatPhoto } from '../service/chatPhotoPicker';
-import { MAX_ATTACHMENTS } from '../common/attachments';
-import { XopcBrandLoading, XopcHubRow } from './MobileComponents';
+import { XopcContextRef } from '../model/chat';
+import { chatDraftIntake } from '../service/chatDraftIntake';
+import { XopcBrandLoading, XopcErrorState, XopcHubRow, XopcPageHeader } from './MobileComponents';
 import { common } from '@kit.AbilityKit';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
 import { XopcDiscussionRecordingPanel } from '../viewmodel/discussionRecordingPanel';
@@ -44,56 +40,45 @@ import { XopcDiscussionRecordingPanelView } from './DiscussionRecordingPanel';
 
 @ComponentV2
 export struct XopcHomeView {
+  @Local profileOptions: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Local colors: XopcThemeColors = appThemeColors;
   @Local capture: XopcDiscussionCapture = discussionCapture;
   @Local recordingPanel: XopcDiscussionRecordingPanel = new XopcDiscussionRecordingPanel();
   @Local recordingViewportWidth: number = 0;
   @Local recordingViewportHeight: number = 0;
-  @Local tab: number = 0;
-  @Computed get quickComposerPlaceholder(): ResourceStr {
-    return this.tab === 2 ? $r('app.string.quick_chat_progress_placeholder')
-      : this.tab === 3 ? $r('app.string.quick_chat_library_placeholder')
-      : this.tab === 4 ? $r('app.string.quick_chat_personal_placeholder')
-      : $r('app.string.quick_chat_conversations_placeholder');
-  }
+  @Local sidebarOpen: boolean = false;
+  @Local sidebarMounted: boolean = false;
+  @Local sidebarProgress: number = 0;
+  @Computed get sidebarWidth(): number { return Math.min(this.recordingViewportWidth * 0.84, 350); }
+  private sidebarDragging: boolean = false;
+  private sidebarTransition: number = 0;
+  @Local chatReady: boolean = false;
+  @Local initialChatError: string = '';
   @Local detailVisible: boolean = false;
   @Local layout: XopcLayoutState = layoutState;
-  @Local secondaryBottomRegionHeight: number = 0;
   @Local attention: XopcProgressViewModel = new XopcProgressViewModel();
+  @Computed get pendingAttention(): number { return this.attention.pendingCount; }
   @Local personalAgent: XopcPersonalAgentViewModel = new XopcPersonalAgentViewModel();
   @Local requestedChatId: string = '';
   @Local activeChatId: string = '';
   @Local requestedChatDraft: string = '';
   @Local chatRequestRevision: number = 0;
   @Local chatFocusRevision: number = 0;
-  @Local quickDraft: string = '';
-  @Local quickSending: boolean = false;
-  @Local quickFiles: XopcChatAttachment[] = [];
-  @Local quickPicking: boolean = false;
-  @Local quickPanelOpen: boolean = false;
-  @Local requestedChatAction: string = '';
-  @Local chatActionRevision: number = 0;
-  @Local creationSheetOpen: boolean = false;
-  @Local creationChatId: string = '';
-  @Local creationChatDraft: string = '';
-  @Local creationChatRevision: number = 0;
-  @Local creationHandoffPending: boolean = false;
-  @Local returnToConversations: boolean = false;
   @Local pendingChatId: string = '';
   @Local intake: XopcShareIntake = shareIntake;
   private chatRepository: XopcChatRepository = new XopcChatRepository();
-  private personalOpening: boolean = false;
+  @Local personalOpening: boolean = false;
   private taskOpening: boolean = false;
-  private quickEditor: TextInputController = new TextInputController();
-  private deletedChatIds: Set<string> = new Set<string>();
-  private replacementRevision: number = 0;
+  private ordinaryOpening: boolean = false;
+  private disposed: boolean = false;
+  private navigationRevision: number = 0;
   private readonly onMotionChange = (reduced: boolean): void => { layoutState.reduceMotion = reduced; };
   private attentionTimer: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
   @Event onDisconnected: () => void = (): void => {};
 
   aboutToAppear(): void {
-    layoutState.dismissTabNavigation = (): boolean => this.handleTabBack();
+    layoutState.dismissSidebar = (): boolean => this.closeSidebar();
     pushNotifications.restore();
     const captureContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
     void this.capture.restore(captureContext).catch((caught: Error): void => {
@@ -104,49 +89,50 @@ export struct XopcHomeView {
       accessibility.onAnimationReduceStateChange(this.onMotionChange);
     } catch (_) { layoutState.reduceMotion = true; }
     notificationNavigation.onTarget = (route: XopcNotificationRoute): void => {
-      if (route.target.kind === 'home') { this.returnToConversations = false; this.pathStack.clear(); this.tab = 0; }
+      if (route.target.kind === 'home') { this.navigationRevision++; this.closeSidebar(); this.pathStack.clear(); }
       else if (route.target.kind === 'task' && route.target.taskId) {
+        this.pathStack.clear();
         this.navigate({ page: 'progress', itemId: '' });
         this.navigate({ page: 'tasks', itemId: route.target.taskId });
-      } else if (route.target.conversationId) this.navigate({ page: 'chat', itemId: route.target.conversationId });
+      } else if (route.target.conversationId) this.openConversationFromList(route.target.conversationId, false);
       else if (route.target.automationId) this.navigate({ page: 'automations', itemId: route.target.automationId });
     };
     notificationNavigation.consume();
-    this.attention.refresh();
-    void this.personalAgent.refresh();
-    void this.restoreActiveChatId();
-    this.attentionTimer = setInterval((): void => { this.attention.refresh(); }, 30000);
+    void this.attention.refresh();
+    void this.restoreInitialChat();
+    this.attentionTimer = setInterval((): void => { if (this.layout.foreground) void this.attention.refresh(); }, 15000);
   }
   aboutToDisappear(): void {
-    quickChatIntake.clear();
-    this.setQuickPanel(false, false);
-    layoutState.dismissTabNavigation = undefined;
+    chatDraftIntake.clear();
+    this.disposed = true;
+    layoutState.dismissSidebar = undefined;
     notificationNavigation.onTarget = undefined; clearInterval(this.attentionTimer); this.attention.dispose();
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
   }
   private navigate(route: XopcMobileRoute): void {
-    if (route.page === 'project-new-chat') { void this.openProjectChat(route.projectId ?? ''); return; }
+    this.navigationRevision++;
+    this.closeSidebar();
+    if (route.page === 'project-new-chat') { void this.openProjectChat(route.projectId ?? '', route.title); return; }
     if (route.page === 'task-chat') { void this.openTaskChat(route); return; }
     if (route.page === 'understanding-chat') {
       void this.openUnderstandingChat(route);
       return;
     }
     if (route.page === 'chat') {
-      this.replacementRevision++;
-      this.pendingChatId = '';
-      this.returnToConversations = false;
-      if (route.itemId) { this.requestedChatId = route.itemId; this.requestedChatDraft = ''; this.chatRequestRevision++; }
-      this.pathStack.clear(); this.activateTab(0); return;
+      if (route.itemId) this.openConversationFromList(route.itemId);
+      return;
     }
-    if (route.page === 'progress') { this.pathStack.clear(); this.activateTab(2); return; }
     this.pathStack.pushPath({ name: route.page, param: route });
   }
 
-  private async openProjectChat(projectId: string): Promise<void> {
+  private async openProjectChat(projectId: string, title: string = ''): Promise<void> {
     if (!projectId) return;
+    const revision = this.navigationRevision;
     try {
       const id = await this.chatRepository.create(projectId);
-      this.navigate({ page: 'chat', itemId: id });
+      if (revision === this.navigationRevision && !this.disposed) {
+        this.navigate({ page: 'project-chat', itemId: id, projectId, title, prompt: 'draft' });
+      }
     } catch (error) {
       this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
     }
@@ -155,7 +141,7 @@ export struct XopcHomeView {
   private async openTaskChat(route: XopcMobileRoute): Promise<void> {
     const taskId = route.itemId;
     if (!taskId || this.taskOpening) return;
-    const sourceTab = this.tab;
+    const sourceRevision = this.navigationRevision;
     const sourceChat = this.activeChatId;
     const sourceDepth = this.pathStack.size();
     const sourceDestination: XopcMobileRoute | undefined = sourceDepth > 0
@@ -165,7 +151,7 @@ export struct XopcHomeView {
     this.taskOpening = true;
     try {
       const id = await this.chatRepository.ensureTaskConversation(taskId);
-      if (this.tab !== sourceTab || this.activeChatId !== sourceChat || this.pathStack.size() !== sourceDepth
+      if (this.navigationRevision !== sourceRevision || this.activeChatId !== sourceChat || this.pathStack.size() !== sourceDepth
         || (sourceDepth > 0 && this.pathStack.getParamByIndex(sourceDepth - 1) !== sourceDestination)) return;
       const target: XopcMobileRoute = {
         page: 'task-conversation', itemId: taskId, title: route.title, prompt: id, projectId: route.projectId
@@ -183,8 +169,8 @@ export struct XopcHomeView {
         kind: 'user_assertion', sourceId: route.itemId,
         expectedVersion: route.version ?? '', title: route.title ?? ''
       }] : [];
-      quickChatIntake.stage(id, route.prompt ?? '', refs);
-      this.returnToConversations = false;
+      chatDraftIntake.stage(id, route.prompt ?? '', refs);
+      this.rememberConversation(id);
       this.switchToChat(id, '', true);
     } catch (error) {
       this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
@@ -193,47 +179,14 @@ export struct XopcHomeView {
   private async exploreShare(value: XopcIncomingShare, targetId: string): Promise<boolean> {
     try {
       const id = value.targetConversationId || targetId || await this.chatRepository.create();
-      await this.intake.addToChat(id); this.switchToChat(id, '');
+      await this.intake.addToChat(id);
+      if (id !== this.activeChatId) this.rememberConversation(id);
+      this.switchToChat(id, '');
       return true;
     } catch (error) { this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') }); return false; }
   }
 
-  private creationPrompt(kind: string): string {
-    const resource: Resource = kind === 'automations' ? $r('app.string.create_automation_chat_prompt')
-      : kind === 'projects' ? $r('app.string.create_project_chat_prompt')
-      : $r('app.string.create_task_chat_prompt');
-    return this.getUIContext().getHostContext()?.resourceManager.getStringSync(resource.id) ?? '';
-  }
-
-  private async openCreationChat(kind: string): Promise<void> {
-    try {
-      const prompt = this.creationPrompt(kind);
-      if (!prompt) throw new Error('CREATION_PROMPT_UNAVAILABLE');
-      const id = await this.chatRepository.create();
-      this.creationChatId = id;
-      this.creationChatDraft = prompt;
-      this.creationChatRevision++;
-      this.creationHandoffPending = false;
-      this.intake.targetChat(id, prompt);
-      this.creationSheetOpen = true;
-    } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
-    }
-  }
-
-  private activateTab(index: number): void {
-    if (this.tab === index) return;
-    this.tab = index;
-  }
-
-  private selectTab(index: number): void {
-    this.returnToConversations = false;
-    this.setQuickPanel(false);
-    this.activateTab(index);
-  }
-
   private async startNoteCapture(): Promise<void> {
-    this.selectTab(3);
     this.recordingPanel.fresh();
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     try {
@@ -261,178 +214,203 @@ export struct XopcHomeView {
     }
   }
 
-  private handleTabBack(): boolean {
-    if (this.quickPanelOpen) { this.setQuickPanel(false); return true; }
-    if (this.tab !== 0 || !this.returnToConversations) return false;
-    this.returnToConversations = false;
-    this.activateTab(1);
+  @Monitor('layout.foreground')
+  refreshOnReturn(): void {
+    if (this.layout.foreground) void this.attention.refresh();
+  }
+
+  private openSidebar(): void {
+    if (this.sidebarOpen) return;
+    this.navigationRevision++;
+    this.sidebarOpen = true;
+    this.sidebarDragging = false;
+    if (this.sidebarMounted) this.settleSidebar(1);
+    else {
+      this.sidebarProgress = 1;
+      this.sidebarMounted = true;
+    }
+    void this.attention.refresh();
+  }
+
+  private closeSidebar(): boolean {
+    if (!this.sidebarOpen && !this.sidebarDragging) return false;
+    if (this.sidebarOpen) this.navigationRevision++;
+    this.sidebarOpen = false;
+    this.sidebarDragging = false;
+    this.settleSidebar(0);
     return true;
   }
 
+  private settleSidebar(target: number): void {
+    const revision = ++this.sidebarTransition;
+    if (this.layout.reduceMotion || this.sidebarProgress === target) {
+      this.sidebarProgress = target;
+      if (target === 0) this.sidebarMounted = false;
+      return;
+    }
+    this.getUIContext().animateTo({ duration: 220, curve: Curve.EaseOut, onFinish: (): void => {
+      if (!this.disposed && this.sidebarTransition === revision && target === 0) this.sidebarMounted = false;
+    } }, (): void => { this.sidebarProgress = target; });
+  }
+
+  private startSidebarDrag(offsetX: number): void {
+    if (this.sidebarMounted || this.detailVisible || this.pendingChatId) return;
+    this.sidebarDragging = true;
+    this.sidebarMounted = true;
+    this.updateSidebarDrag(offsetX);
+  }
+
+  private updateSidebarDrag(offsetX: number): void {
+    if (this.sidebarDragging) this.sidebarProgress = chatSidebarDragProgress(offsetX, this.sidebarWidth);
+  }
+
+  private finishSidebarDrag(offsetX: number, velocityX: number): void {
+    if (!this.sidebarDragging) return;
+    if (shouldOpenChatSidebar(offsetX, velocityX, this.sidebarWidth)) this.openSidebar();
+    else this.closeSidebar();
+  }
+
   private switchToChat(id: string, prompt: string, focusComposer: boolean = false): void {
-    this.replacementRevision++;
+    this.navigationRevision++;
+    this.initialChatError = '';
     this.pendingChatId = '';
+    this.closeSidebar();
     this.requestedChatId = id;
     this.requestedChatDraft = prompt;
     this.chatRequestRevision++;
     if (focusComposer) this.chatFocusRevision++;
+    this.chatReady = true;
     this.pathStack.clear();
-    this.activateTab(0);
   }
 
-  private async restoreActiveChatId(): Promise<void> {
-    const revision = this.chatRequestRevision;
+  private async restoreInitialChat(unavailableId: string = ''): Promise<void> {
+    this.initialChatError = '';
+    if (this.chatReady && !unavailableId) {
+      void this.personalAgent.refresh();
+      return;
+    }
+    const revision = ++this.chatRequestRevision;
+    this.chatReady = false;
+    this.activeChatId = '';
+    this.pendingChatId = '';
     try {
-      const id = await this.chatRepository.mainConversation();
-      if (revision === this.chatRequestRevision && !this.activeChatId && id) this.activeChatId = id;
-    } catch (_) { /* The chat view still restores and reports its own selection. */ }
+      const savedId = await this.chatRepository.mainConversation();
+      if (this.disposed || revision !== this.chatRequestRevision) return;
+      if (savedId && savedId !== unavailableId) {
+        this.requestedChatId = savedId;
+        void this.personalAgent.refresh();
+      } else {
+        if (savedId) await this.chatRepository.saveMainConversation('');
+        if (this.disposed || revision !== this.chatRequestRevision) return;
+        await this.personalAgent.refresh();
+        if (this.disposed || revision !== this.chatRequestRevision) return;
+        if (this.personalAgent.error) throw new Error(this.personalAgent.error);
+        const record = await this.personalAgent.openOrCreate();
+        if (this.disposed || revision !== this.chatRequestRevision) return;
+        if (!record?.conversationId || record.conversationId === unavailableId) {
+          throw new Error(this.personalAgent.error || 'PERSONAL_AGENT_UNAVAILABLE');
+        }
+        this.requestedChatId = record.conversationId;
+      }
+      this.requestedChatDraft = '';
+      this.chatReady = true;
+    } catch (error) {
+      if (!this.disposed && revision === this.chatRequestRevision) this.initialChatError = (error as Error).message;
+    }
   }
 
   private async openPersonalChat(): Promise<void> {
     if (this.personalOpening) return;
     this.personalOpening = true;
-    const originatingTab = this.tab;
-    const selectedRevision = this.chatRequestRevision;
+    const revision = this.navigationRevision;
     try {
       const record = await this.personalAgent.openOrCreate();
-      if (this.tab !== originatingTab || selectedRevision !== this.chatRequestRevision) return;
+      if (this.disposed || revision !== this.navigationRevision) return;
       if (!record) {
         this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(this.personalAgent.error, 'save') });
         return;
       }
-      this.returnToConversations = false;
-      this.activeChatId = record.conversationId;
-      this.switchToChat(record.conversationId, '');
+      this.openConversationFromList(record.conversationId);
     } finally {
       this.personalOpening = false;
     }
   }
 
-  private openConversationFromList(id: string, focusComposer: boolean): void {
-    this.returnToConversations = true;
-    const pendingId = id === this.activeChatId ? '' : id;
-    this.switchToChat(id, '', focusComposer);
-    this.pendingChatId = pendingId;
-  }
-
-  private async replaceDeletedChat(id: string): Promise<void> {
-    this.deletedChatIds.add(id);
-    if (id !== this.activeChatId && id !== this.requestedChatId) return;
-    const revision = ++this.replacementRevision;
-    this.pendingChatId = 'replacement:' + id;
-    try {
-      let offset = 0;
-      let latestId = '';
-      let hasMore = true;
-      while (hasMore && !latestId && revision === this.replacementRevision) {
-        const page = await this.chatRepository.list('', offset, 20, '');
-        latestId = page.items.find((item: XopcSessionItem): boolean => !this.deletedChatIds.has(item.key))?.key ?? '';
-        offset += page.items.length;
-        hasMore = page.hasMore && page.items.length > 0;
-      }
-      if (revision !== this.replacementRevision) return;
-      const replacement = latestId || await this.chatRepository.create();
-      if (revision !== this.replacementRevision) return;
-      this.requestedChatId = replacement;
-      this.requestedChatDraft = '';
-      this.pendingChatId = replacement;
-      this.chatRequestRevision++;
-    } catch (error) {
-      if (revision === this.replacementRevision) {
-        this.pendingChatId = '';
-        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'collection') });
-      }
-    }
-  }
-
-  private async sendQuickDraft(): Promise<void> {
-    const prompt = this.quickDraft.trim();
-    if ((!prompt && !this.quickFiles.length) || this.quickSending || this.quickPicking) return;
-    this.quickSending = true;
-    this.setQuickPanel(false);
+  private async openOrdinaryChat(): Promise<void> {
+    if (this.ordinaryOpening) return;
+    this.ordinaryOpening = true;
+    const revision = this.navigationRevision;
     try {
       const id = await this.chatRepository.create();
-      quickChatIntake.enqueue(id, prompt, this.quickFiles);
-      this.quickDraft = ''; this.quickFiles = [];
-      this.returnToConversations = false;
-      this.switchToChat(id, '');
+      if (!this.disposed && revision === this.navigationRevision) this.openConversationFromList(id);
     } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
-    } finally { this.quickSending = false; }
+      if (!this.disposed && revision === this.navigationRevision) {
+        this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
+      }
+    } finally { this.ordinaryOpening = false; }
   }
 
-  private async openQuickChat(action: string = ''): Promise<void> {
-    if (this.quickSending) return;
-    this.quickSending = true;
-    this.setQuickPanel(false);
-    try {
-      const id = await this.chatRepository.create();
-      this.requestedChatAction = action;
-      if (action) this.chatActionRevision++;
-      this.switchToChat(id, '', !action);
-    } catch (error) {
-      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
-    } finally { this.quickSending = false; }
-  }
-
-  private setQuickPanel(open: boolean, animated: boolean = true): void {
-    if (this.quickPanelOpen === open) { layoutState.chatActionsOpen = open; return; }
-    if (open) {
-      this.quickEditor.stopEditing();
-      this.getUIContext().getFocusController().clearFocus();
-    }
-    if (!animated || this.layout.reduceMotion) {
-      this.quickPanelOpen = open; layoutState.chatActionsOpen = open;
-      return;
-    }
-    this.getUIContext().animateTo({ duration: open ? CHAT_ACTION_PANEL_OPEN_MS : CHAT_ACTION_PANEL_CLOSE_MS,
-      curve: open ? Curve.EaseOut : Curve.EaseInOut }, (): void => {
-      this.quickPanelOpen = open; layoutState.chatActionsOpen = open;
+  private rememberConversation(id: string): void {
+    this.chatRepository.saveMainConversation(id).catch((error: Error): void => {
+      if (!this.disposed) this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(error.message, 'save') });
     });
   }
 
-  private chooseQuickAction(id: string): void {
-    if (!this.quickPanelOpen || this.quickSending || this.quickPicking) return;
-    this.setQuickPanel(false);
-    if (id === 'photos') this.pickQuickFile('photo');
-    else if (id === 'camera') this.pickQuickFile('camera');
-    else if (id === 'document') this.pickQuickFile('document');
-    else if (id === 'new-chat') void this.openQuickChat();
-    else void this.openQuickChat(id);
+  private openConversationFromList(id: string, remember: boolean = true): void {
+    if (remember) this.rememberConversation(id);
+    if (id === this.activeChatId && this.chatReady && (!this.pendingChatId || this.pendingChatId === id)) {
+      this.navigationRevision++;
+      this.closeSidebar();
+      this.pathStack.clear();
+      return;
+    }
+    this.switchToChat(id, '');
+    this.pendingChatId = id;
   }
 
-  private async pickQuickFile(kind: string): Promise<void> {
-    const context = this.getUIContext().getHostContext();
-    if (!context || this.quickSending || this.quickPicking || this.quickFiles.length >= MAX_ATTACHMENTS) return;
-    this.quickPicking = true;
-    try {
-      const file = kind === 'document' ? await pickChatAttachment(context, this.quickFiles)
-        : await pickChatPhoto(context, this.quickFiles, kind === 'camera');
-      if (file) this.quickFiles = this.quickFiles.concat([file]);
-    } catch (error) { this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') }); }
-    finally { this.quickPicking = false; }
-  }
-
-  private continueCreationChat(): void {
-    if (!this.creationChatId) return;
-    this.creationHandoffPending = true;
-    this.creationSheetOpen = false;
-  }
-
-  private completeCreationHandoff(): void {
-    if (!this.creationHandoffPending || !this.creationChatId) return;
-    this.creationHandoffPending = false;
-    // The embedded chat owns the live draft. Let the full chat restore that same draft instead of reapplying the seed prompt.
-    this.switchToChat(this.creationChatId, '', true);
+  private onConversationUnavailable(id: string): void {
+    if (this.disposed || !this.chatReady) return;
+    if (id !== (this.pendingChatId || this.activeChatId || this.requestedChatId)) return;
+    if (this.personalAgent.record?.conversationId === id) return;
+    void this.restoreInitialChat(id);
   }
 
   @Builder
   destination(page: string, param: Object) {
     if (page === 'sessions') {
-      XopcSessionsView({ onExit: (): void => { this.pathStack.pop(); },
-        onOpen: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); },
+      XopcSessionsView({ currentId: this.activeChatId, personalAgent: this.personalAgent.record,
+        onExit: (): void => { this.pathStack.pop(); this.openSidebar(); },
+        onOpen: (id: string): void => { this.openConversationFromList(id); },
         onTask: (id: string): void => { this.navigate({ page: 'task-chat', itemId: id }); },
-        onNew: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } })
+        onNew: (id: string): void => { this.openConversationFromList(id); },
+        onDelete: (id: string): void => { this.onConversationUnavailable(id); } })
+    } else if (page === 'progress') {
+      NavDestination() {
+        XopcProgressView({ activePage: true, model: this.attention, onExit: (): void => { this.pathStack.pop(); },
+          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+      }.hideTitleBar(true).backgroundColor(this.colors.surface)
+    } else if (page === 'library') {
+      NavDestination() {
+        XopcNotesTabView({ activePage: true, onExit: (): void => { this.pathStack.pop(); }, deliveries: this.attention.deliveries,
+          deliveriesLoading: this.attention.loading, deliveryError: this.attention.homeError,
+          onRefreshDeliveries: (): void => { void this.attention.refresh(); },
+          onStartVoice: (): void => { void this.startNoteCapture(); },
+          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+      }.hideTitleBar(true).backgroundColor(this.colors.surface)
+    } else if (page === 'personal' || page === 'personal-goals') {
+      NavDestination() {
+        XopcPersonalView({ record: this.personalAgent.record, goalsPage: page === 'personal-goals', onExit: (): void => { this.pathStack.pop(); }, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+      }.hideTitleBar(true).backgroundColor(this.colors.surface)
+    } else if (page === 'personal-agent-profile') {
+      NavDestination() {
+        XopcPersonalAgentSettings({ record: this.personalAgent.record, chatOptions: this.profileOptions, showSearch: false,
+          onReloadModels: (): void => {
+            const record = this.personalAgent.record;
+            if (record) void this.profileOptions.load(record.conversationId, record.agentId);
+          },
+          onSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
+          onClose: (): void => { this.pathStack.pop(); } })
+      }.hideTitleBar(true).onHidden((): void => { this.profileOptions.dispose(); this.profileOptions = new XopcChatOptionsViewModel(); })
     } else if (page === 'notes' || page === 'inbox' || page === 'note-create') {
       XopcNotesView({ initialId: (param as XopcMobileRoute).itemId, initialStatus: page === 'inbox' ? 'inbox' : '',
         createOnAppear: page === 'note-create', projectId: (param as XopcMobileRoute).projectId ?? '',
@@ -440,6 +418,7 @@ export struct XopcHomeView {
         onOpenConversation: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } })
     } else if (page === 'project-detail' || (page === 'projects' && !!(param as XopcMobileRoute).itemId)) {
       XopcProjectSpaceView({ projectId: (param as XopcMobileRoute).itemId, deliveries: this.attention.deliveries,
+        attention: this.attention.needsUser,
         onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'all-work') {
@@ -453,6 +432,20 @@ export struct XopcHomeView {
             onOpen: (): void => { this.navigate({ page: 'automations', itemId: '' }); } })
         }.width('100%').padding(20)
       }.title($r('app.string.all_work')).backgroundColor(this.colors.surface)
+    } else if (page === 'project-chat') {
+      NavDestination() {
+        Column() {
+          XopcPageHeader({ heading: (param as XopcMobileRoute).prompt === 'draft' ? $r('app.string.project_new_chat')
+            : (param as XopcMobileRoute).title || $r('app.string.conversations'),
+            backVisible: true, onBack: (): void => { this.pathStack.pop(); } })
+          XopcChatView({ requestedId: (param as XopcMobileRoute).itemId, activePage: true, embedded: true,
+            scopedProjectName: (param as XopcMobileRoute).title ?? '', onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+            .width('100%').layoutWeight(1)
+        }.width('100%').height('100%').backgroundColor(this.colors.chat.canvas)
+      }.hideTitleBar(true).onBackPressed((): boolean => {
+        if (layoutState.dismissChatOverlay?.()) return true;
+        this.pathStack.pop(); return true;
+      })
     } else if (page === 'task-conversation') {
       NavDestination() {
         XopcChatView({ requestedId: (param as XopcMobileRoute).prompt ?? '',
@@ -465,21 +458,24 @@ export struct XopcHomeView {
         initialTaskAction: page === 'task-edit' ? 'edit' : 'status', onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'tasks' || page === 'projects' || page === 'automations' || page === 'project-settings'
-      || page === 'task-create' || page === 'automation-create') {
+      || page === 'task-create' || page === 'automation-create' || page === 'project-create') {
       XopcWorkspaceView({ section: page === 'tasks' || page === 'task-create' ? 'tasks'
-        : page === 'projects' || page === 'project-settings' ? 'projects' : 'automations',
+        : page === 'projects' || page === 'project-settings' || page === 'project-create' ? 'projects' : 'automations',
         heading: page === 'tasks' || page === 'task-create' ? $r('app.string.tasks')
-          : page === 'projects' || page === 'project-settings' ? $r('app.string.projects') : $r('app.string.automations'),
+          : page === 'projects' || page === 'project-settings' || page === 'project-create' ? $r('app.string.projects') : $r('app.string.automations'),
         initialId: (param as XopcMobileRoute).itemId, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
-        createOnAppear: page === 'task-create' || page === 'automation-create',
+        createOnAppear: page === 'task-create' || page === 'automation-create' || page === 'project-create',
         projectId: (param as XopcMobileRoute).projectId ?? '',
-        onCreateWithChat: async (section: XopcSection): Promise<void> => { await this.openCreationChat(section); },
+        onCreated: (target: string, id: string): void => {
+          this.pathStack.pop();
+          this.navigate({ page: target, itemId: id });
+        },
         onExit: (): void => { this.pathStack.pop(); } })
-    } else if (page === 'files' || page === 'session-files') {
-      XopcFilesView({ initialId: page === 'files' ? (param as XopcMobileRoute).itemId : '',
+    } else if (page === 'files' || page === 'session-files' || page === 'file-upload') {
+      XopcFilesView({ uploadOnAppear: page === 'file-upload', initialId: page === 'files' ? (param as XopcMobileRoute).itemId : '',
         conversationId: page === 'session-files' ? (param as XopcMobileRoute).itemId : '', onExit: (): void => { this.pathStack.pop(); } })
     } else if (page === 'automation-run') {
-      XopcAutomationRunView({ runId: (param as XopcMobileRoute).itemId,
+      XopcAutomationRunView({ runId: (param as XopcMobileRoute).itemId, onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'sharing') {
       XopcShareCenterView({ onExit: (): void => { this.pathStack.pop(); } })
@@ -500,235 +496,67 @@ export struct XopcHomeView {
     }
   }
 
-  @Computed get dockAccentColor(): Resource {
-    return this.tab === 0 ? this.colors.chat.action : this.colors.accent;
-  }
-
-  @Computed get dockSecondaryColor(): Resource {
-    return this.tab === 0 ? this.colors.chat.secondary : this.colors.secondary;
-  }
-
-  @Builder
-  tabItem(index: number, label: ResourceStr, icon: Resource) {
-    Button({ type: ButtonType.Normal }) {
-    Column({ space: 3 }) {
-      Stack({ alignContent: Alignment.TopEnd }) {
-        Row() {
-          if (index === 0) {
-            if (this.personalAgent.record?.state === 'ready'
-              && this.personalAgent.record.conversationId === this.activeChatId) {
-              XopcPersonalAgentAvatar({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible,
-                agentId: this.personalAgent.record.agentId,
-                appearance: this.personalAgent.record.appearance, revision: this.personalAgent.record.revision ?? 0 }).id('assistant-tab-personal-avatar')
-            } else {
-              XopcLoopi({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible }).id('assistant-tab-loopi')
-            }
-          } else {
-            SymbolGlyph(icon).fontSize(22).fontColor([this.tab === index ? this.dockAccentColor : this.dockSecondaryColor])
-          }
-        }.width(42).height(28).justifyContent(FlexAlign.Center).borderRadius(16)
-          .backgroundColor(this.tab === index ? (index === 0 ? this.colors.chat.bubble : this.colors.active) : Color.Transparent)
-        if (index === 2 && this.attention.needsUser.length) {
-          Text(this.attention.needsUser.length > 99 ? '99+' : this.attention.needsUser.length.toString()).fontSize(10)
-            .fontColor(this.dockAccentColor)
-            .backgroundColor(this.tab === 0 ? this.colors.chat.bubble : this.colors.accentSoft).borderRadius(8)
-            .constraintSize({ minWidth: 16, minHeight: 16 }).textAlign(TextAlign.Center).position({ x: 15, y: -5 })
-        }
-      }
-      Text(label).fontSize(11).fontWeight(FontWeight.Medium)
-        .fontColor(this.tab === index ? this.dockAccentColor : this.dockSecondaryColor)
-        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-    }.width('100%').height(44).justifyContent(FlexAlign.Center)
-      .backgroundColor(Color.Transparent).borderRadius(26)
-    }.id('main-tab-' + index).layoutWeight(1).height(44).padding(0).borderRadius(26).backgroundColor(Color.Transparent)
-      .accessibilitySelected(this.tab === index)
-      .onClick((): void => { this.selectTab(index); })
-  }
-
-  @Builder
-  dockItems() {
-    Row() {
-      this.tabItem(0, this.personalAgent.record?.state === 'ready'
-        && this.personalAgent.record.conversationId === this.activeChatId
-        ? this.personalAgent.record.displayName : $r('app.string.assistant'), $r('sys.symbol.ellipsis_bubble'))
-      this.tabItem(1, $r('app.string.conversations'), $r('sys.symbol.message'))
-      this.tabItem(2, $r('app.string.progress'), $r('sys.symbol.checkmark_circle'))
-      this.tabItem(3, $r('app.string.library_title'), $r('sys.symbol.folder'))
-      this.tabItem(4, $r('app.string.personal'), $r('sys.symbol.person'))
-    }.width('100%').height(52).padding(4)
-  }
-
-  private disabledQuickActionIds(): string[] {
-    return this.quickFiles.length >= MAX_ATTACHMENTS ? ['photos', 'camera', 'document'] : [];
-  }
-
-  @Builder
-  quickComposer() {
-    Column() {
-      if (this.quickFiles.length) {
-        ForEach(this.quickFiles, (file: XopcChatAttachment, index: number) => {
-          Row({ space: 8 }) {
-            if (file.mimeType.startsWith('image/') && file.data) {
-              Image('data:' + file.mimeType + ';base64,' + file.data).width(40).height(40).objectFit(ImageFit.Cover).borderRadius(8)
-            }
-            Text(file.name).fontSize(13).fontColor(this.colors.foreground).maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-            Button($r('app.string.remove_attachment')).height(40).fontSize(12).backgroundColor(Color.Transparent)
-              .fontColor(this.colors.secondary).enabled(!this.quickSending && !this.quickPicking)
-              .onClick((): void => { this.quickFiles = this.quickFiles.filter((_file: XopcChatAttachment, position: number): boolean => position !== index); })
-          }.width('100%').padding({ left: 12, right: 8, top: 4 })
-        }, (file: XopcChatAttachment, index: number): string => file.name + ':' + index)
-      }
-      Row({ space: 4 }) {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.mic')).fontSize(22).fontColor([this.colors.accent])
-        }.id('home-quick-voice').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
-          .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
-          .accessibilityText($r('app.string.assistant')).enabled(!this.quickSending)
-          .onClick((): void => { void this.openQuickChat(); })
-        TextInput({ text: this.quickDraft, placeholder: this.quickComposerPlaceholder, controller: this.quickEditor })
-          .id('home-quick-composer').layoutWeight(1).height(COMPOSER_INPUT_MIN).maxLength(4000)
-          .padding({ left: 4, right: 4 }).enterKeyType(EnterKeyType.Send)
-          .enabled(!this.quickSending && !this.quickPicking).lineHeight(20)
-          .fontSize(16).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-          .backgroundColor(Color.Transparent)
-          .onChange((text: string): void => { this.quickDraft = text; })
-          .onEditChange((editing: boolean): void => { if (editing) this.setQuickPanel(false); })
-          .onSubmit((_enterKey: EnterKeyType): void => { this.sendQuickDraft(); })
-        if (this.quickFiles.length < MAX_ATTACHMENTS) {
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph(this.quickPanelOpen ? $r('sys.symbol.xmark_circle') : $r('sys.symbol.plus_circle'))
-              .fontSize(24).fontColor([this.colors.accent])
-          }.id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
-            .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
-            .enabled(!this.quickSending && !this.quickPicking).accessibilityText($r('app.string.add_attachment'))
-            .onClick((): void => { this.setQuickPanel(!this.quickPanelOpen); })
-        }
-        if (this.quickDraft.trim() || this.quickFiles.length) {
-          Button({ type: ButtonType.Circle }) {
-            if (this.quickSending) {
-              LoadingProgress().width(20).height(20).color(this.colors.panel)
-            } else {
-              SymbolGlyph($r('sys.symbol.arrow_up')).fontSize(22).fontColor([this.colors.panel])
-            }
-          }.id('home-quick-send').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
-            .backgroundColor(this.colors.foreground).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
-            .enabled(!this.quickSending && !this.quickPicking).accessibilityText($r('app.string.send'))
-            .onClick((): void => { this.sendQuickDraft(); })
-        }
-      }.width('100%').padding({ left: 4, right: 4, top: 4, bottom: 4 })
-    }.id('home-quick-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)
-      .borderRadius(18).clip(true).margin({ top: 8, bottom: 8 })
-  }
-
-  @Builder
-  creationChatSheet() {
-    Column() {
-      Row({ space: 8 }) {
-        Column({ space: 2 }) {
-          Text($r('app.string.ai_create')).fontSize(18).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-          Text($r('app.string.ai_create_hint')).fontSize(12).fontColor(this.colors.secondary)
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Button($r('app.string.continue_in_chat')).height(40).padding({ left: 14, right: 14 })
-          .backgroundColor(this.colors.input).fontColor(this.colors.foreground)
-          .onClick((): void => { this.continueCreationChat(); })
-        Button({ type: ButtonType.Circle, stateEffect: true }) {
-          SymbolGlyph($r('sys.symbol.xmark')).fontSize(17).fontColor([this.colors.secondary])
-        }.id('creation-chat-close').width(40).height(40).padding(0).backgroundColor(this.colors.input)
-          .accessibilityText($r('app.string.close'))
-          .onClick((): void => { this.creationHandoffPending = false; this.creationSheetOpen = false; })
-      }.width('100%').padding({ left: 20, right: 12, top: 4, bottom: 8 })
-      Column() {
-        XopcChatView({ requestedId: this.creationChatId, requestRevision: this.creationChatRevision,
-          intakeRevision: this.intake.chatRevision, intakeText: this.creationChatDraft,
-          activePage: this.creationSheetOpen, embedded: true,
-          onNavigate: (route: XopcMobileRoute): void => { this.creationSheetOpen = false; this.navigate(route); } })
-      }.layoutWeight(1).width('100%')
-    }.width('100%').height('100%').backgroundColor(this.colors.surface)
-  }
-
-  @LocalBuilder
-  chatDock() {
-    if (this.tab === 0 && this.layout.isMainDockVisible(0)) {
-      Column() {
-        this.dockItems()
-      }.id('main-tab-dock').width('100%')
-    }
-  }
-
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       Navigation(this.pathStack) {
-        Stack({ alignContent: Alignment.Bottom }) {
-      Column() {
-      Tabs({ barPosition: BarPosition.End, index: this.tab }) {
-        TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
-          personalAgent: this.personalAgent.record,
-          onPersonalAgentSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
-          focusRevision: this.chatFocusRevision,
-          requestedAction: this.requestedChatAction, actionRevision: this.chatActionRevision,
-          intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
-          bottomDock: this.chatDock,
-          activePage: this.tab === 0 && !this.detailVisible,
-          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
-          onConversationChange: (id: string): void => {
-            this.activeChatId = id;
-            if (this.pendingChatId === id) this.pendingChatId = '';
-          } }) }.height(LayoutPolicy.matchParent)
-          .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
-        TabContent() { XopcSessionsView({ embedded: true, bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 1 && !this.detailVisible,
-          currentId: this.activeChatId, personalAgent: this.personalAgent.record, personalBusy: this.personalAgent.creating,
-          onOpenPersonal: (): void => { void this.openPersonalChat(); },
-          onOpen: (id: string): void => { this.openConversationFromList(id, false); },
-          onTask: (id: string): void => { this.navigate({ page: 'task-chat', itemId: id }); },
-          onNew: (id: string): void => { this.openConversationFromList(id, true); },
-          onDelete: (id: string): void => { void this.replaceDeletedChat(id); },
-          onUndoDelete: (id: string): void => {
-            this.deletedChatIds.delete(id);
-            if (this.pendingChatId === 'replacement:' + id) { this.replacementRevision++; this.pendingChatId = ''; }
-          } }) }
-        TabContent() { XopcProgressView({ bottomInset: this.secondaryBottomRegionHeight, activePage: this.tab === 2 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
-        TabContent() { XopcNotesTabView({ activePage: this.tab === 3 && !this.detailVisible,
-          deliveries: this.attention.deliveries, deliveriesLoading: this.attention.loading, deliveryError: this.attention.homeError,
-          onRefreshDeliveries: (): void => { void this.attention.refresh(); }, bottomInset: this.secondaryBottomRegionHeight,
-          onStartVoice: (): void => { void this.startNoteCapture(); },
-          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
-        TabContent() { XopcPersonalView({ activePage: this.tab === 4 && !this.detailVisible,
-          bottomInset: this.secondaryBottomRegionHeight,
-          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }
-      }.scrollable(false).barHeight(0).barMode(BarMode.Fixed)
-        .animationDuration(0)
-        .onChange((index: number): void => { this.tab = index; })
-        .width('100%').height(LayoutPolicy.matchParent)
-        .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], this.tab === 0 ? [LayoutSafeAreaEdge.TOP] : [])
-      }.id('home-tab-viewport').width('100%').height('100%')
-        .clip(this.tab !== 0)
-      if (this.tab === 0 && this.pendingChatId) {
-        Column() {
-          XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })
-        }.id('chat-navigation-loading').width('100%').height('100%')
-          .justifyContent(FlexAlign.Center).backgroundColor(this.colors.surface)
-      }
-      if (this.tab !== 0) {
-        Column().id('secondary-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)
-        Column() {
+        Stack({ alignContent: Alignment.TopStart }) {
           Column() {
-            if (!this.capture.active) {
-              this.quickComposer()
-              XopcChatActionPanel({ open: this.quickPanelOpen, idPrefix: 'home-quick-action',
-                disabledIds: this.disabledQuickActionIds(),
-                onSelect: (id: string): void => { this.chooseQuickAction(id); } })
+            if (this.chatReady) {
+              XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
+                personalAgent: this.personalAgent.record,
+                pendingAttention: this.pendingAttention,
+                onPersonalAgentSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
+                focusRevision: this.chatFocusRevision,
+                intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
+                activePage: !this.detailVisible,
+                sidebarSwipeWidth: this.recordingViewportWidth,
+                sidebarSwipeEnabled: !this.sidebarMounted && !this.pendingChatId,
+                onOpenSidebar: (): void => { this.openSidebar(); },
+                onSidebarDragStart: (offsetX: number): void => { this.startSidebarDrag(offsetX); },
+                onSidebarDragUpdate: (offsetX: number): void => { this.updateSidebarDrag(offsetX); },
+                onSidebarDragEnd: (offsetX: number, velocityX: number): void => { this.finishSidebarDrag(offsetX, velocityX); },
+                onSidebarDragCancel: (): void => { if (this.sidebarDragging) this.closeSidebar(); },
+                onNewOrdinaryChat: (): void => { void this.openOrdinaryChat(); },
+                onLocalChatCreated: (id: string): void => { this.rememberConversation(id); },
+                onConversationUnavailable: (id: string): void => { this.onConversationUnavailable(id); },
+                onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
+                onConversationChange: (id: string): void => {
+                  this.activeChatId = id;
+                  if (this.pendingChatId === id) this.pendingChatId = '';
+                } })
             }
-            if (this.layout.isMainDockVisible(this.tab)) { this.dockItems() }
-          }.id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)
-            .borderRadius(24).clip(true)
-        }.id('secondary-bottom-region').width('100%')
-          .margin({ top: 4, bottom: 0 })
-          .onAreaChange((_previous: Area, current: Area): void => {
-            this.secondaryBottomRegionHeight = Number(current.height);
-          })
-      }
-        }.width('100%').height('100%')
+          }.id('home-chat-viewport').width('100%').height('100%')
+            .accessibilityLevel(this.sidebarOpen ? 'no-hide-descendants' : 'auto')
+          if (!this.chatReady || this.pendingChatId) {
+            Column() {
+              if (this.initialChatError) {
+                Row() {
+                  Button({ type: ButtonType.Circle }) {
+                    SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
+                  }.width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+                    .accessibilityText($r('app.string.chat_open_drawer')).onClick((): void => { this.openSidebar(); })
+                }.width('100%').padding({ left: 12, top: this.getUIContext().px2vp(this.layout.systemTopInsetPx) + 8 })
+                Column() {
+                  XopcErrorState({ error: this.initialChatError, onAction: (): void => { void this.restoreInitialChat(); } })
+                }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
+              } else {
+                XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })
+              }
+            }.id('chat-navigation-loading').width('100%').height('100%')
+              .justifyContent(FlexAlign.Center).backgroundColor(this.colors.surface)
+          }
+          if (this.sidebarMounted) {
+            XopcChatSidebar({ personalAgent: this.personalAgent.record, personalBusy: this.personalOpening || this.personalAgent.creating,
+              reveal: this.sidebarProgress, drawerWidth: this.sidebarWidth, interactive: this.sidebarOpen,
+              currentId: this.activeChatId, pendingAttention: this.pendingAttention,
+              onClose: (): void => { this.closeSidebar(); },
+              onPersonal: (): void => { void this.openPersonalChat(); },
+              onNew: (): void => { void this.openOrdinaryChat(); },
+              onConversation: (id: string): void => { this.openConversationFromList(id); },
+              onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+          }
+        }.width('100%').height(LayoutPolicy.matchParent)
+          .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
       }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)
         .onNavBarStateChange((shown: boolean): void => { this.detailVisible = !shown; })
         .width('100%').height('100%').backgroundColor(this.colors.surface)
@@ -736,16 +564,12 @@ export struct XopcHomeView {
         XopcDiscussionRecordingPanelView({ panel: this.recordingPanel,viewportWidth: this.recordingViewportWidth,viewportHeight: this.recordingViewportHeight,
           onSaved: (_id: string): void => {},
           onOpenNote: (id: string): void => { this.recordingPanel.setCompact(true); this.navigate({ page: 'notes',itemId: id }); },
-          onRecovery: (): void => { this.pathStack.clear(); this.selectTab(3); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
+          onRecovery: (): void => { this.pathStack.clear(); this.navigate({ page: 'library', itemId: '' }); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
       }
       XopcShareIntakeDialog({ currentConversationId: this.activeChatId, onExplore: async (value: XopcIncomingShare, targetId: string): Promise<boolean> => await this.exploreShare(value, targetId),
         onSaved: (noteId: string): void => { this.navigate({ page: 'notes', itemId: noteId }); } })
     }.width('100%').height('100%')
       .onAreaChange((_previous: Area,current: Area): void => { this.recordingViewportWidth = Number(current.width); this.recordingViewportHeight = Number(current.height); })
-      .bindSheet($$this.creationSheetOpen, this.creationChatSheet, {
-        height: SheetSize.LARGE, dragBar: true, showClose: false, backgroundColor: this.colors.surface,
-        enableOutsideInteractive: false, keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY,
-        onDisappear: (): void => { this.completeCreationHandoff(); }
-      })
+
   }
 }

@@ -1,14 +1,18 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
-import { XopcUnderstandingItem, XopcUnderstandingRule, XopcUserGoal } from '../model/userUnderstanding';
+import { XopcUserGoal } from '../model/userUnderstanding';
 import { XopcPersonalViewModel } from '../viewmodel/homeViewModel';
-import { XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
-import { XopcLoopi } from './Loopi';
+import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
+import { XopcPersonalAgentRecord } from '../model/personalAgent';
+import { connectionModel } from '../viewmodel/connectionViewModel';
+import { gatewaySession } from '../service/gatewaySession';
+import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 
 @ComponentV2
 export struct XopcPersonalView {
-  @Param activePage: boolean = true;
-  @Param bottomInset: number = 0;
+  @Param record: XopcPersonalAgentRecord | null = null;
+  @Param goalsPage: boolean = false;
+  @Local completed: boolean = false;
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcPersonalViewModel = new XopcPersonalViewModel();
   @Local goalEditorOpen: boolean = false;
@@ -18,15 +22,11 @@ export struct XopcPersonalView {
   @Local goalTargetDate: string = '';
   @Local goalStatus: string = 'active';
   @Local goalDateError: boolean = false;
+  @Event onExit: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
 
-  aboutToAppear(): void { this.model.refresh(); }
+  aboutToAppear(): void { if (this.goalsPage) void this.model.refresh(); }
   aboutToDisappear(): void { this.model.dispose(); }
-
-  private initials(): string {
-    const name = this.model.name.trim();
-    return name ? Array.from(name).slice(0, 2).join('').toUpperCase() : 'X';
-  }
 
   private dateText(timestamp?: number): string {
     if (timestamp === undefined) return '';
@@ -70,51 +70,6 @@ export struct XopcPersonalView {
     if (goal.status === 'paused') return $r('app.string.personal_goal_paused');
     if (goal.status === 'proposed') return $r('app.string.personal_goal_proposed');
     return $r('app.string.personal_goal_active');
-  }
-
-  @Builder
-  private sectionHeading(title: ResourceStr) {
-    Row() {
-      Text(title).fontSize(13).lineHeight(18).fontWeight(FontWeight.Medium)
-        .fontColor(this.colors.secondary).layoutWeight(1)
-      Button($r('app.string.personal_view_all')).height(40).padding({ left: 8, right: 8 })
-        .fontSize(13).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
-        .onClick((): void => { this.onNavigate({ page: 'about-you', itemId: '' }); })
-    }.width('100%').margin({ top: 24, bottom: 8 }).alignItems(VerticalAlign.Center)
-  }
-
-  @Builder
-  private countCell(value: number, label: ResourceStr, accent: boolean = false) {
-    Column({ space: 4 }) {
-      Text(value.toString()).fontSize(24).fontWeight(FontWeight.Bold)
-        .fontColor(accent && value > 0 ? this.colors.accent : this.colors.foreground)
-      Text(label).fontSize(11).fontColor(this.colors.secondary).maxLines(2).textAlign(TextAlign.Center)
-    }.layoutWeight(1).alignItems(HorizontalAlign.Center)
-  }
-
-  @Builder
-  private understandingRow(item: XopcUnderstandingItem) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 10 }) {
-        Column({ space: 4 }) {
-          Text(item.statement).fontSize(15).lineHeight(21).fontColor(this.colors.foreground)
-            .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-          Text(item.authority === 'user_explicit' ? $r('app.string.about_you_explicit') : $r('app.string.about_you_learned'))
-            .fontSize(12).fontColor(this.colors.secondary).width('100%')
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-      }.width('100%').constraintSize({ minHeight: 68 }).padding({ left: 16, right: 14, top: 10, bottom: 10 })
-    }.width('100%').padding(0).borderRadius(14).backgroundColor(this.colors.panel).margin({ bottom: 8 })
-      .onClick((): void => { this.onNavigate({ page: 'about-you', itemId: item.id }); })
-  }
-
-  @Builder
-  private ruleRow(rule: XopcUnderstandingRule) {
-    Row({ space: 10 }) {
-      SymbolGlyph($r('sys.symbol.info_circle')).fontSize(18).fontColor([this.colors.secondary])
-      Text(rule.statement).fontSize(14).lineHeight(20).fontColor(this.colors.foreground)
-        .layoutWeight(1).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
-    }.width('100%').padding({ left: 16, right: 16, top: 12, bottom: 12 })
   }
 
   @Builder
@@ -190,115 +145,64 @@ export struct XopcPersonalView {
 
   build() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.personal'), actionLabel: $r('app.string.settings'),
-        actionIcon: $r('sys.symbol.gearshape'), onAction: (): void => { this.onNavigate({ page: 'settings', itemId: '' }); } })
+      XopcPageHeader({ heading: this.goalsPage ? $r('app.string.personal_goals') : $r('app.string.personal'),
+        backVisible: true, onBack: this.onExit,
+        actionLabel: this.goalsPage ? $r('app.string.personal_goal_add') : $r('app.string.settings'),
+        actionIcon: this.goalsPage ? $r('sys.symbol.plus') : $r('sys.symbol.gearshape'),
+        onAction: (): void => {
+          if (this.goalsPage) this.openGoalEditor();
+          else this.onNavigate({ page: 'settings', itemId: '' });
+        } })
       Scroll() {
         Column() {
-          Row({ space: 16 }) {
-            Text(this.initials()).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.accent)
-              .width(64).height(64).textAlign(TextAlign.Center).borderRadius(32).backgroundColor(this.colors.accentSoft)
-            Column({ space: 5 }) {
-              Text(this.model.name || $r('app.string.personal_default_name')).fontSize(21).fontWeight(FontWeight.Bold)
-                .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              Text(this.model.role || $r('app.string.personal_profile_hint')).fontSize(13).lineHeight(19)
-                .fontColor(this.colors.secondary).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-              Row({ space: 7 }) {
-                Column().width(7).height(7).borderRadius(4).backgroundColor(this.colors.accent)
-                Text($r('app.string.workspace_connected')).fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
-              }.constraintSize({ minHeight: 28 }).padding({ left: 10, right: 10 }).borderRadius(14).backgroundColor(this.colors.accentSoft)
-              Row({ space: 6 }) {
-                Text($r('app.string.about_you_count', this.model.understandingCount)).fontSize(12).fontColor(this.colors.secondary)
-                if (this.model.reviewCount > 0) {
-                  Text('·').fontSize(12).fontColor(this.colors.tertiary)
-                  Text($r('app.string.about_you_review_count', this.model.reviewCount)).fontSize(12).fontColor(this.colors.accent)
-                }
-              }
-            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-            Column({ space: 4 }) {
-              XopcLoopi({ extent: 44, activePage: this.activePage && !this.goalEditorOpen }).id('personal-loopi')
-              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.tertiary])
-            }.width(44)
-          }.width('100%').padding(20).borderRadius(22).backgroundColor(this.colors.panel)
-            .onClick((): void => { this.onNavigate({ page: 'about-you', itemId: '' }); })
-
-          if (this.model.loading) {
-            Column() { XopcListSkeleton() }.width('100%').padding({ top: 24 })
+          if (this.goalsPage) {
+            Row({ space: 8 }) {
+              Button($r('app.string.ongoing')).height(44).fontColor(this.colors.foreground)
+                .backgroundColor(!this.completed ? this.colors.input : Color.Transparent)
+                .accessibilitySelected(!this.completed).onClick((): void => { this.completed = false; })
+              Button($r('app.string.personal_goal_achieved')).height(44).fontColor(this.colors.foreground)
+                .backgroundColor(this.completed ? this.colors.input : Color.Transparent)
+                .accessibilitySelected(this.completed).onClick((): void => { this.completed = true; })
+            }.width('100%').margin({ top: 8, bottom: 16 })
+            if (this.model.loading) XopcListSkeleton()
+            else if (!this.model.goals.some((goal: XopcUserGoal): boolean => (goal.status === 'achieved') === this.completed)) {
+              Text($r('app.string.personal_goal_empty')).fontSize(14).fontColor(this.colors.secondary).width('100%')
+            }
+            ForEach(this.model.goals.filter((goal: XopcUserGoal): boolean => (goal.status === 'achieved') === this.completed),
+              (goal: XopcUserGoal) => { this.goalRow(goal) }, (goal: XopcUserGoal): string => goal.id + ':' + goal.status)
           } else {
-            Row() {
-              Text($r('app.string.personal_goals')).fontSize(13).lineHeight(18).fontWeight(FontWeight.Medium)
-                .fontColor(this.colors.secondary).layoutWeight(1)
-              Button($r('app.string.personal_goal_add')).height(40).padding({ left: 8, right: 8 })
-                .fontSize(13).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
-                .onClick((): void => { this.openGoalEditor(); })
-            }.width('100%').margin({ top: 24, bottom: 8 }).alignItems(VerticalAlign.Center)
-            if (this.model.goals.length > 0) {
-              ForEach(this.model.goals, (goal: XopcUserGoal) => { this.goalRow(goal) },
-                (goal: XopcUserGoal): string => goal.id)
-            } else if (this.model.focusTitle) {
-              XopcSectionLabel({ heading: $r('app.string.about_you_focus') })
-              Button({ type: ButtonType.Normal }) {
-                Row({ space: 12 }) {
-                  SymbolGlyph($r('sys.symbol.flag')).fontSize(22).fontColor([this.colors.accent])
-                  Column({ space: 4 }) {
-                    Text(this.model.focusTitle).fontSize(16).lineHeight(23).fontWeight(FontWeight.Medium)
-                      .fontColor(this.colors.foreground).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    if (this.model.focusOutcome) {
-                      Text(this.model.focusOutcome).fontSize(13).lineHeight(19).fontColor(this.colors.secondary)
-                        .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }
-                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                  SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-                }.width('100%').padding(16)
-              }.width('100%').padding(0).borderRadius(16).backgroundColor(this.colors.accentSoft)
-                .onClick((): void => { this.onNavigate({ page: 'about-you', itemId: '' }); })
-            } else {
-              Button({ type: ButtonType.Normal }) {
-                Row({ space: 12 }) {
-                  SymbolGlyph($r('sys.symbol.flag')).fontSize(22).fontColor([this.colors.accent])
-                  Column({ space: 4 }) {
-                    Text($r('app.string.personal_goal_empty')).fontSize(15).fontWeight(FontWeight.Medium)
-                      .fontColor(this.colors.foreground).width('100%')
-                    Text($r('app.string.personal_goal_empty_help')).fontSize(13).lineHeight(19)
-                      .fontColor(this.colors.secondary).width('100%')
-                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                }.width('100%').padding(16)
-              }.width('100%').padding(0).borderRadius(16).backgroundColor(this.colors.panel)
-                .onClick((): void => { this.openGoalEditor(); })
-            }
-
-            this.sectionHeading($r('app.string.personal_understanding_title'))
-            Column({ space: 14 }) {
-              Text($r('app.string.personal_understanding_help')).fontSize(14).lineHeight(20)
-                .fontColor(this.colors.secondary).width('100%')
-              Row() {
-                this.countCell(this.model.explicitCount, $r('app.string.about_you_explicit'))
-                this.countCell(this.model.learnedCount, $r('app.string.about_you_learned'))
-                this.countCell(this.model.reviewCount, $r('app.string.about_you_needs_review'), true)
-              }.width('100%')
-              Row({ space: 8 }) {
-                SymbolGlyph($r('sys.symbol.square_stack_3d')).fontSize(16).fontColor([this.colors.secondary])
-                Text($r('app.string.about_you_work_memory_count', this.model.workMemoryCount))
-                  .fontSize(12).fontColor(this.colors.secondary)
-              }.width('100%')
-            }.width('100%').padding(18).borderRadius(18).backgroundColor(this.colors.panel)
-
-            if (this.model.recent.length > 0) {
-              XopcSectionLabel({ heading: $r('app.string.about_you_recent') })
-              ForEach(this.model.recent, (item: XopcUnderstandingItem) => { this.understandingRow(item) },
-                (item: XopcUnderstandingItem): string => item.id)
-            }
-            if (this.model.rules.length > 0) {
-              XopcSectionLabel({ heading: $r('app.string.about_you_rules') })
-              Column() {
-                ForEach(this.model.rules, (rule: XopcUnderstandingRule) => { this.ruleRow(rule) },
-                  (rule: XopcUnderstandingRule): string => rule.id)
-              }.width('100%').borderRadius(16).backgroundColor(this.colors.panel)
-            }
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 12 }) {
+                XopcPersonalAgentAvatar({ agentId: this.record?.agentId ?? '', extent: 54, compact: true,
+                  appearance: this.record?.appearance ?? 'loopi', revision: this.record?.revision ?? 0 })
+                Column({ space: 5 }) {
+                  Text(this.record?.displayName || $r('app.string.chat_personal_agent')).fontSize(20)
+                    .fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%').maxLines(1)
+                  Text($r('app.string.personal_agent_summary')).fontSize(13).fontColor(this.colors.secondary).width('100%')
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.secondary])
+              }.width('100%').padding(16).constraintSize({ minHeight: 100 })
+            }.id('me-agent-profile').width('100%').padding(0).borderRadius(20).backgroundColor(this.colors.panel)
+              .enabled(!!this.record).onClick((): void => { this.onNavigate({ page: 'personal-agent-profile', itemId: '' }); })
+            XopcSectionLabel({ heading: $r('app.string.personalization') })
+            XopcHubRow({ heading: $r('app.string.about_you'), summary: $r('app.string.personal_memory_summary'),
+              symbol: $r('sys.symbol.person'), onOpen: (): void => { this.onNavigate({ page: 'about-you', itemId: '' }); } })
+              .id('me-about-you')
+            XopcHubRow({ heading: $r('app.string.personal_goals'), summary: $r('app.string.personal_goal_help'),
+              symbol: $r('sys.symbol.flag'), onOpen: (): void => { this.onNavigate({ page: 'personal-goals', itemId: '' }); } })
+              .id('me-goals')
+            XopcSectionLabel({ heading: $r('app.string.personal_app_section') })
+            XopcHubRow({ heading: $r('app.string.personal_work_computer'), summary: gatewaySession.currentProfile()?.name ?? '',
+              symbol: $r('sys.symbol.link'), onOpen: (): void => { connectionModel.openGateways(); } })
+              .id('me-work-computer')
+            XopcHubRow({ heading: $r('app.string.settings'), summary: $r('app.string.personal_settings_hint'),
+              symbol: $r('sys.symbol.gearshape'), onOpen: (): void => { this.onNavigate({ page: 'settings', itemId: '' }); } })
+              .id('me-settings')
           }
           if (this.model.error) {
             Text($r('app.string.personal_profile_unavailable')).fontSize(12).fontColor(this.colors.tertiary).margin({ top: 12 })
           }
-        }.width('100%').padding({ left: 20, right: 20, bottom: this.bottomInset }).alignItems(HorizontalAlign.Start)
+        }.width('100%').padding({ left: 20, right: 20 }).alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).width('100%').align(Alignment.Top).scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.goalEditorOpen, this.goalEditor, {

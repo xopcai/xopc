@@ -13,6 +13,7 @@ import { userErrorMessage } from '../common/userError';
 export struct XopcFilesView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param initialId: string = '';
+  @Param uploadOnAppear: boolean = false;
   @Param conversationId: string = '';
   @Event onExit: () => void = (): void => {};
   @Local model: XopcFilesViewModel = new XopcFilesViewModel();
@@ -20,7 +21,15 @@ export struct XopcFilesView {
   @Local shareResult?: XopcShareResult;
   @Local shareOpen: boolean = false;
 
-  aboutToAppear(): void { this.model.start(this.initialId, this.conversationId); }
+  aboutToAppear(): void { void this.openInitial(); }
+  private async openInitial(): Promise<void> {
+    await this.model.start(this.initialId, this.conversationId);
+    if (!this.uploadOnAppear || this.model.error) return;
+    const defaults = this.model.spaces.filter((space: XopcFileSpace): boolean => space.writable);
+    if (defaults.length === 1) await this.model.choose(defaults[0]);
+    const context = this.getUIContext().getHostContext();
+    if (context && this.model.space?.writable) await this.model.upload(context);
+  }
   aboutToDisappear(): void { this.model.dispose(); }
 
   private async goBack(): Promise<void> {

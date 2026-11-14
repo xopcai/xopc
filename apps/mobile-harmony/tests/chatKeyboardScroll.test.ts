@@ -24,7 +24,7 @@ function setup() {
     layout: { reduceMotion: false }, presentationRows: [{ id: 'last' }],
     messagesScroller: { scrollEdge: vi.fn(), scrollToIndex: vi.fn(), isAtEnd: vi.fn(() => false), currentOffset: () => ({ yOffset: 2000 }) },
     replyAnchorId: '', replySpaceHeight: 0, replyBudget: 0, messageViewportHeight: 720,
-    bottomRegionHeight: 96, chatTopInset: 0, replyRowHeights: new Map(),
+    bottomRegionHeight: 96, overlayHeaderHeight: 0, replyRowHeights: new Map(),
   });
 }
 
@@ -41,15 +41,15 @@ describe('chat keyboard viewport following', () => {
     expect(view.initialScrollPending).toBe(false);
   });
 
-  it('reopens the selected conversation at the tail and invalidates an old prepend anchor', () => {
+  it('preserves the reading position when a request targets the selected conversation', () => {
     const view = setup(); view.atBottom = false; view.loadingOlder = true;
     Object.assign(view, { requestedId: 'one', requestRevision: 2, appliedRequestRevision: 1,
       dismissComposer: vi.fn(), olderGeneration: 7 });
     view.onTargetChange();
-    expect(view.atBottom).toBe(true); expect(view.loadingOlder).toBe(false);
-    expect(view.olderGeneration).toBe(8);
+    expect(view.atBottom).toBe(false); expect(view.loadingOlder).toBe(true);
+    expect(view.olderGeneration).toBe(7);
     vi.advanceTimersByTime(50);
-    expect(view.messagesScroller.scrollToIndex).toHaveBeenCalledWith(1, false, 'end');
+    expect(view.messagesScroller.scrollToIndex).not.toHaveBeenCalled();
   });
 
   it('restores a cancelled follow operation on reactivation but preserves an intentional history position', () => {
@@ -91,13 +91,13 @@ describe('chat keyboard viewport following', () => {
     const view = setup();
     view.presentationRows = [{ id: 'question' }];
     view.reserveReplySpace('question', 'next');
-    expect(view.replySpaceHeight).toBeCloseTo(226.8);
+    expect(view.replySpaceHeight).toBeCloseTo(280.8);
     view.presentationRows.push({ id: 'reply' });
     view.recordReplyRowHeight('reply', 20);
-    expect(view.replySpaceHeight).toBeCloseTo(186.8);
+    expect(view.replySpaceHeight).toBeCloseTo(240.8);
     view.onMessageScrollSource('drag'); view.onMessageScroll(-20, 'scroll');
     view.recordReplyRowHeight('reply', 300);
-    expect(view.replySpaceHeight).toBeCloseTo(186.8);
+    expect(view.replySpaceHeight).toBeCloseTo(240.8);
     view.atBottom = true; view.updateReplySpace();
     expect(view.replySpaceHeight).toBe(0);
     view.atBottom = false; view.reserveReplySpace('history-question', 'next');
@@ -117,16 +117,16 @@ describe('chat keyboard viewport following', () => {
     view.presentationRows.push({ id: 'reply' });
     view.recordReplyRowHeight('reply', 20);
     view.onMessageChange();
-    expect(view.replySpaceHeight).toBeCloseTo(186.8);
+    expect(view.replySpaceHeight).toBeCloseTo(240.8);
   });
-  it('reserves the actual status bar inset only for full-screen chats', () => {
+  it('subtracts the overlaid task header from the reply space budget', () => {
     const view = setup();
-    view.chatTopInset = 32;
+    view.overlayHeaderHeight = 104;
     view.reserveReplySpace('last', 'next');
-    expect(view.replySpaceHeight).toBeCloseTo(212.4);
-    view.embedded = true;
+    expect(view.replySpaceHeight).toBeCloseTo(234);
+    view.overlayHeaderHeight = 0;
     view.reserveReplySpace('last', 'next');
-    expect(view.replySpaceHeight).toBeCloseTo(259.2);
+    expect(view.replySpaceHeight).toBeCloseTo(280.8);
   });
 
   it('corrects late streamed row growth even after the temporary reply space is exhausted', () => {

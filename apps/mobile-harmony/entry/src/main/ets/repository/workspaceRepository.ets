@@ -4,10 +4,15 @@ import {
   XopcSection, XopcWorkspaceItem, XopcWorkspacePage, XopcTaskList, XopcProjectList,
   XopcAutomationList, XopcTaskResult, XopcProjectResult, XopcAutomationResult,
   XopcProjectWrite, XopcTaskCommandBody,
-  XopcAutomationRuns, XopcAutomationRun, XopcMobileTaskDetailResult
+  XopcAutomationRuns, XopcAutomationRun, XopcAutomationRunResult, XopcMobileTaskDetailResult
 } from '../model/workspace';
 import { taskItem, taskDetailItem, projectItem, automationItem, newTask, scheduledAutomation } from '../common/workspaceProtocol';
-import { taskCommand, taskPatch, taskReviewMutation } from '../common/taskManagement';
+import { taskCommand, taskPatch, taskReviewMutation, taskRetryCommand } from '../common/taskManagement';
+
+interface XopcCreatedWorkspaceId { id: string; }
+interface XopcWorkspaceCreated {
+  task?: XopcCreatedWorkspaceId; project?: XopcCreatedWorkspaceId; automation?: XopcCreatedWorkspaceId;
+}
 
 export class XopcWorkspaceRepository {
   uuid(): string { return new XopcDeviceCrypto().uuid(); }
@@ -39,7 +44,7 @@ export class XopcWorkspaceRepository {
     throw new Error('INVALID_WORKSPACE_SECTION');
   }
 
-  async save(section: XopcSection, item: XopcWorkspaceItem, idempotencyKey: string): Promise<void> {
+  async save(section: XopcSection, item: XopcWorkspaceItem, idempotencyKey: string): Promise<string> {
     const create = !item.id;
     const path = '/api/' + section + (create ? '' : '/' + encodeURIComponent(item.id));
     let body: string;
@@ -51,9 +56,15 @@ export class XopcWorkspaceRepository {
       const patch: XopcProjectWrite = { name: item.title.trim(), description: item.body }; body = JSON.stringify(patch);
     } else if (section === 'automations') {
       if (!item.editable) throw new Error('AUTOMATION_NOT_MOBILE_EDITABLE');
-      body = JSON.stringify(scheduledAutomation(item.title, item.body, item.cron ?? '', create, item.automation, item.projectId));
+      body = JSON.stringify(scheduledAutomation(item.title, item.body, item.cron ?? '', create, item.automation, item.projectId, item.automationTimeZone));
     } else throw new Error('INVALID_WORKSPACE_SECTION');
-    await gatewaySession.request(path, create ? 'POST' : 'PATCH', body);
+    const response = await gatewaySession.request(path, create ? 'POST' : 'PATCH', body,
+      create && section !== 'tasks' ? idempotencyKey : '');
+    if (!create) return item.id;
+    const raw = JSON.parse(response) as XopcWorkspaceCreated;
+    const id = raw.task?.id || raw.project?.id || raw.automation?.id;
+    if (!id) throw new Error('INVALID_WORKSPACE_RESPONSE');
+    return id;
   }
 
   async action(section: XopcSection, item: XopcWorkspaceItem, action: string, agentId: string, idempotencyKey: string): Promise<void> {
@@ -74,11 +85,30 @@ export class XopcWorkspaceRepository {
         await gatewaySession.request(path, 'PATCH', JSON.stringify(body));
       } else if (action === 'pin' || action === 'unpin') await gatewaySession.request(path + '/' + action, 'POST', '{}');
       else throw new Error('INVALID_ACTION');
-    } else if (section === 'automations' && ['run', 'pause', 'resume'].includes(action)) {
+    } else if (section === 'automations' && ['pause', 'resume'].includes(action)) {
       await gatewaySession.request(path + '/' + action, 'POST', '{}');
     } else if (section === 'automations' && action === 'delete') {
       await gatewaySession.request(path, 'DELETE');
     } else throw new Error('INVALID_ACTION');
+  }
+
+  async retryTask(id: string): Promise<void> {
+    if (!id.trim()) throw new Error('INVALID_HOME_ACTION');
+    const path = '/api/tasks/' + encodeURIComponent(id);
+    const connection = gatewaySession.connectionRevision();
+    const raw = await gatewaySession.request(path);
+    gatewaySession.assertConnection(connection);
+    const detail = JSON.parse(raw) as XopcMobileTaskDetailResult;
+    const body: XopcTaskCommandBody = {
+      source: 'mobile', idempotencyKey: this.uuid(), expectedVersion: detail.task.version, command: taskRetryCommand(detail)
+    };
+    await gatewaySession.request(path + '/commands', 'POST', JSON.stringify(body));
+  }
+
+  async startAutomation(id: string, idempotencyKey: string): Promise<string> {
+    const result = JSON.parse(await gatewaySession.request('/api/automations/' + encodeURIComponent(id) + '/run', 'POST', '{}', idempotencyKey)) as XopcAutomationRunResult;
+    if (!result.run?.id) throw new Error('INVALID_AUTOMATION_RUN');
+    return result.run.id;
   }
 
   async runs(id: string): Promise<XopcAutomationRun[]> {

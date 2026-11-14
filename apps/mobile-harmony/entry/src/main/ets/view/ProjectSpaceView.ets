@@ -1,17 +1,24 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcHomeDelivery, XopcMobileRoute } from '../model/home';
+import { XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { mobileRoute } from '../common/homeProtocol';
 import { XopcNoteIndexEntry } from '../model/note';
 import { XopcWorkspaceItem } from '../model/workspace';
 import { XopcSessionItem } from '../model/chat';
 import { XopcProjectSpaceViewModel } from '../viewmodel/projectSpaceViewModel';
-import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
 
 @ComponentV2
 export struct XopcProjectSpaceView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param projectId: string = '';
+  @Param attention: XopcHomeItem[] = [];
+  @Computed get projectAttention(): XopcHomeItem[] {
+    return this.attention.filter((item: XopcHomeItem): boolean => item.projectId === this.projectId);
+  }
   @Param deliveries: XopcHomeDelivery[] = [];
+  @Computed get continuingTasks(): XopcWorkspaceItem[] {
+    return this.model.tasks.filter((item: XopcWorkspaceItem): boolean => item.status !== 'closed').slice(0, 3);
+  }
   @Computed get projectDeliveries(): XopcHomeDelivery[] {
     return this.deliveries.filter((item: XopcHomeDelivery): boolean => item.projectId === this.projectId).slice(0, 5);
   }
@@ -19,6 +26,8 @@ export struct XopcProjectSpaceView {
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local model: XopcProjectSpaceViewModel = new XopcProjectSpaceViewModel();
   @Local tab: string = 'overview';
+  @Local menuOpen: boolean = false;
+  private menuDestination: string = '';
   private shownOnce: boolean = false;
 
   aboutToAppear(): void { void this.model.load(this.projectId); }
@@ -27,39 +36,25 @@ export struct XopcProjectSpaceView {
   onProjectChange(): void { this.tab = 'overview'; void this.model.load(this.projectId); }
 
   private go(page: string, itemId: string = ''): void {
-    this.onNavigate({ page, itemId, projectId: this.projectId });
+    const title = page === 'project-new-chat' || page === 'project-chat' ? this.model.project?.name : undefined;
+    this.onNavigate({ page, itemId, projectId: this.projectId, title });
   }
 
   private taskStatus(status: string): ResourceStr {
     if (status === 'closed') return $r('app.string.task_phase_closed');
-    if (status === 'in_progress') return $r('app.string.task_phase_in_progress');
+    if (status === 'in_progress' || status === 'active') return $r('app.string.task_phase_in_progress');
     if (status === 'ready') return $r('app.string.task_phase_ready');
     if (status === 'review') return $r('app.string.task_phase_review');
     return $r('app.string.task_phase_backlog');
   }
 
-  private projectStatus(status: string): ResourceStr {
-    if (status === 'archived') return $r('app.string.project_status_archived');
-    if (status === 'planned') return $r('app.string.project_status_planned');
-    if (status === 'paused') return $r('app.string.project_status_paused');
-    if (status === 'completed') return $r('app.string.project_status_completed');
-    if (status === 'cancelled') return $r('app.string.project_status_cancelled');
-    return $r('app.string.project_status_active');
-  }
-
   @Builder
-  tabChip(id: string, label: ResourceStr, count: number) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 5 }) {
-        Text(label).fontSize(14).fontWeight(FontWeight.Medium)
-          .fontColor(this.tab === id ? Color.White : this.colors.secondary)
-        if (id !== 'overview') {
-          Text(count.toString()).fontSize(11).fontColor(this.tab === id ? Color.White : this.colors.tertiary)
-        }
-      }.padding({ left: 14, right: 14 })
-    }.height(38).padding(0).borderRadius(19)
-      .backgroundColor(this.tab === id ? this.colors.accent : this.colors.input)
-      .onClick((): void => { this.tab = id; })
+  tabChip(id: string, label: ResourceStr) {
+    Button(label, { type: ButtonType.Normal }).id('project-tab-' + id).fontSize(13)
+      .fontColor(this.tab === id ? this.colors.foreground : this.colors.secondary)
+      .height(44).padding({ left: 11, right: 11 }).borderRadius(22)
+      .backgroundColor(this.tab === id ? this.colors.input : Color.Transparent)
+      .accessibilitySelected(this.tab === id).onClick((): void => { this.tab = id; })
   }
 
   @Builder
@@ -87,13 +82,13 @@ export struct XopcProjectSpaceView {
           Text(item.displayName || item.name || item.title || $r('app.string.untitled'))
             .fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-          Text($r('app.string.project_session_messages', item.messageCount ?? 0))
+          Text(item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '')
             .fontSize(12).fontColor(this.colors.secondary)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
     }.width('100%').padding(0).borderRadius(15).backgroundColor(this.colors.panel)
-      .onClick((): void => { this.go('chat', item.key); })
+      .onClick((): void => { this.go('project-chat', item.key); })
   }
 
   @Builder
@@ -130,35 +125,51 @@ export struct XopcProjectSpaceView {
       .onClick((): void => { this.go('automations', item.id); })
   }
 
+  private chooseAction(page: string): void {
+    this.menuDestination = page; this.menuOpen = false;
+  }
+
   @Builder
-  sectionHeader(label: ResourceStr, count: number, target: string) {
-    Row({ space: 8 }) {
-      Text(label).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1)
-      Text(count.toString()).fontSize(12).fontColor(this.colors.secondary)
-      Button() { SymbolGlyph($r('sys.symbol.plus')).fontSize(18).fontColor([this.colors.accent]) }
-        .width(40).height(40).padding(0).backgroundColor(this.colors.accentSoft).borderRadius(20)
-        .accessibilityText($r('app.string.project_add_item')).onClick((): void => { this.go(target); })
-    }.width('100%')
+  projectMenu() {
+    Column({ space: 5 }) {
+      Text(this.model.project?.name || $r('app.string.projects')).fontSize(20).fontWeight(FontWeight.Bold)
+        .fontColor(this.colors.foreground).width('100%').margin({ bottom: 8 })
+      XopcHubRow({ heading: $r('app.string.project_new_chat'), symbol: $r('sys.symbol.message'),
+        onOpen: (): void => { this.chooseAction('project-new-chat'); } })
+      XopcHubRow({ heading: $r('app.string.new_task'), symbol: $r('sys.symbol.checkmark_circle'),
+        onOpen: (): void => { this.chooseAction('task-create'); } })
+      XopcHubRow({ heading: $r('app.string.new_note'), symbol: $r('sys.symbol.doc'),
+        onOpen: (): void => { this.chooseAction('note-create'); } })
+      XopcHubRow({ heading: $r('app.string.new_automation'), symbol: $r('sys.symbol.clock'),
+        onOpen: (): void => { this.chooseAction('automation-create'); } })
+      XopcHubRow({ heading: $r('app.string.project_manage'), symbol: $r('sys.symbol.slider_horizontal_2'),
+        onOpen: (): void => { this.chooseAction('project-settings'); } })
+    }.width('100%').padding(18)
   }
 
   build() {
     NavDestination() {
       Column() {
-        Row({ space: 8 }) {
-          Text(this.model.project?.name ?? $r('app.string.projects')).fontSize(21).fontWeight(FontWeight.Bold)
-            .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Button() { SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(22).fontColor([this.colors.secondary]) }
-            .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-            .accessibilityText($r('app.string.project_manage')).onClick((): void => { this.go('project-settings', this.projectId); })
-        }.width('100%').padding({ left: 8, right: 16, top: 10, bottom: 8 })
+        XopcPageHeader({ heading: this.tab === 'overview' ? $r('app.string.projects') : this.model.project?.name || $r('app.string.projects'),
+          backVisible: true, onBack: this.onExit, actionLabel: $r('app.string.project_add_item'), actionIcon: $r('sys.symbol.plus'),
+          onAction: (): void => { this.menuOpen = true; } })
+        if (this.tab === 'overview' && this.model.project) {
+          Column({ space: 8 }) {
+            Text(this.model.project.name).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+            if (this.model.project.brief || this.model.project.description) {
+              Text(this.model.project.brief || this.model.project.description || '').fontSize(14).lineHeight(21)
+                .fontColor(this.colors.secondary).width('100%')
+            }
+          }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 16, bottom: 10 })
+        }
         Scroll() {
-          Row({ space: 8 }) {
-            this.tabChip('overview', $r('app.string.project_overview'), 0)
-            this.tabChip('sessions', $r('app.string.conversations'), this.model.sessions.length)
-            this.tabChip('tasks', $r('app.string.tasks'), this.model.tasksTotal)
-            this.tabChip('notes', $r('app.string.notes'), this.model.notesTotal)
-            this.tabChip('automations', $r('app.string.automations'), this.model.automations.length)
-          }.padding({ left: 20, right: 20 })
+          Row({ space: 3 }) {
+            this.tabChip('overview', $r('app.string.project_overview'))
+            this.tabChip('sessions', $r('app.string.conversations'))
+            this.tabChip('tasks', $r('app.string.tasks'))
+            this.tabChip('notes', $r('app.string.library_title'))
+            this.tabChip('automations', $r('app.string.automations'))
+          }.padding({ left: 18, right: 18 })
         }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%').height(50)
         if (this.model.error) {
           Row({ space: 8 }) {
@@ -168,27 +179,22 @@ export struct XopcProjectSpaceView {
           }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 8 })
         }
         List({ space: 12 }) {
-          if (this.model.project) {
-            ListItem() {
-              Column({ space: 10 }) {
-                Row({ space: 8 }) {
-                  Text(this.projectStatus(this.model.project?.status ?? '')).fontSize(12).fontColor(this.colors.accent)
-                    .padding({ left: 9, right: 9, top: 5, bottom: 5 }).backgroundColor(this.colors.accentSoft).borderRadius(10)
-                  Blank().layoutWeight(1)
-                  Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(17).fontColor([this.colors.secondary]) }
-                    .width(40).height(40).padding(0).backgroundColor(this.colors.input).borderRadius(20)
-                    .accessibilityText($r('app.string.refresh')).onClick((): void => { void this.model.load(this.projectId); })
-                }.width('100%')
-                Text(this.model.project?.brief || this.model.project?.description || $r('app.string.project_empty_description'))
-                  .fontSize(14).lineHeight(21).fontColor(this.colors.secondary).width('100%')
-              }.width('100%').padding(17).alignItems(HorizontalAlign.Start)
-                .backgroundColor(this.colors.panel).borderRadius(18)
-            }
-          }
           if (this.model.loading && !this.model.project) {
             ListItem() { XopcListSkeleton() }
           }
-          if (this.tab === 'overview' && this.projectDeliveries.length) {
+          if (this.tab === 'overview' && this.projectAttention.length) {
+            ListItem() { XopcSectionLabel({ heading: $r('app.string.needs_you') }) }
+            ForEach(this.projectAttention, (item: XopcHomeItem) => {
+              ListItem() {
+                XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.exclamationmark_circle'),
+                  navigable: !!item.openAction, onOpen: (): void => {
+                    const route = mobileRoute(item.openAction?.href ?? '');
+                    if (route) this.onNavigate(route);
+                  } })
+              }
+            }, (item: XopcHomeItem): string => item.id)
+          }
+          if ((this.tab === 'overview' || this.tab === 'notes') && this.projectDeliveries.length) {
             ListItem() { Text($r('app.string.library_recent_results')).fontSize(15).fontWeight(FontWeight.Bold).fontColor(this.colors.secondary) }
             ForEach(this.projectDeliveries, (item: XopcHomeDelivery) => {
               ListItem() {
@@ -200,8 +206,7 @@ export struct XopcProjectSpaceView {
               }
             }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
           }
-          if (this.tab === 'overview' || this.tab === 'sessions') {
-            ListItem() { this.sectionHeader($r('app.string.conversations'), this.model.sessions.length, 'project-new-chat') }
+          if (this.tab === 'sessions') {
             if (this.model.sessionsError) {
               ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
             } else if (this.model.loading && !this.model.sessions.length) {
@@ -209,20 +214,22 @@ export struct XopcProjectSpaceView {
             } else if (!this.model.sessions.length) {
               ListItem() { Text($r('app.string.project_no_sessions')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
             }
-            ForEach(this.tab === 'overview' ? this.model.sessions.slice(0, 3) : this.model.sessions, (item: XopcSessionItem) => {
+            ForEach(this.model.sessions, (item: XopcSessionItem) => {
               ListItem() { this.sessionCard(item) }
             }, (item: XopcSessionItem): string => item.key)
           }
           if (this.tab === 'overview' || this.tab === 'tasks') {
-            ListItem() { this.sectionHeader($r('app.string.tasks'), this.model.tasksTotal, 'task-create') }
+            if (this.tab === 'overview' && this.continuingTasks.length) {
+              ListItem() { XopcSectionLabel({ heading: $r('app.string.project_continue_work') }) }
+            }
             if (this.model.tasksError) {
               ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
             } else if (this.model.loading && !this.model.tasks.length) {
               ListItem() { XopcListSkeleton() }
-            } else if (!this.model.tasks.length) {
+            } else if (this.tab === 'tasks' && !this.model.tasks.length) {
               ListItem() { Text($r('app.string.project_no_tasks')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
             }
-            ForEach(this.tab === 'overview' ? this.model.tasks.slice(0, 3) : this.model.tasks, (item: XopcWorkspaceItem) => {
+            ForEach(this.tab === 'overview' ? this.continuingTasks : this.model.tasks, (item: XopcWorkspaceItem) => {
               ListItem() { this.taskCard(item) }
             }, (item: XopcWorkspaceItem): string => item.id)
             if (this.tab === 'tasks' && this.model.tasks.length < this.model.tasksTotal) {
@@ -233,8 +240,7 @@ export struct XopcProjectSpaceView {
               }
             }
           }
-          if (this.tab === 'overview' || this.tab === 'notes') {
-            ListItem() { this.sectionHeader($r('app.string.notes'), this.model.notesTotal, 'note-create') }
+          if (this.tab === 'notes') {
             if (this.model.notesError) {
               ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
             } else if (this.model.loading && !this.model.notes.length) {
@@ -242,7 +248,7 @@ export struct XopcProjectSpaceView {
             } else if (!this.model.notes.length) {
               ListItem() { Text($r('app.string.project_no_notes')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
             }
-            ForEach(this.tab === 'overview' ? this.model.notes.slice(0, 3) : this.model.notes, (item: XopcNoteIndexEntry) => {
+            ForEach(this.model.notes, (item: XopcNoteIndexEntry) => {
               ListItem() { this.noteCard(item) }
             }, (item: XopcNoteIndexEntry): string => item.id)
             if (this.tab === 'notes' && this.model.notes.length < this.model.notesTotal) {
@@ -253,8 +259,7 @@ export struct XopcProjectSpaceView {
               }
             }
           }
-          if (this.tab === 'overview' || this.tab === 'automations') {
-            ListItem() { this.sectionHeader($r('app.string.automations'), this.model.automations.length, 'automation-create') }
+          if (this.tab === 'automations') {
             if (this.model.automationsError) {
               ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
             } else if (this.model.loading && !this.model.automations.length) {
@@ -262,12 +267,22 @@ export struct XopcProjectSpaceView {
             } else if (!this.model.automations.length) {
               ListItem() { Text($r('app.string.project_no_automations')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
             }
-            ForEach(this.tab === 'overview' ? this.model.automations.slice(0, 3) : this.model.automations, (item: XopcWorkspaceItem) => {
+            ForEach(this.model.automations, (item: XopcWorkspaceItem) => {
               ListItem() { this.automationCard(item) }
             }, (item: XopcWorkspaceItem): string => item.id)
           }
-        }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 24 }).scrollBar(BarState.Off)
+        }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+        if (this.model.project && (this.tab === 'overview' || this.tab === 'sessions')) {
+          Button(this.tab === 'overview' ? $r('app.string.project_chat_cta') : $r('app.string.project_new_chat'))
+            .id('project-start-chat').width('100%').height(50).fontColor(this.colors.chat.onAction)
+            .backgroundColor(this.colors.chat.action).onClick((): void => { this.go('project-new-chat'); })
+        }
       }.height('100%').width('100%').backgroundColor(this.colors.surface)
+        .bindSheet($$this.menuOpen, this.projectMenu, { height: 455, dragBar: true, showClose: false,
+          onDisappear: (): void => {
+            const page = this.menuDestination; this.menuDestination = '';
+            if (page) this.go(page, page === 'project-settings' ? this.projectId : '');
+          } })
     }.hideTitleBar(true)
       .onShown((): void => {
         if (this.shownOnce) void this.model.load(this.projectId);

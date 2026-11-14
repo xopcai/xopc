@@ -31,6 +31,8 @@ export struct XopcBrandLoading {
 export struct XopcPageHeader {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param heading: ResourceStr = '';
+  @Param backVisible: boolean = false;
+  @Event onBack: () => void = (): void => {};
   @Param actionLabel: ResourceStr = '';
   @Param actionIcon: Resource = $r('sys.symbol.arrow_clockwise');
   @Event onAction: () => void = (): void => {};
@@ -41,9 +43,15 @@ export struct XopcPageHeader {
   }
 
   build() {
-    Row({ space: 12 }) {
+    Row({ space: 8 }) {
+      if (this.backVisible) {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground])
+        }.width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
+      }
       Text(this.heading).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)
-        .fontColor(this.colors.foreground).layoutWeight(1)
+        .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       if (this.actionLabel !== '') {
         Button() { SymbolGlyph(this.actionIcon).fontSize(22).fontColor([this.colors.foreground]) }
           .width(44).height(44).backgroundColor(Color.Transparent)

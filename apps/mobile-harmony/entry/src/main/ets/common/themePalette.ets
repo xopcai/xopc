@@ -38,7 +38,6 @@ class XopcThemeTokens {
 
 export interface XopcChatThemeColors {
   canvas: Resource;
-  assistant: Resource;
   card: Resource;
   bubble: Resource;
   action: Resource;
@@ -267,14 +266,12 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
     case 'porcelain':
       return dark ? {
         canvas,
-        assistant: $r('app.color.chat_porcelain_assistant_dark'),
         card: $r('app.color.chat_porcelain_card_dark'),
         bubble: $r('app.color.chat_porcelain_bubble_dark'),
         action: $r('app.color.chat_porcelain_action_dark'),
         onAction: canvas, secondary,
       } : {
         canvas,
-        assistant: $r('app.color.chat_porcelain_assistant_light'),
         card: $r('app.color.chat_porcelain_card_light'),
         bubble: $r('app.color.chat_porcelain_bubble_light'),
         action: $r('app.color.chat_porcelain_action_light'),
@@ -283,14 +280,12 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
     case 'dawn':
       return dark ? {
         canvas,
-        assistant: $r('app.color.chat_dawn_assistant_dark'),
         card: $r('app.color.chat_dawn_card_dark'),
         bubble: $r('app.color.chat_dawn_bubble_dark'),
         action: $r('app.color.chat_dawn_action_dark'),
         onAction: canvas, secondary,
       } : {
         canvas,
-        assistant: $r('app.color.chat_dawn_assistant_light'),
         card: $r('app.color.chat_dawn_card_light'),
         bubble: $r('app.color.chat_dawn_bubble_light'),
         action: $r('app.color.chat_dawn_action_light'),
@@ -299,14 +294,12 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
     case 'emerald':
       return dark ? {
         canvas,
-        assistant: $r('app.color.chat_emerald_assistant_dark'),
         card: $r('app.color.chat_emerald_card_dark'),
         bubble: $r('app.color.chat_emerald_bubble_dark'),
         action: $r('app.color.chat_emerald_action_dark'),
         onAction: canvas, secondary,
       } : {
         canvas,
-        assistant: $r('app.color.chat_emerald_assistant_light'),
         card: $r('app.color.chat_emerald_card_light'),
         bubble: $r('app.color.chat_emerald_bubble_light'),
         action: $r('app.color.chat_emerald_action_light'),
@@ -315,14 +308,12 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
     case 'clay':
       return dark ? {
         canvas,
-        assistant: $r('app.color.chat_clay_assistant_dark'),
         card: $r('app.color.chat_clay_card_dark'),
         bubble: $r('app.color.chat_clay_bubble_dark'),
         action: $r('app.color.chat_clay_action_dark'),
         onAction: canvas, secondary,
       } : {
         canvas,
-        assistant: $r('app.color.chat_clay_assistant_light'),
         card: $r('app.color.chat_clay_card_light'),
         bubble: $r('app.color.chat_clay_bubble_light'),
         action: $r('app.color.chat_clay_action_light'),
@@ -331,14 +322,12 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
     default:
       return dark ? {
         canvas,
-        assistant: $r('app.color.chat_default_assistant_dark'),
         card: $r('app.color.chat_default_card_dark'),
         bubble: $r('app.color.chat_default_bubble_dark'),
         action: $r('app.color.chat_default_action_dark'),
         onAction: canvas, secondary,
       } : {
         canvas,
-        assistant: $r('app.color.chat_default_assistant_light'),
         card: $r('app.color.chat_default_card_light'),
         bubble: $r('app.color.chat_default_bubble_light'),
         action: $r('app.color.chat_default_action_light'),

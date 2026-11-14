@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 const workspace = readFileSync(new URL('../entry/src/main/ets/view/WorkspaceView.ets', import.meta.url), 'utf8');
 
 describe('workspace mobile information architecture', () => {
-  it('offers section-aware filtering and count context before the item list', () => {
+  it('offers section-aware filters including automation attention', () => {
     expect(workspace).toContain("this.filterChip('all'");
     expect(workspace).toContain("this.filterChip('primary'");
     expect(workspace).toContain("this.filterChip('secondary'");
-    expect(workspace).toContain("$r('app.string.workspace_item_count'");
+    expect(workspace).toContain("this.filterChip('attention'");
   });
 
   it('uses dedicated cards with status, summaries, and type-specific metadata', () => {
@@ -23,6 +23,6 @@ describe('workspace mobile information architecture', () => {
     expect(workspace).toContain("$r('app.string.workspace_description')");
     expect(workspace).toContain("$r('app.string.workspace_details')");
     expect(workspace).toContain("$r('app.string.workspace_next_run')");
-    expect(workspace).toContain("$r('app.string.workspace_last_run')");
+    expect(workspace).toContain("$r('app.string.recent_runs')");
   });
 });

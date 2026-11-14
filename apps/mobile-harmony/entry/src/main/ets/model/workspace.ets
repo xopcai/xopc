@@ -2,7 +2,7 @@ export type XopcSection = 'tasks' | 'projects' | 'automations';
 export interface XopcWorkspaceItem {
   id: string; title: string; body: string; status: string; version: number;
   projectId?: string; priority?: string; dueAt?: number; resolution?: string; updatedAt?: number; brief?: string; outcome?: string;
-  cron?: string; enabled?: boolean; editable: boolean; actions: string[]; automation?: XopcAutomation;
+  cron?: string; automationTimeZone?: string; enabled?: boolean; editable: boolean; actions: string[]; automation?: XopcAutomation;
   taskDetail?: XopcMobileTaskDetail;
 }
 export interface XopcTask {
@@ -30,7 +30,11 @@ export interface XopcMobileTaskReceipt {
 export interface XopcMobileTaskContext { id: string; role: string; targetKind: string; targetId: string; title?: string; }
 export interface XopcMobileTaskSession { id: string; conversationId: string; role: string; status: string; }
 export interface XopcMobileTaskDependency { id: string; title: string; phase: string; }
-export interface XopcMobileTaskRun { id: string; contractVersion: number; status?: string; parentRunId?: string; }
+export interface XopcMobileTaskRun {
+  id: string; contractVersion: number; status?: string; parentRunId?: string;
+  queuedAt?: number; executorKind?: string; executorRef?: XopcTaskExecutorRef;
+}
+export interface XopcTaskExecutorRef { agentId?: string; actorId?: string; provider?: string; config?: Object; }
 export interface XopcMobileTaskWait { id: string; kind: string; status: string; reason: string; }
 export interface XopcMobileTaskConversation { activeConversationId?: string; }
 export interface XopcTaskChangeActor { kind: string; id?: string; }
@@ -68,7 +72,7 @@ export interface XopcTaskCreate {
 }
 export interface XopcTaskPatch { expectedVersion: number; title: string; body: string; projectId: string | null; priority: string; dueAt: number | null; }
 export interface XopcTaskCommand { type: string; resultId?: string; phase?: string; resolution?: string; executor?: XopcExecutor; }
-export interface XopcExecutor { kind: string; agentId: string; }
+export interface XopcExecutor extends XopcTaskExecutorRef { kind: string; }
 export interface XopcTaskCommandBody { source?: string; idempotencyKey: string; expectedVersion: number; command: XopcTaskCommand; }
 export interface XopcProject {
   id: string; name: string; description?: string; status: string; brief?: string; outcome?: string;
@@ -77,24 +81,27 @@ export interface XopcProject {
 export interface XopcProjectList { items: XopcProject[]; }
 export interface XopcProjectResult { project: XopcProject; }
 export interface XopcProjectWrite { name?: string; description?: string; status?: string; }
-export interface XopcSchedule { kind: string; expr?: string; }
+export interface XopcSchedule { kind: string; expr?: string; tz?: string; }
 export interface XopcTrigger { kind: string; schedule?: XopcSchedule; }
 export interface XopcAutomationAction { kind: string; instruction?: string; }
 export interface XopcAutomationState {
   nextRunAtMs?: number; runningRunId?: string; lastRunAtMs?: number; lastRunStatus?: string;
   lastError?: string; consecutiveFailures?: number;
 }
+export interface XopcAutomationManagement { editable: string[]; runnable: boolean; deletable: boolean; }
 export interface XopcAutomation {
   id: string; name: string; description?: string; enabled: boolean; trigger: XopcTrigger; action: XopcAutomationAction;
-  conversationMode?: string; state?: XopcAutomationState; projectId?: string;
+  conversationMode?: string; state?: XopcAutomationState; projectId?: string; updatedAtMs?: number;
+  management?: XopcAutomationManagement;
 }
-export interface XopcAutomationWrite { name: string; trigger: XopcTrigger; action: XopcAutomationAction; enabled?: boolean; conversationMode?: string; projectId?: string; }
+export interface XopcAutomationWrite { name: string; trigger: XopcTrigger; action: XopcAutomationAction; enabled?: boolean; conversationMode?: string; projectId?: string; expectedRevision?: number; }
 export interface XopcAutomationList { automations: XopcAutomation[]; }
 export interface XopcAutomationResult { automation: XopcAutomation; }
 export interface XopcAutomationRun {
   id: string; status: string; createdAtMs?: number; startedAtMs?: number; endedAtMs?: number; durationMs?: number;
   summary?: string; error?: string;
 }
+export interface XopcAutomationRunResult { run: XopcAutomationRun; }
 export interface XopcAutomationRuns { runs: XopcAutomationRun[]; }
 export interface XopcAutomationMetricsNext { automationId: string; name: string; runAtMs: number; }
 export interface XopcAutomationMetrics {

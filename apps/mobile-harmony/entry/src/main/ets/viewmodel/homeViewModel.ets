@@ -1,9 +1,10 @@
 import { gatewaySession } from '../service/gatewaySession';
 import { appSettings } from '../service/settings';
 import { XopcHomeAction, XopcHomeDelivery, XopcHomeItem } from '../model/home';
-import { XopcTask, XopcTaskList, XopcAutomationMetrics } from '../model/workspace';
-import { mobileRoute, parseHome, recentClosed, homeCommand } from '../common/homeProtocol';
-import { XopcUnderstandingItem, XopcUnderstandingRule, XopcUnderstandingSummary, XopcUserGoal } from '../model/userUnderstanding';
+import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
+import { XopcAutomationMetrics } from '../model/workspace';
+import { mobileRoute, parseHome, homeCommand } from '../common/homeProtocol';
+import { XopcUnderstandingSummary, XopcUserGoal } from '../model/userUnderstanding';
 
 interface XopcGoalPatchRequest {
   title: string;
@@ -25,29 +26,36 @@ export class XopcProgressViewModel {
   @Trace needsUser: XopcHomeItem[] = [];
   @Trace background: XopcHomeItem[] = [];
   @Trace deliveries: XopcHomeDelivery[] = [];
-  @Trace closed: XopcTask[] = [];
   @Trace automationMetrics?: XopcAutomationMetrics;
   @Trace loading: boolean = true;
-  @Trace refreshing: boolean = false;
   @Trace homeError: string = '';
-  @Trace tasksError: string = '';
   @Trace actionError: string = '';
+  @Computed get pendingCount(): number { return this.loading || this.homeError ? 0 : this.needsUser.length; }
   @Trace pending: boolean = false;
   private generation: number = 0;
+  private workspace: XopcWorkspaceRepository = new XopcWorkspaceRepository();
+  private homeRequest?: Promise<void>;
 
-  dispose(): void { this.generation++; }
+  dispose(): void {
+    this.generation++;
+    this.homeRequest = undefined;
+  }
+
   async refresh(): Promise<void> {
-    if (this.refreshing) return;
+    if (this.homeRequest) return this.homeRequest;
     const generation = ++this.generation;
-    this.refreshing = true;
-    const primary = Promise.all([this.loadHome(generation), this.loadTasks(generation)]);
+    const request = this.loadHome(generation);
+    this.homeRequest = request;
     void this.loadAutomationMetrics(generation);
-    await primary;
-    if (generation === this.generation) { this.loading = false; this.refreshing = false; }
+    await request;
+    if (generation === this.generation) {
+      this.homeRequest = undefined;
+      this.loading = false;
+    }
   }
   private async loadHome(generation: number): Promise<void> {
     try {
-      const home = parseHome(await gatewaySession.request('/api/home?locale=' + encodeURIComponent(appSettings.effectiveLanguage())));
+      const home = parseHome(await gatewaySession.request('/api/home?locale=' + encodeURIComponent(appSettings.effectiveLanguage()) + '&attention=all'));
       if (generation !== this.generation) return;
       this.needsUser = home.needsUser; this.background = home.background;
       this.deliveries = Array.isArray(home.recentDeliveries) ? home.recentDeliveries.filter((item: XopcHomeDelivery): boolean =>
@@ -55,14 +63,6 @@ export class XopcProgressViewModel {
           && typeof item.href === 'string' && !!mobileRoute(item.href)) : [];
       this.homeError = '';
     } catch (error) { if (generation === this.generation) this.homeError = (error as Error).message; }
-  }
-  private async loadTasks(generation: number): Promise<void> {
-    try {
-      const result = JSON.parse(await gatewaySession.request('/api/tasks')) as XopcTaskList;
-      if (!Array.isArray(result.items)) throw new Error('INVALID_TASK_LIST');
-      if (generation !== this.generation) return;
-      this.closed = recentClosed(result.items); this.tasksError = '';
-    } catch (error) { if (generation === this.generation) this.tasksError = (error as Error).message; }
   }
   private async loadAutomationMetrics(generation: number): Promise<void> {
     try {
@@ -79,10 +79,15 @@ export class XopcProgressViewModel {
     if (this.pending) return;
     this.pending = true; this.actionError = '';
     try {
-      const body = homeCommand(action);
-      const path = action.type === 'connector_decision' ? '/api/home/decisions/respond'
-        : action.type === 'retry_run' ? '/api/home/attention/retry' : '/api/home/attention/acknowledge';
-      await gatewaySession.request(path, 'POST', JSON.stringify(body));
+      if (action.type === 'retry_task') {
+        await this.workspace.retryTask(action.taskId ?? '');
+      } else {
+        const body = homeCommand(action);
+        const path = action.type === 'connector_decision' ? '/api/home/decisions/respond'
+          : action.type === 'retry_run' ? '/api/home/attention/retry' : '/api/home/attention/acknowledge';
+        await gatewaySession.request(path, 'POST', JSON.stringify(body));
+      }
+      await this.homeRequest;
       await this.refresh();
     } catch (error) { this.actionError = (error as Error).message; }
     finally { this.pending = false; }
@@ -91,18 +96,7 @@ export class XopcProgressViewModel {
 
 @ObservedV2
 export class XopcPersonalViewModel {
-  @Trace name: string = '';
-  @Trace role: string = '';
-  @Trace understandingCount: number = 0;
-  @Trace explicitCount: number = 0;
-  @Trace learnedCount: number = 0;
-  @Trace reviewCount: number = 0;
-  @Trace workMemoryCount: number = 0;
-  @Trace focusTitle: string = '';
-  @Trace focusOutcome: string = '';
   @Trace goals: XopcUserGoal[] = [];
-  @Trace recent: XopcUnderstandingItem[] = [];
-  @Trace rules: XopcUnderstandingRule[] = [];
   @Trace loading: boolean = true;
   @Trace error: string = '';
   @Trace savingGoal: boolean = false;
@@ -115,18 +109,7 @@ export class XopcPersonalViewModel {
     try {
       const result = JSON.parse(await gatewaySession.request('/api/user-model/mobile-summary')) as XopcUnderstandingSummary;
       if (generation !== this.generation) return;
-      this.name = result.profile.callName.trim() || result.suggestedCallName.trim() || '';
-      this.role = result.profile.role.trim() || '';
-      this.understandingCount = result.counts.total;
-      this.explicitCount = result.counts.explicit;
-      this.learnedCount = result.counts.learned;
-      this.reviewCount = result.counts.review;
-      this.workMemoryCount = result.counts.workMemory;
-      this.focusTitle = result.primaryFocus?.title ?? '';
-      this.focusOutcome = result.primaryFocus?.desiredOutcome ?? '';
-      this.goals = (result.goals ?? []).slice(0, 5);
-      this.recent = result.recent.slice(0, 3);
-      this.rules = result.rules.slice(0, 3);
+      this.goals = result.goals ?? [];
       this.error = '';
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.loading = false; }

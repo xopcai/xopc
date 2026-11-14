@@ -128,16 +128,20 @@ describe('native conversation manager', () => {
     expect(await vm.rename('a', '  ')).toBe(false); expect(mock.rename).toHaveBeenCalledTimes(2);
   });
   it('hides single deletes immediately and undo cancels the five-second write', async () => {
-    const vm = new XopcSessionsViewModel(); await vm.load(); vm.scheduleDelete('a');
+    const deleted = vi.fn();
+    const vm = new XopcSessionsViewModel(); await vm.load(); vm.scheduleDelete('a', deleted);
     expect(vm.hidden).toEqual(['a']); expect(vm.undoId).toBe('a'); await vi.advanceTimersByTimeAsync(4999);
     expect(mock.action).not.toHaveBeenCalled(); vm.undoDelete(); await vi.advanceTimersByTimeAsync(1);
-    expect(mock.action).not.toHaveBeenCalled(); expect(vm.hidden).toEqual([]);
+    expect(mock.action).not.toHaveBeenCalled(); expect(deleted).not.toHaveBeenCalled(); expect(vm.hidden).toEqual([]);
   });
   it('commits requested deletes after the deadline and restores failed deletes', async () => {
     const vm = new XopcSessionsViewModel(); await vm.load(); mock.action.mockRejectedValueOnce(new Error('DENIED'));
-    vm.scheduleDelete('a'); await vi.advanceTimersByTimeAsync(5000);
+    const deleted = vi.fn();
+    vm.scheduleDelete('a', deleted); await vi.advanceTimersByTimeAsync(5000);
     expect(mock.action).toHaveBeenCalledWith('a', 'delete'); expect(vm.hidden).toEqual([]); expect(vm.undoId).toBe(''); expect(vm.actionError).toBe('DENIED');
-    vm.scheduleDelete('a'); vm.dispose(); await vi.advanceTimersByTimeAsync(5000); expect(mock.action).toHaveBeenCalledTimes(2);
+    expect(deleted).not.toHaveBeenCalled();
+    vm.scheduleDelete('a', deleted); vm.dispose(); await vi.advanceTimersByTimeAsync(5000);
+    expect(mock.action).toHaveBeenCalledTimes(2); expect(deleted).toHaveBeenCalledExactlyOnceWith('a');
   });
   it('never sends delayed or subsequent batch writes to a different Gateway', async () => {
     const vm = new XopcSessionsViewModel(); vm.scheduleDelete('later'); mock.gatewayId = 'gateway-b';

@@ -184,6 +184,11 @@ export struct XopcNotesView {
       if (this.model.draft) {
         Text(this.syncText()).fontSize(12).fontColor(this.model.draft.syncState === 'conflict' ? this.colors.danger : this.colors.secondary)
       }
+      if (this.model.selected && !this.model.editing) {
+        Button() { SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(22).fontColor([this.colors.secondary]) }
+          .id('note-more').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .accessibilityText($r('app.string.more')).onClick((): void => { this.openSheet('more'); })
+      }
       if (!this.model.selected && !this.model.draft && !this.model.openingId) {
         Button() { SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.accent]) }
           .width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft).borderRadius(22)
@@ -337,40 +342,11 @@ export struct XopcNotesView {
   }
 
   @Builder
-  detailAction(id: string, label: Resource, symbol: Resource, handleTap: () => void) {
-    Button() {
-      Column({ space: 3 }) {
-        SymbolGlyph(symbol).fontSize(21).fontColor([this.colors.foreground])
-        Text(label).fontSize(10).fontColor(this.colors.secondary)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%').justifyContent(FlexAlign.Center)
-    }.id(id).layoutWeight(1).height(52).padding(0).borderRadius(26)
-      .backgroundColor(Color.Transparent).accessibilityText(label).onClick(handleTap)
-  }
-
-  @Builder
   detailToolbar() {
-    Row({ space: 10 }) {
-      Row({ space: 2 }) {
-        this.detailAction('note-edit', $r('app.string.edit'), $r('sys.symbol.pencil_line'),
-          (): void => { this.model.editing = true; })
-        this.detailAction('note-ai', $r('app.string.note_ai_edit'), $r('sys.symbol.star'),
-          (): void => { this.openSheet('ai'); })
-        this.detailAction('note-history', $r('app.string.note_version_history'), $r('sys.symbol.clock'),
-          (): void => { this.openHistory(); })
-        this.detailAction('note-more', $r('app.string.more'), $r('sys.symbol.ellipsis_circle'),
-          (): void => { this.openSheet('more'); })
-      }.layoutWeight(1).padding(4).borderRadius(30)
-        .backgroundColor(Color.Transparent).backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).clip(true)
-      Button() {
-        SymbolGlyph($r('sys.symbol.message')).fontSize(24).fontColor([this.colors.accent])
-      }.id('note-continue-chat').width(60).height(60).padding(0).borderRadius(30)
-        .backgroundColor(Color.Transparent).backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR).clip(true)
-        .accessibilityText($r('app.string.note_continue_chat'))
-        .enabled(!this.model.openingConversation && !this.model.saving)
-        .onClick((): void => { void this.continueInChat(); })
-    }.id('note-detail-toolbar').width('100%').constraintSize({ maxWidth: 480 })
-      .padding({ left: 20, right: 20 }).margin({ bottom: 16 })
+    Button($r('app.string.edit_note')).id('note-edit').width('100%').constraintSize({ minHeight: 49, maxWidth: 480 })
+      .fontColor(this.colors.chat.onAction).backgroundColor(this.colors.chat.action)
+      .onClick((): void => { this.model.editing = true; })
+      .margin({ left: 20, right: 20, bottom: 12 })
   }
 
   @Builder
@@ -446,6 +422,12 @@ export struct XopcNotesView {
     Column({ space: 8 }) {
       Text($r('app.string.more')).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         .width('100%').margin({ bottom: 4 })
+      XopcHubRow({ heading: $r('app.string.note_version_history'), symbol: $r('sys.symbol.clock'), compact: true,
+        onOpen: (): void => { this.openHistory(); } })
+      XopcHubRow({ heading: $r('app.string.note_ai_edit'), symbol: $r('sys.symbol.star'), compact: true,
+        onOpen: (): void => { this.openSheet('ai'); } })
+      XopcHubRow({ heading: $r('app.string.note_continue_chat'), symbol: $r('sys.symbol.message'), compact: true,
+        onOpen: (): void => { this.sheetOpen = false; void this.continueInChat(); } })
       XopcHubRow({ heading: this.model.selected?.pinned ? $r('app.string.unpin') : $r('app.string.pin'),
         symbol: $r('sys.symbol.pin'), compact: true, onOpen: (): void => {
           this.sheetOpen = false; void this.model.togglePin();

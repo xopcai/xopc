@@ -18,13 +18,15 @@ export struct XopcNotesTabView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local capture: XopcDiscussionCapture = discussionCapture;
   @Param activePage: boolean = false;
-  @Param bottomInset: number = 0;
   @Param deliveries: XopcHomeDelivery[] = [];
   @Param deliveriesLoading: boolean = true;
   @Param deliveryError: string = '';
   @Event onRefreshDeliveries: () => void = (): void => {};
   @Local category: string = 'all';
+  @Local gridView: boolean = true;
+  @Local menuOpen: boolean = false;
   @Local submittedQuery: string = '';
+  @Event onExit: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onStartVoice: () => void = (): void => {};
   @Local model: XopcNoteViewModel = new XopcNoteViewModel();
@@ -55,7 +57,7 @@ export struct XopcNotesTabView {
     const query = this.submittedQuery.toLowerCase();
     const matched = this.deliveries.filter((item: XopcHomeDelivery): boolean => {
       const route = mobileRoute(item.href);
-      return !!route && (route.page === 'tasks' || route.page === 'automation-run')
+      return !!route && (route.page === 'tasks' || route.page === 'automation-run' || route.page === 'files' || route.page === 'notes')
         && (!query || item.title.toLowerCase().includes(query) || item.summary.toLowerCase().includes(query));
     });
     return this.category === 'all' && !query ? matched.slice(0, 3) : matched;
@@ -74,7 +76,7 @@ export struct XopcNotesTabView {
   categoryButton(category: string, label: Resource) {
     Button(label).height(44).layoutWeight(1).padding(0)
       .fontColor(this.category === category ? this.colors.accent : this.colors.secondary)
-      .backgroundColor(this.category === category ? this.colors.accentSoft : Color.Transparent)
+      .backgroundColor(this.category === category ? this.colors.input : Color.Transparent).id('library-filter-' + category)
       .accessibilitySelected(this.category === category)
       .onClick((): void => { this.category = category; if (!this.showsNotes) this.selectedId = ''; })
   }
@@ -89,6 +91,7 @@ export struct XopcNotesTabView {
     this.pendingCreation = '';
     if (action === 'text') this.onNavigate({ page: 'note-create', itemId: '' });
     else if (action === 'voice') this.onStartVoice();
+    else if (action === 'file') this.onNavigate({ page: 'file-upload', itemId: '' });
   }
 
   @Builder
@@ -117,6 +120,8 @@ export struct XopcNotesTabView {
         }.width('100%').height(64).padding({ left: 16, right: 16 })
       }.id('notes-create-voice').width('100%').padding(0).borderRadius(16).backgroundColor(this.colors.input)
         .onClick((): void => { this.pendingCreation = 'voice'; this.creationSheetOpen = false; })
+      XopcHubRow({ heading: $r('app.string.upload'), symbol: $r('sys.symbol.arrow_up'),
+        onOpen: (): void => { this.pendingCreation = 'file'; this.creationSheetOpen = false; } })
     }.width('100%').padding({ left: 20, right: 20, top: 10, bottom: 16 })
   }
 
@@ -144,19 +149,85 @@ export struct XopcNotesTabView {
     void this.model.list(); this.onNavigate({ page: 'notes', itemId: noteId });
   }
 
+  @Computed get hasGrid(): boolean {
+    return this.gridView && this.category === 'all' && !this.submittedQuery
+      && this.visibleFiles.length + this.visibleDeliveries.length + this.model.items.length > 0;
+  }
+
+  @Builder
+  libraryMenu() {
+    Column({ space: 6 }) {
+      Text($r('app.string.library_title')).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
+      XopcHubRow({ heading: $r('app.string.library_grid_view'), symbol: $r('sys.symbol.square_grid_2x2'),
+        onOpen: (): void => { this.gridView = true; this.category = 'all'; this.menuOpen = false; } })
+      XopcHubRow({ heading: $r('app.string.library_list_view'), symbol: $r('sys.symbol.list_bullet'),
+        onOpen: (): void => { this.gridView = false; this.menuOpen = false; } })
+      XopcHubRow({ heading: $r('app.string.library_browse_files'), symbol: $r('sys.symbol.folder'),
+        onOpen: (): void => { this.menuOpen = false; this.onNavigate({ page: 'files', itemId: '' }); } })
+      XopcHubRow({ heading: $r('app.string.share_center'), symbol: $r('sys.symbol.share'),
+        onOpen: (): void => { this.menuOpen = false; this.onNavigate({ page: 'sharing', itemId: '' }); } })
+    }.width('100%').padding({ top: 12, left: 20, right: 20 })
+  }
+
+  @Builder
+  libraryTile(title: ResourceStr, metadata: ResourceStr, icon: Resource, id: string, page: string) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 6 }) {
+        Row() {
+          SymbolGlyph(icon).fontSize(26).fontColor([this.colors.accent])
+        }.width('100%').height(53).padding({ left: 12 }).backgroundColor(this.colors.accentSoft).borderRadius(11)
+        Text(title).fontSize(15).lineHeight(21).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+        Text(metadata).fontSize(12).fontColor(this.colors.secondary).maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+      }.width('100%').height(133).alignItems(HorizontalAlign.Start).padding(10)
+    }.id('library-tile-' + page + '-' + id).width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(16)
+      .onClick((): void => {
+        if (page === 'notes') this.openNote(id);
+        else if (page === 'files') this.onNavigate({ page, itemId: id });
+        else {
+          const delivery = this.visibleDeliveries.find((item: XopcHomeDelivery): boolean => item.id === id);
+          if (delivery) this.openDelivery(delivery);
+        }
+      })
+  }
+
+  @Builder
+  libraryGrid() {
+    Column({ space: 10 }) {
+      Row() {
+        Text($r('app.string.library_recently_used')).fontSize(16).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.foreground).layoutWeight(1)
+        Button($r('app.string.library_list_view')).id('library-switch-list').height(44).padding(0).fontSize(13)
+          .fontColor(this.colors.accent).backgroundColor(Color.Transparent).onClick((): void => { this.gridView = false; })
+      }.width('100%')
+      Grid() {
+        ForEach(this.visibleDeliveries.slice(0, 2), (delivery: XopcHomeDelivery) => {
+          GridItem() { this.libraryTile(delivery.title, $r('app.string.library_results'), $r('sys.symbol.checkmark_circle'), delivery.id, 'deliveries') }
+        }, (delivery: XopcHomeDelivery): string => delivery.id + ':' + delivery.title)
+        ForEach(this.model.items.slice(0, 2), (note: XopcNoteIndexEntry) => {
+          GridItem() { this.libraryTile(note.title || $r('app.string.untitled'),
+            note.kind === 'voice' ? $r('app.string.note_voice_option') : $r('app.string.notes'),
+            note.kind === 'voice' ? $r('sys.symbol.mic') : $r('sys.symbol.doc_text'), note.id, 'notes') }
+        }, (note: XopcNoteIndexEntry): string => note.id + ':' + note.updatedAt)
+        ForEach(this.visibleFiles.slice(0, 2), (file: XopcFile) => {
+          GridItem() { this.libraryTile(file.name, $r('app.string.files'), $r('sys.symbol.doc'), file.id, 'files') }
+        }, (file: XopcFile): string => file.id + ':' + file.revision)
+      }.columnsTemplate('1fr 1fr').columnsGap(12).rowsGap(12).width('100%').enableScrollInteraction(false)
+        .height(Math.ceil((Math.min(this.visibleDeliveries.length, 2) + Math.min(this.model.items.length, 2)
+          + Math.min(this.visibleFiles.length, 2)) / 2) * 145)
+    }.width('100%')
+  }
+
   @Builder
   listPane() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.library_title'), actionLabel: $r('app.string.new_note'),
-        actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.creationSheetOpen = true; } })
-      Row({ space: 8 }) {
-        TextInput({ text: this.model.search, placeholder: $r('app.string.library_search') }).layoutWeight(1).height(44)
-          .backgroundColor(this.colors.input).borderRadius(14).onChange((value: string): void => { this.model.search = value; })
-          .onSubmit((): void => { this.searchAll(); })
-        Button() { SymbolGlyph($r('sys.symbol.folder')).fontSize(20).fontColor([this.colors.secondary]) }
-          .width(44).height(44).padding(0).borderRadius(14).backgroundColor(this.colors.input)
-          .accessibilityText($r('app.string.files')).onClick((): void => { this.onNavigate({ page: 'files', itemId: '' }); })
-      }.width('100%').padding({ left: 20, right: 20, bottom: 12 })
+      XopcPageHeader({ heading: $r('app.string.library_title'), backVisible: true, onBack: this.onExit,
+        actionLabel: $r('app.string.more'), actionIcon: $r('sys.symbol.ellipsis_circle'),
+        onAction: (): void => { this.menuOpen = true; } })
+      TextInput({ text: this.model.search, placeholder: $r('app.string.library_search') }).id('library-search').height(46)
+        .backgroundColor(this.colors.input).borderRadius(23).onChange((value: string): void => { this.model.search = value; })
+        .onSubmit((): void => { this.searchAll(); }).margin({ left: 20, right: 20, bottom: 12 })
       Row({ space: 4 }) {
         this.categoryButton('all', $r('app.string.library_all'))
         this.categoryButton('notes', $r('app.string.notes'))
@@ -208,6 +279,7 @@ export struct XopcNotesTabView {
         }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
       }
         List({ space: 12 }) {
+          if (this.hasGrid) { ListItem() { this.libraryGrid() } } else {
           if (this.category === 'all' && !this.model.loading && !this.files.busy && !this.deliveriesLoading
             && !this.model.error && !this.files.error && !this.deliveryError
             && !this.model.items.length && !this.visibleFiles.length && !this.visibleDeliveries.length) {
@@ -299,8 +371,17 @@ export struct XopcNotesTabView {
               }
             }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
           }
+          }
         }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
-          .contentEndOffset(this.bottomInset)
+      if (this.category !== 'deliveries') {
+        Button(this.category === 'notes' ? $r('app.string.new_note') : this.category === 'files'
+          ? $r('app.string.upload') : $r('app.string.library_create_import'))
+          .id('library-primary-action').height(49).width('100%').fontColor(this.colors.chat.onAction)
+          .backgroundColor(this.colors.chat.action).onClick((): void => {
+            if (this.category === 'files') this.onNavigate({ page: 'file-upload', itemId: '' });
+            else this.creationSheetOpen = true;
+          })
+      }
     }.id('notes-tab-list-pane').width(this.contentWidth >= 840 ? 400 : '100%').height('100%')
       .backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : Color.Transparent)
   }
@@ -325,8 +406,10 @@ export struct XopcNotesTabView {
           .clip(true)
     }.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)
       .onAreaChange((_previous: Area, current: Area): void => { this.contentWidth = Number(current.width); })
+      .bindSheet($$this.menuOpen, this.libraryMenu, { height: 390, dragBar: true, showClose: false,
+        backgroundColor: this.colors.surface })
       .bindSheet($$this.creationSheetOpen, this.creationSheet, {
-        height: 244, dragBar: true, showClose: false, backgroundColor: this.colors.surface,
+        height: 320, dragBar: true, showClose: false, backgroundColor: this.colors.surface,
         onDisappear: (): void => { this.finishCreationSheet(); }
       })
   }

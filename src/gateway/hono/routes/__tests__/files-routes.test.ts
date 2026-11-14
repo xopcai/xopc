@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -59,6 +60,30 @@ describe('files routes', () => {
     registerFilesRoutes(app, { service } as never);
     return { app, project };
   }
+
+  it('saves an immutable snapshot and makes duplicate requests idempotent', async () => {
+    const workspace = join(stateDir, 'versioned');
+    mkdirSync(workspace);
+    const file = join(workspace, 'report.html');
+    writeFileSync(file, '<p>first</p>');
+    const { app } = appFor(workspace);
+    const base = '/api/files/' + fileResourceId(fileSpaceId(realpathSync(workspace)), 'report.html');
+    const { resource } = await (await app.request(base)).json() as { resource: { revision: string } };
+    const id = randomUUID();
+    const save = (versionId: string) => app.request(base + '/versions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: versionId, revision: resource.revision }),
+    });
+    const [first, duplicate] = await Promise.all([save(id), save(id)]);
+    expect(first.status).toBe(201);
+    expect(duplicate.status).toBe(201);
+    expect(await duplicate.json()).toEqual(await first.json());
+    expect(readFileSync(file, 'utf8')).toBe('<p>first</p>');
+    writeFileSync(file, '<p>changed</p>');
+    expect((await save(randomUUID())).status).toBe(409);
+    expect(await (await app.request(base + '/versions')).json()).toMatchObject({ versions: [{ id }] });
+    expect(await (await app.request(base + '/versions/' + id + '/content')).text()).toBe('<p>first</p>');
+  });
 
   it('restores persisted session workspaces for context and direct IDs after restart', async () => {
     const agentRoot = join(stateDir, 'agent');

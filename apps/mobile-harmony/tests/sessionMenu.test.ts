@@ -41,7 +41,10 @@ describe('session long-press menu', () => {
     const calls = [view.shareSession, view.renameItem, view.sessions.act, view.sessions.select, view.sessions.scheduleDelete];
     expect(calls.reduce((sum, fn) => sum + fn.mock.calls.length, 0)).toBe(1);
     if (action === 'pin') expect(view.sessions.act).toHaveBeenCalledWith([{ key: 'conversation', status: 'pinned' }], 'unpin');
-    if (action === 'delete') expect(view.sessions.scheduleDelete).toHaveBeenCalledWith('conversation');
+    if (action === 'delete') {
+      expect(view.sessions.scheduleDelete).toHaveBeenCalledWith('conversation', view.onDelete);
+      expect(view.onDelete).not.toHaveBeenCalled();
+    }
   });
   it('does nothing on cancellation or when a mutation is already running', () => {
     const view = setup();

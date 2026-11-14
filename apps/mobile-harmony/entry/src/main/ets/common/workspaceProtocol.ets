@@ -31,11 +31,15 @@ export function projectItem(project: XopcProject): XopcWorkspaceItem {
 }
 export function automationItem(automation: XopcAutomation): XopcWorkspaceItem {
   if (!automation?.id || !automation.trigger || !automation.action) throw new Error('INVALID_AUTOMATION');
+  const actions: string[] = [];
+  if (automation.management?.runnable !== false) actions.push('run');
+  if (!automation.management || automation.management.editable.includes('enabled')) actions.push(automation.enabled ? 'pause' : 'resume');
+  if (automation.management?.deletable !== false) actions.push('delete');
   return { id: automation.id, title: automation.name, body: automation.action.instruction ?? '',
-    status: automation.enabled ? 'enabled' : 'paused', version: 0, enabled: automation.enabled, projectId: automation.projectId,
-    cron: automation.trigger.schedule?.expr ?? '', editable: automation.trigger.kind === 'schedule'
+    status: automation.enabled ? 'enabled' : 'paused', version: automation.updatedAtMs ?? 0, enabled: automation.enabled, projectId: automation.projectId,
+    cron: automation.trigger.schedule?.expr ?? '', automationTimeZone: automation.trigger.schedule?.tz, editable: !automation.management && automation.trigger.kind === 'schedule'
       && automation.trigger.schedule?.kind === 'cron' && automation.action.kind === 'agent',
-    actions: ['run', automation.enabled ? 'pause' : 'resume', 'delete'], automation };
+    actions, automation };
 }
 export function newTask(title: string, body: string, idempotencyKey: string, projectId?: string): XopcTaskCreate {
   return { title: title.trim(), body, idempotencyKey, projectId,
@@ -44,8 +48,8 @@ export function newTask(title: string, body: string, idempotencyKey: string, pro
     activation: { mode: 'capture', phase: 'backlog' } };
 }
 export function scheduledAutomation(title: string, body: string, cron: string, create: boolean,
-  existing?: XopcAutomation, projectId?: string): XopcAutomationWrite {
-  const result: XopcAutomationWrite = { name: title.trim(), trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: cron.trim() } },
+  existing?: XopcAutomation, projectId?: string, timeZone?: string): XopcAutomationWrite {
+  const result: XopcAutomationWrite = { name: title.trim(), trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: cron.trim(), tz: timeZone?.trim() || undefined } },
     action: { kind: 'agent', instruction: body.trim() }, projectId: projectId || existing?.projectId };
   if (create) { result.enabled = true; result.conversationMode = 'new_session'; }
   else if (existing) {
@@ -53,7 +57,10 @@ export function scheduledAutomation(title: string, body: string, cron: string, c
     if (original.trigger.kind !== 'schedule' || original.trigger.schedule?.kind !== 'cron' || original.action.kind !== 'agent') {
       throw new Error('AUTOMATION_NOT_MOBILE_EDITABLE');
     }
-    original.trigger.schedule.expr = cron.trim(); original.action.instruction = body.trim();
+    original.trigger.schedule.expr = cron.trim();
+    if (timeZone !== undefined) original.trigger.schedule.tz = timeZone.trim() || undefined;
+    result.expectedRevision = existing.updatedAtMs;
+    original.action.instruction = body.trim();
     result.trigger = original.trigger; result.action = original.action;
   }
   return result;

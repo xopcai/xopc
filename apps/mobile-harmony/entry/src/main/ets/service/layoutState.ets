@@ -1,15 +1,9 @@
 @ObservedV2
 export class XopcLayoutState {
   @Trace foreground: boolean = true;
-  @Trace keyboardVisible: boolean = false;
   @Trace systemTopInsetPx: number = 0;
-  @Trace chatActionsOpen: boolean = false;
   @Trace reduceMotion: boolean = true;
   dismissChatOverlay?: () => boolean;
-  dismissTabNavigation?: () => boolean;
-
-  isMainDockVisible(tab: number): boolean {
-    return !this.keyboardVisible && (tab !== 0 || !this.chatActionsOpen);
-  }
+  dismissSidebar?: () => boolean;
 }
 export const layoutState: XopcLayoutState = new XopcLayoutState();

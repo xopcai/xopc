@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskCommandRequestSchema, TaskPatchRequestSchema } from '../../../packages/gateway-contract/src/tasks';
 import { taskDetailItem } from '../entry/src/main/ets/common/workspaceProtocol';
-import { taskCommand, taskCompletionBlock, taskCriterionState, taskPhaseAction } from '../entry/src/main/ets/common/taskManagement';
+import { taskCommand, taskCompletionBlock, taskCriterionState, taskPhaseAction, taskRetryCommand } from '../entry/src/main/ets/common/taskManagement';
 import type { XopcMobileTaskDetailResult } from '../entry/src/main/ets/model/workspace';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { request: vi.fn(), uuid: vi.fn(() => 'mutation-id') };
 });
-vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request, connectionRevision: () => 0, assertConnection: () => undefined } }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class { uuid = mocks.uuid; } }));
 import { XopcWorkspaceRepository } from '../entry/src/main/ets/repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../entry/src/main/ets/viewmodel/workspaceViewModel';
@@ -45,6 +45,26 @@ describe('Harmony task management', () => {
     expect(taskCommand({ ...item, status: 'closed', actions: ['reopen'] }, 'reopen:review', ''))
       .toEqual({ type: 'reopen', phase: 'review' });
     expect(taskCommand(item, 'move:closed', '')).toEqual({ type: 'move', phase: 'closed' });
+  });
+
+  it('restarts only the latest failed root run using its original executor and the current task version', async () => {
+    const task = detail();
+    task.runs = [
+      { id: 'root', contractVersion: 2, queuedAt: 10, status: 'failed',
+        executorKind: 'agent', executorRef: { agentId: 'original-agent' } },
+      { id: 'child', parentRunId: 'root', contractVersion: 2, queuedAt: 20, status: 'succeeded' },
+    ];
+    mocks.request.mockResolvedValueOnce(JSON.stringify(task)).mockResolvedValueOnce('{}');
+    await new XopcWorkspaceRepository().retryTask(task.task.id);
+    const [url, method, body] = mocks.request.mock.calls[1];
+    expect(url).toBe('/api/tasks/task%201/commands');
+    expect(method).toBe('POST');
+    expect(TaskCommandRequestSchema.parse(JSON.parse(body))).toEqual({
+      source: 'mobile', idempotencyKey: 'mutation-id', expectedVersion: 3,
+      command: { type: 'start', executor: { kind: 'agent', agentId: 'original-agent' } },
+    });
+    task.runs.push({ id: 'newer', contractVersion: 2, queuedAt: 30, status: 'running' });
+    expect(() => taskRetryCommand(task)).toThrow('TASK_RETRY_UNAVAILABLE');
   });
 
   it('keeps verification separate from manual completion and cancellation', () => {
@@ -133,7 +153,7 @@ describe('Harmony task management', () => {
     expect(model.selected).toMatchObject({ status: 'active', version: 4 });
     expect(model.error).toBe(''); expect(model.busy).toBe(false);
   });
-  it('continues reloading automation run history after actions in the shared detail model', async () => {
+  it('opens the run identity returned by the Gateway, independently of the order of the run history', async () => {
     const automation = { id: 'automation', name: 'Daily', enabled: true,
       trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 9 * * *' } },
       action: { kind: 'agent', instruction: 'Summarize' } };
@@ -144,10 +164,10 @@ describe('Harmony task management', () => {
     mocks.request.mockResolvedValueOnce(JSON.stringify({ automation }))
       .mockResolvedValueOnce(JSON.stringify({ runs: [] }));
     await model.open('automation');
-    mocks.request.mockResolvedValueOnce('{}').mockResolvedValueOnce(JSON.stringify({ automation }))
-      .mockResolvedValueOnce(JSON.stringify({ runs: [{ id: 'new-run', status: 'running' }] }));
-    await model.action('run', '');
-    expect(model.runs).toEqual([{ id: 'new-run', status: 'running' }]);
+    mocks.request.mockResolvedValueOnce(JSON.stringify({ run: { id: 'new-run', status: 'queued' } }));
+    expect(await model.startAutomation()).toBe('new-run');
+    expect(mocks.request).toHaveBeenLastCalledWith('/api/automations/automation/run', 'POST', '{}', 'mutation-id');
+    expect(model.runs).toEqual([]);
   });
 
 });

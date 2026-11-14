@@ -20,7 +20,6 @@ import { localSessionStore } from '../service/localSessionStore';
 export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
   private onAvoidArea = (data: window.AvoidAreaOptions): void => {
-    if (data.type === window.AvoidAreaType.TYPE_KEYBOARD) layoutState.keyboardVisible = data.area.bottomRect.height > 0;
     if (data.type === window.AvoidAreaType.TYPE_SYSTEM) layoutState.systemTopInsetPx = data.area.topRect.height;
   };
   onWindowStageDestroy(): void {
@@ -28,7 +27,7 @@ export default class EntryAbility extends UIAbility {
     appSettings.onColorModeChanged = undefined;
     try { this.mainWindow?.off('avoidAreaChange', this.onAvoidArea); }
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Window listener cleanup failed'); }
-    this.mainWindow = undefined; layoutState.keyboardVisible = false; layoutState.systemTopInsetPx = 0;
+    this.mainWindow = undefined; layoutState.systemTopInsetPx = 0;
   }
   private receiveWant(want: Want): void {
     if (want.action === 'ohos.want.action.viewData' && want.uri?.startsWith('file://')) {
@@ -77,7 +76,6 @@ export default class EntryAbility extends UIAbility {
           layoutState.systemTopInsetPx = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height;
           appSettings.onColorModeChanged = (dark: boolean): void => { this.updateStatusBar(dark); };
           this.updateStatusBar(appSettings.isDark(this.context));
-          layoutState.keyboardVisible = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD).bottomRect.height > 0;
         } catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Keyboard layout initialization failed'); }
         pushNotifications.onWindowReady();
       }

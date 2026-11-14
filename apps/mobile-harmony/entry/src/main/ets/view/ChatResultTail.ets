@@ -101,7 +101,7 @@ export struct XopcChatResultTail {
           Repeat<XopcArtifact>(this.visibleArtifacts).each((item: RepeatItem<XopcArtifact>) => {
             if (item.item.availability === 'available' && (item.item.uri || item.item.workspaceRelativePath)) {
               XopcChatMediaView({ file: artifactMedia(item.item), conversationId: this.conversationId, compact: true,
-                embedded: true, compactAvailable: true, resultCapsule: true })
+                embedded: true, compactAvailable: true, resultCapsule: true, onNavigate: this.onNavigate })
             } else if (item.item.availability === 'available' && markdownLink(item.item.shareUrl || '')) {
               XopcChatResultCapsule({ title: item.item.title, symbol: $r('sys.symbol.doc'),
                 entryId: 'chat-artifact-' + item.item.artifactId,
