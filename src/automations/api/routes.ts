@@ -8,6 +8,8 @@ import { capabilityHttpContext, capabilityHttpError } from '../../capabilities/a
 import { getAutomationSetup, openAutomationConfiguration } from '../configuration-conversation.js';
 import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import type { AuthenticatedRouteDeps } from '../../gateway/hono/routes/deps.js';
+import { getPersonalOwnerId } from '../../gateway/security/gateway-principal.js';
+import { getPersonalAgent } from '../../personal-agent/repository.js';
 
 function parseProjectId(raw: string | undefined): string | undefined {
   const trimmed = raw?.trim();
@@ -31,15 +33,23 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
     try {
       const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
       if (!body || typeof body !== 'object' || Array.isArray(body)
-        || Object.keys(body).some(key => !['automationId', 'projectId', 'runId'].includes(key))
+        || Object.keys(body).some(key => !['automationId', 'projectId', 'runId', 'personalLocale'].includes(key))
         || (body.automationId !== undefined && typeof body.automationId !== 'string')
         || (body.projectId !== undefined && typeof body.projectId !== 'string')
-        || (body.runId !== undefined && typeof body.runId !== 'string')) {
-        throw new CapabilityError('INVALID_INPUT', 'Expected automationId or projectId');
+        || (body.runId !== undefined && typeof body.runId !== 'string')
+        || (body.personalLocale !== undefined && (body.personalLocale !== 'zh' && body.personalLocale !== 'en'
+          || body.automationId !== undefined || body.projectId !== undefined || body.runId !== undefined))) {
+        throw new CapabilityError('INVALID_INPUT', 'Invalid automation configuration scope');
       }
-      if (body.projectId && !service.projects?.get(body.projectId)) throw new CapabilityError('NOT_FOUND', 'Project not found');
+      const projectId = body.projectId?.trim() || undefined;
+      if (projectId && !service.projects?.get(projectId)) throw new CapabilityError('NOT_FOUND', 'Project not found');
+      const ownerId = body.personalLocale ? getPersonalOwnerId(c) : null;
+      if (body.personalLocale && !ownerId) throw new CapabilityError('FORBIDDEN', 'Owner access is required');
+      const profile = ownerId ? getPersonalAgent(ownerId) : null;
+      if (ownerId && profile?.state !== 'ready') throw new CapabilityError('NOT_FOUND', 'Personal Agent is unavailable');
       const conversationId = openAutomationConfiguration({ agentId: resolveDefaultAgentId(),
-        automationId: body.automationId?.trim() || undefined, projectId: body.projectId?.trim() || undefined, runId: body.runId?.trim() || undefined });
+        automationId: body.automationId?.trim() || undefined, projectId, runId: body.runId?.trim() || undefined,
+        personal: profile ? { conversationId: profile.conversationId, locale: body.personalLocale } : undefined });
       return c.json({ conversationId }, 200);
     } catch (error) { return capabilityHttpError(c, error); }
   });

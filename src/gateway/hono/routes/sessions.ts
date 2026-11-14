@@ -785,6 +785,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       patch.replaceTags = body.replaceTags;
     }
     if (body.customData !== undefined && typeof body.customData === 'object' && body.customData !== null) {
+      if (Object.hasOwn(body.customData, 'automationSetup')) {
+        return c.json({ ok: false, error: 'Automation configuration metadata is managed by the gateway' }, 400);
+      }
       patch.customData = body.customData as Record<string, unknown>;
     }
     let requestedProjectId: string | null | undefined;
