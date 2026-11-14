@@ -35,7 +35,7 @@ export type ToolExecutionLabels = {
   waitingInput: string;
   phone?: Record<'discover' | 'set_mode' | 'open' | 'observe' | 'step' | 'run' | 'status' | 'pause' | 'request_user' | 'resume' | 'cancel' | 'close' | 'default', ToolExecutionLabel>;
   builtins: Record<
-    'automation' | 'browser' | 'clarification' | 'codeExecution' | 'toolSearch' | 'computer' | 'connection' | 'desktopPet' | 'delegation' | 'diagnostics' | 'imageGeneration' | 'imageInspection' | 'job' | 'manual' | 'mediaRead' | 'mediaSend' | 'memoryMaintenance' | 'memoryRead' | 'memoryUpdate' | 'message' | 'publish' | 'planning' | 'review' | 'sessionRecall' | 'sessionSearch' | 'sessionStatus' | 'share' | 'skillInstall' | 'skillManage' | 'skillSearch' | 'skillView' | 'speech' | 'structuredOutput' | 'todo' | 'webExtract',
+    'automation' | 'browser' | 'clarification' | 'codeExecution' | 'connectedAppLookup' | 'toolSearch' | 'computer' | 'connection' | 'desktopPet' | 'delegation' | 'diagnostics' | 'imageGeneration' | 'imageInspection' | 'job' | 'manual' | 'mediaRead' | 'mediaSend' | 'memoryMaintenance' | 'memoryRead' | 'memoryUpdate' | 'message' | 'publish' | 'planning' | 'review' | 'sessionRecall' | 'sessionSearch' | 'sessionStatus' | 'share' | 'skillInstall' | 'skillManage' | 'skillSearch' | 'skillView' | 'speech' | 'structuredOutput' | 'todo' | 'webExtract' | 'workspaceRecordsRead',
     ToolExecutionLabel
   >;
   actions: Record<
@@ -129,7 +129,9 @@ const BUILTIN_SEMANTICS: Readonly<Record<string, keyof ToolExecutionLabels['buil
   knowledge_write: 'memoryUpdate',
   user_context_get: 'memoryRead',
   user_context_update: 'memoryUpdate',
+  personal_capability: 'connectedAppLookup',
   personal_memory: 'memoryUpdate',
+  personal_read: 'workspaceRecordsRead',
   publish_artifacts: 'publish',
   update_plan: 'planning',
   read_media: 'mediaRead',

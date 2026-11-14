@@ -395,6 +395,8 @@
         "publish": { "running": "正在发布成果…", "completed": "发布了成果" },
         "planning": { "running": "正在更新计划…", "completed": "已更新执行计划" },
         "review": { "running": "正在检查工作内容…", "completed": "已检查工作内容" },
+        "connectedAppLookup": { "running": "正在查询应用连接…", "completed": "已查询应用连接" },
+        "workspaceRecordsRead": { "running": "正在读取笔记、项目或自动化…", "completed": "已读取笔记、项目或自动化" },
         "sessionRecall": { "running": "正在回顾会话…", "completed": "回顾了会话" },
         "sessionSearch": { "running": "正在搜索会话…", "completed": "搜索了会话" },
         "sessionStatus": { "running": "正在检查会话状态…", "completed": "检查了会话状态" },

@@ -131,8 +131,8 @@ export function createPersonalRequestTools(deps: XopcUseToolDeps): AgentTool[] {
     return id;
   };
   const capabilityTool: AgentTool<typeof CapabilitySchema> = {
-    name: 'personal_capability', label: 'Connected app availability', parameters: CapabilitySchema,
-    description: 'Check supported connected apps, their capabilities and account connection state. Use for capability questions or when the app is unclear. For a clearly named app, submit with personal_request directly.',
+    name: 'personal_capability', label: 'Check app connections', parameters: CapabilitySchema,
+    description: 'Look up supported app connectors and check their capabilities, eligible accounts, and connection status. Use for questions such as “Is my Gmail account connected?” or to identify an unclear app. This lookup reads local connection state. To read data from a clearly identified app, submit directly with personal_request.',
     async execute(_id, input: Static<typeof CapabilitySchema>) { return result(personalCapabilities(conversation(), input.query, input.accountId).map(({ executorProfiles: _profiles, executorAgentIds, accounts, ...capability }) => ({ ...capability, eligibleExecutorCount: executorAgentIds.length, accounts: accounts.map(({ executorAgentIds: _ids, ...account }) => account) }))); },
   };
   const requestTool: AgentTool<typeof RequestSchema> = {
