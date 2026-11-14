@@ -48,10 +48,11 @@ function openMore(): HTMLButtonElement {
 }
 
 describe('product primary navigation', () => {
-  it('places Space below Work by default', () => {
+  it('places Library below Work by default', () => {
     renderAt('/projects/example', <SidebarNavItems />);
 
     const links = [...container.querySelectorAll('a')];
+    expect(links.find(link => link.getAttribute('href') === '/space')?.textContent).toBe('Library');
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/personal',
       '/',
@@ -217,7 +218,7 @@ describe('product primary navigation', () => {
     expect(document.body.querySelector('a[href="/extensions/reading/list"]')).not.toBeNull();
   });
 
-  it('moves Space above Work and preserves its position on remount', () => {
+  it('moves Library above Work and preserves its position on remount', () => {
     useNavOrderStore.getState().setOrder(['builtin:capabilities', 'builtin:work']);
     renderAt('/space', <SidebarNavItems />);
     const space = container.querySelector<HTMLAnchorElement>('a[href="/space"]')!;

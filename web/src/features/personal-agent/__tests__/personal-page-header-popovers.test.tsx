@@ -200,8 +200,8 @@ describe('Personal AI header', () => {
     act(() => headerRoot.render(usePageHeaderStore.getState().main));
     expect(container.querySelector('aside')?.textContent).toContain('Completed');
     expect([...container.querySelectorAll('aside h3')].map(node => node.textContent)).toEqual(['Scheduled tasks', 'Today']);
-    const tabs = container.querySelectorAll('aside [aria-label="Tasks and Space"] [role="tab"]');
-    expect([...tabs].map(tab => tab.textContent)).toEqual(['Tasks', 'Space']);
+    const tabs = container.querySelectorAll('aside [aria-label="Tasks and Library"] [role="tab"]');
+    expect([...tabs].map(tab => tab.textContent)).toEqual(['Tasks', 'Library']);
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
     expect(container.querySelector('[data-personal-task-identity]')?.textContent).toContain('Just delivered');
     expect(headerContainer.textContent).not.toContain('Just delivered');
@@ -210,7 +210,7 @@ describe('Personal AI header', () => {
   it.each([
     ['audio', 'Rain', `music-generation/sessions/conversation-1/jobs/${'a'.repeat(64)}/audio`],
     ['video', 'Rain on a window', 'video-generation/sessions/conversation-1/jobs/7c3ed84c-9a9b-4ac8-8479-738197a2816a/video'],
-  ])('previews and downloads completed %s from Space', async (kind, title, path) => {
+  ])('previews and downloads completed %s from Library', async (kind, title, path) => {
     const uri = `/api/${path}`;
     const turnId = `${path.split('/')[0]}:${path.split('/')[4]}`;
     const fetchPersonal = vi.mocked(fetchJson).getMockImplementation()!;
