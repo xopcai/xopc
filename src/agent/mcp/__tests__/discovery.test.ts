@@ -115,3 +115,11 @@ it('uses the documented manual Bearer credential when a plan leaves authenticati
   }, context());
   expect(proposed).toMatchObject({ candidates: [{ authentication: 'bearer', ownership: 'owner_review_required' }] });
 });
+
+it('distinguishes a completed empty search from incomplete discovery', async () => {
+  research.search.mockResolvedValueOnce([]);
+  await expect(discover()).resolves.toMatchObject({ outcome: 'no_match', documents: [] });
+  research.read.mockRejectedValueOnce(new Error('Temporary failure'));
+  await expect(discover()).resolves.toMatchObject({ outcome: 'incomplete', documents: [] });
+  await expect(discover()).resolves.toMatchObject({ outcome: 'references' });
+});

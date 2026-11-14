@@ -47,6 +47,7 @@
   "productNavigation": {
     "primaryAria": "Product navigation",
     "sectionsAria": "Page sections",
+    "space": "Space",
     "domains": {
       "work": "Work",
       "automation": "Automations",

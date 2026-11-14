@@ -21,7 +21,7 @@ export function createBrowserUseTool(
     name: 'browser_use',
     label: '🌐 Browser',
     description:
-      'Control a persistent browser through typed semantic actions. Start with observe or navigate, then use only refs and revision values from the latest observation. Screenshots are attached only when requested or semantic observation is insufficient.',
+      'Control a persistent browser through typed semantic actions. Start with observe or navigate, then use only refs and revision values from the latest observation. Read visible data from the latest observation, including labeled textbox values. Once the requested result is visible, report it and finish. Keep any verification in this browser session. Screenshots are attached only when requested or semantic observation is insufficient.',
     parameters: BrowserUseSchema,
 
     async execute(_toolCallId, params: BrowserUseInput, signal) {

@@ -87,7 +87,8 @@ describe('external tool discovery gateway', () => {
       expect.objectContaining({ candidateRef: 'composio-clickup' }),
     ]);
     expect(found.instruction).toContain('xopc_require_connection');
-    expect(found.instruction).toContain('Do not fall back to browser automation');
+    expect(found.instruction).toContain('Prefer a relevant connection candidate');
+    expect(found.instruction).toContain('no suitable connection route remains');
   });
 
   it('advertises every registered source and recommends searching without a filter', () => {
