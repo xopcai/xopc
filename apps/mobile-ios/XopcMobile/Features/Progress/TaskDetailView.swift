@@ -104,9 +104,9 @@ struct TaskConversationView: View {
                 if let conversation {
                     AssistantView(
                         configuration: configuration, isActive: true, realtimeVoiceCall: voiceCall,
-                        conversation: conversation, personalAgent: nil, quickChatHandoff: nil,
+                        conversation: conversation, personalAgent: nil,
                         onStartConversation: { _ in }, onStartScopedConversation: { _, _, _ in },
-                        onConversationUpdated: { self.conversation = $0 }, onQuickChatHandled: { _ in },
+                        onConversationUpdated: { self.conversation = $0 },
                         onPersonalAgentUpdated: { _ in }, onOpenSettings: { optionsRevision += 1 },
                         onInputFocusChanged: { focused in
                             if focused {
@@ -114,7 +114,7 @@ struct TaskConversationView: View {
                             }
                         },
                         showsFloatingHeader: false, sessionActionsRequest: optionsRevision, messageSearchRequest: searchRevision
-                    ) { composer, _ in
+                    ) { composer in
                         composer.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
                     }
                 } else if let error {

@@ -279,8 +279,8 @@ private struct FileRow: View {
 
 struct FilePreviewView: View {
     let configuration: GatewayConfiguration
-    let file: FileResource
 
+    @State private var file: FileResource
     @State private var text: String?
     @State private var error: String?
     @State private var isEditing = false
@@ -289,27 +289,32 @@ struct FilePreviewView: View {
     @State private var shareItem: FileShareItem?
     @State private var downloadedURL: URL?
     @State private var downloadError: String?
-    @State private var revision: String
+    @State private var hasLoaded = false
 
     init(configuration: GatewayConfiguration, file: FileResource) {
         self.configuration = configuration
-        self.file = file
-        _revision = State(initialValue: file.revision)
+        _file = State(initialValue: file)
     }
 
     var body: some View {
         Group {
-            if let text {
+            if isLoading {
+                ProgressView("正在读取文件…")
+            } else if let error {
+                ContentUnavailableView("无法预览", systemImage: "doc.badge.ellipsis", description: Text(error))
+            } else if let text {
                 ScrollView {
                     Text(text).font(.body.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding()
                 }
-            } else if let error {
-                ContentUnavailableView("无法预览", systemImage: "doc.badge.ellipsis", description: Text(error))
-            } else if !isTextFile {
+            } else if !Self.isTextFile(file) {
                 ContentUnavailableView("暂不支持预览", systemImage: "doc", description: Text("移动端当前支持文本、Markdown 和 JSON 文件预览。"))
             } else {
                 ProgressView("正在读取文件…")
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SaveFileVersionControl(configuration: configuration, file: file, revision: file.revision)
+                .disabled(isLoading || error != nil || !hasLoaded)
         }
         .navigationTitle(file.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -318,7 +323,7 @@ struct FilePreviewView: View {
                 .disabled(isLoading)
             Button("下载", systemImage: "arrow.down.to.line") { Task { await download() } }
                 .disabled(isDownloading)
-            if isTextFile, file.capabilities.contains("edit"), text != nil {
+            if !isLoading, error == nil, file.capabilities.contains("edit"), text != nil {
                 Button("编辑", systemImage: "pencil") { isEditing = true }
             }
         }
@@ -327,11 +332,11 @@ struct FilePreviewView: View {
                 FileEditorView(
                     configuration: configuration,
                     file: file,
-                    revision: revision,
+                    revision: file.revision,
                     initialText: text,
                     onSaved: { content, resource in
                         self.text = content
-                        revision = resource.revision
+                        file = resource
                     }
                 )
             }
@@ -354,19 +359,26 @@ struct FilePreviewView: View {
         .task { await load() }
     }
 
-    private var isTextFile: Bool {
+    private static func isTextFile(_ file: FileResource) -> Bool {
         file.mimeType.hasPrefix("text/") || file.mimeType == "application/json" || file.name.hasSuffix(".md")
     }
 
     @MainActor private func load() async {
-        guard isTextFile else { return }
+        guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         do {
-            text = try await GatewayClient(configuration: configuration).fetchFileText(id: file.id)
+            let gateway = GatewayClient(configuration: configuration)
+            let resource = try await gateway.fetchFile(id: file.id)
+            let content = Self.isTextFile(resource) ? try await gateway.fetchFileText(resource) : nil
+            try Task.checkCancellation()
+            file = resource
+            text = content
             error = nil
+            hasLoaded = true
         } catch is CancellationError {
         } catch {
+            guard !Task.isCancelled else { return }
             self.error = error.localizedDescription
         }
     }

@@ -369,7 +369,8 @@ struct GatewayClient: GatewayServing, Sendable {
 
     func requestData(
         path: String,
-        queryItems: [URLQueryItem] = []
+        queryItems: [URLQueryItem] = [],
+        expectedETag: String? = nil
     ) async throws -> Data {
         let url = try makeURL(path: path, queryItems: queryItems)
         var request = URLRequest(url: url)
@@ -391,6 +392,9 @@ struct GatewayClient: GatewayServing, Sendable {
         guard (200 ..< 300).contains(httpResponse.statusCode) else {
             let body = try? decoder.decode(GatewayErrorPayload.self, from: data)
             throw GatewayClientError.http(statusCode: httpResponse.statusCode, message: body?.message)
+        }
+        if let expectedETag, httpResponse.value(forHTTPHeaderField: "ETag") != expectedETag {
+            throw GatewayClientError.http(statusCode: 409, message: nil)
         }
         return data
     }

@@ -398,12 +398,28 @@ extension GatewayClient {
         return response.items
     }
 
-    func fetchFileText(id: String) async throws -> String {
-        let data = try await requestData(path: "/api/files/\(id)/content")
+    func fetchFile(id: String) async throws -> FileResource {
+        let response: FileResourceEnvelope = try await request(path: "/api/files/\(id)")
+        guard response.resource.id == id else { throw GatewayClientError.invalidResponse }
+        return response.resource
+    }
+
+    func fetchFileText(_ file: FileResource) async throws -> String {
+        let data = try await requestData(path: "/api/files/\(file.id)/content", expectedETag: file.revision)
         guard let value = String(data: data, encoding: .utf8) else {
             throw GatewayClientError.invalidPayload("文件不是 UTF-8 文本")
         }
         return value
+    }
+
+    func saveFileVersion(id: String, revision: String, requestID: UUID) async throws {
+        let request = FileVersionCommand(id: requestID.uuidString.lowercased(), revision: revision)
+        let result: FileVersionResult = try await self.request(
+            path: "/api/files/\(id)/versions", method: "POST", body: encoder.encode(request)
+        )
+        guard result.version.id == requestID else {
+            throw GatewayClientError.invalidPayload("无法保存新版本")
+        }
     }
 
     func updateFileText(id: String, content: String, revision: String) async throws -> FileResource {
@@ -785,4 +801,14 @@ private struct DiscussionSealCommand: Encodable {
     let mimeType: String
     let fileName: String
     let containerMode: String
+}
+
+private struct FileVersionCommand: Encodable {
+    let id: String
+    let revision: String
+}
+
+private struct FileVersionResult: Decodable {
+    struct Version: Decodable { let id: UUID }
+    let version: Version
 }

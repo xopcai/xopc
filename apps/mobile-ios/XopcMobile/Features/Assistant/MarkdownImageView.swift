@@ -67,8 +67,8 @@ struct MarkdownImageView: View {
                 items: gallery.isEmpty
                     ? [ChatImageGalleryItem(title: alt, source: source)]
                     : gallery.compactMap { file in
-                        (file.uri ?? file.workspaceRelativePath.map(ChatImageSource.workspaceURL)).map {
-                            ChatImageGalleryItem(title: file.name ?? "图片", source: $0)
+                        file.imageSource.map {
+                            ChatImageGalleryItem(title: file.name ?? "图片", source: $0, attachment: file)
                         }
                     },
                 initialSource: source,

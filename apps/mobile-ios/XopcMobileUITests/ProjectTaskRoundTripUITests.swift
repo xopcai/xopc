@@ -22,13 +22,13 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18790"
         app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = token
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-progress"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
     }
 
     func testProjectTaskCreateAndEditRoundTrip() {
         let title = "xopc-ios-parity-e2e-\(UUID().uuidString.lowercased())"
         createdTitle = title
-        app.buttons["home-tab-progress"].tap()
+        app.openHomeDestination("progress")
         app.buttons["项目"].tap()
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
@@ -76,7 +76,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
     func testProjectNoteCreateAndOpenRoundTrip() {
         let title = "xopc-ios-project-note-e2e-\(UUID().uuidString.lowercased())"
         createdNoteTitle = title
-        app.buttons["home-tab-progress"].tap()
+        app.openHomeDestination("progress")
         app.buttons["项目"].tap()
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
@@ -121,7 +121,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         let name = "xopc-ios-project-automation-e2e-\(UUID().uuidString.lowercased())"
         let instructionText = String(repeating: "iOS parity instruction; do not execute or change data. ", count: 10)
         createdAutomationName = name
-        app.buttons["home-tab-progress"].tap()
+        app.openHomeDestination("progress")
         app.buttons["项目"].tap()
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))

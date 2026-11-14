@@ -68,11 +68,11 @@ final class VoiceRecoveryUITests: XCTestCase {
             ?? "http://127.0.0.1:18790"
         app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = token
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-notes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
     }
 
     func testSavedVoiceNoteSurvivesBackgroundAndColdRelaunch() async throws {
-        app.buttons["home-tab-notes"].tap()
+        app.openHomeDestination("notes")
         app.buttons["新建笔记"].tap()
         app.buttons["语音笔记"].tap()
         app.buttons["开始录音"].tap()
@@ -99,9 +99,7 @@ final class VoiceRecoveryUITests: XCTestCase {
 
         app.terminate()
         app.launch()
-        let notesTab = app.buttons["home-tab-notes"]
-        XCTAssertTrue(notesTab.waitForExistence(timeout: 10))
-        notesTab.tap()
+        app.openHomeDestination("notes")
         let savedNote = app.staticTexts[title].firstMatch
         XCTAssertTrue(savedNote.waitForExistence(timeout: 12))
         savedNote.tap()
@@ -123,7 +121,7 @@ final class VoiceRecoveryUITests: XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "english"
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-notes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
         try await runUploadOutageJourney(copy: .english)
     }
 
@@ -136,7 +134,7 @@ final class VoiceRecoveryUITests: XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "english"
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-notes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
         try runMicrophonePermissionDenialJourney(copy: .english)
     }
 
@@ -150,7 +148,7 @@ final class VoiceRecoveryUITests: XCTestCase {
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "english"
         app.launchEnvironment["XOPC_UI_TEST_AUDIO_INTERRUPTION"] = "1"
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-notes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
         runAudioInterruptionJourney(copy: .english, relaunch: false)
     }
 
@@ -158,7 +156,7 @@ final class VoiceRecoveryUITests: XCTestCase {
         guard ProcessInfo.processInfo.environment["XOPC_UI_TEST_SPOKEN_AUDIO_BASE64"] != nil else {
             throw XCTSkip("A spoken PCM WAV fixture is required")
         }
-        app.buttons["home-tab-notes"].tap()
+        app.openHomeDestination("notes")
         app.buttons["新建笔记"].tap()
         app.buttons["语音笔记"].tap()
         app.buttons["开始录音"].tap()
@@ -187,9 +185,9 @@ final class VoiceRecoveryUITests: XCTestCase {
             app.terminate()
             app.launchEnvironment["XOPC_UI_TEST_AUDIO_INTERRUPTION"] = "1"
             app.launch()
-            XCTAssertTrue(app.buttons["home-tab-notes"].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
         }
-        app.buttons["home-tab-notes"].tap()
+        app.openHomeDestination("notes")
         app.buttons[copy.newNote].tap()
         app.buttons[copy.voiceNote].tap()
         app.buttons[copy.start].tap()
@@ -217,7 +215,7 @@ final class VoiceRecoveryUITests: XCTestCase {
         guard ProcessInfo.processInfo.environment["XOPC_E2E_MICROPHONE_DENIED"] == "1" else {
             throw XCTSkip("Run after denying microphone access for the app")
         }
-        app.buttons["home-tab-notes"].tap()
+        app.openHomeDestination("notes")
         app.buttons[copy.newNote].tap()
         app.buttons[copy.voiceNote].tap()
         app.buttons[copy.start].tap()
@@ -243,7 +241,7 @@ final class VoiceRecoveryUITests: XCTestCase {
         guard ProcessInfo.processInfo.environment["XOPC_E2E_GATEWAY_PROXY_URL"] != nil else {
             throw XCTSkip("A discussion upload fault proxy is required")
         }
-        app.buttons["home-tab-notes"].tap()
+        app.openHomeDestination("notes")
         app.buttons[copy.newNote].tap()
         app.buttons[copy.voiceNote].tap()
         app.buttons[copy.start].tap()
@@ -261,8 +259,8 @@ final class VoiceRecoveryUITests: XCTestCase {
 
         app.terminate()
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-notes"].waitForExistence(timeout: 10))
-        app.buttons["home-tab-notes"].tap()
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
+        app.openHomeDestination("notes")
         let recovery = app.buttons.matching(NSPredicate(
             format: "label CONTAINS %@",
             copy.recoveryTitle

@@ -132,11 +132,11 @@ private struct KeyboardChatFixture: View {
         NavigationStack {
             AssistantView(configuration: configuration, isActive: true, realtimeVoiceCall: call,
                           conversation: .existing(id: "11111111-1111-4111-8111-111111111111", title: "Keyboard fixture", agentId: "main"),
-                          personalAgent: nil, quickChatHandoff: nil, onStartConversation: { _ in },
+                          personalAgent: nil, onStartConversation: { _ in },
                           onStartScopedConversation: { _, _, _ in }, onConversationUpdated: { _ in },
-                          onQuickChatHandled: { _ in }, onPersonalAgentUpdated: { _ in }, onOpenSettings: {},
+                          onPersonalAgentUpdated: { _ in }, onOpenSettings: {},
                           onInputFocusChanged: { _ in })
-            { composer, _ in
+            { composer in
                 VStack(spacing: 0) {
                     composer
                     if !keyboardVisible {

@@ -4,6 +4,37 @@ import Testing
 
 @MainActor
 struct AssistantRecoveryTests {
+    @Test func aRemovedConversationIsReportedOnResume() async {
+        let state = AssistantState()
+        let conversation = ConversationSelection.existing(id: "history", title: "Conversation", agentId: "main")
+        var gateway = GatewayStub()
+        gateway.historyMessages = [WireMessage(id: "message", messageId: nil, turnId: nil, role: "user",
+                                               content: .text("Hello"), deliveries: nil, rawContent: nil, toolCalls: nil, attachments: nil, media: nil, metadata: nil)]
+        await state.loadConversation(conversation, using: gateway)
+        #expect(state.messages.count == 1)
+        gateway.historyMissing = true
+        await state.loadConversation(conversation, using: gateway)
+        #expect(state.unavailableConversationID == conversation.id)
+        #expect(state.messages.isEmpty)
+    }
+
+    @Test func aSendAcceptedAfterSwitchingIsNotReportedAsFailed() async {
+        let state = AssistantState()
+        let conversation = ConversationSelection.draft(agentId: "main")
+        let receipt = PendingReceiptGate()
+        var gateway = GatewayStub()
+        gateway.sendDelay = { await receipt.wait() }
+        await state.loadConversation(conversation, using: gateway)
+        let sender = Task { await state.send("Hello", to: conversation, using: gateway) }
+        while await receipt.sendCount == 0 {
+            await Task.yield()
+        }
+        await state.loadConversation(.draft(agentId: "main"), using: gateway)
+        await receipt.release()
+        #expect(await sender.value == conversation.materialized(transcriptId: "transcript"))
+        #expect(state.messages.isEmpty)
+    }
+
     @Test func assistantResumesWhenReceiptArrivesAfterForeground() async throws {
         let state = AssistantState()
         let conversation = ConversationSelection.draft(agentId: "main").materialized(transcriptId: "transcript")

@@ -5,7 +5,6 @@ import SwiftUI
 struct NotesView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
-    var bottomInset: CGFloat = 0
 
     @State private var notes: [NoteSummary] = []
     @Environment(\.locale) private var locale
@@ -98,7 +97,6 @@ struct NotesView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .contentMargins(.top, 0, for: .scrollContent)
-            .contentMargins(.bottom, bottomInset, for: .scrollContent)
             .refreshable { await refreshLibrary() }
         }
         .background(Color(uiColor: .systemGroupedBackground))

@@ -11,16 +11,19 @@ import SwiftUI
         errorMessage = nil
         guard case let .route(page, id) = link, page == "chat" else { destination = link; return }
         let configuration = appState.gatewayConfiguration
+        let source = appState.selectedConversation
         lookup = Task {
             do {
                 let result: ChatLinkedSession = try await GatewayClient(configuration: configuration)
                     .request(path: "/api/sessions/\(id)/history", queryItems: [
                         URLQueryItem(name: "view", value: "compact"), URLQueryItem(name: "limit", value: "1")
                     ])
-                guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+                guard !Task.isCancelled, configuration == appState.gatewayConfiguration,
+                      source?.id == appState.selectedConversation?.id else { return }
                 appState.openConversation(id: result.session.key, title: result.session.name ?? "对话", agentId: result.session.agentId)
             } catch is CancellationError { } catch {
-                guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+                guard !Task.isCancelled, configuration == appState.gatewayConfiguration,
+                      source?.id == appState.selectedConversation?.id else { return }
                 errorMessage = error.localizedDescription
             }
         }

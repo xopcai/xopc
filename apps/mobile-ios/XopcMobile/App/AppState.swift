@@ -4,16 +4,15 @@ import Observation
 @MainActor
 @Observable
 final class AppState {
-    var selectedTab = AppTab.assistant
+    var homePath: [HomeDestination] = []
     private(set) var externalIntake: ExternalIntakeBatch?
     private(set) var externalIntakeRevision = 0
     private(set) var externalIntakeError: String?
     func openExternalIntake(_ batch: ExternalIntakeBatch, conversation: ConversationSelection) {
         guard batch.target?.scope == ComposerDraftStore.accountScope(gatewayConfiguration) else { externalIntakeRevision += 1; return }
         externalIntakeError = nil
-        selectedConversation = conversation
+        selectHomeConversation(conversation)
         externalIntake = batch
-        selectedTab = .assistant
     }
 
     func externalIntakeFinished(_ id: UUID, error: String?) {
@@ -23,27 +22,22 @@ final class AppState {
         externalIntakeRevision += 1
     }
 
-    private(set) var quickChatHandoff: QuickChatHandoff?
     private(set) var gatewayConfiguration: GatewayConfiguration {
         didSet { restoreConversationSelection() }
     }
 
-    private(set) var selectedConversation: ConversationSelection? {
-        didSet {
-            if let selectedConversation {
-                do { try ComposerDraftStore().saveSelection(selectedConversation, configuration: gatewayConfiguration) }
-                catch { connectionStorageError = error.localizedDescription }
-            }
-        }
-    }
+    private(set) var selectedConversation: ConversationSelection?
+    private var remembersCurrentConversation = false
 
     private var selectionScope = ""
     private func restoreConversationSelection() {
         let scope = ComposerDraftStore.accountScope(gatewayConfiguration)
         guard scope != selectionScope else { return }
         selectionScope = scope
+        homePath = []
         do { selectedConversation = try ComposerDraftStore().readSelection(configuration: gatewayConfiguration) }
         catch { selectedConversation = nil; connectionStorageError = error.localizedDescription }
+        remembersCurrentConversation = selectedConversation != nil
     }
 
     private(set) var connectionStorageError: String?
@@ -228,66 +222,64 @@ final class AppState {
         } catch { connectionStorageError = error.localizedDescription }
     }
 
-    func open(_ conversation: ConversationSummary) {
-        selectedConversation = ConversationSelection(summary: conversation)
-        selectedTab = .assistant
-    }
-
-    func openConversation(id: String, title: String, agentId: String) {
-        selectedConversation = .existing(id: id, title: title, agentId: agentId)
-        selectedTab = .assistant
-    }
-
-    func startConversation(agentId: String) {
-        selectedConversation = .draft(agentId: agentId)
-        selectedTab = .assistant
-    }
-
-    func startProjectConversation(_ project: ProjectRecord) {
-        selectedConversation = .projectDraft(project: project)
-        selectedTab = .assistant
-    }
-
-    func startScopedConversation(project: ProjectRecord?, executionMode: String?, agentId: String) {
-        selectedConversation = project.map {
-            .projectDraft(project: $0, executionMode: executionMode, agentId: agentId)
-        } ?? .draft(agentId: agentId)
-        selectedTab = .assistant
-    }
-
-    func openQuickChat(_ handoff: QuickChatHandoff) {
-        selectedConversation = .draft(agentId: "main")
-        quickChatHandoff = handoff
-        selectedTab = .assistant
-    }
-
-    func consumeQuickChatHandoff(_ id: UUID) {
-        if quickChatHandoff?.id == id {
-            quickChatHandoff = nil
+    private func selectHomeConversation(_ conversation: ConversationSelection, remember: Bool = true) {
+        selectedConversation = conversation
+        remembersCurrentConversation = remember
+        if remember {
+            persistSelection(conversation)
+            homePath = []
         }
     }
 
+    private func persistSelection(_ conversation: ConversationSelection) {
+        do { try ComposerDraftStore().saveSelection(conversation, configuration: gatewayConfiguration) }
+        catch { connectionStorageError = error.localizedDescription }
+    }
+
+    func open(_ conversation: ConversationSummary) {
+        selectHomeConversation(ConversationSelection(summary: conversation))
+    }
+
+    func openConversation(id: String, title: String, agentId: String) {
+        selectHomeConversation(.existing(id: id, title: title, agentId: agentId))
+    }
+
+    func openPersonalConversation(_ record: PersonalAgentRecord, remember: Bool) {
+        selectHomeConversation(.existing(id: record.conversationId, title: record.displayName, agentId: record.agentId),
+                               remember: remember)
+    }
+
+    func conversationUnavailable(_ id: String) {
+        guard selectedConversation?.id == id else { return }
+        do { try ComposerDraftStore().clearSelection(configuration: gatewayConfiguration) }
+        catch { connectionStorageError = error.localizedDescription }
+        selectedConversation = nil
+        remembersCurrentConversation = false
+    }
+
+    func startConversation(agentId: String) {
+        selectHomeConversation(.draft(agentId: agentId))
+    }
+
+    func startProjectConversation(_ project: ProjectRecord) {
+        selectHomeConversation(.projectDraft(project: project))
+    }
+
+    func startScopedConversation(project: ProjectRecord?, executionMode: String?, agentId: String) {
+        selectHomeConversation(project.map {
+            .projectDraft(project: $0, executionMode: executionMode, agentId: agentId)
+        } ?? .draft(agentId: agentId))
+    }
+
     func updateConversation(_ conversation: ConversationSelection) {
+        guard selectedConversation?.id == conversation.id else { return }
         selectedConversation = conversation
+        if remembersCurrentConversation {
+            persistSelection(conversation)
+        }
     }
 }
 
-struct QuickChatHandoff: Equatable {
-    enum Action: Equatable {
-        case send
-        case voice
-        case attachments
-    }
-
-    let id = UUID()
-    let text: String
-    let action: Action
-}
-
-enum AppTab: Hashable {
-    case assistant
-    case conversations
-    case progress
-    case notes
-    case profile
+enum HomeDestination: Hashable {
+    case conversations, progress, projects, automations, library, profile
 }

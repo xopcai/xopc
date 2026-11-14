@@ -2,17 +2,19 @@ import Foundation
 
 extension AssistantView {
     func send(delivery: MessageDelivery) {
-        let conversation = conversation ?? .draft(agentId: state.selectedAgentID ?? "main")
+        guard let conversation, let scope = composerDraftScope,
+              scope == ComposerDraftStore.scope(configuration, conversationID: conversation.id) else { return }
         let text = draft
         let selectedAttachments = attachments
         let selectedReferences = references
+        let queueing = state.isRunActive
         draft = ""
         attachments = []
         references = []
         attachmentError = nil
         Task {
             let gateway = GatewayClient(configuration: configuration)
-            if state.isRunActive {
+            if queueing {
                 if await !state.queueMessage(
                     text,
                     attachments: selectedAttachments,
@@ -21,7 +23,7 @@ extension AssistantView {
                     in: conversation,
                     using: gateway
                 ) {
-                    restoreDraft(text, attachments: selectedAttachments, references: selectedReferences)
+                    restoreDraft(text, attachments: selectedAttachments, references: selectedReferences, scope: scope)
                 }
                 return
             }
@@ -36,7 +38,7 @@ extension AssistantView {
                 onEnqueued: reserveReplySpace
             )
             if materialized == nil {
-                restoreDraft(text, attachments: selectedAttachments, references: selectedReferences)
+                restoreDraft(text, attachments: selectedAttachments, references: selectedReferences, scope: scope)
             }
         }
     }
@@ -44,8 +46,28 @@ extension AssistantView {
     private func restoreDraft(
         _ text: String,
         attachments selectedAttachments: [MessageAttachment],
-        references selectedReferences: [ContextReference]
+        references selectedReferences: [ContextReference],
+        scope: String
     ) {
+        guard composerDraftScope == scope else {
+            let store = ComposerDraftStore()
+            do {
+                var saved = try store.read(scope)
+                if saved.text.isEmpty {
+                    saved.text = text
+                }
+                if saved.attachments.isEmpty {
+                    saved.attachments = selectedAttachments
+                }
+                if saved.references.isEmpty {
+                    saved.references = selectedReferences
+                }
+                try store.save(saved, scope: scope)
+            } catch {
+                attachmentError = error.localizedDescription
+            }
+            return
+        }
         if draft.isEmpty {
             draft = text
         }
@@ -55,5 +77,6 @@ extension AssistantView {
         if references.isEmpty {
             references = selectedReferences
         }
+        saveComposerDraft()
     }
 }

@@ -35,7 +35,7 @@ struct MessageDetailView: View {
                     Text("附件").font(.headline).padding(.top, 18)
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(message.attachments) { attachment in
-                            if attachment.isImage, let uri = attachment.uri {
+                            if attachment.isImage, let uri = attachment.imageSource {
                                 MarkdownImageView(
                                     alt: attachment.name ?? "图片",
                                     source: uri,

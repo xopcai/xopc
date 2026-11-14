@@ -12,8 +12,8 @@ final class NoteEditorDiscardUITests: XCTestCase {
         app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18790"
         app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = token
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-progress"].waitForExistence(timeout: 10))
-        app.buttons["home-tab-progress"].tap()
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
+        app.openHomeDestination("progress")
         app.buttons["项目"].tap()
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))

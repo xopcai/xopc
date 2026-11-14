@@ -19,7 +19,7 @@ import XCTest
         app.launchArguments = ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
         app.launch()
-        if !app.buttons["home-tab-conversations"].waitForExistence(timeout: 5) {
+        if !app.buttons["chat-header-sidebar"].waitForExistence(timeout: 5) {
             let setup = try await request(lab, "/lab/pair", method: "POST")
             let link = try XCTUnwrap((setup["setup"] as? [String: Any])?["universalLink"] as? String)
             let paste = app.buttons["粘贴连接链接"]
@@ -29,7 +29,7 @@ import XCTest
             let field = app.descendants(matching: .any)["gateway-pairing-link"]
             XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap(); field.typeText(link)
             app.buttons["连接 Gateway"].tap()
-            XCTAssertTrue(app.buttons["home-tab-conversations"].waitForExistence(timeout: 35), "Real device pairing must complete before testing approvals")
+            XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 35), "Real device pairing must complete before testing approvals")
         }
     }
 
@@ -46,8 +46,7 @@ import XCTest
     }
 
     private func openConversation(_ phase: String) {
-        let tab = app.buttons["home-tab-conversations"]
-        XCTAssertTrue(tab.waitForExistence(timeout: 20)); tab.tap()
+        app.openHomeDestination("conversations")
         let search = app.textFields["conversations-search-field"]
         XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap()
         if let value = search.value as? String, value != search.placeholderValue {

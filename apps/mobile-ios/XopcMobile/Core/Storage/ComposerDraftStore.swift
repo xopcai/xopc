@@ -45,6 +45,12 @@ struct ComposerDraftStore {
         try JSONEncoder().encode(selection).write(to: url(Self.accountScope(configuration) + ":selection"), options: [.atomic, .completeFileProtection])
     }
 
+    func clearSelection(configuration: GatewayConfiguration) throws {
+        let path = try url(Self.accountScope(configuration) + ":selection")
+        do { try FileManager.default.removeItem(at: path) }
+        catch let error as CocoaError where error.code == .fileNoSuchFile {}
+    }
+
     func readSelection(configuration: GatewayConfiguration) throws -> ConversationSelection? {
         let path = try url(Self.accountScope(configuration) + ":selection")
         guard FileManager.default.fileExists(atPath: path.path) else { return nil }

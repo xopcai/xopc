@@ -9,23 +9,31 @@ struct AssistantView<Dock: View>: View {
     let realtimeVoiceCall: RealtimeVoiceCall
     let conversation: ConversationSelection?
     let personalAgent: PersonalAgentRecord?
-    let quickChatHandoff: QuickChatHandoff?
     let onStartConversation: (String) -> Void
     let onStartScopedConversation: (ProjectRecord?, String?, String) -> Void
     let onConversationUpdated: (ConversationSelection) -> Void
-    let onQuickChatHandled: (UUID) -> Void
     let onPersonalAgentUpdated: (PersonalAgentRecord) -> Void
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
     var showsFloatingHeader = true
+    var onOpenSidebar: (() -> Void)?
+    var onOpenProgress: () -> Void = {}
+    var onConversationUnavailable: (String) async -> Void = { _ in }
+    var pendingAttention = 0
+    var sidebarOpen = false
+    var homeChatError: String?
+    var onRetryHomeChat: () -> Void = {}
+    var onPhoneVisibilityChanged: (Bool) -> Void = { _ in }
+    var onActionPanelVisibilityChanged: (Bool) -> Void = { _ in }
     var sessionActionsRequest = 0
     var messageSearchRequest = 0
     var externalIntake: ExternalIntakeBatch?
     var onExternalIntakeFinished: (UUID, String?) -> Void = { _, _ in }
-    let bottomDock: (AssistantComposer, Bool) -> Dock
+    let bottomDock: (AssistantComposer) -> Dock
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var locale
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
     @State var state = AssistantState()
@@ -47,7 +55,6 @@ struct AssistantView<Dock: View>: View {
     @State private var showingPersonalProfile = false
     @State private var showingMessageSearch = false
     @State private var executionPresentation: ExecutionActivityPresentation?
-    @State private var handledQuickChatID: UUID?
     @State private var readAloud = ChatReadAloud()
     @State private var assistantAudio = AssistantAudioAutoplay()
     @State private var generatedMedia = GeneratedMediaState()
@@ -82,9 +89,12 @@ struct AssistantView<Dock: View>: View {
                 guard isActive, scenePhase == .active, let conversation, !conversation.isDraft else { phone.leave(); return }
                 await phone.observe(configuration: configuration, conversationID: conversation.id, visible: showingPhone)
             }
-            .onChange(of: showingPhone) { phone.setVisible(showingPhone) }
+            .onChange(of: showingPhone) {
+                phone.setVisible(showingPhone)
+                onPhoneVisibilityChanged(showingPhone)
+            }
             .onChange(of: conversation?.id) { showingPhone = false }
-            .onDisappear { phone.leave() }
+            .onDisappear { phone.leave(); onPhoneVisibilityChanged(false) }
     }
 
     private var chatLayout: some View {
@@ -94,12 +104,6 @@ struct AssistantView<Dock: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
                 .ignoresSafeArea(.container, edges: .top)
-                .overlay(alignment: .bottom) {
-                    Color(uiColor: .systemGroupedBackground)
-                        .frame(height: 24)
-                        .ignoresSafeArea(edges: .bottom)
-                        .allowsHitTesting(false)
-                }
             VStack(spacing: 0) {
                 if readAloud.state == .failed, let error = readAloud.errorMessage {
                     TransientComposerFeedback(message: error) { readAloud.stop() }
@@ -107,15 +111,17 @@ struct AssistantView<Dock: View>: View {
                 } else if readAloud.state != .idle {
                     readAloudBar
                 }
-                bottomDock(composer, isActionPanelExpanded)
+                if conversation != nil {
+                    bottomDock(composer).padding(.bottom, 4)
+                }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomDockHeight = $0 }
         }
-        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .background(ChatAppearance.canvas(colorScheme).ignoresSafeArea())
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { messageViewportHeight = $0 }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { chatTopInset = $0 }
         .overlay(alignment: .top) {
-            Color(uiColor: .systemGroupedBackground)
+            ChatAppearance.canvas(colorScheme)
                 .frame(height: chatTopInset)
                 .offset(y: -chatTopInset)
                 .allowsHitTesting(false)
@@ -123,13 +129,26 @@ struct AssistantView<Dock: View>: View {
         }
         .overlay(alignment: .top) {
             if showsFloatingHeader {
-                floatingHeader.padding(.horizontal, 20).padding(.top, 8)
+                floatingHeader
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 6)
+                    .background {
+                        ChatAppearance.canvas(colorScheme)
+                            .mask(alignment: .top) {
+                                VStack(spacing: 0) {
+                                    Rectangle()
+                                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                                        .frame(height: 6)
+                                }
+                            }
+                    }
             }
         }
     }
 
     private var chatLifecycle: some View {
-        chatLayout
+        chatSelectionLifecycle
             .onChange(of: sessionActionsRequest) { showingSessionActions = true }
             .onChange(of: messageSearchRequest) { showingMessageSearch = true }
             .fullScreenCover(isPresented: $showingMessageSearch) {
@@ -145,28 +164,11 @@ struct AssistantView<Dock: View>: View {
                         .presentationDetents([.fraction(0.65)])
                 }
             }
-            .task(id: configuration) {
-                await state.load(using: GatewayClient(configuration: configuration))
-                if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
-                    state.select(agent)
-                }
-            }
-            .task(id: ConversationLoadKey(
-                configuration: configuration,
-                conversationID: conversation?.id,
-                transcriptID: conversation?.transcriptId,
-                isDraft: conversation?.isDraft,
-                isForeground: scenePhase == .active && isActive
-            )) {
-                guard scenePhase == .active, isActive else { state.pauseConversation(); return }
-                await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
-            }
-            .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                               isActive: isActive && scenePhase == .active))
-            {
-                guard scenePhase == .active, isActive, let conversation, !conversation.isDraft else { return }
-                await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
-            }
+            .onChange(of: isActionPanelExpanded, initial: true) { _, shown in onActionPanelVisibilityChanged(shown) }
+    }
+
+    private var chatSelectionLifecycle: some View {
+        chatObservation
             .onChange(of: scenePhase) {
                 if scenePhase != .active {
                     state.pauseConversation()
@@ -210,17 +212,48 @@ struct AssistantView<Dock: View>: View {
             .onChange(of: attachments) { scheduleComposerSave() }
             .onChange(of: references) { scheduleComposerSave() }
             .onChange(of: externalIntake?.id) { handleExternalIntake() }
-            .onChange(of: quickChatHandoff?.id) {
-                handleQuickChatHandoff()
+            .onChange(of: sidebarOpen) {
+                if sidebarOpen {
+                    isActionPanelExpanded = false
+                }
             }
-            .onAppear(perform: handleQuickChatHandoff)
-            .onDisappear {
-                attachmentError = nil
-                saveComposerDraft()
-                state.pauseConversation()
-                readAloud.stop()
-                assistantAudio.stop()
-                onInputFocusChanged(false)
+            .onDisappear(perform: chatDidDisappear)
+    }
+
+    private func chatDidDisappear() {
+        isActionPanelExpanded = false
+        onActionPanelVisibilityChanged(false)
+        attachmentError = nil
+        saveComposerDraft()
+        state.pauseConversation()
+        readAloud.stop()
+        assistantAudio.stop()
+        onInputFocusChanged(false)
+    }
+
+    private var chatObservation: some View {
+        chatLayout
+            .task(id: configuration) {
+                await state.load(using: GatewayClient(configuration: configuration))
+                if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
+                    state.select(agent)
+                }
+            }
+            .task(id: ConversationLoadKey(
+                configuration: configuration,
+                conversationID: conversation?.id,
+                transcriptID: conversation?.transcriptId,
+                isDraft: conversation?.isDraft,
+                isForeground: scenePhase == .active && isActive
+            )) {
+                guard scenePhase == .active, isActive else { state.pauseConversation(); return }
+                await loadChat()
+            }
+            .task(id: TaskResultObservationKey(configuration: configuration, conversationID: conversation?.id,
+                                               isActive: isActive && scenePhase == .active))
+            {
+                guard isActive, scenePhase == .active, let conversation, !conversation.isDraft else { return }
+                await state.observeTaskResults(in: conversation, using: GatewayClient(configuration: configuration))
             }
     }
 
@@ -322,14 +355,14 @@ struct AssistantView<Dock: View>: View {
                     }
                 }
             )) {
-                Button("开始新对话", role: .destructive) {
+                Button("开始新对话") {
                     if let start = pendingStart {
                         performStart(start)
                     }
                     pendingStart = nil
                 }
                 Button("取消", role: .cancel) { pendingStart = nil }
-            } message: { Text("当前未发送的文字、附件和引用将被清空。") }
+            } message: { Text("当前未发送的文字、附件和引用会保存在原会话。") }
             .alert("无法开始语音", isPresented: Binding(
                 get: { voiceStartError != nil },
                 set: {
@@ -346,7 +379,19 @@ struct AssistantView<Dock: View>: View {
 
     @ViewBuilder
     private var content: some View {
-        if state.isLoading, state.agents.isEmpty {
+        if conversation == nil, onOpenSidebar != nil {
+            if let homeChatError {
+                ContentUnavailableView {
+                    Label("无法打开个人助理", systemImage: "bubble.left")
+                } description: {
+                    Text(homeChatError)
+                } actions: {
+                    Button("重试", action: onRetryHomeChat)
+                }
+            } else {
+                ProgressView("正在连接助手…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        } else if state.isLoading, state.agents.isEmpty {
             ProgressView("正在连接助手…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let errorMessage = state.errorMessage, state.agents.isEmpty {
@@ -385,7 +430,7 @@ struct AssistantView<Dock: View>: View {
                             ErrorBanner(message: errorMessage)
                             Button("重试") {
                                 Task {
-                                    await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
+                                    await loadChat()
                                 }
                             }
                             .frame(minHeight: 44)
@@ -400,11 +445,18 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: max(0, viewport.size.height - 24))
                 }
-                .contentMargins(.top, chatTopInset + 72, for: .scrollContent)
+                .contentMargins(.top, chatTopInset + (isPersonalConversation ? 114 : 64), for: .scrollContent)
                 .contentMargins(.bottom, 24, for: .scrollContent)
             }
         } else {
             messageTimeline
+        }
+    }
+
+    private func loadChat() async {
+        await state.loadConversation(conversation, using: GatewayClient(configuration: configuration))
+        if let conversation, state.unavailableConversationID == conversation.id, !Task.isCancelled {
+            await onConversationUnavailable(conversation.id)
         }
     }
 
@@ -506,7 +558,7 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                 }
                 .defaultScrollAnchor(.bottom)
-                .contentMargins(.top, chatTopInset + 72, for: .scrollContent)
+                .contentMargins(.top, chatTopInset + (isPersonalConversation ? 114 : 64), for: .scrollContent)
                 .contentMargins(.bottom, 24 + replySpace.remaining, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
                 .onDisappear {
@@ -625,7 +677,7 @@ struct AssistantView<Dock: View>: View {
                                       }, onConfirm: {
                                           Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
                                       })
-                    .id("generated-media-\(card.id)")
+                                      .id("generated-media-\(card.id)")
                 }
             }
             .frame(maxWidth: maximumWidth, alignment: .leading)
@@ -758,14 +810,11 @@ struct AssistantView<Dock: View>: View {
 
     private var welcome: some View {
         VStack(spacing: 18) {
-            PersonalAgentAvatar(configuration: configuration, agent: isPersonalConversation ? personalAgent : nil,
-                                size: 108, active: isActive)
-                .accessibilityIdentifier("chat-welcome-loopi")
             Text(verbatim: isPersonalConversation
                 ? (locale.language.languageCode?.identifier == "zh"
                     ? "你好，我是\(personalAgent?.displayName ?? "Ada")。" : "Hi, I'm \(personalAgent?.displayName ?? "Ada").")
                 : (locale.language.languageCode?.identifier == "zh"
-                    ? "今天想推进什么？" : "What do you want to move forward?"))
+                    ? "今天想聊点什么？" : "What’s on your mind?"))
                 .font(.system(size: 20, weight: .medium))
                 .multilineTextAlignment(.center)
             if isPersonalConversation {
@@ -784,7 +833,8 @@ struct AssistantView<Dock: View>: View {
     private var composer: AssistantComposer {
         AssistantComposer(
             configuration: configuration,
-            focusAllowed: !showingPhone && !startingVoice && state.clarification?.kind != "approval",
+            focusAllowed: !sidebarOpen && !showingPhone && !startingVoice && !state.isLoadingHistory && state.clarification?.kind != "approval",
+            personalName: isPersonalConversation ? personalAgent?.displayName : nil,
             draft: $draft,
             attachments: $attachments,
             references: $references,
@@ -844,21 +894,6 @@ struct AssistantView<Dock: View>: View {
         }
     }
 
-    private func handleQuickChatHandoff() {
-        guard let quickChatHandoff, handledQuickChatID != quickChatHandoff.id else { return }
-        handledQuickChatID = quickChatHandoff.id
-        draft = quickChatHandoff.text
-        switch quickChatHandoff.action {
-        case .send:
-            send(delivery: .next)
-        case .voice:
-            showingVoiceRecorder = true
-        case .attachments:
-            isActionPanelExpanded = true
-        }
-        onQuickChatHandled(quickChatHandoff.id)
-    }
-
     private func requestConversation(_ agentID: String) {
         requestStart(.agent(agentID))
     }
@@ -883,67 +918,99 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var floatingHeader: some View {
-        HStack(spacing: 12) {
-            Group {
-                if isPersonalConversation {
-                    Button { showingPersonalProfile = true } label: {
-                        HStack(spacing: 8) {
-                            PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 36, active: isActive)
-                            Text(verbatim: currentAgentName).font(.system(size: 16, weight: .medium)).lineLimit(1).fixedSize(horizontal: true, vertical: false)
-                        }
-                        .padding(.leading, 6).padding(.trailing, 14).frame(height: 48)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-                        .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
-                    }.buttonStyle(.plain).accessibilityLabel("配置助手").fixedSize(horizontal: true, vertical: false)
-                } else {
+        ZStack(alignment: .top) {
+            HStack(spacing: 6) {
+                if let onOpenSidebar {
+                    headerButton("打开导航", symbol: "line.3.horizontal", action: onOpenSidebar)
+                        .accessibilityIdentifier("chat-header-sidebar")
+                }
+                if !isPersonalConversation {
                     Menu {
                         ForEach(state.agents) { agent in
                             Button { requestConversation(agent.id) } label: { Text(verbatim: agent.displayName) }
                         }
                     } label: {
-                        HStack(spacing: 8) {
-                            ConfiguredAgentAvatar(configuration: configuration,
-                                                  agent: state.agents.first(where: { $0.id == conversation?.agentId }) ?? state.selectedAgent,
-                                                  size: 36, active: isActive)
-                            Text(verbatim: conversationNavigationTitle).font(.system(size: 16, weight: .medium)).lineLimit(1)
-                        }.padding(.horizontal, 12).frame(height: 48)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+                        Text(verbatim: conversationNavigationTitle)
+                            .font(.subheadline.weight(.semibold)).lineLimit(1)
+                            .padding(.horizontal, 10)
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("chat-header-agent")
+                }
+                if phone.summary?.available == true, isPersonalConversation {
+                    phoneWorkspaceButton
+                }
+                Spacer(minLength: 0)
+                if phone.summary?.available == true, !isPersonalConversation {
+                    phoneWorkspaceButton
+                }
+                headerButton("语音通话", symbol: "phone", action: startRealtimeVoice)
+                    .disabled(!canStartRealtimeVoice)
+                    .accessibilityIdentifier("chat-header-voice-call")
+                if !isPersonalConversation, conversation?.isDraft == true, onOpenSidebar != nil {
+                    headerButton("新建对话", symbol: "square.and.pencil") {
+                        requestConversation(state.defaultAgentID ?? "main")
+                    }
+                    .accessibilityIdentifier("chat-header-new")
+                } else {
+                    headerButton(isPersonalConversation ? "配置助手" : "会话选项",
+                                 symbol: isPersonalConversation ? "slider.horizontal.3" : "ellipsis")
+                    {
+                        if isPersonalConversation {
+                            showingPersonalProfile = true
+                        } else {
+                            showingSessionActions = true
+                        }
+                    }
+                    .accessibilityIdentifier("assistant-options")
+                }
+            }
+            if isPersonalConversation {
+                VStack(spacing: 4) {
+                    Button { showingPersonalProfile = true } label: {
+                        VStack(spacing: 4) {
+                            PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 50, active: isActive)
+                                .accessibilityHidden(true)
+                            Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
+                        }
+                        .frame(maxWidth: 120)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("chat-header-personal")
+                    if pendingAttention > 0 {
+                        Button(action: onOpenProgress) {
+                            Label {
+                                Text("有 \(pendingAttention) 项待你处理")
+                            } icon: { Circle().fill(.orange).frame(width: 6, height: 6) }
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("chat-header-attention")
                     }
                 }
             }
-            Spacer(minLength: 0)
-            HStack(spacing: 0) {
-                if phone.summary?.available == true {
-                    Button { showingPhone = true } label: {
-                        Image(systemName: "iphone").font(.system(size: 22)).frame(width: 44, height: 44)
-                            .overlay(alignment: .topTrailing) {
-                                if phone.needsAttention {
-                                    Circle().fill(.blue).frame(width: 6, height: 6).padding(6)
-                                }
-                            }
-                    }.accessibilityLabel("查看手机").accessibilityIdentifier("chat-header-phone")
-                }
-                Button(action: startRealtimeVoice) {
-                    Image(systemName: "phone").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(.rect)
-                }
-                .disabled(!canStartRealtimeVoice)
-                .accessibilityLabel("语音通话")
-                .accessibilityIdentifier("chat-header-voice-call")
-                Button {
-                    if isPersonalConversation {
-                        showingPersonalProfile = true
-                    } else {
-                        showingSessionActions = true
-                    }
-                } label: { Image(systemName: "gearshape").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(.rect) }
-                    .accessibilityLabel(isPersonalConversation ? "配置助手" : "会话选项")
-                    .accessibilityIdentifier("assistant-options")
-            }.buttonStyle(.plain).padding(.horizontal, 4).frame(height: 48)
-                .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-                .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat-floating-header")
+    }
+
+    private var phoneWorkspaceButton: some View {
+        headerButton("查看手机", symbol: "iphone") { showingPhone = true }
+            .overlay(alignment: .topTrailing) {
+                if phone.needsAttention {
+                    Circle().fill(.blue).frame(width: 6, height: 6).padding(6).allowsHitTesting(false)
+                }
+            }
+            .accessibilityIdentifier("chat-header-phone")
+    }
+
+    private func headerButton(_ title: LocalizedStringKey, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.title3).frame(width: 44, height: 44)
+                .background(ChatAppearance.card(colorScheme), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 }
 
@@ -1033,7 +1100,9 @@ struct PersonalAgentProfileView: View {
             .task {
                 guard !loadedProfile else { return }
                 await reloadProfile()
-                if !Task.isCancelled { loadedProfile = true }
+                if !Task.isCancelled {
+                    loadedProfile = true
+                }
                 await loadVoices()
             }
             .task { await loadModelSettings() }
@@ -1048,7 +1117,9 @@ struct PersonalAgentProfileView: View {
                             HStack {
                                 Text(callModeTitle(mode))
                                 Spacer()
-                                if mode == callMode { Image(systemName: "checkmark") }
+                                if mode == callMode {
+                                    Image(systemName: "checkmark")
+                                }
                             }
                         }
                     }
@@ -1067,9 +1138,15 @@ struct PersonalAgentProfileView: View {
                     Button("关闭", systemImage: "xmark") {
                         nameSaveTask?.cancel()
                         Task {
-                            if error != nil { dismiss(); return }
-                            if hasProfileChanges { await save() }
-                            if error == nil { dismiss() }
+                            if error != nil {
+                                dismiss(); return
+                            }
+                            if hasProfileChanges {
+                                await save()
+                            }
+                            if error == nil {
+                                dismiss()
+                            }
                         }
                     }
                     .labelStyle(.iconOnly)
@@ -1181,7 +1258,9 @@ struct PersonalAgentProfileView: View {
                 error = nil
             }
         } catch {
-            if !Task.isCancelled { self.error = error.localizedDescription }
+            if !Task.isCancelled {
+                self.error = error.localizedDescription
+            }
         }
     }
 

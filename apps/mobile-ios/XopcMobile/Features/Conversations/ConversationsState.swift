@@ -12,6 +12,7 @@ final class ConversationsState {
     private(set) var errorMessage: String?
     private(set) var operatingConversationID: String?
     var searchText = ""
+    var personalConversationID: String?
     private var activeSearch = ""
     private var generation = 0
     private var nextOffset = 0
@@ -19,9 +20,10 @@ final class ConversationsState {
     var visibleConversations: [ConversationSummary] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard query == activeSearch else { return [] }
-        guard !query.isEmpty else { return conversations.filter { $0.messageCount > 0 } }
-        let titleMatches = conversations.filter { $0.messageCount > 0 && $0.displayName.localizedCaseInsensitiveContains(query) }
-        let otherMatches = conversations.filter { $0.messageCount > 0 && !$0.displayName.localizedCaseInsensitiveContains(query) }
+        let history = conversations.filter { $0.messageCount > 0 && $0.id != personalConversationID }
+        guard !query.isEmpty else { return history }
+        let titleMatches = history.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
+        let otherMatches = history.filter { !$0.displayName.localizedCaseInsensitiveContains(query) }
         return titleMatches + otherMatches
     }
 
@@ -121,22 +123,25 @@ final class ConversationsState {
         }
     }
 
-    func delete(_ conversation: ConversationSummary, using gateway: any GatewayServing) async {
+    func delete(_ conversation: ConversationSummary, using gateway: any GatewayServing) async -> Bool {
         await perform(on: conversation.id) {
             try await gateway.deleteConversation(id: conversation.id)
             conversations.removeAll { $0.id == conversation.id }
         }
     }
 
-    private func perform(on id: String, operation: () async throws -> Void) async {
-        guard operatingConversationID == nil else { return }
+    @discardableResult
+    private func perform(on id: String, operation: () async throws -> Void) async -> Bool {
+        guard operatingConversationID == nil else { return false }
         operatingConversationID = id
         errorMessage = nil
         defer { operatingConversationID = nil }
         do {
             try await operation()
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 }

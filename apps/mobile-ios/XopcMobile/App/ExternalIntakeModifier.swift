@@ -44,6 +44,7 @@ struct ExternalIntakeModifier: ViewModifier {
     private func refresh() {
         guard !appState.gatewayConfiguration.token.isEmpty, appState.externalIntake == nil else { return }
         do { selection = try ExternalIntakeStore().pending().first }
+        catch let error as CocoaError where error.code == .fileNoSuchFile {}
         catch { errorMessage = error.localizedDescription }
     }
 }

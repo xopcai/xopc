@@ -9,7 +9,6 @@ struct ProfileView: View {
     var personalAgentError: String?
     var onOpenPersonalAgent: () -> Void = {}
     var onPersonalAgentUpdated: (PersonalAgentRecord) -> Void = { _ in }
-    var bottomInset: CGFloat = 0
 
     @Environment(\.locale) private var locale
 
@@ -137,7 +136,6 @@ struct ProfileView: View {
             }
         }
         .listSectionSpacing(16)
-        .contentMargins(.bottom, bottomInset, for: .scrollContent)
         .navigationTitle(AppLocalization.string("我的", locale: locale))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
