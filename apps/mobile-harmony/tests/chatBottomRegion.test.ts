@@ -101,11 +101,11 @@ describe('chat bottom region composition', () => {
     expect(home).not.toContain("$r('sys.symbol.star')");
     expect(home).toContain('this.attention.needsUser.length');
     expect(chat).toContain(".id('chat-bottom-region').width('100%')");
-    expect(chat).toContain("Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.surface)");
+    expect(chat).toContain("Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.chat.canvas)");
     expect(chat).not.toContain("}.id('chat-bottom-region').width('100%').backgroundColor");
     expect(home).toContain(".id('secondary-bottom-region').width('100%')");
     expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
-    expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)");
+    expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.chat.canvas)");
     expect(chat).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
     expect(chat).toContain('.borderRadius(24).clip(true)');
     expect(home).toContain(".id('main-tab-dock').width('100%')");
@@ -113,7 +113,7 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)");
     expect(home).toContain('.borderRadius(24).clip(true)');
     expect(home).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
-    expect(chat).toContain(".id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)");
+    expect(chat).toContain(".id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.chat.composer)");
     expect(home).toContain(".id('home-quick-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)");
     expect(home).toContain('.borderRadius(18).clip(true).margin({ top: 8, bottom: 8 })');
     expect(home).not.toContain(".id('secondary-tab-dock')");

@@ -13,21 +13,21 @@ export struct XopcChatResultCapsule {
   build() {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 8 }) {
-        SymbolGlyph(this.symbol).fontSize(18).fontColor([this.colors.accent]).flexShrink(0)
+        SymbolGlyph(this.symbol).fontSize(18).fontColor([this.colors.chat.action]).flexShrink(0)
         Column({ space: 2 }) {
           Text(this.title).fontSize(14).fontColor(this.colors.foreground)
-            .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width('100%').textAlign(TextAlign.Start).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           if (this.subtitle) {
-            Text(this.subtitle).fontSize(12).fontColor(this.colors.secondary)
-              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(this.subtitle).fontSize(12).fontColor(this.colors.chat.secondary)
+              .width('100%').textAlign(TextAlign.Start).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
-        }.alignItems(HorizontalAlign.Start).flexShrink(1).constraintSize({ maxWidth: '100%' })
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         if (this.canOpen) {
-          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary]).flexShrink(0)
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.chat.secondary]).flexShrink(0)
         }
-      }.constraintSize({ maxWidth: '100%', minHeight: 44 }).padding({ left: 12, right: 12, top: 8, bottom: 8 })
-    }.id(this.entryId).constraintSize({ maxWidth: '100%', minHeight: 44 }).padding(0)
-      .borderRadius(18).backgroundColor(this.colors.input).enabled(this.canOpen)
+      }.width('100%').constraintSize({ minHeight: 44 }).padding({ left: 12, right: 12, top: 8, bottom: 8 })
+    }.id(this.entryId).width('100%').constraintSize({ maxWidth: 320, minHeight: 44 }).padding(0)
+      .borderRadius(18).backgroundColor(this.colors.chat.card).enabled(this.canOpen)
       .accessibilityText(this.title).onClick((): void => { this.onOpen(); })
   }
 }

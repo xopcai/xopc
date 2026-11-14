@@ -36,6 +36,7 @@ export struct XopcGeneratedMediaRow {
   @Local detailsOpen: boolean = false;
   @Event onPlay: () => void = (): void => {};
   @Event onCloseMusic: () => void = (): void => {};
+  @Event onLyricsExpanded: () => void = (): void => {};
   @Event onConfirm: () => void = (): void => {};
 
   @Computed get musicSelected(): boolean { return this.card.kind === 'music' && this.music.songId === this.card.item.id; }
@@ -46,7 +47,8 @@ export struct XopcGeneratedMediaRow {
     if (this.card.kind === 'music') {
       const parts: string[] = [];
       if (item.versionNumber) parts.push(this.zh ? '第 ' + item.versionNumber + ' 版' : 'Version ' + item.versionNumber);
-      if (item.durationMs) parts.push(generatedMediaTime(item.durationMs / 1000));
+      const duration = this.music.durationFor(item.id, item.durationMs);
+      if (duration > 0) parts.push(generatedMediaTime(duration));
       return parts.join(' · ');
     }
     return [item.duration === -1 ? (this.zh ? '自动时长' : 'Auto duration')
@@ -59,32 +61,33 @@ export struct XopcGeneratedMediaRow {
       Row({ space: 10 }) {
         Stack() {
           if (this.card.kind === 'music') {
-            Text('♫').fontSize(23).fontColor(this.colors.accent)
+            Text('♫').fontSize(23).fontColor(this.colors.chat.secondary)
           } else {
-            SymbolGlyph($r('sys.symbol.film')).fontSize(21).fontColor([this.colors.accent])
+            SymbolGlyph($r('sys.symbol.film')).fontSize(21).fontColor([this.colors.chat.secondary])
           }
-        }.width(42).height(42).borderRadius(13).backgroundColor(this.colors.accentSoft)
+        }.width(42).height(42).borderRadius(13).backgroundColor(this.colors.chat.canvas)
         Column({ space: 3 }) {
           Text(mediaTitle(this.card, this.zh)).fontSize(16).fontWeight(FontWeight.Medium)
             .fontColor(this.colors.foreground).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           Text([mediaStatus(this.card, this.zh), this.metadata()].filter((part: string): boolean => !!part).join(' · '))
-            .fontSize(12).fontColor(this.colors.secondary).maxLines(2)
+            .fontSize(12).fontColor(this.colors.chat.secondary).maxLines(2)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         if (this.card.item.state === 'completed') {
           if (this.musicSelected) {
             XopcGeneratedMusicButton({ music: this.music, zh: this.zh, onAction: this.onPlay })
           } else {
             Button({ type: ButtonType.Circle }) {
-              SymbolGlyph(this.videoSelected ? $r('sys.symbol.xmark') : $r('sys.symbol.play_fill')).fontSize(17).fontColor([this.colors.accent])
+              SymbolGlyph(this.videoSelected ? $r('sys.symbol.xmark') : $r('sys.symbol.play_fill')).fontSize(17).fontColor([this.colors.chat.action])
             }.id('generated-media-play-' + this.card.item.id).width(44).height(44).padding(0)
-              .backgroundColor(this.colors.accentSoft)
+              .backgroundColor(this.colors.chat.bubble)
               .accessibilityText(this.videoSelected ? (this.zh ? '关闭播放' : 'Close player') : (this.zh ? '播放' : 'Play'))
               .onClick((): void => { this.onPlay(); })
           }
         }
       }.width('100%')
       if (this.musicSelected) {
-        XopcGeneratedMusicControls({ card: this.card, music: this.music, zh: this.zh, onClose: this.onCloseMusic })
+        XopcGeneratedMusicControls({ card: this.card, music: this.music, zh: this.zh,
+          onClose: this.onCloseMusic, onLyricsExpanded: this.onLyricsExpanded })
       } else if (this.videoSelected) {
         XopcGeneratedVideoPlayer({ card: this.card, conversationId: this.conversationId, zh: this.zh })
       }
@@ -92,18 +95,19 @@ export struct XopcGeneratedMediaRow {
         if (this.card.item.estimatedCreditMicro !== undefined) {
           Text(this.zh ? '预估 ' + (this.card.item.estimatedCreditMicro / 1000000).toFixed(2) + ' 积分'
             : 'Estimated ' + (this.card.item.estimatedCreditMicro / 1000000).toFixed(2) + ' credits')
-            .fontSize(13).fontColor(this.colors.secondary)
+            .fontSize(13).fontColor(this.colors.chat.secondary)
         } else if (this.card.item.estimatedCostFen !== undefined) {
           Text((this.zh ? '预估 ¥' : 'Estimated ¥') + (this.card.item.estimatedCostFen / 100).toFixed(2))
-            .fontSize(13).fontColor(this.colors.secondary)
+            .fontSize(13).fontColor(this.colors.chat.secondary)
         }
         Button(this.submitting ? (this.zh ? '正在提交' : 'Submitting') : (this.zh ? '确认生成' : 'Generate video'))
           .id('generated-video-confirm-' + this.card.item.id).height(44).fontSize(14)
+          .backgroundColor(this.colors.chat.action).fontColor(this.colors.chat.onAction)
           .enabled(this.card.canConfirm && !this.submitting)
           .onClick((): void => { this.onConfirm(); })
         if (!this.card.canConfirm) {
           Text(this.zh ? '请在网关确认视频模型配置后重新准备草稿。' : 'Check the gateway video model and prepare a new draft.')
-            .fontSize(13).fontColor(this.colors.secondary)
+            .fontSize(13).fontColor(this.colors.chat.secondary)
         }
       }
       if (this.card.item.error || this.confirmationFailed) {
@@ -112,15 +116,15 @@ export struct XopcGeneratedMediaRow {
       }
       if (this.card.item.prompt) {
         Button(this.detailsOpen ? (this.zh ? '收起创作详情' : 'Hide details') : (this.zh ? '创作详情' : 'Details'))
-          .height(44).padding({ left: 0, right: 12 }).fontSize(13).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
+          .height(44).padding({ left: 0, right: 12 }).fontSize(13).backgroundColor(Color.Transparent).fontColor(this.colors.chat.secondary)
           .onClick((): void => { this.detailsOpen = !this.detailsOpen; })
         if (this.detailsOpen) {
-          Text(this.card.item.prompt).fontSize(14).fontColor(this.colors.secondary).width('100%')
+          Text(this.card.item.prompt).fontSize(14).fontColor(this.colors.chat.secondary).width('100%')
         }
       }
     }.id('generated-media-card-' + this.card.item.id).width('100%').constraintSize({ maxWidth: 440 })
-      .alignItems(HorizontalAlign.Start).padding(12).borderRadius(18)
-      .backgroundColor(this.colors.grouped)
+      .alignItems(HorizontalAlign.Start).padding(16).borderRadius(18)
+      .backgroundColor(this.colors.chat.card)
   }
 }
 
@@ -166,7 +170,7 @@ struct XopcGeneratedVideoPlayer {
   build() {
     Column({ space: 6 }) {
       if (this.loading) {
-        LoadingProgress().width(32).height(32).color(this.colors.accent)
+        LoadingProgress().width(32).height(32).color(this.colors.chat.action)
       } else if (this.failed) {
         Text(this.zh ? '无法播放这段视频' : 'Unable to play this video').fontColor(this.colors.danger)
         Button($r('app.string.refresh')).height(44).onClick((): void => {
@@ -194,15 +198,15 @@ struct XopcGeneratedMusicButton {
   build() {
     Button({ type: ButtonType.Circle }) {
       if (this.music.loading || ['loading', 'initialized'].includes(this.music.player.state)) {
-        LoadingProgress().width(20).height(20).color(this.colors.accent)
+        LoadingProgress().width(20).height(20).color(this.colors.chat.action)
       } else if (this.music.failed || this.music.player.state === 'error') {
-        Text('↻').fontSize(21).fontColor(this.colors.accent)
+        Text('↻').fontSize(21).fontColor(this.colors.chat.action)
       } else {
         SymbolGlyph(this.music.player.state === 'playing' ? $r('sys.symbol.pause_fill') : $r('sys.symbol.play_fill'))
-          .fontSize(17).fontColor([this.colors.accent])
+          .fontSize(17).fontColor([this.colors.chat.action])
       }
     }.id('generated-media-toggle-' + this.music.songId).width(44).height(44).padding(0)
-      .backgroundColor(this.colors.accentSoft)
+      .backgroundColor(this.colors.chat.bubble)
       .enabled(!this.music.loading && !['loading', 'initialized'].includes(this.music.player.state))
       .accessibilityText(this.music.failed || this.music.player.state === 'error' ? (this.zh ? '重试' : 'Retry')
         : this.music.player.state === 'playing' ? (this.zh ? '暂停' : 'Pause') : (this.zh ? '播放' : 'Play'))
@@ -219,6 +223,7 @@ struct XopcGeneratedMusicControls {
   @Local lyricsOpen: boolean = false;
   @Local scrubPosition: number = -1;
   @Event onClose: () => void = (): void => {};
+  @Event onLyricsExpanded: () => void = (): void => {};
 
   @Computed get displayPosition(): number {
     return this.scrubPosition >= 0 ? this.scrubPosition : this.music.player.position;
@@ -232,6 +237,7 @@ struct XopcGeneratedMusicControls {
       } else {
         Slider({ value: this.displayPosition, min: 0, max: Math.max(1, this.music.player.duration), step: 1 })
           .width('100%').enabled(this.music.player.duration > 0)
+          .selectedColor(this.colors.chat.action).blockColor(this.colors.chat.action)
           .accessibilityText(this.zh ? '播放进度' : 'Playback progress')
           .onChange((position: number, mode: SliderChangeMode): void => {
             if (mode === SliderChangeMode.Begin || mode === SliderChangeMode.Moving) this.scrubPosition = position;
@@ -241,27 +247,39 @@ struct XopcGeneratedMusicControls {
             }
           })
         Row() {
-          Text(generatedMediaTime(this.displayPosition)).fontSize(13).fontColor(this.colors.secondary)
-          Text(generatedMediaTime(this.music.player.duration || (this.card.item.durationMs ?? 0) / 1000))
-            .fontSize(13).fontColor(this.colors.secondary)
+          Text(generatedMediaTime(this.displayPosition)).fontSize(13).fontColor(this.colors.chat.secondary)
+          Text(generatedMediaTime(this.music.durationFor(this.card.item.id, this.card.item.durationMs)))
+            .fontSize(13).fontColor(this.colors.chat.secondary)
         }.justifyContent(FlexAlign.SpaceBetween).width('100%')
       }
       Row() {
         if (this.card.item.lyrics) {
           Button(this.lyricsOpen ? (this.zh ? '收起歌词' : 'Hide lyrics') : (this.zh ? '歌词' : 'Lyrics'))
-            .height(44).backgroundColor(this.colors.accentSoft).fontColor(this.colors.accent)
+            .id('generated-music-lyrics-toggle-' + this.card.item.id)
+            .height(44).padding({ left: 0, right: 12 }).fontSize(13)
+            .backgroundColor(Color.Transparent).fontColor(this.colors.chat.secondary)
             .onClick((): void => { this.lyricsOpen = !this.lyricsOpen; })
         }
         Blank()
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([this.colors.secondary])
-        }.width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([this.colors.chat.secondary])
+        }.id('generated-music-close-' + this.card.item.id)
+          .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .accessibilityText(this.zh ? '关闭播放' : 'Close player')
           .onClick((): void => { this.onClose(); })
       }.width('100%')
       if (this.lyricsOpen && this.card.item.lyrics) {
-        Text(this.card.item.lyrics).width('100%').fontSize(16).lineHeight(26)
-          .fontColor(this.colors.foreground).textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)
+        Scroll() {
+          Text(this.card.item.lyrics).width('100%').fontSize(16).lineHeight(26)
+            .padding({ right: 8 }).fontColor(this.colors.foreground)
+            .textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)
+        }.id('generated-music-lyrics-' + this.card.item.id)
+          .width('100%').constraintSize({ maxHeight: 160 }).scrollBar(BarState.Auto)
+          .edgeEffect(EdgeEffect.None)
+          .nestedScroll({ scrollForward: NestedScrollMode.SELF_FIRST, scrollBackward: NestedScrollMode.SELF_FIRST })
+          .onAreaChange((previous: Area, current: Area): void => {
+            if (Number(previous.height) === 0 && Number(current.height) > 0) this.onLyricsExpanded();
+          })
       }
     }.id('generated-media-inline-' + this.card.item.id).width('100%').alignItems(HorizontalAlign.Start)
   }

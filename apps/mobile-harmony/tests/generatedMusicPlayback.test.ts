@@ -29,9 +29,28 @@ it('pauses and resumes a selected song without downloading it again', async () =
   await music.play('/cache', 'chat', 'song');
   await music.play('/cache', 'chat', 'song');
   expect(mocks.download).toHaveBeenCalledTimes(1);
-  expect(mocks.open).toHaveBeenCalledWith(expect.stringMatching(/^\/cache\/generated-music-/), 1024, true);
+  expect(mocks.open).toHaveBeenCalledWith(expect.stringMatching(/^\/cache\/generated-music-/), 1024, true, expect.any(Function));
   expect(mocks.toggle).toHaveBeenCalledTimes(2);
   expect(music.songId).toBe('song');
+});
+
+it('uses the measured duration for the same song after closing and ignores stale player callbacks', async () => {
+  const music = new XopcGeneratedMusicPlayback();
+  expect(music.durationFor('first', 125_000)).toBe(125);
+  await music.play('/cache', 'chat', 'first');
+  const firstDuration = mocks.open.mock.calls[0][3] as (seconds: number) => void;
+  firstDuration(123.4);
+  expect(music.durationFor('first', 125_000)).toBe(123.4);
+  await music.play('/cache', 'chat', 'second');
+  firstDuration(122);
+  expect(music.durationFor('first', 125_000)).toBe(123.4);
+  expect(music.durationFor('second', 100_000)).toBe(100);
+  const secondDuration = mocks.open.mock.calls[1][3] as (seconds: number) => void;
+  secondDuration(98);
+  await music.stop();
+  expect(music.durationFor('second', 100_000)).toBe(98);
+  music.clearDurations();
+  expect(music.durationFor('second', 100_000)).toBe(100);
 });
 
 it('discards the old download if another song starts first', async () => {

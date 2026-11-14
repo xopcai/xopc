@@ -69,7 +69,8 @@ export struct XopcChatMessageContent {
   }
 
   private previewFadeColor(alpha: string): string {
-    const background = this.row.role === 'user' ? this.colors.accentSoft : this.colors.panel;
+    const background = this.row.role === 'user' ? this.colors.chat.bubble
+      : this.row.role === 'assistant' ? this.colors.chat.assistant : this.colors.chat.canvas;
     const color = this.getUIContext().getHostContext()?.resourceManager.getColorSync(background) ?? 0xFFFFFFFF;
     return '#' + alpha + (color >>> 0).toString(16).padStart(8, '0').slice(2);
   }
@@ -79,14 +80,14 @@ export struct XopcChatMessageContent {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 8 }) {
         SymbolGlyph(ref.kind === 'task' ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.doc_text'))
-          .fontSize(15).fontColor([this.colors.secondary])
+          .fontSize(15).fontColor([this.colors.chat.secondary])
         Text(ref.title || ref.sourceId).fontSize(13).fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          .fontColor(this.colors.chat.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.tertiary])
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.chat.secondary])
       }.width('100%').height('100%').alignItems(VerticalAlign.Center)
     }.id('chat-reference-' + ref.kind + '-' + ref.sourceId).width('100%').height(40)
-      .padding({ left: 10, right: 8 }).borderRadius(10).backgroundColor(this.colors.panel)
+      .padding({ left: 10, right: 8 }).borderRadius(10).backgroundColor(this.colors.chat.card)
       .onClick((): void => {
         this.onNavigate({ page: ref.kind === 'task' ? 'tasks' : ref.kind === 'user_assertion' ? 'about-you' : 'notes', itemId: ref.sourceId });
       })
@@ -119,6 +120,9 @@ export struct XopcChatMessageContent {
         }.id('chat-message-preview-' + this.row.id).width('100%')
           .accessibilityText($r('app.string.chat_message_detail'))
           .onClick((): void => { this.onShowMore(this.row); })
+        Button($r('app.string.chat_view_more')).height(44).fontSize(13)
+          .padding({ left: 0, right: 12 }).backgroundColor(Color.Transparent).fontColor(this.colors.chat.action)
+          .onClick((): void => { this.onShowMore(this.row); })
       } else {
         if (this.row.role !== 'user') {
           ForEach(this.row.refs || [], (ref: XopcContextRef) => {
@@ -137,13 +141,13 @@ export struct XopcChatMessageContent {
                 Text($r('app.string.chat_review')).fontSize(16).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
                 Text(item.item.review.overallCorrectness === 'patch is incorrect' ? $r('app.string.chat_review_incorrect')
                   : item.item.review.overallCorrectness === 'patch is correct' ? $r('app.string.chat_review_correct') : $r('app.string.chat_review_unknown'))
-                  .fontSize(12).fontColor(this.colors.secondary)
+                  .fontSize(12).fontColor(this.colors.chat.secondary)
                 if (item.item.review.summary) { XopcMarkdownView({ textSelectable: this.textSelectable, content: item.item.review.summary, conversationId: this.conversationId,
                   compactReading: true, onNavigate: this.onNavigate }) }
                 ForEach(item.item.review.findings || [], (finding: XopcReviewFinding, index: number) => {
                   Column({ space: 6 }) {
                     Text('P' + finding.priority + ' · ' + finding.title).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-                    if (finding.filePath) { Text(finding.filePath + (finding.lineStart ? ':' + finding.lineStart : '')).fontSize(12).fontFamily('monospace').fontColor(this.colors.secondary).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None) }
+                    if (finding.filePath) { Text(finding.filePath + (finding.lineStart ? ':' + finding.lineStart : '')).fontSize(12).fontFamily('monospace').fontColor(this.colors.chat.secondary).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None) }
                     XopcMarkdownView({ textSelectable: this.textSelectable, content: finding.body, conversationId: this.conversationId, compactReading: true,
                       onNavigate: this.onNavigate })
                   }.width('100%').padding(10).borderRadius(8).backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
@@ -168,7 +172,7 @@ export struct XopcChatMessageContent {
             this.reference(ref)
           }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
         } else {
-          Text(this.row.text).fontSize(13).fontColor(this.colors.secondary).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
+          Text(this.row.text).fontSize(13).fontColor(this.colors.chat.secondary).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)
         }
         Repeat<XopcHistoryMedia>(this.audioMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
           if (this.row.role === 'user') {
@@ -178,7 +182,7 @@ export struct XopcChatMessageContent {
               }.width(this.row.text ? 148 : '100%')
             }.width('100%').justifyContent(FlexAlign.Start)
           } else {
-            XopcChatMediaView({ file: item.item, conversationId: this.conversationId })
+            XopcChatMediaView({ file: item.item, conversationId: this.conversationId, conversationCard: true })
           }
         }).key((file: XopcHistoryMedia): string => file.id || file.uri)
         if (this.imageMedia.length) {
@@ -187,19 +191,22 @@ export struct XopcChatMessageContent {
         if (this.attachmentMedia.length) {
           if (this.row.role !== 'user') {
             Text($r('app.string.chat_attachments_heading')).fontSize(12).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.secondary)
+              .fontColor(this.colors.chat.secondary)
           }
           Repeat<XopcHistoryMedia>(this.displayedMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
-            XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true, imageGallery: this.galleryMedia })
+            XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true, conversationCard: true, imageGallery: this.galleryMedia })
           }).key((file: XopcHistoryMedia): string => file.id || file.uri)
           if (this.attachmentMedia.length > 3) {
             Button(this.mediaExpanded ? $r('app.string.chat_fewer_attachments')
               : $r('app.string.chat_more_attachments', this.attachmentMedia.length - 3)).height(44).fontSize(13)
-              .backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+              .backgroundColor(Color.Transparent).fontColor(this.colors.chat.action)
               .onClick((): void => { this.mediaExpanded = !this.mediaExpanded; })
           }
         }
-        if (this.row.role === 'assistant') { XopcChatResultTail({ row: this.row, conversationId: this.conversationId, messageImageGallery: this.galleryMedia, onNavigate: this.onNavigate, onFillDraft: this.onFillDraft }) }
+      }
+      if (this.row.role === 'assistant') {
+        XopcChatResultTail({ row: this.row, conversationId: this.conversationId, messageImageGallery: this.galleryMedia,
+          onNavigate: this.onNavigate, onFillDraft: this.onFillDraft })
       }
     }.width('100%').alignItems(this.row.role === 'user' ? HorizontalAlign.End : HorizontalAlign.Start)
   }

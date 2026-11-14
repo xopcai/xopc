@@ -500,6 +500,14 @@ export struct XopcHomeView {
     }
   }
 
+  @Computed get dockAccentColor(): Resource {
+    return this.tab === 0 ? this.colors.chat.action : this.colors.accent;
+  }
+
+  @Computed get dockSecondaryColor(): Resource {
+    return this.tab === 0 ? this.colors.chat.secondary : this.colors.secondary;
+  }
+
   @Builder
   tabItem(index: number, label: ResourceStr, icon: Resource) {
     Button({ type: ButtonType.Normal }) {
@@ -516,18 +524,19 @@ export struct XopcHomeView {
               XopcLoopi({ extent: 28, compact: true, activePage: this.tab === 0 && !this.detailVisible }).id('assistant-tab-loopi')
             }
           } else {
-            SymbolGlyph(icon).fontSize(22).fontColor([this.tab === index ? this.colors.accent : this.colors.secondary])
+            SymbolGlyph(icon).fontSize(22).fontColor([this.tab === index ? this.dockAccentColor : this.dockSecondaryColor])
           }
         }.width(42).height(28).justifyContent(FlexAlign.Center).borderRadius(16)
-          .backgroundColor(this.tab === index ? this.colors.active : Color.Transparent)
+          .backgroundColor(this.tab === index ? (index === 0 ? this.colors.chat.bubble : this.colors.active) : Color.Transparent)
         if (index === 2 && this.attention.needsUser.length) {
           Text(this.attention.needsUser.length > 99 ? '99+' : this.attention.needsUser.length.toString()).fontSize(10)
-            .fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft).borderRadius(8)
+            .fontColor(this.dockAccentColor)
+            .backgroundColor(this.tab === 0 ? this.colors.chat.bubble : this.colors.accentSoft).borderRadius(8)
             .constraintSize({ minWidth: 16, minHeight: 16 }).textAlign(TextAlign.Center).position({ x: 15, y: -5 })
         }
       }
       Text(label).fontSize(11).fontWeight(FontWeight.Medium)
-        .fontColor(this.tab === index ? this.colors.accent : this.colors.secondary)
+        .fontColor(this.tab === index ? this.dockAccentColor : this.dockSecondaryColor)
         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
     }.width('100%').height(44).justifyContent(FlexAlign.Center)
       .backgroundColor(Color.Transparent).borderRadius(26)

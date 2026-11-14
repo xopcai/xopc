@@ -12,8 +12,8 @@ describe('chat message interactions', () => {
     expect(sheet).not.toContain('FlexAlign.Center');
     expect(sheet).not.toContain('Alignment.Center');
   });
-  it('opens the full message from the preview without a separate view-more row', () => {
-    expect(content).not.toContain('app.string.chat_view_more');
+  it('opens the full message from the preview and the visible view-more action', () => {
+    expect(content).toContain("Button($r('app.string.chat_view_more'))");
     expect(content).toContain(".id('chat-message-preview-' + this.row.id)");
     expect(content).toContain(".accessibilityText($r('app.string.chat_message_detail'))");
     expect(content).toContain('.onClick((): void => { this.onShowMore(this.row); })');
