@@ -359,13 +359,15 @@ extension ProductStateTests {
                                                          runStatus: "running", activeConversationId: "child-1")])
         var gateway = GatewayStub()
         gateway.conversationPages = [
-            ConversationPage(items: [row("draft-1", count: 0)], total: 4, hasMore: true),
-            ConversationPage(items: [row("parent", count: 2)], total: 4, hasMore: true,
+            ConversationPage(items: [row("draft-1", count: 0)], total: 5, hasMore: true),
+            ConversationPage(items: [row("personal", count: 4)], total: 5, hasMore: true),
+            ConversationPage(items: [row("parent", count: 2)], total: 5, hasMore: true,
                              childrenByConversationId: ["parent": group]),
-            ConversationPage(items: [row("draft-2", count: 0)], total: 4, hasMore: true),
-            ConversationPage(items: [row("history", count: 1)], total: 4, hasMore: false)
+            ConversationPage(items: [row("draft-2", count: 0)], total: 5, hasMore: true),
+            ConversationPage(items: [row("history", count: 1)], total: 5, hasMore: false)
         ]
         let state = ConversationsState()
+        state.personalConversationID = "personal"
         await state.load(using: gateway)
         #expect(state.visibleConversations.map(\.id) == ["parent"])
         #expect(state.childrenByConversationID["parent"] == group)

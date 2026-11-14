@@ -8,11 +8,21 @@ struct AppRootView: View {
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
     @State private var personalAgent = PersonalAgentState()
     @State private var settingsPresented = false
-    @State private var quickDraft = ""
-    @State private var keyboardVisible = false
-    @State private var secondaryDockHeight: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sidebarOpen = false
+    @State private var composerFocused = false
+    @State private var phoneVisible = false
+    @State private var actionPanelVisible = false
+    @GestureState private var sidebarDrag: CGFloat = 0
+    @State private var reopenSidebar = false
+    @State private var recentConversations: [ConversationSummary] = []
+    @State private var recentError = false
+    @State private var recentLoading = false
+    @State private var recentRevision = 0
+    @State private var homeRetry = 0
+    @State private var pendingAttention = 0
+    @State private var defaultAgentID = "main"
     @State private var messageLinks = ChatMessageLinkRouter()
-    @FocusState private var quickInputFocused: Bool
     @AppStorage("app.language") private var language = AppLanguage.system.rawValue
     @AppStorage("app.appearance") private var appearance = AppAppearance.system.rawValue
 
@@ -25,7 +35,7 @@ struct AppRootView: View {
                     onManage: appState.gatewayProfiles.isEmpty ? nil : { settingsPresented = true }
                 )
             } else {
-                tabShell
+                homeShell
             }
         }
         .modifier(ExternalIntakeModifier(appState: appState))
@@ -105,268 +115,275 @@ struct AppRootView: View {
                   raw == AVAudioSession.InterruptionType.ended.rawValue else { return }
             Task { await realtimeVoiceCall.resumeAfterInterruption() }
         }
-        // Keep dock visibility in the same layout transaction as keyboard avoidance.
-        .onGeometryChange(for: Bool.self) { $0.safeAreaInsets.bottom > 100 } action: { keyboardVisible = $0 }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
-            quickInputFocused = false
-        }
     }
 
-    private var tabShell: some View {
-        TabView(selection: $appState.selectedTab) {
-            NavigationStack {
-                AssistantView(
-                    configuration: appState.gatewayConfiguration,
-                    isActive: appState.selectedTab == .assistant,
-                    realtimeVoiceCall: realtimeVoiceCall,
-                    conversation: appState.selectedConversation,
-                    personalAgent: personalAgent.record,
-                    quickChatHandoff: appState.quickChatHandoff,
-                    onStartConversation: appState.startConversation,
-                    onStartScopedConversation: appState.startScopedConversation,
-                    onConversationUpdated: appState.updateConversation,
-                    onQuickChatHandled: appState.consumeQuickChatHandoff,
-                    onPersonalAgentUpdated: personalAgent.applyProfile,
-                    onOpenSettings: { settingsPresented = true },
-                    onInputFocusChanged: { _ in },
-                    externalIntake: appState.externalIntake,
-                    onExternalIntakeFinished: appState.externalIntakeFinished
-                ) { composer, isActionPanelExpanded in
-                    bottomDock(showTabs: !isActionPanelExpanded) { composer }
-                }
-                .toolbar(.hidden, for: .navigationBar)
-            }
-            .tabItem { Label("助手", systemImage: "sparkles") }
-            .tag(AppTab.assistant)
-            .toolbar(.hidden, for: .tabBar)
+    private var homeShell: some View {
+        GeometryReader { geometry in
+            let width = min(350, geometry.size.width * 0.84)
+            let reveal = sidebarOpen ? 1 : min(1, sidebarDrag / max(1, width))
 
-            NavigationStack {
-                secondaryTab {
-                    ConversationsView(
-                        configuration: appState.gatewayConfiguration,
-                        onSelect: appState.open,
-                        onStartNew: { appState.startConversation(agentId: "main") },
-                        personalAgent: personalAgent.record,
-                        personalAgentLoading: personalAgent.isLoading || personalAgent.isOpening,
-                        personalAgentError: personalAgent.errorMessage,
-                        onOpenPersonalAgent: openPersonalAgent,
-                        onOpenSettings: { settingsPresented = true },
-                        bottomInset: secondaryDockHeight + 24
-                    )
+            NavigationStack(path: $appState.homePath) {
+                chatScreen
+                    .toolbar(.hidden, for: .navigationBar)
+                    .navigationDestination(for: HomeDestination.self, destination: destination)
+            }
+            .simultaneousGesture(sidebarGesture(width: width), including: canDragSidebar ? .all : .none)
+            .accessibilityHidden(sidebarOpen)
+            .overlay(alignment: .leading) {
+                Color.black.opacity(0.4 * reveal).ignoresSafeArea()
+                    .onTapGesture { setSidebar(false) }
+                    .allowsHitTesting(sidebarOpen).accessibilityHidden(true)
+            }
+            .overlay(alignment: .leading) {
+                if sidebarOpen || sidebarDrag > 0 {
+                    sidebar.frame(width: width)
+                        .offset(x: (reveal - 1) * width)
+                        .allowsHitTesting(sidebarOpen)
+                        .accessibilityHidden(!sidebarOpen)
+                        .transition(reduceMotion ? .opacity : .move(edge: .leading))
                 }
             }
-            .tabItem { Label("对话", systemImage: "bubble.left.and.bubble.right") }
-            .tag(AppTab.conversations)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack {
-                secondaryTab {
-                    ProgressHubView(
-                        configuration: appState.gatewayConfiguration,
-                        onOpenConversation: appState.openConversation,
-                        onStartProjectConversation: appState.startProjectConversation,
-                        bottomInset: secondaryDockHeight + 24
-                    )
-                }
+        }
+        .task(id: SidebarAttentionLoad(configuration: appState.gatewayConfiguration, language: language)) {
+            let configuration = appState.gatewayConfiguration
+            while !Task.isCancelled {
+                await loadAttention(using: configuration)
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
             }
-            .id("progress-\(appState.activeGatewayProfileID ?? "")")
-            .tabItem { Label("进展", systemImage: "chart.line.uptrend.xyaxis") }
-            .tag(AppTab.progress)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack {
-                secondaryTab {
-                    NotesView(
-                        configuration: appState.gatewayConfiguration,
-                        onOpenConversation: appState.openConversation,
-                        bottomInset: secondaryDockHeight + 24
-                    )
-                }
-            }
-            .id("library-\(appState.activeGatewayProfileID ?? "")")
-            .tabItem { Label("资料", systemImage: "folder") }
-            .tag(AppTab.notes)
-            .toolbar(.hidden, for: .tabBar)
-
-            NavigationStack {
-                secondaryTab {
-                    ProfileView(
-                        configuration: appState.gatewayConfiguration,
-                        onOpenGatewaySettings: { settingsPresented = true },
-                        personalAgent: personalAgent.record,
-                        personalAgentLoading: personalAgent.isLoading || personalAgent.isOpening,
-                        personalAgentError: personalAgent.errorMessage,
-                        onOpenPersonalAgent: openPersonalAgent,
-                        onPersonalAgentUpdated: personalAgent.applyProfile,
-                        bottomInset: secondaryDockHeight + 24
-                    )
-                }
-            }
-            .tabItem { Label("我的", systemImage: "person.crop.circle") }
-            .tag(AppTab.profile)
-            .toolbar(.hidden, for: .tabBar)
         }
         .task(id: appState.gatewayConfiguration) {
-            await personalAgent.refresh(using: appState.gatewayConfiguration)
-        }
-        .onChange(of: appState.selectedTab) {
-            if appState.selectedTab == .conversations || appState.selectedTab == .profile {
-                Task { await personalAgent.refresh(using: appState.gatewayConfiguration) }
-            }
-        }
-    }
-
-    private func openPersonalAgent() {
-        Task {
             let configuration = appState.gatewayConfiguration
-            guard let record = await personalAgent.open(using: configuration),
-                  configuration == appState.gatewayConfiguration else { return }
-            appState.openConversation(id: record.conversationId, title: record.displayName, agentId: record.agentId)
-        }
-    }
-
-    private func secondaryTab(@ViewBuilder content: () -> some View) -> some View {
-        ZStack(alignment: .bottom) {
-            content()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-                .overlay(alignment: .bottom) {
-                    Color(uiColor: .systemGroupedBackground)
-                        .frame(height: 24)
-                        .ignoresSafeArea(edges: .bottom)
-                        .allowsHitTesting(false)
-                }
-            bottomDock { quickComposer }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { secondaryDockHeight = $0 }
-        }
-        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-    }
-
-    private func bottomDock(
-        showTabs: Bool = true,
-        @ViewBuilder composer: () -> some View
-    ) -> some View {
-        VStack(spacing: 0) {
-            composer()
-            if showTabs, !keyboardVisible {
-                HStack(spacing: 0) {
-                    dockTab(.assistant, "助手", icon: "bubble.left")
-                    dockTab(.conversations, "对话", icon: "bubble.left.and.bubble.right")
-                    dockTab(.progress, "进展", icon: "checkmark.circle")
-                    dockTab(.notes, "资料", icon: "folder")
-                    dockTab(.profile, "我的", icon: "person")
-                }
-                .padding(.horizontal, 4)
-                .padding(.top, 8)
-                .padding(.bottom, 6)
+            if let catalog = try? await GatewayClient(configuration: configuration).fetchAgents(),
+               !Task.isCancelled, configuration == appState.gatewayConfiguration
+            {
+                defaultAgentID = catalog.defaultId
             }
         }
-        .frame(maxWidth: 720)
-        .background(Color(uiColor: .systemBackground), in: .rect(cornerRadius: 24))
-        .clipShape(.rect(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.06), radius: 12, y: -2)
-        .padding(.horizontal, 8)
-        .padding(.top, 4)
-        .frame(maxWidth: .infinity)
+        .task(id: HomeChatLoad(configuration: appState.gatewayConfiguration,
+                               needsSelection: appState.selectedConversation == nil, retry: homeRetry))
+        {
+            let configuration = appState.gatewayConfiguration
+            await personalAgent.refresh(using: configuration)
+            guard appState.selectedConversation == nil, !Task.isCancelled,
+                  configuration == appState.gatewayConfiguration, personalAgent.errorMessage == nil else { return }
+            await openPersonalAgent(remember: false)
+        }
+        .task(id: SidebarLoad(configuration: appState.gatewayConfiguration, open: sidebarOpen,
+                              revision: recentRevision, language: language))
+        {
+            guard sidebarOpen else { return }
+            let configuration = appState.gatewayConfiguration
+            async let recents: Void = loadRecent(using: configuration)
+            async let attention: Void = loadAttention(using: configuration)
+            _ = await (recents, attention)
+        }
+        .onChange(of: ComposerDraftStore.accountScope(appState.gatewayConfiguration)) {
+            setSidebar(false)
+            reopenSidebar = false
+            recentConversations = []
+            pendingAttention = 0
+            defaultAgentID = "main"
+        }
+        .onChange(of: appState.homePath) { old, current in
+            if old == [.conversations], current.isEmpty, reopenSidebar {
+                setSidebar(true)
+            }
+            if current.isEmpty {
+                reopenSidebar = false
+            }
+        }
     }
 
-    private var quickComposer: some View {
-        HStack(spacing: 8) {
-            Button {
-                openQuickChat(.voice)
-            } label: {
-                Image(systemName: "mic")
-                    .font(.system(size: 22))
-                    .frame(width: 40, height: 44)
-            }
-            .accessibilityLabel("语音输入")
-
-            TextField(quickPlaceholder, text: $quickDraft, axis: .vertical)
-                .focused($quickInputFocused)
-                .lineLimit(1 ... 3)
-                .submitLabel(.send)
-                .onSubmit { openQuickChat(.send) }
-                .accessibilityIdentifier("home-quick-composer")
-
-            if quickDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button {
-                    openQuickChat(.attachments)
-                } label: {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 24))
-                        .frame(width: 40, height: 44)
+    private var chatScreen: some View {
+        let configuration = appState.gatewayConfiguration
+        return AssistantView(
+            configuration: configuration,
+            isActive: appState.homePath.isEmpty,
+            realtimeVoiceCall: realtimeVoiceCall,
+            conversation: appState.selectedConversation,
+            personalAgent: personalAgent.record(using: configuration),
+            onStartConversation: appState.startConversation,
+            onStartScopedConversation: appState.startScopedConversation,
+            onConversationUpdated: appState.updateConversation,
+            onPersonalAgentUpdated: { updated in
+                if configuration == appState.gatewayConfiguration {
+                    personalAgent.applyProfile(updated, using: configuration)
                 }
-                .accessibilityLabel("添加内容")
+            },
+            onOpenSettings: { settingsPresented = true },
+            onInputFocusChanged: { composerFocused = $0 },
+            onOpenSidebar: { setSidebar(true) },
+            onOpenProgress: { navigate(.progress) },
+            onConversationUnavailable: { id in await recoverUnavailableConversation(id, using: configuration) },
+            pendingAttention: pendingAttention,
+            sidebarOpen: sidebarOpen,
+            homeChatError: personalAgent.errorMessage,
+            onRetryHomeChat: { homeRetry += 1 },
+            onPhoneVisibilityChanged: { phoneVisible = $0 },
+            onActionPanelVisibilityChanged: { actionPanelVisible = $0 },
+            externalIntake: appState.externalIntake,
+            onExternalIntakeFinished: appState.externalIntakeFinished
+        ) { composer in composer }
+    }
+
+    private func recoverUnavailableConversation(_ id: String, using configuration: GatewayConfiguration) async {
+        guard configuration == appState.gatewayConfiguration, appState.selectedConversation?.id == id else { return }
+        do {
+            let record: PersonalAgentRecord? = if let current = personalAgent.record(using: configuration) {
+                current
             } else {
-                Button {
-                    openQuickChat(.send)
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .frame(width: 40, height: 44)
+                try await GatewayClient(configuration: configuration).fetchPersonalAgent()
+            }
+            guard record?.conversationId != id, !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+            appState.conversationUnavailable(id)
+        } catch {
+            // Keep the selection retryable if the Gateway cannot identify the Personal Agent.
+        }
+    }
+
+    @ViewBuilder private func destination(_ route: HomeDestination) -> some View {
+        let configuration = appState.gatewayConfiguration
+        switch route {
+        case .conversations:
+            ConversationsView(configuration: configuration, onSelect: selectConversation, onStartNew: startNew,
+                              personalConversationID: personalAgent.record(using: configuration)?.conversationId,
+                              onOpenSettings: { settingsPresented = true }, onDelete: appState.conversationUnavailable)
+        case .progress:
+            ProgressHubView(configuration: configuration, onOpenConversation: appState.openConversation,
+                            onStartProjectConversation: appState.startProjectConversation)
+        case .projects:
+            ProjectsView(configuration: configuration, onOpenConversation: appState.openConversation,
+                         onStartProjectConversation: appState.startProjectConversation).navigationTitle("项目")
+        case .automations:
+            AutomationsView(configuration: configuration, onOpenConversation: appState.openConversation).navigationTitle("自动化")
+        case .library:
+            NotesView(configuration: configuration, onOpenConversation: appState.openConversation)
+        case .profile:
+            ProfileView(configuration: configuration, onOpenGatewaySettings: { settingsPresented = true },
+                        personalAgent: personalAgent.record(using: configuration), personalAgentLoading: personalAgent.isLoading || personalAgent.isOpening,
+                        personalAgentError: personalAgent.errorMessage,
+                        onOpenPersonalAgent: { Task { await openPersonalAgent(remember: true) } },
+                        onPersonalAgentUpdated: { personalAgent.applyProfile($0, using: configuration) })
+        }
+    }
+
+    private var sidebar: some View {
+        let configuration = appState.gatewayConfiguration
+        return ChatSidebarView(configuration: configuration, personal: personalAgent.record(using: configuration),
+                               openingPersonal: personalAgent.isOpening, selectedID: appState.selectedConversation?.id,
+                               recent: recentConversations, recentLoading: recentLoading, recentError: recentError,
+                               attention: pendingAttention, onClose: { setSidebar(false) }, onNavigate: navigate,
+                               onPersonal: { Task { await openPersonalAgent(remember: true) } },
+                               onConversation: selectConversation, onNew: startNew, onRetry: { recentRevision += 1 })
+    }
+
+    private func navigate(_ route: HomeDestination) {
+        reopenSidebar = route == .conversations
+        setSidebar(false)
+        appState.homePath.append(route)
+    }
+
+    private func selectConversation(_ conversation: ConversationSummary) {
+        reopenSidebar = false
+        setSidebar(false)
+        appState.open(conversation)
+    }
+
+    private func startNew() {
+        reopenSidebar = false
+        setSidebar(false)
+        appState.startConversation(agentId: defaultAgentID)
+    }
+
+    private func openPersonalAgent(remember: Bool) async {
+        let configuration = appState.gatewayConfiguration
+        let selection = appState.selectedConversation?.id
+        let path = appState.homePath
+        guard let record = await personalAgent.open(using: configuration), !Task.isCancelled,
+              configuration == appState.gatewayConfiguration,
+              appState.selectedConversation?.id == selection,
+              !remember || appState.homePath == path else { return }
+        if remember {
+            reopenSidebar = false
+            setSidebar(false)
+        }
+        appState.openPersonalConversation(record, remember: remember)
+    }
+
+    private func setSidebar(_ open: Bool) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { sidebarOpen = open }
+    }
+
+    private var canDragSidebar: Bool {
+        appState.homePath.isEmpty && !sidebarOpen && !composerFocused && !phoneVisible && !actionPanelVisible
+    }
+
+    private func sidebarGesture(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .global)
+            .updating($sidebarDrag) { value, progress, _ in
+                guard sidebarSwipe(value) else { return }
+                progress = value.translation.width
+            }
+            .onEnded { value in
+                guard sidebarSwipe(value) else { return }
+                let distance = value.translation.width
+                if distance >= min(width * 0.32, 96)
+                    || (distance > 28 && value.predictedEndTranslation.width >= width * 0.55)
+                {
+                    setSidebar(true)
                 }
-                .accessibilityLabel("发送快捷消息")
+            }
+    }
+
+    private func sidebarSwipe(_ value: DragGesture.Value) -> Bool {
+        value.startLocation.x >= 24 && value.translation.width > abs(value.translation.height) * 1.5
+    }
+
+    private func loadRecent(using configuration: GatewayConfiguration) async {
+        recentError = false
+        recentLoading = true
+        defer {
+            if !Task.isCancelled {
+                recentLoading = false
             }
         }
-        .foregroundStyle(.blue)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(Color(uiColor: .systemGray5), in: .rect(cornerRadius: 18))
-        .padding(.horizontal, 8)
-        .padding(.top, 8)
-    }
-
-    private var quickPlaceholder: LocalizedStringKey {
-        switch appState.selectedTab {
-        case .assistant, .conversations: "开始一个新对话"
-        case .progress: "询问进展，或推进下一步"
-        case .notes: "查找、整理或引用资料"
-        case .profile: "告诉 xopc 你的偏好和习惯"
+        do {
+            let page = try await GatewayClient(configuration: configuration).fetchConversations()
+            guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+            recentConversations = page.items
+        } catch is CancellationError {
+        } catch {
+            guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+            recentError = true
         }
     }
 
-    private func dockTab(_ tab: AppTab, _ title: LocalizedStringKey, icon: String) -> some View {
-        Button {
-            quickInputFocused = false
-            appState.selectedTab = tab
-        } label: {
-            VStack(spacing: 3) {
-                Group {
-                    if tab == .assistant {
-                        LoopiIcon(size: 28, active: appState.selectedTab == .assistant, compact: true)
-                    } else {
-                        Image(systemName: icon)
-                            .font(.system(size: 21, weight: .regular))
-                    }
-                }
-                .frame(width: 42, height: 28)
-                .background(
-                    appState.selectedTab == tab ? Color.blue.opacity(0.12) : .clear,
-                    in: .capsule
-                )
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(appState.selectedTab == tab ? .blue : .secondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .contentShape(.rect)
+    private func loadAttention(using configuration: GatewayConfiguration) async {
+        let resolvedLocale = (AppLanguage(rawValue: language) ?? .system).locale
+        if let home = try? await GatewayClient(configuration: configuration).fetchHome(locale: resolvedLocale.identifier),
+           !Task.isCancelled, configuration == appState.gatewayConfiguration
+        {
+            pendingAttention = home.needsUser.count
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("home-tab-\(tab)")
-        .accessibilityAddTraits(appState.selectedTab == tab ? .isSelected : [])
     }
+}
 
-    private func openQuickChat(_ action: QuickChatHandoff.Action) {
-        let text = quickDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if action == .send, text.isEmpty {
-            return
-        }
-        quickInputFocused = false
-        quickDraft = ""
-        appState.openQuickChat(QuickChatHandoff(text: text, action: action))
-    }
+private struct HomeChatLoad: Hashable {
+    let configuration: GatewayConfiguration
+    let needsSelection: Bool
+    let retry: Int
+}
+
+private struct SidebarAttentionLoad: Hashable {
+    let configuration: GatewayConfiguration
+    let language: String
+}
+
+private struct SidebarLoad: Hashable {
+    let configuration: GatewayConfiguration
+    let open: Bool
+    let revision: Int
+    let language: String
 }
 
 #Preview {

@@ -15,10 +15,11 @@ struct ChatAttachmentPreview: View {
     @State private var showsExtractedText = false
     @State private var previewText: String?
     @State private var managedFile: FileResource?
+    @State private var versionFile: FileResource?
     @State private var share: ChatManagedShare?
 
     private var isManaged: Bool {
-        attachment.uri?.hasPrefix("xopc-file:") == true || attachment.workspaceRelativePath != nil
+        attachment.managedFileID != nil || attachment.workspaceRelativePath != nil
     }
 
     private var isMarkdown: Bool {
@@ -110,6 +111,11 @@ struct ChatAttachmentPreview: View {
                             .padding()
                     }
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if let versionFile {
+                        SaveFileVersionControl(configuration: configuration, file: versionFile, revision: versionFile.revision)
+                    }
+                }
                 .navigationTitle(attachment.name ?? "附件")
                 .toolbar { Button("关闭") { showsExtractedText = false } }
             }
@@ -135,7 +141,8 @@ struct ChatAttachmentPreview: View {
 
     @MainActor private func open() async {
         guard !isLoading else { return }
-        if (attachment.uri ?? "").isEmpty, attachment.workspaceRelativePath == nil,
+        versionFile = nil
+        if (attachment.uri ?? "").isEmpty, !isManaged,
            attachment.extractedText?.isEmpty == false
         {
             previewText = attachment.extractedText
@@ -145,9 +152,11 @@ struct ChatAttachmentPreview: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let bytes = try await ChatAttachmentLoader(configuration: configuration).load(
-                attachment, conversationID: conversationID
-            )
+            let loader = ChatAttachmentLoader(configuration: configuration)
+            let resource = isManaged && isTextPreview
+                ? try await loader.resolveManagedFile(attachment, conversationID: conversationID)
+                : nil
+            let bytes = try await loader.load(attachment, conversationID: conversationID, matching: resource)
             try Task.checkCancellation()
             if isTextPreview {
                 guard let text = String(data: bytes, encoding: .utf8) else {
@@ -157,6 +166,7 @@ struct ChatAttachmentPreview: View {
                     throw ChatAttachmentPreviewError.htmlTooLarge
                 }
                 previewText = isHTML ? text : String(text.prefix(100_000))
+                versionFile = resource
                 showsExtractedText = true
                 return
             }
@@ -231,8 +241,12 @@ struct ChatAttachmentLoader: Sendable {
     let configuration: GatewayConfiguration
     var session: URLSession = .shared
 
-    func load(_ attachment: HistoryAttachment, conversationID: String?) async throws -> Data {
-        let uri = try await resolvedURI(attachment, conversationID: conversationID)
+    func load(_ attachment: HistoryAttachment, conversationID: String?, matching resource: FileResource? = nil) async throws -> Data {
+        let uri: String = if let resource {
+            "xopc-file:\(resource.id)"
+        } else {
+            try await resolvedURI(attachment, conversationID: conversationID)
+        }
         if uri.hasPrefix("data:"), let marker = uri.range(of: ";base64,") {
             let payload = String(uri[marker.upperBound...])
             guard payload.count <= Self.byteLimit * 4 / 3 + 4,
@@ -244,9 +258,13 @@ struct ChatAttachmentLoader: Sendable {
         guard let source = ChatImageSource.resolve(uri, conversationID: conversationID),
               let request = source.request(configuration: configuration)
         else { throw ChatAttachmentPreviewError.unavailable }
-        let (bytes, response) = try await session.bytes(for: request, delegate: ChatAttachmentRedirectBlocker())
+        let (bytes, response) = try await session.bytes(for: GatewayPairingService.shared.signedRequest(request),
+                                                        delegate: ChatAttachmentRedirectBlocker())
         guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
             throw ChatAttachmentPreviewError.unavailable
+        }
+        if let resource, response.value(forHTTPHeaderField: "ETag") != resource.revision {
+            throw GatewayClientError.http(statusCode: 409, message: nil)
         }
         guard response.expectedContentLength <= Self.byteLimit else {
             throw ChatAttachmentPreviewError.tooLarge
@@ -261,12 +279,9 @@ struct ChatAttachmentLoader: Sendable {
     }
 
     func resolveManagedFile(_ attachment: HistoryAttachment, conversationID: String?) async throws -> FileResource {
-        let gateway = GatewayClient(configuration: configuration)
-        if let uri = attachment.uri, uri.hasPrefix("xopc-file:"),
-           let id = String(uri.dropFirst("xopc-file:".count)).removingPercentEncoding
-        {
-            let result: FileResourceEnvelope = try await gateway.request(path: "/api/files/\(id)")
-            return result.resource
+        let gateway = GatewayClient(configuration: configuration, session: session)
+        if let id = attachment.managedFileID {
+            return try await gateway.fetchFile(id: id)
         }
         guard let path = attachment.workspaceRelativePath, !path.isEmpty,
               let conversationID, !conversationID.isEmpty else { throw ChatAttachmentPreviewError.unavailable }
@@ -279,6 +294,9 @@ struct ChatAttachmentLoader: Sendable {
     }
 
     private func resolvedURI(_ attachment: HistoryAttachment, conversationID: String?) async throws -> String {
+        if let id = attachment.managedFileID {
+            return "xopc-file:\(id)"
+        }
         if let uri = attachment.uri, !uri.isEmpty {
             return uri
         }
@@ -295,9 +313,7 @@ private struct ChatManagedShareRequest: Encodable {
 
     init(attachment: HistoryAttachment, conversationID: String?) throws {
         conversationId = conversationID
-        if let uri = attachment.uri, uri.hasPrefix("xopc-file:"),
-           let id = String(uri.dropFirst("xopc-file:".count)).removingPercentEncoding, !id.isEmpty
-        {
+        if let id = attachment.managedFileID {
             fileId = id
             path = nil
         } else if let relativePath = attachment.workspaceRelativePath, !relativePath.isEmpty,

@@ -9,6 +9,8 @@ import Observation
 final class AssistantState {
     private(set) var agents: [AgentSummary] = []
     private(set) var selectedAgentID: String?
+    private(set) var defaultAgentID: String?
+    private(set) var unavailableConversationID: String?
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var messages: [TimelineMessage] = []
@@ -30,6 +32,7 @@ final class AssistantState {
     var isUpdatingQueue = false
     private var loadedConversationID: String?
     private var loadedTranscriptID: String?
+    private var historyGeneration = 0
     private var contextGeneration = 0
     private var runObservation: Task<Void, Never>?
     private var runGeneration = 0
@@ -47,6 +50,7 @@ final class AssistantState {
             let catalog = try await gateway.fetchAgents()
             guard !Task.isCancelled else { return }
             agents = catalog.agents
+            defaultAgentID = catalog.defaultId
             if !agents.contains(where: { $0.id == selectedAgentID }) {
                 selectedAgentID = catalog.defaultId
             }
@@ -80,6 +84,10 @@ final class AssistantState {
 
     func loadConversation(_ conversation: ConversationSelection?, using gateway: any GatewayServing) async {
         isForeground = true
+        unavailableConversationID = nil
+        historyGeneration += 1
+        let generation = historyGeneration
+        isLoadingHistory = false
         if let conversation,
            !conversation.isDraft,
            conversation.id == loadedConversationID,
@@ -87,6 +95,7 @@ final class AssistantState {
            !messages.isEmpty
         {
             await resumeConversation(conversation, using: gateway)
+            guard generation == historyGeneration, !Task.isCancelled, unavailableConversationID == nil else { return }
             await loadContext(for: conversation, using: gateway)
             await refreshClarification(for: conversation, using: gateway)
             await refreshInputState(for: conversation, using: gateway)
@@ -96,15 +105,20 @@ final class AssistantState {
         prepareConversation(conversation)
         guard let conversation, !conversation.isDraft else { return }
         isLoadingHistory = true
-        defer { isLoadingHistory = false }
+        defer {
+            if generation == historyGeneration {
+                isLoadingHistory = false
+            }
+        }
         do {
             let history = try await gateway.fetchHistory(conversationID: conversation.id)
-            guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
+            guard generation == historyGeneration, !Task.isCancelled else { return }
             let projected = await projectHistory(history)
-            guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
+            guard generation == historyGeneration, !Task.isCancelled else { return }
             messages = projected
+            isLoadingHistory = false
             let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
-            guard !Task.isCancelled, loadedConversationID == conversation.id else { return }
+            guard generation == historyGeneration, !Task.isCancelled else { return }
             runID = run.active ? run.runId : nil
             if let runID {
                 runProgress.begin(runID); runProgress.restore(history.session.messages)
@@ -118,9 +132,22 @@ final class AssistantState {
         } catch is CancellationError {
             return
         } catch {
-            guard !Task.isCancelled else { return }
-            errorMessage = error.localizedDescription
+            guard generation == historyGeneration, !Task.isCancelled else { return }
+            reportHistoryFailure(error, conversationID: conversation.id)
         }
+    }
+
+    private func reportHistoryFailure(_ error: Error, conversationID: String) {
+        if case .http(statusCode: 404, message: _) = error as? GatewayClientError {
+            unavailableConversationID = conversationID
+            messages = []
+            runID = nil
+        }
+        errorMessage = error.localizedDescription
+    }
+
+    func isCurrentConversation(_ id: String) -> Bool {
+        loadedConversationID == id
     }
 
     func send(
@@ -134,7 +161,8 @@ final class AssistantState {
         onEnqueued: ((String) -> Void)? = nil
     ) async -> ConversationSelection? {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty || !attachments.isEmpty || !references.isEmpty, !isSending else { return nil }
+        guard !content.isEmpty || !attachments.isEmpty || !references.isEmpty, !isSending,
+              loadedConversationID == nil || loadedConversationID == conversation.id else { return nil }
         if conversation.isDraft {
             loadedConversationID = conversation.id
         }
@@ -152,8 +180,8 @@ final class AssistantState {
         onEnqueued?(optimisticID)
         messages.append(.init(id: optimisticID, role: "user", text: optimisticText, isPending: true, turnId: nil))
 
+        defer { isSending = false }
         do {
-            defer { isSending = false }
             let result = try await gateway.sendMessage(
                 content,
                 attachments: attachments,
@@ -161,25 +189,24 @@ final class AssistantState {
                 delivery: delivery,
                 to: conversation
             )
-            guard loadedConversationID == conversation.id else { return nil }
+            let materialized = conversation.materialized(transcriptId: result.receipt.transcriptId)
+            guard loadedConversationID == conversation.id else { return materialized }
             loadedTranscriptID = result.receipt.transcriptId
             if let index = messages.firstIndex(where: { $0.id == optimisticID }) {
                 messages[index].isPending = false
             }
-            let materialized = conversation.materialized(transcriptId: result.receipt.transcriptId)
             onMaterialized?(materialized)
             runID = result.inputState.activeRunId
             await followRun(of: materialized, using: gateway)
             return materialized
         } catch is CancellationError {
-            isSending = false
             return nil
         } catch {
+            guard loadedConversationID == conversation.id else { return nil }
             if let index = messages.firstIndex(where: { $0.id == optimisticID }) {
                 messages[index].isPending = false
             }
             errorMessage = error.localizedDescription
-            isSending = false
             return nil
         }
     }
@@ -216,8 +243,8 @@ final class AssistantState {
             }
         } catch is CancellationError { return }
         catch {
-            guard loadedConversationID == conversation.id, generation == runGeneration else { return }
-            errorMessage = error.localizedDescription
+            guard loadedConversationID == conversation.id, generation == runGeneration, !Task.isCancelled else { return }
+            reportHistoryFailure(error, conversationID: conversation.id)
             // A transient REST failure must not disable the existing run's reconnect loop.
             if runID != nil {
                 startFollowing(conversation, using: gateway)
@@ -327,8 +354,8 @@ final class AssistantState {
             errorMessage = nil
         } catch is CancellationError { return }
         catch {
-            guard loadedConversationID == conversation.id, generation == runGeneration else { return }
-            errorMessage = error.localizedDescription
+            guard loadedConversationID == conversation.id, generation == runGeneration, !Task.isCancelled else { return }
+            reportHistoryFailure(error, conversationID: conversation.id)
         }
     }
 

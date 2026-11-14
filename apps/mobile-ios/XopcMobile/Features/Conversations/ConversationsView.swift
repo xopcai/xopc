@@ -4,12 +4,13 @@ struct ConversationsView: View {
     let configuration: GatewayConfiguration
     let onSelect: (ConversationSummary) -> Void
     let onStartNew: () -> Void
-    let personalAgent: PersonalAgentRecord?
-    let personalAgentLoading: Bool
-    let personalAgentError: String?
-    let onOpenPersonalAgent: () -> Void
+    let personalConversationID: String?
     let onOpenSettings: () -> Void
-    var bottomInset: CGFloat = 0
+    var onDelete: (String) -> Void = { _ in }
+
+    private var visibleConversations: [ConversationSummary] {
+        state.visibleConversations
+    }
 
     @Environment(\.locale) private var locale
 
@@ -21,17 +22,12 @@ struct ConversationsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            personalAgentEntry
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-
             conversationSearchField
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
 
             Group {
-                if state.isLoading, state.visibleConversations.isEmpty {
+                if state.isLoading, visibleConversations.isEmpty {
                     ConversationLoadingSkeleton()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let errorMessage = state.errorMessage, state.conversations.isEmpty {
@@ -43,12 +39,12 @@ struct ConversationsView: View {
                         Button("连接设置", action: onOpenSettings)
                         Button("重试") { reload() }
                     }
-                } else if state.visibleConversations.isEmpty {
+                } else if visibleConversations.isEmpty {
                     ContentUnavailableView.search(text: state.searchText)
                 } else {
                     List {
                         if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            ForEach(ConversationDateSection.group(state.visibleConversations, locale: locale)) { section in
+                            ForEach(ConversationDateSection.group(visibleConversations, locale: locale)) { section in
                                 Section {
                                     ForEach(section.conversations) { conversation in
                                         conversationListRow(conversation)
@@ -58,7 +54,7 @@ struct ConversationsView: View {
                                 }
                             }
                         } else {
-                            ForEach(state.visibleConversations) { conversation in
+                            ForEach(visibleConversations) { conversation in
                                 conversationListRow(conversation)
                             }
                         }
@@ -75,7 +71,6 @@ struct ConversationsView: View {
                         }
                     }
                     .listStyle(.plain)
-                    .contentMargins(.bottom, bottomInset, for: .scrollContent)
                     .scrollContentBackground(.hidden)
                     .background(Color(uiColor: .systemGroupedBackground))
                     .refreshable {
@@ -92,7 +87,8 @@ struct ConversationsView: View {
                 Button("新建对话", systemImage: "plus", action: onStartNew)
             }
         }
-        .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText)) {
+        .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText, personalConversationID: personalConversationID)) {
+            state.personalConversationID = personalConversationID
             if !state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 try? await Task.sleep(for: .milliseconds(300))
             }
@@ -128,46 +124,6 @@ struct ConversationsView: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
     }
 
-    private var personalAgentEntry: some View {
-        Button(action: onOpenPersonalAgent) {
-            HStack(spacing: 14) {
-                PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 54, active: false)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(verbatim: personalAgent?.isReady == true
-                        ? (locale.language.languageCode?.identifier == "zh"
-                            ? "继续和\(personalAgent?.displayName ?? "Ada")对话"
-                            : "Continue with \(personalAgent?.displayName ?? "Ada")")
-                        : (locale.language.languageCode?.identifier == "zh" ? "创建我的助手" : "Create my assistant"))
-                        .mobileTextStyle(.rowTitle)
-                        .foregroundStyle(.primary)
-                    Text(verbatim: personalAgentError ?? (personalAgent?.isReady == true
-                            ? (locale.language.languageCode?.identifier == "zh"
-                                ? "回到你的固定主会话" : "Return to your ongoing conversation")
-                            : (locale.language.languageCode?.identifier == "zh"
-                                ? "保持同一个助手和持续的对话" : "One assistant, one ongoing conversation")))
-                        .mobileTextStyle(.caption)
-                        .foregroundColor(personalAgentError == nil ? .secondary : .red)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 4)
-                if personalAgentLoading {
-                    ProgressView()
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.blue)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-            .background(Color.blue.opacity(0.08), in: .rect(cornerRadius: 22))
-        }
-        .buttonStyle(.plain)
-        .disabled(personalAgentLoading)
-        .accessibilityIdentifier("conversations-personal-agent-entry")
-    }
-
     private func conversationButton(for conversation: ConversationSummary) -> some View {
         Button {
             onSelect(conversation)
@@ -181,28 +137,24 @@ struct ConversationsView: View {
         .listRowSeparator(.hidden)
         .disabled(state.operatingConversationID != nil)
         .swipeActions(edge: .trailing) {
-            if conversation.id != personalAgent?.conversationId {
-                Button("删除", role: .destructive) { deleteTarget = conversation }
-                Button("归档") { archive(conversation) }.tint(.orange)
-            }
+            Button("删除", role: .destructive) { deleteTarget = conversation }
+            Button("归档") { archive(conversation) }.tint(.orange)
         }
         .contextMenu {
-            if conversation.id != personalAgent?.conversationId {
-                Button("重命名", systemImage: "pencil") {
-                    renameText = conversation.displayName
-                    renameTarget = conversation
-                }
-                Button { togglePin(conversation) } label: {
-                    Label {
-                        Text(conversation.status == "pinned"
-                            ? LocalizedStringResource("取消置顶")
-                            : LocalizedStringResource("置顶"))
-                    } icon: {
-                        Image(systemName: conversation.status == "pinned" ? "pin.slash" : "pin")
-                    }
-                }
-                Button("归档", systemImage: "archivebox") { archive(conversation) }
+            Button("重命名", systemImage: "pencil") {
+                renameText = conversation.displayName
+                renameTarget = conversation
             }
+            Button { togglePin(conversation) } label: {
+                Label {
+                    Text(conversation.status == "pinned"
+                        ? LocalizedStringResource("取消置顶")
+                        : LocalizedStringResource("置顶"))
+                } icon: {
+                    Image(systemName: conversation.status == "pinned" ? "pin.slash" : "pin")
+                }
+            }
+            Button("归档", systemImage: "archivebox") { archive(conversation) }
         }
     }
 
@@ -251,7 +203,7 @@ struct ConversationsView: View {
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
         .listRowBackground(Color.clear).listRowSeparator(.hidden)
         .onAppear {
-            guard conversation.id == state.visibleConversations.last?.id else { return }
+            guard conversation.id == visibleConversations.last?.id else { return }
             Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
         }
     }
@@ -310,7 +262,9 @@ private extension ConversationsView {
         guard let target = deleteTarget else { return }
         deleteTarget = nil
         Task {
-            await state.delete(target, using: GatewayClient(configuration: configuration))
+            if await state.delete(target, using: GatewayClient(configuration: configuration)) {
+                onDelete(target.id)
+            }
         }
     }
 }
@@ -318,6 +272,7 @@ private extension ConversationsView {
 private struct ConversationSearchKey: Hashable {
     let configuration: GatewayConfiguration
     let query: String
+    let personalConversationID: String?
 }
 
 struct ConversationDateSection: Identifiable {
@@ -385,8 +340,7 @@ private struct ConversationRow: View {
 #Preview {
     NavigationStack {
         ConversationsView(configuration: .local, onSelect: { _ in }, onStartNew: {},
-                          personalAgent: nil, personalAgentLoading: false, personalAgentError: nil,
-                          onOpenPersonalAgent: {}, onOpenSettings: {})
+                          personalConversationID: nil, onOpenSettings: {})
     }
 }
 

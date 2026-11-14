@@ -53,6 +53,7 @@ struct GatewayStub: GatewayServing {
     var activeRun: ActiveRun
     var historyMessages: [WireMessage] = []
     var historyFails = false
+    var historyMissing = false
     var runStream: AsyncThrowingStream<RunStreamEvent, Error>?
     var runStreamFactory: (@Sendable () -> AsyncThrowingStream<RunStreamEvent, Error>)?
     var sendDelay: (@Sendable () async -> Void)?
@@ -124,6 +125,9 @@ struct GatewayStub: GatewayServing {
     }
 
     func fetchHistory(conversationID: String) async throws -> ConversationHistory {
+        if historyMissing {
+            throw GatewayClientError.http(statusCode: 404, message: nil)
+        }
         if historyFails {
             throw URLError(.notConnectedToInternet)
         }

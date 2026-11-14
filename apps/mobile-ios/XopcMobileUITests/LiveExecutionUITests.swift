@@ -73,7 +73,7 @@ final class LiveExecutionUITests: XCTestCase {
         app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = value
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
     }
 
     func testLiveExecutionOpensAndSettles() async throws {
@@ -138,7 +138,7 @@ final class LiveExecutionUITests: XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "english"
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
         try await runToolFailureJourney(copy: .english)
     }
 
@@ -177,16 +177,16 @@ final class LiveExecutionUITests: XCTestCase {
         app.buttons[copy.done].tap()
     }
 
-    func testQuickComposerStartsAndSendsConversation() {
+    func testNewConversationSendsMessage() {
         let marker = "iOS-quick-dock-\(UUID().uuidString.prefix(8))"
         self.marker = marker
-        app.buttons["home-tab-conversations"].tap()
-        let quickInput = app.descendants(matching: .any)["home-quick-composer"]
+        openNewConversation()
+        let quickInput = app.descendants(matching: .any)["assistant-chat-composer"]
         XCTAssertTrue(quickInput.waitForExistence(timeout: 5))
         quickInput.tap()
         quickInput.typeText(marker)
-        app.buttons["发送快捷消息"].tap()
-        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 5))
+        app.buttons["assistant-chat-send"].tap()
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts[marker].waitForExistence(timeout: 12))
         XCTAssertTrue(app.buttons["添加附件或引用"].waitForExistence(timeout: 5))
         capture("quick-dock-sent")
@@ -267,7 +267,7 @@ final class LiveExecutionUITests: XCTestCase {
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "english"
         app.launch()
-        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
         try await runExecutionRetryJourney(copy: .english)
     }
 
@@ -412,11 +412,11 @@ final class LiveExecutionUITests: XCTestCase {
     }
 
     private func openNewConversation(label: String = "新建对话") {
-        app.buttons["home-tab-conversations"].tap()
+        app.openHomeDestination("conversations")
         let create = app.buttons[label == "新对话" ? "新建对话" : label]
         XCTAssertTrue(create.waitForExistence(timeout: 5))
         create.tap()
-        XCTAssertTrue(app.buttons["home-tab-assistant"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 5))
     }
 
     private func capture(_ name: String) {

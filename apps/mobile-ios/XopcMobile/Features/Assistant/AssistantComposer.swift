@@ -7,6 +7,7 @@ struct AssistantComposer: View {
     @Environment(\.colorScheme) private var colorScheme
     let configuration: GatewayConfiguration
     var focusAllowed = true
+    var personalName: String?
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -200,6 +201,7 @@ struct AssistantComposer: View {
             .accessibilityLabel("语音输入")
 
             TextField(placeholder, text: $draft, axis: .vertical)
+                .foregroundStyle(.primary)
                 .focused($isComposerFocused)
                 .lineLimit(1 ... 3)
                 .submitLabel(.send)
@@ -248,8 +250,8 @@ struct AssistantComposer: View {
         }
         .foregroundStyle(ChatAppearance.action(colorScheme))
         .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(Color(uiColor: .systemGray5), in: .rect(cornerRadius: 18))
+        .padding(.vertical, 1)
+        .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 24))
     }
 
     private var attachmentStrip: some View {
@@ -407,8 +409,11 @@ struct AssistantComposer: View {
         attachments.isEmpty && references.isEmpty
     }
 
-    private var placeholder: LocalizedStringKey {
-        "给助手发送消息"
+    private var placeholder: String {
+        if let personalName {
+            return String(format: AppLocalization.string("问问 %@", locale: locale), personalName)
+        }
+        return AppLocalization.string("给助手发送消息", locale: locale)
     }
 }
 

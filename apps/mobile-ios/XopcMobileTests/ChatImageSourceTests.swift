@@ -98,6 +98,14 @@ struct ChatImageSourceTests {
         #expect(attachment.isAudio == false)
     }
 
+    @Test func chatHistoryResolvesFilesAddressedOnlyByFileID() throws {
+        let data = Data(#"{"type":"image","fileId":"managed-image","name":"report.png"}"#.utf8)
+        let attachment = try JSONDecoder().decode(HistoryAttachment.self, from: data)
+        #expect(attachment.id == "managed-image")
+        #expect(attachment.managedFileID == "managed-image")
+        #expect(attachment.imageSource == "xopc-file:managed-image")
+    }
+
     @Test func chatAttachmentsMatchHarmonySizeLimits() throws {
         func attachment(size: Int) -> MessageAttachment {
             MessageAttachment(type: "file", name: "file.txt", mimeType: "text/plain", size: size, data: "")

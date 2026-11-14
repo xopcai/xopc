@@ -24,7 +24,16 @@ config={'model':'test/model','thinkingLevel':'medium','configVersion':1}
 personal_config=dict(config)
 second_model=dict(model,id='test/model-two',name='Second Fixture Model')
 project={'id':'fixture-project','name':'资料测试项目','status':'active','updatedAt':now}
+automation={'id':'fixture-automation','name':'每天整理纪要','enabled':True,'createdAtMs':now,'updatedAtMs':now,
+            'trigger':{'kind':'schedule','schedule':{'kind':'cron','expr':'0 9 * * *','tz':'Asia/Shanghai'}},
+            'action':{'kind':'agent','instruction':'整理最近纪要'}}
+automation_run={'id':'fixture-automation-run','automationId':automation['id'],'automationName':automation['name'],
+                'status':'succeeded','summary':'已整理最近纪要。','createdAtMs':now}
 task={'id':'task-header','version':1,'title':'任务顶部栏检查','body':'验证任务对话入口','phase':'ready','delegateAgentId':'main','createdAt':now,'updatedAt':now}
+file_fixture = {'id':'fixture-file','spaceId':'workspace','name':'版本验收.txt','relativePath':'版本验收.txt',
+                'parentPath':'','kind':'file','mimeType':'text/plain','size':20,'modifiedAt':now,
+                'revision':'fixture-revision','capabilities':['preview','save_version']}
+version_attempts = set()
 w=io.BytesIO()
 with wave.open(w,'wb') as audio:
  audio.setparams((1,2,8000,0,'NONE','not compressed'))
@@ -83,7 +92,11 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/projects': data={'ok':True,'items':[project],'total':1,'hasMore':False}
   elif path=='/api/projects/fixture-project': data={'ok':True,'project':project}
   elif path=='/api/projects/fixture-project/sessions': data={'ok':True,'sessions':[]}
-  elif path=='/api/automations': data={'automations':[]}
+  elif path=='/api/automations': data={'automations':[] if 'projectId' in query else [automation]}
+  elif path=='/api/automations/fixture-automation': data={'automation':automation}
+  elif path=='/api/automation-runs': data={'runs':[automation_run]}
+  elif path=='/api/automation-runs/fixture-automation-run': data={'run':automation_run}
+  elif path=='/api/automation-runs/fixture-automation-run/events': data={'events':[]}
   elif path=='/api/tasks': data={'ok':True,'items':[{'task':task,'operationalState':'idle'}],'total':1,'hasMore':False}
   elif path in ('/api/tasks/task-header','/api/tasks/task-child'):
    selected_task = task if path.endswith('task-header') else dict(task,id='task-child',title='移动端子任务')
@@ -91,7 +104,21 @@ class Handler(BaseHTTPRequestHandler):
   elif path in ('/api/tasks/task-header/conversation','/api/tasks/task-child/conversation'):
    data={'ok':True,'conversationId':child}
   elif path=='/api/automations/metrics': data={'nextRun':{'automationId':'auto','name':'不应重复显示的计划','runAtMs':now+100000}}
-  elif path in ('/api/files/recent','/api/files/search'): data={'items':[]}
+  elif path in ('/api/files/recent','/api/files/search'): data={'items':[dict(file_fixture,revision='stale-revision')]}
+  elif path=='/api/files/fixture-file': data={'resource':file_fixture}
+  elif path=='/api/files/fixture-file/content':
+   payload=b'File version fixture'
+   self.send_response(200);self.send_header('Content-Type','text/plain');self.send_header('ETag',file_fixture['revision']);self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
+  elif path=='/api/files/fixture-file/versions' and self.command=='POST':
+   command=json.loads(body)
+   key=command.get('id')
+   if not key or command.get('revision') != file_fixture['revision']:
+    status=400; data={'error':{'message':'Wrong version request'}}
+   elif key not in version_attempts:
+    version_attempts.add(key)
+    status=503; data={'error':{'message':'Retry the same version request'}}
+   else:
+    status=201; data={'version':{'id':key,'revision':file_fixture['revision']}}
   elif path=='/api/notes': data={'items':[{'id':'note-1','title':'布局检查笔记','kind':'note','status':'active','createdAt':now,'updatedAt':now,'snippet':'用于模拟器验证。'}],'total':1,'hasMore':False}
   elif path=='/api/user-model/mobile-summary': data={'profile':{'callName':'Tester','role':'工程师'},'settings':{'memoryEnabled':True,'showMemoryReferences':True,'sensitiveWritePolicy':'ask'},'counts':{'total':0,'explicit':0,'learned':0,'review':0,'workMemory':0},'goals':[],'recent':[]}
   elif 'media' in path or path.endswith('voice.wav'):

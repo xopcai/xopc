@@ -510,12 +510,7 @@
 "无法将 Gateway 令牌保存到钥匙串（%d）" = "Unable to save the Gateway token to Keychain (%d)";
 "连接成功，已读取 %lld 个助手" = "Connected. Loaded %lld assistants.";
 "资料库" = "Library";
-"开始一个新对话" = "Start a new conversation";
-"询问进展，或推进下一步" = "Ask about progress or move work forward";
-"查找、整理或引用资料" = "Find, organize, or reference your library";
-"告诉 xopc 你的偏好和习惯" = "Tell xopc your preferences and habits";
 "语音对话" = "Voice Chat";
-"发送快捷消息" = "Send Quick Message";
 "今天" = "Today";
 "昨天" = "Yesterday";
 "日期未知" = "Unknown Date";
@@ -1084,3 +1079,16 @@
 "这条回复只有文字。" = "This reply is available as text.";
 "这条回复的语音已中断，你可以继续说。" = "Voice playback stopped. You can keep talking.";
 "刚才那句话没收到，请再说一次。" = "The last words were not captured. Please say them again.";
+
+"打开导航" = "Open navigation";
+"关闭导航" = "Close navigation";
+"最近对话" = "Recent conversations";
+"个人助理" = "My assistant";
+"我的与设置" = "Profile and settings";
+"问问 %@" = "Ask %@";
+"无法打开个人助理" = "Could not open your assistant";
+"有 %lld 项待你处理" = "%lld items need attention";
+"保存为新版本" = "Save as new version";
+"已保存新版本" = "New version saved";
+"无法保存新版本" = "Could not save a new version";
+"历史记录" = "History";

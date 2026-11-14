@@ -12,6 +12,7 @@ extension AssistantState {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty || !attachments.isEmpty || !references.isEmpty,
               isRunActive,
+              isCurrentConversation(conversation.id),
               !conversation.isDraft else { return false }
         queueError = nil
         do {
@@ -22,12 +23,16 @@ extension AssistantState {
                 delivery: delivery,
                 to: conversation
             )
-            accept(result.inputState)
+            if isCurrentConversation(conversation.id) {
+                accept(result.inputState)
+            }
             return true
         } catch is CancellationError {
             return false
         } catch {
-            queueError = error.localizedDescription
+            if isCurrentConversation(conversation.id) {
+                queueError = error.localizedDescription
+            }
             return false
         }
     }
@@ -85,16 +90,20 @@ extension AssistantState {
         for conversation: ConversationSelection,
         using gateway: any GatewayServing
     ) async {
+        guard isCurrentConversation(conversation.id), !Task.isCancelled else { return }
         guard !conversation.isDraft else {
             pendingInputs = []
             return
         }
         do {
-            try await accept(gateway.fetchInputState(conversationID: conversation.id))
+            let inputState = try await gateway.fetchInputState(conversationID: conversation.id)
+            guard isCurrentConversation(conversation.id), !Task.isCancelled else { return }
+            accept(inputState)
             queueError = nil
         } catch is CancellationError {
             return
         } catch {
+            guard isCurrentConversation(conversation.id), !Task.isCancelled else { return }
             queueError = error.localizedDescription
         }
     }

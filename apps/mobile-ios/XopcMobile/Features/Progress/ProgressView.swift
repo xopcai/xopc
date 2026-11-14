@@ -6,7 +6,6 @@ struct ProgressHubView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
     let onStartProjectConversation: (ProjectRecord) -> Void
-    var bottomInset: CGFloat = 0
 
     @Environment(\.locale) private var locale
     @State private var home: HomeSnapshot?
@@ -92,7 +91,6 @@ struct ProgressHubView: View {
                 }
                 .padding(.horizontal, 20).padding(.vertical, 12)
             }
-            .contentMargins(.bottom, bottomInset, for: .scrollContent)
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -481,7 +479,7 @@ private struct TasksView: View {
     }
 }
 
-private struct ProjectsView: View {
+struct ProjectsView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
     let onStartProjectConversation: (ProjectRecord) -> Void

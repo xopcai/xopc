@@ -4,8 +4,8 @@ import XCTest
 @MainActor final class PhoneWorkspaceUITests: XCTestCase {
     func testLivePhoneWorkspaceAndSingleControlAction() throws {
         let app = try launchAcceptanceApp()
-        XCTAssertTrue(app.buttons["home-tab-conversations"].waitForExistence(timeout: 15))
-        app.buttons["home-tab-conversations"].tap()
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 15))
+        app.openHomeDestination("conversations")
         let search = app.textFields["conversations-search-field"]
         XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("鸿蒙 Phone Use 真机验证")
         let conversation = app.staticTexts["鸿蒙 Phone Use 真机验证 · 2026-10-25"].firstMatch

@@ -285,14 +285,29 @@ struct HistoryAttachment: Decodable, Equatable, Identifiable, Sendable {
     let duration: Double?
     let workspaceRelativePath: String?
     let extractedText: String?
+    var fileId: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case mediaID = "id"
-        case type, name, mimeType, size, uri, duration, durationSeconds, workspaceRelativePath, extractedText
+        case type, name, mimeType, size, uri, duration, durationSeconds, workspaceRelativePath, extractedText, fileId
     }
 
     var id: String {
-        mediaID ?? uri ?? workspaceRelativePath ?? "\(name ?? "attachment")|\(mimeType ?? "application/octet-stream")"
+        mediaID ?? uri ?? fileId ?? workspaceRelativePath ?? "\(name ?? "attachment")|\(mimeType ?? "application/octet-stream")"
+    }
+
+    var managedFileID: String? {
+        if let uri, case let .managedFile(id) = ChatMessageLink.resolve(uri) {
+            return id
+        }
+        if let fileId, case let .managedFile(id) = ChatMessageLink.resolve("xopc-file:\(fileId)"), id == fileId {
+            return id
+        }
+        return nil
+    }
+
+    var imageSource: String? {
+        uri ?? managedFileID.map { "xopc-file:\($0)" } ?? workspaceRelativePath.map(ChatImageSource.workspaceURL)
     }
 
     var isImage: Bool {
@@ -322,6 +337,7 @@ extension HistoryAttachment {
             ?? container.decodeIfPresent(Double.self, forKey: .durationSeconds)
         workspaceRelativePath = try container.decodeIfPresent(String.self, forKey: .workspaceRelativePath)
         extractedText = try container.decodeIfPresent(String.self, forKey: .extractedText)
+        fileId = try container.decodeIfPresent(String.self, forKey: .fileId)
     }
 }
 

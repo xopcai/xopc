@@ -133,7 +133,9 @@ struct MessageBubble: View {
 
     private var bubbleWidth: CGFloat? {
         guard let maximumWidth else { return nil }
-        if isUserAudioBubble { return min(maximumWidth, 132) }
+        if isUserAudioBubble {
+            return min(maximumWidth, 132)
+        }
         if !message.attachments.isEmpty || !message.references.isEmpty || !message.taskReceipts.isEmpty
             || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty || showsPreview
             || (message.role == "assistant" && (message.revealAnswer || message.text.contains(where: { "\n#`*_~[]<>|".contains($0) })))
@@ -312,7 +314,7 @@ private extension MessageBubble {
             VStack(alignment: .leading, spacing: 6) {
                 let images = message.attachments.filter(\.isImage)
                 if images.count == 1, let attachment = images.first,
-                   let source = attachment.uri ?? attachment.workspaceRelativePath.map(ChatImageSource.workspaceURL)
+                   let source = attachment.imageSource
                 {
                     MarkdownImageView(alt: attachment.name ?? AppLocalization.string("图片", locale: locale), source: source,
                                       configuration: configuration, conversationID: conversationID, gallery: images)
@@ -321,7 +323,7 @@ private extension MessageBubble {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: columnCount), spacing: 6) {
                         ForEach(images) { attachment in
                             GeometryReader { geometry in
-                                if let uri = attachment.uri {
+                                if let uri = attachment.imageSource {
                                     MarkdownImageView(
                                         alt: attachment.name ?? AppLocalization.string("图片", locale: locale),
                                         source: uri, configuration: configuration,
@@ -341,7 +343,7 @@ private extension MessageBubble {
                 }
                 ForEach(message.attachments.filter { !$0.isImage }) { attachment in
                     if attachment.isAudio, let conversationID,
-                       attachment.uri != nil || attachment.workspaceRelativePath != nil
+                       attachment.uri != nil || attachment.managedFileID != nil || attachment.workspaceRelativePath != nil
                     {
                         ChatAudioAttachmentView(
                             attachment: attachment,
