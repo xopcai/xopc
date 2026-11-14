@@ -44,6 +44,15 @@ describe('Harmony continuous voice call response handoff', () => {
     harness.transport = { send: mocks.send, close: async () => {} };
   });
 
+  it('keeps a failed reply in the connected call and clears its notice on new speech', () => {
+    harness.onEvent(event('session.error', '', { code: 'RESPONSE_FAILED', recoverable: true }));
+    expect(call.phase).toBe('connected');
+    expect(call.error).toBe('RESPONSE_FAILED');
+    harness.onEvent(event('input.speech_started', '', { utteranceId: 'next-input' }));
+    expect(call.phase).toBe('connected');
+    expect(call.error).toBe('');
+  });
+
   it('updates the speaker immediately and applies rapid taps in order', async () => {
     let applyFirst!: () => void;
     mocks.setSpeaker.mockImplementationOnce(() => new Promise<void>(resolve => { applyFirst = resolve; }))

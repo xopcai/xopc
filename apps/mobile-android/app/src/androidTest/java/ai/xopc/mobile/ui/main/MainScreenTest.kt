@@ -90,6 +90,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.isRoot
@@ -111,6 +112,21 @@ import java.io.ByteArrayOutputStream
 
 class MainScreenTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+
+  @Test fun voiceToggleRespondsToBothIconAndLabel() {
+    val active = mutableStateOf(false)
+    composeTestRule.setContent {
+      VoiceCallToggle(R.string.voice_mute, R.drawable.action_microphone, active.value, true, "voice-mute") {
+        active.value = !active.value
+      }
+    }
+    val control = composeTestRule.onNodeWithTag("voice-mute")
+    control.assertIsNotSelected().performTouchInput { click(Offset(center.x, height * 0.3f)) }
+    control.assertIsSelected()
+    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.voice_mute), useUnmergedTree = true)
+      .performTouchInput { click() }
+    control.assertIsNotSelected()
+  }
 
   @Test fun personalAssistantEntryOpensFixedConversationAction() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
