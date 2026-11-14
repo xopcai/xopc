@@ -1,16 +1,19 @@
 import { AutomationCancelOutputSchema, AutomationReadOutputSchema, AutomationReadAllInputSchema, AutomationReadAllOutputSchema, AutomationDeleteInputSchema, AutomationDeleteOutputSchema, AutomationMutationOutputSchema, AutomationRunMutationOutputSchema, AutomationSetEnabledInputSchema, CapabilityResourceInputSchema, AutomationReplayEventInputSchema, AutomationRetryDeliveryInputSchema, AutomationRecoveryOutputSchema } from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
-import { assertAutomationSetupTarget, bindAutomationSetup } from '../configuration-conversation.js';
+import { assertAutomationSetupTarget, bindAutomationSetup, getAutomationSetup } from '../configuration-conversation.js';
 import { CapabilityError, defineAtomicCapability, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
 import { getAutomation, getAutomationRun, markAutomationRunRead, markAllAutomationRunsRead } from '../storage/index.js';
 import { AutomationInvalidSourceError, AutomationInvalidAgentError, AutomationInvalidScheduleError, AutomationAlreadyExistsError, AutomationAlreadyRunningError, type AutomationService } from '../service/automation-service.js';
 import { AutomationTriggerSchema, CreateAutomationSchema, UpdateAutomationSchema } from '../domain/validation.js';
-import type { AutomationTrigger } from '../domain/types.js';
+import type { Automation, AutomationTrigger } from '../domain/types.js';
 import type { ProjectService } from '../../projects/project-service.js';
 import { getAutomationEventForRun } from '../events/index.js';
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { LocalAppAutomationSubmitSchema } from '../../local-apps/capabilities/projections.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { getPersonalAgentByConversation } from '../../personal-agent/repository.js';
+import { personalScheduleInput } from '../../personal-agent/schedules.js';
 
 const triggerRequest = z.union([AutomationTriggerSchema, z.object({ kind: z.literal('schedule'),
   schedule: z.object({ kind: z.literal('once'), afterMs: z.number().int().min(1).max(366 * 86400000) }).strict() }).strict()]);
@@ -198,10 +201,37 @@ export function registerAutomationWriteCapabilities(dispatcher: CapabilityDispat
     input: AutomationCreateCapabilityInputSchema,
     requestScope: context => context.conversationId ?? '',
     execute(input, context) {
-      requireProject(input.projectId);
       assertAutomationSetupTarget(context.conversationId);
+      const setup = getAutomationSetup(context.conversationId);
+      const scopedProjectId = setup && context.conversationId ? getSessionMetadata(context.conversationId)?.projectId : undefined;
+      if (scopedProjectId && input.projectId && scopedProjectId !== input.projectId) {
+        throw new CapabilityError('INVALID_INPUT', 'This configuration conversation belongs to another project');
+      }
+      const projectId = scopedProjectId ?? input.projectId;
+      requireProject(projectId);
       try {
-        const automation = validateSchedule(() => service.createAtomically({ ...input, delivery: service.bindConversationDelivery(context.conversationId, input.delivery), trigger: materializeAutomationTrigger(input.trigger) }));
+        const trigger = materializeAutomationTrigger(input.trigger);
+        const personal = setup?.personal;
+        let automation: Automation;
+        if (personal) {
+          const profile = getPersonalAgentByConversation(personal.conversationId);
+          if (profile?.state !== 'ready') {
+            throw new CapabilityError('NOT_FOUND', 'Personal Agent is unavailable');
+          }
+          if (projectId || trigger.kind !== 'schedule' || !trigger.schedule || input.action.kind !== 'agent' || input.action.mcpSourceId) {
+            throw new CapabilityError('INVALID_INPUT', 'Personal schedules require a schedule and a Personal Agent task instruction');
+          }
+          const request = personalScheduleInput(profile, {
+            id: input.id, name: input.name, description: input.description, enabled: input.enabled,
+            schedule: trigger.schedule, instruction: input.action.instruction, locale: personal.locale,
+            notificationPolicy: input.delivery?.notificationPolicy,
+          });
+          automation = validateSchedule(() => service.createAtomically(request));
+        } else {
+          automation = validateSchedule(() => service.createAtomically({
+            ...input, projectId, delivery: service.bindConversationDelivery(context.conversationId, input.delivery), trigger,
+          }));
+        }
         bindAutomationSetup(context.conversationId, automation.id);
         return { ok: true as const, automation: { ...automation } };
       }

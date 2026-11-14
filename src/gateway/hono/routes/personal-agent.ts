@@ -4,11 +4,10 @@ import { z } from 'zod';
 import { HIGGS_REALTIME_REF, voiceCallPreferencesPatchSchema } from '@xopcai/realtime-protocol/voice';
 
 import { writeAgentAvatarFromBase64 } from '../../agents-admin.js';
-import { getGatewayPrincipal } from '../../security/gateway-principal.js';
-import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
+import { getPersonalOwnerId } from '../../security/gateway-principal.js';
 import { markPersonalRead, personalUnreadSnapshot } from '../../../personal-agent/unread.js';
 import { getPersonalAgent } from '../../../personal-agent/repository.js';
-import { isPersonalSchedule } from '../../../personal-agent/schedules.js';
+import { isPersonalSchedule, personalScheduleInput } from '../../../personal-agent/schedules.js';
 import { AutomationScheduleSchema } from '../../../automations/domain/validation.js';
 import { getAutomation } from '../../../automations/storage/index.js';
 import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
@@ -63,13 +62,7 @@ const PersonalSchedulePatchSchema = PersonalScheduleSchema.partial().extend({
 }).refine(value => Object.keys(value).length > 1);
 
 export function registerPersonalAgentRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const owner = (c: Parameters<typeof getGatewayPrincipal>[0]) => {
-    const principal = getGatewayPrincipal(c);
-    if (principal.kind === 'owner') return 'local-owner';
-    if (principal.kind !== 'device' || !principal.deviceId) return null;
-    const platform = getDevice(principal.deviceId)?.platform;
-    return platform === 'harmonyos' || platform === 'ios' || platform === 'android' ? 'local-owner' : null;
-  };
+  const owner = getPersonalOwnerId;
 
   registerProactivityRoutes(authenticated, deps, owner);
 
@@ -88,16 +81,12 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
     const profile = getPersonalAgent(ownerId);
     if (profile?.state !== 'ready') return c.json({ ok: false, error: 'Personal Agent is unavailable' }, 409);
     const parsed = PersonalScheduleSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) return c.json({ ok: false, error: 'Invalid Personal schedule' }, 400);
+    if (!parsed.success || !parsed.data.schedule) return c.json({ ok: false, error: 'Invalid Personal schedule' }, 400);
     const { name, instruction, locale, schedule } = parsed.data;
     try {
-      const automation = await deps.service.automationServiceInstance.create({
-        name, trigger: { kind: 'schedule', schedule },
-        action: { kind: 'personal_task', agentId: profile.agentId, conversationId: profile.conversationId, instruction, locale },
-        management: { owner: 'personal-agent', editable: ['enabled', 'trigger'], runnable: true, deletable: true },
-        conversationMode: 'new_session',
-        delivery: { notificationPolicy: 'attention', destinations: [{ key: 'gateway_event', kind: 'gateway_event' }] },
-      });
+      const automation = await deps.service.automationServiceInstance.create(
+        personalScheduleInput(profile, { name, instruction, locale, schedule }),
+      );
       return c.json({ ok: true, payload: automation }, 201);
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
