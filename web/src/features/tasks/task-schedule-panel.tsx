@@ -35,7 +35,7 @@ export function TaskSchedulePanel({ schedules, language, onEdit, onUpdated }: {
       setPendingId(null);
     }
   }
-  return <section aria-label={zh ? '执行时间' : 'Execution schedule'} className="rounded-xl border border-edge bg-surface-panel p-4">
+  return <section aria-label={zh ? '执行时间' : 'Execution schedule'} className="rounded-xl bg-surface-inset p-4">
     <h2 className="text-sm font-semibold text-fg">{zh ? '执行时间' : 'Execution schedule'}</h2>
     <div className="mt-3 space-y-4">{schedules.map((automation) => {
       const schedule = automation.trigger.kind === 'schedule' ? automation.trigger.schedule : null;

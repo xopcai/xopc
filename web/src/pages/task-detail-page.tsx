@@ -823,7 +823,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
       style={{ '--task-chat-panel-width': `${chatPanelPercent}%` } as CSSProperties}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-      <div className="task-detail-scroll flex min-w-0 shrink-0 flex-col bg-surface-panel lg:min-h-0 lg:flex-1 lg:shrink lg:overflow-y-auto lg:overscroll-contain">
+      <div className="task-detail-scroll flex min-w-0 shrink-0 flex-col bg-surface-base lg:min-h-0 lg:flex-1 lg:shrink lg:overflow-y-auto lg:overscroll-contain">
       <header ref={heroRef} className={cn('shrink-0 px-4 py-5 sm:px-6 sm:py-6', recentlyChanged('title') && 'task-detail-live-update')}>
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
@@ -902,7 +902,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
         {statusKey !== 'review' ? <TaskCurrentAction ref={currentActionRef} detail={detail} executorName={activeExecutorName} language={language} onUpdated={(updated) => { void mutateDetail(updated, { revalidate: false }); }} /> : null}
         <section data-task-section="results" data-task-section-label={language === 'zh' ? '交付结果' : 'Results'} ref={resultsRef} tabIndex={-1} aria-labelledby="task-results-heading" className="scroll-mt-24 space-y-4">
           <TaskDeliverySummary detail={detail} language={language} />
-          <TaskDetailDisclosure panelId="acceptance" chevron data-task-section="acceptance" data-task-section-label={language === 'zh' ? '验收' : 'Acceptance'} defaultOpen ref={acceptanceRef} tabIndex={-1} aria-label={copy.successDefinition} className="scroll-mt-24 overflow-hidden rounded-2xl border border-edge-subtle bg-surface-panel" summaryClassName="min-h-12 cursor-pointer px-4 py-2 text-sm font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" title={<span className="flex items-center justify-between gap-2">
+          <TaskDetailDisclosure panelId="acceptance" chevron data-task-section="acceptance" data-task-section-label={language === 'zh' ? '验收' : 'Acceptance'} defaultOpen ref={acceptanceRef} tabIndex={-1} aria-label={copy.successDefinition} className="scroll-mt-24 overflow-hidden rounded-2xl bg-surface-panel" summaryClassName="min-h-12 cursor-pointer px-4 py-2 text-sm font-semibold text-fg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent" title={<span className="flex items-center justify-between gap-2">
             {language === 'zh' ? '验收' : 'Acceptance'}
             <span aria-live="polite" className="rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium tabular-nums text-fg-muted">{criterionSummaries.filter((criterion) => criterion.status === 'passed').length}/{criterionSummaries.length}</span>
           </span>}>
@@ -914,18 +914,18 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
           </TaskDetailDisclosure>
         </section>
 
-        <TaskDetailDisclosure panelId="report" chevron defaultOpen data-task-section="report" data-task-section-label={language === 'zh' ? '执行报告' : 'Report'} className="rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '完整执行报告' : 'Full execution report'}>
+        <TaskDetailDisclosure panelId="report" chevron defaultOpen data-task-section="report" data-task-section-label={language === 'zh' ? '执行报告' : 'Report'} className="rounded-2xl bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '完整执行报告' : 'Full execution report'}>
           <TaskExecutionReport key={latestReceipt?.runId ?? taskId} detail={detail} language={language} />
         </TaskDetailDisclosure>
         {!automationList && !automationListError ? <Skeleton className="h-9 rounded-lg" /> : null}
         {automationListError ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger"><span>{language === 'zh' ? '无法读取执行计划，请重试后再设置时间。' : 'Could not load schedules. Retry before setting a time.'}</span><Button variant="ghost" onClick={() => void mutateAutomations()}>{language === 'zh' ? '重试' : 'Retry'}</Button></div> : null}
-        {taskSchedules.length > 0 ? <TaskDetailDisclosure panelId="schedule" chevron defaultOpen data-task-section="schedule" data-task-section-label={language === 'zh' ? '执行时间' : 'Schedule'} ref={schedulePanelRef} tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm text-fg-muted" title={<>{language === 'zh' ? '执行时间' : 'Execution schedule'} · {taskSchedules.length}{nextScheduledRun !== undefined ? ` · ${language === 'zh' ? '下次执行：' : 'Next run: '}${formatMediumDateTime(nextScheduledRun, language)}` : ''}</>}>
+        {taskSchedules.length > 0 ? <TaskDetailDisclosure panelId="schedule" chevron defaultOpen data-task-section="schedule" data-task-section-label={language === 'zh' ? '执行时间' : 'Schedule'} ref={schedulePanelRef} tabIndex={-1} className="scroll-mt-24 rounded-2xl bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm text-fg-muted" title={<>{language === 'zh' ? '执行时间' : 'Execution schedule'} · {taskSchedules.length}{nextScheduledRun !== undefined ? ` · ${language === 'zh' ? '下次执行：' : 'Next run: '}${formatMediumDateTime(nextScheduledRun, language)}` : ''}</>}>
           <div className="mt-3"><TaskSchedulePanel schedules={taskSchedules} language={language} onEdit={editSchedule} onUpdated={saveScheduledAutomation} /></div>
         </TaskDetailDisclosure> : null}
 
-        <TaskDetailDisclosure panelId="goal" chevron defaultOpen data-task-section="goal" data-task-section-label={language === 'zh' ? '目标说明' : 'Goal'} className="rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '任务目标与说明' : 'Task goal and description'}>
+        <TaskDetailDisclosure panelId="goal" chevron defaultOpen data-task-section="goal" data-task-section-label={language === 'zh' ? '目标说明' : 'Goal'} className="rounded-2xl bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '任务目标与说明' : 'Task goal and description'}>
           <div className="mt-3">
-        <section className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel divide-y divide-edge-subtle">
+        <section className="overflow-hidden rounded-xl bg-surface-inset divide-y divide-edge-subtle">
         <div className="border-b border-edge-subtle p-5">
 <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '任务目标' : 'Task goal'}</h2>
           <TaskExpandableContent content={detail.task.contract?.objective || detail.task.title} contentKey={`${taskId}:goal`} language={language} markdown={false} previewHeight={72} className="mt-3 text-sm leading-6 text-fg" />
@@ -985,8 +985,8 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
           </div>
         </TaskDetailDisclosure>
 
-        <TaskDetailDisclosure panelId="management" chevron defaultOpen data-task-section="management" data-task-section-label={language === 'zh' ? '任务管理' : 'Management'} aria-label={language === 'zh' ? '任务管理' : 'Task management'} className="rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '任务管理' : 'Task management'}>
-        <aside className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
+        <TaskDetailDisclosure panelId="management" chevron defaultOpen data-task-section="management" data-task-section-label={language === 'zh' ? '任务管理' : 'Management'} aria-label={language === 'zh' ? '任务管理' : 'Task management'} className="rounded-2xl bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-medium text-fg" title={language === 'zh' ? '任务管理' : 'Task management'}>
+        <aside className="min-w-0 overflow-hidden rounded-xl bg-surface-inset divide-y divide-edge-subtle">
           <section className={cn('p-5', recentlyChanged('phase', 'resolution', 'priority', 'dueAt', 'delegateAgentId') && 'task-detail-live-update')}>
             <h2 className="text-sm font-semibold text-fg">{copy.taskProperties}</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1009,7 +1009,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
           </details>
         </aside>
           {detail.task.phase !== 'closed' ? <Button variant="ghost" className="my-3" disabled={!automationList} onClick={openSchedule}><CalendarClock className="size-4" />{taskSchedules.length > 0 ? (language === 'zh' ? '管理执行时间' : 'Manage schedule') : copy.scheduleRecurringTask}</Button> : null}
-      <details className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel p-5 shadow-surface">
+      <details className="mb-4 rounded-xl bg-surface-inset p-5">
         <summary className="cursor-pointer text-sm font-semibold text-fg">{language === 'zh' ? '关联内容' : 'Related work'}</summary>
         {(linkedSessions.length > 0 || detail.runs.length > 0 || linkedAutomations.length > 0 || detail.dependencies.length > 0 || detail.dependents.length > 0) ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {linkedSessions.length > 0 ? <div className="rounded-lg bg-surface-hover p-3"><h3 className="text-xs font-medium text-fg-muted">{language === 'zh' ? `对话 · ${linkedSessions.length}` : `Conversations · ${linkedSessions.length}`}</h3><TaskExpandableList contentKey={`${taskId}:sessions`} language={language} className="mt-2">{linkedSessions.map((session) => <li key={session.id}><Link className="block break-words [overflow-wrap:anywhere] text-sm text-accent hover:underline" to={session.conversationId === conversationConversationId ? taskChatHref(taskId) : `/chat/${encodeURIComponent(session.conversationId)}`}>{session.conversationId === conversationConversationId ? (language === 'zh' ? '当前执行对话' : 'Current execution chat') : session.role === 'discussion' ? (language === 'zh' ? '关联讨论' : 'Linked discussion') : (language === 'zh' ? '历史执行对话' : 'Earlier execution chat')}</Link></li>)}</TaskExpandableList></div> : null}
@@ -1021,7 +1021,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
           {referenceContext.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{referenceContext.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
         </TaskDetailDisclosure>
 
-        <TaskDetailDisclosure panelId="activity" chevron defaultOpen data-task-section="activity" data-task-section-label={language === 'zh' ? '活动留言' : 'Activity'} className="rounded-2xl border border-edge-subtle bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-semibold text-fg" title={language === 'zh' ? '活动记录与留言' : 'Activity and updates'}>
+        <TaskDetailDisclosure panelId="activity" chevron defaultOpen data-task-section="activity" data-task-section-label={language === 'zh' ? '活动留言' : 'Activity'} className="rounded-2xl bg-surface-panel p-4" summaryClassName="cursor-pointer rounded-sm text-sm font-semibold text-fg" title={language === 'zh' ? '活动记录与留言' : 'Activity and updates'}>
           <div className="mt-3 space-y-4"><TaskCollaborationPanel key={taskId} taskId={taskId} /><TaskPhaseHistory changes={detail.phaseChanges} language={language} /></div>
         </TaskDetailDisclosure>
       </section>

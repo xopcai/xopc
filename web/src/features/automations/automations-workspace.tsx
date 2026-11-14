@@ -984,7 +984,7 @@ export function AutomationsWorkspace({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className={cn('flex min-h-0 w-full flex-1 flex-col gap-4', embedded ? 'py-1' : 'px-4 pt-3 sm:px-9 lg:pt-4 xl:px-10', !embedded && (activityView ? 'overflow-y-auto' : 'overflow-hidden'))}>
         {embedded ? (
-          <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-base px-4 py-3 shadow-surface">
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-surface-base px-4 py-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <Zap className="size-4 text-accent-fg" aria-hidden />
@@ -1399,7 +1399,7 @@ function DraftPanel({
 }) {
   const requiresApproval = Boolean(draft && draft.simulation.requiredConfirmations.length > 0);
   return (
-    <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+    <section className="rounded-lg bg-surface-base p-4">
       {!draft ? (
         <div className="mb-5 border-b border-edge-subtle pb-4">
           <div className="flex items-center justify-between gap-3">
@@ -1414,7 +1414,7 @@ function DraftPanel({
               <button
                 type="button"
                 key={template.name}
-                className="focus-visible:ring-2 focus-visible:ring-accent rounded-lg border border-edge-subtle bg-surface-panel p-3 text-left hover:bg-surface-hover"
+                className="focus-visible:ring-2 focus-visible:ring-accent rounded-lg bg-surface-panel p-3 text-left hover:bg-surface-hover"
                 onClick={() => onTemplateSelect(template)}
               >
                 <div className="text-sm font-medium text-fg">{template.name}</div>
@@ -1589,7 +1589,7 @@ function AutomationActivityView({
   const runningCount = runs.filter(isActiveRun).length;
   const attentionCount = runs.filter(needsAttention).length;
   return (
-    <section className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface" aria-labelledby="automation-activity-title">
+    <section className="overflow-hidden rounded-xl bg-surface-base" aria-labelledby="automation-activity-title">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3 sm:px-5">
         <div className="min-w-0">
           <h2 id="automation-activity-title" className="text-sm font-semibold text-fg">{labels.dashboard.activity}</h2>
@@ -1705,7 +1705,7 @@ function JsonDetails({
   const preview = isLong ? `${json.split('\n').slice(0, 10).join('\n').trimEnd()}...` : json;
 
   return (
-    <div className="mt-2 rounded-md border border-edge/70 bg-surface-inset/35">
+    <div className="mt-2 rounded-md bg-surface-inset">
       {isLong ? (
         <button
           type="button"
@@ -1762,7 +1762,7 @@ function RunDiagnosticsPanel({
 }) {
   if (!run) {
     return (
-      <aside className={cn('flex min-h-64 flex-col justify-center rounded-lg border border-edge-subtle bg-surface-base px-4 text-center text-sm text-fg-muted shadow-surface', className)}>
+      <aside className={cn('flex min-h-64 flex-col justify-center rounded-lg bg-surface-base px-4 text-center text-sm text-fg-muted', className)}>
         <Activity className="mx-auto size-5" />
         <div className="mt-2">{labels.selectRun}</div>
       </aside>
@@ -1778,7 +1778,7 @@ function RunDiagnosticsPanel({
   const ResultIcon = isActiveRun(run) ? Activity : run.status === 'succeeded' ? CheckCircle2 : CircleAlert;
 
   return (
-    <aside className={cn('rounded-lg border border-edge-subtle bg-surface-base shadow-surface', className)}>
+    <aside className={cn('rounded-lg bg-surface-base', className)}>
       <div className="border-b border-edge px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -1824,8 +1824,8 @@ function RunDiagnosticsPanel({
           ) : null}
         </div>
         <div className={cn(
-          'mt-3 max-h-80 overflow-y-auto rounded-lg border border-edge/70 bg-surface-inset/25 p-3',
-          run.error && 'border-red-500/25 bg-red-500/5',
+          'mt-3 max-h-80 overflow-y-auto rounded-lg bg-surface-inset p-3',
+          run.error && 'bg-danger-soft',
         )}>
           {result ? (
             run.error ? (
@@ -1917,7 +1917,7 @@ function RunDiagnosticsPanel({
                       {formatDate(event.createdAtMs, labels, language)} · {event.type}
                     </div>
                     {event.data && typeof event.data === 'object' ? (
-                      <details className="group/event mt-2 rounded-md border border-edge/70 bg-surface-inset/35">
+                      <details className="group/event mt-2 rounded-md bg-surface-inset">
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-xs font-medium text-fg-muted outline-none hover:text-fg">
                           {labels.details.eventData}
                           <ChevronDown className="size-3.5 transition-transform group-open/event:rotate-180" />
@@ -2177,7 +2177,7 @@ function AutomationOverview({
   }
 
   return (
-    <aside className="h-fit overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface">
+    <aside className="h-fit overflow-hidden rounded-xl bg-surface-base">
       <div className="border-b border-edge-subtle px-4 py-3">
         <h3 className="text-sm font-semibold text-fg">{labels.info.overview}</h3>
       </div>

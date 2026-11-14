@@ -56,7 +56,7 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated, r
     })}
   </ul> : null;
 
-  return <section ref={ref} tabIndex={-1} aria-label={zh ? '当前需要处理' : 'Current action'} className="rounded-xl border border-edge bg-surface-panel p-4">
+  return <section ref={ref} tabIndex={-1} aria-label={zh ? '当前需要处理' : 'Current action'} className="rounded-xl bg-surface-panel p-4">
     <h2 className="text-sm font-semibold text-fg">{needsAttention
       ? (zh ? '需要你处理' : 'Your action needed')
       : (zh ? '当前进展' : 'Current progress')}{actionableWaits.length > 1 ? ` · ${actionableWaits.length}` : ''}</h2>

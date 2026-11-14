@@ -48,7 +48,7 @@ export function AgentBrowserSettingsPage() {
       {form ? <>
 
 
-        <section className="rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5" aria-label={zh ? '浏览器控制设置' : 'Browser control settings'}>
+        <section className="rounded-2xl bg-surface-base p-4 sm:p-5" aria-label={zh ? '浏览器控制设置' : 'Browser control settings'}>
           <div className="flex items-center gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-surface-inset text-fg-muted"><Globe className="size-6" aria-hidden /></span>
             <div className="min-w-0 flex-1"><Toggle label={zh ? '启用浏览器控制' : 'Enable browser control'} description={zh ? '让 AI 帮你操作浏览器。' : 'Let AI work with your browser.'} checked={form.enabled} onChange={enabled => vm.update({ enabled })} /></div>
@@ -108,7 +108,7 @@ function DriverDescription({ kind, zh }: { kind: typeof driverKinds[number]; zh:
 }
 
 function Section({ title, description, icon, children }: { title: string; description?: string; icon?: ReactNode; children: ReactNode }) {
-  return <section className="rounded-2xl border border-edge bg-surface-panel p-4 sm:p-5"><div className="mb-4 flex items-start gap-2">{icon && <span className="mt-0.5 text-fg-subtle" aria-hidden>{icon}</span>}<div><h2 className="text-sm font-semibold text-fg">{title}</h2>{description ? <p className="mt-1 text-xs leading-5 text-fg-muted">{description}</p> : null}</div></div><div className="space-y-4">{children}</div></section>;
+  return <section className="rounded-2xl bg-surface-base p-4 sm:p-5"><div className="mb-4 flex items-start gap-2">{icon && <span className="mt-0.5 text-fg-subtle" aria-hidden>{icon}</span>}<div><h2 className="text-sm font-semibold text-fg">{title}</h2>{description ? <p className="mt-1 text-xs leading-5 text-fg-muted">{description}</p> : null}</div></div><div className="space-y-4">{children}</div></section>;
 }
 function Field({ label, description, children }: { label: string; description?: string; children: ReactNode }) { return <label className="block text-sm text-fg"><span className="mb-1.5 block font-medium">{label}</span>{children}{description ? <span className="mt-1.5 block text-xs leading-5 text-fg-subtle">{description}</span> : null}</label>; }
 function TextField({ label, description, value, onChange, type = 'text', multiline = false, autoComplete }: { label: string; description?: string; value: string; onChange: (value: string) => void; type?: string; multiline?: boolean; autoComplete?: string }) { const className = 'w-full rounded-lg border border-edge bg-surface-inset px-3 py-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'; return <Field label={label} description={description}>{multiline ? <textarea rows={3} value={value} onChange={(event) => onChange(event.target.value)} className={className} /> : <input type={type} autoComplete={autoComplete} value={value} onChange={(event) => onChange(event.target.value)} className={className} />}</Field>; }

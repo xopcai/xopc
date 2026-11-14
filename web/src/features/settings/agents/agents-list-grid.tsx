@@ -53,7 +53,7 @@ export function AgentsListGrid({
         const settingsLabel = messages.listConfigureAgent.replace('{{name}}', name);
         const chatLabel = messages.listChatWithName.replace('{{name}}', name);
         return (
-          <li key={agent.id} className="relative isolate grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_1fr] items-center gap-x-3 rounded-xl border border-edge bg-surface-panel p-3">
+          <li key={agent.id} className="relative isolate grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_1fr] items-center gap-x-3 rounded-xl bg-surface-panel p-3">
             <button
               type="button"
               className="absolute inset-0 cursor-pointer rounded-[inherit] transition-colors hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent disabled:cursor-default disabled:hover:bg-transparent"
@@ -101,7 +101,7 @@ export function AgentsListGrid({
           />
         </label>
       ) : null}
-      {!hasMatches ? <p role="status" className="rounded-xl border border-edge bg-surface-panel p-4 text-sm text-fg-muted">{agents.length ? messages.listEmpty : messages.listNoAgentsYet}</p> : null}
+      {!hasMatches ? <p role="status" className="rounded-xl bg-surface-panel p-4 text-sm text-fg-muted">{agents.length ? messages.listEmpty : messages.listNoAgentsYet}</p> : null}
       {sections.assistants.length ? (
         <section aria-labelledby={`${headingId}-assistants`}>
           <h2 id={`${headingId}-assistants`} className={sectionTitleClass}>{messages.listAssistantsHeading}</h2>

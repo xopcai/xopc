@@ -69,7 +69,7 @@ export function TaskCollaborationPanel({ taskId }: { taskId: string }) {
       setSending(false);
     }
   };
-  return <section className="rounded-xl border border-edge bg-surface-panel p-4">
+  return <section className="rounded-xl bg-surface-inset p-4">
     <h2 className="text-sm font-semibold text-fg">{language === 'zh' ? '任务留言' : 'Task updates'}</h2>
     <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
       {!data && !loadError ? <div aria-busy="true" className="space-y-2">

@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 export function MediaGenerationCard({ children }: { children: ReactNode }) {
-  return <article className="min-w-0 w-full max-w-lg space-y-2.5 rounded-xl border border-edge-subtle bg-surface-panel p-3 sm:p-4">
+  return <article className="min-w-0 w-full max-w-lg space-y-2.5 rounded-xl bg-surface-inset p-3 sm:p-4">
     {children}
   </article>;
 }

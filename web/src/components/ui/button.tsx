@@ -3,13 +3,15 @@ import { type ButtonHTMLAttributes, type Ref } from 'react';
 
 import { cn } from '@/lib/cn';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'segmented';
+export type ButtonVariant = 'primary' | 'secondary' | 'tonal' | 'ghost' | 'segmented';
 
 const variantClass: Record<ButtonVariant, string> = {
   primary:
     'bg-accent text-on-accent shadow-none sm:shadow-surface hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
   secondary:
     'bg-surface-panel text-fg border border-edge shadow-none sm:shadow-surface hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel dark:border-edge',
+  tonal:
+    'bg-fg/8 text-fg hover:bg-fg/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
   ghost:
     'text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
   /** Pill track segments: no hover styling — visual state is only selected vs unselected (`segmentedThumb*` + focus ring there). */

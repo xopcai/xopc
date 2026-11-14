@@ -11,6 +11,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CapabilityIcon } from '@/features/capabilities/capability-icon';
 import {
@@ -151,7 +152,7 @@ export function ExtensionMarketplacePanel({
       {isLoading && !data ? (
         <ul className={extensionCardGridClass} aria-label={copy.marketplaceLoading}>
           {[0, 1, 2, 3, 4, 5].map((index) => (
-            <li key={index} className="rounded-xl border border-edge bg-surface-panel p-4">
+            <li key={index} className="rounded-xl bg-surface-panel p-4">
               <div className="flex items-start gap-3">
                 <Skeleton className="size-10 shrink-0 rounded-xl" />
                 <div className="min-w-0 flex-1 space-y-2">
@@ -207,17 +208,13 @@ export function ExtensionMarketplacePanel({
                         </span>
                       ) : kind === 'user' ? (
                         <>
-                          {e.packageType === 'plugin' ? <button
+                          {e.packageType === 'plugin' ? <Button variant="tonal"
                             type="button"
                             onClick={() => installed?.pluginId && pluginCanStart(installed) ? navigate(pluginStartPath(displayName, language.startsWith('zh'), installed.pluginId)) : installed?.pluginId ? navigate(pluginDetailPath(installed.pluginId, 'installed', pluginNeedsAuthorization(installed), location.pathname + location.search)) : dispatch({ type: 'patch', patch: { detailPkg: e.id, quickInstallPkg: null } })}
-                            className={cn(
-                              'inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
-                              'transition-colors active:scale-[0.98] active:bg-surface-hover/80',
-                              'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                            )}
+                            className="rounded-lg text-xs"
                           >
                             {!!installed && pluginNeedsAuthorization(installed) ? (language.startsWith('zh') ? '去授权' : 'Connect account') : installed && pluginCanStart(installed) ? (language.startsWith('zh') ? '开始使用' : 'Start using') : (language.startsWith('zh') ? '管理插件' : 'Manage plugin')}
-                          </button> : <button
+                          </Button> : <Button variant="tonal"
                             type="button"
                             disabled={busy}
                             onClick={() => {
@@ -226,12 +223,7 @@ export function ExtensionMarketplacePanel({
                                 /* error surfaced via actionError */
                               });
                             }}
-                            className={cn(
-                              'inline-flex items-center justify-center gap-1.5 rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
-                              'transition-colors active:scale-[0.98] active:bg-surface-hover/80',
-                              'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                              'disabled:pointer-events-none disabled:opacity-50',
-                            )}
+                            className="gap-1.5 rounded-lg text-xs"
                           >
                             {busy ? (
                               <Loader2 className="size-3.5 animate-spin" aria-hidden />
@@ -239,10 +231,10 @@ export function ExtensionMarketplacePanel({
                               <Trash2 className="size-3.5" strokeWidth={2} aria-hidden />
                             )}
                             {copy.marketplaceUninstall}
-                          </button>}
+                          </Button>}
                         </>
                       ) : (
-                        <button
+                        <Button variant="tonal"
                           type="button"
                           onClick={() => dispatch({
                             type: 'patch',
@@ -250,21 +242,17 @@ export function ExtensionMarketplacePanel({
                               ? { detailPkg: e.id, quickInstallPkg: null }
                               : { detailPkg: e.id, quickInstallPkg: null },
                           })}
-                          className={cn(
-                            'inline-flex min-w-16 items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
-                            'transition-[transform,background-color] active:scale-[0.98]',
-                            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                          )}
+                          className="min-w-16 rounded-lg text-xs"
                         >
                           {e.packageType === 'plugin'
                             ? (language.startsWith('zh') ? '安装' : 'Install')
                             : copy.marketplaceReview}
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
                   {description ? <p className="pointer-events-none relative mt-3 line-clamp-3 text-sm leading-relaxed text-fg-muted">{description}</p> : null}
-                  {(e.categories?.length ?? 0) > 0 ? <div className="pointer-events-none relative mt-3 flex flex-wrap gap-1.5">{e.categories?.map(c => <span key={c} className="max-w-full truncate rounded-md border border-edge px-2 py-0.5 text-xs text-fg-muted">{c}</span>)}</div> : null}
+                  {(e.categories?.length ?? 0) > 0 ? <div className="pointer-events-none relative mt-3 flex flex-wrap gap-1.5">{e.categories?.map(c => <span key={c} className="max-w-full truncate rounded-md bg-surface-inset px-2 py-0.5 text-xs text-fg-muted">{c}</span>)}</div> : null}
                 </li>
               );
             })

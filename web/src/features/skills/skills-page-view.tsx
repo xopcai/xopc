@@ -94,7 +94,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
   return (
     <>
       <SkillsPageHeaderRegistration vm={vm} embedded={embedded} onHeaderActionChange={onHeaderActionChange} />
-      <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'bg-surface-panel')}>
+      <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'bg-surface-base')}>
       <div className={cn(
         'mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 sm:px-6 lg:px-8',
         embedded ? 'pb-7 pt-3 lg:pb-9 lg:pt-4' : 'py-7 lg:py-9',
@@ -157,7 +157,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
               ariaLabel={sk.skillsNavAria}
               tabIdPrefix="skills-tab"
               panelIdPrefix="skills-panel"
-              className="flex-wrap border-b border-edge-subtle pb-3"
+              className="flex-wrap"
             />
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
@@ -248,7 +248,7 @@ export function SkillsPageView({ vm, embedded = false, onHeaderActionChange }: {
               ariaLabel={sk.marketplaceResultsTabsAria}
               tabIdPrefix="skills-marketplace-results-tab"
               panelIdPrefix="skills-marketplace-results-panel"
-              className="min-h-9 gap-1 overflow-x-auto rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
+              className="min-h-9 gap-1 overflow-x-auto rounded-lg bg-surface-inset p-0.5"
               buttonClassName="rounded-md px-2.5 py-1.5 text-xs"
               selectedClassName="bg-fg text-surface-panel dark:bg-fg dark:text-surface-base"
               unselectedClassName="text-fg-muted hover:text-fg"

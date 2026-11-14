@@ -83,9 +83,9 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 | 悬浮 Hover | `bg-surface-hover` / `--color-surface-hover` | `#e8ecf1` | `#242933` |
 | 次级激活 Active | `bg-surface-active` / `--color-surface-active` | `#dfe5ec` | `#2e3440` |
 
-> **层级规律**：Light 模式下层级越高越亮（白面板 > 浅灰底）；Dark 模式下层级越高越亮（elevated 灰阶梯）。卡片与列表行可再加 `border-edge` / `border-edge-subtle` 编组（见 §2.3）。
+> **层级规律**：有卡片的页面用 `bg-surface-base` 作画布，卡片用 `bg-surface-panel`。浅色和深色模式的卡片均比画布亮。卡片内的摘要与分组用 `bg-surface-inset`；同级区块用标题和留白组织。密集列表可用 `border-edge-subtle` 分隔行（见 §2.3）。
 
-> **应用壳（侧栏 + 主区）**：这一层级的分区靠**背景色阶（区块色）**表达，**不在**侧栏与主内容之间使用整根竖向边框或外框线。细边框仅用于内层组件（卡片、列表、输入框、弹窗等），见 [4.2](#42-应用壳左侧导航与主工作区区块色块与边框边界)。
+> **应用壳（侧栏 + 主区）**：这一层级的分区靠**背景色阶（区块色）**表达。边框用于密集列表的行分隔、输入控件与浮层轮廓，见 [4.2](#42-应用壳左侧导航与主工作区区块色块与边框边界)。
 
 ---
 
@@ -121,7 +121,7 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 | 层级 | Utility / 变量 | Light Hex | Dark Hex | 用途 |
 |------|----------------|-----------|----------|------|
 | 细边框 | `border-edge-subtle` / `--color-edge-subtle` | `#f2f2f2` | `#252932` | 列表项分割、内部细节 |
-| 主边框 | `border-edge` / `--color-edge` | `#ececec` | `#323844` | 卡片、输入框、分割线 |
+| 主边框 | `border-edge` / `--color-edge` | `#ececec` | `#323844` | 输入控件、浮层轮廓、需要明确边界的交互区域 |
 | 强调边框 | `border-edge-strong` / `--color-edge-strong` | `#d8dce8` | `#465061` | 需要明确区分的容器 |
 
 > **Dark 模式边框策略**：浮层以 `border-edge` 勾勒轮廓（Rim Light）；弥散阴影在深色下减弱，与 `web` 中 `html.dark` 的 `--shadow-*` 定义一致（见 §5.2）。
@@ -295,11 +295,9 @@ xopc 工作站有两种核心使用场景，对应两种布局密度，通过用
 Gateway 控制台等工作台界面采用 **左侧导航 + 右侧主内容** 结构。这一 **整体大布局** 的层级与分区应通过 **背景色阶（区块色）** 呈现：侧栏与主区使用相邻一档的表面色 / 基底色，形成柔和明度差即可。
 
 - **左侧导航**：使用较「底」的一层（`bg-surface-base`），与全局底或主区形成区块感。
-- **右侧主内容区**：使用较「浮」的一层（`bg-surface-panel`），作为阅读与操作的主表面。
+- **右侧主内容区**：阅读区使用 `bg-surface-panel`。工作台和能力中心的卡片区使用 `bg-surface-base` 作画布，由卡片的 `bg-surface-panel` 形成内容层。
 - **不要做**：在侧栏与主内容之间加 **整根竖向 border** 或把整个壳包进 **粗外框**，用线去切「大块」区域。
-- **仍要做**：列表行、卡片、表格单元、输入框、模态与抽屉等 **内层组件** 可以继续使用细边框、分割线（见 2.3、5.2、10.2），用于局部编组与可读性。
-
-**一句话**：**大布局靠色块、无声；小组件可以用线。**
+- **局部边界**：密集列表和表格可使用行分隔线；输入控件、可拖动分隔手柄、模态与抽屉保留各自的边界提示（见 2.3、5.2、10.2）。
 
 ### 4.3 侧栏「任务 / 会话」列表（Gateway Web）
 
@@ -342,7 +340,7 @@ Gateway 控制台等工作台界面采用 **左侧导航 + 右侧主内容** 结
 克制使用阴影。通过**多层、低对比**的弥散阴影区分层级，避免深色硬阴影。
 
 - **应用壳（侧栏 / 主区）**: 不靠阴影也不靠大块边框分割，靠背景色阶（见 [4.2](#42-应用壳左侧导航与主工作区区块色块与边框边界)）。
-- **主区内的默认卡片**: 可无阴影，靠 `border-edge` / `border-edge-subtle` 与表面色区分（指内容区内的卡片，不是壳层分区）。
+- **主区内的默认卡片**：使用独立的表面色和留白，常态省略外框和描边式阴影。可点卡片使用 `hover:bg-surface-panel-hover` 在原表面上叠加轻微色差，并保留选中态和键盘焦点环。
 - **浅色模式 — 语义阴影类（Tailwind）**：
   - `shadow-surface`：内嵌卡片、输入条（如对话 composer 外框）
   - `shadow-elevated`：菜单、Popover、下拉
@@ -445,6 +443,10 @@ hover:bg-surface-hover active:scale-95
 transition-colors duration-150 ease-out
 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2
 ```
+
+**中性填充按钮 (Tonal)** — 卡片内需要明确显示的次要操作
+
+`Button variant="tonal"` 使用半透明的前景色叠在所在表面上。悬停时加深填充，键盘聚焦时显示焦点环。
 
 **幽灵按钮 (Ghost)** — 最低视觉权重，用于工具栏、列表操作
 ```
@@ -678,7 +680,7 @@ focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-
 - **次要文本**: `text-fg-muted`
 - **辅助文本**: `text-fg-subtle`
 - **弱化 / 禁用**: `text-fg-disabled`
-- **边框**: `border-edge` / `border-edge-subtle` — 用于 **内层** 列表、卡片、输入框等；**应用壳** 层级仍以背景色阶为主，边框为辅（见 [4.2](#42-应用壳左侧导航与主工作区区块色块与边框边界)）
+- **边框**：`border-edge-subtle` 用于密集行分隔，`border-edge` 用于输入控件与浮层轮廓。应用壳和常态内容卡片通过表面色区分。
 
 ### 10.3 色彩适应 (Color Adaptation)
 暗色模式下的彩色需要稍微"提亮"以保证对比度。

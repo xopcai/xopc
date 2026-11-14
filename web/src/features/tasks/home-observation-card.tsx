@@ -58,7 +58,7 @@ export function HomeObservationCard({ observation, advisor, language, emphasizeS
     window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: result }));
   });
 
-  return <section className="rounded-xl border border-edge bg-surface-panel p-4 shadow-surface" aria-labelledby="home-observation-title" aria-busy={busy} data-workbench-panel>
+  return <section className="rounded-xl bg-surface-panel p-4" aria-labelledby="home-observation-title" aria-busy={busy} data-workbench-panel>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-3">
         <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-fg">
@@ -80,8 +80,8 @@ export function HomeObservationCard({ observation, advisor, language, emphasizeS
     {observation.status === 'disabled' ? <div className="mt-4">
       <h3 className="text-balance text-lg font-semibold leading-snug tracking-tight text-fg">{zh ? '把重复的事，慢慢交给我' : 'Let me take recurring work off your hands'}</h3>
       <p className="mt-2 max-w-prose text-sm leading-6 text-fg-muted">{zh ? '我会结合你在 xopc 中的工作记录，寻找可以代劳的事情。有合适的建议时，先做一次给你看。' : 'I can look through your work in xopc for tasks I could take on, then offer a first draft for you to review.'}</p>
-      <Button className="mt-3 rounded-lg text-xs sm:shadow-none" variant={emphasizeStart ? 'primary' : 'secondary'} disabled={busy} onClick={() => void run(async () => { await command({ kind: 'start', backfillDays: 30 }); })}>{zh ? '帮我发现重复工作' : 'Find recurring work'}</Button>
-      <p className="mt-4 flex items-start gap-2 border-t border-edge-subtle pt-3 text-xs leading-5 text-fg-muted">
+      <Button className="mt-3 rounded-lg text-xs sm:shadow-none" variant={emphasizeStart ? 'primary' : 'tonal'} disabled={busy} onClick={() => void run(async () => { await command({ kind: 'start', backfillDays: 30 }); })}>{zh ? '帮我发现重复工作' : 'Find recurring work'}</Button>
+      <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-fg-muted">
         <LockKeyhole className="mt-1 size-3 shrink-0" aria-hidden />
         <span>{zh ? '仅查看最近 30 天已授权的私人会话及后续工作记录。不扫描屏幕，定期执行前会请你确认。' : 'Uses up to 30 days of authorized private chats and new work. No screen recording. Recurring runs need your confirmation.'}</span>
       </p>
@@ -127,7 +127,7 @@ export function HomeObservationCard({ observation, advisor, language, emphasizeS
       {resume ? <div className="mt-3 space-y-2"><p className="text-sm text-fg-muted">{zh ? '恢复后，要补看暂停期间的工作吗？' : 'Include work from while suggestions were paused?'}</p><div className="flex flex-wrap gap-2">{(['catch_up', 'new_only'] as const).map(mode => <Button key={mode} disabled={busy} onClick={() => void run(async () => { await command({ kind: 'resume', mode }); setResume(false); })}>{mode === 'catch_up' ? (zh ? '一起补看' : 'Include earlier work') : (zh ? '只看之后的工作' : 'New work only')}</Button>)}<Button variant="ghost" onClick={() => setResume(false)}>{zh ? '取消' : 'Cancel'}</Button></div></div> : null}
     </>}
     </> : null}
-    {editing && topic ? <form className="mt-3 space-y-3 rounded-lg border border-edge p-3" onSubmit={event => { event.preventDefault(); void run(async () => {
+    {editing && topic ? <form className="mt-3 space-y-3 rounded-lg bg-surface-inset p-3" onSubmit={event => { event.preventDefault(); void run(async () => {
       await command({ kind: 'feedback', topicId: topic.id, text, scope }); setText(''); setEditing(false); setNotice(zh ? '已记下。改变定期做法前，会先请你确认。' : 'Preference saved. I will ask before changing the recurring approach.');
     }); }}>
       <label className="block text-xs text-fg-muted">{zh ? `关于「${topic.title}」，希望我怎么做？` : `How should I handle “${topic.title}”?`}
@@ -139,14 +139,14 @@ export function HomeObservationCard({ observation, advisor, language, emphasizeS
       <p className="text-xs text-fg-muted">{zh ? '记下你的要求；改变定期安排前，仍会请你确认。' : 'I will remember your preference and ask before changing a recurring arrangement.'}</p>
       <Button type="submit" variant="primary" disabled={busy || !text.trim()}>{zh ? '记住这个要求' : 'Save preference'}</Button><Button variant="ghost" onClick={() => { setEditing(false); setText(''); setScope('once'); }}>{zh ? '取消' : 'Cancel'}</Button>
     </form> : null}
-    {journal ? <div className="mt-4 space-y-3 border-t border-edge-subtle pt-3">
+    {journal ? <div className="mt-4 space-y-3 rounded-lg bg-surface-inset p-3">
       <p className="text-xs text-fg-muted" role="status">{observation.status === 'disabled' ? (zh ? '尚未开启' : 'Not enabled') : observation.status === 'paused' ? (zh ? '已暂停寻找新建议' : 'Suggestions paused') : observation.analyzedRevision < observation.revision ? (zh ? '正在整理最近的工作记录' : 'Reviewing recent work') : (zh ? '有新发现时会在这里告诉你' : 'New suggestions will appear here')}</p>
       <p className="text-xs leading-5 text-fg-muted">{zh ? '只查看已授权的 xopc 私人会话和相关任务结果。暂停寻找建议不会停止已经确认的定期安排。' : 'Uses authorized private xopc chats and related task results. Pausing suggestions does not stop confirmed recurring tasks.'}</p>
       {observation.status !== 'disabled' ? <Button disabled={busy} variant="ghost" onClick={() => observation.status === 'active' ? void run(async () => { await command({ kind: 'pause' }); }) : setResume(!resume)}>{observation.status === 'active' ? (zh ? '暂停寻找建议' : 'Pause suggestions') : (zh ? '恢复寻找建议' : 'Resume suggestions')}</Button> : null}
       {savedTopics.length ? <div className="space-y-3">
         <p className="text-xs font-medium text-fg">{zh ? '已保存的要求与试做' : 'Saved preferences and trials'}</p>
-        <div className="max-h-48 space-y-2 overflow-y-auto">{savedTopics.map(t => <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border border-edge p-2"><span className="min-w-0 truncate text-sm text-fg">{t.routine?.title || t.trials[0]?.title || (zh ? '已保存的工作要求' : 'Saved work preferences')}</span><Button variant="ghost" disabled={Boolean(text) && t.id !== topic?.id} onClick={() => { setHistoryTopicId(t.id); setSelected(t.id); setForget(false); }}>{zh ? '管理' : 'Manage'}</Button></div>)}</div>
-        {historyTopic ? <div className="space-y-2 rounded-lg bg-surface-inset p-3">
+        <div className="max-h-48 space-y-2 overflow-y-auto">{savedTopics.map(t => <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-panel p-2"><span className="min-w-0 truncate text-sm text-fg">{t.routine?.title || t.trials[0]?.title || (zh ? '已保存的工作要求' : 'Saved work preferences')}</span><Button variant="ghost" disabled={Boolean(text) && t.id !== topic?.id} onClick={() => { setHistoryTopicId(t.id); setSelected(t.id); setForget(false); }}>{zh ? '管理' : 'Manage'}</Button></div>)}</div>
+        {historyTopic ? <div className="space-y-2 rounded-lg bg-surface-panel p-3">
           {observation.status === 'active' ? <Button variant="ghost" disabled={busy} onClick={edit}>{zh ? '调整要求' : 'Edit preferences'}</Button> : null}
           {historyTopic.feedback.filter(f => f.status === 'active').map(f => <div className="text-xs text-fg" key={f.id}><p>{f.text}</p><Button disabled={busy} variant="ghost" onClick={() => void run(async () => { await command({ kind:'retract',topicId:historyTopic.id,feedbackId:f.id }); })}>{zh ? '撤回要求' : 'Retract preference'}</Button></div>)}
           {historyTopic.trials.map(t => <Button variant="ghost" key={t.taskId} onClick={() => setReviewId(t.taskId)}>{zh ? '查看结果：' : 'Review result: '}{t.title}</Button>)}

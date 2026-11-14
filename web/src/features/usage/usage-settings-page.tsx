@@ -186,25 +186,25 @@ export function UsageSettingsPage() {
           { label: t.knownCost, value: externalAmount(totals), icon: Coins },
           { label: t.calls, value: totals.calls.toLocaleString(), icon: Gauge },
           { label: t.tokens, value: compactNumber(totals.totalTokens, language), icon: Database },
-        ].map(item => <div key={item.label} className="rounded-xl border border-edge bg-surface-panel p-4">
+        ].map(item => <div key={item.label} className="rounded-xl bg-surface-inset p-4">
           <div className="flex items-center gap-2 text-xs text-fg-muted"><item.icon className="size-4" aria-hidden />{item.label}</div>
           <div className="mt-2 text-xl font-semibold tabular-nums text-fg">{item.value}</div>
         </div>)}
       </section>
 
       {(totals.billing?.external.unknownCostCalls ?? 0) > 0 ? (
-        <p className="rounded-lg border border-edge bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-muted">
+        <p className="rounded-lg bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-muted">
           {totals.billing?.external.unknownCostCalls === totals.billing?.external.calls ? t.allCostsUnknown : t.someCostsUnknown}
         </p>
       ) : null}
 
-      {totals.billing?.cloud.calls ? <p className="rounded-lg border border-edge bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-muted">
+      {totals.billing?.cloud.calls ? <p className="rounded-lg bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-muted">
         {t.cloudCoverage.replace('{{pending}}', String(totals.billing.cloud.pendingCalls))
           .replace('{{unknown}}', String(totals.billing.cloud.unavailableCalls))}
         {totals.billing.cloud.reservedCreditMicro !== null ? ` ${t.cloudReserved.replace('{{credits}}', creditDecimal(totals.billing.cloud.reservedCreditMicro))}` : ''}
       </p> : null}
 
-      <section className="overflow-hidden rounded-xl border border-edge bg-surface-panel">
+      <section className="overflow-hidden rounded-xl bg-surface-inset">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold text-fg">{t.distribution}</h2>
@@ -240,7 +240,7 @@ export function UsageSettingsPage() {
         </div> : null}
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-edge bg-surface-panel">
+      <section className="overflow-hidden rounded-xl bg-surface-inset">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
           <div><h2 className="text-sm font-semibold text-fg">{t.recentCalls}</h2>
           <p className="mt-1 text-xs text-fg-subtle">{t.recentCallsHint}</p></div>
@@ -281,7 +281,7 @@ export function UsageSettingsPage() {
           </nav>
         </div>
       </section>
-      <details className="rounded-xl border border-edge bg-surface-panel p-4">
+      <details className="rounded-xl bg-surface-inset p-4">
         <summary className="cursor-pointer text-sm font-medium text-fg focus-visible:outline-accent">{t.billingDetails}</summary>
         <p className="mt-3 text-xs leading-5 text-fg-muted">{t.cloudBillingHint}</p>
         <a className="mt-2 inline-block text-xs text-accent-fg hover:underline" href="https://console.xopc.ai/models/billing" target="_blank" rel="noreferrer">{t.cloudCreditsLabel}</a>

@@ -127,7 +127,7 @@ export function ModelUsesList({ data, zh, onChange, onSettings, onlyUse, disable
   ];
   return <section ref={listRef} className="@container min-w-0">
     <h2 className={onlyUse ? "mb-2 text-sm font-semibold text-fg" : "sr-only"}>{onlyUse ? (zh ? '当前模型' : 'Current model') : (zh ? '能力总览' : 'Capabilities')}</h2>
-    <div className={onlyUse ? 'space-y-4' : 'overflow-hidden rounded-2xl border border-edge bg-surface-panel'}>{capabilityGroups.filter(group => (!onlyUse || group.uses.includes(onlyUse))).map(group => {
+    <div className={onlyUse ? 'space-y-4' : 'overflow-hidden rounded-2xl bg-surface-inset'}>{capabilityGroups.filter(group => (!onlyUse || group.uses.includes(onlyUse))).map(group => {
       const groupRows = group.uses.filter(id => !onlyUse || id === onlyUse).map(id => {
         const row = rows.find(row => row.id === id)!;
         const options = modelUseOptions(catalog?.previews ?? [], row.id, zh);

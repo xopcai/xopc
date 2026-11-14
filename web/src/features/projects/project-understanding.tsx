@@ -86,9 +86,9 @@ export function ProjectUnderstandingPanel({ projectId, hasProjectFolder }: { pro
       setEditing(false);
     } catch { setSaveError(true); } finally { setSaving(false); }
   };
-  if (!hasProjectFolder) return <section className="rounded-xl border border-edge p-4"><ProjectFolderRequired projectId={projectId} /></section>;
+  if (!hasProjectFolder) return <section className="rounded-xl bg-surface-inset p-4"><ProjectFolderRequired projectId={projectId} /></section>;
   if (isLoading) return <Skeleton className="h-12 w-full rounded-xl" />;
-  return <section className="rounded-xl border border-edge bg-surface-panel px-5 py-3">
+  return <section className="rounded-xl bg-surface-inset px-5 py-3">
     <div className="flex items-center justify-between gap-3 text-xs text-fg-subtle">
       <span>{isProjectUnderstandingRunning(data?.status) ? copy.running : data?.status === 'failed' || data?.status === 'canceled' || error ? copy.failed : copy.title}</span>
       {!isProjectUnderstandingRunning(data?.status) ? <ProjectUnderstandingAction projectId={projectId} hasProjectFolder={hasProjectFolder} /> : null}

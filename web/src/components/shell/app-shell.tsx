@@ -276,6 +276,7 @@ function AppShellContent() {
                       data-workbench-page-scroll={pathname === '/' ? '' : undefined}
                       className={cn(
                         'flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden',
+                        (pathname === '/' || routeKey === 'capabilities') && 'bg-surface-base',
                         routeKey !== 'settings' && routeKey !== 'chat' && 'page-enter',
                         routeKey === 'settings'
                           ? 'overflow-hidden'

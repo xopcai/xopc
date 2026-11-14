@@ -70,7 +70,7 @@ function interpolate(template: string, values: Record<string, string | number>):
 }
 
 const READ_DELIVERIES_KEY = 'xopc-home-read-deliveries';
-const workPanel = 'min-w-0 rounded-xl border border-edge bg-surface-panel shadow-surface';
+const workPanel = 'min-w-0 rounded-xl bg-surface-panel';
 const sectionTitle = 'text-base font-semibold tracking-tight text-fg';
 const workColumns = '@min-[54rem]/workbench:grid-cols-[minmax(0,1fr)_minmax(19rem,0.57fr)]';
 
@@ -157,7 +157,7 @@ function DecisionCard({
           {item.primaryAction ? (
             <Button
               type="button"
-              variant={primary ? 'primary' : 'secondary'}
+              variant={primary ? 'primary' : 'tonal'}
               className="min-h-9 shrink-0 rounded-lg px-3 text-xs sm:shadow-none"
               disabled={busy}
               aria-expanded={authorization ? scopeOpen : expandReview ? reviewOpen : undefined}
@@ -643,7 +643,7 @@ export function HomePage() {
           {work.deliveryHistory}<ArrowRight className="size-3.5" aria-hidden />
         </Button>
       </div>
-      <div className={`${workPanel} divide-y divide-edge-subtle`} data-workbench-fill data-workbench-panel>
+      <div className={`${workPanel} space-y-1`} data-workbench-fill data-workbench-panel>
         {unreadDeliveries.slice(0, mode === 'attention' ? 1 : 3).map((item, index) => (
           <HomeDeliveryRow key={item.id} item={item} language={language} showNew primary={mode === 'delivery' && index === 0} onOpen={() => openDelivery(item)} />
         ))}
@@ -669,7 +669,7 @@ export function HomePage() {
         {backgroundGroups.map(({ title, items }) => (
           <div key={title} className="pt-3">
             <h3 className="mb-1 px-2 text-xs font-medium text-fg-muted">{title}</h3>
-            <div className="divide-y divide-edge-subtle">
+            <div className="space-y-1">
               {(showAllBackground ? items : items.slice(0, backgroundLimit)).map((item) => <BackgroundRow key={item.id} item={item} language={language} onAction={runAction} onUpdated={onTaskUpdated} />)}
             </div>
           </div>
@@ -686,7 +686,7 @@ export function HomePage() {
   const hasAdvisor = !home?.observation && advisorVisible;
   const attentionSection = needsUserCount > 0 ? (
     <section className={workPanel} aria-labelledby="home-needs-user-title" data-workbench-panel>
-      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-edge-subtle px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 px-4 pb-1 pt-4 sm:px-5">
         <span className="mr-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-warning-soft text-fg">
           <CircleAlert className="size-[18px]" aria-hidden />
         </span>
@@ -694,7 +694,7 @@ export function HomePage() {
         <span className="rounded-full bg-surface-inset px-2 py-0.5 text-xs font-semibold tabular-nums text-fg-muted" aria-live="polite" aria-label={interpolate(t.home.attentionTitle, { count: needsUserCount })}>{needsUserCount}</span>
         {dueToday > 0 ? <span className="ml-auto rounded-md bg-warning-soft px-2 py-1 text-xs text-fg-muted">{interpolate(work.dueToday, { count: dueToday })}</span> : null}
       </div>
-      <div className="divide-y divide-edge-subtle">
+      <div className="space-y-1 pb-2">
         {attentionRows.map((item, index) => item === handled ? (
           <div key={item.id} className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 text-sm text-fg-muted">
             <span>{item.title}</span><Check className="size-4 shrink-0 text-success" aria-label={language === 'zh' ? '已处理' : 'Handled'} />
@@ -728,7 +728,7 @@ export function HomePage() {
     <section className="space-y-2" aria-labelledby="home-resume-title">
       <h2 id="home-resume-title" className={`flex min-h-9 items-center pl-1 ${sectionTitle}`}>{work.resume}</h2>
       {resumable.length > 0 ? (
-        <div className={`${workPanel} divide-y divide-edge-subtle p-2`} data-workbench-fill data-workbench-panel>
+        <div className={`${workPanel} space-y-1 p-2`} data-workbench-fill data-workbench-panel>
           {resumable.slice(0, mode === 'attention' ? 1 : 3).map((item) => (
             <Link
               key={`${item.kind}:${item.id}`}

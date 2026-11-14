@@ -461,6 +461,10 @@ html.dark {
   }
 }
 
+@utility bg-surface-panel-hover {
+  background-color: color-mix(in oklab, var(--color-surface-panel), var(--color-fg) 6%);
+}
+
 .app-main-surface {
   min-width: 0;
 }

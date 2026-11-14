@@ -35,7 +35,7 @@ export function InstalledPluginConnectionRow({ extension, language, onOpen }: {
   const StatusIcon = preparing ? Clock3 : disabled ? PauseCircle : needsAttention ? AlertCircle : CheckCircle2;
 
   return <button type="button" onClick={onOpen}
-    className={cn('flex min-h-[8.75rem] w-full min-w-0 flex-col rounded-xl border border-edge bg-surface-panel p-4 text-left transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent', needsAttention && 'border-amber-500/25')}>
+    className="flex min-h-[8.75rem] w-full min-w-0 flex-col rounded-xl bg-surface-panel p-4 text-left transition-colors hover:bg-surface-panel-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
     <span className="flex w-full min-w-0 items-start gap-3">
       <CapabilityIcon iconUrl={extension.branding?.iconUrl} fallback={Plug} className="size-9" />
       <span className="min-w-0 flex-1">

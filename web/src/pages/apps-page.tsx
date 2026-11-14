@@ -206,12 +206,12 @@ export function ExtensionsPage({ embedded = false, onHeaderActionChange }: { emb
   ];
 
   return (
-    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', !embedded && 'bg-surface-panel')}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-base">
       <div className={cn(
         'mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8',
         'pb-7 pt-3 lg:pb-9 lg:pt-4',
       )}>
-        <div className="mb-6 border-b border-edge-subtle pb-3">
+        <div className="mb-6">
           <PageTabs
             items={tabItems}
             activeTab={mainTab}
@@ -315,7 +315,7 @@ function ExtensionAppCard({
           </div>
         </div>
         <div className="pointer-events-auto relative z-10 flex max-w-[45%] shrink-0 items-start">
-          <button type="button" onClick={onAction} className="inline-flex items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg transition-colors hover:bg-surface-hover active:scale-[0.98] active:bg-surface-hover/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{action}</button>
+          <Button variant="tonal" onClick={onAction} className="rounded-lg text-xs">{action}</Button>
         </div>
       </div>
       <p className="pointer-events-none relative mt-3 line-clamp-3 text-sm leading-relaxed text-fg-muted">{description?.trim() || copy.cardNoDescription}</p>
@@ -597,7 +597,7 @@ function ExtensionsPageSkeleton() {
 
 function EmptyExtensionsState({ message }: { message: string }) {
   return (
-    <div className="flex min-h-[min(40vh,16rem)] flex-col items-center justify-center rounded-xl border border-edge-subtle bg-surface-base px-4 py-12 text-center shadow-surface">
+    <div className="flex min-h-[min(40vh,16rem)] flex-col items-center justify-center px-4 py-12 text-center">
       <p className="text-sm text-fg-muted">{message}</p>
     </div>
   );

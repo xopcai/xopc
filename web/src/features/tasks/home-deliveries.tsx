@@ -43,7 +43,7 @@ export function HomeDeliveryRow({ item, language, primary, showNew = false, onOp
           {item.summary ? <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-fg-muted">{item.summary}</p> : null}
         </div>
       </div>
-      <Button variant={primary ? 'primary' : showNew ? 'ghost' : 'secondary'} className="min-h-9 shrink-0 gap-1 rounded-lg px-2.5 text-xs sm:shadow-none" onClick={onOpen}>
+      <Button variant={primary ? 'primary' : showNew ? 'ghost' : 'tonal'} className="min-h-9 shrink-0 gap-1 rounded-lg px-2.5 text-xs sm:shadow-none" onClick={onOpen}>
         {copy.openDelivery}{showNew ? <ChevronRight className="size-3.5" aria-hidden /> : null}
       </Button>
     </div>

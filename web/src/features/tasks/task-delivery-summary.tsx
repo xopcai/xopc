@@ -36,7 +36,7 @@ export function TaskDeliverySummary({ detail, language }: { detail: TaskDetail; 
   const shortSummary = summary && summary.length <= 160 && !summary.includes('\n')
     && !/\b(?:Claim|Criterion|Research claim)\b|c-ac\d|Default criteria were not/i.test(summary) ? summary : undefined;
   const remainingEvidence = evidence.filter(item => !deliverableUris.has(item.uri));
-  return <section aria-label={zh ? '交付结果' : 'Deliverables'} className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
+  return <section aria-label={zh ? '交付结果' : 'Deliverables'} className="rounded-xl bg-surface-panel p-4">
     <h2 id="task-results-heading" className="text-sm font-semibold text-fg">{zh ? '交付结果' : 'Deliverables'}</h2>
     {shortSummary ? <p className="mt-2 break-words text-sm leading-6 text-fg-muted [overflow-wrap:anywhere]">{shortSummary}</p> : null}
     {receipt && receipt.completionVerdict !== 'achieved' ? <p className="mt-2 text-xs text-fg-muted">{zh ? '本次执行尚未报告目标全部达成。' : 'This run has not reported the full goal achieved.'}</p> : null}
@@ -46,7 +46,7 @@ export function TaskDeliverySummary({ detail, language }: { detail: TaskDetail; 
         return <li key={item.id} className="min-w-0">
           <DeliverablePreview item={item} conversationId={item.task?.conversationId ?? detail.conversation.activeConversationId}
             backgroundPath={`${location.pathname}${location.search}`} zh={zh}
-            className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-edge-subtle px-3 py-2 text-left text-sm text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg bg-surface-inset px-3 py-2 text-left text-sm text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <FileIcon name={title} /><span className="min-w-0 break-words [overflow-wrap:anywhere]">{title}</span>
           </DeliverablePreview>
           {item.artifact?.availability === 'available' && item.artifact.uri?.startsWith('media://outbound/')

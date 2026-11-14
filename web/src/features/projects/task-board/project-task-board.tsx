@@ -160,7 +160,7 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBef
         event.stopPropagation();
         onDropBefore(task.id);
       }}
-      className="group relative min-h-max min-w-0 shrink-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-base shadow-surface transition-[border-color,box-shadow] hover:border-edge focus-within:border-accent/40"
+      className="group relative min-h-max min-w-0 shrink-0 overflow-hidden rounded-xl bg-surface-panel transition-colors hover:bg-surface-panel-hover motion-reduce:transition-none"
     >
       <Link
         to={taskDetailModalHref(returnTo, task.id)}
@@ -452,7 +452,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAct
                   event.preventDefault();
                   void dropTask(phase, null);
                 }}
-                className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-inset/70 p-2.5"
+                className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl bg-surface-inset p-2.5"
               >
                 <header className="mb-2.5 flex shrink-0 items-center gap-2 px-0.5">
                   <div className={cn('flex items-center gap-1.5 rounded-md px-2 py-1', LANE_TONES[phase])}>
