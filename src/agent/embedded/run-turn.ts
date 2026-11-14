@@ -363,7 +363,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     : undefined;
   return withCloudCreditBudget({ conversationId: params.conversationId, runId: params.runId, limitCreditMicro }, async () => {
     try {
-      const result = await traceRun('agent.run', { conversationId: params.conversationId, runId: params.runId }, () => runXopcEmbeddedTurnInner(params), params.userMessage);
+      const result = await traceRun('agent.run', { conversationId: params.conversationId, runId: params.runId },
+        () => runWithEmbeddedExecutionSession(params.conversationId, () => runXopcEmbeddedTurnInner(params), params.runId), params.userMessage);
       if (result.errorMessage?.includes('provider_usage_scope_denied')) return { ...result, ok: false, retryable: false };
       const stopped = cloudCreditBudgetStopMessage();
       if (stopped) return { ...result, ok: false, retryable: false, errorMessage: stopped };
@@ -529,6 +530,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
     };
     const basePrepareRequest = session.agent.prepareRequest;
     const authoritativePrepareRequest: typeof session.agent.prepareRequest = async (request, signal) => {
+      runLease?.prepareCommandWaits();
       const prepared = await basePrepareRequest?.(request, signal) as AgentRequestUpdate | undefined;
       const currentContext = prepared?.context ?? request.context;
       const imagesForModel = resolvedModel.input?.includes('image') === false ? [] : params.images ?? [];

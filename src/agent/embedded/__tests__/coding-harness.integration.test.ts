@@ -22,6 +22,9 @@ vi.mock('../model-runtime.js', async () => {
 });
 
 import { runXopcEmbeddedTurn } from '../run-turn.js';
+import { queueEmbeddedSteer } from '../runs.js';
+import { commandRegistry } from '../../commands/command-registry.js';
+import { createManagedJobTool } from '../../tools/managed-job-tool.js';
 import { InMemoryTranscriptRuntime } from '../transcript-runtime.js';
 import { evictEmbeddedSessionRunner } from '../session-runner.js';
 import { createApplyPatchTool } from '../../tools/apply-patch.js';
@@ -30,6 +33,82 @@ import { createReviewWorkspaceTool } from '../../tools/review-workspace.js';
 import { createReadFileTool } from '../../tools/read.js';
 import { createDataBatchTool } from '../../tools/dataBatch.js';
 import { createAgentTurnPolicy } from '../../orchestration/agent-turn-policy.js';
+
+it('yields a running command and a subsequent job wait when steered, then collects the same process result', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'command-steer-'));
+  const conversationId = crypto.randomUUID();
+  const runId = 'command-steer';
+  const registry = commandRegistry();
+  const firstWait = Promise.withResolvers<string>();
+  const secondWait = Promise.withResolvers<void>();
+  const finalWait = Promise.withResolvers<void>();
+  const waitForJob = registry.wait.bind(registry);
+  const wait = vi.spyOn(registry, 'wait').mockImplementation((...args) => {
+    if (args[0] === conversationId) {
+      if (args[2] === 60_000) firstWait.resolve(args[1]);
+      if (args[2] === 50_000) secondWait.resolve();
+      if (args[2] === 49_000) finalWait.resolve();
+    }
+    return waitForJob(...args);
+  });
+  let jobId: string | undefined;
+  let round = 0;
+  const steer = (input: string) => queueEmbeddedSteer(conversationId, input, runId);
+  const cmd = `${JSON.stringify(process.execPath)} -e "process.stdin.pipe(process.stdout)"`;
+  const responses: Array<() => AssistantMessage['content']> = [
+    () => [{ type: 'toolCall', id: 'command', name: 'exec_command', arguments: { cmd } }],
+    () => [{ type: 'toolCall', id: 'first-wait', name: 'managed_job', arguments: { action: 'wait', jobId, waitMs: 50_000 } }],
+    () => [{ type: 'toolCall', id: 'final-wait', name: 'managed_job', arguments: { action: 'wait', jobId, waitMs: 49_000 } }],
+    () => [{ type: 'text', text: 'Command completed.' }],
+  ];
+  const runtime = new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: root });
+  scripted.stream.mockImplementation(() => {
+    const content = responses[round++]!();
+    const stopReason = content[0]?.type === 'toolCall' ? 'toolUse' : 'stop';
+    const message: AssistantMessage = { role: 'assistant', api: 'openai-completions', provider: 'openai', model: 'gpt-4.1',
+      content, stopReason, timestamp: Date.now(), usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+    const stream = createAssistantMessageEventStream();
+    stream.push({ type: 'done', reason: stopReason, message });
+    return stream;
+  });
+  const abort = new AbortController();
+  const turn = runXopcEmbeddedTurn({ conversationId, runId, workspaceDir: root, transcriptRuntime: runtime,
+    userMessage: { role: 'user', content: 'Start a command.', timestamp: Date.now() }, systemPrompt: 'Run the command.',
+    model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+    modelRef: 'openai/gpt-4.1', timeoutMs: 8_000, abortSignal: abort.signal,
+    tools: [createExecCommandTool(root, { getConversationId: () => conversationId }), createManagedJobTool(root, () => conversationId)],
+  });
+  try {
+    const whileRunning = <T>(milestone: Promise<T>) => Promise.race([milestone, turn.then(result => {
+      throw new Error(`Turn ended before the expected wait: ${JSON.stringify(result)}`);
+    })]);
+    jobId = await whileRunning(firstWait.promise);
+    expect(await steer('Check the existing command.')).toBe(true);
+    await whileRunning(secondWait.promise);
+    expect(await steer('Keep waiting for the same command.')).toBe(true);
+    await whileRunning(finalWait.promise);
+    expect(registry.write(conversationId, jobId, 'same process\n', true)).toBe(true);
+    expect(await turn).toMatchObject({ ok: true, lastAssistantText: 'Command completed.' });
+    const messages = await runtime.loadMessages();
+    expect(messages.filter(message => message.role === 'toolResult')).toMatchObject([
+      { details: { id: jobId, status: 'running' } },
+      { details: { id: jobId, status: 'running' } },
+      { details: { id: jobId, status: 'success', stdout: 'same process\n' } },
+    ]);
+    expect(messages.filter(message => message.role === 'user').map(message => JSON.stringify(message.content))).toEqual([
+      expect.stringContaining('Start a command.'),
+      expect.stringContaining('Check the existing command.'),
+      expect.stringContaining('Keep waiting for the same command.'),
+    ]);
+  } finally {
+    abort.abort();
+    await turn.catch(() => {});
+    if (jobId) await registry.cancel(conversationId, jobId);
+    wait.mockRestore();
+    evictEmbeddedSessionRunner(conversationId);
+    await rm(root, { recursive: true, force: true });
+  }
+}, 12_000);
 
 it('delivers batch evidence through the real session and tool-result guard in two model rounds', async () => {
   const root = await mkdtemp(join(tmpdir(), 'data-harness-'));

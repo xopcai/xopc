@@ -7,6 +7,7 @@ import type { CommandIsolation } from '../commands/command-isolation.js';
 import { commandRegistry, commandTimeout } from '../commands/command-registry.js';
 import { getSessionInteractionPolicy } from '../session/interaction-policy.js';
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
+import { getEmbeddedCommandYieldSignal } from '../embedded/runs.js';
 
 const ManagedJobSchema = Type.Union([
   Type.Object({ action: Type.Literal('start'), command: Type.String({ minLength: 1 }), cwd: Type.Optional(Type.String()), tty: Type.Optional(Type.Boolean()), maxRuntimeMs: Type.Optional(Type.Number()) }),
@@ -33,7 +34,7 @@ export function createManagedJobTool(
 ): AgentTool {
   return {
     name: 'managed_job', label: 'Managed Job',
-    description: 'Manage shell jobs, including jobs yielded by exec_command. Start returns an id; wait returns on completion or after at most 60s; stdin writes input; tty:true allocates a terminal and resize changes its dimensions; status/list/cancel inspect or stop jobs. Completed output and logs survive restart. Interrupted jobs require inspection before restart.',
+    description: 'Manage shell jobs, including jobs yielded by exec_command. Start returns an id; wait returns on completion, a user steer, or after at most 60s; stdin writes input; tty:true allocates a terminal and resize changes its dimensions; status/list/cancel inspect or stop jobs. Completed output and logs survive restart. Interrupted jobs require inspection before restart.',
     parameters: ManagedJobSchema,
     supportsParallel: true, idempotent: false,
     async execute(_toolCallId: string, input: Static<typeof ManagedJobSchema>, signal?: AbortSignal) {
@@ -45,7 +46,7 @@ export function createManagedJobTool(
         if (input.action === 'stdin' && !registry.write(owner, input.jobId, input.chars, input.end)) {
           return result({ status: 'failed', error: 'Job is unavailable or stdin is closed' });
         }
-        const job = input.action === 'wait' ? await registry.wait(owner, input.jobId, input.waitMs, signal)
+        const job = input.action === 'wait' ? await registry.wait(owner, input.jobId, input.waitMs, signal, getEmbeddedCommandYieldSignal())
           : input.action === 'cancel' ? await registry.cancel(owner, input.jobId) : registry.get(owner, input.jobId);
         return result(job ?? { status: 'failed', error: 'Managed job not found' });
       }

@@ -154,6 +154,28 @@ describe('EmbeddedRunRegistry', () => {
     expect(steer).toHaveBeenCalledWith('change course');
     expect(registry.size()).toBe(1);
   });
+
+  it('yields command waits only for queued steer input and rearms after delivery', async () => {
+    const registry = new EmbeddedRunRegistry();
+    const lease = registry.acquire(identity);
+    const steer = vi.fn().mockResolvedValueOnce('handled').mockResolvedValue('queued');
+    const getSteeringMessages = vi.fn().mockReturnValue(['another steer']);
+    await lease.attach({ steer, getSteeringMessages } as never, vi.fn());
+    const yieldSignal = registry.getCommandYieldSignal(identity.conversationId, identity.runId);
+    try {
+      await registry.steerByConversationId(identity.conversationId, 'handled by extension');
+      expect(yieldSignal?.aborted).toBe(false);
+      await registry.steerByConversationId(identity.conversationId, 'queued for the model');
+      expect(yieldSignal?.aborted).toBe(true);
+      expect(lease.signal.aborted).toBe(false);
+      lease.prepareCommandWaits();
+      expect(registry.getCommandYieldSignal(identity.conversationId, identity.runId)).toBe(yieldSignal);
+      getSteeringMessages.mockReturnValue([]);
+      lease.prepareCommandWaits();
+      expect(registry.getCommandYieldSignal(identity.conversationId, identity.runId)?.aborted).toBe(false);
+      expect(registry.getCommandYieldSignal(identity.conversationId, 'other-run')).toBeUndefined();
+    } finally { lease.release(); }
+  });
   it('ignores an old run cancellation after the conversation lease moves to a new run', async () => {
     const registry = new EmbeddedRunRegistry();
     const old = registry.acquire(identity);
