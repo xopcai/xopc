@@ -10,9 +10,11 @@
  * and `evaluateFilePolicy()` before file read/write/edit operations.
  */
 
-import { resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 
 import { createLogger } from '../../utils/logger.js';
+import { getExecutionAuthority } from '../../infra/execution-authority.js';
+import { getDelegationScope } from '../orchestration/delegation-scope.js';
 import { prepareSafeToolEnv } from './sanitize-env-vars.js';
 import { validatePath, validateWritePath } from './path-policy.js';
 import { validateCommand, auditCommand } from './command-validator.js';
@@ -33,6 +35,7 @@ export function evaluateExecPolicy(params: {
   command: string;
   cwd: string;
   workspaceRoot?: string;
+  allowOutsideWorkspace?: boolean;
   config?: Partial<SandboxConfig>;
   allowedEnvVars?: string[];
 }): ExecPolicyResult {
@@ -73,8 +76,11 @@ export function evaluateExecPolicy(params: {
   }
 
   // 2. CWD path validation
+  const allowOutsideWorkspace = params.allowOutsideWorkspace
+    && !getExecutionAuthority() && !getDelegationScope()?.restrictToWorkspace;
   const cwdResult = validatePath(params.cwd, {
-    allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : [params.workspaceRoot ?? params.cwd],
+    allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots
+      : allowOutsideWorkspace ? undefined : [params.workspaceRoot ?? params.cwd],
     extraBlockedPaths: config.blockedPaths,
   });
   if (!cwdResult.allowed) {
@@ -110,6 +116,7 @@ export function evaluateFilePolicy(params: {
   operation: 'read' | 'write' | 'edit' | 'delete';
   path: string;
   workspaceRoot: string;
+  allowOutsideWorkspace?: boolean;
   config?: Partial<SandboxConfig>;
 }): PathValidationResult {
   const config = { ...DEFAULT_SANDBOX_CONFIG, ...params.config };
@@ -118,20 +125,16 @@ export function evaluateFilePolicy(params: {
     return { allowed: true };
   }
 
-  const isWriteOp = params.operation !== 'read';
-
-  const result = isWriteOp
-    ? validateWritePath(params.path, params.workspaceRoot, {
-        allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : [params.workspaceRoot],
-        extraBlockedPaths: config.blockedPaths,
-      })
-    : validatePath(
-        params.path.startsWith('/') ? params.path : resolve(params.workspaceRoot, params.path),
-        {
-          allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : [params.workspaceRoot],
-          extraBlockedPaths: config.blockedPaths,
-        },
-      );
+  const allowOutsideWorkspace = params.allowOutsideWorkspace
+    && !getExecutionAuthority() && !getDelegationScope()?.restrictToWorkspace;
+  const pathOptions = {
+    allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots
+      : allowOutsideWorkspace ? undefined : [params.workspaceRoot],
+    extraBlockedPaths: config.blockedPaths,
+  };
+  const result = params.operation === 'read'
+    ? validatePath(isAbsolute(params.path) ? params.path : resolve(params.workspaceRoot, params.path), pathOptions)
+    : validateWritePath(params.path, params.workspaceRoot, pathOptions);
 
   if (!result.allowed) {
     log.warn(

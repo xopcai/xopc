@@ -18,6 +18,7 @@ import type { DataBatchResult, DataFragment, DataOperationResult } from './types
 export interface DataSourceOptions {
   getTools?: () => readonly AgentTool[];
   allowHostGit?: () => boolean;
+  allowOutsideWorkspace?: boolean;
   canExecute?: (toolName: string) => boolean;
 }
 
@@ -55,7 +56,7 @@ export async function acquireData(workspace: string, args: DataBatchArgs, allowe
       const safePath = (input: string) => {
         const safety = checkFileSafety('read', input);
         if (!safety.allowed) throw new Error(`Sandbox: ${safety.message}`);
-        return checkedFilePath(workspace, resolve(workspace, input), 'read');
+        return checkedFilePath(workspace, resolve(workspace, input), 'read', options.allowOutsideWorkspace);
       };
       if (op.kind === 'file_read') {
         const target = safePath(op.path);
@@ -70,7 +71,7 @@ export async function acquireData(workspace: string, args: DataBatchArgs, allowe
             if (readBytes + bytes > 32 * 1024 * 1024) throw new Error('Batch read byte budget exceeded');
             readBytes += bytes;
             result.sourceRequests++;
-            const data = await readWorkspaceFileAsync(workspace, target, operationSignal, Math.min(bytes, 10 * 1024 * 1024));
+            const data = await readWorkspaceFileAsync(workspace, target, operationSignal, Math.min(bytes, 10 * 1024 * 1024), options.allowOutsideWorkspace);
             if (data.includes(0)) throw new Error('Binary file: use the appropriate media or document tool');
             return { lines: data.toString('utf8').split('\n'), revision: createHash('sha256').update(data).digest('hex') };
           });
@@ -103,7 +104,7 @@ export async function acquireData(workspace: string, args: DataBatchArgs, allowe
           ...(op.literal ? ['--fixed-strings'] : []), ...(op.ignoreCase ? ['--ignore-case'] : []),
           ...(op.glob ? ['--glob', op.glob] : []), ...op.patterns.flatMap(pattern => ['-e', pattern]), '--', ...paths,
         ], operationSignal, { maxBytes: Math.min(1024 * 1024, Math.floor(4 * 1024 * 1024 / args.operations.length)), onLine: line => {
-          const match = parseRepositoryMatch(workspace, line);
+          const match = parseRepositoryMatch(workspace, line, options.allowOutsideWorkspace);
           if (!match) return;
           const resource = match.path;
           const text = match.text;

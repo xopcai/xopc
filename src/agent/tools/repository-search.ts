@@ -12,13 +12,13 @@ export interface RepositorySearchOptions {
   onLine?: (line: string) => boolean | void;
 }
 
-export function parseRepositoryMatch(workspace: string, line: string): { path: string; line: number; text: string; match: boolean } | undefined {
+export function parseRepositoryMatch(workspace: string, line: string, allowOutsideWorkspace = false): { path: string; line: number; text: string; match: boolean } | undefined {
   if (!line) return undefined;
   const event = JSON.parse(line);
   if (event.type !== 'match' && event.type !== 'context') return undefined;
   const data = event.data;
   if (typeof data?.path?.text !== 'string' || typeof data.lines?.text !== 'string'
-    || !Number.isInteger(data.line_number) || !isSearchFileAllowed(workspace, data.path.text)) return undefined;
+    || !Number.isInteger(data.line_number) || !isSearchFileAllowed(workspace, data.path.text, allowOutsideWorkspace)) return undefined;
   return { path: data.path.text, line: data.line_number, text: data.lines.text.replace(/\r?\n$/, ''), match: event.type === 'match' };
 }
 
@@ -84,8 +84,8 @@ export async function repositorySearch(cwd: string, args: string[], signal?: Abo
 }
 
 /** Search results must satisfy the same policy as direct file reads. */
-export function isSearchFileAllowed(workspace: string, path: string): boolean {
-  const policy = evaluateFilePolicy({ operation: 'read', workspaceRoot: workspace, path });
+export function isSearchFileAllowed(workspace: string, path: string, allowOutsideWorkspace = false): boolean {
+  const policy = evaluateFilePolicy({ operation: 'read', workspaceRoot: workspace, path, allowOutsideWorkspace });
   if (!policy.allowed || !policy.canonicalPath) return false;
   try {
     const stat = lstatSync(policy.canonicalPath);

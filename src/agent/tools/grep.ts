@@ -15,14 +15,14 @@ const grepSchema = Type.Object({
 export interface GrepToolDetails { truncated: boolean }
 export type GrepToolInput = Static<typeof grepSchema>;
 
-export function createGrepTool(cwd: string): AgentTool {
+export function createGrepTool(cwd: string, allowOutsideWorkspace = false): AgentTool {
   return {
     name: 'grep', label: 'Search', parameters: grepSchema,
     description: 'Search with ripgrep, respecting .gitignore and skipping binary files. Returns path:line content. Use a narrow path or glob; output is bounded.',
     supportsParallel: true, idempotent: true,
     async execute(_id, params: GrepToolInput, signal) {
       let path = resolveToCwd(params.path || '.', cwd);
-      const policy = evaluateFilePolicy({ operation: 'read', path, workspaceRoot: cwd });
+      const policy = evaluateFilePolicy({ operation: 'read', path, workspaceRoot: cwd, allowOutsideWorkspace });
       if (!policy.allowed) throw new Error(policy.reason);
       path = policy.canonicalPath!;
       const limit = Math.min(1000, Math.max(1, params.limit ?? 100));
@@ -34,7 +34,7 @@ export function createGrepTool(cwd: string): AgentTool {
         ...(params.ignoreCase ? ['--ignore-case'] : []), ...(params.literal ? ['--fixed-strings'] : []),
         ...(params.glob ? ['--glob', params.glob] : []), '-e', params.pattern, '--', path,
       ], signal, { onLine: row => {
-        const match = parseRepositoryMatch(cwd, row);
+        const match = parseRepositoryMatch(cwd, row, allowOutsideWorkspace);
         if (!match) return;
         const separator = match.match ? ':' : '-';
         lines.push(`${match.path}${separator}${match.line}${separator}${match.text}`);

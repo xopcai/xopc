@@ -32,7 +32,7 @@ export function resolveToCwd(path: string, cwd: string): string {
   if (path.startsWith('~')) {
     return path.replace(/^~/, process.env.HOME || process.env.USERPROFILE || '');
   }
-  if (path.startsWith('/')) {
+  if (isAbsolute(path)) {
     return path;
   }
   return `${cwd}/${path}`;

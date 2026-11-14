@@ -5,6 +5,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import type { CommandIsolation } from '../commands/command-isolation.js';
 import { commandRegistry, commandTimeout } from '../commands/command-registry.js';
+import { getSessionInteractionPolicy } from '../session/interaction-policy.js';
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
 
 const ManagedJobSchema = Type.Union([
@@ -28,6 +29,7 @@ export function createManagedJobTool(
   getSkillPassthroughEnvVarNames?: () => string[],
   prepareEnv?: (baseEnv: Record<string, string>, cwd: string) => Promise<Record<string, string>>,
   getCommandIsolation?: () => CommandIsolation | undefined,
+  allowOutsideWorkspace = false,
 ): AgentTool {
   return {
     name: 'managed_job', label: 'Managed Job',
@@ -49,11 +51,18 @@ export function createManagedJobTool(
       }
       const command = input.command.trim();
       if (!command) return result({ status: 'failed', error: 'command is required' });
-      const policy = evaluateExecPolicy({ workspaceRoot: workspace, command, cwd: resolve(workspace, input.cwd?.trim() || '.'), allowedEnvVars: getSkillPassthroughEnvVarNames?.() ?? [] });
+      const isolation = getCommandIsolation?.();
+      const interaction = getSessionInteractionPolicy(owner);
+      const policy = evaluateExecPolicy({
+        workspaceRoot: workspace, command, cwd: resolve(workspace, input.cwd?.trim() || '.'),
+        allowedEnvVars: getSkillPassthroughEnvVarNames?.() ?? [],
+        allowOutsideWorkspace: allowOutsideWorkspace && isolation?.mode !== 'docker'
+          && interaction.mode !== 'plan' && interaction.access !== 'read-only' && interaction.sandbox !== 'workspace-write',
+      });
       if (!policy.allowed) return result({ status: 'blocked', error: `Command blocked: ${policy.reason}` });
       const env = prepareEnv ? await prepareEnv(policy.sanitizedEnv, policy.effectiveCwd) : policy.sanitizedEnv;
       return result(await registry.start({ owner, command, cwd: policy.effectiveCwd, env: { ...env, COLUMNS: '200' },
-        tty: input.tty, workspace, isolation: getCommandIsolation?.(), timeoutMs: commandTimeout(input.maxRuntimeMs, policy.timeoutMs), snapshot: true, signal }));
+        tty: input.tty, workspace, isolation, timeoutMs: commandTimeout(input.maxRuntimeMs, policy.timeoutMs), snapshot: true, signal }));
     },
   } as AgentTool;
 }

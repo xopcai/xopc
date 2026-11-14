@@ -6,7 +6,7 @@
  */
 
 import { lstatSync, realpathSync } from 'node:fs';
-import { isAbsolute, normalize, posix, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, normalize, posix, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
 import type { PathValidationResult } from './types.js';
@@ -50,6 +50,9 @@ const BLOCKED_HOME_SUBPATHS: readonly string[] = [
 // ---------------------------------------------------------------------------
 
 function normalizePosixPath(raw: string): string {
+  if (process.platform === 'win32' && /^[\\/]{2}[^\\/]/.test(raw)) {
+    return normalize(raw).replace(/\\/g, '/');
+  }
   const slashPath = raw.replace(/\\/g, '/');
   if (slashPath.startsWith('/')) {
     return posix.normalize(slashPath);
@@ -58,6 +61,7 @@ function normalizePosixPath(raw: string): string {
 }
 
 function resolvePolicyPath(raw: string): string {
+  if (process.platform === 'win32' && /^[\\/]{2}[^\\/]/.test(raw)) return resolve(raw);
   const slashPath = raw.replace(/\\/g, '/');
   if (slashPath.startsWith('/')) {
     return posix.normalize(slashPath);
@@ -93,16 +97,19 @@ export function getBlockedPaths(): string[] {
 /**
  * Check if `target` equals or is a descendant of `root`.
  */
-function isPathInsideOrEqual(root: string, target: string): boolean {
-  const normalizedRoot = normalizePosixPath(root);
-  const normalizedTarget = normalizePosixPath(target);
+function isPathInsideOrEqual(root: string, target: string, ignoreCase = false): boolean {
+  const normalizedRoot = ignoreCase ? normalizePosixPath(root).toLowerCase() : normalizePosixPath(root);
+  const normalizedTarget = ignoreCase ? normalizePosixPath(target).toLowerCase() : normalizePosixPath(target);
   if (normalizedTarget === normalizedRoot) return true;
   const prefix = normalizedRoot.endsWith('/') ? normalizedRoot : `${normalizedRoot}/`;
   return normalizedTarget.startsWith(prefix);
 }
 
 export function containsBlockedCredentialSegment(target: string): string | null {
-  const normalized = normalizePosixPath(target);
+  const path = normalizePosixPath(target);
+  const normalized = process.platform === 'win32'
+    ? path.toLowerCase().split('/').map(segment => segment.split(':', 1)[0].replace(/[. ]+$/, '')).join('/')
+    : path;
   for (const sub of BLOCKED_HOME_SUBPATHS) {
     const prefix = `/${sub.replace(/\\/g, '/')}`;
     if (normalized.endsWith(prefix) || normalized.includes(`${prefix}/`)) {
@@ -130,9 +137,9 @@ function resolveCanonicalPath(targetPath: string): string {
     } catch (statError) {
       if ((statError as NodeJS.ErrnoException).code !== 'ENOENT') throw statError;
     }
-    const parent = resolve(targetPath, '..');
+    const parent = dirname(targetPath);
     if (parent === targetPath) throw error;
-    return resolve(resolveCanonicalPath(parent), targetPath.split(sep).at(-1)!);
+    return resolve(resolveCanonicalPath(parent), basename(targetPath));
   }
 }
 
@@ -157,11 +164,15 @@ export function validatePath(
     extraBlockedPaths?: string[];
   },
 ): PathValidationResult {
+  if (process.platform === 'win32' && /^[\\/]{2}[?.][\\/]/.test(rawPath)) {
+    return { allowed: false, reason: 'Cannot operate on Windows device paths' };
+  }
   if (!rawPath || !rawPath.trim()) {
     return { allowed: false, reason: 'Empty path' };
   }
 
-  const target = normalizePosixPath(resolvePolicyPath(rawPath));
+  const resolved = resolvePolicyPath(rawPath);
+  const target = normalizePosixPath(resolved);
   const blockedCredentialSegment = containsBlockedCredentialSegment(target);
   if (blockedCredentialSegment) {
     return { allowed: false, reason: `Path targets blocked directory: ${blockedCredentialSegment}` };
@@ -179,7 +190,7 @@ export function validatePath(
   ];
 
   for (const blocked of blockedPaths) {
-    if (isPathInsideOrEqual(blocked, target)) {
+    if (isPathInsideOrEqual(blocked, target, process.platform === 'win32')) {
       return { allowed: false, reason: `Path targets blocked directory: ${blocked}` };
     }
     // Also block if the target *covers* a blocked path (e.g. mounting "/" covers "/etc")
@@ -193,7 +204,7 @@ export function validatePath(
 
   // --- Pass 2: canonical (symlink-resolved) check ---
   let canonical: string;
-  try { canonical = resolveCanonicalPath(target); }
+  try { canonical = resolveCanonicalPath(resolved); }
   catch { return { allowed: false, reason: 'Cannot safely resolve path' }; }
   const canonicalNormalized = normalizePosixPath(canonical);
 
@@ -202,7 +213,7 @@ export function validatePath(
 
   if (canonicalNormalized !== target) {
     for (const blocked of blockedPaths) {
-      if (isPathInsideOrEqual(blocked, canonicalNormalized)) {
+      if (isPathInsideOrEqual(blocked, canonicalNormalized, process.platform === 'win32')) {
         return {
           allowed: false,
           reason: `Path resolves (via symlink) to blocked directory: ${blocked}`,

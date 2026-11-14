@@ -1,7 +1,7 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { stat } from 'node:fs/promises';
-import { relative } from 'node:path';
+import { realpath, stat } from 'node:fs/promises';
+import { relative, isAbsolute, sep } from 'node:path';
 
 import { checkedFilePath, readWorkspaceFile, writeWorkspaceFile, deleteWorkspaceFile } from '../sandbox/fileAccess.js';
 import { detectLineEnding, generateDiffString, normalizeToLF, restoreLineEndings } from './edit-diff.js';
@@ -175,14 +175,6 @@ function applyHunks(original: string, hunks: PatchHunk[], path: string): string 
   return content;
 }
 
-async function readExisting(workspace: string, path: string): Promise<string> {
-  return readWorkspaceFile(workspace, path).toString('utf8');
-}
-
-async function assertWritable(workspace: string, path: string): Promise<string> {
-  return checkedFilePath(workspace, path, 'write');
-}
-
 async function pathExists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -196,8 +188,11 @@ async function pathExists(path: string): Promise<boolean> {
 async function buildPatchPlan(
   workspace: string,
   parsed: ParsedPatch[],
+  allowOutsideWorkspace: boolean,
 ): Promise<PlannedPatchChange[]> {
   const changes: PlannedPatchChange[] = [];
+  const assertWritable = (path: string) => checkedFilePath(workspace, path, 'write', allowOutsideWorkspace);
+  const readExisting = (path: string) => readWorkspaceFile(workspace, path, undefined, allowOutsideWorkspace).toString('utf8');
   const plannedTargets = new Set<string>();
 
   const rememberTarget = (target: string) => {
@@ -209,7 +204,7 @@ async function buildPatchPlan(
 
   for (const op of parsed) {
     if (op.kind === 'add') {
-      const target = await assertWritable(workspace, op.path);
+      const target = assertWritable(op.path);
       rememberTarget(target);
       if (await pathExists(target)) throw new Error(`Add file target already exists: ${op.path}`);
       const diff = generateDiffString('', op.content, op.path);
@@ -226,9 +221,9 @@ async function buildPatchPlan(
     }
 
     if (op.kind === 'delete') {
-      const target = await assertWritable(workspace, op.path);
+      const target = assertWritable(op.path);
       rememberTarget(target);
-      const oldContent = await readExisting(workspace, target);
+      const oldContent = readExisting(target);
       const diff = generateDiffString(oldContent, '', op.path);
       const counts = countDiff(diff);
       changes.push({
@@ -242,13 +237,13 @@ async function buildPatchPlan(
       continue;
     }
 
-    const target = await assertWritable(workspace, op.path);
+    const target = assertWritable(op.path);
     rememberTarget(target);
-    const oldContent = await readExisting(workspace, target);
+    const oldContent = readExisting(target);
     const lineEnding = detectLineEnding(oldContent);
     const newLfContent = applyHunks(normalizeToLF(oldContent), op.hunks, op.path);
     const newContent = restoreLineEndings(newLfContent, lineEnding);
-    const destination = op.moveTo ? await assertWritable(workspace, op.moveTo) : target;
+    const destination = op.moveTo ? assertWritable(op.moveTo) : target;
     if (destination !== target) {
       rememberTarget(destination);
       if (await pathExists(destination)) {
@@ -274,20 +269,20 @@ async function buildPatchPlan(
   return changes;
 }
 
-async function commitPatchPlan(workspace: string, changes: PlannedPatchChange[]): Promise<void> {
+async function commitPatchPlan(workspace: string, changes: PlannedPatchChange[], allowOutsideWorkspace: boolean): Promise<void> {
   const committed: PlannedPatchChange[] = [];
   try {
     for (const change of changes) {
       committed.push(change);
       if (change.kind === 'add') {
-        writeWorkspaceFile(workspace, change.absolutePath, change.newContent ?? '');
+        writeWorkspaceFile(workspace, change.absolutePath, change.newContent ?? '', allowOutsideWorkspace);
       } else if (change.kind === 'delete') {
-        deleteWorkspaceFile(workspace, change.absolutePath);
+        deleteWorkspaceFile(workspace, change.absolutePath, allowOutsideWorkspace);
       } else {
         const destination = change.absoluteMoveTo ?? change.absolutePath;
-        writeWorkspaceFile(workspace, destination, change.newContent ?? '');
+        writeWorkspaceFile(workspace, destination, change.newContent ?? '', allowOutsideWorkspace);
         if (destination !== change.absolutePath) {
-          deleteWorkspaceFile(workspace, change.absolutePath);
+          deleteWorkspaceFile(workspace, change.absolutePath, allowOutsideWorkspace);
         }
       }
     }
@@ -295,14 +290,14 @@ async function commitPatchPlan(workspace: string, changes: PlannedPatchChange[])
     for (const change of committed.reverse()) {
       try {
         if (change.kind === 'add') {
-          if (await pathExists(change.absolutePath)) deleteWorkspaceFile(workspace, change.absolutePath);
+          if (await pathExists(change.absolutePath)) deleteWorkspaceFile(workspace, change.absolutePath, allowOutsideWorkspace);
         } else if (change.kind === 'delete') {
-          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '');
+          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '', allowOutsideWorkspace);
         } else if (change.absoluteMoveTo) {
-          if (await pathExists(change.absoluteMoveTo)) deleteWorkspaceFile(workspace, change.absoluteMoveTo);
-          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '');
+          if (await pathExists(change.absoluteMoveTo)) deleteWorkspaceFile(workspace, change.absoluteMoveTo, allowOutsideWorkspace);
+          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '', allowOutsideWorkspace);
         } else {
-          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '');
+          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '', allowOutsideWorkspace);
         }
       } catch {
         // Best-effort rollback; the original write error is more useful to the caller.
@@ -312,7 +307,7 @@ async function commitPatchPlan(workspace: string, changes: PlannedPatchChange[])
   }
 }
 
-export function createApplyPatchTool(workspace: string): AgentTool {
+export function createApplyPatchTool(workspace: string, allowOutsideWorkspace = false): AgentTool {
   return {
     name: 'apply_patch',
     label: 'Apply Patch',
@@ -332,14 +327,20 @@ export function createApplyPatchTool(workspace: string): AgentTool {
       try {
         const patch = params.patch ?? '';
         const parsed = parsePatch(patch);
-        const canonicalWorkspace = checkedFilePath(workspace, workspace, 'write');
-        const changes = await buildPatchPlan(canonicalWorkspace, parsed);
-        await commitPatchPlan(canonicalWorkspace, changes);
+        const canonicalWorkspace = allowOutsideWorkspace
+          ? await realpath(workspace).catch(() => workspace)
+          : checkedFilePath(workspace, workspace, 'write');
+        const changes = await buildPatchPlan(canonicalWorkspace, parsed, allowOutsideWorkspace);
+        await commitPatchPlan(canonicalWorkspace, changes, allowOutsideWorkspace);
 
         const diff = changes.map((change) => change.diff).join('\n');
         const added = changes.reduce((sum, change) => sum + change.added, 0);
         const removed = changes.reduce((sum, change) => sum + change.removed, 0);
-        const files = changes.map((change) => relative(canonicalWorkspace, change.absoluteMoveTo ?? change.absolutePath));
+        const files = changes.map((change) => {
+          const target = change.absoluteMoveTo ?? change.absolutePath;
+          const path = relative(canonicalWorkspace, target);
+          return isAbsolute(path) || path === '..' || path.startsWith(`..${sep}`) ? target : path;
+        });
         const summary = changes
           .map((change) => {
             const display = change.moveTo ? `${change.path} -> ${change.moveTo}` : change.path;
