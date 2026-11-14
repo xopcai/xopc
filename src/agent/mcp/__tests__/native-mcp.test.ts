@@ -48,8 +48,8 @@ it('projects legacy SSE for the native transport factory and rejects native name
 
 it('keeps one process-wide native state directory across workspace turns', async () => {
   await prepareNativeMcpConfig({} as Config, join(state, 'first'));
-  const first = getNativePiAgentDir();
+  const first = await getNativePiAgentDir();
   await prepareNativeMcpConfig({} as Config, join(state, 'second'));
-  expect(getNativePiAgentDir()).toBe(first);
+  expect(await getNativePiAgentDir()).toBe(first);
   expect(first).toBe(join(state, 'pi'));
 });

@@ -3,8 +3,7 @@ import type { Context, Hono } from 'hono';
 import { randomUUID } from 'node:crypto';
 import { TaskContextMutationOutputSchema } from '../../../tasks/capabilities/relations.js';
 import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
-import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
-import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
+import { CapabilityError, type CapabilityDispatcher } from '../../../capabilities/runtime/dispatcher.js';
 import { TaskMutationOutputSchema } from '../../../tasks/capabilities/write.js';
 import { TaskDeleteOutputSchema } from '../../../tasks/capabilities/management.js';
 import {
@@ -45,17 +44,20 @@ function canReviewTask(principal: GatewayPrincipal): boolean {
 }
 
 export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const capabilities = createProductDispatcher(() => deps.service.notesServiceInstance, {
-    getConfig: () => deps.service.currentConfig, getProjects: () => deps.service.projects,
-    wake: runId => runId ? deps.service.dispatchTaskRuns() : deps.service.dispatchTaskEvents(),
-    abortConversation: async conversationId => {
-      const liveRunId = deps.service.getActiveWebchatRunId(conversationId);
-      if (liveRunId) await deps.service.abortAgentRun(liveRunId);
-    },
-  });
+  let dispatcher: Promise<CapabilityDispatcher> | undefined;
+  const getCapabilities = () => dispatcher ??= import('../../../capabilities/runtime/product.js')
+    .then(({ createProductDispatcher }) => createProductDispatcher(() => deps.service.notesServiceInstance, {
+      getConfig: () => deps.service.currentConfig, getProjects: () => deps.service.projects,
+      wake: runId => runId ? deps.service.dispatchTaskRuns() : deps.service.dispatchTaskEvents(),
+      abortConversation: async conversationId => {
+        const liveRunId = deps.service.getActiveWebchatRunId(conversationId);
+        if (liveRunId) await deps.service.abortAgentRun(liveRunId);
+      },
+    }));
   const taskRateLimit = deps.taskRateLimitMiddleware ?? deps.strictRateLimitMiddleware;
   const invokeRelation = async (c: Context, operation: string, input: unknown) => {
     const caller = capabilityHttpContext(c);
+    const capabilities = await getCapabilities();
     return capabilities.call(operation, input, caller, { ...capabilities.describe(operation, caller),
       idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() });
   };
@@ -76,7 +78,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     try {
       const input: Record<string, unknown> = { ...c.req.query() };
       for (const key of ['limit', 'offset']) if (input[key] !== undefined) input[key] = Number(input[key]);
-      return c.json(await capabilities.call('xopc.tasks.list', input, capabilityHttpContext(c)));
+      return c.json(await (await getCapabilities()).call('xopc.tasks.list', input, capabilityHttpContext(c)));
     } catch (error) { return capabilityHttpError(c, error); }
   });
 
@@ -87,6 +89,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     try {
       const context = capabilityHttpContext(c);
       const { idempotencyKey, ...input } = parsed.data;
+      const capabilities = await getCapabilities();
       const created = TaskMutationOutputSchema.parse(await capabilities.call(
         'xopc.tasks.create', input, context,
         { ...capabilities.describe('xopc.tasks.create', context), idempotencyKey },
@@ -106,7 +109,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   });
 
   authenticated.get('/api/tasks/metrics', async (c) => {
-    try { return c.json(await capabilities.call('xopc.tasks.metrics', {}, capabilityHttpContext(c))); }
+    try { return c.json(await (await getCapabilities()).call('xopc.tasks.metrics', {}, capabilityHttpContext(c))); }
     catch (error) { return capabilityHttpError(c, error); }
   });
 
@@ -121,7 +124,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
 
   authenticated.get('/api/tasks/:id', async (c) => {
     try {
-      return c.json(await capabilities.call('xopc.tasks.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
+      return c.json(await (await getCapabilities()).call('xopc.tasks.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
     } catch (error) { return capabilityHttpError(c, error); }
   });
 
@@ -366,6 +369,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const { idempotencyKey, ...input } = parsed.data;
     let result;
     try {
+      const capabilities = await getCapabilities();
       result = TaskMutationOutputSchema.parse(await capabilities.call('xopc.tasks.command',
         { ...input, taskId: c.req.param('id') }, capabilityContext,
         { ...capabilities.describe('xopc.tasks.command', capabilityContext), idempotencyKey }));
@@ -402,7 +406,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   authenticated.get('/api/task-runs/:runId', async (c) => {
     try {
       const { run, receipt } = ProductReadContracts['xopc.task_runs.get'].output.parse(
-        await capabilities.call('xopc.task_runs.get', { id: c.req.param('runId') }, capabilityHttpContext(c)));
+        await (await getCapabilities()).call('xopc.task_runs.get', { id: c.req.param('runId') }, capabilityHttpContext(c)));
       return c.json({ ok: true, run, receipt });
     } catch (error) { return capabilityHttpError(c, error); }
   });
@@ -410,7 +414,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   authenticated.get('/api/task-runs/:runId/events', async (c) => {
     try {
       const { events } = ProductReadContracts['xopc.task_runs.get'].output.parse(
-        await capabilities.call('xopc.task_runs.get', { id: c.req.param('runId') }, capabilityHttpContext(c)));
+        await (await getCapabilities()).call('xopc.task_runs.get', { id: c.req.param('runId') }, capabilityHttpContext(c)));
       return c.json({ ok: true, items: events });
     } catch (error) { return capabilityHttpError(c, error); }
   });

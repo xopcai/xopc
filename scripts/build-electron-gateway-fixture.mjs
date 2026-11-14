@@ -26,7 +26,7 @@ try {
   cpSync(pnpmRoot, join(context, 'pnpm'), { recursive: true, dereference: true });
   for (const path of ['out/server', 'dist/gateway/static/root', 'dist/electron/extensions', 'skills']) cpSync(join(root, path), join(context, path), { recursive: true, dereference: true });
   cpSync(join(root, 'scripts/fixtures/electron-gateway/Dockerfile'), join(context, 'Dockerfile'));
-  report.serverSha256 = createHash('sha256').update(readFileSync(join(context, 'out/server/index.js'))).digest('hex');
+  report.serverSha256 = createHash('sha256').update(readFileSync(join(context, 'out/server/gateway.js'))).digest('hex');
   report.dependencies = pkg.dependencies;
   const built = spawnSync('docker', ['build', '-t', image, context], { stdio: 'inherit' });
   assert.equal(built.status, 0, 'Gateway fixture image build failed');

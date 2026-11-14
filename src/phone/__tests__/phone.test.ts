@@ -590,8 +590,8 @@ describe('ADB observations', () => {
       { serial: '10.0.0.1:5555', state: 'offline', name: '10.0.0.1:5555', emulator: false },
     ]);
   });
-  it('does not expose password fields through native text observations', () => {
-    const nodes = parsePhoneUi('<?xml version="1.0"?><hierarchy><node text="secret" content-desc="password" password="true" focused="true" bounds="[0,0][100,50]"/><node text="About" bounds="[0,50][100,100]"/></hierarchy>');
+  it('does not expose password fields through native text observations', async () => {
+    const nodes = await parsePhoneUi('<?xml version="1.0"?><hierarchy><node text="secret" content-desc="password" password="true" focused="true" bounds="[0,0][100,50]"/><node text="About" bounds="[0,50][100,100]"/></hierarchy>');
     expect(nodes[0]).toMatchObject({ text: '', description: '', password: true });
     expect(nodes[1].text).toBe('About');
   });

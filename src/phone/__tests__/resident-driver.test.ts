@@ -57,7 +57,7 @@ it('rejects truncated current values and password fields before a native write',
 
 it('decodes XML field text exactly once, including literal entity-looking content', async () => {
   const { parsePhoneUi } = await import('../adb-driver.js');
-  const [field] = parsePhoneUi('<hierarchy><node class="android.widget.EditText" text="A&amp;B &lt;C&gt; &quot;D&quot; &amp;lt; 😀" content-desc="X&amp;Y" bounds="[0,0][100,100]"/></hierarchy>');
+  const [field] = await parsePhoneUi('<hierarchy><node class="android.widget.EditText" text="A&amp;B &lt;C&gt; &quot;D&quot; &amp;lt; 😀" content-desc="X&amp;Y" bounds="[0,0][100,100]"/></hierarchy>');
   expect(field.text).toBe('A&B <C> "D" &lt; 😀'); expect(field.description).toBe('X&Y');
 });
 
@@ -73,7 +73,7 @@ it('replaces an unnamed editable field through the guarded native transaction', 
 
 it('honors native editability for custom classes and explicit false for EditText', async () => {
   const { parsePhoneUi } = await import('../adb-driver.js');
-  const nodes = parsePhoneUi('<hierarchy><node class="com.vendor.SearchInput" editable="true" focused="true" bounds="[0,0][100,100]"/><node class="android.widget.EditText" editable="false" bounds="[0,100][100,200]"/><node class="android.widget.EditText" bounds="[0,200][100,300]"/></hierarchy>');
+  const nodes = await parsePhoneUi('<hierarchy><node class="com.vendor.SearchInput" editable="true" focused="true" bounds="[0,0][100,100]"/><node class="android.widget.EditText" editable="false" bounds="[0,100][100,200]"/><node class="android.widget.EditText" bounds="[0,200][100,300]"/></hierarchy>');
   expect(nodes.map(node => node.editable)).toEqual([true, false, true]);
 });
 

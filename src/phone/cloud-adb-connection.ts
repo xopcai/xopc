@@ -3,12 +3,10 @@ import { lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { connect, type Socket } from 'node:net';
 import { join } from 'node:path';
 
-import { Adb, AdbDaemonTransport, AdbPacket, AdbPacketSerializeStream, AdbSignatureAuthenticator } from '@yume-chan/adb';
-import { Consumable, ReadableStream, StructDeserializeStream } from '@yume-chan/stream-extra';
+import type { Adb } from '@yume-chan/adb';
 
 import { resolveCredentialsDir } from '../config/paths.js';
 import { parsePhoneApplications, phoneApplicationsCommand } from './applications.js';
-import { observeAdbConsumption } from './cloud-adb-writable.js';
 import { readScrcpyServer } from './scrcpy-assets.js';
 import { PhoneError } from './contracts.js';
 import { protectPhoneCredential } from './cloud-key-permissions.js';
@@ -84,6 +82,11 @@ export class CloudAdbConnection {
     socket.on('error', () => {});
     try {
       await new Promise<void>((resolve, reject) => { socket.once('connect', resolve); socket.once('error', reject); socket.once('close', () => reject(new Error('closed'))); });
+      const [{ Adb, AdbDaemonTransport, AdbPacket, AdbPacketSerializeStream, AdbSignatureAuthenticator },
+        { Consumable, ReadableStream, StructDeserializeStream }, { observeAdbConsumption }] = await Promise.all([
+        import('@yume-chan/adb'), import('@yume-chan/stream-extra'), import('./cloud-adb-writable.js'),
+      ]);
+      if (socket.destroyed) throw new Error('closed');
       const iterator = socket[Symbol.asyncIterator]();
       const raw = new ReadableStream<Uint8Array>({
         async pull(controller) { const next = await iterator.next(); if (next.done) controller.close(); else controller.enqueue(next.value); },
@@ -151,6 +154,7 @@ export class CloudAdbConnection {
       if (existing !== hash) {
         staging = `${remote}.${randomUUID()}.tmp`;
         await measurePhonePhase('dex_upload', async () => {
+          const { ReadableStream } = await import('@yume-chan/stream-extra');
           const adb = await this.client(); combined.throwIfAborted();
           const sync = await adb.sync();
           try {
@@ -198,6 +202,7 @@ export class CloudAdbConnection {
     const abort = () => this.close(); combined.addEventListener('abort', abort, { once: true });
     const remote = `/data/local/tmp/xopc-apps-${randomUUID()}.jar`;
     try {
+      const { ReadableStream } = await import('@yume-chan/stream-extra');
       combined.throwIfAborted(); const binary = await readScrcpyServer(); const adb = await this.client();
       combined.throwIfAborted(); const sync = await adb.sync();
       try { await sync.write({ filename: remote, permission: 0o600, file: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(binary); controller.close(); } }) }); }

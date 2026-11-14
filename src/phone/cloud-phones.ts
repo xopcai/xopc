@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import sharp from 'sharp';
 
 import { CloudAdbConnection, parseCloudEndpoint, parseCloudPrivateKey, PhoneCloudKeyStore } from './cloud-adb.js';
-import { CloudScrcpyProvider } from './cloud-scrcpy.js';
+import type { CloudScrcpyProvider } from './cloud-scrcpy.js';
 import { PhoneError, type PhoneDevice } from './contracts.js';
 import type { PhoneRepository } from './repository.js';
 import { WuyingLocationAdapter } from './wuying-location.js';
@@ -29,7 +28,10 @@ export class CloudPhones {
       const androidVersion = (await command('shell', 'getprop', 'ro.build.version.release')).toString().trim().slice(0, 50);
       const pixels = await command('exec-out', 'screencap', '-p');
       let screenshot: string;
-      try { screenshot = `data:image/jpeg;base64,${(await sharp(pixels, { limitInputPixels: 16_000_000 }).resize({ width: 360, withoutEnlargement: true }).jpeg({ quality: 70 }).toBuffer()).toString('base64')}`; }
+      try {
+        const { default: sharp } = await import('sharp');
+        screenshot = `data:image/jpeg;base64,${(await sharp(pixels, { limitInputPixels: 16_000_000 }).resize({ width: 360, withoutEnlargement: true }).jpeg({ quality: 70 }).toBuffer()).toString('base64')}`;
+      }
       finally { pixels.fill(0); }
       signal.throwIfAborted();
       const token = randomUUID(); const expiresAt = Date.now() + 600_000;
@@ -64,6 +66,7 @@ export class CloudPhones {
     return connection.driver();
   }
   async interactive(device: PhoneDevice, failed: () => void): Promise<CloudScrcpyProvider> {
+    const { CloudScrcpyProvider } = await import('./cloud-scrcpy.js');
     const binding = device.connection;
     if (!binding) throw new PhoneError('PHONE_CONNECTION_INVALID', 'Missing cloud connection');
     return new CloudScrcpyProvider(binding.endpoint, await this.keys.load(binding.credentialId), failed, this.connect);

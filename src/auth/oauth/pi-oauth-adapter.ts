@@ -8,12 +8,13 @@ function fromPiCredential({ type: _type, ...credential }: OAuthCredential): OAut
 }
 
 /** Translate xopc login callbacks and credentials to pi's provider-auth API. */
-export function piOAuthAdapter(id: string, name: string, getOAuth: () => OAuthAuth): OAuthProviderInterface {
+export function piOAuthAdapter(id: string, name: string, getOAuth: () => Promise<OAuthAuth>): OAuthProviderInterface {
   return {
     id,
     name,
     async login(callbacks: OAuthLoginCallbacks) {
-      registerBundledOAuthFlows();
+      await registerBundledOAuthFlows();
+      const oauth = await getOAuth();
       const interaction: ProviderAuthInteraction = {
         signal: callbacks.signal ?? new AbortController().signal,
         async prompt(prompt) {
@@ -28,11 +29,12 @@ export function piOAuthAdapter(id: string, name: string, getOAuth: () => OAuthAu
           else callbacks.onProgress?.(event.message);
         },
       };
-      return fromPiCredential(await getOAuth().login(interaction));
+      return fromPiCredential(await oauth.login(interaction));
     },
     async refreshToken(credentials, signal) {
-      registerBundledOAuthFlows();
-      return fromPiCredential(await getOAuth().refresh(
+      await registerBundledOAuthFlows();
+      const oauth = await getOAuth();
+      return fromPiCredential(await oauth.refresh(
         { ...credentials, type: 'oauth' }, signal ?? new AbortController().signal,
       ));
     },

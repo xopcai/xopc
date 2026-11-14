@@ -1,5 +1,5 @@
 import { InMemoryModelsStore } from '@earendil-works/pi-ai';
-import { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import {
   CredentialResolver,
@@ -20,7 +20,8 @@ export interface ProviderAuthServiceOptions {
 }
 
 async function createAuthRuntime(credentials: XopcModelCredentialStore): Promise<ModelRuntime> {
-  registerBundledOAuthFlows();
+  const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
+  await registerBundledOAuthFlows();
   const runtime = await ModelRuntime.create({
     credentials,
     modelsPath: resolveModelsJsonPath(),

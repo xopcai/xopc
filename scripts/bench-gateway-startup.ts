@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { createServer } from 'node:net';
@@ -19,13 +20,19 @@ type GatewayBenchSample = {
 
 type GatewayBenchSummary = {
   avgReadyMs: number | null;
+  p50ReadyMs: number | null;
   p95ReadyMs: number | null;
+  maxReadyMs: number | null;
   avgMaxRssMb: number | null;
   passedBudget: boolean;
 };
 
 type GatewayBenchResult = {
   entry: string;
+  executable: string;
+  warmup: number;
+  freshCompileCache: boolean;
+  skipChannels: boolean;
   port: number;
   samples: GatewayBenchSample[];
   summary: GatewayBenchSummary;
@@ -91,10 +98,10 @@ function probeHealth(port: number): Promise<{ ready: boolean; httpListening: boo
         });
         res.on('end', () => {
           try {
-            const parsed = JSON.parse(body) as { ready?: boolean; httpListening?: boolean };
+            const parsed = JSON.parse(body) as { ready?: boolean; status?: string };
             resolve({
-              ready: parsed.ready === true,
-              httpListening: parsed.httpListening === true,
+              ready: res.statusCode === 200 && parsed.ready === true,
+              httpListening: res.statusCode === 200 && (parsed.status === 'starting' || parsed.status === 'ok'),
             });
           } catch {
             resolve({ ready: false, httpListening: false });
@@ -121,16 +128,13 @@ function parseStartupTrace(output: string): Record<string, number> {
   return trace;
 }
 
-function parseReadyLogMs(output: string): number | null {
-  const match = output.match(/Gateway ready in ([0-9.]+)s/);
-  if (!match) return null;
-  return Math.round(Number.parseFloat(match[1]!) * 1000);
-}
-
 async function runOnce(params: {
   entry: string;
+  executable: string;
   port: number;
   timeoutMs: number;
+  compileCacheDir: string;
+  skipChannels: boolean;
 }): Promise<GatewayBenchSample> {
   const tempRoot = mkdtempSync(join(tmpdir(), 'xopc-gateway-bench-'));
   const configPath = join(tempRoot, 'xopc.json');
@@ -144,7 +148,7 @@ async function runOnce(params: {
           mode: 'local',
           bind: 'loopback',
           port: params.port,
-          auth: { mode: 'none' },
+          auth: { mode: 'token', token: randomBytes(32).toString('base64url') },
         },
         browser: { enabled: false },
       },
@@ -153,26 +157,34 @@ async function runOnce(params: {
     )}\n`,
   );
 
+  const inheritedEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !/^(XOPC_|PI_)/.test(key) && !/(API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i.test(key),
+  ));
   const startedAt = performance.now();
   let output = '';
   let readyMs: number | null = null;
   let httpListeningMs: number | null = null;
+  let finished = false;
 
   return await new Promise<GatewayBenchSample>((resolve) => {
     const child = spawn(
-      process.execPath,
+      params.executable,
       [params.entry, 'gateway', '--port', String(params.port), '--bind', 'loopback', '--no-hot-reload'],
       {
         env: {
-          ...process.env,
+          ...inheritedEnv,
           XOPC_CONFIG_PATH: configPath,
           XOPC_CONFIG: configPath,
           XOPC_WORKSPACE: workspacePath,
           XOPC_STATE_DIR: tempRoot,
           XOPC_HOME: tempRoot,
-          XOPC_SKIP_CHANNELS: '1',
-          XOPC_GATEWAY_STARTUP_TRACE: '1',
-          XOPC_LOG_CONSOLE: 'false',
+          PI_CODING_AGENT_DIR: join(tempRoot, 'pi'),
+          XOPC_SKIP_CHANNELS: params.skipChannels ? '1' : '0',
+          XOPC_SKIP_PROVIDERS: '0',
+          XOPC_GATEWAY_STARTUP_TRACE: process.env.XOPC_GATEWAY_BENCH_TRACE === '1' ? '1' : '0',
+          NODE_COMPILE_CACHE: params.compileCacheDir,
+          XOPC_LOG_CONSOLE: process.env.XOPC_GATEWAY_BENCH_TRACE === '1' ? 'true' : 'false',
+          ...(process.env.XOPC_GATEWAY_BENCH_TRACE === '1' ? { XOPC_LOG_LEVEL: 'info' } : {}),
           XOPC_LOG_FILE: 'false',
           XOPC_NO_RESPAWN: '1',
         },
@@ -180,6 +192,7 @@ async function runOnce(params: {
       },
     );
 
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
     const timeout = setTimeout(() => {
       child.kill('SIGKILL');
     }, params.timeoutMs);
@@ -191,11 +204,12 @@ async function runOnce(params: {
     child.stderr.on('data', appendOutput);
 
     const poll = async (): Promise<void> => {
-      if (readyMs !== null) {
+      if (finished) {
         return;
       }
       try {
         const health = await probeHealth(params.port);
+        if (finished) return;
         if (health.httpListening && httpListeningMs === null) {
           httpListeningMs = performance.now() - startedAt;
         }
@@ -207,20 +221,22 @@ async function runOnce(params: {
       } catch {
         // still booting
       }
-      if (performance.now() - startedAt < params.timeoutMs) {
-        setTimeout(() => {
+      if (!finished && performance.now() - startedAt < params.timeoutMs) {
+        pollTimer = setTimeout(() => {
           void poll();
-        }, 100);
+        }, 5);
       }
     };
 
     void poll();
 
-    child.on('exit', (exitCode, signal) => {
+    child.once('error', (err) => {
+      output += `\n${err.message}\n`;
+    });
+    child.once('close', (exitCode, signal) => {
+      finished = true;
       clearTimeout(timeout);
-      if (readyMs === null) {
-        readyMs = parseReadyLogMs(output);
-      }
+      clearTimeout(pollTimer);
       rmSync(tempRoot, { recursive: true, force: true });
       resolve({
         durationMs: performance.now() - startedAt,
@@ -249,21 +265,27 @@ function summarize(samples: GatewayBenchSample[], readyBudgetMs: number, rssBudg
     readyValues.length > 0
       ? Math.round(readyValues.reduce((sum, value) => sum + value, 0) / readyValues.length)
       : null;
-  const p95ReadyMs =
+  const p95Ready =
     readyValues.length > 0
-      ? Math.round(readyValues[Math.min(readyValues.length - 1, Math.ceil(readyValues.length * 0.95) - 1)]!)
+      ? readyValues[Math.ceil(readyValues.length * 0.95) - 1]!
       : null;
+  const p95ReadyMs = p95Ready === null ? null : Math.round(p95Ready);
+  const p50ReadyMs = readyValues.length > 0
+    ? Math.round(readyValues[Math.ceil(readyValues.length / 2) - 1]!)
+    : null;
+  const maxReadyMs = readyValues.length > 0 ? Math.round(readyValues.at(-1)!) : null;
   const avgMaxRssMb =
     rssValues.length > 0
       ? Math.round((rssValues.reduce((sum, value) => sum + value, 0) / rssValues.length) * 10) / 10
       : null;
 
   const passedBudget =
-    p95ReadyMs !== null &&
-    p95ReadyMs <= readyBudgetMs &&
+    p95Ready !== null &&
+    readyValues.length === samples.length &&
+    p95Ready <= readyBudgetMs &&
     (avgMaxRssMb === null || avgMaxRssMb <= rssBudgetMb);
 
-  return { avgReadyMs, p95ReadyMs, avgMaxRssMb, passedBudget };
+  return { avgReadyMs, p50ReadyMs, p95ReadyMs, maxReadyMs, avgMaxRssMb, passedBudget };
 }
 
 async function main(): Promise<void> {
@@ -274,8 +296,11 @@ async function main(): Promise<void> {
         '',
         'Options:',
         '  --entry <path>            CLI entry (default: dist/src/cli/bin.js)',
+        '  --executable <path>       Runtime executable (defaults to current Node.js)',
         '  --runs <n>                Measured runs (default: 3)',
         '  --warmup <n>              Warmup runs (default: 1)',
+        '  --fresh-compile-cache    Use an empty V8 compile cache for every sample',
+        '  --with-channels          Run normal channel initialization',
         '  --timeout-ms <ms>         Per-run timeout (default: 45000)',
         '  --ready-budget-ms <ms>    Fail if p95 ready exceeds this (default: 15000)',
         '  --rss-budget-mb <mb>      Fail if avg RSS exceeds this (default: 512)',
@@ -287,8 +312,12 @@ async function main(): Promise<void> {
   }
 
   const entry = parseFlagValue('--entry') ?? DEFAULT_ENTRY;
+  const executable = parseFlagValue('--executable') ?? process.execPath;
   const runs = parsePositiveInt(parseFlagValue('--runs'), DEFAULT_RUNS);
-  const warmup = parsePositiveInt(parseFlagValue('--warmup'), DEFAULT_WARMUP);
+  const warmupFlag = parseFlagValue('--warmup');
+  const warmup = warmupFlag === '0' ? 0 : parsePositiveInt(warmupFlag, DEFAULT_WARMUP);
+  const freshCompileCache = hasFlag('--fresh-compile-cache');
+  const skipChannels = !hasFlag('--with-channels');
   const timeoutMs = parsePositiveInt(parseFlagValue('--timeout-ms'), DEFAULT_TIMEOUT_MS);
   const readyBudgetMs = parsePositiveInt(parseFlagValue('--ready-budget-ms'), DEFAULT_READY_BUDGET_MS);
   const rssBudgetMb = parsePositiveInt(parseFlagValue('--rss-budget-mb'), DEFAULT_RSS_BUDGET_MB);
@@ -297,15 +326,29 @@ async function main(): Promise<void> {
   const port = await reservePort();
 
   const samples: GatewayBenchSample[] = [];
-  for (let index = 0; index < warmup; index += 1) {
-    await runOnce({ entry, port: port + index + 1, timeoutMs });
-  }
-  for (let index = 0; index < runs; index += 1) {
-    samples.push(await runOnce({ entry, port: port + warmup + index + 1, timeoutMs }));
+  const compileCacheDir = mkdtempSync(join(tmpdir(), 'xopc-gateway-bench-cache-'));
+  try {
+    for (let index = 0; index < warmup + runs; index += 1) {
+      const sample = await runOnce({
+        entry,
+        executable,
+        port: port + index + 1,
+        timeoutMs,
+        compileCacheDir: freshCompileCache ? join(compileCacheDir, String(index)) : compileCacheDir,
+        skipChannels,
+      });
+      if (index >= warmup) samples.push(sample);
+    }
+  } finally {
+    rmSync(compileCacheDir, { recursive: true, force: true });
   }
 
   const result: GatewayBenchResult = {
     entry,
+    executable,
+    warmup,
+    freshCompileCache,
+    skipChannels,
     port,
     samples,
     summary: summarize(samples, readyBudgetMs, rssBudgetMb),

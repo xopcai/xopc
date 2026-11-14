@@ -31,9 +31,9 @@ export function inferProductLanguageFromEnvironment(): ProductLanguage {
     process.env.LC_ALL,
     process.env.LC_MESSAGES,
     process.env.LANG,
-    Intl.DateTimeFormat().resolvedOptions().locale,
-  ].find((value) => typeof value === 'string' && value.trim());
-  return locale?.trim().toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  ].find((value) => typeof value === 'string' && value.trim())
+    ?? Intl.DateTimeFormat().resolvedOptions().locale;
+  return locale.trim().toLowerCase().startsWith('zh') ? 'zh' : 'en';
 }
 
 /** Install safe product defaults while preserving every explicit on/off choice. */

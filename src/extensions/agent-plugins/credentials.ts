@@ -15,7 +15,7 @@ export async function removePluginCredentials(store: AgentPluginStore, id: strin
   pluginName.parse(id);
   const history = store.history(id);
   if (store.stateDir === resolveStateDir()) {
-    getNativePiAgentDir();
+    await getNativePiAgentDir();
     const native = await createNativeMcpCredentials();
     for (const plugin of history) {
       const servers = plugin.receipt.oauthServers ?? Object.fromEntries(Object.entries(plugin.servers).filter(([, server]) => server.type !== 'stdio').map(([name, server]) => [name, server.type !== 'stdio' ? server.url : '']));

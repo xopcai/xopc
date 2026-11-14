@@ -12,6 +12,7 @@ import { resolveGatewayListenPlan } from './listen.js';
 import { GatewayService } from './service.js';
 import { createHonoApp } from './hono/app.js';
 import { handleSiteShareUpgrade } from '../share/site-share-router.js';
+import { configureTunnelFromGatewayConfig } from '../tunnel/gateway-lifecycle.js';
 
 export interface GatewayServerConfig {
   port: number;
@@ -82,7 +83,6 @@ export class GatewayServer {
       await this.stop();
     });
 
-    const { configureTunnelFromGatewayConfig } = await import('../tunnel/gateway-lifecycle.js');
     await configureTunnelFromGatewayConfig(this.service.currentConfig, { deferWellKnownFetch: true });
 
     const app = createHonoApp({ service: this.service, listenHost: bindHost });

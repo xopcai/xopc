@@ -27,8 +27,7 @@ files:
   # pnpm junctions under _pack-resources/ (e.g. playwright-core) break asar extraction.
   - '!_pack-resources/**'
 
-# Gateway bundle runs in a Node subprocess; asar fs adapter overhead on a 19MB require
-# slows cold start. Unpacking it (and its sibling templates) puts it on plain disk.
+# Run the Gateway and load its runtime files directly from the filesystem.
 asarUnpack:
   - 'out/server/**'
   - 'node_modules/**'

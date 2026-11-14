@@ -44,8 +44,12 @@ export function createRuntimeImportService(owner: string, refreshSkills?: () => 
   });
 }
 
-export async function recoverCapabilityImports(): Promise<void> {
-  for (const owner of ImportRepository.owners()) await createRuntimeImportService(owner).recoverAndClean();
+export async function recoverCapabilityImports(
+  importOwners = ImportRepository.owners(),
+  selectionOwners = ImportSelectionRepository.owners(),
+): Promise<void> {
+  for (const owner of importOwners) await createRuntimeImportService(owner).recoverAndClean();
+  if (!selectionOwners.length) return;
   const { recoverSelectionRuns } = await import('./productImport.js');
-  for (const owner of ImportSelectionRepository.owners()) await recoverSelectionRuns(createRuntimeImportService(owner), owner);
+  for (const owner of selectionOwners) await recoverSelectionRuns(createRuntimeImportService(owner), owner);
 }

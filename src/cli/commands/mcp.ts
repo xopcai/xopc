@@ -24,7 +24,7 @@ function createMcpCommand(ctx: CLIContext): Command {
       const config = loadConfig(ctx.configPath);
       const mcp = await prepareNativeMcpConfig(server ? resolveMcpSetupConfig(config, server) : config, ctx.workspacePath || process.cwd(), (options as { agent?: string })?.agent);
       if (mcp.errors.length) throw new Error(mcp.errors.join('\n'));
-      const path = join(getNativePiAgentDir(), 'mcp.json');
+      const path = join(await getNativePiAgentDir(), 'mcp.json');
       if (existsSync(path) && JSON.parse(readFileSync(path, 'utf8')).xopcGenerated !== true) {
         throw new Error('The pi directory contains a user-managed mcp.json. Use a dedicated PI_CODING_AGENT_DIR for xopc.');
       }

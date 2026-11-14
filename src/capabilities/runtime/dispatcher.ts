@@ -74,6 +74,10 @@ export function defineExternalCapability<I extends z.ZodType, O extends z.ZodTyp
 }
 
 type CapabilityDefinition<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodType> = ReadCapability<I, O> | AtomicCapability<I, O> | ExternalCapability<I, O>;
+type CapabilityEntry = {
+  definition: CapabilityDefinition;
+  descriptors?: { descriptor: CapabilityDescriptor; extensionDescriptor?: CapabilityDescriptor };
+};
 
 /** Stable JSON encoding for contract digests; rejects non-JSON values. */
 export function canonicalCapabilityJson(value: unknown): string {
@@ -89,13 +93,19 @@ export function canonicalCapabilityJson(value: unknown): string {
 }
 
 export class CapabilityDispatcher {
-  private readonly entries = new Map<string, { definition: CapabilityDefinition; descriptor: CapabilityDescriptor; extensionDescriptor?: CapabilityDescriptor }>();
+  private readonly entries = new Map<string, CapabilityEntry>();
 
   register<I extends z.ZodType, O extends z.ZodType>(definition: CapabilityDefinition<I, O>): void {
     if (!/^(xopc|extension)\.[a-zA-Z0-9_.-]+$/.test(definition.id) || !Number.isSafeInteger(definition.majorVersion) || definition.majorVersion < 1) {
       throw new Error('Invalid capability identity');
     }
     if (this.entries.has(definition.id)) throw new Error(`Duplicate capability: ${definition.id}`);
+    this.entries.set(definition.id, {
+      definition: { ...definition, scopes: [...definition.scopes], surfaces: [...definition.surfaces] },
+    });
+  }
+
+  private buildDescriptors(definition: CapabilityDefinition) {
     const descriptor = {
       id: definition.id,
       majorVersion: definition.majorVersion,
@@ -111,15 +121,19 @@ export class CapabilityDispatcher {
     const extensionDescriptor = definition.extensionOutput ? { ...descriptor,
       outputSchema: z.toJSONSchema(definition.extensionOutput, { io: 'output' }),
     } : undefined;
-    this.entries.set(definition.id, {
-      definition: { ...definition, scopes: [...definition.scopes], surfaces: [...definition.surfaces] },
+    return {
       descriptor: { ...descriptor, descriptorDigest },
       extensionDescriptor: extensionDescriptor ? { ...extensionDescriptor,
         descriptorDigest: createHash('sha256').update(canonicalCapabilityJson({ ...extensionDescriptor, scopes: definition.scopes,
           ...(definition.effect === 'external-write' ? { recovery: definition.recovery } : {}),
         })).digest('hex'),
       } : undefined,
-    });
+    };
+  }
+
+  private readDescriptor(entry: CapabilityEntry, surface: CapabilitySurface): CapabilityDescriptor {
+    const { descriptor, extensionDescriptor } = entry.descriptors ??= this.buildDescriptors(entry.definition);
+    return structuredClone(surface === 'extension' && extensionDescriptor ? extensionDescriptor : descriptor);
   }
 
   private visible(definition: CapabilityDefinition, context: CapabilityContext): boolean {
@@ -131,13 +145,13 @@ export class CapabilityDispatcher {
 
   list(context: CapabilityContext): CapabilityDescriptor[] {
     return [...this.entries.values()].filter(entry => this.visible(entry.definition, context))
-      .map(entry => structuredClone(context.surface === 'extension' && entry.extensionDescriptor ? entry.extensionDescriptor : entry.descriptor));
+      .map(entry => this.readDescriptor(entry, context.surface));
   }
 
   describe(id: string, context: CapabilityContext): CapabilityDescriptor {
     const entry = this.entries.get(id);
     if (!entry || !this.visible(entry.definition, context)) throw new CapabilityError('NOT_FOUND', 'Capability not available');
-    return structuredClone(context.surface === 'extension' && entry.extensionDescriptor ? entry.extensionDescriptor : entry.descriptor);
+    return this.readDescriptor(entry, context.surface);
   }
 
   async validateInput(id: string, input: unknown, context: CapabilityContext): Promise<unknown> {

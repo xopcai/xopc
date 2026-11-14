@@ -49,13 +49,19 @@ try {
   for (let attempt = 0; attempt < 180 && child.exitCode === null; attempt++) {
     try {
       const response = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(1000), redirect: 'error' });
-      if (response.ok) { ready = true; break; }
+      if (response.ok && (await response.json()).ready === true) { ready = true; break; }
     } catch { /* Wait for this isolated process only. */ }
     await delay(250);
   }
   assert.ok(ready, 'Built Gateway did not start');
   assert.equal((await fetch(`${origin}/api/endpoint-tools/compatibility`)).status, 401);
   await assertGatewayCompatibility({ port, token });
+  const avatar = await fetch(`${origin}/api/agents/main/avatar?resolve=1`, {
+    headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000), redirect: 'error',
+  });
+  assert.equal(avatar.status, 200, 'Built Gateway must load avatar styles on first request');
+  assert.equal(avatar.headers.get('content-type'), 'image/png');
+  assert.ok((await avatar.arrayBuffer()).byteLength > 0);
   // This must reach grant validation, never the generic 1MB limiter. No upload grant is issued.
   const probe = Buffer.alloc(2 * 1024 * 1024);
   const upload = await fetch(`${origin}/api/endpoint-tools/invocations/pack-probe/files?name=probe.png`, {

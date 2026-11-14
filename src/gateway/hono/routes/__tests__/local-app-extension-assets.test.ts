@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { ExtensionLoader } from '../../../../extensions/loader.js';
 import type { GatewayService } from '../../../service.js';
-import { registerPublicExtensionAssetRoutes } from '../auth-registry-extensions.js';
+import { registerPublicExtensionAssetRoutes } from '../extension-ui-assets.js';
 
 const roots: string[] = [];
 

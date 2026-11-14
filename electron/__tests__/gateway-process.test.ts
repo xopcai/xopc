@@ -149,7 +149,7 @@ it('reports authenticated readiness promptly without skipping compatibility chec
   const pending = waitForGatewayReady(12345, 'readiness-test', { pid: 123, exitCode: null, signalCode: null }, 2000)
     .then(port => { ready = port; });
   try {
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(fetch).toHaveBeenCalledTimes(1);
     expect(ready).toBeUndefined();
     readyResponse = true;
     await pending;

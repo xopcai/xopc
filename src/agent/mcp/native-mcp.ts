@@ -4,7 +4,7 @@ import { validPluginOAuthReference, type PluginOAuthReference } from '../../exte
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { getAgentDir, type LoadedMcpConfig, type McpServerConfig } from '@earendil-works/pi-coding-agent';
+import type { LoadedMcpConfig, McpServerConfig } from '@earendil-works/pi-coding-agent';
 
 import { resolveStateDir } from '../../config/paths-state.js';
 import { McpServerSchema, type Config } from '../../config/schema.js';
@@ -13,8 +13,9 @@ import { createNativeMcpCredentials, routeNativeMcpCredentials, type NativeMcpCr
 import { loadMergedMcpConfig } from './config.js';
 
 /** One process-wide pi directory: sessions share native OAuth credentials, never swap roots per turn. */
-export function getNativePiAgentDir(): string {
+export async function getNativePiAgentDir(): Promise<string> {
   process.env.PI_CODING_AGENT_DIR ??= join(resolveStateDir(), 'pi');
+  const { getAgentDir } = await import('@earendil-works/pi-coding-agent');
   const directory = getAgentDir();
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   return directory;
@@ -24,7 +25,7 @@ export type NativeMcpConfig = LoadedMcpConfig & { credentials?: NativeMcpCredent
 
 /** Only projects host configuration and secret references; all MCP execution belongs to pi. */
 export async function prepareNativeMcpConfig(config: Config, workspaceDir: string, agentId?: string): Promise<NativeMcpConfig> {
-  getNativePiAgentDir();
+  process.env.PI_CODING_AGENT_DIR ??= join(resolveStateDir(), 'pi');
   const merged = loadMergedMcpConfig({ cfg: config, workspaceDir, agentId });
   const result: LoadedMcpConfig = { servers: [], errors: merged.diagnostics.map(item => item.message) };
   const names = new Set<string>();
@@ -55,6 +56,7 @@ export async function prepareNativeMcpConfig(config: Config, workspaceDir: strin
     result.servers.push({ name, config: projected as unknown as McpServerConfig, source: plugin?.revision ? `plugin:${plugin.id}@${plugin.revision}` : 'xopc.json', scope: 'extension' });
   }
   if (aliases.size) {
+    await getNativePiAgentDir();
     (result as NativeMcpConfig).credentials = routeNativeMcpCredentials(await createNativeMcpCredentials(), aliases);
     (result as NativeMcpConfig).credentialAliases = Object.fromEntries(aliases);
   }

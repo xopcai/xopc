@@ -446,13 +446,14 @@ export async function waitForGatewayReady(
   timeoutMs = 120_000,
   signal?: AbortSignal,
 ): Promise<number> {
-  const deadline = Date.now() + timeoutMs;
+  const startedAt = performance.now();
+  const deadline = startedAt + timeoutMs;
   const origin = localGatewayOrigin({ port });
   const headers = { Authorization: `Bearer ${token}` };
   const requestSignal = () => signal
     ? AbortSignal.any([signal, AbortSignal.timeout(2000)])
     : AbortSignal.timeout(2000);
-  while (Date.now() < deadline) {
+  while (performance.now() < deadline) {
     signal?.throwIfAborted();
     if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
       const logHint = gatewayLogSnippetForError();
@@ -479,8 +480,8 @@ export async function waitForGatewayReady(
       if (error instanceof GatewayStartupError) throw error;
       /* retry */
     }
-    // Avoid adding a full 250ms startup quantum after the authenticated API becomes available.
-    await delay(100, undefined, { signal });
+    // Probe frequently during normal local startup, then back off for slow boots.
+    await delay(performance.now() - startedAt < 1_000 ? 25 : 100, undefined, { signal });
   }
   const logHint = gatewayLogSnippetForError();
   throw new GatewayStartupError(

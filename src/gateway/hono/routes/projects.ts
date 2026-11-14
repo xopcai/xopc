@@ -1,8 +1,7 @@
 import type { Context, Hono } from 'hono';
 import { randomUUID } from 'node:crypto';
 import { ProductReadContracts, ProjectResolveWorkspaceOutputSchema, ProjectDeleteOutputSchema, ProjectMutationOutputSchema, ProjectMilestoneOutputSchema, ProjectMilestoneDeleteOutputSchema, ProjectUpdateOutputSchema } from '@xopcai/gateway-contract';
-import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
-import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
+import { CapabilityError, type CapabilityDispatcher } from '../../../capabilities/runtime/dispatcher.js';
 import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
 
 import { ActivityService } from '../../../activity/index.js';
@@ -148,11 +147,14 @@ function buildProjectDigestKnowledgeContent(input: ReturnType<typeof buildProjec
 
 export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-  const capabilities = createProductDispatcher(undefined, {
-    getProjects: () => service.projects, getConfig: () => service.currentConfig, getWorkDiscovery: () => service.workDiscovery,
-  });
-  const invokeWrite = (c: Context, operation: string, input: unknown) => {
+  let dispatcher: Promise<CapabilityDispatcher> | undefined;
+  const getCapabilities = () => dispatcher ??= import('../../../capabilities/runtime/product.js')
+    .then(({ createProductDispatcher }) => createProductDispatcher(undefined, {
+      getProjects: () => service.projects, getConfig: () => service.currentConfig, getWorkDiscovery: () => service.workDiscovery,
+    }));
+  const invokeWrite = async (c: Context, operation: string, input: unknown) => {
     const caller = capabilityHttpContext(c);
+    const capabilities = await getCapabilities();
     return capabilities.call(operation, input, caller, { ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() });
   };
   const readBody = async (c: Context): Promise<Record<string, unknown>> => {
@@ -189,7 +191,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/projects', async (c) => {
     try {
     const { includeOperating: _includeOperating, ...input } = c.req.query();
-    const result = ProductReadContracts['xopc.projects.list'].output.parse(await capabilities.call('xopc.projects.list', {
+    const result = ProductReadContracts['xopc.projects.list'].output.parse(await (await getCapabilities()).call('xopc.projects.list', {
       ...input, limit: input.limit === undefined ? undefined : Number(input.limit), offset: input.offset === undefined ? undefined : Number(input.offset),
     }, capabilityHttpContext(c)));
     const includeOperating = c.req.query('includeOperating') === 'true';
@@ -343,14 +345,14 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.get('/api/projects/:id', async (c) => {
     try {
-      const { project } = ProductReadContracts['xopc.projects.get'].output.parse(await capabilities.call('xopc.projects.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
+      const { project } = ProductReadContracts['xopc.projects.get'].output.parse(await (await getCapabilities()).call('xopc.projects.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
       return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
     } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/projects/:id/milestones', async (c) => {
     try {
-      const { items } = ProductReadContracts['xopc.projects.list_milestones'].output.parse(await capabilities.call('xopc.projects.list_milestones', { id: c.req.param('id') }, capabilityHttpContext(c)));
+      const { items } = ProductReadContracts['xopc.projects.list_milestones'].output.parse(await (await getCapabilities()).call('xopc.projects.list_milestones', { id: c.req.param('id') }, capabilityHttpContext(c)));
       return c.json({ ok: true, items });
     } catch (error) { return capabilityHttpError(c, error); }
   });
@@ -390,7 +392,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.get('/api/projects/:id/updates', async (c) => {
     try {
-      const { items } = ProductReadContracts['xopc.projects.list_updates'].output.parse(await capabilities.call('xopc.projects.list_updates', {
+      const { items } = ProductReadContracts['xopc.projects.list_updates'].output.parse(await (await getCapabilities()).call('xopc.projects.list_updates', {
         id: c.req.param('id'), limit: c.req.query('limit') === undefined ? undefined : Number(c.req.query('limit')),
       }, capabilityHttpContext(c)));
       return c.json({ ok: true, items });

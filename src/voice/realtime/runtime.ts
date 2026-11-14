@@ -40,11 +40,9 @@ import { resolveSpeechProviderChain, type ResolvedSpeechProvider } from '../tts/
 import type { TTSConfig } from '../tts/types.js';
 import { ALIBABA_REALTIME_TTS_MODEL } from '../tts/providers/alibaba-speech.js';
 import { claimOpeningGreeting, finishOpeningGreeting, openingGreetingText, type OpeningGreetingIdentity, type OpeningGreetingResult } from './opening-greeting.js';
-import { createAgentVoiceEngine } from './agentEngine.js';
 import { buildVoiceResumeHistory, voiceConversationInstructions, type VoiceConversationContext } from './conversation-context.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import { resolveOmniRoute, selectedNaturalModel, type OmniRoute } from './omniRoute.js';
-import { createOmniVoiceEngine } from './omniEngine.js';
 import { applyVoiceOutputGain } from './pcm-output-gain.js';
 import { PcmPlaybackEcho } from './pcmPlaybackEcho.js';
 import type { ResolvedStreamingStt, ResolvedStreamingTts, VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
@@ -687,29 +685,37 @@ export class VoiceRealtimeRuntime {
             outputMediaTimestampMs += 20;
           }
         };
-        engine = engineOmni ? createOmniVoiceEngine({
-          callId: consumed.sessionId,
-          route: engineOmni, silenceDurationMs: consumed.silenceDurationMs,
-          restoreInstructions: engineOmni.route.provider === 'boson' ? restoreInstructions : undefined,
-          restoreHistory: () => {
-            const history = buildVoiceResumeHistory(context?.history ?? []);
-            log.info({ conversationId, sessionId: consumed.sessionId, historyChars: history.length }, 'Voice conversation history restored');
-            return history;
-          },
-          bargeIn: consumed.config.voice?.realtime?.bargeIn ?? true, send, sendAudio,
-          ...(conversationId && consumed.conversationSessionId && engineOmni.tools ? {
-            agent: { broker: this.options.agentBroker, conversationId, transcriptId: consumed.conversationSessionId,
-              publish: publication => this.options.publishConversationContent?.(conversationId, consumed.conversationSessionId!, publication)
-                ?? Promise.reject(new Error('Chat publication is unavailable')) },
-          } : {}),
-          onUserInput: conversationId ? () => this.options.onConversationInput?.(conversationId) : undefined,
-          record: async (entry) => {
-            if (conversationId) await this.options.recordOmniTranscript!(conversationId, consumed.sessionId, entry, consumed.conversationSessionId!);
-          },
-          onClose: shutdown,
-        }) : createAgentVoiceEngine({
-          claim: consumed, runtime: this.options, signal: abortController.signal, send, sendAudio, onClose: shutdown,
-        });
+        if (engineOmni) {
+          const { createOmniVoiceEngine } = await import('./omniEngine.js');
+          if (closed) return;
+          engine = createOmniVoiceEngine({
+            callId: consumed.sessionId,
+            route: engineOmni, silenceDurationMs: consumed.silenceDurationMs,
+            restoreInstructions: engineOmni.route.provider === 'boson' ? restoreInstructions : undefined,
+            restoreHistory: () => {
+              const history = buildVoiceResumeHistory(context?.history ?? []);
+              log.info({ conversationId, sessionId: consumed.sessionId, historyChars: history.length }, 'Voice conversation history restored');
+              return history;
+            },
+            bargeIn: consumed.config.voice?.realtime?.bargeIn ?? true, send, sendAudio,
+            ...(conversationId && consumed.conversationSessionId && engineOmni.tools ? {
+              agent: { broker: this.options.agentBroker, conversationId, transcriptId: consumed.conversationSessionId,
+                publish: publication => this.options.publishConversationContent?.(conversationId, consumed.conversationSessionId!, publication)
+                  ?? Promise.reject(new Error('Chat publication is unavailable')) },
+            } : {}),
+            onUserInput: conversationId ? () => this.options.onConversationInput?.(conversationId) : undefined,
+            record: async (entry) => {
+              if (conversationId) await this.options.recordOmniTranscript!(conversationId, consumed.sessionId, entry, consumed.conversationSessionId!);
+            },
+            onClose: shutdown,
+          });
+        } else {
+          const { createAgentVoiceEngine } = await import('./agentEngine.js');
+          if (closed) return;
+          engine = createAgentVoiceEngine({
+            claim: consumed, runtime: this.options, signal: abortController.signal, send, sendAudio, onClose: shutdown,
+          });
+        }
         await Promise.all([
           engine.start(),
           consumed.openingGreeting ? engine.prepareOpeningGreeting?.(consumed.openingGreeting) : undefined,

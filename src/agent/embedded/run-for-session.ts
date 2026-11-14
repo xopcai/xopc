@@ -19,7 +19,6 @@ import type { SessionStore } from '../../session/store.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import { resolveAgentAbortReason } from '../orchestration/run-termination.js';
 import { resolveAgentTurnTimeoutMs } from '../orchestration/run-agent-turn-with-timeout.js';
-import { runXopcEmbeddedTurn } from './run-turn.js';
 import { runWithEmbeddedExecutionSession } from './execution-context.js';
 import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTurnResult } from './types.js';
 import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enrichment.js';
@@ -76,6 +75,7 @@ export async function runEmbeddedTurnForSession(
 }
 
 async function runEmbeddedTurnForSessionInner(params: RunEmbeddedForSessionParams): Promise<RunXopcEmbeddedTurnResult> {
+  const { runXopcEmbeddedTurn } = await import('./run-turn.js');
   const sessionStartedAt = performance.now();
   const { conversationId, agentManager, modelManager, sessionStore, userMessage } = params;
   const personal = isPersonalConversation(conversationId);

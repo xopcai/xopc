@@ -2,16 +2,12 @@ import { resolveMcpSetupConfig } from './effective-server.js';
 import { join } from 'node:path';
 
 import { InMemoryCredentialStore, InMemoryModelsStore } from '@earendil-works/pi-ai';
-import {
-  createAgentSession, createMcpExtension, createToolSearchExtension, DefaultResourceLoader,
-  ModelRuntime, SessionManager, SettingsManager,
-} from '@earendil-works/pi-coding-agent';
 
 import type { Config } from '../../config/schema.js';
 import { createEmbeddedModelRuntime } from '../embedded/model-runtime.js';
 import type { NativeMcpCredentials } from './credential-store.js';
 import { getNativePiAgentDir, prepareNativeMcpConfig } from './native-mcp.js';
-import { createXopcMcpTransport, type McpTransportDiagnostics } from './transport.js';
+import type { McpTransportDiagnostics } from './transport.js';
 
 export type McpCatalogTool = {
   name: string;
@@ -57,7 +53,12 @@ async function runNativeMcpSession(config: Config, workspaceDir: string, serverI
     if (relay.username || relay.password || relay.search || relay.hash) throw new Error('Invalid callback relay.');
     entry.config = { ...entry.config, oauth: { ...entry.config.oauth, callbackRelayUrl: relay.href } };
   }
-  const agentDir = getNativePiAgentDir();
+  const [{ createAgentSession, createMcpExtension, createToolSearchExtension, DefaultResourceLoader,
+    ModelRuntime, SessionManager, SettingsManager }, { createXopcMcpTransport }] = await Promise.all([
+    import('@earendil-works/pi-coding-agent'), import('./transport.js'),
+  ]);
+  signal?.throwIfAborted();
+  const agentDir = await getNativePiAgentDir();
   const settingsManager = SettingsManager.inMemory({ retry: { enabled: false }, compaction: { enabled: false } });
   const loader = new DefaultResourceLoader({ cwd: workspaceDir, agentDir, settingsManager,
     noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,

@@ -13,8 +13,6 @@
  * `listProvidersForCapability` filter skips this provider for image/video.
  */
 
-import OpenAI from 'openai';
-
 import { registerMediaUnderstandingProvider } from '../../../media-understanding/registry.js';
 import type {
   AudioTranscriptionRequest,
@@ -30,6 +28,7 @@ const DEFAULT_MODEL = 'gpt-4o-mini-transcribe';
 async function transcribeAudio(req: AudioTranscriptionRequest): Promise<AudioTranscriptionResult> {
   const startTime = Date.now();
   const model = req.model ?? DEFAULT_MODEL;
+  const { default: OpenAI } = await import('openai');
 
   // openai SDK supports baseURL override per-instance.
   const client = new OpenAI({

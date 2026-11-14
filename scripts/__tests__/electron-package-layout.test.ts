@@ -9,6 +9,8 @@ import { DESKTOP_PACKAGE_PATHS, verifyCanonicalSqlBytes, verifyDesktopArtifactBy
 
 function fixture() {
   const files = new Map<string, Buffer>(DESKTOP_PACKAGE_PATHS.map((path: string) => [path, Buffer.from('resource')]));
+  files.set('out/server/runtime-files.json', Buffer.from('["zod.js"]'));
+  files.set('out/server/runtime/zod.js', Buffer.from('module'));
   files.set('out/server/upgrades/261_schema.sql', Buffer.from('SQL'));
   files.set('dist/gateway/static/root/index.html', Buffer.from('<script src="/assets/app-123.js"></script><link href="/assets/app-123.css" rel="stylesheet">'));
   files.set('dist/gateway/static/root/assets/app-123.js', Buffer.from('script'));
@@ -22,7 +24,7 @@ describe('desktop package resource gate', () => {
     value.files.set('out/preload/index.cjs', Buffer.from('different bytes'));
     expect(value.verify().files['out/preload/index.cjs']).not.toBe(before.files['out/preload/index.cjs']);
   });
-  it.each(['out/preload/index.cjs', 'out/server/schema.sql', 'out/server/upgrades/261_schema.sql', 'dist/gateway/static/root/assets/app-123.js'])('rejects incomplete package: %s', path => {
+  it.each(['out/preload/index.cjs', 'out/server/schema.sql', 'out/server/upgrades/261_schema.sql', 'out/server/runtime/zod.js', 'dist/gateway/static/root/assets/app-123.js'])('rejects incomplete package: %s', path => {
     const value = fixture(); value.files.delete(path);
     expect(value.verify).toThrow(/Missing or empty/);
   });

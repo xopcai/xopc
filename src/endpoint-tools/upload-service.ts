@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import sharp from 'sharp';
 import { COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS } from '@xopcai/computer-control-contract';
 
 import {
@@ -300,6 +299,7 @@ export class EndpointUploadService {
       }
       this.validatingFrames.add(params.invocationId);
       try {
+        const { default: sharp } = await import('sharp');
         const metadata = await sharp(params.bytes, { limitInputPixels: COMPUTER_FRAME_MAX_PIXELS }).metadata();
         const format = params.mimeType === 'image/png' ? 'png' : params.mimeType === 'image/jpeg' ? 'jpeg' : undefined;
         if (!format || metadata.format !== format || !metadata.width || !metadata.height
@@ -316,6 +316,7 @@ export class EndpointUploadService {
     }
     if (grant.profile === 'personal' && params.mimeType.startsWith('image/')) {
       try {
+        const { default: sharp } = await import('sharp');
         // Re-encoding removes EXIF (including GPS), embedded thumbnails and ancillary metadata.
         const image = sharp(params.bytes, { limitInputPixels: 40000000, failOn: 'warning' });
         const metadata = await image.metadata();

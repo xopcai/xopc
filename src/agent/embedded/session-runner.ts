@@ -3,13 +3,7 @@ import { join } from 'node:path';
 
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import {
-  createAgentSession,
-  DefaultResourceLoader,
-  createMcpExtension,
-  SettingsManager,
-  type AgentSession,
-} from '@earendil-works/pi-coding-agent';
+import type { AgentSession, SettingsManager } from '@earendil-works/pi-coding-agent';
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
@@ -22,14 +16,12 @@ import {
 } from './model-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
-import { createXopcCodemodeExtension, type CodemodePolicy } from './codemode-extension.js';
+import type { CodemodePolicy } from './codemode-extension.js';
 import { isCodemodeCoreRead } from '../tools/codemode-permissions.js';
 import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
 import { getExternalToolRegistry } from '../external-tools/tool-registry.js';
-import { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE } from './tool-search-extension.js';
 import { materializeNativeExternalTools } from './external-tool-discovery.js';
 import { type NativeMcpConfig, getNativePiAgentDir } from '../mcp/native-mcp.js';
-import { createXopcMcpTransport } from '../mcp/transport.js';
 import { createMcpSetupContinuationGuard } from '../mcp/continuation-guard.js';
 import { abortEmbeddedRun } from './runs.js';
 import { filterExecutionTools, resolveExecutionToolPolicy, type ExecutionToolPolicy } from './execution-tool-policy.js';
@@ -142,13 +134,6 @@ export function getEmbeddedSessionRunnerIdleTtlMs(): number {
   }
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_IDLE_TTL_MS;
-}
-
-function createEmbeddedSettingsManager(cwd: string): SettingsManager {
-  const sm = SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } });
-  sm.setCompactionEnabled(false);
-  void cwd;
-  return sm;
 }
 
 export interface EmbeddedSessionRunnerPoolOptions {
@@ -318,8 +303,21 @@ export class EmbeddedSessionRunnerPool {
 
   private async createPooledRunner(params: AcquireEmbeddedSessionRunnerParams): Promise<PooledRunner> {
     const { runtimeId, transcriptId, workspaceDir, model, thinkingLevel, tools, systemPrompt } = params;
+    const [
+      { createAgentSession, DefaultResourceLoader, createMcpExtension, SettingsManager },
+      { createXopcCodemodeExtension },
+      { createXopcToolSearchExtension, TOOL_DISCOVERY_STATE },
+      { createXopcMcpTransport },
+    ] = await Promise.all([
+      import('@earendil-works/pi-coding-agent'),
+      import('./codemode-extension.js'),
+      import('./tool-search-extension.js'),
+      import('../mcp/transport.js'),
+    ]);
+    const agentDir = await getNativePiAgentDir();
 
-    const settingsManager = createEmbeddedSettingsManager(workspaceDir);
+    const settingsManager = SettingsManager.inMemory({ compaction: { enabled: false }, retry: { enabled: false } });
+    settingsManager.setCompactionEnabled(false);
 
     const piSm = guardSessionManager(
       params.transcriptRuntime.openSessionManager(workspaceDir),
@@ -362,7 +360,7 @@ export class EmbeddedSessionRunnerPool {
 
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspaceDir,
-      agentDir: getNativePiAgentDir(),
+      agentDir,
       settingsManager,
       systemPrompt,
       noContextFiles: true,
@@ -374,7 +372,7 @@ export class EmbeddedSessionRunnerPool {
         ...(discovery ? [createXopcToolSearchExtension(tools, { nativeDiscovery, externalDiscovery, registry,
           ...(registry ? { refreshNative: () => materializeNativeExternalTools({ conversationId: runtimeId,
             tools: tools.filter(tool => !getXopcToolMetadata(tool)?.external) }) } : {}) })] : []),
-        ...(mcp ? [createMcpExtension({ createTransport: createXopcMcpTransport({}, mcp.assertPluginCallAccess), loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(getNativePiAgentDir(), 'mcp.log') })] : []),
+        ...(mcp ? [createMcpExtension({ createTransport: createXopcMcpTransport({}, mcp.assertPluginCallAccess), loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(agentDir, 'mcp.log') })] : []),
         createAgentProfileContextExtension(runtimeId),
       ],
     });
