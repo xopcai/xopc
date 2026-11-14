@@ -107,6 +107,7 @@ function AppShellContent() {
   const token = useGatewayStore((s) => s.conversationId);
   const { pathname, search, state } = useLocation();
   const navigate = useNavigate();
+  const [spacePreviewHost, setSpacePreviewHost] = useState<HTMLDivElement | null>(null);
   const isSettingsRoute = pathname.startsWith('/settings');
   const isWorkDiscoveryRoute = pathname === '/onboarding/workspace';
   const language = useLocaleStore((s) => s.language);
@@ -266,8 +267,9 @@ function AppShellContent() {
 
           {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
           <div className="app-main-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel text-fg">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
-              <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', routeKey === 'personal' && '@container/personal-chat')} inert={personalDetailsOverlay} data-app-chat-shell={routeKey === 'chat' || routeKey === 'personal' ? '' : undefined}>
+            <div className={cn('flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden', routeKey === 'space' && '@container/space relative')}>
+              <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', routeKey === 'personal' && '@container/personal-chat',
+                routeKey === 'space' && '@container/space-list @max-[58rem]/space:[&:has(+[data-space-preview-host]>*)]:invisible')} inert={personalDetailsOverlay} data-app-chat-shell={routeKey === 'chat' || routeKey === 'personal' ? '' : undefined}>
                 {!isSettingsRoute ? <PrimaryAppHeader /> : null}
                 <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   {(
@@ -285,13 +287,14 @@ function AppShellContent() {
                             : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable_both-edges]',
                       )}
                     >
-                      <Outlet />
+                      <Outlet context={routeKey === 'space' ? spacePreviewHost : undefined} />
                     </div>
                   )}
                 </main>
                 <GlobalReadAloudPlayer />
                 {!isSettingsRoute && !pathname.startsWith('/chat') ? <MobilePrimaryNav /> : null}
               </div>
+              {routeKey === 'space' ? <div ref={setSpacePreviewHost} data-space-preview-host className="contents" /> : null}
               <RightWorkspace scope={workspaceScope}
                 onDockedWidthChange={setWorkspaceDockedWidth}
                 enabled={!isSettingsRoute && (pathname.startsWith('/chat') || pathname === '/personal' || (pathname === '/automations' && Boolean(workspaceOverride)) || ((Boolean(taskModalId) || pathname.startsWith('/tasks/')) && Boolean(workspaceOverride)))}

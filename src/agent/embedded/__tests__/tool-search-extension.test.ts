@@ -11,8 +11,8 @@ import { setXopcToolMetadata } from '../tool-metadata.js';
 import { xopcToolsToDefinitions } from '../xopc-tools-bridge.js';
 
 function fixture(options: { nativeDiscovery?: boolean; externalDiscovery?: boolean; externalTimeoutMs?: number; external?: boolean;
-  refreshNative?: () => Promise<AgentTool[]> } = {}) {
-  const tools: AgentTool[] = ['web_search', 'xopc_tool_describe', 'xopc_tool_execute'].map(name => setXopcToolMetadata({
+  refreshNative?: () => Promise<AgentTool[]>; mcpSetup?: boolean } = {}) {
+  const tools: AgentTool[] = ['web_search', 'xopc_tool_describe', 'xopc_tool_execute', ...(options.mcpSetup ? ['mcp_setup'] : [])].map(name => setXopcToolMetadata({
     name, label: name, description: name === 'web_search' ? 'Search WeCom documentation on the web' : name,
     parameters: Type.Object({}), execute: vi.fn(),
   }, { exposure: 'deferred' }));
@@ -85,6 +85,14 @@ describe('unified tool_search', () => {
     expect(found.waitingObjective).toBe('Find the weekly report');
     expect(found.instruction).toContain('xopc_require_connection');
     expect(f.api.getActiveTools()).not.toContain('xopc_tool_execute');
+  });
+
+  it('offers named-service MCP discovery only when the setup tool and native discovery are available', async () => {
+    const enabled = await fixture({ mcpSetup: true }).call();
+    expect(enabled.instruction).toContain('call mcp_setup discover');
+    expect((await fixture().call()).instruction).not.toContain('call mcp_setup discover');
+    expect((await fixture({ mcpSetup: true, nativeDiscovery: false }).call()).instruction)
+      .not.toContain('call mcp_setup discover');
   });
 
   it('preserves native results on connector failure and distinguishes a source error from no matches', async () => {

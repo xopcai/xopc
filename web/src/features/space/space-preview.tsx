@@ -22,7 +22,7 @@ export function SpacePreview({ itemId, version, hit, download }: {
   const descriptor: PreviewFileDescriptor = {
     id: `space:${version.id}`, context: 'attachment', source: { kind: 'inline' },
     fileName: version.fileName, mimeType: version.mimeType, size: version.sizeBytes,
-    type: detected === 'html' ? 'text' : detected,
+    type: detected,
   };
   const controller = usePreviewRuntimeController(descriptor);
   const [loaded, setLoaded] = useState<Omit<PreviewLoadedSource, 'descriptor'>>({
@@ -71,13 +71,13 @@ export function SpacePreview({ itemId, version, hit, download }: {
   }, [detected, media, itemId, version.id, version.fileName, version.mimeType, version.sizeBytes, plugin, language]);
   if (media) {
     const url = spaceContentUrl(itemId, version.id);
-    return <div className="flex min-h-48 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel p-3">
+    return <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-surface-panel p-3">
       {detected === 'audio' ? <audio src={url} controls preload="metadata" className="w-full" />
         : <video src={url} controls playsInline preload="metadata" className="max-h-full max-w-full rounded-lg" />}
     </div>;
   }
   return (
-    <div className="flex min-h-48 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
       {plugin.capabilities.some(capability => ['zoom', 'pageNavigation', 'rotate', 'search'].includes(capability)) ? (
         <div className="border-b border-edge-subtle px-2 py-1"><PreviewRuntimeToolbar controller={controller} /></div>
       ) : null}

@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import { SlidingIndicator, useSlidingIndicator } from '@/components/ui/sliding-indicator';
 
@@ -31,6 +31,7 @@ export function PageTabs<T extends string>({
   selectedClassName = 'bg-surface-active text-fg',
   unselectedClassName = 'text-fg-muted hover:bg-surface-hover hover:text-fg',
   countClassName,
+  scrollActiveIntoView = false,
   onReorder,
 }: {
   items: readonly PageTabItem<T>[];
@@ -45,12 +46,28 @@ export function PageTabs<T extends string>({
   selectedClassName?: string;
   unselectedClassName?: string;
   countClassName?: string;
+  scrollActiveIntoView?: boolean;
   onReorder?: (draggedId: T, targetId: T, position: PageTabsDropPosition) => void;
 }) {
   const trackRef = useRef<HTMLElement>(null);
   const indicator = useSlidingIndicator(trackRef, '[role="tab"]', '[role="tab"][aria-selected="true"]');
   const [draggedId, setDraggedId] = useState<T | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: T; position: PageTabsDropPosition } | null>(null);
+
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!scrollActiveIntoView || !track || track.scrollWidth <= track.clientWidth) return;
+    const active = track.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (!active) return;
+    const viewport = track.getBoundingClientRect();
+    const tab = active.getBoundingClientRect();
+    const offset = tab.left < viewport.left ? tab.left - viewport.left
+      : tab.right > viewport.right ? tab.right - viewport.right : 0;
+    if (offset) track.scrollBy({
+      left: offset,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    });
+  }, [activeTab, scrollActiveIntoView]);
 
   const clearDragState = () => {
     setDraggedId(null);
@@ -81,8 +98,8 @@ export function PageTabs<T extends string>({
           : (Math.max(0, currentIndex) + (event.key === nextKey ? 1 : -1) + items.length) % items.length;
         onChange(items[nextIndex].id);
         const next = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex];
-        next?.focus();
-        next?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        next?.focus({ preventScroll: scrollActiveIntoView });
+        if (!scrollActiveIntoView) next?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       }}
     >
       <SlidingIndicator bounds={indicator} className={cn('rounded-lg', buttonClassName, selectedClassName)} />

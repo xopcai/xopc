@@ -108,6 +108,14 @@ export function startGeneratedMedia(element: HTMLMediaElement): Promise<void> {
   return element.play();
 }
 
+export async function playGeneratedMedia(source: GeneratedMediaSource): Promise<void> {
+  const entry = entries.get(source.src) ?? createMedia(source);
+  await startGeneratedMedia(entry.element).catch((error: unknown) => {
+    if (useGeneratedMediaStore.getState().active?.entry === entry && entry.element.paused) closeMedia(entry);
+    throw error;
+  });
+}
+
 export function closeGeneratedMedia(): void {
   const active = useGeneratedMediaStore.getState().active;
   if (active) closeMedia(active.entry);

@@ -24,6 +24,7 @@ export function createXopcToolSearchExtension(tools: readonly AgentTool[], optio
   let deferred = tools.filter(tool => getXopcToolMetadata(tool)?.exposure === 'deferred');
   const registry = options.externalDiscovery === false ? undefined : options.registry ?? getExternalToolRegistry(tools);
   const nativeDiscovery = options.nativeDiscovery !== false;
+  const mcpSetupAvailable = tools.some(tool => tool.name === 'mcp_setup');
   return pi => {
     const setActiveTools = (names: string[]) => {
       pi.setActiveTools(names);
@@ -112,6 +113,9 @@ export function createXopcToolSearchExtension(tools: readonly AgentTool[], optio
                 nativeDiscovery ? (result.content as { type: string; text?: string }[]).filter(block => block.type === 'text').map(block => block.text).join('\n') : '',
                 alreadyLoaded.length ? `Already loaded: ${alreadyLoaded.join(', ')}. Call these tools directly.` : '',
                 external?.result?.instruction ?? '',
+                mcpSetupAvailable && nativeDiscovery
+                  ? 'If none of these tools or connector candidates can do the requested task on its named service, call mcp_setup discover with that service name and original purpose before asking for an address or switching to a device. For a general public lookup, use web search instead.'
+                  : '',
                 'loadedTools are declared from the next model call; externalTools are references and must be described before execution. No matches alone do not prove missing authorization.',
               ].filter(Boolean).join('\n'),
             };

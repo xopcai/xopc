@@ -3,7 +3,7 @@ import type { SessionInputControlView } from '@xopcai/gateway-contract';
 import type { ComposerMode } from './composer.types';
 import { parseUserTurnDocument, userTurnDocumentRefIds } from '@xopcai/gateway-contract';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -151,6 +151,7 @@ export const ChatComposer = memo(function ChatComposer({
   prepareContextSession,
   unboundDraftKey,
   getDraftHandoffTarget,
+  attachmentHandoffReady,
   editingUserTurnId,
   composerMode, inputControl, onResumeQueue, onRestoreEditor, onReacquireEdit, onComposerHydrated,
   onCancelUserMessageEdit,
@@ -212,6 +213,7 @@ export const ChatComposer = memo(function ChatComposer({
   prepareContextSession?: () => Promise<string | null>;
   unboundDraftKey?: string;
   getDraftHandoffTarget?: () => string | undefined;
+  attachmentHandoffReady?: boolean;
   editingUserTurnId?: string | null;
   composerMode?: ComposerMode;
   onRestoreEditor?: (mode: ComposerMode) => void;
@@ -227,6 +229,7 @@ export const ChatComposer = memo(function ChatComposer({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { state: locationState } = useLocation();
   useEffect(() => {
     void fetchCommandsCached();
   }, []);
@@ -386,19 +389,22 @@ export const ChatComposer = memo(function ChatComposer({
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
 
   useEffect(() => {
-    if (!attachmentHandoffId) return;
+    if (!attachmentHandoffReady || !attachmentHandoffId) return;
     const file = takeComposerAttachmentHandoff(attachmentHandoffId);
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-        next.delete('attachmentHandoff');
-        return next;
-      },
-      { replace: true },
-    );
+    // Replacing the /new URL invalidates the active project preparation.
+    if (conversationId) {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.delete('attachmentHandoff');
+          return next;
+        },
+        { replace: true, state: locationState },
+      );
+    }
     if (!file) return;
     void att.processFiles([file]).then(() => editor.editorRef.current?.focus({ preventScroll: true }));
-  }, [attachmentHandoffId, att.processFiles, editor.editorRef, conversationId, setSearchParams]);
+  }, [attachmentHandoffReady, attachmentHandoffId, att.processFiles, editor.editorRef, conversationId, locationState, setSearchParams]);
 
   const { onUserTextCommitted, onWireInputClearWalk, tryInputHistoryArrow } =
     useComposerInputHistoryWalk({

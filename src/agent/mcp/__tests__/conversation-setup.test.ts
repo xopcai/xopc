@@ -87,6 +87,19 @@ it('stops retrying after cancellation and after three failed probes', async () =
   expect(native.probeMcpConnection).toHaveBeenCalledTimes(4); expect(resume).not.toHaveBeenCalled();
 });
 
+it('returns only the host action to a card-capable turn and keeps links for other turns', async () => {
+  const goal = await service.command('start', {
+    serverId: 'docs', url: 'https://fixture.example/mcp', purpose: 'Read the report', authentication: 'bearer',
+  }, { ...context, showSetupCard: true }) as any;
+  const pending = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version },
+    { ...context, showSetupCard: true });
+  expect(pending).toMatchObject({ phase: 'token_required', interaction: 'chat_card', purpose: 'Read the report' });
+  expect(pending).not.toHaveProperty('interactionPath');
+  expect(JSON.stringify(pending)).not.toContain('/mcp-setup/');
+  expect(await service.command('get', { setupId: goal.setupId }, context))
+    .toMatchObject({ interactionPath: `/mcp-setup/${goal.setupId}` });
+});
+
 it('requests a known Bearer Token before any unauthenticated connection probe', async () => {
   const goal = await service.command('start', { serverId: 'docs', url: 'https://fixture.example/mcp', purpose: 'Read', authentication: 'bearer' }, context) as any;
   const pending = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;

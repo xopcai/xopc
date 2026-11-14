@@ -42,7 +42,7 @@ type Goal = { id: string; conversationId: string; transcriptId: string; agentId:
   reviewRequired?: boolean; publicOnly?: boolean; sources?: Array<{ url: string; hash: string }>;
   diagnosis?: Pick<McpConnectionProbe, 'auth' | 'recovery' | 'observation'>; attempts?: number; nextRetryAt?: number; requestCounts?: Record<string, number>;
   committedRevision?: string; reloadRequired?: boolean; resumed?: boolean; errorCode?: string };
-export type McpSetupContext = { conversationId: string; agentId: string; canConfigure: boolean; canRequestWeixinSetup?: boolean;
+export type McpSetupContext = { conversationId: string; agentId: string; canConfigure: boolean; canRequestWeixinSetup?: boolean; showSetupCard?: boolean;
   signal?: AbortSignal; authorizeResearch?: (tool: 'web_search' | 'web_fetch', args: Record<string, unknown>) => Promise<boolean> };
 type Save = (next: Config, expected?: Config) => Promise<{ saved: boolean; persisted?: boolean; conflict?: boolean }>;
 
@@ -96,31 +96,35 @@ export class McpConversationSetup {
     return !goal.publicOnly && (goal.phase === 'auth_unknown' || goal.phase === 'blocked' && goal.errorCode === 'access_denied') && !goal.tokenProvider && !goal.secretProviders
       && (url.protocol === 'https:' || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname));
   }
-  private view(goal: Goal) {
+  private view(goal: Goal, showSetupCard = false) {
     const expired = goal.expiresAt < Date.now() && goal.phase !== 'ready';
     const interactionPath = goal.channel ? `${goal.channel.origin}/#/mcp-setup/${goal.id}` : `/mcp-setup/${goal.id}`;
     const interactionLink = `[Complete connection](${interactionPath})`;
+    const nextStep = showSetupCard
+      ? 'The app displays a secure connection action in this chat. Briefly explain why it is needed without printing a setup link or instructing the user to send credentials. Then stop; the host resumes after verification.'
+      : `Use exactly ${interactionLink} and stop. Credentials belong in that secure form. The host resumes after verification.`;
     return { setupId: goal.id, serverId: goal.serverId, displayName: goal.displayName, version: goal.version, phase: goal.phase,
       expired, reloadRequired: goal.reloadRequired === true, canProvideToken: this.canProvideToken(goal),
       secretFields: goal.secretFields, helpUrl: goal.helpUrl, objective: goal.objective,
       planApproval: goal.reviewRequired ? { sources: goal.sources ?? [], execution: goal.execution, endpoint: goal.transport === 'stdio' ? goal.execution?.command : goal.url, purpose: goal.purpose } : undefined,
       diagnosis: goal.diagnosis, nextRetryAt: goal.nextRetryAt, attempts: goal.attempts ?? 0,
       errorCode: goal.errorCode, conversationId: goal.conversationId, expiresAt: goal.expiresAt,
-      interactionPath,
+      ...(showSetupCard ? { interaction: 'chat_card' as const } : { interactionPath }),
+      purpose: goal.purpose,
       returnChannel: goal.channel ? 'weixin' : undefined, managementPath: goal.channel ? `${goal.channel.origin}/#/capabilities/connectors?tab=connected` : '/capabilities/connectors?tab=connected',
       continuationQueued: goal.resumed === true, replyDelivery: goal.reply?.status,
       instruction: goal.phase === 'cancelled' ? 'This setup is cancelled. Do not continue or revive it. Cancellation does not undo configuration already saved.'
         : expired ? 'This request expired. Start a new objective instead of reusing authorization.'
         : goal.phase === 'approval_required' ? goal.channel
           ? 'Send the exact trusted interactionPath to the user. The paired Weixin user has requested this service; an authenticated Gateway owner must approve this exact request on that page before any probe, credential submission or configuration change. Never ask for keys, callback URLs or a continue reply in chat. The result returns to this original Weixin conversation automatically.'
-          : `Copy ${interactionLink} verbatim. The owner must review this exact publisher source or local execution plan before any probe, credential submission or execution. Do not ask for secrets or an additional continue reply in chat.`
-        : this.canProvideToken(goal) ? `The service refused access. Copy this Markdown link verbatim for secure first-time Token input: ${interactionLink} . Never rewrite its destination as xopc://workspace or add an origin. A refusal alone does not prove a missing Token; service or account permissions may also block access. Do not request secrets in chat or repeatedly retry.`
-        : goal.phase === 'auth_unknown' ? `Authentication could not be verified. Link ${interactionLink} to review the connection, but do not ask for a Token or claim OAuth works. Check the official guide and exact endpoint.`
+          : `The owner needs to review the connection source. ${nextStep}`
+        : this.canProvideToken(goal) ? `The service refused access. A refusal alone does not establish its authentication method. ${nextStep}`
+        : goal.phase === 'auth_unknown' ? `Authentication could not be verified. Check the official guide and exact endpoint; do not ask for a Token or claim OAuth works. ${nextStep}`
         : goal.phase === 'blocked' ? 'The connection check failed. Report the safe error code and the remaining blocker. Do not repeatedly retry without resolving the cause.'
         : goal.reloadRequired ? 'Configuration is saved but runtime reload failed. Report the partial result and require a Gateway restart; do not claim the tools are active or tested.'
         : goal.phase === 'ready' ? 'Configuration is saved. The host queues the original objective once in a fresh turn. If this is that continuation, discover native tools by the exact server namespace and finish the original objective; otherwise stop and let the queued continuation run. Do not repeat installation or invent a successful read.'
         : goal.phase === 'planned' ? 'Continue automatic steps with advance and the returned version.'
-        : `Copy this Markdown link verbatim for authorization or Token input: ${interactionLink} . Never rewrite its destination as xopc://workspace or add an origin. Then stop this turn. The host resumes automatically; never ask for credentials, callback URLs or a continue reply in chat.` };
+        : nextStep };
   }
   private cancelGoal(goal: Goal) {
     clearTimeout(this.retryTimers.get(goal.id)); this.retryTimers.delete(goal.id);
@@ -164,6 +168,7 @@ export class McpConversationSetup {
     const activeSession = getSessionMetadata(context.conversationId);
     if (!activeSession || activeSession.agentId !== context.agentId) throw new McpDraftError(404, 'Owner conversation required.');
     const localOwner = connectorPrincipalForSession(context.conversationId).isLocalOwner;
+    const showSetupCard = localOwner && context.showSetupCard === true;
     const channel = context.canRequestWeixinSetup ? weixinSetupScope(context.conversationId, this.options.readConfig()) : undefined;
     if (!localOwner && !channel) throw new McpDraftError(404, 'A paired, account-isolated Weixin direct conversation and a secure Gateway public URL are required. Shared/merged routing is not eligible.');
     if (channel && !['discover', 'propose', 'select', 'repair', 'start', 'get', 'cancel', 'advance'].includes(command)) throw new McpDraftError(409, 'Weixin configuration requires approval for a specific new connection on the secure page.');
@@ -173,7 +178,7 @@ export class McpConversationSetup {
       return this.discovery.command(command, input, { ...context, managementOrigin: channel?.origin });
     }
     if (command === 'inspect') { z.object({}).strict().parse(input); return this.inspect(); }
-    if (command === 'get') { const args = setupSchema.parse(input); return this.view(this.get(args.setupId, context.conversationId)); }
+    if (command === 'get') { const args = setupSchema.parse(input); return this.view(this.get(args.setupId, context.conversationId), showSetupCard); }
     if (!context.canConfigure && !channel) throw new McpDraftError(409, 'An active owner App or local CLI turn is required for MCP configuration.');
     if (command === 'repair') {
       const args = setupSchema.extend({ planId: z.string().uuid(), expectedPlanVersion: z.number().int().positive() }).strict().parse(input);
@@ -235,7 +240,7 @@ export class McpConversationSetup {
         && JSON.stringify([goal.transport ?? 'streamable-http', goal.execution, goal.secretFields, goal.helpUrl, goal.objective]) === JSON.stringify([args.transport ?? 'streamable-http', args.execution, args.secretFields, args.helpUrl, args.objective])
         && JSON.stringify(goal.sources) === JSON.stringify(selected?.sources)
         && goal.serverId === args.serverId && goal.url === url.href && goal.purpose === args.purpose && goal.displayName === args.displayName && (goal.authentication ?? 'auto') === (args.authentication ?? 'auto') && goal.phase !== 'cancelled' && goal.phase !== 'ready' && goal.expiresAt > Date.now());
-      if (existing) return this.view(existing);
+      if (existing) return this.view(existing, showSetupCard);
       for (const previous of this.goals.values().filter(item => item.conversationId === context.conversationId && (item.phase !== 'ready' || !item.resumed) && item.phase !== 'cancelled')) {
         this.cancelGoal(previous);
       }
@@ -244,7 +249,7 @@ export class McpConversationSetup {
         transport: args.transport, execution: args.execution, secretFields: args.secretFields, helpUrl: args.helpUrl, objective: args.objective,
         reviewRequired: stdio || Boolean(selected), publicOnly: Boolean(selected && !stdio), sources: selected?.sources,
         expectedRevision: mcpConfigRevision(server), version: 1, phase: channel || stdio || selected ? 'approval_required' : 'planned', ...(channel ? { channel } : {}), expiresAt: Date.now() + 15 * 60_000 };
-      this.goals.set(goal.id, goal); this.notify(goal); return this.view(goal);
+      this.goals.set(goal.id, goal); this.notify(goal); return this.view(goal, showSetupCard);
     }
     if (command === 'remove' || command === 'set_enabled') {
       const args = serverSchema.parse(input);
@@ -266,24 +271,24 @@ export class McpConversationSetup {
     const args = setupSchema.parse(input), goal = this.get(args.setupId, context.conversationId);
     if (!['advance', 'cancel'].includes(command)) throw new McpDraftError(400, 'Supported MCP setup commands: inspect, start, get, advance, cancel, set_enabled, remove.');
     if (args.expectedVersion !== goal.version) throw new McpDraftError(409, 'Setup changed. Read get before retrying.');
-    if (dryRun) return { dryRun: true, ...this.view(goal) };
-    if (command === 'cancel') return this.cancelGoal(goal);
-    return this.advance(goal);
+    if (dryRun) return { dryRun: true, ...this.view(goal, showSetupCard) };
+    if (command === 'cancel') { this.cancelGoal(goal); return this.view(goal, showSetupCard); }
+    return this.advance(goal, showSetupCard);
   }
 
-  private async advance(goal: Goal) {
+  private async advance(goal: Goal, showSetupCard = false) {
     this.current(goal);
-    if (goal.phase === 'approval_required') return this.view(goal);
+    if (goal.phase === 'approval_required') return this.view(goal, showSetupCard);
     if (goal.channel && !goal.approvedBy) throw new McpDraftError(409, 'Owner approval is required.');
-    if (goal.phase === 'ready') { await this.resume(goal); return this.view(goal); }
+    if (goal.phase === 'ready') { await this.resume(goal); return this.view(goal, showSetupCard); }
     if (goal.expiresAt < Date.now()) throw new McpDraftError(409, 'Setup expired. Start a new goal; do not reuse an old authorization.');
-    if (goal.nextRetryAt && Date.now() < goal.nextRetryAt) { this.scheduleRetry(goal); return this.view(goal); }
-    if (this.busy.has(goal.id)) return { ...this.view(goal), inProgress: true };
+    if (goal.nextRetryAt && Date.now() < goal.nextRetryAt) { this.scheduleRetry(goal); return this.view(goal, showSetupCard); }
+    if (this.busy.has(goal.id)) return { ...this.view(goal, showSetupCard), inProgress: true };
     this.busy.add(goal.id);
     try {
       const config = this.options.readConfig(), published = configuredServer(config, goal.serverId);
       if (published?.xopcSetupId === goal.id) {
-        goal.phase = 'ready'; goal.committedRevision = mcpConfigRevision(published); this.save(goal); await this.resume(goal); return this.view(goal);
+        goal.phase = 'ready'; goal.committedRevision = mcpConfigRevision(published); this.save(goal); await this.resume(goal); return this.view(goal, showSetupCard);
       }
       if (mcpConfigRevision(published) !== goal.expectedRevision) throw new McpDraftError(409, 'Server changed. Start again from the current configuration.');
       let draftId = this.draftIds.get(goal.id);
@@ -304,14 +309,14 @@ export class McpConversationSetup {
       const missingDocumentedCredential = (goal.authentication === 'bearer' && !goal.secretFields?.length && !goal.tokenProvider && !goal.secretProviders?.token)
         || goal.secretFields?.some(field => !goal.secretProviders?.[field.id]);
       if (!goal.publicOnly && missingDocumentedCredential) {
-        goal.phase = 'token_required'; goal.errorCode = undefined; this.save(goal); return this.view(goal);
+        goal.phase = 'token_required'; goal.errorCode = undefined; this.save(goal); return this.view(goal, showSetupCard);
       }
       if (goal.phase === 'authorizing') {
         const auth = this.drafts.authorization('local-owner', draftId);
-        if (auth.state === 'error' || auth.state === 'cancelled') { goal.phase = 'blocked'; goal.errorCode = 'authorization_failed'; this.save(goal); return this.view(goal); }
-        if (auth.state !== 'connected') return this.view(goal);
+        if (auth.state === 'error' || auth.state === 'cancelled') { goal.phase = 'blocked'; goal.errorCode = 'authorization_failed'; this.save(goal); return this.view(goal, showSetupCard); }
+        if (auth.state !== 'connected') return this.view(goal, showSetupCard);
       } else {
-        if ((goal.attempts ?? 0) >= 3) { goal.phase = 'blocked'; goal.nextRetryAt = undefined; goal.diagnosis = { ...goal.diagnosis, recovery: { kind: 'report_blocker', reason: 'retry_budget_exhausted' } }; this.save(goal); return this.view(goal); }
+        if ((goal.attempts ?? 0) >= 3) { goal.phase = 'blocked'; goal.nextRetryAt = undefined; goal.diagnosis = { ...goal.diagnosis, recovery: { kind: 'report_blocker', reason: 'retry_budget_exhausted' } }; this.save(goal); return this.view(goal, showSetupCard); }
         goal.attempts = (goal.attempts ?? 0) + 1; goal.nextRetryAt = undefined; this.save(goal);
         const probe = await this.drafts.probe('local-owner', draftId, { beforeRequest: request => {
           this.current(goal); const key = `${request?.method ?? 'GET'}:${request?.stage ?? 'metadata'}`;
@@ -329,22 +334,22 @@ export class McpConversationSetup {
           if ((probe.recovery?.kind === 'wait' || ['network', 'timeout', 'connection_refused'].includes(probe.errorCode ?? '')) && (goal.attempts ?? 0) < 3) {
             goal.nextRetryAt = probe.recovery?.retryAt ?? Date.now() + (goal.attempts === 1 ? 2000 : 5000);
           }
-          this.save(goal); this.scheduleRetry(goal); return this.view(goal);
+          this.save(goal); this.scheduleRetry(goal); return this.view(goal, showSetupCard);
         }
       }
       const result = await this.options.withConfigLock(async () => { this.current(goal); return this.drafts.commit('local-owner', draftId!, true); });
       goal.phase = 'ready'; goal.errorCode = undefined; goal.reloadRequired = result.reloadRequired === true;
       goal.committedRevision = mcpConfigRevision(configuredServer(this.options.readConfig(), goal.serverId));
       this.current(goal); this.save(goal); this.draftIds.delete(goal.id);
-      await this.resume(goal); return this.view(goal);
+      await this.resume(goal); return this.view(goal, showSetupCard);
     } catch (error) {
       this.current(goal);
       if (error instanceof McpDraftError) {
-        if (error.status === 404) { this.draftIds.delete(goal.id); goal.phase = 'planned'; this.save(goal); return { ...this.view(goal), requiresRecheck: true }; }
+        if (error.status === 404) { this.draftIds.delete(goal.id); goal.phase = 'planned'; this.save(goal); return { ...this.view(goal, showSetupCard), requiresRecheck: true }; }
         throw error;
       }
       goal.phase = 'blocked'; goal.errorCode = classifyMcpConnectionError(error); this.save(goal);
-      return this.view(goal);
+      return this.view(goal, showSetupCard);
     } finally { this.busy.delete(goal.id); }
   }
 
