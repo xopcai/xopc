@@ -137,6 +137,9 @@ import {
   isXopcDatabaseOpen,
   setSessionTaskPlan,
 } from '../../storage/sqlite/index.js';
+import { getSessionInteractionPolicy } from '../session/interaction-policy.js';
+import { getExecutionEnvironmentForSession } from '../../execution-environments/subject.js';
+import { getExecutionAuthority } from '../../infra/execution-authority.js';
 import { resolveStateDir } from '../../config/paths-state.js';
 import { buildRuntimeEnvironment } from '../../runtime-tools/environment.js';
 
@@ -494,6 +497,15 @@ export class AgentToolsFactory {
       return config ? resolveEffectiveAgentConfigForAgent(resolvedAgentId).config.runtime.commandIsolation : undefined;
     };
 
+    const session = executionConversationId && isXopcDatabaseOpen() ? getSessionMetadata(executionConversationId) : null;
+    const allowOutsideWorkspace = session?.sessionType === 'chat'
+      && ['webchat', 'tui', 'cli'].includes(session.sourceChannel)
+      && !session.customData?.automationSetup && !session.customData?.systemInternal
+      && executionToolPolicy.surface === 'agent' && !executionToolPolicy.taskExecution && !executionToolPolicy.readOnly
+      && !getExecutionAuthority() && getCommandIsolation()?.mode !== 'docker'
+      && getSessionInteractionPolicy(session.key).sandbox !== 'workspace-write'
+      && getExecutionEnvironmentForSession(session.key)?.kind !== 'managed_worktree';
+
     const externalTools = createDefaultExternalToolGatewayTools({
       workspace,
       getConfig: () => this.deps.getConfig?.(),
@@ -522,16 +534,18 @@ export class AgentToolsFactory {
     const optionalTools = [imageTool, imageGenerateTool, ...webMediaTools].filter((t) => t != null) as any[];
 
     const readTool = createReadFileTool(workspace, {
+      allowOutsideWorkspace,
       profileMarkdownRoot: options?.profileMarkdownRoot,
       ...(personalToolsConfigured ? { defaultMaxLines: 150, maxOutputBytes: LOCAL_READ_MAX_CHARS, maxReadBytes: 12000 } : {}),
     });
     const writeTool = createWriteFileTool(workspace, {
+      allowOutsideWorkspace,
       profileMarkdownRoot: options?.profileMarkdownRoot,
     });
-    const applyPatchTool = createApplyPatchTool(workspace);
-    const listDir = createListDirTool(workspace);
-    const grep = createGrepTool(workspace);
-    const find = createFindTool(workspace);
+    const applyPatchTool = createApplyPatchTool(workspace, allowOutsideWorkspace);
+    const listDir = createListDirTool(workspace, allowOutsideWorkspace);
+    const grep = createGrepTool(workspace, allowOutsideWorkspace);
+    const find = createFindTool(workspace, allowOutsideWorkspace);
 
     const productToolDeps = {
       canRequestWeixinMcpSetup: () => {
@@ -636,7 +650,8 @@ export class AgentToolsFactory {
       find,
       createExecCommandTool(workspace, {
         getCommandIsolation,
-        getConversationId: () => this.deps.getCurrentContext()?.conversationId,
+        getConversationId: currentConversationId,
+        allowOutsideWorkspace,
         getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
         prepareEnv: this.prepareRuntimeEnv,
       }),
@@ -644,10 +659,11 @@ export class AgentToolsFactory {
       createLanguageDiagnosticsTool(workspace, { getCommandIsolation, getConversationId: () => this.deps.getCurrentContext()?.conversationId, prepareEnv: this.prepareRuntimeEnv }),
       createManagedJobTool(
         workspace,
-        () => this.deps.getCurrentContext()?.conversationId,
+        currentConversationId,
         this.deps.getSkillPassthroughEnvVarNames,
         this.prepareRuntimeEnv,
         getCommandIsolation,
+        allowOutsideWorkspace,
       ),
       createWebSearchTool(() => this.deps.getConfig?.()),
       createWebFetchTool(() => this.deps.getConfig?.()),
@@ -931,6 +947,7 @@ export class AgentToolsFactory {
         getTools: dataTools,
         canExecute: name => dataTools().some(tool => tool.name === name),
         allowHostGit: () => getCommandIsolation()?.mode !== 'docker',
+        allowOutsideWorkspace,
       }));
     }
     const selected = filterToolsByDisabledSet(core.map(markCodemodeCoreRead), disabled)

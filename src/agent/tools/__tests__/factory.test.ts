@@ -1,3 +1,7 @@
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
@@ -13,6 +17,7 @@ import {
   resolveAgentCapabilityCatalog,
 } from '../../capabilities/index.js';
 import { runWithEmbeddedExecutionSession } from '../../embedded/execution-context.js';
+import { withDelegationScope } from '../../orchestration/delegation-scope.js';
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { personalAgentId } from '../../../personal-agent/repository.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
@@ -53,6 +58,73 @@ describe('AgentToolsFactory', () => {
     const result = await batch.execute('denied', { operations: [{ id: 'r', kind: 'file_read', path: 'x' }] });
     expect(result.details).toMatchObject({ sourceRequests: 0, status: 'failed' });
   });
+  it('uses the workspace as a default while allowing host paths in interactive local chats', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'xopc-chat-directories-')));
+    try {
+      const workspace = join(root, 'workspace');
+      const external = join(root, 'external');
+      await mkdir(workspace);
+      await mkdir(external);
+      await writeFile(join(external, '.env'), 'fixture-secret');
+      const factory = new AgentToolsFactory({ workspace, bus: {} as MessageBus, getCurrentContext: () => null });
+      const conversationId = createConversation({ agentId: 'main', sourceChannel: 'webchat', sessionType: 'chat' }, workspace).key;
+      const tools = factory.createCoreTools({ conversationId, agentId: 'main' });
+      const invoke = (name: string, args: unknown) => tools.find(tool => tool.name === name)!.execute(name, args);
+
+      const local = await invoke('write_file', { path: 'local.txt', content: 'default workspace' });
+      expect(local.details).toHaveProperty('delivery');
+      expect(await readFile(join(workspace, 'local.txt'), 'utf8')).toBe('default workspace');
+
+      const path = join(external, 'nested', 'outside.txt');
+      const written = await invoke('write_file', { path, content: 'cross-directory content' });
+      expect(written.details).toMatchObject({ path });
+      expect(written.details).not.toHaveProperty('delivery');
+      const read = await invoke('read_file', { path });
+      expect(read.content).toEqual([{ type: 'text', text: 'cross-directory content' }]);
+      const listed = await invoke('list_dir', { path: join(external, 'nested') });
+      expect(listed.content).toEqual([{ type: 'text', text: 'f outside.txt' }]);
+      expect(JSON.stringify((await invoke('find', { path: external, pattern: '*.txt' })).content)).toContain('outside.txt');
+      expect(JSON.stringify((await invoke('grep', { path: external, pattern: 'cross-directory' })).content)).toContain('cross-directory content');
+
+      const patched = await invoke('apply_patch', {
+        patch: `*** Begin Patch\n*** Update File: ${path}\n@@\n-cross-directory content\n+updated\n*** End Patch`,
+      });
+      expect(patched.details).toMatchObject({ files: [path.replaceAll('\\', '/')] });
+      expect(await readFile(path, 'utf8')).toMatch(/^updated\s*$/);
+
+      const command = await invoke('exec_command', { cmd: process.platform === 'win32' ? 'cd' : 'pwd', cwd: external });
+      expect(command.details).toMatchObject({ status: 'success', cwd: await realpath(external).then(path => path.replaceAll('\\', '/')) });
+
+      const started = await invoke('managed_job', {
+        action: 'start', command: process.platform === 'win32' ? 'cd' : 'pwd', cwd: external,
+      });
+      expect(started.details).toHaveProperty('id');
+      const finished = await invoke('managed_job', { action: 'wait', jobId: started.details.id });
+      expect(finished.details).toMatchObject({ status: 'success', cwd: command.details.cwd });
+
+      const batch = await invoke('data_batch', { operations: [{ id: 'outside', kind: 'file_read', path }] });
+      expect(batch.details).toMatchObject({ status: 'completed', partialCount: 0 });
+      expect(JSON.stringify(batch.content)).toContain('updated');
+
+      const inherited = await withDelegationScope({ tools, restrictToWorkspace: true },
+        () => invoke('read_file', { path }));
+      expect(inherited.details).toMatchObject({ status: 'failed' });
+
+      const denied = await invoke('read_file', { path: join(external, '.env') });
+      expect(denied.details).toMatchObject({ status: 'failed' });
+      expect(JSON.stringify(denied.content)).not.toContain('fixture-secret');
+      const protectedWrite = await invoke('write_file', { path: join(external, '.env'), content: 'overwritten' });
+      expect(protectedWrite.details).toMatchObject({ status: 'failed' });
+      expect(await readFile(join(external, '.env'), 'utf8')).toBe('fixture-secret');
+
+      const automationId = createConversation({ agentId: 'main', sourceChannel: 'automation', sessionType: 'chat' }, workspace).key;
+      const automationRead = factory.createCoreTools({ conversationId: automationId, agentId: 'main' }).find(tool => tool.name === 'read_file')!;
+      expect((await automationRead.execute('restricted', { path })).details).toMatchObject({ status: 'failed' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('applies an Agent tool allowlist to core and dynamic tools', () => {
     const factory = new AgentToolsFactory({
       workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null,

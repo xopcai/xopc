@@ -83,6 +83,7 @@ export interface CreateExecCommandToolOptions {
   /** Env var names allowed through prepareSafeToolEnv even if they match secret heuristics. */
   getCommandIsolation?: () => CommandIsolation | undefined;
   getConversationId?: () => string | undefined;
+  allowOutsideWorkspace?: boolean;
   getSkillPassthroughEnvVarNames?: () => string[];
   prepareEnv?: (baseEnv: Record<string, string>, cwd: string) => Promise<Record<string, string>>;
 }
@@ -183,7 +184,8 @@ export function createExecCommandTool(
       signal?: AbortSignal,
       onUpdate?: AgentToolUpdateCallback<ExecCommandUpdateDetails>,
     ): Promise<AgentToolResult<ExecCommandDetails>> {
-      const interaction = getSessionInteractionPolicy(options?.getConversationId?.() ?? workspaceCwd);
+      const owner = options?.getConversationId?.() ?? workspaceCwd;
+      const interaction = getSessionInteractionPolicy(owner);
       if ((interaction.mode === 'plan' || interaction.access === 'read-only') && (params.outputs?.length || params.reuseVerification)) throw new Error('Artifact publishing is disabled in Plan and read-only modes.');
       const command = (params.cmd ?? '').trim();
       if (params.yieldTimeMs !== undefined && params.outputs?.length) throw new Error('yieldTimeMs cannot be combined with outputs; publish files after the job completes.');
@@ -213,15 +215,18 @@ export function createExecCommandTool(
         ? resolve(workspaceCwd, params.cwd.trim())
         : workspaceCwd;
       const passthroughNames = options?.getSkillPassthroughEnvVarNames?.() ?? [];
+      const isolation = options?.getCommandIsolation?.();
       const policy = evaluateExecPolicy({
         command,
         cwd: requestedCwd,
         workspaceRoot: workspaceCwd,
+        allowOutsideWorkspace: options?.allowOutsideWorkspace && isolation?.mode !== 'docker'
+          && interaction.mode !== 'plan' && interaction.access !== 'read-only' && interaction.sandbox !== 'workspace-write',
         allowedEnvVars: passthroughNames,
       });
       if (!policy.allowed) {
         const recovery = policy.blockedBy === 'cwd'
-          ? `Current session workspace: ${workspaceCwd}\nUse this workspace: omit cwd or choose a directory inside it. The source checkout and other sessions' worktrees may be outside this session's scope.`
+          ? `Current session workspace: ${workspaceCwd}\nUse the default directory: omit cwd or specify a permitted directory.`
           : 'Remove destructive cleanup and use a fresh output directory with mkdir -p, or narrow the operation.';
         const text = `Sandbox blocked command: ${policy.reason}\nNothing was executed. ${recovery}\nDo not repeat unchanged or rephrase the blocked operation to bypass policy.`;
         return {
@@ -249,7 +254,6 @@ export function createExecCommandTool(
 
       const timeoutMs = commandTimeout(params.timeoutMs, policy.timeoutMs);
       const maxOutputChars = clampMaxOutputChars(params.maxOutputChars);
-      const isolation = options?.getCommandIsolation?.();
       if (process.platform !== 'win32' && isolation?.mode !== 'docker') {
         const started = performance.now();
         const syntax = await runProcess({ program: '/bin/sh', args: ['-n', '-c', command], cwd: policy.effectiveCwd,
@@ -279,7 +283,6 @@ export function createExecCommandTool(
       const runtimeEnv = options?.prepareEnv
         ? await options.prepareEnv(policy.sanitizedEnv, policy.effectiveCwd)
         : policy.sanitizedEnv;
-      const owner = options?.getConversationId?.() ?? workspaceCwd;
       const registry = commandRegistry();
       successfulChecks.delete(checkKey);
       let commandResult = await registry.start({

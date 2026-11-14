@@ -4,6 +4,7 @@ import type { AgentTurnPolicyOptions } from './agent-turn-policy.js';
 
 interface DelegationScope {
   tools: AgentTool<any, any>[];
+  restrictToWorkspace?: boolean;
   authorizeToolCall?: AgentTurnPolicyOptions['authorizeToolCall'];
   getToolContext?: () => Pick<BeforeToolCallContext, 'assistantMessage' | 'context'> | undefined;
 }
@@ -14,7 +15,8 @@ export function withoutDelegationScope<T>(run: () => T): T {
 }
 
 export function withDelegationScope<T>(scope: DelegationScope, run: () => T): T {
-  return storage.run(scope, run);
+  const parent = storage.getStore();
+  return storage.run(parent?.restrictToWorkspace ? { ...scope, restrictToWorkspace: true } : scope, run);
 }
 
 export function getDelegationScope(): DelegationScope | undefined {

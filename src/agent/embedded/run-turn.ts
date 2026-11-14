@@ -1026,7 +1026,7 @@ async function runXopcEmbeddedTurnInner(params: RunXopcEmbeddedTurnParams): Prom
       }
       await runAgentTurnWithTimeout(
         session.agent,
-        () => withDelegationScope({ tools,
+        () => withDelegationScope({ tools, restrictToWorkspace: toolPolicyConversationId !== conversationId,
           getToolContext: () => {
             const message = session.agent.state.messages.findLast(item => item.role === 'assistant');
             return message?.role === 'assistant' ? { assistantMessage: message, context: { messages: session.agent.state.messages, tools: session.agent.state.tools } } : undefined;

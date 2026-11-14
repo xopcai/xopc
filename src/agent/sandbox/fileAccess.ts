@@ -1,32 +1,34 @@
 import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, mkdirSync, openSync, readdirSync, read, readSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, parse, resolve } from 'node:path';
 
 import { evaluateFilePolicy } from './exec-policy.js';
 
 /** Revalidate at I/O time; never truncate a file before checking the opened inode. */
-export function checkedFilePath(workspaceRoot: string, path: string, operation: 'read' | 'write' | 'delete'): string {
-  const policy = evaluateFilePolicy({ workspaceRoot, path, operation });
+export function checkedFilePath(workspaceRoot: string, path: string, operation: 'read' | 'write' | 'delete', allowOutsideWorkspace = false): string {
+  const policy = evaluateFilePolicy({ workspaceRoot, path, operation, allowOutsideWorkspace });
   if (!policy.allowed || !policy.canonicalPath) throw new Error(`Sandbox: ${policy.reason ?? 'Cannot resolve file'}`);
   return policy.canonicalPath;
 }
 
-function mkdirChecked(workspace: string, directory: string): void {
-  const path = checkedFilePath(workspace, directory, 'write');
+function mkdirChecked(workspace: string, directory: string, allowOutsideWorkspace: boolean): void {
+  // Roots are existing parents, never directories to create.
+  if (allowOutsideWorkspace && directory === parse(directory).root) return;
+  const path = checkedFilePath(workspace, directory, 'write', allowOutsideWorkspace);
   try {
     if (!lstatSync(path).isDirectory()) throw new Error('Expected a directory');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    mkdirChecked(workspace, dirname(path));
-    if (checkedFilePath(workspace, path, 'write') !== path) throw new Error('Directory changed during operation');
+    mkdirChecked(workspace, dirname(path), allowOutsideWorkspace);
+    if (checkedFilePath(workspace, path, 'write', allowOutsideWorkspace) !== path) throw new Error('Directory changed during operation');
     mkdirSync(path);
   }
 }
 
-function openChecked(workspace: string, inputPath: string, write: boolean): number {
+function openChecked(workspace: string, inputPath: string, write: boolean, allowOutsideWorkspace = false): number {
   const operation = write ? 'write' : 'read';
-  const path = checkedFilePath(workspace, inputPath, operation);
-  if (write) mkdirChecked(workspace, dirname(path));
-  if (checkedFilePath(workspace, path, operation) !== path) throw new Error('Path changed during operation');
+  const path = checkedFilePath(workspace, inputPath, operation, allowOutsideWorkspace);
+  if (write) mkdirChecked(workspace, dirname(path), allowOutsideWorkspace);
+  if (checkedFilePath(workspace, path, operation, allowOutsideWorkspace) !== path) throw new Error('Path changed during operation');
   const flags = (write ? constants.O_WRONLY : constants.O_RDONLY) | constants.O_NOFOLLOW | constants.O_NONBLOCK;
   let fd: number;
   try { fd = openSync(path, flags); }
@@ -36,7 +38,7 @@ function openChecked(workspace: string, inputPath: string, write: boolean): numb
   }
   try {
     const opened = fstatSync(fd);
-    const currentPath = checkedFilePath(workspace, inputPath, operation);
+    const currentPath = checkedFilePath(workspace, inputPath, operation, allowOutsideWorkspace);
     const current = statSync(currentPath);
     if (currentPath !== path || current.dev !== opened.dev || current.ino !== opened.ino) throw new Error('File changed during operation');
     if (!opened.isFile() || opened.nlink !== 1) throw new Error('Sandbox requires a regular file without hard links');
@@ -44,8 +46,8 @@ function openChecked(workspace: string, inputPath: string, write: boolean): numb
   } catch (error) { closeSync(fd); throw error; }
 }
 
-export function readWorkspaceFile(workspace: string, path: string, maxBytes = 10 * 1024 * 1024): Buffer {
-  const fd = openChecked(workspace, path, false);
+export function readWorkspaceFile(workspace: string, path: string, maxBytes = 10 * 1024 * 1024, allowOutsideWorkspace = false): Buffer {
+  const fd = openChecked(workspace, path, false, allowOutsideWorkspace);
   try {
     if (fstatSync(fd).size > maxBytes) throw new Error(`File too large: maximum ${maxBytes} bytes`);
     const chunks: Buffer[] = [];
@@ -63,9 +65,9 @@ export function readWorkspaceFile(workspace: string, path: string, maxBytes = 10
 }
 
 /** Use the same checked inode as synchronous access, yielding between bounded reads. */
-export async function readWorkspaceFileAsync(workspace: string, path: string, signal?: AbortSignal, maxBytes = 10 * 1024 * 1024): Promise<Buffer> {
+export async function readWorkspaceFileAsync(workspace: string, path: string, signal?: AbortSignal, maxBytes = 10 * 1024 * 1024, allowOutsideWorkspace = false): Promise<Buffer> {
   signal?.throwIfAborted();
-  const fd = openChecked(workspace, path, false);
+  const fd = openChecked(workspace, path, false, allowOutsideWorkspace);
   try {
     const before = fstatSync(fd);
     if (before.size > maxBytes) throw new Error(`File too large: maximum ${maxBytes} bytes`);
@@ -84,23 +86,23 @@ export async function readWorkspaceFileAsync(workspace: string, path: string, si
       chunks.push(chunk.subarray(0, count));
     }
     const after = fstatSync(fd);
-    const current = statSync(checkedFilePath(workspace, path, 'read'));
+    const current = statSync(checkedFilePath(workspace, path, 'read', allowOutsideWorkspace));
     if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs
       || current.ino !== after.ino || current.dev !== after.dev) throw new Error('File changed during read; retry');
     return Buffer.concat(chunks);
   } finally { closeSync(fd); }
 }
 
-export function writeWorkspaceFile(workspace: string, path: string, content: string | Buffer): void {
-  const fd = openChecked(workspace, path, true);
+export function writeWorkspaceFile(workspace: string, path: string, content: string | Buffer, allowOutsideWorkspace = false): void {
+  const fd = openChecked(workspace, path, true, allowOutsideWorkspace);
   try { ftruncateSync(fd, 0); writeFileSync(fd, content, 'utf8'); }
   finally { closeSync(fd); }
 }
 
-export function deleteWorkspaceFile(workspace: string, path: string): void {
-  const target = checkedFilePath(workspace, path, 'delete');
+export function deleteWorkspaceFile(workspace: string, path: string, allowOutsideWorkspace = false): void {
+  const target = checkedFilePath(workspace, path, 'delete', allowOutsideWorkspace);
   if (!lstatSync(target).isFile()) throw new Error('Expected a regular file');
-  if (checkedFilePath(workspace, resolve(target), 'delete') !== target) throw new Error('File changed during operation');
+  if (checkedFilePath(workspace, resolve(target), 'delete', allowOutsideWorkspace) !== target) throw new Error('File changed during operation');
   unlinkSync(target);
 }
 

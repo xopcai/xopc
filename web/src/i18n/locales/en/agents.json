@@ -269,12 +269,12 @@
       "misc": "Other built-ins"
     },
     "toolDescriptions": {
-      "read_file": "Read text and small files inside the agent workspace (paths are restricted to the workspace sandbox).",
-      "write_file": "Create new files or overwrite existing ones under the workspace.",
+      "read_file": "Read text and small files. Relative paths resolve from the working directory.",
+      "write_file": "Create or overwrite files. Relative paths resolve from the working directory.",
       "apply_patch": "Apply strict multi-file patches for focused source changes.",
-      "list_dir": "List files and subfolders in a workspace directory.",
+      "list_dir": "List files and subfolders in the specified directory.",
       "grep": "Search file contents with regular expressions (similar to ripgrep).",
-      "find": "Find files by name or glob pattern under the workspace.",
+      "find": "Find files by name or glob pattern. Defaults to the working directory.",
       "exec_command": "Run commands with workspace context; high impact, so disable for read-only or safer agents.",
       "update_plan": "Update the visible multi-step coding plan for the current turn.",
       "web_search": "Search the public web for facts and pages newer than the model may know.",

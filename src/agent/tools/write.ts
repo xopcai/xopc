@@ -7,7 +7,7 @@ import {
   type ProductDeliveryEnvelope,
 } from '@xopcai/gateway-contract';
 import { realpath } from 'fs/promises';
-import { basename, relative, sep } from 'path';
+import { basename, isAbsolute, relative, sep } from 'path';
 import { fileResourceId, fileSpaceId } from '../../files/file-service.js';
 import { checkFileSafety } from '../prompt/safety.js';
 import {
@@ -29,6 +29,7 @@ type WriteFileParams = { path: string; content: string };
 export interface CreateWriteFileToolOptions {
   /** When set and the path is a bare profile filename (e.g. SOUL.md), write to this root. */
   profileMarkdownRoot?: string;
+  allowOutsideWorkspace?: boolean;
 }
 
 export function createWriteFileTool(
@@ -73,23 +74,25 @@ export function createWriteFileTool(
         const target = writesProfileFile
           ? resolveProfileMarkdownPathIfBareName(p.path, options!.profileMarkdownRoot!)
           : resolvePathUnderWorkspace(p.path, workspace);
-        writeWorkspaceFile(workspaceRoot, target, p.content);
-        const delivery: ProductDeliveryEnvelope | undefined = writesProfileFile
-          ? undefined
-          : await Promise.all([realpath(workspace), realpath(target)]).then(([root, canonicalTarget]) => ({
+        writeWorkspaceFile(workspaceRoot, target, p.content, !writesProfileFile && options?.allowOutsideWorkspace);
+        let delivery: ProductDeliveryEnvelope | undefined;
+        if (!writesProfileFile) {
+          const [root, canonicalTarget] = await Promise.all([realpath(workspace).catch(() => null), realpath(target)]);
+          const relativePath = root ? relative(root, canonicalTarget) : canonicalTarget;
+          if (root && !isAbsolute(relativePath) && relativePath !== '..' && !relativePath.startsWith(`..${sep}`)) {
+            delivery = {
               version: PRODUCT_DELIVERY_VERSION,
               operation: 'updated',
               primary: {
                 kind: 'file',
-                id: fileResourceId(
-                  fileSpaceId(root),
-                  relative(root, canonicalTarget).split(sep).join('/'),
-                ),
+                id: fileResourceId(fileSpaceId(root), relativePath.split(sep).join('/')),
                 title: basename(target),
                 summary: `${contentBytes} bytes written`,
                 capabilities: ['preview', 'share'],
               },
-            }));
+            };
+          }
+        }
         return {
           content: [{
             type: 'text',

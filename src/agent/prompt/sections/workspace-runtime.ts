@@ -14,7 +14,7 @@ export function buildWorkspaceSection(workspaceDir: string): string {
   return [
     '## Workspace',
     `Your working directory is: ${sanitized}`,
-    'Treat this directory as the single global workspace for file operations unless explicitly instructed otherwise.',
+    'Resolve relative paths here. Use absolute paths for other directories where permitted.',
   ].join('\n');
 }
 

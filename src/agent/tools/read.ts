@@ -27,6 +27,7 @@ export interface CreateReadFileToolOptions {
   defaultMaxLines?: number;
   maxOutputBytes?: number;
   maxReadBytes?: number;
+  allowOutsideWorkspace?: boolean;
 }
 
 type ReadFileParams = {
@@ -73,7 +74,8 @@ async function executeReadFile(
     }
 
     let activeRoot = workspace;
-    let normalized = checkedFilePath(activeRoot, resolvePathUnderWorkspace(params.path, workspace), 'read');
+    let allowOutsideWorkspace = options?.allowOutsideWorkspace;
+    let normalized = checkedFilePath(activeRoot, resolvePathUnderWorkspace(params.path, workspace), 'read', allowOutsideWorkspace);
     let stats;
     try {
       stats = await stat(normalized);
@@ -89,6 +91,7 @@ async function executeReadFile(
           normalized = checkedFilePath(profileMarkdownRoot, alt, 'read');
           stats = await stat(normalized);
           activeRoot = profileMarkdownRoot;
+          allowOutsideWorkspace = false;
         } catch {
           throw e;
         }
@@ -106,7 +109,7 @@ async function executeReadFile(
       return { content: [{ type: 'text', text: `🚫 File too large: ${formatSize(stats.size)}` }], details: { status: 'failed' } };
     }
 
-    const content = (await readWorkspaceFileAsync(activeRoot, normalized, signal, MAX_FILE_SIZE)).toString('utf8');
+    const content = (await readWorkspaceFileAsync(activeRoot, normalized, signal, MAX_FILE_SIZE, allowOutsideWorkspace)).toString('utf8');
     const offset = Math.max(1, params.offset ?? 1);
     const lines = content.split('\n');
     if (offset > lines.length) throw new Error(`Offset ${offset} exceeds ${lines.length} lines`);

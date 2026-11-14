@@ -11,7 +11,7 @@ const ListDirSchema = Type.Object({
 
 type ListDirParams = { path: string };
 
-export function createListDirTool(workspace: string): AgentTool {
+export function createListDirTool(workspace: string, allowOutsideWorkspace = false): AgentTool {
   return {
     name: 'list_dir',
     description: 'List the contents of a directory. Relative paths are under the current agent workspace.',
@@ -27,7 +27,7 @@ export function createListDirTool(workspace: string): AgentTool {
     ): Promise<AgentToolResult<{}>> {
       try {
         const p = params as ListDirParams;
-        const target = checkedFilePath(workspace, resolvePathUnderWorkspace(p.path, workspace), 'read');
+        const target = checkedFilePath(workspace, resolvePathUnderWorkspace(p.path, workspace), 'read', allowOutsideWorkspace);
         const entries = await readdir(target, { withFileTypes: true });
         const lines = entries.map((e) => {
           const type = e.isDirectory() ? 'd' : e.isFile() ? 'f' : '?';
