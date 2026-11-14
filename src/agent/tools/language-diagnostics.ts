@@ -21,7 +21,7 @@ function quote(value: string): string {
 }
 
 export function createLanguageDiagnosticsTool(workspace: string, options?: CreateExecCommandToolOptions): AgentTool {
-  const exec = createExecCommandTool(workspace, options);
+  const exec = createExecCommandTool(workspace, { ...options, yieldOnSteer: false });
   return {
     name: 'language_diagnostics', label: 'TypeScript diagnostics',
     description: 'Run the repository-installed TypeScript compiler without emitting code. Returns compiler exit status, bounded file/line diagnostics, and a durable command log. Supports tsconfig projects; other languages use their normal check command.',

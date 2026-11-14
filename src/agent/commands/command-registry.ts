@@ -49,6 +49,7 @@ interface RunningCommand {
   result: CommandResult;
   transport: CommandTransport;
   done: Promise<CommandResult>;
+  isClosing: () => boolean;
   stop: (status: 'cancelled' | 'timed_out') => void;
 }
 
@@ -149,7 +150,7 @@ export class CommandRegistry {
         resolve({ ...result });
       });
     });
-    this.running.set(id, { owner: input.owner, result, transport, done, stop });
+    this.running.set(id, { owner: input.owner, result, transport, done, isClosing: () => closed, stop });
     if (input.signal?.aborted) abort();
     return { ...result };
   }
@@ -170,21 +171,29 @@ export class CommandRegistry {
     }
   }
 
-  async wait(owner: string, id: string, waitMs = 30_000, signal?: AbortSignal): Promise<CommandResult | undefined> {
+  async wait(owner: string, id: string, waitMs = 30_000, signal?: AbortSignal, yieldSignal?: AbortSignal): Promise<CommandResult | undefined> {
     const current = this.running.get(id);
     if (!current || current.owner !== owner) return this.get(owner, id);
     signal?.throwIfAborted();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let aborted: (() => void) | undefined;
+    let yielded: (() => void) | undefined;
     try {
       return await Promise.race([current.done, new Promise<CommandResult | undefined>((resolve, reject) => {
         timer = setTimeout(() => resolve(this.get(owner, id)), Math.min(60_000, Math.max(0, waitMs)));
         aborted = () => reject(signal?.reason ?? new Error('Aborted'));
         signal?.addEventListener('abort', aborted, { once: true });
+        yielded = () => {
+          if (signal?.aborted) aborted();
+          else resolve(current.result.status === 'running' && !current.isClosing() ? this.get(owner, id) : current.done);
+        };
+        if (yieldSignal?.aborted) yielded();
+        else yieldSignal?.addEventListener('abort', yielded, { once: true });
       })]);
     } finally {
       clearTimeout(timer);
       if (aborted) signal?.removeEventListener('abort', aborted);
+      if (yielded) yieldSignal?.removeEventListener('abort', yielded);
     }
   }
   async cancel(owner: string, id: string): Promise<CommandResult | undefined> {

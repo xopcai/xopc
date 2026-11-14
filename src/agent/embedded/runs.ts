@@ -5,6 +5,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { AgentRunCancelledError } from '../orchestration/run-termination.js';
 import { registerSteeringTranscript, type TranscriptUserMessage } from '../inbound/attachment-pipeline.js';
 import { VOICE_AGENT_INSTRUCTION_TYPE } from '../../session/voice-transcript.js';
+import { getEmbeddedExecutionRunId, getEmbeddedExecutionSession } from './execution-context.js';
 
 export type EmbeddedSteerOptions = {
   images?: ImageContent[];
@@ -27,6 +28,7 @@ export type EmbeddedRunHandle = EmbeddedRunIdentity & {
 type PendingEmbeddedRun = EmbeddedRunIdentity & {
   handle?: EmbeddedRunHandle;
   abortController: AbortController;
+  commandYield: AbortController;
   steeringCleanup: Array<() => void>;
   steeringImages: Map<TranscriptUserMessage, ImageContent[]>;
 };
@@ -40,6 +42,7 @@ export class EmbeddedRunConflictError extends Error {
 
 export type EmbeddedRunLease = {
   signal: AbortSignal;
+  prepareCommandWaits(): void;
   attach(session: AgentSession, abort: () => Promise<void>): Promise<void>;
   release(): void;
 };
@@ -69,11 +72,18 @@ export class EmbeddedRunRegistry {
     if (active) throw new EmbeddedRunConflictError(identity.conversationId, active.runId);
 
     const controller = this.prepared.get(JSON.stringify([identity.conversationId, identity.runId]));
-    const entry: PendingEmbeddedRun = { ...identity, abortController: controller ?? new AbortController(), steeringCleanup: [], steeringImages: new Map() };
+    const entry: PendingEmbeddedRun = { ...identity, abortController: controller ?? new AbortController(),
+      commandYield: new AbortController(), steeringCleanup: [], steeringImages: new Map() };
     this.byConversationId.set(identity.conversationId, entry);
 
     return {
       signal: entry.abortController.signal,
+      prepareCommandWaits: () => {
+        // Pi can deliver steering one message at a time. Keep yielding while its queue has more input.
+        if (entry.commandYield.signal.aborted && !entry.handle?.session.getSteeringMessages().length) {
+          entry.commandYield = new AbortController();
+        }
+      },
       attach: async (session, abort) => {
         entry.handle = { ...identity, session, abort };
         if (entry.abortController.signal.aborted) await abort();
@@ -91,6 +101,11 @@ export class EmbeddedRunRegistry {
 
   getByConversationId(conversationId: string): EmbeddedRunHandle | undefined {
     return this.byConversationId.get(conversationId)?.handle;
+  }
+
+  getCommandYieldSignal(conversationId: string, runId: string): AbortSignal | undefined {
+    const entry = this.byConversationId.get(conversationId);
+    return entry?.runId === runId ? entry.commandYield.signal : undefined;
   }
 
   isActive(conversationId: string): boolean {
@@ -119,8 +134,10 @@ export class EmbeddedRunRegistry {
     }
     const entry = this.byConversationId.get(conversationId)!;
     if (options?.voiceAgentInstruction) {
+      const wasStreaming = handle.session.isStreaming;
       await handle.session.sendCustomMessage({ customType: VOICE_AGENT_INSTRUCTION_TYPE, content: text, display: false },
         { deliverAs: 'steer', triggerTurn: true });
+      if (wasStreaming) entry.commandYield.abort();
       return true;
     }
     const transcript = options?.transcriptMessage;
@@ -136,6 +153,7 @@ export class EmbeddedRunRegistry {
         cleanup();
         options?.onHandled?.();
       }
+      if (disposition === 'queued') entry.commandYield.abort();
     } catch (error) {
       cleanup();
       throw error;
@@ -171,6 +189,12 @@ export class EmbeddedRunRegistry {
 }
 
 const embeddedRunRegistry = new EmbeddedRunRegistry();
+
+export function getEmbeddedCommandYieldSignal(): AbortSignal | undefined {
+  const conversationId = getEmbeddedExecutionSession();
+  const runId = getEmbeddedExecutionRunId();
+  if (conversationId && runId) return embeddedRunRegistry.getCommandYieldSignal(conversationId, runId);
+}
 
 function userMessageText(message: AgentMessage): string {
   const content = (message as { content?: unknown }).content;

@@ -641,13 +641,14 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   private async replaceEmbeddedQueue(conversationId: string, state: TuiChatInputState): Promise<boolean> {
-    const { getEmbeddedRunByConversationId } = await import('../../agent/embedded/runs.js');
+    const { getEmbeddedRunByConversationId, queueEmbeddedSteer } = await import('../../agent/embedded/runs.js');
     const handle = getEmbeddedRunByConversationId(conversationId);
     if (!handle) return false;
     handle.session.clearQueue();
     for (const input of state.inputs) {
-      if (input.status === 'injecting') await handle.session.steer(input.content);
-      else if (input.status === 'queued') await handle.session.followUp(input.content);
+      if (input.status === 'injecting') {
+        if (!await queueEmbeddedSteer(conversationId, input.content, handle.runId)) return false;
+      } else if (input.status === 'queued') await handle.session.followUp(input.content);
     }
     return true;
   }

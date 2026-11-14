@@ -253,6 +253,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     mocks.leaseController = new AbortController();
     mocks.acquireRunLease.mockReturnValue({
       signal: mocks.leaseController.signal,
+      prepareCommandWaits: vi.fn(),
       attach: vi.fn(),
       release: vi.fn(),
     });

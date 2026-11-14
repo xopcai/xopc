@@ -16,6 +16,7 @@ import { formatSize, truncateTail } from './truncate.js';
 import { runProcess } from '../../process/run-process.js';
 import { classifyVerificationCommand } from '../coding/verification-command.js';
 import { readWorkspaceRevision } from '../coding/workspace-revision.js';
+import { getEmbeddedCommandYieldSignal } from '../embedded/runs.js';
 
 const DEFAULT_MAX_OUTPUT_CHARS = 50_000;
 
@@ -37,7 +38,7 @@ const ExecCommandSchema = Type.Object({
       description: 'Maximum characters returned to the model. UI streaming still receives output deltas.',
     }),
   ),
-  yieldTimeMs: Type.Optional(Type.Number({ minimum: 0, maximum: 60000, description: 'Return a running job after this wait; manage it with managed_job. Omit to wait for completion. Cannot be combined with outputs.' })),
+  yieldTimeMs: Type.Optional(Type.Number({ minimum: 0, maximum: 60000, description: 'Return a running job after this wait; manage it with managed_job. Omit to wait for completion or a user steer. Cannot be combined with outputs, which require waiting through publication.' })),
   reuseVerification: Type.Optional(Type.Boolean({ description: 'Publish outputs using this exact command and cwd from a prior successful check at the identical workspace revision, without executing again. Requires outputs. Fails closed if no matching evidence; omit when a fresh execution is required.' })),
   outputs: Type.Optional(
     Type.Array(Type.String({ minLength: 1 }), {
@@ -84,6 +85,7 @@ export interface CreateExecCommandToolOptions {
   getCommandIsolation?: () => CommandIsolation | undefined;
   getConversationId?: () => string | undefined;
   allowOutsideWorkspace?: boolean;
+  yieldOnSteer?: boolean;
   getSkillPassthroughEnvVarNames?: () => string[];
   prepareEnv?: (baseEnv: Record<string, string>, cwd: string) => Promise<Record<string, string>>;
 }
@@ -284,22 +286,27 @@ export function createExecCommandTool(
         ? await options.prepareEnv(policy.sanitizedEnv, policy.effectiveCwd)
         : policy.sanitizedEnv;
       const registry = commandRegistry();
+      const yieldSignal = params.outputs?.length || options?.yieldOnSteer === false ? undefined : getEmbeddedCommandYieldSignal();
+      let forwardOutput = onUpdate;
       successfulChecks.delete(checkKey);
       let commandResult = await registry.start({
         workspace: workspaceCwd, isolation, tty: params.tty,
         owner, command, cwd: policy.effectiveCwd, env: { ...runtimeEnv, COLUMNS: '200' },
         timeoutMs, maxOutputChars, signal,
         snapshot: true,
-        onOutput: (stream, delta) => onUpdate?.({ content: [],
+        onOutput: (stream, delta) => forwardOutput?.({ content: [],
           details: { kind: 'command_output_delta', command, cwd: policy.effectiveCwd, stream, delta } }),
       });
       try {
         do {
-          commandResult = (await registry.wait(owner, commandResult.id, params.yieldTimeMs ?? 60_000, signal))!;
-        } while (params.yieldTimeMs === undefined && commandResult.status === 'running');
+          commandResult = (await registry.wait(owner, commandResult.id, params.yieldTimeMs ?? 60_000, signal, yieldSignal))!;
+          signal?.throwIfAborted();
+        } while (params.yieldTimeMs === undefined && commandResult.status === 'running' && !yieldSignal?.aborted);
       } catch (error) {
         if (!signal?.aborted) throw error;
         commandResult = (await registry.cancel(owner, commandResult.id))!;
+      } finally {
+        forwardOutput = undefined;
       }
       const baseDetails: ExecCommandDetails = {
         ...commandResult, truncated: false, outputBytes: Buffer.byteLength(commandResult.aggregatedOutput),
