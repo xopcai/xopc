@@ -142,6 +142,7 @@ class NoteRepository(private val gateway: GatewaySession) {
     require(draft.title.isNotBlank() || draft.markdown.isNotBlank()) { "EMPTY_NOTE" }
     val body = JSONObject().put("title", draft.title.trim()).put("markdown", draft.markdown)
       .put("kind", "thought").put("channel", "app").put("platform", "android")
+    draft.projectId?.let { requireValidId(it); body.put("projectId", it) }
     val result = gateway.request("/api/notes", "POST", body.toString(),
       mapOf("Idempotency-Key" to draft.mutationId))
     val row = JSONObject(result).getJSONObject("note")

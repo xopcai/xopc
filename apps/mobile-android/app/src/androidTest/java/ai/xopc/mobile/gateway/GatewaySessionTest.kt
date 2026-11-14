@@ -649,10 +649,18 @@ class GatewaySessionTest {
         assertEquals(true, automations.setEnabled(pausedAutomation, true).enabled)
         assertEquals(listOf("/api/automations/auto-1/run", "/api/automations/auto-1/pause",
           "/api/automations/auto-1/resume"), fake.automationActionPaths)
-        val createdAutomation = automations.create(" New brief ", " Summarize today ", "0 8 * * *",
-          "11111111-2222-3333-4444-555555555555")
-        assertEquals("auto-created", createdAutomation.id)
-        assertEquals(listOf("/api/automations"), fake.automationCreatePaths)
+        assertEquals("configuration-chat", automations.openConfiguration(null, null))
+        assertEquals("configuration-chat", automations.openConfiguration("project-1", null))
+        assertEquals("configuration-chat", automations.openConfiguration(null, "zh-CN"))
+        assertEquals(listOf(emptyMap(), mapOf("projectId" to "project-1"), mapOf("personalLocale" to "zh")),
+          fake.automationConfigurationScopes)
+        val overview = PersonalOverviewAccess(restored, automations)
+        assertEquals("Personal reading", overview.work(0).current.single().title)
+        assertEquals("Personal report", overview.deliveries(0, "personal-chat").items.single().title)
+        assertEquals("personal-automation", overview.schedules().single().id)
+        val project = progress.writeProject(ProjectMutation.Save(null, "Parity project", "Project brief",
+          "abcdabcd-bbbb-cccc-dddd-eeeeeeeeeeee"))
+        assertEquals("parity-project", project.id)
         val updatedAutomation = automations.update(automation, " Updated brief ", " Plan tomorrow ",
           "0 10 * * *", "22222222-3333-4444-5555-666666666666")
         assertEquals("Updated brief", updatedAutomation.name)
@@ -665,7 +673,7 @@ class GatewaySessionTest {
         assertEquals(listOf("/api/notes?limit=30&offset=0&sortBy=updatedAt&sortOrder=desc&search=idea&status=inbox",
           "/api/notes/note-1"), fake.noteReadPaths)
         val noteDraft = NoteDraft("local-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", " New idea ",
-          "Body", "44444444-5555-6666-7777-888888888888", 1)
+          "Body", "44444444-5555-6666-7777-888888888888", 1, projectId = "project-1")
         assertEquals("note-created", notes.create(noteDraft).id)
         assertEquals(listOf("/api/notes"), fake.noteCreatePaths)
         val edited = NoteDraft("note-1", " Revised idea ", "Updated body",
@@ -950,7 +958,7 @@ class GatewaySessionTest {
     val progressHomeActionPaths = mutableListOf<String>()
     val automationReadPaths = mutableListOf<String>()
     val automationActionPaths = mutableListOf<String>()
-    val automationCreatePaths = mutableListOf<String>()
+    val automationConfigurationScopes = mutableListOf<Map<String, String>>()
     val automationEditMethods = mutableListOf<String>()
     val noteReadPaths = mutableListOf<String>()
     val noteCreatePaths = mutableListOf<String>()
@@ -1124,16 +1132,23 @@ class GatewaySessionTest {
             "trigger":{"kind":"schedule","schedule":{"kind":"cron","expr":"0 9 * * *"}},
             "action":{"kind":"agent","instruction":"Summarize my day"},"state":{},"updatedAtMs":123}]}"""
         }
-        path == "/api/automations" && method == "POST" -> {
-          automationCreatePaths += path
-          assertEquals("New brief", input.getString("name"))
-          assertEquals(true, input.getBoolean("enabled"))
-          assertEquals("new_session", input.getString("conversationMode"))
-          assertEquals("0 8 * * *", input.getJSONObject("trigger").getJSONObject("schedule").getString("expr"))
-          assertEquals("Summarize today", input.getJSONObject("action").getString("instruction"))
-          """{"automation":{"id":"auto-created","name":"New brief","enabled":true,
-            "trigger":{"kind":"schedule","schedule":{"kind":"cron","expr":"0 8 * * *"}},
-            "action":{"kind":"agent","instruction":"Summarize today"},"state":{},"updatedAtMs":200}}"""
+        path == "/api/personal-agent/activity?view=work&limit=10&offset=0" && method == "GET" ->
+          """{"ok":true,"payload":{"current":[{"id":"task-1","title":"Personal reading","phase":"active",
+             "operationalState":"running","updatedAt":300}],"items":[],"total":0}}"""
+        path == "/api/personal-agent/activity?view=deliverables&limit=15&offset=0" && method == "GET" ->
+          """{"ok":true,"payload":{"items":[{"id":"deliverable","artifact":{"title":"Personal report"}}],"nextOffset":null}}"""
+        path == "/api/personal-agent/schedules" && method == "GET" ->
+          """{"ok":true,"payload":[{"id":"personal-automation","name":"Personal automation","enabled":true,
+            "trigger":{"kind":"schedule","schedule":{"kind":"cron","expr":"0 9 * * *"}},
+            "action":{"kind":"personal_task","instruction":"Summarize my day"},"state":{},"updatedAtMs":123}]}"""
+        path == "/api/projects" && method == "POST" -> {
+          assertEquals("Parity project", input.getString("name"))
+          assertEquals("Project brief", input.getString("description"))
+          """{"ok":true,"project":{"id":"parity-project","name":"Parity project","status":"active","version":1}}"""
+        }
+        path == "/api/automations/configuration-conversations" && method == "POST" -> {
+          automationConfigurationScopes += input.keys().asSequence().associateWith(input::getString)
+          """{"conversationId":"configuration-chat"}"""
         }
         path == "/api/automations/auto-1" && method == "GET" -> {
           automationReadPaths += path
@@ -1233,6 +1248,7 @@ class GatewaySessionTest {
         }
         path == "/api/notes" && method == "POST" -> {
           noteCreatePaths += path
+          assertEquals("project-1", input.getString("projectId"))
           assertEquals("New idea", input.getString("title"))
           assertEquals("Body", input.getString("markdown"))
           assertEquals("thought", input.getString("kind"))

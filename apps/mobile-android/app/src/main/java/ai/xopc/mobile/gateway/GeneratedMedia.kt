@@ -54,6 +54,13 @@ class GeneratedMediaAccess internal constructor(private val gateway: GatewaySess
     }
   }
 
+  internal suspend fun downloadMusic(gatewayId: String, conversationId: String, id: String, destination: File) {
+    runInterruptible(Dispatchers.IO) {
+      gateway.downloadGeneratedMedia(path(GeneratedMediaKind.Music, conversationId) + "/" + encode(id) + "/audio",
+        destination, expectedGatewayId = gatewayId)
+    }
+  }
+
   private fun path(kind: GeneratedMediaKind, id: String) =
     "/api/${kind.path}-generation/sessions/${encode(id)}/jobs"
 

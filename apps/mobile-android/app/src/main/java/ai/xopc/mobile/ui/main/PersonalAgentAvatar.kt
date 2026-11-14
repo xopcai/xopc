@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -37,12 +38,15 @@ internal fun PersonalAgentAvatar(avatar: Bitmap?, appearance: String, extent: Dp
 
 @Composable
 internal fun AgentAvatar(avatar: Bitmap?, reference: String, agentId: String, extent: Dp, active: Boolean,
-  modifier: Modifier = Modifier) {
+  modifier: Modifier = Modifier, fallbackName: String = agentId) {
+  val builtInAvatar = builtInAgentAvatar(agentId)
   if (avatar != null) PersonalAgentAvatar(avatar, "custom", extent, active, modifier)
   else if (reference.startsWith("xopc:loopi:")) PersonalAgentAvatar(null,
     when (reference.substringAfterLast(':')) { "care" -> "loopi-care"; "curious" -> "loopi-curious"; else -> "loopi" }, extent, active, modifier)
+  else if (builtInAvatar != null) Image(painterResource(builtInAvatar), contentDescription = null,
+    contentScale = ContentScale.Crop, modifier = modifier.size(extent).clip(CircleShape))
   else Box(modifier.size(extent).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
     contentAlignment = Alignment.Center) {
-    androidx.compose.material3.Text(agentId.take(1).uppercase(), color = MaterialTheme.colorScheme.onSecondaryContainer)
+    androidx.compose.material3.Text(fallbackName.take(1).uppercase(), color = MaterialTheme.colorScheme.onSecondaryContainer)
   }
 }

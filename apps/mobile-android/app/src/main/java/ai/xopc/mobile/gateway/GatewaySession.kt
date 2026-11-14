@@ -116,9 +116,10 @@ class GatewaySession(
   @Synchronized
   fun requestBytes(path: String): ByteArray = readMedia { origin, bearer -> http.requestBytes(origin, path, bearer) }
 
-  fun downloadGeneratedMedia(path: String, destination: java.io.File) {
+  fun downloadGeneratedMedia(path: String, destination: java.io.File, expectedGatewayId: String? = null) {
     val (origin, bearer) = synchronized(this) {
       val current = profile ?: throw IllegalStateException("NOT_PAIRED")
+      check(expectedGatewayId == null || current.gatewayId == expectedGatewayId) { "GATEWAY_CHANGED" }
       val route = current.routes.firstOrNull { it.id == current.activeRouteId } ?: throw IllegalStateException("NO_VERIFIED_ROUTE")
       verifyRoute(current, route)
       route.url to token()
@@ -237,6 +238,12 @@ class GatewaySession(
   }
 
   fun currentProfile(): GatewayProfile? = profile
+
+  @Synchronized
+  internal fun <T> withActiveGateway(gatewayId: String, request: () -> T): T {
+    check(profile?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    return request()
+  }
 
   @Synchronized
   fun savedProfiles(): List<GatewayProfile> = readCatalog().profiles

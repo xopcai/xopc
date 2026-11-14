@@ -44,20 +44,15 @@ class AutomationScreensTest {
     composeTestRule.onNodeWithTag("automation-auto-2").assertDoesNotExist()
   }
 
-  @Test fun automationCreateRequiresFieldsAndKeepsFailureVisible() {
-    var name by mutableStateOf("")
-    var instruction by mutableStateOf("")
-    var saved = 0
+  @Test fun emptySchedulesOfferEditablePromptAndHideExamplesDuringSearch() {
+    var draft = ""
     composeTestRule.setContent {
-      AutomationCreateContent(name, { name = it }, instruction, { instruction = it },
-        "0 9 * * *", {}, false, true) { saved++ }
+      AutomationListContent(AutomationUiState(listLoaded = true), "gateway-1", {}, {}, onSchedule = { draft = it })
     }
-    composeTestRule.onNodeWithTag("automation-create-error").assertExists()
-    composeTestRule.onNodeWithTag("automation-create-save").assertIsNotEnabled()
-    composeTestRule.onNodeWithTag("automation-create-name").performTextInput("Morning")
-    composeTestRule.onNodeWithTag("automation-create-instruction").performTextInput("Summarize")
-    composeTestRule.onNodeWithTag("automation-create-save").performClick()
-    assertEquals(1, saved)
+    composeTestRule.onNodeWithTag("automation-idea-morning").performClick()
+    assertEquals(composeTestRule.activity.getString(ai.xopc.mobile.R.string.automation_idea_morning_prompt), draft)
+    composeTestRule.onNodeWithTag("automation-search").performTextInput("Unmatched")
+    composeTestRule.onNodeWithTag("automation-idea-morning").assertDoesNotExist()
   }
 
   @Test fun automationEditRequiresChangeAndShowsManagedScheduleRestriction() {

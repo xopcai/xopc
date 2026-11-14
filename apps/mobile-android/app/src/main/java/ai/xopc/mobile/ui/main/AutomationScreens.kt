@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,7 +42,7 @@ import java.util.UUID
 
 @Composable
 internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
-  onRefresh: () -> Unit, onOpen: (String) -> Unit, onCreate: () -> Unit = {}) {
+  onRefresh: () -> Unit, onOpen: (String) -> Unit, onSchedule: (String) -> Unit = {}) {
   var search by rememberSaveable(gatewayId) { mutableStateOf("") }
   var query by rememberSaveable(gatewayId) { mutableStateOf("") }
   var filter by rememberSaveable(gatewayId) { mutableStateOf("all") }
@@ -49,6 +50,7 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
     item.name.contains(query, ignoreCase = true) && when (filter) {
       "enabled" -> item.enabled
       "paused" -> !item.enabled
+      "attention" -> item.lastRunStatus in setOf("failed", "timed_out")
       else -> true
     }
   }
@@ -59,10 +61,7 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
       TextButton(onClick = { query = search.trim(); onRefresh() }, enabled = !state.listLoading,
         modifier = Modifier.testTag("automation-refresh")) { Text(stringResource(R.string.progress_refresh)) }
     }
-    Button(onClick = onCreate, modifier = Modifier.fillMaxWidth().testTag("automation-create")) {
-      Text(stringResource(R.string.automation_new))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       FilterChip(filter == "all", { filter = "all" }, label = { Text(stringResource(R.string.progress_filter_all)) },
         modifier = Modifier.testTag("automation-filter-all"))
       FilterChip(filter == "enabled", { filter = "enabled" },
@@ -71,10 +70,11 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
       FilterChip(filter == "paused", { filter = "paused" },
         label = { Text(stringResource(R.string.automation_paused)) },
         modifier = Modifier.testTag("automation-filter-paused"))
+      FilterChip(filter == "attention", { filter = "attention" },
+        label = { Text(stringResource(R.string.automation_attention)) },
+        modifier = Modifier.testTag("automation-filter-attention"))
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-      item { Text(stringResource(R.string.automation_list_hint, state.items.size),
-        style = MaterialTheme.typography.bodySmall) }
       if (state.listLoading && state.items.isEmpty()) item {
         BrandLoadingPanel(modifier = Modifier.testTag("automation-list-loading"))
       }
@@ -82,35 +82,12 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
         modifier = Modifier.testTag("automation-list-retry")) {
         Text(stringResource(R.string.progress_load_failed))
       } }
-      if (!state.listLoading && !state.listError && shown.isEmpty()) item {
-        Text(stringResource(if (state.items.isEmpty()) R.string.automation_empty else R.string.progress_no_matches))
+      if (state.listLoaded && !state.listLoading && !state.listError && shown.isEmpty()) item {
+        if (state.items.isEmpty() && filter == "all" && search.isBlank() && query.isEmpty())
+          AutomationIdeas(showIntro = true, onSelect = onSchedule)
+        else Text(stringResource(R.string.progress_no_matches))
       }
       items(shown, key = { it.id }) { item -> AutomationCard(item, onOpen) }
-    }
-  }
-}
-
-@Composable
-internal fun AutomationCreateContent(name: String, onNameChange: (String) -> Unit,
-  instruction: String, onInstructionChange: (String) -> Unit, cron: String,
-  onCronChange: (String) -> Unit, busy: Boolean, error: Boolean, onSave: () -> Unit) {
-  val valid = name.trim().isNotEmpty() && name.trim().length <= 200 &&
-    instruction.trim().isNotEmpty() && instruction.trim().length <= 50000 &&
-    cron.trim().isNotEmpty() && cron.trim().length <= 256
-  Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    OutlinedTextField(name, { onNameChange(it.take(200)) }, label = { Text(stringResource(R.string.automation_name)) },
-      singleLine = true, modifier = Modifier.fillMaxWidth().testTag("automation-create-name"))
-    OutlinedTextField(instruction, { onInstructionChange(it.take(50000)) },
-      label = { Text(stringResource(R.string.automation_instruction)) },
-      minLines = 4, modifier = Modifier.fillMaxWidth().testTag("automation-create-instruction"))
-    OutlinedTextField(cron, { onCronChange(it.take(256)) },
-      label = { Text(stringResource(R.string.automation_cron)) },
-      singleLine = true, modifier = Modifier.fillMaxWidth().testTag("automation-create-cron"))
-    if (error) Text(stringResource(R.string.automation_create_error),
-      color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("automation-create-error"))
-    Button(onClick = onSave, enabled = valid && !busy,
-      modifier = Modifier.fillMaxWidth().testTag("automation-create-save")) {
-      Text(stringResource(R.string.automation_save))
     }
   }
 }

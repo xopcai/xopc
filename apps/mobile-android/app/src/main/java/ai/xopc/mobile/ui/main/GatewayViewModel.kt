@@ -164,6 +164,7 @@ data class ProgressUiState(
 data class AutomationUiState(
   val items: List<AutomationSummary> = emptyList(),
   val listLoading: Boolean = false,
+  val listLoaded: Boolean = false,
   val listError: Boolean = false,
   val selectedId: String? = null,
   val detail: AutomationSummary? = null,
@@ -179,9 +180,6 @@ data class AutomationUiState(
   val eventsError: Boolean = false,
   val actionBusy: Boolean = false,
   val actionError: Boolean = false,
-  val createBusy: Boolean = false,
-  val createError: Boolean = false,
-  val createdId: String? = null,
   val editBusy: Boolean = false,
   val editError: Boolean = false,
   val editedRevision: Int = 0,
@@ -272,6 +270,7 @@ data class ConnectionUiState(
   val conversationSearch: String = "",
   val selectedConversationId: String? = null,
   val taskConversationTaskId: String? = null,
+  val automationConfigurationChat: Boolean = false,
   val taskScopeLoading: Boolean = false,
   val messages: List<ConversationMessage> = emptyList(),
   val executionMessageId: String? = null,
@@ -426,6 +425,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   private val connectionWaitRepository = ConnectionWaitRepository(session)
   private val progressRepository = ProgressRepository(session)
   private val automationRepository = AutomationRepository(session)
+  val personalOverviewAccess = ai.xopc.mobile.gateway.PersonalOverviewAccess(session, automationRepository)
   private val noteRepository = NoteRepository(session)
   private val fileRepository = FileRepository(session)
   private val shareRepository = ShareRepository(session)
@@ -939,7 +939,11 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
-  fun beginNoteDraft() {
+  fun beginNoteDraft() = beginNoteDraft(null)
+
+  fun beginProjectNoteDraft(projectId: String) = beginNoteDraft(projectId)
+
+  private fun beginNoteDraft(projectId: String?) {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
     if (mutableState.value.notes.draftLoading || mutableState.value.notes.draftSaving ||
       mutableState.value.notes.metadataBusy) return
@@ -955,7 +959,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       try {
         val draft = withContext(Dispatchers.IO) { noteDraftLock.withLock {
           if (previous != null && previous.version != previousSynced) noteDraftStore.save(gatewayId, previous)
-          noteDraftStore.create(gatewayId)
+          noteDraftStore.create(gatewayId, projectId)
         } }
         if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(notes = it.notes.copy(draft = draft, draftLoading = false,
@@ -1871,7 +1875,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       try {
         val items = runInterruptible(Dispatchers.IO) { automationRepository.list() }
         if (revision == automationRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(automations = it.progress.automations.copy(items = items)))
+          it.copy(progress = it.progress.copy(automations = it.progress.automations.copy(items = items, listLoaded = true)))
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
@@ -2039,30 +2043,16 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
-  fun createAutomation(name: String, instruction: String, cron: String, key: String) {
-    val gatewayId = mutableState.value.profile?.gatewayId ?: return
-    if (mutableState.value.progress.automations.createBusy) return
-    mutableState.update { it.copy(progress = it.progress.copy(automations =
-      it.progress.automations.copy(createBusy = true, createError = false, createdId = null))) }
-    viewModelScope.launch {
-      try {
-        val created = runInterruptible(Dispatchers.IO) {
-          automationRepository.create(name, instruction, cron, key)
-        }
-        if (mutableState.value.profile?.gatewayId == gatewayId) {
-          mutableState.update { it.copy(progress = it.progress.copy(automations =
-            it.progress.automations.copy(createBusy = false, createdId = created.id))) }
-          loadAutomations()
-        }
-      } catch (error: CancellationException) { throw error }
-      catch (_: Exception) {
-        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(progress = it.progress.copy(automations =
-            it.progress.automations.copy(createBusy = false, createError = true)))
-        }
-      }
+  suspend fun requestAutomationConfiguration(projectId: String?, personalLocale: String?): String {
+    val gatewayId = mutableState.value.profile?.gatewayId ?: error("NO_GATEWAY")
+    return runInterruptible(Dispatchers.IO) {
+      session.withActiveGateway(gatewayId) { automationRepository.openConfiguration(projectId, personalLocale) }
     }
   }
+
+  fun showAutomationConfiguration(id: String, prompt: String) =
+    selectConversationScoped(id, null, remember = false, fallbackToPersonal = false,
+      automationConfiguration = true, initialDraft = prompt)
 
   fun updateAutomation(id: String, name: String, instruction: String, cron: String, key: String) {
     val current = mutableState.value
@@ -2368,6 +2358,16 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
+  suspend fun writeProgressProject(mutation: ai.xopc.mobile.gateway.ProjectMutation): ProgressProject {
+    val gatewayId = mutableState.value.profile?.gatewayId ?: error("NO_GATEWAY")
+    val project = runInterruptible(Dispatchers.IO) {
+      session.withActiveGateway(gatewayId) { progressRepository.writeProject(mutation) }
+    }
+    check(mutableState.value.profile?.gatewayId == gatewayId)
+    loadProgressProjects()
+    return project
+  }
+
   fun createProgressTask(title: String, body: String, projectId: String) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: return
@@ -2637,7 +2637,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       current.personal.assertionSaving || current.notes.draftSaving ||
       current.shares.busyId != null ||
       current.progress.commandBusy || current.progress.editBusy || current.progress.createBusy ||
-      current.progress.automations.actionBusy || current.progress.automations.createBusy ||
+      current.progress.automations.actionBusy ||
       current.progress.automations.editBusy || current.progress.automations.deleteBusy
   }
 
@@ -2684,6 +2684,8 @@ class GatewayViewModel internal constructor(application: Application, private va
   }
 
   private suspend fun adoptGateway(profile: GatewayProfile?) {
+    val currentMusic = ai.xopc.mobile.playback.MusicPlayback.state.value?.track
+    if (currentMusic != null && currentMusic.gatewayId != profile?.gatewayId) ai.xopc.mobile.playback.MusicPlayback.stop()
     gatewayProbeGeneration++
     val profiles = withContext(Dispatchers.IO) { session.savedProfiles() }
     mutableState.value = ConnectionUiState(profile = profile, gatewayProfiles = profiles,
@@ -2968,7 +2970,9 @@ class GatewayViewModel internal constructor(application: Application, private va
   fun restoreConversation(id: String) = selectConversationScoped(id, null, remember = false)
 
   fun retryConversation(id: String) = selectConversationScoped(id,
-    mutableState.value.taskConversationTaskId, remember = false)
+    mutableState.value.taskConversationTaskId, remember = false,
+    fallbackToPersonal = mutableState.value.taskConversationTaskId == null && !mutableState.value.automationConfigurationChat,
+    automationConfiguration = mutableState.value.automationConfigurationChat)
 
   fun beginConversationShare(id: String) {
     val current = mutableState.value
@@ -3026,7 +3030,8 @@ class GatewayViewModel internal constructor(application: Application, private va
   }
 
   private fun selectConversationScoped(id: String, taskId: String?, remember: Boolean = taskId == null,
-    fallbackToPersonal: Boolean = taskId == null) {
+    fallbackToPersonal: Boolean = taskId == null, automationConfiguration: Boolean = false,
+    initialDraft: String = "") {
     discardStream()
     if (mutableState.value.profile == null || mutableState.value.discardingDraftId == id ||
       mutableState.value.pendingDeleteId == id) return
@@ -3051,6 +3056,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     realtime.watchRun(null)
     val revision = ++historyRevision
     mutableState.update { it.copy(selectedConversationId = id, taskConversationTaskId = taskId, restoringHomeChat = false,
+      automationConfigurationChat = automationConfiguration,
       clarification = null, clarificationBusy = false, clarificationError = null,
       taskScopeLoading = taskId == null, messages = emptyList(), draftText = "", draftRefs = emptyList(),
       draftAttachments = emptyList(), attachmentLoading = false, attachmentError = false, historyLoading = true,
@@ -3079,6 +3085,7 @@ class GatewayViewModel internal constructor(application: Application, private va
         refWriteJob?.join()
         val restored = runInterruptible(Dispatchers.IO) {
           if (remember) session.saveMainConversationId(id)
+          if (initialDraft.isNotBlank()) conversations.saveComposerDraft(id, initialDraft)
           RestoredComposer(conversations.draft(id), conversations.composerDraft(id),
             conversations.composerRefs(id), conversations.composerAttachments(id), conversations.pendingInput(id))
         }
@@ -3841,29 +3848,6 @@ class GatewayViewModel internal constructor(application: Application, private va
   suspend fun transcribeAudio(bytes: ByteArray, language: String): String =
     withContext(Dispatchers.IO) { session.transcribeAudio(bytes, language) }
 
-  suspend fun addVoiceDraftAttachment(bytes: ByteArray, durationSeconds: Int) {
-    val current = mutableState.value
-    val gatewayId = current.profile?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
-    val conversationId = current.selectedConversationId ?: throw IllegalStateException("NO_CONVERSATION")
-    require(!current.sending && current.pendingInput == null && !current.attachmentLoading) {
-      "COMPOSER_BUSY"
-    }
-    mutableState.update { it.copy(attachmentLoading = true, attachmentError = false) }
-    try {
-      val items = runInterruptible(Dispatchers.IO) {
-        conversations.addComposerVoice(gatewayId, conversationId, bytes, durationSeconds)
-        conversations.composerAttachments(conversationId)
-      }
-      if (mutableState.value.profile?.gatewayId == gatewayId &&
-        mutableState.value.selectedConversationId == conversationId) mutableState.update {
-        it.copy(draftAttachments = items, attachmentLoading = false)
-      }
-    } catch (failure: Exception) {
-      mutableState.update { it.copy(attachmentLoading = false, attachmentError = true) }
-      throw failure
-    }
-  }
-
   suspend fun sendVoiceRecording(bytes: ByteArray, durationSeconds: Int) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
@@ -4087,14 +4071,21 @@ class GatewayViewModel internal constructor(application: Application, private va
     createConversationFor(mutableState.value.defaultAgentId, false)
   }
 
-  fun createProjectConversation(projectId: String) {
+  suspend fun createProjectConversation(projectId: String): String {
     val current = mutableState.value
-    val project = current.progress.project
-    if (project?.id != projectId ||
-      !projectId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) return
-    createConversationFor(project.defaultAgentId?.takeIf(String::isNotBlank) ?: "main", false,
-      projectId = projectId,
-      executionMode = if (project.workspaceRoot.isNullOrBlank()) null else project.executionMode)
+    val profile = checkNotNull(current.profile)
+    val project = checkNotNull(current.progress.project?.takeIf { it.id == projectId })
+    draftWriteJob?.join()
+    val draft = runInterruptible(Dispatchers.IO) {
+      val active = session.currentProfile()
+      check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+      conversations.createDraft(project.defaultAgentId?.takeIf(String::isNotBlank) ?: "main",
+        projectId, if (project.workspaceRoot.isNullOrBlank()) null else project.executionMode)
+    }
+    val active = mutableState.value.profile
+    check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+    loadConversations()
+    return draft.conversationId
   }
 
   fun dismissComposerErrors(gatewayId: String?, conversationId: String?) {
@@ -4354,7 +4345,7 @@ class GatewayViewModel internal constructor(application: Application, private va
 
   fun switchAgent(agentId: String, discardCurrentDraft: Boolean) {
     if (mutableState.value.agents.none { it.id == agentId }) return
-    createConversationFor(agentId, discardCurrentDraft)
+    createConversationFor(agentId, discardCurrentDraft, projectId = mutableState.value.context?.project?.id)
   }
 
   private fun createConversationFor(agentId: String, discardCurrentDraft: Boolean,

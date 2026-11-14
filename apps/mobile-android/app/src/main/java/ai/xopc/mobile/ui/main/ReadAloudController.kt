@@ -39,6 +39,7 @@ internal class ReadAloudController(private val context: Context, private val sco
   private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
   fun speak(markdown: String, sourceId: String, fallbackLanguage: String) {
+    ai.xopc.mobile.playback.MusicPlayback.pause()
     stop()
     val chunks = speechChunks(markdown)
     if (chunks.isEmpty()) return

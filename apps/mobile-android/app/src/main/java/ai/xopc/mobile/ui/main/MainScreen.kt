@@ -27,6 +27,9 @@ import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.GeneratedMediaAccess
 import ai.xopc.mobile.gateway.GeneratedMediaItem
 import ai.xopc.mobile.gateway.GeneratedMediaKind
+import ai.xopc.mobile.playback.MusicPhase
+import ai.xopc.mobile.playback.MusicPlayback
+import ai.xopc.mobile.playback.MusicTrack
 import ai.xopc.mobile.gateway.generatedMediaByReply
 import ai.xopc.mobile.gateway.ConversationTarget
 import ai.xopc.mobile.gateway.CameraCaptureStore
@@ -52,6 +55,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.combinedClickable
@@ -101,6 +105,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -114,8 +119,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -123,6 +126,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -177,6 +182,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -345,7 +351,7 @@ fun MainScreen(
   onCreateConversation: () -> Unit = {},
   onSearchExternalConversations: suspend (String) -> List<ConversationSummary> = { emptyList() },
   onAppendExternalFiles: suspend (ai.xopc.mobile.gateway.ExternalFileBatch, String?) -> Unit = { _, _ -> },
-  onCreateProjectConversation: (String) -> Unit = {},
+  onCreateProjectConversation: suspend (String) -> String = { error("UNAVAILABLE") },
   onDiscardDraft: (String) -> Unit = {},
   onBeginRename: (String) -> Unit = {},
   onRenameDraftChange: (String) -> Unit = {},
@@ -396,7 +402,9 @@ fun MainScreen(
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
-  onCreateAutomation: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+  personalOverviewAccess: ai.xopc.mobile.gateway.PersonalOverviewAccess? = null,
+  onRequestAutomationConfiguration: suspend (String?, String?) -> String = { _, _ -> error("UNAVAILABLE") },
+  onShowAutomationConfiguration: (String, String) -> Unit = { _, _ -> },
   onUpdateAutomation: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
   onDeleteAutomation: (String, String) -> Unit = { _, _ -> },
   onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
@@ -408,6 +416,8 @@ fun MainScreen(
   onCreateTaskWithChat: () -> Unit = {},
   onLoadProgressProjects: () -> Unit = {},
   onOpenProgressProject: (String) -> Unit = {},
+  onWriteProgressProject: suspend (ai.xopc.mobile.gateway.ProjectMutation) -> ai.xopc.mobile.gateway.ProgressProject = { error("UNAVAILABLE") },
+  onCreateProjectNote: (String) -> Unit = {},
   onCreateProgressTask: (String, String, String) -> Unit = { _, _, _ -> },
   onOpenTaskChat: (String) -> Unit = {},
   onSaveProgressTask: (String, Int, ProgressTaskEdit) -> Unit = { _, _, _ -> },
@@ -438,9 +448,6 @@ fun MainScreen(
   onVoiceClarification: suspend (String, Int, String, String) -> Unit = { _, _, _, _ -> },
   onPendingVoiceApproval: suspend (String) -> VoiceApproval? = { null },
   onRespondVoiceApproval: suspend (VoiceApproval, Boolean) -> Unit = { _, _ -> },
-  onAddVoiceAttachment: suspend (ByteArray, Int) -> Unit = { _, _ ->
-    throw IllegalStateException("VOICE_UNAVAILABLE")
-  },
   onSendVoiceRecording: suspend (ByteArray, Int) -> Unit = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
@@ -702,7 +709,9 @@ fun MainScreen(
     onOpenAutomation = onOpenAutomation,
     onOpenAutomationRun = onOpenAutomationRun,
     onAutomationAction = onAutomationAction,
-    onCreateAutomation = onCreateAutomation,
+    personalOverviewAccess = personalOverviewAccess,
+    onRequestAutomationConfiguration = onRequestAutomationConfiguration,
+    onShowAutomationConfiguration = onShowAutomationConfiguration,
     onUpdateAutomation = onUpdateAutomation,
     onDeleteAutomation = onDeleteAutomation,
     onAutomationRunAction = onAutomationRunAction,
@@ -712,6 +721,7 @@ fun MainScreen(
     onCreateTaskWithChat = onCreateTaskWithChat,
     onLoadProgressProjects = onLoadProgressProjects,
     onOpenProgressProject = onOpenProgressProject,
+    onWriteProgressProject = onWriteProgressProject, onCreateProjectNote = onCreateProjectNote,
     onCreateProgressTask = onCreateProgressTask,
     onOpenTaskChat = onOpenTaskChat,
     onSaveProgressTask = onSaveProgressTask,
@@ -729,7 +739,6 @@ fun MainScreen(
     onVoiceClarification = onVoiceClarification,
     onPendingVoiceApproval = onPendingVoiceApproval,
     onRespondVoiceApproval = onRespondVoiceApproval,
-    onAddVoiceAttachment = onAddVoiceAttachment,
     onSendVoiceRecording = onSendVoiceRecording,
     onCopyMessageText = { value ->
       (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
@@ -822,7 +831,7 @@ fun MainScreen(
     } })
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun MainContent(
   selectedTab: HomeTab,
@@ -843,7 +852,7 @@ internal fun MainContent(
   onRetryConversation: (String) -> Unit = onSelectConversation,
   onSelectTaskChildConversation: (String, String) -> Unit = { _, _ -> },
   onCreateConversation: () -> Unit = {},
-  onCreateProjectConversation: (String) -> Unit = {},
+  onCreateProjectConversation: suspend (String) -> String = { error("UNAVAILABLE") },
   onDiscardDraft: (String) -> Unit = {},
   onBeginRename: (String) -> Unit = {},
   onRenameDraftChange: (String) -> Unit = {},
@@ -892,7 +901,9 @@ internal fun MainContent(
   onOpenAutomation: (String) -> Unit = {},
   onOpenAutomationRun: (String) -> Unit = {},
   onAutomationAction: (String, String) -> Unit = { _, _ -> },
-  onCreateAutomation: (String, String, String, String) -> Unit = { _, _, _, _ -> },
+  personalOverviewAccess: ai.xopc.mobile.gateway.PersonalOverviewAccess? = null,
+  onRequestAutomationConfiguration: suspend (String?, String?) -> String = { _, _ -> error("UNAVAILABLE") },
+  onShowAutomationConfiguration: (String, String) -> Unit = { _, _ -> },
   onUpdateAutomation: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
   onDeleteAutomation: (String, String) -> Unit = { _, _ -> },
   onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
@@ -904,6 +915,8 @@ internal fun MainContent(
   onCreateTaskWithChat: () -> Unit = {},
   onLoadProgressProjects: () -> Unit = {},
   onOpenProgressProject: (String) -> Unit = {},
+  onWriteProgressProject: suspend (ai.xopc.mobile.gateway.ProjectMutation) -> ai.xopc.mobile.gateway.ProgressProject = { error("UNAVAILABLE") },
+  onCreateProjectNote: (String) -> Unit = {},
   onCreateProgressTask: (String, String, String) -> Unit = { _, _, _ -> },
   onOpenTaskChat: (String) -> Unit = {},
   onSaveProgressTask: (String, Int, ProgressTaskEdit) -> Unit = { _, _, _ -> },
@@ -934,9 +947,6 @@ internal fun MainContent(
   onVoiceClarification: suspend (String, Int, String, String) -> Unit = { _, _, _, _ -> },
   onPendingVoiceApproval: suspend (String) -> VoiceApproval? = { null },
   onRespondVoiceApproval: suspend (VoiceApproval, Boolean) -> Unit = { _, _ -> },
-  onAddVoiceAttachment: suspend (ByteArray, Int) -> Unit = { _, _ ->
-    throw IllegalStateException("VOICE_UNAVAILABLE")
-  },
   onSendVoiceRecording: suspend (ByteArray, Int) -> Unit = { _, _ ->
     throw IllegalStateException("VOICE_UNAVAILABLE")
   },
@@ -1032,10 +1042,6 @@ internal fun MainContent(
     try { awaitCancellation() }
     finally { withContext(NonCancellable) { voiceCall.stop() } }
   }
-  val voiceMemo = remember(gatewayId, conversationId) {
-    VoiceMemoRecorder(voiceContext)
-  }
-  DisposableEffect(voiceMemo) { onDispose { voiceMemo.cancel() } }
   val inputVoice = remember(gatewayId, conversationId, selectedTab) {
     VoiceMemoRecorder(voiceContext)
   }
@@ -1066,13 +1072,11 @@ internal fun MainContent(
     else inputVoiceNotice.show(inputVoicePermissionDeniedText)
   }
   val voiceFocusManager = LocalFocusManager.current
-  DisposableEffect(lifecycleOwner, voiceCall, voiceMemo, inputVoice) {
+  DisposableEffect(lifecycleOwner, voiceCall, inputVoice) {
     val observer = LifecycleEventObserver { _, event ->
       if (event == Lifecycle.Event.ON_STOP) {
         permissionTarget = null; inputVoiceNotice.clear()
         onDismissComposerErrors(gatewayId, conversationId)
-        if (voiceMemo.phase == "recording" || voiceMemo.phase == "paused")
-          voiceMemo.stopRecording()
         if (voiceCall.phase != "idle") voiceCall.onBackground()
         if (inputVoice.phase != "idle") {
           inputVoice.cancel(); inputVoiceHeld = false
@@ -1083,15 +1087,6 @@ internal fun MainContent(
     }
     lifecycleOwner.lifecycle.addObserver(observer)
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-  }
-  var voiceMemoSending by remember(voiceMemo) { mutableStateOf(false) }
-  var voiceMemoError by remember(voiceMemo) { mutableStateOf(false) }
-  var voiceElapsed by remember(voiceMemo) { mutableIntStateOf(0) }
-  LaunchedEffect(voiceMemo.phase) {
-    while (voiceMemo.phase == "recording") {
-      voiceElapsed = voiceMemo.elapsedSeconds
-      delay(500)
-    }
   }
   var pendingVoiceMode by remember(gatewayId) { mutableStateOf<String?>(null) }
   var activeVoiceConversationId by remember(gatewayId) { mutableStateOf<String?>(null) }
@@ -1116,13 +1111,94 @@ internal fun MainContent(
     if (ContextCompat.checkSelfPermission(voiceContext, Manifest.permission.RECORD_AUDIO) !=
       PackageManager.PERMISSION_GRANTED) return@LaunchedEffect
     pendingVoiceMode = null
-    if (mode == "record") { voiceElapsed = 0; voiceMemo.start() } else {
-      activeVoiceConversationId = id
-      voiceCall.start(id, mode)
-    }
+    MusicPlayback.pause()
+    activeVoiceConversationId = id
+    voiceCall.start(id, mode)
   }
   var personalPage by rememberSaveable(gatewayId) { mutableStateOf("home") }
   val taskNavigation = rememberTaskChatNavigation(connection)
+  var personalOverviewOpen by rememberSaveable(gatewayId) { mutableStateOf(false) }
+  var editingOverviewProfile by remember(gatewayId) { mutableStateOf(false) }
+  var overviewMedia by remember(gatewayId) { mutableStateOf<MessagePreviewRequest?>(null) }
+  val overviewAgent = connection.personal.agent?.takeIf { it.state == "ready" && it.conversationId == conversationId }
+  val showOverview = personalOverviewOpen && selectedTab == HomeTab.Assistant && overviewAgent != null && !connection.automationConfigurationChat
+  val overviewState = rememberSaveableStateHolder()
+  val playback = MusicPlayback.state.collectAsStateWithLifecycle()
+  val currentMusic by remember { derivedStateOf { playback.value?.track } }
+  val activeMusic = currentMusic?.takeIf { it.gatewayId == gatewayId }
+  var inlineMusicKey by remember(gatewayId) { mutableStateOf<String?>(null) }
+  var musicPlayerOpen by rememberSaveable(gatewayId) { mutableStateOf(false) }
+  val downloadMusic = rememberMusicDownload(generatedMediaAccess)
+  LaunchedEffect(gatewayId, currentMusic?.gatewayId) {
+    if (gatewayId != null && currentMusic?.gatewayId?.let { it != gatewayId } == true) MusicPlayback.stop()
+  }
+  var automationReturnTab by rememberSaveable(gatewayId) { mutableStateOf(HomeTab.Assistant) }
+  var automationReturnConversation by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
+  var openingAutomation by remember(gatewayId) { mutableStateOf(false) }
+  val activeTab by rememberUpdatedState(selectedTab)
+  val activeGateway by rememberUpdatedState(gatewayId)
+  val activeConversation by rememberUpdatedState(conversationId)
+  val activeProject by rememberUpdatedState(connection.progress.projectId)
+  var projectChatId by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
+  var projectChatTitle by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
+  var projectChatReturnTab by rememberSaveable(gatewayId) { mutableStateOf(HomeTab.Projects) }
+  var projectChatReturnConversation by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
+  var openingProjectChat by remember(gatewayId) { mutableStateOf(false) }
+  val showingProjectChat = projectChatId != null && projectChatId == conversationId &&
+    selectedTab == HomeTab.Assistant
+  val newProjectChatTitle = stringResource(R.string.assistant_action_new_chat)
+  fun openProjectChat(id: String, title: String) {
+    projectChatId = id
+    projectChatTitle = title
+    projectChatReturnTab = selectedTab
+    projectChatReturnConversation = conversationId
+    onRestoreConversation(id)
+    onSelectTab(HomeTab.Assistant)
+  }
+  fun closeProjectChat() {
+    projectChatId = null
+    projectChatTitle = null
+    projectChatReturnConversation?.let(onRestoreConversation) ?: onOpenPersonalAgent()
+    connection.progress.projectId?.let(onOpenProgressProject)
+    onSelectTab(projectChatReturnTab)
+  }
+  val automationLocale = LocalConfiguration.current.locales[0].toLanguageTag()
+  fun arrangeAutomation(projectId: String?, personal: Boolean, prompt: String) {
+    if (openingAutomation || gatewayId == null || connection.automationConfigurationChat) return
+    openingAutomation = true
+    val sourceTab = selectedTab
+    val sourceConversation = conversationId
+    voiceScope.launch {
+      try {
+        val id = onRequestAutomationConfiguration(projectId, automationLocale.takeIf { personal })
+        if (activeTab != sourceTab || activeGateway != gatewayId || activeConversation != sourceConversation ||
+          projectId != null && activeProject != projectId) return@launch
+        automationReturnTab = sourceTab
+        automationReturnConversation = sourceConversation
+        onShowAutomationConfiguration(id, prompt)
+        onSelectTab(HomeTab.Assistant)
+      } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+      } catch (error: Exception) {
+        if (activeTab == sourceTab && activeGateway == gatewayId && activeConversation == sourceConversation)
+          Toast.makeText(voiceContext, if (personal && (error as? ai.xopc.mobile.gateway.GatewayHttpException)?.status == 400)
+            R.string.automation_setup_personal_update_gateway else R.string.automation_create_error, Toast.LENGTH_SHORT).show()
+      } finally { openingAutomation = false }
+    }
+  }
+  fun closeAutomationConfiguration() {
+    automationReturnConversation?.let(onRestoreConversation) ?: onOpenPersonalAgent()
+    when (automationReturnTab) {
+      HomeTab.Automations -> onLoadAutomations()
+      HomeTab.Projects -> connection.progress.project?.id?.let(onOpenProgressProject)
+      HomeTab.Progress -> {
+        onLoadAutomations()
+        connection.progress.project?.id?.let(onOpenProgressProject)
+      }
+      else -> Unit
+    }
+    onSelectTab(automationReturnTab)
+  }
   val libraryDelivery = rememberSaveable(gatewayId) { mutableStateOf("") }
   val deliveryRoute = libraryDelivery.value
   val libraryDeliveryKind = deliveryRoute.substringBefore(':')
@@ -1134,6 +1210,7 @@ internal fun MainContent(
     linkedDetails = linkedDetails + LinkedDetail(selectedTab, destination, id)
     onSelectTab(destination)
   }
+  var settingsFromSidebar by rememberSaveable(gatewayId) { mutableStateOf(false) }
   var personalReturnPage by rememberSaveable(gatewayId) { mutableStateOf("home") }
   var personalStartSection by rememberSaveable(gatewayId) { mutableStateOf("overview") }
   var personalDetailId by rememberSaveable(gatewayId) { mutableStateOf("") }
@@ -1155,6 +1232,10 @@ internal fun MainContent(
       personalPage = "settings"
     } else if (personalPage == "settings-add") {
       personalPage = "settings-gateways"
+    } else if (personalPage == "settings" && settingsFromSidebar) {
+      settingsFromSidebar = false
+      personalPage = "home"
+      onSelectTab(HomeTab.Assistant)
     } else personalPage = "home"
   }
   LaunchedEffect(connection.personal.assertionDeletedRevision) {
@@ -1314,7 +1395,9 @@ internal fun MainContent(
   val phoneController = rememberPhoneWorkspace(phoneRepository, conversationId,
     gatewayId, selectedTab == HomeTab.Assistant, phonePage)
   val phoneUi = phoneWorkspaceState(phoneController)
-  val showBottomChrome = isPaired && selectedTab == HomeTab.Assistant && !phonePage &&
+  val showMusicMini = activeMusic != null &&
+    (selectedTab != HomeTab.Assistant || phonePage || inlineMusicKey != activeMusic.key || activeMusic.conversationId != conversationId)
+  val showBottomChrome = isPaired && selectedTab == HomeTab.Assistant && !phonePage && !showOverview &&
     (conversationId != null || !connection.restoringHomeChat)
   LaunchedEffect(showBottomChrome) {
     if (!showBottomChrome) {
@@ -1377,6 +1460,11 @@ internal fun MainContent(
   BackHandler(enabled = selectedTab == HomeTab.Assistant && isTaskChat(connection) && !imeVisible) {
     taskNavigation.close(onRestoreConversation, onSelectTab)
   }
+  BackHandler(enabled = selectedTab == HomeTab.Assistant && connection.automationConfigurationChat && !imeVisible) {
+    closeAutomationConfiguration()
+  }
+  BackHandler(enabled = showingProjectChat && !imeVisible, onBack = ::closeProjectChat)
+  BackHandler(enabled = showOverview) { personalOverviewOpen = false }
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
   BackHandler(enabled = selectedTab == HomeTab.Me && personalPage != "home") { leavePersonalPage() }
   BoxWithConstraints(modifier.fillMaxSize()) {
@@ -1395,7 +1483,9 @@ internal fun MainContent(
     containerColor = MaterialTheme.colorScheme.background,
     bottomBar = {
       if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-          MainBottomSurface("assistant-bottom-surface") {
+          if (showMusicMini) MusicMiniPlayer(activeMusic, { musicPlayerOpen = true },
+            Modifier.padding(horizontal = 12.dp).padding(bottom = 4.dp))
+          MainBottomSurface("assistant-bottom-surface", assistantActionsOpen) {
             AssistantComposer(connection, assistantComposerValue, { value ->
               inputVoiceNotice.clear()
               onDismissComposerErrors(gatewayId, conversationId)
@@ -1419,32 +1509,27 @@ internal fun MainContent(
               exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) +
                 fadeOut(animationSpec = tween(180)), label = "assistant-actions") {
               AssistantActionPanel(
-                canCreate = !connection.creatingConversation && !connection.sending,
-                onSearch = {
-                  assistantActionsOpen = false
-                  messageSearchOpen = true
-                },
+                canRecord = !inputVoiceBusy && !inputVoiceMode && inputVoice.phase == "idle" && !connection.sending,
                 canReference = !connection.sending && connection.pendingInput == null,
                 canPick = !connection.sending && !connection.attachmentLoading &&
                   connection.pendingInput == null && connection.draftAttachments.size < 10,
                 onPick = { kind ->
                   assistantActionsOpen = false
                   onPickDraftAttachment(kind)
-                }, onVoiceAction = { mode ->
+                }, onVoiceAction = {
                   assistantActionsOpen = false
-                  requestVoice(mode)
+                  toggleInputVoice()
                 }, onOpenReference = { kind ->
                   assistantActionsOpen = false
                   assistantReferenceQuery = ""
                   assistantReferenceKind = kind
-                }, onCreateConversation = {
-                  assistantActionsOpen = false
-                  onCreateConversation()
                 })
             }
           }
-        Spacer(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)
-           .navigationBarsPadding().height(6.dp).testTag("bottom-content-mask"))
+        Spacer(Modifier.fillMaxWidth().navigationBarsPadding().testTag("bottom-content-mask"))
+      } else if (showMusicMini && !showOverview) {
+        MusicMiniPlayer(activeMusic, { musicPlayerOpen = true }, Modifier.navigationBarsPadding()
+          .padding(horizontal = 12.dp, vertical = 7.dp))
       }
     },
   ) { insets ->
@@ -1517,9 +1602,18 @@ internal fun MainContent(
           messageSearchOpen = messageSearchOpen,
           onMessageSearchOpenChange = { messageSearchOpen = it },
           onOpenSidebar = openSidebar, onRetryHomeChat = onOpenPersonalAgent,
+          onCloseAutomationConfiguration = ::closeAutomationConfiguration,
+          projectChatTitle = projectChatTitle.takeIf { showingProjectChat },
+          onCloseProjectChat = { closeKeyboard(); closeProjectChat() },
+          onOpenPersonalOverview = {
+            closeKeyboard()
+            overviewState.removeState("personal-overview-$gatewayId")
+            personalOverviewOpen = true
+          },
           sidebarGesture = Modifier.openSidebarOnSwipe(
             !sidebar.open && !assistantActionsOpen && !messageSearchOpen && !inputVoiceHeld &&
-              !isTaskChat(connection) && !phonePage && sidebarWidthPx > 0,
+              !isTaskChat(connection) && !connection.automationConfigurationChat && !showingProjectChat &&
+              !showOverview && !phonePage && sidebarWidthPx > 0,
             leftBackEdge, rightBackEdge,
             onDrag = {
               if (sidebar.dragFraction == null) closeKeyboard()
@@ -1545,6 +1639,10 @@ internal fun MainContent(
             requestVoice("auto")
           },
           generatedMediaAccess = generatedMediaAccess.takeUnless { phonePage },
+          activeMusic = activeMusic,
+          onInlineMusic = { inlineMusicKey = it },
+          onExpandMusic = { musicPlayerOpen = true },
+          onDownloadMusic = downloadMusic,
           taskChrome = { search, options ->
             TaskConversationChrome(connection, taskNavigation, onRestoreConversation, onSelectTab,
               onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, onSaveProgressTask,
@@ -1583,23 +1681,44 @@ internal fun MainContent(
           onSaveProgressTask, onHomeAction = onProgressHomeAction,
           onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
           onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
-          onCreateAutomation = onCreateAutomation,
+          onArrangeAutomation = { id, prompt -> arrangeAutomation(id, false, prompt) },
+          onWriteProject = onWriteProgressProject,
+          onCreateProjectNote = { projectId ->
+            onCreateProjectNote(projectId)
+            openLinkedDetail(HomeTab.Notes, "project-note-$projectId")
+          },
           onUpdateAutomation = onUpdateAutomation,
           onDeleteAutomation = onDeleteAutomation,
           onAutomationRunAction = onAutomationRunAction,
           onOpenChat = { id ->
           onSelectConversation(id)
           onSelectTab(HomeTab.Assistant)
+        }, onOpenProjectChat = { session ->
+          openProjectChat(session.id, session.title.takeUnless { session.isLocalDraft || it.isBlank() } ?: newProjectChatTitle)
         }, onOpenNote = { id -> openLinkedDetail(HomeTab.Notes, id) }, onCreateProjectChat = { projectId ->
-          if (!connection.creatingConversation && connection.progress.project?.id == projectId) {
-            onCreateProjectConversation(projectId)
-            onSelectTab(HomeTab.Assistant)
+          if (!openingProjectChat && !connection.creatingConversation && connection.progress.project?.id == projectId) {
+            openingProjectChat = true
+            val sourceTab = selectedTab
+            val sourceConversation = conversationId
+            voiceScope.launch {
+              fun sourceActive() = activeGateway == gatewayId && activeTab == sourceTab &&
+                activeConversation == sourceConversation && activeProject == projectId
+              try {
+                val id = onCreateProjectConversation(projectId)
+                if (sourceActive()) openProjectChat(id, newProjectChatTitle)
+              } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+              } catch (_: Exception) {
+                if (sourceActive())
+                  Toast.makeText(voiceContext, R.string.project_save_error, Toast.LENGTH_SHORT).show()
+              } finally { openingProjectChat = false }
+            }
           }
-        }, chatBusy = connection.creatingConversation,
+        }, chatBusy = connection.creatingConversation || openingProjectChat,
           initialPage = when (selectedTab) {
             HomeTab.Projects -> if (linkedDetailId == null) "projects" else "project"
             HomeTab.Automations -> if (linkedDetailId == null) "automations" else "automation"
-            else -> "overview"
+            else -> if (linkedDetailId == null) "overview" else "detail"
           },
           initialItemId = linkedDetailId,
           onExit = {
@@ -1637,8 +1756,11 @@ internal fun MainContent(
         onNoteFiles = onNoteFiles, onNoteFileText = onNoteFileText,
         onNoteFileContent = onNoteFileContent,
         onSaveFileVersion = { file, id -> onSaveFileVersion(gatewayId, file, id) },
-        initialNoteId = linkedDetailId,
+        initialNoteId = linkedDetailId?.takeUnless { it.startsWith("project-note-") },
+        initialProjectDraft = linkedDetailId?.startsWith("project-note-") == true,
         onExit = {
+          linkedDetailId?.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
+            ?.takeIf { it == connection.progress.projectId }?.let(onOpenProgressProject)
           if (linkedDetailId != null) tabStateHolder.removeState(tabStateKey)
           exitDestination()
         },
@@ -1720,11 +1842,58 @@ internal fun MainContent(
     }
     }
   }
+    if (showOverview) {
+      overviewState.SaveableStateProvider("personal-overview-$gatewayId") {
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        PersonalAgentOverview(personalOverviewAccess, overviewAgent, connection.personal.agentAvatar,
+          connection.clarification?.question, onClose = { personalOverviewOpen = false },
+          onEdit = { editingOverviewProfile = true },
+          onTask = { id -> openLinkedDetail(HomeTab.Progress, id) },
+          onSchedule = { prompt -> arrangeAutomation(null, true, prompt) },
+          onOpenSchedule = { id -> openLinkedDetail(HomeTab.Automations, id) },
+          onDelivery = { delivery ->
+            val source = delivery.conversationId ?: overviewAgent.conversationId
+            val media = delivery.media
+            val target = delivery.target
+            when {
+              delivery.musicJob != null && gatewayId != null && generatedMediaAccess != null -> {
+                if (activeMusic == null || activeMusic.conversationId != source || activeMusic.id != delivery.musicJob)
+                  playGeneratedMusic(voiceContext, generatedMediaAccess, MusicTrack(gatewayId, source, delivery.musicJob,
+                    delivery.title, delivery.taskTitle ?: overviewAgent.displayName))
+                musicPlayerOpen = true
+              }
+              media != null -> overviewMedia = MessagePreviewRequest(source, media)
+              target?.kind == "note" -> openLinkedDetail(HomeTab.Notes, target.id)
+              target?.kind == "task" -> openLinkedDetail(HomeTab.Progress, target.id)
+              target?.kind == "automation" -> openLinkedDetail(HomeTab.Automations, target.id)
+              target?.kind == "project" -> openLinkedDetail(HomeTab.Projects, target.id)
+              else -> {
+                personalOverviewOpen = false
+                onSelectConversation(if (target?.kind == "session") target.id else source)
+              }
+            }
+          }, modifier = Modifier.weight(1f))
+          if (activeMusic != null) MusicMiniPlayer(activeMusic, { musicPlayerOpen = true },
+            Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
+          Spacer(Modifier.navigationBarsPadding())
+        }
+      }
+      if (editingOverviewProfile) PersonalAgentProfileSheet(connection.personal, { editingOverviewProfile = false },
+        onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
+        onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel)
+      overviewMedia?.let { request ->
+        ModalBottomSheet(onDismissRequest = { overviewMedia = null }) {
+          MessageMediaPreview(request, onLoadMessageMedia, onResolveMessageFile,
+            { file, key -> onSaveFileVersion(gatewayId, file, key) }) { overviewMedia = null }
+        }
+      }
+    }
     ChatSidebar(sidebar, sidebarWidth, connection, onClose = { sidebar.open = false }, onRetry = onRefreshConversations,
       onDestination = { destination ->
         sidebar.open = false
         linkedDetails = emptyList()
         returnToSidebar = destination == HomeTab.Conversations
+        if (destination == HomeTab.Me) { personalPage = "settings"; settingsFromSidebar = true }
         onSelectTab(destination)
       },
       onPersonal = {
@@ -1740,6 +1909,14 @@ internal fun MainContent(
         onSelectConversation(id)
       })
   }
+  if (musicPlayerOpen && activeMusic != null) MusicPlayerSheet(activeMusic, { musicPlayerOpen = false },
+    onSource = {
+      musicPlayerOpen = false
+      personalOverviewOpen = false
+      if (conversationId != activeMusic.conversationId) onSelectConversation(activeMusic.conversationId)
+      onSelectTab(HomeTab.Assistant)
+    }, onDownload = { downloadMusic(activeMusic) })
+  LaunchedEffect(activeMusic) { if (activeMusic == null) musicPlayerOpen = false }
   var voiceExpanded by remember(voiceCall) { mutableStateOf(true) }
   var voiceMiniX by remember(voiceCall) { mutableStateOf(0f) }
   var voiceMiniY by remember(voiceCall) { mutableStateOf(0f) }
@@ -1865,64 +2042,17 @@ internal fun MainContent(
       }
     }
   }
-  if (voiceMemo.phase != "idle") AlertDialog(onDismissRequest = voiceMemo::cancel,
-    modifier = Modifier.testTag("voice-record-dialog"),
-    title = { Text(stringResource(R.string.assistant_action_voice)) },
-    text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-      Text(when (voiceMemo.phase) {
-        "recording" -> stringResource(R.string.voice_recording_seconds, voiceElapsed)
-        "paused" -> stringResource(R.string.voice_recording_paused_seconds, voiceMemo.elapsedSeconds)
-        "playing" -> stringResource(R.string.voice_playing)
-        "ready" -> stringResource(R.string.voice_recorded_seconds, voiceMemo.durationSeconds)
-        else -> stringResource(R.string.voice_record_error)
-      })
-      if (voiceMemo.error.isNotBlank() || voiceMemoError) Text(
-        voiceMemo.error.ifBlank { stringResource(R.string.voice_record_error) },
-        color = MaterialTheme.colorScheme.error)
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (voiceMemo.phase == "recording" || voiceMemo.phase == "paused") {
-          OutlinedButton(onClick = if (voiceMemo.phase == "recording")
-            voiceMemo::pauseRecording else voiceMemo::resumeRecording,
-            modifier = Modifier.testTag("voice-record-pause-resume")) {
-            Text(stringResource(if (voiceMemo.phase == "recording") R.string.voice_record_pause
-              else R.string.voice_record_resume))
-          }
-          Button(onClick = voiceMemo::stopRecording,
-            modifier = Modifier.testTag("voice-record-stop")) {
-            Text(stringResource(R.string.voice_record_stop))
-          }
-        }
-        if (voiceMemo.phase == "ready") {
-          OutlinedButton(onClick = voiceMemo::play,
-            modifier = Modifier.testTag("voice-record-preview")) { Text(stringResource(R.string.voice_preview)) }
-          Button(onClick = { voiceScope.launch {
-            voiceMemoSending = true; voiceMemoError = false
-            try {
-              val (bytes, seconds) = withContext(Dispatchers.IO) { voiceMemo.consume() }
-              onAddVoiceAttachment(bytes, seconds)
-              voiceMemo.cancel()
-            } catch (_: Exception) { voiceMemoError = true }
-            voiceMemoSending = false
-          } }, enabled = !voiceMemoSending, modifier = Modifier.testTag("voice-record-add")) {
-            Text(stringResource(R.string.voice_add_attachment))
-          }
-        }
-        if (voiceMemo.phase == "playing") OutlinedButton(onClick = voiceMemo::stopPlayback) {
-          Text(stringResource(R.string.voice_record_stop))
-        }
-      }
-    } }, confirmButton = { TextButton(onClick = voiceMemo::cancel,
-      modifier = Modifier.testTag("voice-record-cancel")) {
-      Text(stringResource(R.string.progress_cancel))
-    } })
 }
 
 private fun ConnectionUiState.matchesComposer(gatewayId: String?, conversationId: String?): Boolean =
   profile?.gatewayId == gatewayId && selectedConversationId == conversationId
 
 @Composable
-private fun MainBottomSurface(tag: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-  Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag(tag), content = content)
+private fun MainBottomSurface(tag: String, expanded: Boolean,
+  content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+  Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag(tag)
+    .background(if (expanded) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent, RoundedCornerShape(28.dp)),
+    content = content)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2098,12 +2228,14 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
     }
     val personalAgent = connection.personal.agent?.takeIf { it.conversationId == connection.selectedConversationId }
     Column(modifier = Modifier.fillMaxWidth()
-      .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(28.dp))
-      .testTag("assistant-composer-shell")) {
+      .background(when {
+        actionsOpen -> Color.Transparent
+        MaterialTheme.colorScheme.background.luminance() < .35f -> MaterialTheme.colorScheme.surfaceContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest
+      }, RoundedCornerShape(28.dp)).testTag("assistant-composer-shell")) {
       Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Bottom) {
-        if (!expandedComposer) VoiceInputToggle(voiceMode,
-          voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+        if (!expandedComposer) AssistantAddAction(connection, actionsOpen, toggleActions, voiceBusy || voiceHeld)
         if (showVoicePad) {
           VoiceInputPad(Modifier.weight(1f), voiceHeld, voiceBusy, voicePhase,
             voiceDestination, voiceSeconds, onVoiceStart, onVoiceMove, onVoiceFinish,
@@ -2125,17 +2257,17 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
             }
           })
         if (!expandedComposer) {
-          AssistantComposerButtons(connection, actionsOpen,
-            toggleActions, onSendMessage, onStopRun, voiceBusy || voiceHeld)
+          VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+          AssistantComposerButtons(connection, onSendMessage, onStopRun, voiceBusy || voiceHeld)
         }
       }
       if (expandedComposer) {
         Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp),
           horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-          VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+          AssistantAddAction(connection, actionsOpen, toggleActions, voiceBusy || voiceHeld)
           Spacer(Modifier.weight(1f))
-          AssistantComposerButtons(connection, actionsOpen,
-            toggleActions, onSendMessage, onStopRun, voiceBusy || voiceHeld)
+          VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+          AssistantComposerButtons(connection, onSendMessage, onStopRun, voiceBusy || voiceHeld)
         }
       }
     }
@@ -2245,12 +2377,9 @@ private fun VoiceInputToggle(active: Boolean, disabled: Boolean, onClick: () -> 
 }
 
 @Composable
-private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () -> Unit,
-  onSearch: () -> Unit,
-  canReference: Boolean = false, onOpenReference: (String) -> Unit = {},
-  canPick: Boolean = false, onPick: (String) -> Unit = {},
-  onVoiceAction: (String) -> Unit = {}) {
-  val firstPage = listOf(
+private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOpenReference: (String) -> Unit,
+  canPick: Boolean, onPick: (String) -> Unit, onVoiceAction: () -> Unit) {
+  val actions = listOf(
     Triple(R.string.assistant_action_photos, R.drawable.action_photo, "photos"),
     Triple(R.string.assistant_action_camera, R.drawable.action_camera, "camera"),
     Triple(R.string.assistant_action_local_files, R.drawable.action_folder, "local-files"),
@@ -2258,91 +2387,58 @@ private fun AssistantActionPanel(canCreate: Boolean, onCreateConversation: () ->
     Triple(R.string.assistant_action_reference_note, R.drawable.tab_notes, "reference-note"),
     Triple(R.string.assistant_action_reference_task, R.drawable.tab_progress, "reference-task"),
     Triple(R.string.assistant_action_reference_file, R.drawable.action_folder, "reference-file"),
-    Triple(R.string.assistant_action_new_chat, R.drawable.action_new_chat, "new-chat"),
   )
-  val secondPage = listOf(
-    Triple(R.string.chat_personal_search, R.drawable.action_search, "search"),
-  )
-  val pages = listOf(firstPage, secondPage)
-  val pagerState = rememberPagerState(pageCount = { pages.size })
-  Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).testTag("assistant-action-panel")
-    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(18.dp))
-    .height(196.dp).padding(top = 4.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-    HorizontalPager(state = pagerState, verticalAlignment = Alignment.Top,
-      modifier = Modifier.fillMaxWidth().height(172.dp)) { page ->
-      Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        pages[page].chunked(4).forEach { row ->
-          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            row.forEach { (label, icon, id) ->
-              val enabled = (id == "new-chat" && canCreate) ||
-                (id == "voice" && canCreate) || id == "search" ||
-                (id in setOf("reference-note", "reference-task") && canReference) ||
-                (id == "reference-file" && canPick) ||
-                (id in setOf("photos", "camera", "local-files") && canPick)
-              TextButton(onClick = {
-                if (id == "new-chat") onCreateConversation()
-                else if (id == "search") onSearch()
-                else if (id == "voice") onVoiceAction("record")
-                else if (id in setOf("photos", "camera", "local-files")) onPick(id)
-                else onOpenReference(when (id) {
-                  "reference-note" -> "note"
-                  "reference-file" -> "file"
-                  else -> "task"
-                })
-              }, enabled = enabled,
-                modifier = Modifier.weight(1f).height(84.dp).testTag("assistant-action-$id"),
-                contentPadding = PaddingValues(0.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally,
-                  verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                  Box(modifier = Modifier.size(48.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)),
-                    contentAlignment = Alignment.Center) {
-                    Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp),
-                      tint = if (enabled) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                  }
-                  Text(stringResource(label), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Normal),
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                      alpha = if (enabled) 1f else 0.65f),
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-              }
+  Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp).padding(top = 2.dp, bottom = 10.dp)
+    .testTag("assistant-action-panel"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    actions.chunked(4).forEach { row ->
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        row.forEach { (label, icon, id) ->
+          val enabled = when (id) {
+            "voice" -> canRecord
+            "reference-note", "reference-task" -> canReference
+            else -> canPick
+          }
+          TextButton(onClick = {
+            when {
+              id == "voice" -> onVoiceAction()
+              id.startsWith("reference-") -> onOpenReference(id.removePrefix("reference-"))
+              else -> onPick(id)
             }
-            repeat(4 - row.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
+          }, enabled = enabled, modifier = Modifier.weight(1f).height(84.dp).testTag("assistant-action-$id"),
+            contentPadding = PaddingValues(0.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center) {
+                Icon(painterResource(icon), null, Modifier.size(24.dp),
+                  tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .5f))
+              }
+              Text(stringResource(label), style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
           }
         }
-      }
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
-      verticalAlignment = Alignment.CenterVertically) {
-      pages.indices.forEach { page ->
-        Box(modifier = Modifier.padding(horizontal = 4.dp).size(6.dp)
-          .background(if (pagerState.currentPage == page) MaterialTheme.colorScheme.onSurfaceVariant
-            else MaterialTheme.colorScheme.outline, CircleShape))
+        repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
       }
     }
   }
 }
 
 @Composable
-private fun AssistantComposerButtons(connection: ConnectionUiState, actionsOpen: Boolean,
-  onToggleActions: () -> Unit, onSendMessage: () -> Unit, onStopRun: () -> Unit,
-  voiceBusy: Boolean = false) {
+private fun AssistantAddAction(connection: ConnectionUiState, open: Boolean, onClick: () -> Unit, voiceBusy: Boolean) {
+  val label = stringResource(if (open) R.string.composer_close_actions else R.string.composer_add_actions)
+  IconButton(onClick, enabled = !voiceBusy && !connection.sending && !connection.attachmentLoading &&
+    connection.pendingDeleteId != connection.selectedConversationId,
+    modifier = Modifier.size(44.dp).testTag("assistant-actions-toggle")) {
+    Icon(painterResource(if (open) R.drawable.action_close else R.drawable.action_add), label,
+      Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
+  }
+}
+
+@Composable
+private fun AssistantComposerButtons(connection: ConnectionUiState,
+  onSendMessage: () -> Unit, onStopRun: () -> Unit, voiceBusy: Boolean) {
   val hasPayload = connection.draftText.isNotBlank() || connection.draftRefs.isNotEmpty() ||
     connection.draftAttachments.isNotEmpty()
-  if (connection.activeRunId == null || !hasPayload) {
-    val actionsDescription = stringResource(if (actionsOpen) R.string.composer_close_actions else R.string.composer_add_actions)
-    IconButton(onClick = onToggleActions,
-      enabled = !voiceBusy && !connection.sending && connection.pendingDeleteId != connection.selectedConversationId,
-      modifier = Modifier.size(48.dp).semantics {
-        contentDescription = actionsDescription
-      }.testTag("assistant-actions-toggle")) {
-      Text(if (actionsOpen) "×" else "+", style = MaterialTheme.typography.headlineMedium,
-        color = MaterialTheme.colorScheme.primary)
-    }
-  }
   if (hasPayload) {
     val sendLabel = stringResource(R.string.assistant_send)
     IconButton(onClick = onSendMessage, modifier = Modifier.size(48.dp)
@@ -2425,11 +2521,20 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onStartVoiceCall: () -> Unit,
   onOpenSidebar: () -> Unit,
   onRetryHomeChat: () -> Unit,
+  onCloseAutomationConfiguration: () -> Unit = {},
+  projectChatTitle: String? = null,
+  onCloseProjectChat: () -> Unit = {},
+  onOpenPersonalOverview: () -> Unit = {},
   sidebarGesture: Modifier,
   generatedMediaAccess: GeneratedMediaAccess? = null,
+  activeMusic: MusicTrack? = null,
+  onInlineMusic: (String?) -> Unit = {},
+  onExpandMusic: () -> Unit = {},
+  onDownloadMusic: (MusicTrack) -> Unit = {},
   taskChrome: @Composable (() -> Unit, () -> Unit) -> Unit = { _, _ -> }) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
+  val personalOverviewLabel = stringResource(R.string.personal_overview_open)
   val bottomChromeHeight = bottomChromeInsets.calculateBottomPadding()
   val uriHandler = LocalUriHandler.current
   val context = LocalContext.current
@@ -2511,9 +2616,28 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val generatedCards = remember(generatedMedia.items, displayMessages) {
     generatedMediaByReply(generatedMedia.items, displayMessages)
   }
-  val playGeneratedMedia: (GeneratedMediaItem) -> Unit = {
+  SideEffect {
+    onInlineMusic(activeMusic?.takeIf { track -> track.conversationId == selectedMessageConversationId &&
+      generatedMedia.items.any { it.id == track.id && it.kind == GeneratedMediaKind.Music } }?.key)
+  }
+  val musicPlayback = MusicPlayback.state.collectAsStateWithLifecycle()
+  val musicPlaying by remember { derivedStateOf { musicPlayback.value?.phase == MusicPhase.Playing } }
+  LaunchedEffect(musicPlaying) {
+    if (musicPlaying) { generatedMedia.playingVideoId = null; reader.stop() }
+  }
+  val playGeneratedMedia: (GeneratedMediaItem) -> Unit = { item ->
     reader.stop()
-    generatedMedia.playingId = it.id.takeUnless { id -> id == generatedMedia.playingId }
+    if (item.kind == GeneratedMediaKind.Music && mediaScope.first != null && selectedMessageConversationId != null) {
+      generatedMedia.playingVideoId = null
+      playGeneratedMusic(context, generatedMediaAccess, MusicTrack(requireNotNull(mediaScope.first),
+        selectedMessageConversationId, item.id, item.title.orEmpty().ifBlank { context.getString(R.string.music_notification_channel) },
+        connection.personal.agent?.displayName?.takeIf { isPersonalChat }
+          ?: connection.conversations.firstOrNull { it.id == selectedMessageConversationId }?.title.orEmpty(),
+        item.lyrics, (item.duration ?: 0).coerceIn(0, Int.MAX_VALUE / 1000) * 1000))
+    } else if (item.kind == GeneratedMediaKind.Video) {
+      if (generatedMedia.playingVideoId != item.id) MusicPlayback.pause()
+      generatedMedia.playingVideoId = item.id.takeUnless { it == generatedMedia.playingVideoId }
+    }
   }
   val confirmGeneratedMedia: (GeneratedMediaItem) -> Unit = { card ->
     if (!mediaRunActive && selectedMessageConversationId != null && generatedMediaAccess != null) {
@@ -2522,12 +2646,12 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   }
   DisposableEffect(generatedMedia, generatedMediaAccess, mediaLifecycle) {
     val observer = LifecycleEventObserver { _, event ->
-      if (event == Lifecycle.Event.ON_STOP) generatedMedia.playingId = null
+      if (event == Lifecycle.Event.ON_STOP) generatedMedia.playingVideoId = null
     }
     mediaLifecycle.addObserver(observer)
     onDispose {
       mediaLifecycle.removeObserver(observer)
-      generatedMedia.playingId = null
+      generatedMedia.playingVideoId = null
     }
   }
   val externalLinkFailure = stringResource(R.string.message_open_link_failed)
@@ -2735,7 +2859,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()
           .onSizeChanged { messageViewportHeight = it.height }
           .padding(top = headerClearance, bottom = bottomChromeHeight).testTag("assistant-welcome-viewport")) {
-          AssistantWelcome(maxHeight, if (connection.contextLoading || isPersonalChat) null else
+          if (connection.automationConfigurationChat) AutomationConfigurationWelcome()
+          else AssistantWelcome(maxHeight, if (connection.contextLoading || isPersonalChat) null else
             taskRecommendation(connection.taskWelcome) ?: projectRecommendation(connection.projectWelcome),
             personalName = connection.personal.agent?.displayName.takeIf { isPersonalChat },
             standaloneDraft = selected?.isLocalDraft == true && !isPersonalChat &&
@@ -2781,8 +2906,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         generatedCards[""]?.let { cards ->
           item(key = "generated-media-unanchored") {
             GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
-              playGeneratedMedia, confirmGeneratedMedia, generatedMedia.playingId, selectedMessageConversationId, generatedMediaAccess,
-              generatedMedia.measuredDurations) { id, duration -> generatedMedia.measuredDurations[id] = duration }
+              playGeneratedMedia, confirmGeneratedMedia, generatedMedia.playingVideoId, selectedMessageConversationId,
+              generatedMediaAccess, activeMusic, onExpandMusic, onDownloadMusic)
           }
         }
         val latestMessageId = displayMessages.lastOrNull {
@@ -2803,8 +2928,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
             generatedCards[message.renderId]?.let { cards ->
               GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
-                playGeneratedMedia, confirmGeneratedMedia, generatedMedia.playingId, selectedMessageConversationId, generatedMediaAccess,
-              generatedMedia.measuredDurations) { id, duration -> generatedMedia.measuredDurations[id] = duration }
+                playGeneratedMedia, confirmGeneratedMedia, generatedMedia.playingVideoId, selectedMessageConversationId,
+              generatedMediaAccess, activeMusic, onExpandMusic, onDownloadMusic)
             }
           }
         }
@@ -2845,13 +2970,28 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
     }
   }
-    Spacer(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(chatTopInset)
-      .background(MaterialTheme.colorScheme.background).testTag("chat-status-bar-background"))
-    if (!isTaskChat(connection)) {
+    val canvas = MaterialTheme.colorScheme.background
+    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(headerClearance + 16.dp)
+      .background(Brush.verticalGradient(0f to canvas, 0.3f to canvas.copy(alpha = .94f),
+        .72f to canvas.copy(alpha = .84f), 1f to canvas.copy(alpha = 0f)))
+      .testTag("chat-status-bar-background"))
+    if (connection.automationConfigurationChat || projectChatTitle != null) {
+      Row(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+        .background(MaterialTheme.colorScheme.background)
+        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+        .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
+        verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = if (connection.automationConfigurationChat) onCloseAutomationConfiguration else onCloseProjectChat,
+          modifier = Modifier.testTag(if (connection.automationConfigurationChat) "automation-configuration-close" else "project-chat-close")) {
+          Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+        }
+        Text(if (connection.automationConfigurationChat) stringResource(R.string.automation_setup_title) else projectChatTitle.orEmpty(),
+          style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
+    } else if (!isTaskChat(connection)) {
       val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
         it.conversationId == connection.selectedConversationId }
       Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
-        .background(MaterialTheme.colorScheme.background)
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
         horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2860,14 +3000,29 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             .background(LocalChatColors.current.card, CircleShape).testTag("chat-header-sidebar")) {
             Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
           }
-          if (personalAgent != null) PersonalAgentAvatar(connection.personal.agentAvatar,
-            personalAgent.appearance, 60.dp, active = true, modifier = Modifier.align(Alignment.TopCenter))
-          else Text(selected?.takeUnless { it.isLocalDraft }?.title
-            ?: stringResource(R.string.assistant_new_conversation),
+          if (personalAgent != null) IconButton(onClick = onOpenPersonalOverview,
+            modifier = Modifier.align(Alignment.TopCenter).size(62.dp).semantics {
+              contentDescription = personalOverviewLabel
+            }.testTag("chat-personal-overview")) {
+            PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, 62.dp,
+              active = !personalSettingsOpen && !messageSearchOpen)
+          }
+          else {
+            val selectedAgent = connection.agents.firstOrNull { it.id == connection.selectedAgentId }
+            Text(selected?.takeUnless { it.isLocalDraft }?.title
+              ?: selectedAgent?.takeUnless { it.id == "main" }?.let { agentDisplayName(it) }
+              ?: stringResource(R.string.assistant_new_conversation),
             Modifier.align(Alignment.Center).padding(horizontal = if (phoneAvailable) 112.dp else 96.dp)
-              .clickable { if (selected?.isLocalDraft == true) optionsOpen = true else agentPickerOpen = true }
+              .clickable {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                agentQuery = ""
+                onReloadAgents()
+                agentPickerOpen = true
+              }
               .testTag("chat-ordinary-title"), style = MaterialTheme.typography.titleMedium,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+              maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
           Row(Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             if (phoneAvailable) IconButton(onClick = onOpenPhone,
               modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
@@ -3151,16 +3306,36 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         if (connection.agentError) TextButton(onClick = onReloadAgents) {
           Text(stringResource(R.string.assistant_agent_retry))
         }
+        val agentRows = if (connection.agentsLoading) emptyList() else connection.agents.map {
+          Triple(it, agentDisplayName(it), agentDisplayDescription(it))
+        }.filter { (agent, name, description) ->
+          listOf(name, description, agent.id, agent.name).any { it.contains(agentQuery.trim(), ignoreCase = true) }
+        }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          if (!connection.agentsLoading) items(connection.agents.filter {
-            agentQuery.isBlank() || it.name.contains(agentQuery, true) || it.id.contains(agentQuery, true)
-          }, key = { it.id }) { agent ->
-            ContextRow("${if (agent.id == connection.selectedAgentId) "✓ " else ""}${agent.name}",
-              agent.description.ifBlank { agent.id }, "agent-${agent.id}", flat = true,
-              enabled = !connection.creatingConversation) {
-              if (connection.draftText.isNotBlank() || connection.draftAttachments.isNotEmpty() || connection.draftRefs.isNotEmpty())
-                pendingAgentId = agent.id
-              else { closeOptions(); onSwitchAgent(agent.id, false) }
+          items(agentRows, key = { it.first.id }) { (agent, name, description) ->
+            val personal = connection.personal.agent?.takeIf { it.agentId == agent.id }
+            val selectedHere = agent.id == connection.selectedAgentId
+            Surface(onClick = {
+              when {
+                selectedHere -> closeOptions()
+                personal != null -> { closeOptions(); onRetryHomeChat() }
+                connection.draftText.isNotBlank() || connection.draftAttachments.isNotEmpty() || connection.draftRefs.isNotEmpty() ->
+                  pendingAgentId = agent.id
+                else -> { closeOptions(); onSwitchAgent(agent.id, false) }
+              }
+            }, enabled = !connection.creatingConversation, modifier = Modifier.fillMaxWidth().testTag("agent-${agent.id}"),
+              shape = RoundedCornerShape(14.dp), color = LocalChatColors.current.card) {
+              Row(Modifier.heightIn(min = 60.dp).padding(10.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (personal != null) PersonalAgentAvatar(connection.personal.agentAvatar, personal.appearance, 40.dp, false)
+                else AgentAvatar(connection.agentAvatars[agent.id], agent.avatar, agent.id, 40.dp, false, fallbackName = name)
+                Column(Modifier.weight(1f)) {
+                  Text(name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                  if (description.isNotBlank()) Text(description, style = MaterialTheme.typography.bodySmall, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (selectedHere) Text("✓", color = MaterialTheme.colorScheme.primary)
+              }
             }
           }
         }
@@ -3180,6 +3355,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (connection.selectedConversationId != null) {
+          ContextRow(stringResource(R.string.chat_personal_search), "", "assistant-search",
+            iconRes = R.drawable.action_search, compact = true, flat = true) {
+            closeOptions(); onMessageSearchOpenChange(true)
+          }
           ContextRow(stringResource(R.string.assistant_context), contextSummary, "assistant-context",
             iconRes = R.drawable.action_folder, compact = true, flat = true) {
             optionsOpen = false; contextInitialMode = "context"; contextInitialKind = "note"

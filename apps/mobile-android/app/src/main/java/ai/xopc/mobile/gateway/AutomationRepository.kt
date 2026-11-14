@@ -59,27 +59,21 @@ class AutomationRepository(private val gateway: GatewaySession) {
     return run
   }
 
-  fun create(name: String, instruction: String, cron: String, key: String): AutomationSummary {
-    val title = name.trim()
-    val command = instruction.trim()
-    val expression = cron.trim()
-    require(title.isNotEmpty() && title.length <= 200 && command.isNotEmpty() &&
-      command.length <= 50000 && expression.isNotEmpty() && expression.length <= 256) {
-      "INVALID_AUTOMATION_FORM"
-    }
-    requireValidKey(key)
-    val body = JSONObject().put("name", title).put("enabled", true)
-      .put("trigger", JSONObject().put("kind", "schedule")
-        .put("schedule", JSONObject().put("kind", "cron").put("expr", expression)))
-      .put("action", JSONObject().put("kind", "agent").put("instruction", command))
-      .put("conversationMode", "new_session").toString()
-    val created = parseAutomation(JSONObject(gateway.request("/api/automations", "POST", body,
-      mapOf("Idempotency-Key" to key))).getJSONObject("automation"))
-    require(created.name == title && created.triggerKind == "schedule" &&
-      created.schedule == expression && created.instruction == command && created.updatedAtMs > 0) {
-      "AUTOMATION_CREATE_NOT_CONFIRMED"
-    }
-    return created
+  fun openConfiguration(projectId: String?, personalLocale: String?): String {
+    require(projectId == null || personalLocale == null)
+    val body = JSONObject()
+    projectId?.let { requireValidId(it); body.put("projectId", it) }
+    personalLocale?.let { body.put("personalLocale", if (it.startsWith("zh")) "zh" else "en") }
+    val id = JSONObject(gateway.request("/api/automations/configuration-conversations", "POST",
+      body.toString())).getString("conversationId")
+    requireValidId(id)
+    return id
+  }
+
+  fun personalSchedules(): List<AutomationSummary> {
+    val rows = JSONObject(gateway.request("/api/personal-agent/schedules")).getJSONArray("payload")
+    return (0 until rows.length()).map { parseAutomation(rows.getJSONObject(it)) }
+      .sortedWith(compareBy<AutomationSummary> { it.nextRunAtMs ?: Long.MAX_VALUE }.thenByDescending { it.updatedAtMs })
   }
 
   fun update(item: AutomationSummary, name: String, instruction: String, cron: String,
