@@ -11,13 +11,13 @@ import { useLocaleStore } from '@/stores/locale-store';
 const SetupDialog = lazy(() => import('@/features/connectors/mcp/mcp-conversation-setup-page').then(module => ({ default: module.McpConversationSetupDialog })));
 
 type PendingSetup = { setupId: string; version: number; serverId: string; displayName?: string; phase: string;
-  expired?: boolean; errorCode?: string; helpUrl?: string; reloadRequired?: boolean };
+  purpose?: string; canProvideToken?: boolean; expired?: boolean; errorCode?: string; helpUrl?: string; reloadRequired?: boolean };
 const copy = {
-  zh: { connection: '服务连接', cancel: '取消连接请求', close: '关闭', finish: '完成连接', review: '查看连接', reconnect: '更新密钥',
+  zh: { connection: '服务连接', cancel: '取消连接请求', close: '关闭', finish: '检查连接', source: '查看来源', enter: '填写访问密钥', login: '登录并继续', waiting: '等待完成登录', review: '查看连接', reconnect: '更新密钥',
     expired: '连接请求已过期', rejected: '服务未接受当前密钥', token: '需要访问密钥', oauth: '需要登录授权', unknown: '无法确认认证方式',
     failed: '连接检查未通过', planned: '正在检查连接', approval: '请确认服务和资料来源', reload: '配置已保存，重启 Gateway 后生效',
     help: '获取访问密钥', connected: '连接已完成', continuing: '连接已完成，原任务将自动继续', cancelFailed: '暂时无法取消连接，请重试。' },
-  en: { connection: 'Service connection', cancel: 'Cancel connection request', close: 'Close', finish: 'Complete connection', review: 'View connection', reconnect: 'Update key',
+  en: { connection: 'Service connection', cancel: 'Cancel connection request', close: 'Close', finish: 'Check connection', source: 'Review source', enter: 'Enter access key', login: 'Sign in and continue', waiting: 'Waiting for sign-in', review: 'View connection', reconnect: 'Update key',
     expired: 'Connection request expired', rejected: 'The service rejected the current key', token: 'Access key required', oauth: 'Sign-in required', unknown: 'Could not verify the authentication method',
     failed: 'Connection check failed', planned: 'Checking the connection', approval: 'Review the service and its sources', reload: 'Settings saved. Restart the Gateway to apply them.',
     help: 'Get an access key', connected: 'Connection complete', continuing: 'Connection complete. Your task will resume automatically.', cancelFailed: 'Could not cancel the connection. Try again.' },
@@ -100,24 +100,31 @@ export function McpSetupActionBar({ conversationId }: { conversationId: string }
     : setup.phase === 'token_required' ? t.token : ['oauth_required', 'authorizing'].includes(setup.phase) ? t.oauth
       : setup.phase === 'auth_unknown' ? t.unknown : setup.phase === 'blocked' ? t.failed
         : setup.phase === 'approval_required' ? t.approval : setup.phase === 'ready' ? t.connected : t.planned;
-  const action = rejected && !setup.expired ? t.reconnect : setup.expired || setup.reloadRequired || ['blocked', 'auth_unknown'].includes(setup.phase) ? t.review : t.finish;
+  const action = setup.expired || setup.reloadRequired ? t.review
+    : rejected ? t.reconnect
+      : setup.phase === 'approval_required' ? t.source
+        : setup.phase === 'token_required' || setup.canProvideToken ? t.enter
+          : setup.phase === 'oauth_required' ? t.login
+            : setup.phase === 'authorizing' ? t.waiting
+              : ['blocked', 'auth_unknown', 'ready'].includes(setup.phase) ? t.review : t.finish;
   return <><section className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-edge bg-surface-panel px-3 py-2" aria-label={t.connection}>
     <Link2 className="size-4 shrink-0 text-accent" aria-hidden />
     <div className="min-w-0 flex-1 break-words text-sm" role="status">
       <p className="font-medium text-fg">{setup.displayName || setup.serverId}</p>
-      <p className="text-xs text-fg-muted">{status}</p>
+      {setup.purpose ? <p className="mt-0.5 break-words text-sm text-fg-muted">{setup.purpose}</p> : null}
+      <p className="mt-0.5 text-xs text-fg-muted">{status}</p>
     </div>
-    <Link className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-accent-fg hover:bg-surface-hover" to={`/mcp-setup/${encodeURIComponent(setup.setupId)}`} onClick={event => {
+    <Button asChild variant="primary" className="min-h-11 shrink-0 rounded-lg"><Link to={`/mcp-setup/${encodeURIComponent(setup.setupId)}`} onClick={event => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault(); setOpenSetupId(setup.setupId);
       }}>
       {action}
-    </Link>
+    </Link></Button>
     <Button variant="ghost" className="size-11 shrink-0 p-0" aria-label={t.cancel} title={t.cancel} disabled={cancelling} onClick={() => void cancel()}>
       <X className="size-4" aria-hidden />
     </Button>
     {!setup.expired && setup.phase === 'token_required' && setup.helpUrl ?
-      <div className="basis-full pl-6"><a href={setup.helpUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-8 items-center text-sm text-accent-fg hover:underline">{t.help} ↗</a></div> : null}
+      <div className="basis-full pl-6"><a href={setup.helpUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm text-accent-fg hover:underline">{t.help} ↗</a></div> : null}
     {cancelErrorFor === setup.setupId ? <span role="alert" className="basis-full text-sm text-fg-muted">{t.cancelFailed}</span> : null}
   </section>{dialog}</>;
 }

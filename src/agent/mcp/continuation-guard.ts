@@ -17,7 +17,7 @@ export function createMcpSetupContinuationGuard(conversationId: string, discover
       const input = runId ? findSessionInputByRunId(conversationId, runId) : undefined;
       const goal = input?.clientMessageId.startsWith('mcp-setup:') ? new DurableState<{ serverId: string; phase: string }>('mcp.conversation-setup').get(input.clientMessageId.slice('mcp-setup:'.length)) : undefined;
       if (empty && goal?.phase === 'ready') return { content: [...event.content, { type: 'text' as const, text: `This is a saved connection continuation. Search tools using the exact namespace mcp__${goal.serverId.replace(/-/g, '_')}, then finish the original objective. Do not restart setup.` }] };
-      if (empty) return { content: [...event.content, { type: 'text' as const, text: 'No registered tool matches this search. This is not evidence that the requested service cannot be connected. If the user clearly asked to connect a named service, call the available mcp_setup discover {serviceName,purpose} and read tool_manual topic mcp before reporting a blocker or asking for an MCP URL. Do not substitute a different saved service.' }] };
+      if (empty) return { content: [...event.content, { type: 'text' as const, text: 'No registered tool matches this search. This is not evidence that the requested service cannot be connected. If the task needs a named service, try its installed connector first. If none can do the task, call mcp_setup discover {serviceName,purpose} and read tool_manual topic mcp before reporting a blocker or asking for an MCP URL. Do not substitute a different saved service.' }] };
     });
     pi.on('tool_call', event => {
       if (!event.toolName.startsWith('mcp__') && !['read_mcp_resource', 'read_resource'].includes(event.toolName)) return;

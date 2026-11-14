@@ -47,8 +47,7 @@ inspect {} returns configured server IDs and revisions without
 secrets. For a clear connection request start {serverId,url,purpose,displayName?,authentication?,expectedRevision?}.
 Set authentication:"bearer" when the user or a verified service guide specifies a Bearer Token;
 otherwise omit it or use "auto". This is a non-secret hint, never a place for a Token or headers.
-A user-specified Bearer setup goes directly to secure Token input. Public discovery plans are probed first. On access_denied with canProvideToken, link
-interactionPath for first-time Token input rather than repeatedly retrying or reporting a dead end.
+A user-specified Bearer setup opens secure Token input. For a discovered plan the host reviews the source and checks the endpoint before opening its documented credential form. On access_denied with canProvideToken, tell the user the secure form can accept a documented Token.
 An access refusal can also reflect account permissions; never promise a Token will resolve it.
 Use displayName for the user's service name. Derive a simple ASCII serverId when none was
 supplied; do not ask users to invent technical identifiers. Use only the user-supplied or
@@ -56,10 +55,10 @@ verified service URL, never invent one. Local execution requires its concrete re
 never execute installers through other tools. purpose preserves the original user objective. Replacing a
 configured server requires its revision from inspect. Do not alter managed connectors/plugins.
 Then advance {setupId,expectedVersion} using the returned version. get {setupId} refreshes
-status; cancel requires the current version. OAuth/Token steps provide interactionPath:
-link to that trusted product page, never request credentials or OAuth callbacks in chat.
-Copy the host-provided Markdown link in instruction verbatim. Use the exact returned interactionPath as its destination; Weixin paths are absolute. Never rewrite it as xopc://workspace, or prepend localhost or an origin to a relative product path. Do not invent a URL
-scheme or setup id. The host also displays a trusted Complete connection action above input.
+status; cancel requires the current version. If interaction is chat_card, the app owns the only
+connection action above input. Explain its purpose briefly and stop without a link.
+For text-only clients use the exact returned interactionPath; Weixin paths are absolute.
+Never request secrets or OAuth callbacks in chat.
 The page owns sign-in, safe credential entry, verification and automatic return to the
 original objective. When ready/continuationQueued is returned, stop this turn; the host
 continues in a fresh turn where native MCP tools can load. Use native tool_search and the
@@ -188,7 +187,7 @@ do not repeat confirmation. A one-off answer does not authorize creating a Task,
 Check returned ok and saved state; handle revision conflicts by re-reading, preserving changes
 and retrying once with the new revision. Keep original keys after uncertain writes.`,
   connections: `# xopc external connections
-For a clear request to connect a named service, reuse a known native/connector connection if one exists.
+For a task that needs a named service, reuse a usable native tool or connector when available.
 Reuse requires matching the requested service identity, not merely a similar tool description.
 Never read another service's profile or claim it connected because it also offers read_profile.
 If the requested name differs from saved services, discover that requested service; do not stop to ask whether the user meant an unrelated saved connection.

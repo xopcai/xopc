@@ -999,6 +999,33 @@ describe('durable connection recovery', () => {
     expect(await recovery.preflight(input)).toBe(false);
     expect(getActiveConnectionWait(conversationId)?.status).toBe('open');
   });
+  it('preserves completed and pending steps and the absolute time range', async () => {
+    const checkpoint = {
+      completedSteps: ['Feedback desk returned ticket FIXTURE-742'],
+      pendingSteps: ['Read the selected work mailbox and merge results'],
+      timeRange: {
+        from: '2026-11-02T00:00:00+08:00',
+        to: '2026-11-09T00:00:00+08:00',
+        timezone: 'Asia/Shanghai',
+        expression: 'last week',
+      },
+    };
+    requireSessionConnection({
+      conversationId, principalId: 'local-owner', agentId: 'main',
+      summary: 'Summarize feedback tickets and work email', needs: [need], checkpoint,
+    });
+    activeConnection();
+    await recovery.act(conversationId, action('check'));
+    finishSessionInputRun(conversationId, 'run-original', 'suspended');
+    const input = claimNextSessionInput(conversationId, 'run-r13')!;
+    expect(input.kind).toBe('connection_resume');
+    expect(input.content).toContain(JSON.stringify(checkpoint.timeRange));
+    expect(input.content).toContain(checkpoint.completedSteps[0]);
+    expect(input.content).toContain(checkpoint.pendingSteps[0]);
+    expect(consumeConnectionResume(input)).toBe(true);
+    expect(consumeConnectionResume(input)).toBe(false);
+  });
+
   it('persists skip suppression in the internal continuation', () => {
     const wait = requireWait(); queueConnectionResolution(wait, 'skipped');
     finishSessionInputRun(conversationId, 'run-original', 'suspended');

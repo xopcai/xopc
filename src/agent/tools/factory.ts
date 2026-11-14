@@ -554,6 +554,12 @@ export class AgentToolsFactory {
         const route = getConversationRouting(context.conversationId);
         return route?.accountId === context.metadata?.accountId && route.peerId.toLowerCase() === context.chatId.toLowerCase();
       },
+      canShowMcpSetupCard: () => {
+        const origin = this.deps.getCurrentContext()?.origin;
+        if (origin?.type !== 'endpoint') return false;
+        const kind = this.deps.endpointTools?.registry.get(origin.endpointId)?.kind;
+        return kind === 'web' || kind === 'desktop';
+      },
       canConfigureFromConversation: () => {
         const origin = this.deps.getCurrentContext()?.origin;
         return origin?.type === 'system' && origin.source === 'cli'

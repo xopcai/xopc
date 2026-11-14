@@ -16,6 +16,7 @@ type Setup = { setupId: string; serverId: string; conversationId: string; versio
   displayName?: string; returnChannel?: string; approval?: { accountId: string; peerId: string; endpoint: string; purpose: string };
   endpointOrigin: string;
   canReplaceToken?: boolean; canProvideToken?: boolean;
+  purpose?: string;
   secretFields?: Array<{ id: string; label: string }>; helpUrl?: string; nextRetryAt?: number;
   diagnosis?: { recovery?: { reason?: string } };
   planApproval?: { sources: Array<{ url: string }>; execution?: { command: string; args: string[]; cwd?: string; sourceUrl: string }; endpoint?: string; purpose: string };
@@ -99,7 +100,7 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
   const deliveryFailed = connected && data?.returnChannel === 'weixin' && data.replyDelivery === 'failed';
   const blocked = (data?.phase === 'blocked' || data?.phase === 'auth_unknown') && !tokenRequired && !terminal;
   const description = data?.expired ? t.expired : data?.phase === 'cancelled' ? t.cancelled : data?.reloadRequired ? t.reload
-    : connected ? deliveryFailed ? t.deliveryFailed : data?.replyDelivery === 'delivered' ? t.delivered : t.continuing
+    : connected ? deliveryFailed ? t.deliveryFailed : data?.replyDelivery === 'delivered' ? t.delivered : data?.returnChannel === 'weixin' && data.continuationQueued ? t.continuing : t.connected
       : needsApproval ? t.approval : waitingRetry ? (language === 'zh' ? `服务要求等待，将在 ${new Date(data!.nextRetryAt!).toLocaleTimeString()} 后有限重试。` : `Waiting until ${new Date(data!.nextRetryAt!).toLocaleTimeString()} before a bounded retry.`)
       : busy ? t.checkingDescription
       : data?.phase === 'auth_unknown' && !data.canProvideToken ? (language === 'zh' ? '无法确认服务的认证方式。请核对官方接入文档和服务地址后重新检查。' : 'Could not verify the authentication method. Check the official setup guide and service address, then recheck.')
@@ -122,6 +123,7 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
           {connected ? t.connected : data?.displayName || t.title}
         </Dialog.Title>
         {data ? <p className="mt-1 truncate text-[13px] text-fg-muted" title={data.endpointOrigin}>{data.endpointOrigin}</p> : null}
+        {data?.purpose && !needsApproval && !connected ? <p className="mt-2 break-words text-sm text-fg">{data.purpose}</p> : null}
         <Dialog.Description role={(data?.errorCode === 'credential_rejected' || !tokenRequired && (error || actionError || blocked || data?.expired || data?.reloadRequired)) ? 'alert' : undefined} className="mt-3 text-sm leading-relaxed text-fg-muted">{description}</Dialog.Description>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-4 sm:px-8" aria-busy={busy}>
@@ -135,9 +137,14 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
           <p className="text-xs leading-relaxed text-fg-muted">{t.shared}</p>
           {planApproval ? <div className="space-y-2 rounded-xl bg-surface-base p-3 text-xs"><p>{language === 'zh' ? '同时审阅本次来源与执行计划：' : 'Also review this source and execution plan:'}</p><pre className="whitespace-pre-wrap break-all">{JSON.stringify(planApproval, null, 2)}</pre></div> : null}
         </section> : planApproval ? <section className="space-y-3 text-sm">
-          <p className="break-all">{planApproval.endpoint}</p><p>{planApproval.purpose}</p>
+          <dl className="space-y-3 rounded-xl bg-surface-base p-4">
+            <div><dt className="text-xs text-fg-muted">{t.purpose}</dt><dd className="break-words">{planApproval.purpose}</dd></div>
+            <div><dt className="text-xs text-fg-muted">{t.endpoint}</dt><dd className="break-all">{planApproval.endpoint}</dd></div>
+          </dl>
           {planApproval.execution ? <><p>{language === 'zh' ? '将在 Gateway 主机运行以下程序，可能下载指定依赖，并按该主机的进程权限访问文件和网络。' : 'This program runs on the Gateway host, may download the specified dependency and can access files and network with that process’s permissions.'}</p><pre className="whitespace-pre-wrap break-all rounded-xl bg-surface-base p-3 text-xs">{JSON.stringify(planApproval.execution, null, 2)}</pre></> : <p>{language === 'zh' ? '来源归属尚未独立核实。请确认服务和以下资料来源后连接。' : 'Publisher ownership has not been independently verified. Review the service and sources before connecting.'}</p>}
-          {planApproval.sources.map(source => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className="block break-all text-accent-fg">{source.url}</a>)}
+          {planApproval.sources.length ? <ul className="space-y-1">
+            {planApproval.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center break-all text-accent-fg">{source.url}</a></li>)}
+          </ul> : null}
         </section> : tokenRequired ? <form id="mcp-setup-secret-form" className="space-y-3" onSubmit={event => { event.preventDefault(); const value = data.secretFields?.length ? Object.fromEntries(fields.map(field => [field.id, field.id === 'token' ? token : secrets[field.id] ?? ''])) : token; setToken(''); setSecrets({}); void act('token', value); }}>
           {fields.map(field => <div key={field.id} className="space-y-2"><label htmlFor={`mcp-setup-${field.id}`} className="block text-sm font-medium">{field.label}</label>
             <SecretInput id={`mcp-setup-${field.id}`} value={field.id === 'token' ? token : secrets[field.id] ?? ''} onChange={value => { if (field.id === 'token') setToken(value); else setSecrets(previous => ({ ...previous, [field.id]: value })); setActionError(false); }} disabled={busy || waitingRetry} autoComplete="off" hideCopy className="[&_button]:size-11 [&_button]:p-3"

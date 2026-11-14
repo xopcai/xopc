@@ -103,3 +103,15 @@ it('does not treat an OAuth access token example as a manually supplied Bearer k
   await expect(discovery.command('propose', args, context())).rejects.toThrow('manually supplied credential');
   await expect(discovery.command('propose', { ...args, plan: { ...args.plan, authentication: 'auto' } }, context())).resolves.toHaveProperty('candidates');
 });
+
+it('uses the documented manual Bearer credential when a plan leaves authentication on auto', async () => {
+  const text = 'Endpoint: https://service.example/mcp. Authorization: Bearer YOUR_TOKEN. Acquire a Token at https://service.example/keys.';
+  research.read.mockResolvedValueOnce({ url: 'https://service.example/guide', text });
+  const found = await discover();
+  const proposed = await discovery.command('propose', {
+    discoveryId: found.discoveryId, expectedVersion: found.version,
+    plan: { displayName: 'Service', url: 'https://service.example/mcp', objective: 'complete_task' },
+    evidence: [{ documentId: found.documents[0].id, quote: text }],
+  }, context());
+  expect(proposed).toMatchObject({ candidates: [{ authentication: 'bearer', ownership: 'owner_review_required' }] });
+});
