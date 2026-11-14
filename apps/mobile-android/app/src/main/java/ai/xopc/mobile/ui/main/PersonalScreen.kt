@@ -67,7 +67,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -117,7 +116,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
   onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onUploadAvatar: suspend (ByteArray) -> Unit = {},
   onLoadModel: LoadPersonalModel? = null, onSaveModel: SavePersonalModel? = null,
-  bottomChromeHeight: Dp = 0.dp) {
+  onExit: (() -> Unit)? = null) {
   var agentEditorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   fun openAgentEditor() { if (state.agent != null) agentEditorOpen = true }
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -142,12 +141,15 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     if (editorOpen && state.savedGoalRevision > saveStartedRevision) editorOpen = false
   }
   val settingsLabel = stringResource(R.string.settings_title)
-  val loadingHeight = (LocalConfiguration.current.screenHeightDp.dp - bottomChromeHeight - 260.dp)
+  val loadingHeight = (LocalConfiguration.current.screenHeightDp.dp - 260.dp)
     .coerceAtLeast(220.dp)
   Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
     .padding(horizontal = 20.dp).testTag("personal-screen")) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
       verticalAlignment = Alignment.CenterVertically) {
+      if (onExit != null) IconButton(onClick = onExit, modifier = Modifier.testTag("personal-back")) {
+        Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+      }
       Text(stringResource(R.string.tab_me), style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
       IconButton(onClick = onOpenSettings,
@@ -198,7 +200,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
         style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 16.dp))
       TextButton(onClick = onRefresh) { Text(stringResource(R.string.personal_retry)) }
     }
-    Spacer(Modifier.height(bottomChromeHeight + 24.dp))
+    Spacer(Modifier.height(24.dp))
   }
   if (agentEditorOpen) PersonalAgentProfileSheet(state, { agentEditorOpen = false }, onLoadAgentVoices,
     onUpdateAgentProfile, onUploadAvatar, onLoadModel, onSaveModel)

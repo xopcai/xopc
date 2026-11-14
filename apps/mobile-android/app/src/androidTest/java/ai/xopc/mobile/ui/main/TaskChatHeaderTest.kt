@@ -38,12 +38,13 @@ class TaskChatHeaderTest {
           onOpenTaskChat = { id ->
             openedTask = id
             state.value = state.value.copy(selectedConversationId = conversationId,
-              taskConversationTaskId = id, quickOpenedConversationId = conversationId)
+              taskConversationTaskId = id, chatNavigationId = conversationId)
           },
-          onQuickNavigationHandled = { state.value = state.value.copy(quickOpenedConversationId = null) })
+          onChatNavigationHandled = { state.value = state.value.copy(chatNavigationId = null) })
       }
     }
-    compose.onNodeWithTag("tab-Progress").performClick()
+    compose.onNodeWithTag("chat-header-sidebar").performClick()
+    compose.onNodeWithTag("chat-sidebar-progress").performClick()
     compose.onNodeWithTag("progress-item-header-task").performScrollTo().performClick()
     compose.onNodeWithTag("progress-task-chat").assertIsDisplayed().performClick()
     compose.runOnIdle { assertEquals(task.id, openedTask) }

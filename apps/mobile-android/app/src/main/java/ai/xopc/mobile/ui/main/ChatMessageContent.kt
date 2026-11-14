@@ -1,6 +1,7 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.ManagedFile
 import ai.xopc.mobile.gateway.ConversationArtifact
 import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.ConversationMessage
@@ -58,6 +59,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -461,13 +463,16 @@ private fun MessageResultCapsule(
 
 @Composable
 internal fun MessageMediaPreview(request: MessagePreviewRequest,
-  load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit) {
+  load: suspend (String, ConversationMedia) -> ByteArray,
+  resolveFile: suspend (String, ConversationMedia) -> ManagedFile? = { _, _ -> null },
+  saveVersion: suspend (ManagedFile, String) -> Unit = { _, _ -> }, onClose: () -> Unit) {
   if (mediaPreviewKind(request.media) == "image") {
-    MessageImageGallery(request, load, onClose)
+    MessageImageGallery(request, load, onClose, resolveFile, saveVersion)
     return
   }
   val activeMedia = request.media
-  val result by produceState<Result<ByteArray>?>(initialValue = null, activeMedia) {
+  val file = rememberMessageFile(request.conversationId, activeMedia, resolveFile)
+  val result by produceState<Result<ByteArray>?>(initialValue = null, request.conversationId, activeMedia) {
     value = null
     value = runCatching { load(request.conversationId, activeMedia) }
   }
@@ -479,6 +484,7 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
       Text(mediaDetail(activeMedia.mimeType, activeMedia.size),
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+    FileVersionAction(file, saveVersion)
     val payload = result?.getOrNull()
     if (result == null) {
       BrandLoadingPanel(modifier = Modifier.testTag("message-media-preview-loading"))
@@ -505,16 +511,38 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
 }
 
 @Composable
+private fun rememberMessageFile(conversationId: String, media: ConversationMedia,
+  resolveFile: suspend (String, ConversationMedia) -> ManagedFile?): ManagedFile? = key(conversationId, media) {
+  val file by produceState<ManagedFile?>(null) {
+    try {
+      value = resolveFile(conversationId, media)
+    } catch (error: kotlinx.coroutines.CancellationException) {
+      throw error
+    } catch (_: Exception) {
+      // Managed-file metadata is optional for an attachment preview.
+    }
+  }
+  file
+}
+
+@Composable
 private fun MessageImageGallery(request: MessagePreviewRequest,
-  load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit) {
+  load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit,
+  resolveFile: suspend (String, ConversationMedia) -> ManagedFile?,
+  saveVersion: suspend (ManagedFile, String) -> Unit) {
   val gallery = request.imageGallery.takeIf { it.isNotEmpty() } ?: listOf(request.media)
   val pager = rememberPagerState(initialPage = gallery.indexOfFirst { it.id == request.media.id }.coerceAtLeast(0),
     pageCount = { gallery.size })
   val scope = rememberCoroutineScope()
   var zoomed by remember(request) { mutableStateOf(false) }
+  val versionState = rememberSaveableStateHolder()
   LaunchedEffect(pager.currentPage) { zoomed = false }
   Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
     .testTag("message-media-preview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val file = rememberMessageFile(request.conversationId, gallery[pager.currentPage], resolveFile)
+    if (file != null) versionState.SaveableStateProvider("${file.id}:${file.revision}") {
+      FileVersionAction(file, saveVersion)
+    }
     HorizontalPager(pager, modifier = Modifier.fillMaxWidth().height(420.dp).testTag("message-image-pager"),
       beyondViewportPageCount = 1, userScrollEnabled = !zoomed, key = { gallery[it].id }) { page ->
       val media = gallery[page]

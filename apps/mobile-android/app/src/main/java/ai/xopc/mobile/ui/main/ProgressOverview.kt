@@ -22,7 +22,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -35,7 +34,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
   onOpenChat: (String) -> Unit, onOpenTaskList: () -> Unit, onOpenProjects: () -> Unit,
   onOpenAutomations: () -> Unit, onOpenAutomation: (String) -> Unit,
   onOpenTask: (String) -> Unit, onRequestAction: (ProgressHomeAction) -> Unit,
-  bottomChromeHeight: Dp, onOpenRun: (String) -> Unit) {
+  onOpenRun: (String) -> Unit) {
   val (scheduled, running) = remember(state.background) {
     state.background.partition { it.kind == "scheduled" }
   }
@@ -62,7 +61,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
     onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("progress-refresh-gesture")) {
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("progress-overview-list"),
       verticalArrangement = Arrangement.spacedBy(8.dp),
-      contentPadding = PaddingValues(bottom = bottomChromeHeight + 20.dp)) {
+      contentPadding = PaddingValues(bottom = 20.dp)) {
       item(key = "summary", contentType = "summary") {
         if (largeText) {
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

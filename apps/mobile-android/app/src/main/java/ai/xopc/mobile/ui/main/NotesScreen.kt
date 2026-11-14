@@ -90,7 +90,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.ensureActive
@@ -128,8 +127,9 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   onNoteFiles: suspend (String?, String, String) -> List<ManagedFile> = { _, _, _ -> emptyList() },
   onNoteFileText: suspend (String) -> String = { "" },
   onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
-  onTopLevelChange: (Boolean) -> Unit = {},
-  bottomChromeHeight: Dp = 0.dp,
+  onExit: (() -> Unit)? = null,
+  initialNoteId: String? = null,
+  onSaveFileVersion: suspend (ManagedFile, String) -> Unit = { _, _ -> },
   deliveries: List<ProgressDelivery> = emptyList(),
   deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
   onRefreshDeliveries: () -> Unit = {}, onOpenDelivery: (ProgressDelivery) -> Unit = {}) {
@@ -182,7 +182,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       onSearch(query.trim(), state.status)
     }
   }
-  var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
+  var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf(initialNoteId) }
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var creationSheetOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -204,9 +204,6 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   var filesLoading by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf(true) }
   var filesError by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf(false) }
-  LaunchedEffect(selectedId, editorOpen, fileBrowserOpen) {
-    onTopLevelChange(selectedId == null && !editorOpen && !fileBrowserOpen)
-  }
   LaunchedEffect(fileBrowserOpen, fileSpaceId, filePath, fileRefreshRevision, state.gatewayId) {
     if (!fileBrowserOpen) return@LaunchedEffect
     filesLoading = true
@@ -264,10 +261,11 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       draft.title.isBlank() && draft.markdown.isBlank())) editorOpen = false
     else onSaveDraft()
   }
-  BackHandler(enabled = editorOpen || selectedId != null) {
-    if (editorOpen) closeEditor() else selectedId = null
+  val closeNote = {
+    if (initialNoteId != null && selectedId == initialNoteId && onExit != null) onExit()
+    else selectedId = null
   }
-  BackHandler(enabled = fileBrowserOpen) {
+  val closeFile = {
     when {
       previewFromLibrary.value -> {
         previewFromLibrary.value = false
@@ -280,6 +278,10 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       else -> fileBrowserOpen = false
     }
   }
+  BackHandler(enabled = editorOpen || selectedId != null) {
+    if (editorOpen) closeEditor() else closeNote()
+  }
+  BackHandler(enabled = fileBrowserOpen, onBack = closeFile)
   LaunchedEffect(state.createdNoteId) {
     if (state.createdNoteId != null) {
       editorOpen = false
@@ -303,7 +305,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       moreOpen = false
       deleteConfirmOpen = false
       editorOpen = false
-      if (selectedId == id) selectedId = null
+      if (selectedId == id) closeNote()
       onDeletionHandled(id)
     }
   }
@@ -326,6 +328,17 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically) {
+      if (onExit != null) {
+        val back = when {
+          fileBrowserOpen -> closeFile
+          editorOpen -> closeEditor
+          selectedId != null -> closeNote
+          else -> onExit
+        }
+        IconButton(onClick = back, modifier = Modifier.testTag("library-back")) {
+          Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+        }
+      }
       if (fileBrowserOpen || editorOpen || selectedId != null) {
 
         Text(if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
@@ -360,7 +373,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       }, { file ->
         if (file.kind == "directory") { fileSpaceId = file.spaceId; filePath = file.relativePath }
         else selectedFile = file
-      }, Modifier.weight(1f))
+      }, Modifier.weight(1f), onSaveFileVersion)
     else if (editorOpen) NoteDraftContent(state, onDraftChange, onSaveDraft,
       Modifier.weight(1f), onResolveConflict, onAddAttachment = { attachmentSheetOpen = true },
       attachmentBusy = attachmentBusy, attachmentError = attachmentError)
@@ -380,7 +393,6 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           selectedFile = file
         }
       },
-      bottomChromeHeight = bottomChromeHeight,
       deliveries = deliveries, deliveriesLoading = deliveriesLoading, deliveryError = deliveryError,
       onRefreshDeliveries = onRefreshDeliveries, onOpenDelivery = onOpenDelivery,
       filesLoading = libraryFiles.loading, filesError = libraryFiles.error,
@@ -999,7 +1011,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   onSubmit: () -> Unit, onStatus: (String) -> Unit, onOpen: (String) -> Unit,
   onLoadMore: () -> Unit, modifier: Modifier = Modifier, onOpenDraft: (String) -> Unit = {},
   onOpenFiles: (() -> Unit)? = null, searchFiles: List<ManagedFile> = emptyList(),
-  onOpenSearchFile: (ManagedFile) -> Unit = {}, bottomChromeHeight: Dp = 0.dp,
+  onOpenSearchFile: (ManagedFile) -> Unit = {},
   deliveries: List<ProgressDelivery> = emptyList(),
   deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
   onRefreshDeliveries: () -> Unit = {}, onOpenDelivery: (ProgressDelivery) -> Unit = {},
@@ -1073,7 +1085,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
     }
     LazyColumn(state = libraryListState, modifier = Modifier.weight(1f).testTag("notes-list"),
       verticalArrangement = Arrangement.spacedBy(10.dp),
-      contentPadding = PaddingValues(bottom = bottomChromeHeight + 20.dp)) {
+      contentPadding = PaddingValues(bottom = 20.dp)) {
       if (category == "all" && !state.loading && !filesLoading && !deliveriesLoading &&
         !state.listError && !filesError && !deliveryError && state.items.isEmpty() && state.drafts.isEmpty() &&
         visibleFiles.isEmpty() && visibleDeliveries.isEmpty()) {
@@ -1139,7 +1151,8 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
 private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<ManagedFile>,
   selected: ManagedFile?, content: ByteArray?, loading: Boolean, error: Boolean,
   onRetry: () -> Unit, onOpenSpace: (ManagedFileSpace) -> Unit,
-  onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier) {
+  onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier,
+  onSaveFileVersion: suspend (ManagedFile, String) -> Unit) {
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (error) OutlinedButton(onClick = onRetry, modifier = Modifier.testTag("notes-files-retry")) {
       Text(stringResource(R.string.progress_load_failed))
@@ -1149,6 +1162,7 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
         modifier = Modifier.testTag("notes-file-title"))
       Text(selected.relativePath, style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
+      FileVersionAction(selected, onSaveFileVersion)
       val bitmap = remember(content) { content?.takeIf { isBitmapPreview(selected.name, selected.mimeType) }
         ?.let { bytes ->
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

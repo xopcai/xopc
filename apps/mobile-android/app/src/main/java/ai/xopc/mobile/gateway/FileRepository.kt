@@ -2,12 +2,16 @@ package ai.xopc.mobile.gateway
 
 import java.net.URLEncoder
 import org.json.JSONObject
+import java.util.UUID
 
 data class ManagedFileSpace(val id: String, val title: String, val writable: Boolean)
 data class ManagedFile(val id: String, val spaceId: String, val name: String,
-  val relativePath: String, val kind: String, val mimeType: String, val size: Long)
+  val relativePath: String, val kind: String, val mimeType: String, val size: Long,
+  val revision: String = "", val capabilities: Set<String> = emptySet()) {
+  val canSaveVersion: Boolean
+    get() = kind == "file" && size <= 8 * 1024 * 1024 && revision.isNotBlank() && "save_version" in capabilities
+}
 
-/** Read-only Files projection for the Notes tab and its search results. */
 class FileRepository(private val gateway: GatewaySession) {
   fun spaces(): List<ManagedFileSpace> {
     val rows = JSONObject(gateway.request("/api/files/spaces")).getJSONArray("spaces")
@@ -29,11 +33,42 @@ class FileRepository(private val gateway: GatewaySession) {
     val rows = JSONObject(gateway.request(route)).getJSONArray("items")
     require(rows.length() <= 50) { "INVALID_FILE_LIST" }
     return (0 until rows.length()).map { index ->
-      val row = rows.getJSONObject(index)
-      ManagedFile(row.getString("id"), row.getString("spaceId"), row.getString("name"),
-        row.getString("relativePath"), row.getString("kind"),
-        row.optString("mimeType"), row.optLong("size"))
+      parseFile(rows.getJSONObject(index))
     }
+  }
+
+  fun resource(id: String): ManagedFile = parseFile(
+    JSONObject(gateway.request("/api/files/${encode(id)}")).getJSONObject("resource"),
+  )
+
+  fun resolveConversationFile(conversationId: String, media: ConversationMedia): ManagedFile? {
+    if (media.uri.startsWith("xopc-file:")) {
+      return resource(android.net.Uri.decode(media.uri.removePrefix("xopc-file:")))
+    }
+    media.fileId?.let { return resource(it) }
+    val path = media.workspaceRelativePath?.takeIf(String::isNotBlank) ?: return null
+    val spaceId = JSONObject(gateway.request("/api/files/contexts/session/${encode(conversationId)}"))
+      .getJSONObject("space").getString("id")
+    val body = JSONObject().put("spaceId", spaceId).put("path", path)
+    return parseFile(JSONObject(gateway.request("/api/files/resolve", "POST", body.toString()))
+      .getJSONObject("resource"))
+  }
+
+  fun saveVersion(file: ManagedFile, requestId: String) {
+    require(file.canSaveVersion) { "FILE_VERSION_UNAVAILABLE" }
+    UUID.fromString(requestId)
+    val body = JSONObject().put("id", requestId).put("revision", file.revision)
+    val result = JSONObject(gateway.request("/api/files/${encode(file.id)}/versions", "POST", body.toString()))
+    require(result.getJSONObject("version").getString("id") == requestId) { "INVALID_FILE_VERSION" }
+  }
+
+  private fun parseFile(row: JSONObject): ManagedFile {
+    val capabilities = row.optJSONArray("capabilities")
+    return ManagedFile(row.getString("id"), row.getString("spaceId"), row.getString("name"),
+      row.getString("relativePath"), row.getString("kind"), row.optString("mimeType"), row.optLong("size"),
+      row.optString("revision"), (0 until (capabilities?.length() ?: 0)).mapNotNull {
+        capabilities?.optString(it)?.takeIf(String::isNotBlank)
+      }.toSet())
   }
 
   fun content(id: String): ByteArray {

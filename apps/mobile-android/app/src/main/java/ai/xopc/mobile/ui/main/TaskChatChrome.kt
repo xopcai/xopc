@@ -75,7 +75,7 @@ internal class TaskChatNavigation {
       return true
     }
     if (connection.selectedConversationId != source.conversationId ||
-      connection.quickOpenedConversationId != null) pendingSource = null
+      connection.chatNavigationId != null) pendingSource = null
     return false
   }
 }
@@ -84,7 +84,7 @@ internal class TaskChatNavigation {
 internal fun rememberTaskChatNavigation(connection: ConnectionUiState): TaskChatNavigation {
   val navigation = remember(connection.profile?.gatewayId) { TaskChatNavigation() }
   val context = androidx.compose.ui.platform.LocalContext.current
-  LaunchedEffect(connection.progress.taskChatError, connection.selectedConversationId, connection.quickOpenedConversationId) {
+  LaunchedEffect(connection.progress.taskChatError, connection.selectedConversationId, connection.chatNavigationId) {
     if (navigation.settle(connection)) android.widget.Toast.makeText(context,
       R.string.progress_task_chat_error, android.widget.Toast.LENGTH_SHORT).show()
   }
@@ -100,7 +100,8 @@ internal fun TaskConversationChrome(connection: ConnectionUiState, navigation: T
   val taskId = connection.taskConversationTaskId ?: return
   val title = connection.context?.task?.title ?: connection.taskWelcome?.taskTitle.orEmpty()
   TaskChatChrome(taskId, title, connection.progress, { navigation.close(onConversation, onTab) },
-    { onReload(taskId) }, onCommand, onStart, onSave, onProjects, onSearch, onOptions, bottomClearance)
+    { onReload(taskId) }, onCommand, onStart, onSave, onProjects, onSearch, onOptions, bottomClearance,
+    returnTab = navigation.returnTab)
 }
 
 /** Task chrome overlays the existing timeline; the ordinary composer remains owned by MainContent. */
@@ -140,7 +141,7 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
         IconButton(onClick = onClose, modifier = Modifier.testTag("task-chat-close")) {
           Icon(painterResource(R.drawable.action_close), stringResource(when (returnTab) {
             HomeTab.Assistant -> R.string.task_chat_return_conversation
-            HomeTab.Progress, HomeTab.Notes -> R.string.task_chat_return_task
+            HomeTab.Progress, HomeTab.Projects, HomeTab.Automations, HomeTab.Notes -> R.string.task_chat_return_task
             else -> R.string.task_chat_return_history
           }))
         }
