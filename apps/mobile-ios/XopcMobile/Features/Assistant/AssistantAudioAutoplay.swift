@@ -95,6 +95,7 @@ private struct PendingAssistantAudio {
                 let bytes = try await ChatAttachmentLoader(configuration: next.configuration)
                     .load(next.attachment, conversationID: next.conversationID)
                 guard current == generation, !Task.isCancelled else { return }
+                GeneratedMusicPlayback.shared.yieldAudioSession()
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
                 try AVAudioSession.sharedInstance().setActive(true)
                 ownsAudioSession = true

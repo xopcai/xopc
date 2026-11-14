@@ -5,6 +5,7 @@ struct PersonalAgentAvatar: View {
     let agent: PersonalAgentRecord?
     let size: CGFloat
     let active: Bool
+    var working = false
 
     @State private var picture: UIImage?
 
@@ -17,7 +18,7 @@ struct PersonalAgentAvatar: View {
                     .frame(width: size, height: size)
                     .clipShape(Circle())
             } else {
-                LoopiIcon(size: size, active: active, interactive: false)
+                LoopiIcon(size: size, active: active, working: working, interactive: false)
             }
         }
         .task(id: AvatarLoadKey(configuration: configuration, agentID: agent?.agentId, appearance: agent?.appearance, revision: agent?.revision)) {
@@ -57,6 +58,8 @@ struct ConfiguredAgentAvatar: View {
                 Image(uiImage: picture).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle())
             } else if agent?.avatar?.hasPrefix("xopc:loopi:") == true {
                 LoopiIcon(size: size, active: active)
+            } else if let name = agent?.builtInAvatar {
+                Image(name).resizable().scaledToFit().frame(width: size, height: size).clipShape(Circle())
             } else {
                 Text(verbatim: String((agent?.id ?? "").prefix(1)).uppercased())
                     .frame(width: size, height: size).background(Color.accentColor.opacity(0.12), in: Circle())

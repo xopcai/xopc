@@ -222,7 +222,7 @@ struct PersonalConnectionCard: View {
 
 enum AssistantAction: String, CaseIterable, Identifiable {
     case photo, camera, localFile, voice
-    case noteReference, taskReference, fileReference, newConversation
+    case noteReference, taskReference, fileReference
 
     var id: String {
         rawValue
@@ -237,7 +237,6 @@ enum AssistantAction: String, CaseIterable, Identifiable {
         case .noteReference: "引用笔记"
         case .taskReference: "引用任务"
         case .fileReference: "引用文件"
-        case .newConversation: "新建会话"
         }
     }
 
@@ -249,7 +248,6 @@ enum AssistantAction: String, CaseIterable, Identifiable {
         case .voice: "mic"
         case .noteReference: "doc"
         case .taskReference: "checkmark.circle"
-        case .newConversation: "square.and.pencil"
         }
     }
 
@@ -266,7 +264,6 @@ enum AssistantAction: String, CaseIterable, Identifiable {
 struct AssistantActionPanel: View {
     let canReferenceFiles: Bool
     let onSelect: (AssistantAction) -> Void
-    let onSearch: () -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -275,44 +272,23 @@ struct AssistantActionPanel: View {
     }
 
     var body: some View {
-        TabView {
-            LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(AssistantAction.allCases) { action in
-                    Button {
-                        onSelect(action)
-                    } label: {
-                        tile(title: Text(action.title), image: action.systemImage)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(action == .fileReference && !canReferenceFiles)
-                    .accessibilityLabel(action.title)
-                    .accessibilityHint(action == .fileReference && !canReferenceFiles
-                        ? AppLocalization.string("发送第一条消息后可引用文件", locale: AppLocalization.selectedLocale)
-                        : "")
-                }
-            }
-            .padding(.horizontal, 6)
-            .padding(.top, 4)
-            .padding(.bottom, 20)
-            .frame(maxHeight: .infinity, alignment: .top)
-
-            HStack(alignment: .top, spacing: 8) {
-                Button(action: onSearch) {
-                    tile(title: Text("搜索消息"), image: "magnifyingglass")
+        LazyVGrid(columns: columns, spacing: 4) {
+            ForEach(AssistantAction.allCases) { action in
+                Button {
+                    onSelect(action)
+                } label: {
+                    tile(title: Text(action.title), image: action.systemImage)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("搜索消息")
-                .accessibilityIdentifier("chat-action-search")
-                .frame(maxWidth: .infinity)
-                ForEach(0 ..< 3, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
+                .disabled(action == .fileReference && !canReferenceFiles)
+                .accessibilityLabel(action.title)
+                .accessibilityIdentifier("assistant-action-\(action.rawValue)")
+                .accessibilityHint(action == .fileReference && !canReferenceFiles
+                    ? AppLocalization.string("发送第一条消息后可引用文件", locale: AppLocalization.selectedLocale)
+                    : "")
             }
-            .padding(.horizontal, 6)
-            .padding(.top, 4)
-            .padding(.bottom, 20)
-            .frame(maxHeight: .infinity, alignment: .top)
         }
-        .tabViewStyle(.page(indexDisplayMode: .always))
-        .frame(height: dynamicTypeSize.isAccessibilitySize ? 420 : 196)
+        .padding(8)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
         .padding(.bottom, 8)
         .accessibilityIdentifier("assistant-action-panel")

@@ -18,6 +18,10 @@ enum ChatAppearance {
             : Color(red: 226 / 255, green: 232 / 255, blue: 241 / 255)
     }
 
+    static func composer(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? card(scheme) : Color(red: 210 / 255, green: 218 / 255, blue: 231 / 255)
+    }
+
     static func action(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? Color(red: 168 / 255, green: 188 / 255, blue: 1)
             : Color(red: 36 / 255, green: 83 / 255, blue: 214 / 255)
@@ -494,6 +498,7 @@ private final class ChatAudioPlayback: NSObject, AVAudioPlayerDelegate {
                 let data = try await ChatAttachmentLoader(configuration: configuration)
                     .load(attachment, conversationID: conversationID)
                 guard current == generation, !Task.isCancelled else { return }
+                GeneratedMusicPlayback.shared.yieldAudioSession()
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
                 try AVAudioSession.sharedInstance().setActive(true)
                 ownsAudioSession = true

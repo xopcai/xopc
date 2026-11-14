@@ -10,13 +10,19 @@ struct AssistantSessionActionsView: View {
     let onConversationUpdated: (ConversationSelection) -> Void
     let onStartScopedConversation: (ProjectRecord?, String?) -> Void
     var isTaskConversation = false
+    var onSearch: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
     @State private var options = AssistantOptionsState()
 
     var body: some View {
         NavigationStack {
             List {
+                if !isTaskConversation, let onSearch {
+                    Button(action: onSearch) { optionRow("搜索消息", symbol: "magnifyingglass") }
+                        .accessibilityIdentifier("assistant-search")
+                }
                 NavigationLink {
                     ConversationContextView(configuration: configuration, conversation: conversation,
                                             summary: state.contextSummary, isLoading: state.isLoadingContext,
@@ -36,7 +42,8 @@ struct AssistantSessionActionsView: View {
                                 onStartConversation(agent.id)
                             } label: {
                                 HStack {
-                                    Text(agent.displayName)
+                                    ConfiguredAgentAvatar(configuration: configuration, agent: agent, size: 36, active: false)
+                                    Text(agent.localizedName(locale))
                                     Spacer()
                                     if agent.id == conversation?.agentId {
                                         Image(systemName: "checkmark")
@@ -45,8 +52,8 @@ struct AssistantSessionActionsView: View {
                             }
                         }.navigationTitle("选择新对话对象")
                     } label: {
-                        optionRow("对话对象", value: state.agents.first(where: { $0.id == conversation?.agentId })?.displayName
-                            ?? state.selectedAgent?.displayName ?? conversation?.agentId ?? "Main", symbol: "person.crop.circle")
+                        optionRow("对话对象", value: state.agents.first(where: { $0.id == conversation?.agentId })?.localizedName(locale)
+                            ?? state.selectedAgent?.localizedName(locale) ?? conversation?.agentId ?? "Main", symbol: "person.crop.circle")
                     }
                 }
                 if let conversation {

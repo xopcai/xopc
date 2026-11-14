@@ -115,7 +115,7 @@ struct ConversationSummary: Decodable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct ConversationSelection: Codable, Equatable, Identifiable, Sendable {
+struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
     let id: String
     let title: String
     let agentId: String

@@ -23,6 +23,13 @@ enum ChatImageSource: Equatable, Sendable {
         if raw.hasPrefix("data:image/") {
             return embeddedImage(raw)
         }
+        if raw.hasPrefix("xopc-file-version:") {
+            let components = raw.dropFirst("xopc-file-version:".count).split(separator: "/", omittingEmptySubsequences: false)
+            guard components.count == 2, let file = encodedSegment(String(components[0])),
+                  case .managedFile? = ChatMessageLink.resolve("xopc-file:" + file),
+                  UUID(uuidString: String(components[1])) != nil else { return nil }
+            return .gateway(path: "/api/files/\(file)/versions/\(components[1])/content", query: [])
+        }
         if raw.hasPrefix("xopc-file:") {
             guard let id = encodedSegment(String(raw.dropFirst("xopc-file:".count))) else { return nil }
             return .gateway(path: "/api/files/\(id)/content", query: [])

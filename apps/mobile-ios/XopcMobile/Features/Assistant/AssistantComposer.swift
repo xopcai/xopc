@@ -17,7 +17,7 @@ struct AssistantComposer: View {
     @Binding var showingPhotoPicker: Bool
     @Binding var showingFilePicker: Bool
     @Binding var showingCameraPicker: Bool
-    @Binding var showingVoiceRecorder: Bool
+    @Binding var voiceMode: Bool
     @Binding var showingReferencePicker: Bool
     @Binding var referenceKind: ContextReferenceKind
     @Binding var isActionPanelExpanded: Bool
@@ -29,8 +29,8 @@ struct AssistantComposer: View {
     let onStop: () -> Void
     let onSend: () -> Void
     let onSteer: () -> Void
-    let onNewConversation: () -> Void
-    let onSearch: () -> Void
+    let onVoiceStart: () -> Void
+    let onVoiceAttachment: (MessageAttachment) -> Void
 
     @FocusState private var isComposerFocused: Bool
     @State private var previewAttachment: MessageAttachment?
@@ -72,28 +72,25 @@ struct AssistantComposer: View {
             if isActionPanelExpanded {
                 AssistantActionPanel(
                     canReferenceFiles: canReferenceFiles,
-                    onSelect: selectAction,
-                    onSearch: {
-                        isActionPanelExpanded = false
-                        onSearch()
-                    }
+                    onSelect: selectAction
                 )
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.horizontal, 8)
-        .padding(.top, 8)
+        .padding(.top, 4)
         .onChange(of: focusAllowed) {
             if !focusAllowed {
                 isComposerFocused = false; isActionPanelExpanded = false
             }
         }
         .onChange(of: isComposerFocused) {
-            onInputFocusChanged(isComposerFocused)
+            onInputFocusChanged(isComposerFocused || voiceMode)
             if isComposerFocused {
                 isActionPanelExpanded = false
             }
         }
+        .onChange(of: voiceMode) { onInputFocusChanged(isComposerFocused || voiceMode) }
         .task(id: configuration) { await loadPalette() }
         .sheet(item: $previewAttachment) { attachment in
             NavigationStack {
@@ -192,25 +189,37 @@ struct AssistantComposer: View {
         HStack(spacing: 8) {
             Button {
                 isComposerFocused = false
-                showingVoiceRecorder = true
+                isActionPanelExpanded = false
+                voiceMode.toggle()
             } label: {
-                Image(systemName: "mic")
-                    .font(.system(size: 22))
-                    .frame(width: 40, height: 44)
+                Image(systemName: voiceMode ? "keyboard" : "mic")
+                    .font(.system(size: 20)).frame(width: 44, height: 44)
             }
-            .accessibilityLabel("语音输入")
-
-            TextField(placeholder, text: $draft, axis: .vertical)
-                .foregroundStyle(.primary)
-                .focused($isComposerFocused)
-                .lineLimit(1 ... 3)
-                .submitLabel(.send)
-                .onSubmit {
-                    if sendEnabled {
-                        onSend()
+            .accessibilityLabel(voiceMode ? "键盘输入" : "语音输入")
+            if voiceMode {
+                HoldToSpeakBar(configuration: configuration, onStart: onVoiceStart, onAttachment: onVoiceAttachment,
+                               onText: { text in
+                                   draft += draft.isEmpty ? text : "\n" + text
+                                   voiceMode = false
+                                   Task { @MainActor in
+                                       await Task.yield()
+                                       if focusAllowed, !voiceMode { isComposerFocused = true }
+                                   }
+                               },
+                               onError: { attachmentError = $0.isEmpty ? nil : $0 })
+            } else {
+                TextField(placeholder, text: $draft, axis: .vertical)
+                    .foregroundStyle(.primary)
+                    .focused($isComposerFocused)
+                    .lineLimit(1 ... 3)
+                    .submitLabel(.send)
+                    .onSubmit {
+                        if sendEnabled {
+                            onSend()
+                        }
                     }
-                }
-                .accessibilityIdentifier("assistant-chat-composer")
+                    .accessibilityIdentifier("assistant-chat-composer")
+            }
 
             if isRunActive {
                 Button(action: onStop) {
@@ -251,7 +260,8 @@ struct AssistantComposer: View {
         .foregroundStyle(ChatAppearance.action(colorScheme))
         .padding(.horizontal, 8)
         .padding(.vertical, 1)
-        .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 24))
+        .background(ChatAppearance.composer(colorScheme), in: .rect(cornerRadius: 24))
+        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color.primary.opacity(0.12)))
     }
 
     private var attachmentStrip: some View {
@@ -387,11 +397,10 @@ struct AssistantComposer: View {
         case .photo: showingPhotoPicker = true
         case .camera: showingCameraPicker = true
         case .localFile: showingFilePicker = true
-        case .voice: showingVoiceRecorder = true
+        case .voice: voiceMode = true
         case .noteReference, .taskReference, .fileReference:
             referenceKind = action.referenceKind ?? .note
             showingReferencePicker = true
-        case .newConversation: onNewConversation()
         }
     }
 

@@ -5,7 +5,6 @@ import SwiftUI
 struct ProgressHubView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
-    let onStartProjectConversation: (ProjectRecord) -> Void
 
     @Environment(\.locale) private var locale
     @State private var home: HomeSnapshot?
@@ -77,8 +76,7 @@ struct ProgressHubView: View {
                             TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("任务")
                         } label: { toolRow("任务", symbol: "checkmark.circle") }
                         NavigationLink {
-                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation,
-                                         onStartProjectConversation: onStartProjectConversation).navigationTitle("项目")
+                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("项目")
                         } label: { toolRow("项目", symbol: "folder") }
                     }.buttonStyle(.plain)
                     NavigationLink {
@@ -100,8 +98,7 @@ struct ProgressHubView: View {
                             TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("任务")
                         }
                         NavigationLink("项目") {
-                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation,
-                                         onStartProjectConversation: onStartProjectConversation).navigationTitle("项目")
+                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("项目")
                         }
                         NavigationLink("自动化") {
                             AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("自动化")
@@ -242,12 +239,10 @@ struct ProgressHubView: View {
         case let .task(id):
             TaskDetailView(configuration: configuration, taskID: id)
         case .projects:
-            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation,
-                         onStartProjectConversation: onStartProjectConversation).navigationTitle("项目")
+            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("项目")
         case let .project(id):
             ProjectDetailView(configuration: configuration, projectID: id,
-                              onOpenConversation: onOpenConversation,
-                              onStartProjectConversation: onStartProjectConversation)
+                              onOpenConversation: onOpenConversation)
         case .automations:
             AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("自动化")
         case let .automation(id):
@@ -482,12 +477,13 @@ private struct TasksView: View {
 struct ProjectsView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
-    let onStartProjectConversation: (ProjectRecord) -> Void
 
     @State private var items: [ProjectRecord] = []
     @State private var filter = "active"
+    @State private var searchText = ""
     @State private var isLoading = false
     @State private var error: String?
+    @State private var creating = false
 
     var body: some View {
         List {
@@ -509,7 +505,9 @@ struct ProjectsView: View {
                             configuration: configuration,
                             projectID: project.id,
                             onOpenConversation: onOpenConversation,
-                            onStartProjectConversation: onStartProjectConversation
+                            onProjectUpdated: { updated in
+                                if let index = items.firstIndex(where: { $0.id == updated.id }) { items[index] = updated }
+                            }
                         )
                     } label: {
                         ProgressRow(
@@ -524,13 +522,34 @@ struct ProjectsView: View {
                 }
             }
         }
+        .searchable(text: $searchText, prompt: "搜索项目")
         .refreshable { await load() }
         .task { await load() }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("新建项目", systemImage: "plus") { creating = true }
+                    .accessibilityIdentifier("project-create")
+            }
+        }
+        .sheet(isPresented: $creating) {
+            ProjectManageView(configuration: configuration) { project in
+                filter = "active"
+                items.insert(project, at: 0)
+            }
+        }
         .alert("无法读取项目", isPresented: errorBinding) { Button("好", role: .cancel) {} } message: { Text(error ?? "未知错误") }
     }
 
     private var visibleItems: [ProjectRecord] {
-        items.filter { filter == "all" || (filter == "archived") == ($0.status == "archived") }
+        items.filter { project in
+            (filter == "all" || (filter == "archived") == (project.status == "archived")) &&
+                (searchText.isEmpty || project.name.localizedCaseInsensitiveContains(searchText)
+                    || project.description?.localizedCaseInsensitiveContains(searchText) == true)
+        }
+            .sorted { lhs, rhs in
+                if (lhs.pinnedAt != nil) != (rhs.pinnedAt != nil) { return lhs.pinnedAt != nil }
+                return lhs.updatedAt == rhs.updatedAt ? lhs.id < rhs.id : lhs.updatedAt > rhs.updatedAt
+            }
     }
 
     private var errorBinding: Binding<Bool> {

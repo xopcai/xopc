@@ -4,6 +4,7 @@ import SwiftUI
 // swiftlint:disable:next type_body_length
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @State private var appState = AppState()
     @State private var realtimeVoiceCall = RealtimeVoiceCall()
     @State private var personalAgent = PersonalAgentState()
@@ -23,6 +24,8 @@ struct AppRootView: View {
     @State private var pendingAttention = 0
     @State private var defaultAgentID = "main"
     @State private var messageLinks = ChatMessageLinkRouter()
+    @State private var music = GeneratedMusicPlayback.shared
+    @State private var musicSourceToOpen: GeneratedMusicTrack?
     @AppStorage("app.language") private var language = AppLanguage.system.rawValue
     @AppStorage("app.appearance") private var appearance = AppAppearance.system.rawValue
 
@@ -50,6 +53,13 @@ struct AppRootView: View {
         })
         .environment(\.locale, (AppLanguage(rawValue: language) ?? .system).locale)
         .preferredColorScheme((AppAppearance(rawValue: appearance) ?? .system).colorScheme)
+        .sheet(isPresented: $music.expanded, onDismiss: openMusicSource) {
+            GeneratedMusicPlayer(playback: music) { track in
+                musicSourceToOpen = track
+                music.expanded = false
+            }
+        }
+        .onChange(of: appState.gatewayConfiguration) { music.validateScope(appState.gatewayConfiguration) }
         .overlay(alignment: .top) {
             if realtimeVoiceCall.phase != .idle, !realtimeVoiceCall.expanded {
                 RealtimeVoiceMiniBar(call: realtimeVoiceCall)
@@ -108,12 +118,33 @@ struct AppRootView: View {
             if scenePhase == .active {
                 Task { await appState.refreshGatewayOnForeground() }
                 Task { await realtimeVoiceCall.resumeAfterInterruption() }
+            } else {
+                music.checkpoint()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notification in
+            if notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ==
+                AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue { music.pause() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
-            guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-                  raw == AVAudioSession.InterruptionType.ended.rawValue else { return }
-            Task { await realtimeVoiceCall.resumeAfterInterruption() }
+            guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
+            if raw == AVAudioSession.InterruptionType.began.rawValue { music.pause() }
+            if raw == AVAudioSession.InterruptionType.ended.rawValue {
+                Task { await realtimeVoiceCall.resumeAfterInterruption() }
+            }
+        }
+    }
+
+    private func openMusicSource() {
+        guard let track = musicSourceToOpen else { return }
+        musicSourceToOpen = nil
+        let configuration = appState.gatewayConfiguration
+        guard track.configurationScope == ComposerDraftStore.accountScope(configuration),
+              !appState.homePath.isEmpty || appState.selectedConversation?.id != track.conversationID else { return }
+        if let record = personalAgent.record(using: configuration), record.conversationId == track.conversationID {
+            appState.openPersonalConversation(record, remember: true)
+        } else {
+            appState.openConversation(id: track.conversationID, title: track.source, agentId: track.sourceAgentID ?? "main")
         }
     }
 
@@ -126,6 +157,11 @@ struct AppRootView: View {
                 chatScreen
                     .toolbar(.hidden, for: .navigationBar)
                     .navigationDestination(for: HomeDestination.self, destination: destination)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !appState.homePath.isEmpty || phoneVisible {
+                    GeneratedMusicDock(playback: music)
+                }
             }
             .simultaneousGesture(sidebarGesture(width: width), including: canDragSidebar ? .all : .none)
             .accessibilityHidden(sidebarOpen)
@@ -144,6 +180,7 @@ struct AppRootView: View {
                 }
             }
         }
+        .background(ChatAppearance.canvas(colorScheme).ignoresSafeArea())
         .task(id: SidebarAttentionLoad(configuration: appState.gatewayConfiguration, language: language)) {
             let configuration = appState.gatewayConfiguration
             while !Task.isCancelled {
@@ -214,6 +251,7 @@ struct AppRootView: View {
             onInputFocusChanged: { composerFocused = $0 },
             onOpenSidebar: { setSidebar(true) },
             onOpenProgress: { navigate(.progress) },
+            onOpenPersonalOverview: { navigate(.personalOverview) },
             onConversationUnavailable: { id in await recoverUnavailableConversation(id, using: configuration) },
             pendingAttention: pendingAttention,
             sidebarOpen: sidebarOpen,
@@ -249,15 +287,21 @@ struct AppRootView: View {
                               personalConversationID: personalAgent.record(using: configuration)?.conversationId,
                               onOpenSettings: { settingsPresented = true }, onDelete: appState.conversationUnavailable)
         case .progress:
-            ProgressHubView(configuration: configuration, onOpenConversation: appState.openConversation,
-                            onStartProjectConversation: appState.startProjectConversation)
+            ProgressHubView(configuration: configuration, onOpenConversation: appState.openConversation)
         case .projects:
-            ProjectsView(configuration: configuration, onOpenConversation: appState.openConversation,
-                         onStartProjectConversation: appState.startProjectConversation).navigationTitle("项目")
+            ProjectsView(configuration: configuration, onOpenConversation: appState.openConversation).navigationTitle("项目")
         case .automations:
             AutomationsView(configuration: configuration, onOpenConversation: appState.openConversation).navigationTitle("自动化")
         case .library:
             NotesView(configuration: configuration, onOpenConversation: appState.openConversation)
+        case .personalOverview:
+            if let agent = personalAgent.record(using: configuration) {
+                PersonalAgentOverview(configuration: configuration, agent: agent, attention: pendingAttention,
+                                      onEdit: { personalAgent.applyProfile($0, using: configuration) },
+                                      onModelSaved: appState.updateConversation, onOpenConversation: appState.openConversation)
+            }
+        case .settings:
+            AppSettingsView(configuration: configuration, onOpenGatewaySettings: { settingsPresented = true }, showsProfile: true)
         case .profile:
             ProfileView(configuration: configuration, onOpenGatewaySettings: { settingsPresented = true },
                         personalAgent: personalAgent.record(using: configuration), personalAgentLoading: personalAgent.isLoading || personalAgent.isOpening,

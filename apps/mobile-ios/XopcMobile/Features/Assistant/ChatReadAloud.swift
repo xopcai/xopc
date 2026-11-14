@@ -177,6 +177,7 @@ enum ChatSpeechText {
                 data = try await gateway.synthesizeSpeech(text: chunks[chunkIndex], language: language)
             }
             guard generation == self.generation, !Task.isCancelled else { return }
+            GeneratedMusicPlayback.shared.yieldAudioSession()
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
             try AVAudioSession.sharedInstance().setActive(true)
             isAudioSessionActive = true

@@ -4,7 +4,7 @@ struct ProjectDetailView: View {
     let configuration: GatewayConfiguration
     let projectID: String
     let onOpenConversation: (String, String, String) -> Void
-    let onStartProjectConversation: (ProjectRecord) -> Void
+    var onProjectUpdated: (ProjectRecord) -> Void = { _ in }
 
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -18,6 +18,10 @@ struct ProjectDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var creationSheet: ProjectCreationSheet?
+    @State private var managingProject = false
+    @State private var setupPrompt: String?
+    @State private var projectChat: ConversationSelection?
+    @State private var localChats: [ConversationSelection] = []
 
     var body: some View {
         Group {
@@ -89,8 +93,39 @@ struct ProjectDetailView: View {
             switch sheet {
             case .task: ProjectTaskEditorView(configuration: configuration, projectID: projectID)
             case .note: NoteEditorView(configuration: configuration, projectID: projectID)
-            case .automation: AutomationEditorView(configuration: configuration, projectID: projectID)
             }
+        }
+        .toolbar {
+            if let project {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("添加到项目", systemImage: "plus") {
+                        Button("新建项目对话", systemImage: "bubble.left") { startProjectChat(project) }
+                        Button("新建项目任务", systemImage: "checklist") { creationSheet = .task }
+                        Button("新建项目笔记", systemImage: "note.text") { creationSheet = .note }
+                        Button("新建项目自动化", systemImage: "clock") { setupPrompt = "" }
+                        Button("项目设置", systemImage: "gearshape") { managingProject = true }
+                    }
+                    .accessibilityIdentifier("project-add")
+                }
+            }
+        }
+        .sheet(isPresented: $managingProject) {
+            if let project {
+                ProjectManageView(configuration: configuration, project: project) {
+                    self.project = $0
+                    onProjectUpdated($0)
+                }
+            }
+        }
+        .modifier(AutomationSetupPresentation(configuration: configuration, scope: .project(projectID),
+                                              prompt: $setupPrompt, onClosed: { Task { await load() } }))
+        .navigationDestination(item: $projectChat) { chat in
+            ScopedAssistantChat(configuration: configuration, selection: chat,
+                                heading: chat.isDraft ? "新建项目对话" : LocalizedStringKey(chat.title),
+                                onMaterialized: { _ in removeLocalChat(chat.id) })
+        }
+        .onChange(of: projectChat) { _, chat in
+            if chat == nil { Task { await load() } }
         }
         .alert("项目内容未完整载入", isPresented: errorBinding) {
             Button("重试") { Task { await load() } }
@@ -122,7 +157,7 @@ struct ProjectDetailView: View {
     private func projectSessions(_ project: ProjectRecord) -> some View {
         Section {
             Button {
-                onStartProjectConversation(project)
+                startProjectChat(project)
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "plus.bubble")
@@ -133,11 +168,18 @@ struct ProjectDetailView: View {
                 }
                 .frame(minHeight: 48)
             }
-            if sessions.isEmpty {
+            ForEach(visible(localChats)) { draft in
+                Button("对话草稿", systemImage: "doc.text") { projectChat = draft }
+                    .accessibilityIdentifier("project-draft-\(draft.id)")
+                    .swipeActions {
+                        Button("删除", role: .destructive) { removeLocalChat(draft.id) }
+                    }
+            }
+            if sessions.isEmpty && localChats.isEmpty {
                 Text("暂无项目对话").foregroundStyle(.secondary)
             } else {
                 ForEach(visible(sessions)) { session in
-                    Button { onOpenConversation(session.id, session.displayName, session.agentId) } label: {
+                    Button { projectChat = ConversationSelection(summary: session) } label: {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: "bubble.left")
                                 .foregroundStyle(.blue)
@@ -193,6 +235,7 @@ struct ProjectDetailView: View {
         Section {
             if automations.isEmpty {
                 Text("暂无自动化").foregroundStyle(.secondary)
+                AutomationExamples(scope: .project(projectID)) { setupPrompt = $0 }
             } else {
                 ForEach(visible(automations)) { automation in
                     NavigationLink {
@@ -206,21 +249,44 @@ struct ProjectDetailView: View {
                     }
                 }
             }
-        } header: { sectionHeader("自动化", count: automations.count, create: .automation) }
+        } header: {
+            sectionHeader("自动化", count: automations.count, actionTitle: "新建项目自动化") { setupPrompt = "" }
+        }
     }
 
-    private func sectionHeader(_ title: LocalizedStringKey, count: Int, create: ProjectCreationSheet? = nil) -> some View {
+    private func sectionHeader(_ title: LocalizedStringKey, count: Int, create: ProjectCreationSheet? = nil,
+                               actionTitle: LocalizedStringKey? = nil, action: (() -> Void)? = nil) -> some View {
         HStack {
             Text(title)
             Spacer()
             Text(count, format: .number)
             if let create {
-                Button { creationSheet = create } label: { Image(systemName: "plus.circle.fill") }
-                    .mobileTextStyle(.sectionTitle)
-                    .accessibilityLabel(create.actionTitle)
+                Button(create.actionTitle, systemImage: "plus.circle.fill") { creationSheet = create }
+                    .labelStyle(.iconOnly).mobileTextStyle(.sectionTitle)
+            } else if let actionTitle, let action {
+                Button(actionTitle, systemImage: "plus.circle.fill", action: action)
+                    .labelStyle(.iconOnly).mobileTextStyle(.sectionTitle)
             }
         }
         .mobileTextStyle(.rowTitle)
+    }
+
+    private func startProjectChat(_ project: ProjectRecord) {
+        let draft = ConversationSelection.projectDraft(project: project)
+        do {
+            let next = [draft] + localChats
+            try ComposerDraftStore().saveProjectDrafts(next, configuration, projectID: projectID)
+            localChats = next
+            projectChat = draft
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func removeLocalChat(_ id: String) {
+        let next = localChats.filter { $0.id != id }
+        do {
+            try ComposerDraftStore().saveProjectDrafts(next, configuration, projectID: projectID)
+            localChats = next
+        } catch { self.error = error.localizedDescription }
     }
 
     private func visible<T>(_ items: [T]) -> [T] {
@@ -238,6 +304,9 @@ struct ProjectDetailView: View {
     @MainActor private func load() async {
         isLoading = true
         defer { isLoading = false }
+        do {
+            localChats = try ComposerDraftStore().readProjectDrafts(configuration, projectID: projectID)
+        } catch { self.error = error.localizedDescription }
         async let home = try? GatewayClient(configuration: configuration).fetchHome(locale: locale.identifier)
         do {
             async let projectRequest = GatewayClient(configuration: configuration).fetchProject(id: projectID)
@@ -248,6 +317,11 @@ struct ProjectDetailView: View {
             let result = try await (projectRequest, sessionsRequest, tasksRequest, notesRequest, automationsRequest)
             project = result.0
             sessions = result.1
+            let materialized = Set(sessions.map(\.id))
+            if localChats.contains(where: { materialized.contains($0.id) }) {
+                localChats.removeAll { materialized.contains($0.id) }
+                try ComposerDraftStore().saveProjectDrafts(localChats, configuration, projectID: projectID)
+            }
             tasks = result.2.items
             notes = result.3.items
             automations = result.4
@@ -262,7 +336,6 @@ struct ProjectDetailView: View {
 private enum ProjectCreationSheet: String, Identifiable {
     case task
     case note
-    case automation
 
     var id: String {
         rawValue
@@ -272,7 +345,6 @@ private enum ProjectCreationSheet: String, Identifiable {
         switch self {
         case .task: "新建项目任务"
         case .note: "新建项目笔记"
-        case .automation: "新建项目自动化"
         }
     }
 }

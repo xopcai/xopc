@@ -7,7 +7,7 @@ struct AutomationsView: View {
     @State private var items: [AutomationRecord] = []
     @State private var filter = "all"
     @State private var searchText = ""
-    @State private var isCreating = false
+    @State private var setupPrompt: String?
     @State private var isLoading = false
     @State private var error: String?
     @FocusState private var isSearchFocused: Bool
@@ -48,14 +48,6 @@ struct AutomationsView: View {
                 filterButton("已暂停", value: "paused", count: searchedItems.filter { !$0.enabled }.count)
             }
             .listRowBackground(Color.clear)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("管理定时运行、状态与最近结果").font(.subheadline.weight(.semibold))
-                Text("已加载 \(items.count) 项").mobileTextStyle(.caption).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .background(Color.blue.opacity(0.08), in: .rect(cornerRadius: 16))
-            .listRowBackground(Color.clear)
             if isLoading, items.isEmpty {
                 ProgressListSkeleton()
             } else if visibleItems.isEmpty {
@@ -63,6 +55,9 @@ struct AutomationsView: View {
                     ContentUnavailableView("暂无自动化", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
                                            description: Text("已配置的自动化会显示在这里。"))
                         .listRowBackground(Color.clear)
+                    if items.isEmpty, error == nil {
+                        AutomationExamples(scope: .workspace) { setupPrompt = $0 }
+                    }
                 } else {
                     ContentUnavailableView("没有匹配的自动化", systemImage: "magnifyingglass",
                                            description: Text("试试其他关键词或清除搜索。"))
@@ -91,12 +86,13 @@ struct AutomationsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("新建自动化", systemImage: "plus") { isCreating = true }
+                Button("新建自动化", systemImage: "plus") { isSearchFocused = false; setupPrompt = "" }
+                    .disabled(setupPrompt != nil)
+                    .accessibilityIdentifier("automation-create-in-chat")
             }
         }
-        .sheet(isPresented: $isCreating, onDismiss: { Task { await load() } }) {
-            AutomationEditorView(configuration: configuration)
-        }
+        .modifier(AutomationSetupPresentation(configuration: configuration, scope: .workspace,
+                                              prompt: $setupPrompt, onClosed: { Task { await load() } }))
         .alert("无法读取自动化", isPresented: errorBinding) { Button("好", role: .cancel) {} } message: { Text(error ?? "未知错误") }
     }
 

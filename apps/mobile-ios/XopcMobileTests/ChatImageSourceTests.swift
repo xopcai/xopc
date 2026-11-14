@@ -42,6 +42,14 @@ struct ChatImageSourceTests {
         #expect(query?.first(where: { $0.name == "uri" })?.value == "media://messages/image.png")
     }
 
+    @Test func versionedAttachmentsUseTheirImmutableContentRoute() {
+        let id = "11111111-1111-4111-8111-111111111111"
+        let source = ChatImageSource.resolve("xopc-file-version:report/\(id)", conversationID: nil)
+        #expect(source == .gateway(path: "/api/files/report/versions/\(id)/content", query: []))
+        #expect(ChatImageSource.resolve("xopc-file-version:report/latest", conversationID: nil) == nil)
+        #expect(ChatImageSource.resolve("xopc-file-version:folder%2Freport/\(id)", conversationID: nil) == nil)
+    }
+
     @Test func externalImagesNeverReceiveGatewayCredentials() {
         let request = ChatImageSource.resolve("https://example.com/image.png", conversationID: "chat-1")?
             .request(configuration: configuration)

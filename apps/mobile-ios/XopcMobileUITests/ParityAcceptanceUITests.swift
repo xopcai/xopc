@@ -282,7 +282,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["引用笔记"].exists)
         XCTAssertTrue(app.buttons["引用任务"].exists)
         XCTAssertTrue(app.buttons["引用文件"].exists)
-        XCTAssertTrue(app.buttons["新建会话"].exists)
+        XCTAssertFalse(app.buttons["assistant-action-newConversation"].exists)
         XCTAssertGreaterThan(app.buttons["照片"].frame.minY, app.descendants(matching: .any)["assistant-chat-composer"].frame.maxY)
         app.buttons["引用任务"].tap()
         XCTAssertTrue(app.navigationBars["添加引用"].waitForExistence(timeout: 5))
@@ -292,22 +292,13 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 5))
     }
 
-    func testAssistantVoiceRecordingPreview() {
+    func testAssistantVoiceModeReplacesTheComposerWithHoldToSpeak() {
         openNewConversation()
-        app.buttons["mic"].tap()
-        let start = app.buttons["开始录音"]
-        XCTAssertTrue(start.waitForExistence(timeout: 8))
-        start.tap()
-        let consent = app.buttons["同意并开始"]
-        if consent.waitForExistence(timeout: 2) {
-            consent.tap()
-        }
-        XCTAssertTrue(app.buttons["完成"].waitForExistence(timeout: 8))
-        app.buttons["完成"].tap()
-        XCTAssertTrue(app.buttons["试听"].waitForExistence(timeout: 8))
-        app.buttons["试听"].tap()
-        XCTAssertTrue(app.buttons["试听"].waitForExistence(timeout: 8))
-        app.buttons["取消"].tap()
+        app.buttons["语音输入"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["chat-hold-to-speak"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.navigationBars["语音"].exists)
+        app.buttons["键盘输入"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["assistant-chat-composer"].firstMatch.waitForExistence(timeout: 5))
     }
 
     func testAssistantKeyboardAndAddPanelAreMutuallyExclusive() {
@@ -320,7 +311,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         capture("assistant-keyboard-tab-visibility")
 
         app.buttons["添加附件或引用"].tap()
-        let panel = app.collectionViews["assistant-action-panel"]
+        let panel = app.descendants(matching: .any)["assistant-action-panel"].firstMatch
         XCTAssertTrue(panel.waitForExistence(timeout: 5))
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         capture("assistant-add-panel-after-keyboard")
@@ -365,7 +356,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         let add = app.buttons["添加附件或引用"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         add.tap()
-        XCTAssertTrue(app.collectionViews["assistant-action-panel"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["assistant-action-panel"].firstMatch.waitForExistence(timeout: 5))
 
         try app.performAccessibilityAudit(for: [
             .elementDetection,
@@ -524,7 +515,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.buttons["自动化"].tap()
         XCTAssertTrue(app.buttons["新建自动化"].waitForExistence(timeout: 8))
         app.buttons["新建自动化"].tap()
-        XCTAssertTrue(app.navigationBars["新建自动化"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["用对话创建定时任务"].waitForExistence(timeout: 8))
         try performCoreAccessibilityAudit()
         capture("creation-editors-accessibility-audit")
     }
@@ -898,11 +889,11 @@ final class ParityAcceptanceUITests: XCTestCase {
         let newAutomation = app.buttons["New Automation"]
         XCTAssertTrue(newAutomation.waitForExistence(timeout: 8))
         newAutomation.tap()
-        XCTAssertTrue(app.navigationBars["New Automation"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.textFields["Cron Expression"].exists)
-        XCTAssertTrue(app.switches["Enable after creation"].exists)
-        capture("english-automation-editor")
-        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Create a schedule in chat"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["assistant-chat-composer"].firstMatch.exists)
+        XCTAssertFalse(app.textFields["Cron Expression"].exists)
+        capture("english-automation-chat")
+        app.buttons["automation-setup-close"].tap()
     }
 
     func testConversationListStartsNewChat() {
@@ -1084,7 +1075,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         for (section, action, formTitle) in [
             ("任务", "新建项目任务", "新建项目任务"),
             ("笔记", "新建项目笔记", "新建笔记"),
-            ("自动化", "新建项目自动化", "新建自动化")
+            ("自动化", "新建项目自动化", "用对话创建定时任务")
         ] {
             sections.buttons[section].tap()
             let create = app.buttons[action]
@@ -1092,7 +1083,7 @@ final class ParityAcceptanceUITests: XCTestCase {
             create.tap()
             XCTAssertTrue(app.navigationBars[formTitle].waitForExistence(timeout: 5))
             capture("21-project-create-\(section)")
-            app.buttons["取消"].tap()
+            app.buttons[section == "自动化" ? "automation-setup-close" : "取消"].tap()
         }
     }
 
@@ -1512,6 +1503,11 @@ final class ParityAcceptanceUITests: XCTestCase {
         let destination = ["助手": "assistant", "对话": "conversations", "进展": "progress", "笔记": "notes",
                            "资料": "notes", "我的": "profile"][label] ?? label
         app.openHomeDestination(destination)
+        if destination == "profile" {
+            let profile = app.buttons["settings-personal-profile"]
+            XCTAssertTrue(profile.waitForExistence(timeout: 5))
+            profile.tap()
+        }
     }
 
     private func openNewConversation() {
@@ -1538,8 +1534,8 @@ final class ParityAcceptanceUITests: XCTestCase {
 
     private func checkAutomationCreation() {
         app.buttons["新建自动化"].tap()
-        XCTAssertTrue(app.textFields["Cron 表达式"].waitForExistence(timeout: 5))
-        app.buttons["取消"].tap()
+        XCTAssertTrue(app.navigationBars["用对话创建定时任务"].waitForExistence(timeout: 5))
+        app.buttons["automation-setup-close"].tap()
     }
 
     private func checkTaskFilters() {
@@ -1868,15 +1864,116 @@ final class GatewayPairingE2EUITests: XCTestCase {
 final class MobileLayoutParityUITests: XCTestCase {
     private var app: XCUIApplication!
 
+    private var fixtureBase: String {
+        ProcessInfo.processInfo.environment["XOPC_PARITY_FIXTURE_URL"] ?? "http://127.0.0.1:18791"
+    }
+
     override func setUp() async throws {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
         app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = "synthetic-layout-fixture"
-        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = "http://127.0.0.1:18791"
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase
         app.launch()
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
+    }
+
+    func testPersonalOverviewScrollTasksAndScheduleDraft() {
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-personal"].tap()
+        app.buttons["chat-header-personal"].tap()
+        let scroll = app.scrollViews["personal-overview-scroll"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+        let task = app.buttons["personal-overview-task-task-header"]
+        XCTAssertTrue(task.waitForExistence(timeout: 6))
+        let initialTop = scroll.frame.minY
+        scroll.swipeUp(velocity: .slow)
+        XCTAssertLessThan(scroll.frame.minY, initialTop)
+        let example = app.buttons.matching(identifier: "schedule-example").firstMatch
+        for _ in 0..<4 where !example.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(example.isHittable)
+        example.tap()
+        let title = app.navigationBars["用对话创建定时任务"]
+        XCTAssertTrue(title.waitForExistence(timeout: 8))
+        let draft = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
+        XCTAssertTrue(draft.waitForExistence(timeout: 5))
+        XCTAssertTrue((draft.value as? String)?.contains("提醒我查看待处理事项") == true)
+        XCTAssertTrue(app.buttons["assistant-chat-send"].exists)
+        XCTAssertFalse(app.textFields["Cron 表达式"].exists)
+        app.buttons["automation-setup-close"].tap()
+        XCTAssertTrue(scroll.waitForExistence(timeout: 6))
+        let library = app.segmentedControls["personal-overview-tabs"].buttons["资料库"]
+        XCTAssertTrue(library.waitForExistence(timeout: 5))
+        library.tap()
+        XCTAssertTrue(app.buttons["chat-attachment-preview-fixture-file"].waitForExistence(timeout: 6))
+        capture("ios-personal-overview-library")
+        app.buttons["personal-overview-close"].tap()
+        XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 5))
+    }
+
+    func testProjectChatBackPreservesTheProjectAndMainConversation() {
+        tab("projects")
+        let project = app.descendants(matching: .any)["project-fixture-project"].firstMatch
+        XCTAssertTrue(project.waitForExistence(timeout: 5))
+        project.tap()
+        app.segmentedControls.buttons["对话"].tap()
+        let create = app.buttons["新建项目对话"]
+        XCTAssertTrue(create.waitForExistence(timeout: 6))
+        create.tap()
+        let chat = app.navigationBars["新建项目对话"]
+        XCTAssertTrue(chat.waitForExistence(timeout: 6))
+        let draft = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
+        XCTAssertTrue(draft.waitForExistence(timeout: 5))
+        chat.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["项目详情"].waitForExistence(timeout: 6))
+        XCTAssertTrue(create.exists)
+        XCTAssertTrue(app.buttons["对话草稿"].exists)
+    }
+
+    func testAgentPickerShowsLocalizedBuiltInNames() {
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-new"].tap()
+        app.buttons["chat-header-agent"].tap()
+        let coder = app.buttons["agent-picker-coder"]
+        XCTAssertTrue(coder.waitForExistence(timeout: 6))
+        XCTAssertTrue(coder.label.contains("编程") || coder.label.contains("代码"))
+        coder.tap()
+        XCTAssertTrue(app.buttons["chat-header-agent"].waitForExistence(timeout: 6))
+    }
+
+    func testGeneratedMusicContinuesAcrossConversationAndBackground() async throws {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/music"
+        app.launch()
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-personal"].tap()
+        let play = app.buttons["generated-music-start-fixture-song"]
+        XCTAssertTrue(play.waitForExistence(timeout: 10))
+        play.tap()
+        XCTAssertTrue(app.buttons["music-inline-player"].waitForExistence(timeout: 6))
+        XCTAssertTrue(app.openHomeSidebar())
+        let recent = app.buttons["chat-sidebar-session-11111111-1111-4111-8111-111111111111"]
+        XCTAssertTrue(recent.waitForExistence(timeout: 5))
+        recent.tap()
+        let open = app.buttons["music-open-player"]
+        XCTAssertTrue(open.waitForExistence(timeout: 6))
+        open.tap()
+        let elapsed = app.staticTexts["music-elapsed"]
+        XCTAssertTrue(elapsed.waitForExistence(timeout: 6))
+        let before = elapsed.label
+        XCUIDevice.shared.press(.home)
+        try await Task.sleep(for: .seconds(3))
+        app.activate()
+        XCTAssertTrue(elapsed.waitForExistence(timeout: 5))
+        XCTAssertNotEqual(elapsed.label, before)
+        XCTAssertEqual(app.buttons["music-play-toggle"].label, "暂停")
+        app.buttons["music-play-toggle"].tap()
+        XCTAssertEqual(app.buttons["music-play-toggle"].label, "播放")
+        XCTAssertTrue(app.staticTexts["用于校验歌词和跨页播放。"].exists)
+        capture("ios-global-music-player")
+        app.buttons["返回来源对话"].tap()
+        XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 6))
     }
 
     func testSidebarSwipeAndSecondaryDestinations() {
@@ -2097,22 +2194,17 @@ final class MobileLayoutParityUITests: XCTestCase {
     }
 
     private func openChatMessageSearch() {
-        let add = app.buttons["添加附件或引用"]
-        XCTAssertTrue(add.waitForExistence(timeout: 5))
-        add.tap()
-        let panel = app.collectionViews["assistant-action-panel"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 5))
-        panel.swipeLeft()
-        let search = app.buttons["chat-action-search"]
+        app.buttons["assistant-options"].tap()
+        let search = app.buttons["assistant-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
     }
 
     func testMessageSearchBottomControlsAndClose() {
         XCTAssertTrue(app.openHomeSidebar())
-        let personal = app.buttons["chat-sidebar-personal"]
-        XCTAssertTrue(personal.waitForExistence(timeout: 10))
-        personal.tap()
+        let ordinary = app.buttons["chat-sidebar-session-11111111-1111-4111-8111-111111111111"]
+        XCTAssertTrue(ordinary.waitForExistence(timeout: 10))
+        ordinary.tap()
         openChatMessageSearch()
         let input = app.textFields["chat-message-search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
@@ -2207,14 +2299,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(voice.frame.height, 44)
         XCTAssertTrue(app.buttons["assistant-options"].exists)
         capture("personal-chat-capsule-header")
-        openChatMessageSearch()
-        XCTAssertTrue(app.textFields["chat-message-search-input"].waitForExistence(timeout: 5))
-        app.textFields["chat-message-search-input"].tap()
-        app.textFields["chat-message-search-input"].typeText("检查结果")
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "所有改动均已记录")).firstMatch.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["chat-search-close"].waitForExistence(timeout: 5))
-        app.buttons["chat-search-close"].tap()
         app.buttons["assistant-options"].tap()
+        XCTAssertFalse(app.buttons["assistant-search"].exists)
         XCTAssertTrue(app.textFields["名称"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["上传头像"].exists)
         capture("personal-ai-profile-settings")
@@ -2362,6 +2448,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["布局检查笔记"].waitForExistence(timeout: 10))
         capture("notes-search-icons")
         tab("profile")
+        app.buttons["settings-personal-profile"].tap()
         XCTAssertTrue(app.buttons["profile-personal-agent-configure"].waitForExistence(timeout: 10))
         XCTAssertGreaterThan(app.staticTexts["Ada"].frame.minY - app.staticTexts["工程师"].frame.maxY, 16)
         capture("profile-card-spacing")

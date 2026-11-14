@@ -19,7 +19,8 @@ struct ChatAttachmentPreview: View {
     @State private var share: ChatManagedShare?
 
     private var isManaged: Bool {
-        attachment.managedFileID != nil || attachment.workspaceRelativePath != nil
+        attachment.uri?.hasPrefix("xopc-file-version:") != true &&
+            (attachment.managedFileID != nil || attachment.workspaceRelativePath != nil)
     }
 
     private var isMarkdown: Bool {
