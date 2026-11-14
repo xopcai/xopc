@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { reconnectGatewayRealtime, startGatewayRealtime } from '@/features/gateway/gateway-realtime';
+import { resumeGatewayRealtime, startGatewayRealtime } from '@/features/gateway/gateway-realtime';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useGatewayRealtime(): void {
@@ -9,15 +9,14 @@ export function useGatewayRealtime(): void {
     return startGatewayRealtime();
   }, [token]);
   useEffect(() => {
-    const reconnect = () => reconnectGatewayRealtime();
-    const reconnectWhenVisible = () => {
-      if (document.visibilityState === 'visible') reconnectGatewayRealtime();
+    const resumeWhenVisible = () => {
+      if (document.visibilityState === 'visible') resumeGatewayRealtime();
     };
-    window.addEventListener('online', reconnect);
-    document.addEventListener('visibilitychange', reconnectWhenVisible);
+    window.addEventListener('online', resumeGatewayRealtime);
+    document.addEventListener('visibilitychange', resumeWhenVisible);
     return () => {
-      window.removeEventListener('online', reconnect);
-      document.removeEventListener('visibilitychange', reconnectWhenVisible);
+      window.removeEventListener('online', resumeGatewayRealtime);
+      document.removeEventListener('visibilitychange', resumeWhenVisible);
     };
   }, []);
 }

@@ -102,6 +102,7 @@ describe('resolveGatewayStartupMode', () => {
   it.each(['missing', 'old-contract', 'old-realtime', 'old-endpoint', 'old-upload-limit', 'html'])('rejects %s gateways before reuse and after spawn', async (variant) => {
     const server = createServer((req, res) => {
       if (req.url === '/api/config') { res.end('{}'); return; }
+      if (req.url === '/api/health') { res.end('{"ready":true}'); return; }
       if (variant === 'missing') { res.writeHead(404); res.end(); return; }
       if (variant === 'html') { res.end('<html>not an API</html>'); return; }
       res.setHeader('Content-Type', 'application/json');
@@ -115,7 +116,7 @@ describe('resolveGatewayStartupMode', () => {
     const port = await listen(server);
     const failure = { failure: { kind: 'gateway_protocol_incompatible', port } };
     await expect(resolveGatewayStartupMode({ port, token: 'test', bindHost: '127.0.0.1' })).rejects.toMatchObject(failure);
-    await expect(waitForGatewayReady(port, 'test', { exitCode: null, signalCode: null } as any, 2000)).rejects.toMatchObject(failure);
+    await expect(waitForGatewayReady(port, 'test', { pid: 123, exitCode: null, signalCode: null }, 2000)).rejects.toMatchObject(failure);
     expect(server.listening).toBe(true);
   });
 
@@ -133,34 +134,31 @@ describe('resolveGatewayStartupMode', () => {
 });
 
 it('reports authenticated readiness promptly without skipping compatibility checks', async () => {
-  vi.useFakeTimers();
-  let available = false;
+  let readyResponse = false;
   let ready: number | undefined;
   const fetch = vi.fn(async (url: string, options?: RequestInit) => {
     expect(options?.headers).toEqual({ Authorization: 'Bearer readiness-test' });
-    if (url.endsWith('/api/config')) return new Response('{}', { status: available ? 200 : 503 });
+    if (url.endsWith('/api/config')) return Response.json({});
+    if (url.endsWith('/api/health')) return Response.json({ ready: readyResponse });
     expect(url).toContain('/api/endpoint-tools/compatibility');
     return Response.json({ ok: true, payload: { realtimeProtocolVersion: REALTIME_PROTOCOL_VERSION,
       computerFrameUploadMaxBytes: COMPUTER_FRAME_MAX_BYTES, endpointProtocolVersion: ENDPOINT_PROTOCOL_VERSION,
       computerControl: COMPUTER_DESCRIPTOR } });
   });
   vi.stubGlobal('fetch', fetch);
-  const pending = waitForGatewayReady(12345, 'readiness-test', { exitCode: null, signalCode: null } as any, 2000)
+  const pending = waitForGatewayReady(12345, 'readiness-test', { pid: 123, exitCode: null, signalCode: null }, 2000)
     .then(port => { ready = port; });
   try {
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(ready).toBeUndefined();
-    expect(fetch).toHaveBeenCalledTimes(1);
-    available = true;
-    await vi.advanceTimersByTimeAsync(149);
-    expect(ready).toBe(12345);
-    expect(fetch).toHaveBeenCalledTimes(3);
-  } finally {
-    available = true;
-    await vi.advanceTimersByTimeAsync(2000);
+    readyResponse = true;
     await pending;
+    expect(ready).toBe(12345);
+    expect(fetch).toHaveBeenCalledTimes(4);
+  } finally {
+    readyResponse = true;
+    await pending.catch(() => {});
     vi.unstubAllGlobals();
-    vi.useRealTimers();
   }
 });
 

@@ -102,6 +102,19 @@ describe('gateway realtime topic multiplexing', () => {
     expect(restarted?.subscriptions).toContainEqual({ topic: 'run:r1', afterSeq: 7 });
   });
 
+  it('delivers events from the replacement Gateway after the sequence resets', async () => {
+    const onEvent = vi.fn();
+    const onGap = vi.fn();
+    cleanups.push(subscribeRealtimeTopic('run:r1', { onEvent, onGap }, 0));
+    emit(event(7));
+    const client = realtimeMock.instances.at(-1)!;
+    const gap = { topic: 'run:r1', requestedSeq: 7, earliestSeq: 1, recoverable: false };
+    await (client.options.onGap as (gap: object) => Promise<void>)(gap);
+    emit(event(1));
+    expect(onGap).toHaveBeenCalledWith(gap);
+    expect(onEvent.mock.calls.map(([value]) => value.seq)).toEqual([7, 1]);
+  });
+
   it('isolates a failing topic listener from other consumers', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const healthy = vi.fn();

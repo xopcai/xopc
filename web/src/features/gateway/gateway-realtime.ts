@@ -1,5 +1,6 @@
 import {
   RealtimeClient,
+  RealtimeConnectionError,
   type RealtimeConnectionState,
   type RealtimeEndpointBinding,
   type RealtimeWebSocket,
@@ -45,7 +46,6 @@ export function startGatewayRealtime(): () => void {
   const id = resolveClientId();
   const kind = window.electronAPI ? 'desktop' as const : 'web' as const;
   const client = new RealtimeClient({
-    maxReconnectAttempts: 5,
     clientId: id,
     clientKind: kind,
     getWebSocketUrl: websocketUrl,
@@ -58,9 +58,10 @@ export function startGatewayRealtime(): () => void {
         body: JSON.stringify({ clientId: id, clientKind: kind, protocolVersion: REALTIME_PROTOCOL_VERSION }),
         signal,
       });
-      const body = await response.json().catch(() => null) as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } }; error?: { message?: string } } | null;
+      const body = await response.json().catch(() => null) as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } }; error?: { message?: string; retryable?: boolean } } | null;
       if (!response.ok || !body?.payload?.ticket || !body.payload.realtime) {
-        throw new Error(body?.error?.message ?? `Realtime ticket failed (${response.status})`);
+        const retryable = ![401, 403, 426].includes(response.status) && body?.error?.retryable !== false;
+        throw new RealtimeConnectionError(body?.error?.message ?? `Realtime ticket failed (${response.status})`, retryable);
       }
       return { ticket: body.payload.ticket, realtime: body.payload.realtime };
     },
@@ -89,13 +90,18 @@ export function startGatewayRealtime(): () => void {
       }
     },
     onGap: async (gap) => {
-      window.dispatchEvent(new CustomEvent('realtime-gap', { detail: gap }));
       const affected = [...listeners.get(gap.topic) ?? []].filter(
         (registration) =>
           !gap.recoverable
           || registration.cursor === undefined
           || registration.cursor < gap.earliestSeq - 1,
       );
+      if (!gap.recoverable) {
+        // The Gateway may have restarted with a new sequence range for this topic.
+        topicCursors.set(gap.topic, gap.earliestSeq - 1);
+        for (const registration of affected) registration.cursor = gap.earliestSeq - 1;
+      }
+      window.dispatchEvent(new CustomEvent('realtime-gap', { detail: gap }));
       const results = await Promise.allSettled(
         affected.map((registration) => registration.listener.onGap?.(gap)),
       );
@@ -143,6 +149,10 @@ export function stopGatewayRealtime(): void {
 
 export function reconnectGatewayRealtime(): void {
   activeClient?.reconnect();
+}
+
+export function resumeGatewayRealtime(): void {
+  activeClient?.resume();
 }
 
 export function subscribeRealtimeTopic(topic: string, listener: TopicListener, afterSeq?: number): () => void {

@@ -811,7 +811,7 @@ async function resolveLocalWindowLoad(reportProgress: StartupProgressReporter = 
         ...(proxyUrl ? { proxyUrl } : {}),
         onUnexpectedExit: (code, signal) => {
           gatewayExitedUnexpectedly = true;
-          console.error(`[main] Gateway exited unexpectedly: code=${code}, signal=${signal}`);
+          console.error(`[main] Gateway recovery failed: code=${code}, signal=${signal}`);
 
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('gateway:exited', { code, signal });
@@ -834,7 +834,9 @@ async function resolveLocalWindowLoad(reportProgress: StartupProgressReporter = 
         const child = spawnGatewayProcess(spawnOpts);
         reportProgress({ phase: 'connecting-assistant' });
         const readyPort = await waitForGatewayReady(port, token, child);
-        registerEmbeddedGatewayRuntime({ ...spawnOpts, port: readyPort, authToken: token });
+        registerEmbeddedGatewayRuntime({ ...spawnOpts, port: readyPort, authToken: token }, child);
+      } else {
+        registerGatewayConnection({ port, token });
       }
       setEmbeddedGatewayCredentials(port, token);
       void maybeAutoStartTunnel();

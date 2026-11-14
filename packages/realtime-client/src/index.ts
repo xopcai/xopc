@@ -103,6 +103,7 @@ export class RealtimeClient {
   private shouldReconnect = false;
   private ready = false;
   private lastServerMessageAt = 0;
+  private heartbeatTimeoutMs = 0;
   private endpointBinding: RealtimeEndpointBinding | undefined;
   private reconnectWhenSocketOpens = false;
   private offeredCapabilities = new Set<RealtimeCapability>();
@@ -139,6 +140,14 @@ export class RealtimeClient {
     this.reconnectAttempts = 0;
     this.shouldReconnect = true;
     void this.open(true);
+  }
+
+  /** Resume after a network or visibility change, preserving a healthy connection. */
+  resume(): void {
+    if (!this.shouldReconnect || this.connectionTimer) return;
+    if (this.ready && this.socket?.readyState === 1
+      && Date.now() - this.lastServerMessageAt < this.heartbeatTimeoutMs) return;
+    this.reconnect();
   }
 
   subscribe(topic: string, afterSeq?: number): void {
@@ -310,6 +319,7 @@ export class RealtimeClient {
         throw new Error('Realtime server negotiated a capability the client did not offer');
       }
       this.ready = true;
+      this.heartbeatTimeoutMs = message.payload.heartbeatTimeoutMs;
       this.reconnectAttempts = 0;
       this.clearConnectionTimer();
       this.ticketAbort = undefined;

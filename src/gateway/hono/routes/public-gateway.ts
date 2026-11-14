@@ -59,12 +59,14 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
   });
 
   app.get('/health', (c) => {
+    c.header('Cache-Control', 'no-store');
     const health = service.getHealth();
     return c.json({ status: health.ready ? 'ok' : 'starting', ready: health.ready });
   });
 
-  /** Public liveness probe (no auth) — minimal payload for CLI / load balancers. */
+  /** Public probe with readiness in the response body. */
   app.get('/api/health', (c) => {
+    c.header('Cache-Control', 'no-store');
     const health = service.getHealth();
     return c.json({
       status: health.ready ? 'ok' : 'starting',

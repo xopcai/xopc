@@ -2,6 +2,7 @@ import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import { app } from 'electron';
@@ -21,21 +22,142 @@ import {
 } from './startup-failure.js';
 
 let gatewayChild: ChildProcess | null = null;
-let gatewayExitHandler: ((code: number | null, signal: string | null) => void) | null = null;
 
 type EmbeddedGatewayRuntime = GatewayProcessOptions & { authToken: string };
+type GatewaySupervision = {
+  runtime: EmbeddedGatewayRuntime;
+  controller: AbortController;
+  child: ChildProcess;
+  timer?: ReturnType<typeof setTimeout>;
+  attempts: number;
+  readyAt: number;
+  failedProbes: number;
+};
 let embeddedGatewayRuntime: EmbeddedGatewayRuntime | null = null;
+let gatewaySupervision: GatewaySupervision | undefined;
 let gatewayRestartInProgress = false;
+let gatewayStopEpoch = 0;
+let gatewayStopPromise: Promise<void> | undefined;
 const gatewayConnections = new LocalGatewayConnectionRegistry();
 
 export function registerGatewayConnection(connection: GatewayConnectionCredentials): void {
   gatewayConnections.register(connection);
+  cancelGatewaySupervision();
   embeddedGatewayRuntime = null;
 }
 
-export function registerEmbeddedGatewayRuntime(runtime: EmbeddedGatewayRuntime): void {
+export function registerEmbeddedGatewayRuntime(runtime: EmbeddedGatewayRuntime, child = gatewayChild): void {
+  if (child !== gatewayChild || child && (child.exitCode !== null || child.signalCode !== null)) {
+    throw new Error('Gateway exited before registration completed');
+  }
   gatewayConnections.register({ port: runtime.port, token: runtime.authToken }, 'embedded');
+  cancelGatewaySupervision();
   embeddedGatewayRuntime = { ...runtime };
+  if (gatewayChild) {
+    gatewaySupervision = {
+      runtime: embeddedGatewayRuntime,
+      controller: new AbortController(),
+      child: gatewayChild,
+      attempts: 0,
+      readyAt: performance.now(),
+      failedProbes: 0,
+    };
+    scheduleGatewayHealthCheck(gatewaySupervision);
+  }
+}
+
+const GATEWAY_HEALTH_INTERVAL_MS = 10_000;
+const GATEWAY_HEALTH_FAILURE_LIMIT = 3;
+const GATEWAY_RECOVERY_DELAYS_MS = [1_000, 3_000, 10_000];
+const GATEWAY_STABLE_PERIOD_MS = 5 * 60_000;
+
+function cancelGatewaySupervision(): void {
+  if (!gatewaySupervision) return;
+  clearTimeout(gatewaySupervision.timer);
+  gatewaySupervision.controller.abort();
+  gatewaySupervision = undefined;
+}
+
+function scheduleGatewayHealthCheck(supervision: GatewaySupervision): void {
+  supervision.timer = setTimeout(() => { void checkGatewayHealth(supervision); }, GATEWAY_HEALTH_INTERVAL_MS);
+}
+
+async function checkGatewayHealth(supervision: GatewaySupervision): Promise<void> {
+  const { child, controller, runtime } = supervision;
+  if (controller.signal.aborted || gatewayChild !== child) return;
+  const alive = await fetch(`${localGatewayOrigin(runtime)}/health`, {
+    redirect: 'error',
+    signal: AbortSignal.any([controller.signal, AbortSignal.timeout(2_000)]),
+  }).then(async response => {
+    const health = await response.json() as { status?: string };
+    return response.ok && (health.status === 'ok' || health.status === 'starting');
+  }).catch(() => false);
+  if (controller.signal.aborted || gatewayChild !== child) return;
+  supervision.failedProbes = alive ? 0 : supervision.failedProbes + 1;
+  if (supervision.failedProbes < GATEWAY_HEALTH_FAILURE_LIMIT) {
+    scheduleGatewayHealthCheck(supervision);
+    return;
+  }
+
+  console.warn('[gateway] Local HTTP health check timed out repeatedly');
+  try {
+    await stopOwnedGatewayProcessAndWait();
+  } catch (error) {
+    console.error('[gateway] Could not stop the unresponsive process:', error);
+    if (!controller.signal.aborted) runtime.onUnexpectedExit?.(null, null);
+    return;
+  }
+  scheduleGatewayRecovery(supervision, null, null);
+}
+
+function scheduleGatewayRecovery(supervision: GatewaySupervision, code: number | null, signal: string | null): void {
+  if (supervision.controller.signal.aborted) return;
+  clearTimeout(supervision.timer);
+  if (performance.now() - supervision.readyAt >= GATEWAY_STABLE_PERIOD_MS) supervision.attempts = 0;
+  supervision.readyAt = Infinity;
+  const retryDelay = GATEWAY_RECOVERY_DELAYS_MS[supervision.attempts];
+  if (retryDelay === undefined) {
+    supervision.runtime.onUnexpectedExit?.(code, signal);
+    return;
+  }
+  supervision.attempts += 1;
+  supervision.timer = setTimeout(() => {
+    void recoverGateway(supervision, code, signal);
+  }, retryDelay);
+}
+
+async function recoverGateway(supervision: GatewaySupervision, code: number | null, signal: string | null): Promise<void> {
+  const { runtime, controller } = supervision;
+  const recoverySignal = controller.signal;
+  if (recoverySignal.aborted || gatewayChild) return;
+  let child: ChildProcess | undefined;
+  try {
+    console.info(`[gateway] Recovering embedded process (attempt ${supervision.attempts})`);
+    child = spawnGatewayProcess(runtime);
+    await waitForGatewayReady(runtime.port, runtime.authToken, child, 120_000, recoverySignal);
+    if (recoverySignal.aborted) return;
+    if (gatewayChild !== child) throw new Error('Gateway exited during recovery');
+    supervision.child = child;
+    supervision.readyAt = performance.now();
+    supervision.failedProbes = 0;
+    console.info('[gateway] Embedded process recovered');
+    scheduleGatewayHealthCheck(supervision);
+  } catch (error) {
+    if (recoverySignal.aborted) return;
+    console.error('[gateway] Embedded recovery failed:', error instanceof Error ? error.message : String(error));
+    try {
+      if (child && gatewayChild === child) await stopOwnedGatewayProcessAndWait();
+    } catch (stopError) {
+      console.error('[gateway] Could not stop the failed recovery process:', stopError);
+      if (!recoverySignal.aborted) runtime.onUnexpectedExit?.(code, signal);
+      return;
+    }
+    if (error instanceof GatewayStartupError && error.failure.kind !== 'unknown' && error.failure.kind !== 'gateway_timeout') {
+      if (!recoverySignal.aborted) runtime.onUnexpectedExit?.(code, signal);
+      return;
+    }
+    scheduleGatewayRecovery(supervision, code, signal);
+  }
 }
 
 export function getGatewayCredential(): string | undefined {
@@ -130,9 +252,9 @@ export async function resolveGatewayStartupMode(params: {
   );
 }
 
-async function checkGatewayCompatibility(connection: { port: number; token: string }): Promise<void> {
+async function checkGatewayCompatibility(connection: { port: number; token: string }, signal?: AbortSignal): Promise<void> {
   try {
-    await assertGatewayCompatibility(connection);
+    await assertGatewayCompatibility(connection, signal);
   } catch (error) {
     if (error instanceof Error && error.message === GATEWAY_PROTOCOL_INCOMPATIBLE) {
       throw new GatewayStartupError({ kind: 'gateway_protocol_incompatible', port: connection.port,
@@ -179,7 +301,7 @@ export interface GatewayProcessOptions {
   bind: GatewayBindMode;
   /** System proxy resolved by Electron for model downloads in the Node gateway subprocess. */
   proxyUrl?: string;
-  /** Called when gateway process exits unexpectedly (non-zero or by signal). */
+  /** Called when a running embedded Gateway cannot be recovered. */
   onUnexpectedExit?: (code: number | null, signal: string | null) => void;
 }
 
@@ -214,6 +336,7 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
           ? { HTTPS_PROXY: opts.proxyUrl, HTTP_PROXY: opts.proxyUrl }
           : {}),
         ELECTRON_RUN_AS_NODE: '1',
+        XOPC_SERVICE_MARKER: 'electron',
         XOPC_STATE_DIR: dirname(opts.configPath),
         XOPC_CONFIG_PATH: opts.configPath,
         XOPC_GATEWAY_DIAGNOSTIC_PATH: join(logDir, 'gateway-process.log'),
@@ -252,7 +375,6 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
 
   writeDiagnostic('gateway_spawn', { childPid: child.pid, port: opts.port, packaged: isPackaged });
   gatewayChild = child;
-  gatewayExitHandler = opts.onUnexpectedExit ?? null;
 
   // Drain stdout/stderr pipes to prevent Windows deadlock when buffers fill up.
   // In packaged mode, we capture logs but don't want to block the process.
@@ -291,10 +413,8 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
       console.error(`[gateway] process killed by signal=${signal}`);
     }
 
-    // Notify on abnormal exit (not clean code 0). Avoid `code !== 0` alone: `null !== 0` is true in JS.
-    const isCleanExit = code === 0 && signal == null;
-    if (wasCurrentChild && gatewayExitHandler && !isCleanExit) {
-      gatewayExitHandler(code, signal);
+    if (wasCurrentChild && gatewaySupervision?.child === child) {
+      scheduleGatewayRecovery(gatewaySupervision, code, signal);
     }
   });
 
@@ -309,6 +429,7 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
     console.error('[gateway] process error:', err);
     if (gatewayChild === child) {
       gatewayChild = null;
+      if (gatewaySupervision?.child === child) scheduleGatewayRecovery(gatewaySupervision, null, null);
     }
   });
 
@@ -316,19 +437,24 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
 }
 
 /**
- * Wait until our gateway accepts the configured token. `/health` is unauthenticated, so a stale
- * process on the same port would falsely pass a health-only check; `/api/config` validates auth.
+ * Wait for startup readiness, then confirm the configured credential and protocol.
  */
 export async function waitForGatewayReady(
   port: number,
   token: string,
-  child: ChildProcess,
+  child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode'>,
   timeoutMs = 120_000,
+  signal?: AbortSignal,
 ): Promise<number> {
   const deadline = Date.now() + timeoutMs;
-  const url = `${localGatewayOrigin({ port })}/api/config`;
+  const origin = localGatewayOrigin({ port });
+  const headers = { Authorization: `Bearer ${token}` };
+  const requestSignal = () => signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(2000)])
+    : AbortSignal.timeout(2000);
   while (Date.now() < deadline) {
-    if (child.exitCode !== null || child.signalCode !== null) {
+    signal?.throwIfAborted();
+    if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
       const logHint = gatewayLogSnippetForError();
       throw new GatewayStartupError(
         classifyGatewayStartupFailure({
@@ -341,20 +467,20 @@ export async function waitForGatewayReady(
       );
     }
     try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(2000),
-      });
-      if (res.ok) {
-        await checkGatewayCompatibility({ port, token });
-        return port;
+      const health = await fetch(`${origin}/api/health`, { headers, redirect: 'error', signal: requestSignal() });
+      if (health.ok && (await health.json() as { ready?: boolean }).ready === true) {
+        const res = await fetch(`${origin}/api/config`, { headers, redirect: 'error', signal: requestSignal() });
+        if (res.ok) {
+          await checkGatewayCompatibility({ port, token }, signal);
+          return port;
+        }
       }
     } catch (error) {
       if (error instanceof GatewayStartupError) throw error;
       /* retry */
     }
     // Avoid adding a full 250ms startup quantum after the authenticated API becomes available.
-    await new Promise((r) => setTimeout(r, 100));
+    await delay(100, undefined, { signal });
   }
   const logHint = gatewayLogSnippetForError();
   throw new GatewayStartupError(
@@ -382,14 +508,16 @@ export async function restartEmbeddedGatewayFromSavedConfig(params: {
   }
   if (gatewayRestartInProgress) throw new Error('Gateway restart is already in progress');
   const epoch = gatewayConnections.describe()?.epoch;
+  const stopEpoch = gatewayStopEpoch;
   const assertRestartAuthority = () => {
-    if (embeddedGatewayRuntime !== runtime || gatewayConnections.describe()?.epoch !== epoch) {
+    if (gatewayStopEpoch !== stopEpoch || embeddedGatewayRuntime !== runtime || gatewayConnections.describe()?.epoch !== epoch) {
       throw new Error('Gateway connection changed during restart');
     }
   };
   gatewayRestartInProgress = true;
   try {
-    await stopGatewayProcessAndWait();
+    cancelGatewaySupervision();
+    await stopOwnedGatewayProcessAndWait();
     assertRestartAuthority();
     const { port, token, bind, bindHost } = await params.resolveCredentials();
     assertRestartAuthority();
@@ -412,10 +540,10 @@ export async function restartEmbeddedGatewayFromSavedConfig(params: {
     try {
       const readyPort = await waitForGatewayReady(port, token, child);
       assertRestartAuthority();
-      registerEmbeddedGatewayRuntime({ ...opts, port: readyPort, authToken: token });
+      registerEmbeddedGatewayRuntime({ ...opts, port: readyPort, authToken: token }, child);
       return { port: readyPort, token };
     } catch (error) {
-      if (gatewayChild === child) await stopGatewayProcessAndWait();
+      if (gatewayChild === child) await stopOwnedGatewayProcessAndWait();
       throw error;
     }
   } finally {
@@ -439,9 +567,25 @@ function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<boole
 }
 
 export async function stopGatewayProcessAndWait(timeoutMs = 7000): Promise<void> {
+  gatewayStopEpoch += 1;
+  cancelGatewaySupervision();
+  await stopOwnedGatewayProcessAndWait(timeoutMs);
+}
+
+async function stopOwnedGatewayProcessAndWait(timeoutMs = 7000): Promise<void> {
+  if (gatewayStopPromise) return gatewayStopPromise;
   const child = gatewayChild;
   if (!child) return;
-  stopGatewayProcess();
+  signalOwnedGatewayProcess();
+  gatewayStopPromise = confirmGatewayStopped(child, timeoutMs);
+  try {
+    await gatewayStopPromise;
+  } finally {
+    gatewayStopPromise = undefined;
+  }
+}
+
+async function confirmGatewayStopped(child: ChildProcess, timeoutMs: number): Promise<void> {
   if (await waitForChildExit(child, timeoutMs)) return;
 
   try {
@@ -457,11 +601,16 @@ export async function stopGatewayProcessAndWait(timeoutMs = 7000): Promise<void>
 }
 
 export function stopGatewayProcess(): void {
+  gatewayStopEpoch += 1;
+  cancelGatewaySupervision();
+  signalOwnedGatewayProcess();
+}
+
+function signalOwnedGatewayProcess(): void {
   if (!gatewayChild?.pid) return;
 
   const child = gatewayChild;
   gatewayChild = null;
-  gatewayExitHandler = null;
 
   try {
     if (process.platform === 'win32') {

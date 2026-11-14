@@ -4,7 +4,7 @@
  * Polls service runtime + port usage + HTTP health probe to confirm:
  * 1. Service is running with a new PID
  * 2. Port is being listened on by the new process
- * 3. HTTP /api/health responds successfully
+ * 3. HTTP /api/health reports readiness
  * 4. Version matches expected (optional)
  */
 
@@ -50,7 +50,7 @@ interface RestartHealthService {
  * Loop:
  * 1. Check service runtime → get PID
  * 2. inspectPortUsage → confirm port is busy with new process
- * 3. HTTP probe /api/health → confirm reachable
+ * 3. HTTP probe /api/health → confirm ready
  * 4. Version match (if expectedVersion provided)
  */
 export async function waitForRestartHealth(params: {
@@ -207,14 +207,13 @@ interface HealthProbeResult {
 }
 
 async function probeHealth(port: number, token?: string): Promise<HealthProbeResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
   try {
     const headers: Record<string, string> = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
 
     const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
       method: 'GET',
@@ -222,16 +221,17 @@ async function probeHealth(port: number, token?: string): Promise<HealthProbeRes
       signal: controller.signal,
     });
 
-    clearTimeout(timeout);
-
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}` };
     }
 
-    const body = await response.json() as { version?: string };
+    const body = await response.json() as { ready?: boolean; version?: string };
+    if (body.ready !== true) return { ok: false, error: 'Gateway is still starting' };
     return { ok: true, version: body.version };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
