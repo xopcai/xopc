@@ -93,7 +93,7 @@ export struct XopcChatResultTail {
   }
   build() {
     if (!this.row.live && (this.artifacts.length || this.deliveries.length)) {
-      Column({ space: 8 }) {
+      Column({ space: 12 }) {
           if (this.imageArtifacts.length) {
             XopcChatImageGrid({ files: this.imageArtifacts.map((artifact: XopcArtifact): XopcHistoryMedia => artifactMedia(artifact)),
               gallery: this.imageGallery, conversationId: this.conversationId })

@@ -24,6 +24,7 @@ export struct XopcChatMediaView {
   @Param conversationId: string = '';
   @Param draftPreview: boolean = false;
   @Param compact: boolean = false;
+  @Param conversationCard: boolean = false;
   @Param embedded: boolean = false;
   @Param noteInlineImage: boolean = false;
   @Param readingImage: boolean = false;
@@ -373,6 +374,10 @@ export struct XopcChatMediaView {
     catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.busy = false; }
   }
+  @Computed get mediaSecondaryColor(): Resource {
+    return this.conversationCard ? this.colors.chat.secondary : this.colors.secondary;
+  }
+
   build() {
     Column({ space: 8 }) {
       if (!this.previewOnly) {
@@ -385,10 +390,10 @@ export struct XopcChatMediaView {
               SymbolGlyph(this.audioPlayer.state === 'playing' ? $r('sys.symbol.stop_circle_fill') : $r('sys.symbol.speaker_wave_2'))
                 .fontSize(24).fontColor([this.error || this.audioPlayer.error ? this.colors.danger : this.colors.foreground])
             }
-            SymbolGlyph($r('sys.symbol.waveform')).fontSize(30).fontColor([this.colors.secondary]).layoutWeight(1)
+            SymbolGlyph($r('sys.symbol.waveform')).fontSize(30).fontColor([this.mediaSecondaryColor]).layoutWeight(1)
             if (this.inlineAudioDuration() > 0) {
               Text(Math.max(1, Math.ceil(this.inlineAudioDuration())).toString() + '″')
-                .fontSize(13).fontColor(this.colors.secondary)
+                .fontSize(13).fontColor(this.mediaSecondaryColor)
             }
           }.width('100%').height(48).padding({ left: 10, right: 10 }).justifyContent(FlexAlign.Start)
             .alignItems(VerticalAlign.Center)
@@ -414,9 +419,9 @@ export struct XopcChatMediaView {
               } else {
                 Stack({ alignContent: Alignment.Center }) {
                   if (this.busy) {
-                    LoadingProgress().width(18).height(18).color(this.colors.secondary)
+                    LoadingProgress().width(18).height(18).color(this.mediaSecondaryColor)
                   } else {
-                    SymbolGlyph($r('sys.symbol.picture')).fontSize(19).fontColor([this.colors.secondary])
+                    SymbolGlyph($r('sys.symbol.picture')).fontSize(19).fontColor([this.mediaSecondaryColor])
                   }
                 }.id('chat-compact-thumbnail-placeholder-' + this.file.id)
                   .width(this.compactThumbnailWidth || (this.compactMetadata ? 36 : 48))
@@ -424,7 +429,7 @@ export struct XopcChatMediaView {
                   .borderRadius(8).backgroundColor(this.colors.grouped)
               }
             } else {
-              SymbolGlyph(this.mediaSymbol()).fontSize(20).fontColor([this.colors.secondary])
+              SymbolGlyph(this.mediaSymbol()).fontSize(20).fontColor([this.mediaSecondaryColor])
             }
             if (this.compactMetadata) {
               Column({ space: 2 }) {
@@ -433,21 +438,21 @@ export struct XopcChatMediaView {
                 if (this.compactAvailable) {
                   Text(this.draftPreview ? this.fileSizeLabel() : this.file.size > 0
                     ? $r('app.string.chat_artifact_available_size', this.fileSizeLabel())
-                    : $r('app.string.chat_artifact_available')).fontSize(11).fontColor(this.colors.secondary).maxLines(1)
+                    : $r('app.string.chat_artifact_available')).fontSize(11).fontColor(this.mediaSecondaryColor).maxLines(1)
                 }
               }
               .layoutWeight(1).alignItems(HorizontalAlign.Start)
             }
             if (this.compactDisclosure) {
-              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
+              SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.conversationCard ? this.colors.chat.secondary : this.colors.tertiary])
             }
           }.width('100%').constraintSize({ minHeight: this.compactThumbnailHeight > 0
             ? this.compactThumbnailHeight + (this.compactMetadata ? 8 : 0) : this.compactThumbnail ? 56 : 48 })
             .padding({ left: this.compactMetadata ? 12 : this.compactThumbnail ? 0 : 4,
               right: this.compactMetadata ? 12 : this.compactThumbnail ? 0 : 4 })
         }.id('chat-preview-' + this.file.id).width('100%').padding(0)
-          .backgroundColor(this.embedded ? Color.Transparent : this.colors.input)
-          .borderRadius(this.embedded ? 0 : 10)
+          .backgroundColor(this.embedded ? Color.Transparent : this.conversationCard ? this.colors.chat.card : this.colors.input)
+          .borderRadius(this.embedded ? 0 : this.conversationCard ? 18 : 10)
           .enabled(!this.busy && this.previewable())
           .accessibilityText($r('app.string.chat_preview_file', this.file.name)).onClick((): void => { this.openPreview(); })
       } else if (this.picture) {
@@ -458,7 +463,7 @@ export struct XopcChatMediaView {
           .id('chat-image-' + this.file.id).accessibilityText(this.file.name).onClick((): void => { this.openPreview(); })
       } else if (this.readingImage && this.error) {
         Column({ space: 8 }) {
-          Text(this.file.name).fontSize(13).fontColor(this.colors.secondary).maxLines(2)
+          Text(this.file.name).fontSize(13).fontColor(this.mediaSecondaryColor).maxLines(2)
           Button($r('app.string.retry')).height(44).onClick((): void => { this.load(); })
         }.width(320).constraintSize({ maxWidth: '100%' }).height(180).padding(12)
           .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.grouped).borderRadius(10)
@@ -469,30 +474,32 @@ export struct XopcChatMediaView {
       }
       if (!this.inlineVoice && !this.compact && !this.noteInlineImage && !this.readingImage) {
         Row({ space: 8 }) {
-          Text(this.file.name || this.file.type).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1).maxLines(2)
+          Text(this.file.name || this.file.type).fontSize(13).fontColor(this.mediaSecondaryColor).layoutWeight(1).maxLines(2)
           if (this.previewable()) {
-            Button($r('app.string.chat_preview')).height(44).fontSize(12).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
+            Button($r('app.string.chat_preview')).height(44).fontSize(12).fontColor(this.conversationCard ? this.colors.chat.action : this.colors.accent).backgroundColor(Color.Transparent)
               .id('chat-preview-' + this.file.id).enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.openPreview(); })
           }
           if (!this.draftPreview) {
             if (this.shareable()) {
-              Button($r('app.string.chat_share')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
+              Button($r('app.string.chat_share')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor(this.mediaSecondaryColor)
                 .enabled(!this.busy).onClick((): void => { this.share(); })
             }
-            Button($r('app.string.download')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
+            Button($r('app.string.download')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor(this.mediaSecondaryColor)
               .enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.save(); })
           }
         }.width('100%')
         if (this.error) {
           Text(this.error === 'INVALID_MEDIA_OR_TOO_LARGE' ? $r('app.string.chat_media_too_large') : $r('app.string.chat_media_failed')).fontSize(12).fontColor(this.colors.danger)
-          Button($r('app.string.refresh')).backgroundColor(this.colors.grouped).fontColor(this.colors.secondary).onClick((): void => {
+          Button($r('app.string.refresh')).backgroundColor(this.colors.grouped).fontColor(this.mediaSecondaryColor).onClick((): void => {
             if (this.failedAction === 'save') this.save(); else if (this.failedAction === 'share') this.share();
             else if (this.failedAction === 'open') this.openWithSystem(); else this.openPreview();
           })
         }
       }
       }
-    }.width('100%').onAreaChange((_old: Area, area: Area): void => {
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.conversationCard && !this.compact ? 16 : 0)
+      .borderRadius(this.conversationCard && !this.compact ? 18 : 0)
+      .backgroundColor(this.conversationCard && !this.compact ? this.colors.chat.card : Color.Transparent).onAreaChange((_old: Area, area: Area): void => {
       if (this.readingImage) this.readingAvailableWidth = Math.max(1, Math.min(320, Number(area.width)));
     }).onVisibleAreaChange([0.1], (visible: boolean): void => {
       if (!visible || this.previewOnly || this.inlineVoice || this.attempted) return;

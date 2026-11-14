@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
 const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
+const media = readFileSync(new URL('../entry/src/main/ets/view/ChatMediaView.ets', import.meta.url), 'utf8');
+const resultCapsule = readFileSync(new URL('../entry/src/main/ets/view/ChatResultCapsule.ets', import.meta.url), 'utf8');
 
 describe('chat message layout parity', () => {
   it('renders user messages as compact right-positioned bubbles with left-aligned text', () => {
@@ -12,38 +14,44 @@ describe('chat message layout parity', () => {
 
     expect(userLayout).toContain(".id('chat-user-bubble-' + item.item.id)");
     expect(userLayout).toContain(".width(this.userBubbleWidth(item.item))");
-    expect(userLayout).toContain("maxWidth: item.item.sendState === 'sending' || item.item.sendState === 'failed' ? '78%' : '84%'");
+    expect(userLayout).toContain("maxWidth: CHAT_MESSAGE_MAX_WIDTH");
     expect(userLayout).toContain(".justifyContent(FlexAlign.End)");
     expect(userLayout).toContain(".alignItems(HorizontalAlign.End)");
-    expect(userLayout).toContain('.backgroundColor(this.colors.accentSoft)');
+    expect(userLayout).toContain('.backgroundColor(this.colors.chat.bubble)');
     expect(userLayout).toContain('.borderRadius(18)');
     expect(chat).toContain("if (this.userVoiceOnly(row)) return '132vp'");
-    expect(chat).toContain('if (this.userVoiceMessage(row)) return userTextBubbleWidth(row.text, 180)');
-    expect(chat).toContain('if (payloadCount > 1) return userTextBubbleWidth(row.text, 264)');
-    expect(chat).toContain('if (payloadCount === 1) return userTextBubbleWidth(row.text, 220)');
-    expect(chat).toContain('return userTextBubbleWidth(row.text, 44)');
+    expect(chat).toContain('if (this.userVoiceMessage(row)) return chatTextBubbleWidth(row.text, 180)');
+    expect(chat).toContain('if (payloadCount > 1) return chatTextBubbleWidth(row.text, 264)');
+    expect(chat).toContain('if (payloadCount === 1) return chatTextBubbleWidth(row.text, 220)');
+    expect(chat).toContain('return chatTextBubbleWidth(row.text, 44)');
     expect(content).toContain(".width(this.row.text ? 148 : '100%')");
     expect(chat).toContain("this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }");
-    expect(chat).toContain("return width >= maximum ? '90%' : width + 'vp'");
   });
 
-  it('renders assistant messages as compact left-aligned response bubbles', () => {
+  it('uses a separate surface for left-aligned assistant replies and their preview fades', () => {
     const start = chat.indexOf("} else if (item.item.role === 'assistant') {");
     const end = chat.indexOf("} else {", start);
     const assistantLayout = chat.slice(start, end);
 
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id)");
     expect(assistantLayout).toContain('.width(this.assistantBubbleWidth(item.item))');
-    expect(assistantLayout).toContain("constraintSize({ minWidth: 64, maxWidth: '90%' })");
-    expect(assistantLayout).toContain(".padding({ left: 16, right: 16, top: 14, bottom: 14 })");
-    expect(assistantLayout).toContain('.borderRadius(18)');
-    expect(assistantLayout).not.toContain('.border(');
-    expect(chat).toContain('if (chatNeedsWideBubble(row)) return \'90%\'');
+    expect(assistantLayout).toContain('.constraintSize({ minWidth: 44, maxWidth: CHAT_MESSAGE_MAX_WIDTH }).alignItems(HorizontalAlign.Start)');
+    expect(assistantLayout).toContain('.padding({ left: 14, right: 14, top: 10, bottom: 10 })');
+    expect(chat).toContain(".width(CHAT_MESSAGE_MAX_WIDTH).alignItems(HorizontalAlign.Start).padding({ top: 6 })");
+    expect(assistantLayout).toContain('.borderRadius(18).backgroundColor(this.colors.chat.assistant)');
+    expect(content).toContain("this.row.role === 'assistant' ? this.colors.chat.assistant : this.colors.chat.canvas");
     expect(chat).toContain('Repeat<XopcChatRow>(this.presentationRows)');
     expect(chat).not.toContain(".id('chat-assistant-live-card')");
     expect(chat).not.toContain(".id('chat-assistant-running-card')");
     expect(chat).toContain("List({ space: 20, scroller: this.messagesScroller })");
     expect(chat).toContain(".padding({ left: 20, right: 20 }).cachedCount(3)");
+  });
+
+  it('aligns compact deliveries to the leading edge and limits their width', () => {
+    expect(media).toContain(".width('100%').alignItems(HorizontalAlign.Start).padding(this.conversationCard");
+    expect(resultCapsule).toContain(".width('100%').constraintSize({ maxWidth: 320, minHeight: 44 })");
+    expect(resultCapsule).toContain('.alignItems(HorizontalAlign.Start).layoutWeight(1)');
+    expect(content).toContain("      }\n      if (this.row.role === 'assistant') {\n        XopcChatResultTail(");
   });
 
   it('groups references with message text using a compact neutral inset row', () => {
@@ -53,8 +61,8 @@ describe('chat message layout parity', () => {
     expect(content).toContain('Column({ space: this.showPreview ? 2 : 8 })');
     expect(reference).toContain(".id('chat-reference-' + ref.kind + '-' + ref.sourceId)");
     expect(reference).toContain('.width(\'100%\').height(40)');
-    expect(reference).toContain('.fontColor(this.colors.secondary)');
-    expect(reference).toContain('.backgroundColor(this.colors.panel)');
+    expect(reference).toContain('.fontColor(this.colors.chat.secondary)');
+    expect(reference).toContain('.backgroundColor(this.colors.chat.card)');
     expect(reference).not.toContain('.border(');
     expect(reference).not.toContain('.backgroundColor(this.colors.accentSoft)');
     expect(composerReference).toContain(".id('chat-composer-reference-' + ref.kind + '-' + ref.sourceId)");

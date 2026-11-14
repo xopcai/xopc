@@ -6,10 +6,19 @@ export class XopcGeneratedMusicPlayback {
   @Trace songId: string = '';
   @Trace loading: boolean = false;
   @Trace failed: boolean = false;
+  @Trace private durations: Map<string, number> = new Map<string, number>();
   readonly player: XopcChatMediaPlayback = new XopcChatMediaPlayback();
   private generation: number = 0;
   private path: string = '';
   private cleanup: Promise<void> = Promise.resolve();
+
+  durationFor(songId: string, durationMs: number | undefined): number {
+    return this.durations.get(songId) ?? (durationMs ?? 0) / 1000;
+  }
+
+  clearDurations(): void {
+    this.durations.clear();
+  }
 
   async play(cacheDir: string, conversationId: string, songId: string): Promise<void> {
     if (this.songId === songId && !this.failed && this.player.state !== 'error') {
@@ -29,7 +38,11 @@ export class XopcGeneratedMusicPlayback {
         (): boolean => generation === this.generation);
       if (generation !== this.generation) { await removeGeneratedMediaFile(path); return; }
       this.path = path;
-      await this.player.open(path, length, true);
+      await this.player.open(path, length, true, (seconds: number): void => {
+        if (generation === this.generation && Number.isFinite(seconds) && seconds > 0) {
+          this.durations.set(songId, seconds);
+        }
+      });
     } catch (_) {
       if (generation === this.generation) this.failed = true;
     } finally {

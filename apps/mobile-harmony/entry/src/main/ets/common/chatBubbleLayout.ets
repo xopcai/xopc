@@ -1,4 +1,6 @@
-export function userTextBubbleWidth(text: string, minimum: number): string {
+export const CHAT_MESSAGE_MAX_WIDTH = '84%';
+
+export function chatTextBubbleWidth(text: string, minimum: number): string {
   let lineUnits = 0;
   let widestLineUnits = 0;
   for (let index = 0; index < text.length; index++) {
