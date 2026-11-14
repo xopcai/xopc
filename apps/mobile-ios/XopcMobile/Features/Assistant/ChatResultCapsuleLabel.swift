@@ -5,24 +5,19 @@ struct ChatResultCapsuleLabel: View {
     let systemImage: String
     var status: String?
     var canOpen = true
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
                 .font(.system(size: 18))
-                .foregroundStyle(.tint)
+                .foregroundStyle(ChatAppearance.action(colorScheme))
                 .accessibilityHidden(true)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    titleLabel
-                    statusLabel
-                }
-                .fixedSize(horizontal: true, vertical: false)
-                VStack(alignment: .leading, spacing: 2) {
-                    titleLabel
-                    statusLabel
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                titleLabel
+                statusLabel
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .layoutPriority(1)
             if canOpen {
                 Image(systemName: "chevron.right")
@@ -34,7 +29,8 @@ struct ChatResultCapsuleLabel: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+        .frame(maxWidth: 320, alignment: .leading)
+        .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 18))
         .contentShape(.rect(cornerRadius: 18))
         .accessibilityElement(children: .combine)
     }
@@ -50,7 +46,7 @@ struct ChatResultCapsuleLabel: View {
 
     @ViewBuilder private var statusLabel: some View {
         if let status, !status.isEmpty {
-            Text(verbatim: "· " + status)
+            Text(verbatim: status)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)

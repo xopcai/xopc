@@ -41,7 +41,6 @@ export interface XopcChatThemeColors {
   assistant: Resource;
   card: Resource;
   bubble: Resource;
-  composer: Resource;
   action: Resource;
   onAction: Resource;
   secondary: Resource;
@@ -76,7 +75,7 @@ export class XopcThemeColors {
     this.border = tokens.border;
     this.accentSoft = tokens.accentSoft;
     this.active = tokens.active;
-    this.chat = xopcChatThemeColors('default', false, tokens.secondary);
+    this.chat = xopcChatThemeColors('default', false, tokens.surface, tokens.secondary);
   }
 
   apply(scheme: XopcColorScheme, dark: boolean): void {
@@ -93,7 +92,7 @@ export class XopcThemeColors {
     this.border = tokens.border;
     this.accentSoft = tokens.accentSoft;
     this.active = tokens.active;
-    this.chat = xopcChatThemeColors(scheme, dark, tokens.secondary);
+    this.chat = xopcChatThemeColors(scheme, dark, tokens.surface, tokens.secondary);
   }
 }
 
@@ -262,95 +261,86 @@ function xopcThemeTokens(scheme: XopcColorScheme, dark: boolean): XopcThemeToken
   return xopcThemeTokens('default', dark);
 }
 
-function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, secondary: Resource): XopcChatThemeColors {
+function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Resource,
+  secondary: Resource): XopcChatThemeColors {
   switch (scheme) {
     case 'porcelain':
       return dark ? {
-        canvas: $r('app.color.chat_porcelain_canvas_dark'),
+        canvas,
         assistant: $r('app.color.chat_porcelain_assistant_dark'),
         card: $r('app.color.chat_porcelain_card_dark'),
         bubble: $r('app.color.chat_porcelain_bubble_dark'),
-        composer: $r('app.color.chat_porcelain_composer_dark'),
         action: $r('app.color.chat_porcelain_action_dark'),
-        onAction: $r('app.color.chat_porcelain_canvas_dark'), secondary,
+        onAction: canvas, secondary,
       } : {
-        canvas: $r('app.color.chat_porcelain_canvas_light'),
+        canvas,
         assistant: $r('app.color.chat_porcelain_assistant_light'),
         card: $r('app.color.chat_porcelain_card_light'),
         bubble: $r('app.color.chat_porcelain_bubble_light'),
-        composer: $r('app.color.chat_porcelain_composer_light'),
         action: $r('app.color.chat_porcelain_action_light'),
         onAction: $r('app.color.theme_default_panel_light'), secondary,
       };
     case 'dawn':
       return dark ? {
-        canvas: $r('app.color.chat_dawn_canvas_dark'),
+        canvas,
         assistant: $r('app.color.chat_dawn_assistant_dark'),
         card: $r('app.color.chat_dawn_card_dark'),
         bubble: $r('app.color.chat_dawn_bubble_dark'),
-        composer: $r('app.color.chat_dawn_composer_dark'),
         action: $r('app.color.chat_dawn_action_dark'),
-        onAction: $r('app.color.chat_dawn_canvas_dark'), secondary,
+        onAction: canvas, secondary,
       } : {
-        canvas: $r('app.color.chat_dawn_canvas_light'),
+        canvas,
         assistant: $r('app.color.chat_dawn_assistant_light'),
         card: $r('app.color.chat_dawn_card_light'),
         bubble: $r('app.color.chat_dawn_bubble_light'),
-        composer: $r('app.color.chat_dawn_composer_light'),
         action: $r('app.color.chat_dawn_action_light'),
         onAction: $r('app.color.theme_default_panel_light'), secondary,
       };
     case 'emerald':
       return dark ? {
-        canvas: $r('app.color.chat_emerald_canvas_dark'),
+        canvas,
         assistant: $r('app.color.chat_emerald_assistant_dark'),
         card: $r('app.color.chat_emerald_card_dark'),
         bubble: $r('app.color.chat_emerald_bubble_dark'),
-        composer: $r('app.color.chat_emerald_composer_dark'),
         action: $r('app.color.chat_emerald_action_dark'),
-        onAction: $r('app.color.chat_emerald_canvas_dark'), secondary,
+        onAction: canvas, secondary,
       } : {
-        canvas: $r('app.color.chat_emerald_canvas_light'),
+        canvas,
         assistant: $r('app.color.chat_emerald_assistant_light'),
         card: $r('app.color.chat_emerald_card_light'),
         bubble: $r('app.color.chat_emerald_bubble_light'),
-        composer: $r('app.color.chat_emerald_composer_light'),
         action: $r('app.color.chat_emerald_action_light'),
         onAction: $r('app.color.theme_default_panel_light'), secondary,
       };
     case 'clay':
       return dark ? {
-        canvas: $r('app.color.chat_clay_canvas_dark'),
+        canvas,
         assistant: $r('app.color.chat_clay_assistant_dark'),
         card: $r('app.color.chat_clay_card_dark'),
         bubble: $r('app.color.chat_clay_bubble_dark'),
-        composer: $r('app.color.chat_clay_composer_dark'),
         action: $r('app.color.chat_clay_action_dark'),
-        onAction: $r('app.color.chat_clay_canvas_dark'), secondary,
+        onAction: canvas, secondary,
       } : {
-        canvas: $r('app.color.chat_clay_canvas_light'),
+        canvas,
         assistant: $r('app.color.chat_clay_assistant_light'),
         card: $r('app.color.chat_clay_card_light'),
         bubble: $r('app.color.chat_clay_bubble_light'),
-        composer: $r('app.color.chat_clay_composer_light'),
         action: $r('app.color.chat_clay_action_light'),
         onAction: $r('app.color.theme_default_panel_light'), secondary: $r('app.color.chat_clay_secondary_light'),
       };
     default:
       return dark ? {
-        canvas: $r('app.color.chat_default_canvas_dark'),
+        canvas,
         assistant: $r('app.color.chat_default_assistant_dark'),
         card: $r('app.color.chat_default_card_dark'),
         bubble: $r('app.color.chat_default_bubble_dark'),
-        composer: $r('app.color.chat_default_composer_dark'),
         action: $r('app.color.chat_default_action_dark'),
-        onAction: $r('app.color.chat_default_canvas_dark'), secondary,
+        onAction: canvas, secondary,
       } : {
-        canvas: $r('app.color.chat_default_canvas_light'),
+        canvas,
         assistant: $r('app.color.chat_default_assistant_light'),
         card: $r('app.color.chat_default_card_light'),
         bubble: $r('app.color.chat_default_bubble_light'),
-        composer: $r('app.color.chat_default_composer_light'),
         action: $r('app.color.chat_default_action_light'),
         onAction: $r('app.color.theme_default_panel_light'), secondary,
       };

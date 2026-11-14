@@ -7,6 +7,7 @@ export const CHAT_ACTION_PANEL_CLOSE_MS: number = 180;
 export struct XopcChatActionPanel {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param open: boolean = false;
+  @Param showSearch: boolean = false;
   @Param idPrefix: string = 'chat-action';
   @Param disabledIds: string[] = [];
   @Event onSelect: (id: string) => void = (_id: string): void => {};
@@ -45,7 +46,11 @@ export struct XopcChatActionPanel {
         }.width('100%').padding({ left: 6, right: 6, top: 4, bottom: 20 })
         Column({ space: 4 }) {
           Row() {
-            this.actionTile('voice-call', $r('app.string.voice_call_action_natural'), $r('sys.symbol.waveform'))
+            if (this.showSearch) {
+              this.actionTile('search', $r('app.string.search'), $r('sys.symbol.magnifyingglass'))
+            } else {
+              this.actionTile('voice-call', $r('app.string.voice_call_action_natural'), $r('sys.symbol.waveform'))
+            }
           }.width('100%')
         }.width('100%').padding({ left: 6, right: 6, top: 4, bottom: 20 })
       }.id(this.idPrefix + '-panel').width('100%').height(196).loop(false).autoPlay(false)

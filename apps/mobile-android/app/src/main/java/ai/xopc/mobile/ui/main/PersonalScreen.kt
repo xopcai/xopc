@@ -112,10 +112,11 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
   onOpenAssertion: (String) -> Unit = {},
   onOpenAgent: () -> Unit = {},
   onLoadAgentVoices: () -> Unit = {},
-  onUpdateAgentProfile: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
+  onUpdateAgentProfile: (String, String, String?, Boolean, String) -> Unit = { _, _, _, _, _ -> },
   onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
   onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
-  onUploadAvatar: suspend (ByteArray) -> Unit = {}, onModel: () -> Unit = {},
+  onUploadAvatar: suspend (ByteArray) -> Unit = {},
+  onLoadModel: LoadPersonalModel? = null, onSaveModel: SavePersonalModel? = null,
   bottomChromeHeight: Dp = 0.dp) {
   var agentEditorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   fun openAgentEditor() { if (state.agent != null) agentEditorOpen = true }
@@ -200,7 +201,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     Spacer(Modifier.height(bottomChromeHeight + 24.dp))
   }
   if (agentEditorOpen) PersonalAgentProfileSheet(state, { agentEditorOpen = false }, onLoadAgentVoices,
-    onUpdateAgentProfile, onUploadAvatar)
+    onUpdateAgentProfile, onUploadAvatar, onLoadModel, onSaveModel)
   if (editorOpen) {
     val currentSaving by rememberUpdatedState(state.savingGoal)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,

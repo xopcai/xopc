@@ -416,6 +416,9 @@
     <string name="voice_error_microphone">Microphone interrupted. Check your audio device.</string>
     <string name="voice_error_playback">Audio playback interrupted.</string>
     <string name="voice_error_input_dropped">Network delay caused missed speech. Retry the call and repeat your last words.</string>
+    <string name="voice_reply_text_only">This reply is available as text.</string>
+    <string name="voice_reply_interrupted">Voice playback stopped. You can keep talking.</string>
+    <string name="voice_repeat_input">The last words were not captured. Please say them again.</string>
     <string name="voice_error_route">Could not switch audio output.</string>
     <string name="voice_error_time_limit">Voice call time limit reached.</string>
     <string name="voice_error_background">Voice call paused in the background.</string>
@@ -698,7 +701,6 @@
     <string name="message_open_external_title">Open external link?</string>
     <string name="message_open_external">Open</string>
     <string name="personal_agent_refresh_voices">Refresh voices</string>
-    <string name="personal_agent_settings_title">Configure %1$s</string>
     <string name="personal_agent_configure">Configure my assistant</string>
     <string name="personal_agent_name">Assistant name</string>
     <string name="personal_agent_address">What should I call you?</string>
@@ -728,7 +730,6 @@
     <string name="personal_agent_none">None</string>
     <string name="personal_agent_occasional">Occasional</string>
     <string name="personal_agent_playful">Playful</string>
-    <string name="personal_agent_save">Save</string>
     <string name="personal_agent_save_error">Could not save assistant settings. Please retry.</string>
     <string name="execution_status_queued">Queued</string>
     <string name="execution_status_running">Running</string>
@@ -769,7 +770,14 @@
     <string name="personal_agent_done">Cancel</string>
     <string name="personal_agent_saving">Saving…</string>
     <string name="personal_agent_outreach_hint">Quiet hours follow your Gateway settings.</string>
-    <string name="personal_agent_advanced_hint">For more settings, use the PC or Web app.</string>
+    <string name="personal_agent_chat_model">Chat model</string>
+    <string name="personal_agent_no_models">No models available</string>
+    <string name="personal_agent_calls">Voice calls</string>
+    <string name="personal_agent_call_mode">Call mode</string>
+    <string name="personal_agent_call_auto">Automatic</string>
+    <string name="personal_agent_call_natural">Direct conversation</string>
+    <string name="personal_agent_call_assistant">Voice assistant</string>
+    <string name="personal_agent_voice_details">Voice and greeting</string>
     <string name="personal_agent_outreach_load_error">Could not load proactive messages. Other preferences can still be saved.</string>
     <string name="personal_agent_outreach_save_error">Could not save proactive messages. Your edits are kept; please retry.</string>
     <string name="personal_goal_title_hint">e.g. Launch the new app</string>

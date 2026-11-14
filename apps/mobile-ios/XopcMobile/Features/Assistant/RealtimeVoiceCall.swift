@@ -42,6 +42,9 @@ final class RealtimeVoiceCall {
     private var approvalTask: Task<Void, Never>?
     private var limitTask: Task<Void, Never>?
     private var generation = 0
+    private var appliedSpeaker = false
+    private var speakerTask: Task<Void, Never>?
+    private var muteTask: Task<Void, Never>?
     private var reconnectAttempt = 0
     private var connectedAt: Date?
     private var responseDone = false
@@ -66,6 +69,7 @@ final class RealtimeVoiceCall {
         expanded = true
         muted = false
         speaker = false
+        appliedSpeaker = false
         reconnectAttempt = 0
         userText = ""
         assistantText = ""
@@ -96,18 +100,43 @@ final class RealtimeVoiceCall {
         await resume()
     }
 
-    func setMuted(_ value: Bool) async {
+    func setMuted(_ value: Bool) {
+        guard phase == .connected, muted != value else { return }
         muted = value
         audio.setMuted(value)
-        try? await transport.send("input.mute", payload: .init(muted: value || congested || clarification != nil || approval != nil))
+        let previous = muteTask
+        let current = generation
+        muteTask = Task {
+            await previous?.value
+            guard current == generation, !Task.isCancelled else { return }
+            try? await transport.send("input.mute", payload: .init(
+                muted: value || congested || clarification != nil || approval != nil
+            ))
+        }
     }
 
     func setSpeaker(_ value: Bool) {
-        do {
-            try audio.setSpeaker(value)
-            speaker = value
-        } catch {
-            errorCode = "ROUTE_CHANGE_FAILED"
+        guard phase == .connected, speaker != value else { return }
+        speaker = value
+        if errorCode == "ROUTE_CHANGE_FAILED" { errorCode = nil }
+        guard speakerTask == nil else { return }
+        let current = generation
+        speakerTask = Task {
+            defer { speakerTask = nil }
+            while current == generation, speaker != appliedSpeaker {
+                let requested = speaker
+                do {
+                    try await audio.setSpeaker(requested)
+                    guard current == generation else { return }
+                    appliedSpeaker = requested
+                } catch {
+                    guard current == generation else { return }
+                    if speaker == requested {
+                        speaker = appliedSpeaker
+                        errorCode = "ROUTE_CHANGE_FAILED"
+                    }
+                }
+            }
         }
     }
 
@@ -174,8 +203,16 @@ final class RealtimeVoiceCall {
                 }
             )
             guard generation == current else { await release(); return }
+            appliedSpeaker = false
             if speaker {
-                try? audio.setSpeaker(true)
+                do {
+                    try await audio.setSpeaker(true)
+                    guard generation == current else { return }
+                    appliedSpeaker = true
+                } catch {
+                    guard generation == current else { return }
+                    speaker = false
+                }
             }
             scheduleConnectTimeout(for: current)
             let stream = try await transport.connect(origin: gateway.configuration.baseURL, session: session,
@@ -295,7 +332,10 @@ final class RealtimeVoiceCall {
         limitTask = nil
         captureTask = nil
         receiveTask = nil
+        muteTask?.cancel()
+        muteTask = nil
         await transport.close()
+        await speakerTask?.value
         audio.stop()
         if let session, let gateway {
             try? await gateway.cancelRealtimeVoiceSession(session)
@@ -454,6 +494,9 @@ private extension RealtimeVoiceCall {
     func handleResponse(_ type: String, payload: RealtimeVoiceEvent.Payload) async {
         switch type {
         case "response.created":
+            if let errorCode, ["INPUT_DROPPED", "INPUT_BACKPRESSURE", "EMPTY_UTTERANCE", "RESPONSE_FAILED", "NO_RESPONSE_AUDIO"].contains(errorCode) {
+                self.errorCode = nil
+            }
             guard responseID.isEmpty || responseID == payload.responseId else {
                 if let id = payload.responseId {
                     try? await transport.send("response.stop_playback", payload: .init(responseId: id))

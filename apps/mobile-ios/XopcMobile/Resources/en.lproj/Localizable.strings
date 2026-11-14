@@ -1071,3 +1071,16 @@
 
 "没有匹配的资料" = "No matching library items";
 "确认验收" = "Accept result";
+
+"对话模型" = "Chat Model";
+
+"暂无可用模型" = "No models available";
+"通话模式" = "Call Mode";
+"自动选择" = "Automatic";
+"直接对话" = "Direct Conversation";
+"声音与问候" = "Voice and Greeting";
+"刷新音色" = "Refresh Voices";
+
+"这条回复只有文字。" = "This reply is available as text.";
+"这条回复的语音已中断，你可以继续说。" = "Voice playback stopped. You can keep talking.";
+"刚才那句话没收到，请再说一次。" = "The last words were not captured. Please say them again.";

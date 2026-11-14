@@ -53,6 +53,24 @@ describe('chat options and queue', () => {
     await model.load('one', 'main'); expect(await model.selectModel('p/b')).toBe(true);
     expect(mock.rememberModel).toHaveBeenCalledWith('main', 'p/b', 'high'); model.dispose();
   });
+  it('saves the personal conversation model and thinking with the latest config revision', async () => {
+    mock.models.mockResolvedValue({ models: [
+      { id: 'p/a', name: 'A' },
+      { id: 'p/b', name: 'B', thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low' } },
+    ] });
+    mock.config.mockResolvedValue({ model: 'p/a', thinkingLevel: 'off', configVersion: 7 });
+    mock.setModel.mockResolvedValueOnce({ model: 'p/b', thinkingLevel: 'low', configVersion: 8 });
+    mock.setModel.mockResolvedValueOnce({ model: 'p/b', thinkingLevel: 'high', configVersion: 9 });
+    const model = new XopcChatOptionsViewModel();
+    await model.load('personal-chat', 'personal-agent');
+    expect(await model.selectModel('p/b', false)).toBe(true);
+    expect(await model.selectThinking('high', false)).toBe(true);
+    expect(mock.setModel).toHaveBeenNthCalledWith(1, 'personal-chat', 'p/b', 'low', 7);
+    expect(mock.setModel).toHaveBeenNthCalledWith(2, 'personal-chat', 'p/b', 'high', 8);
+    expect(mock.rememberModel).not.toHaveBeenCalled();
+    expect(model.thinkingLevel).toBe('high');
+    model.dispose();
+  });
   it('keeps the local draft config frozen while catalogs load instead of querying a nonexistent server session', async () => {
     mock.draft.mockResolvedValueOnce({ conversationId: 'draft', createdAt: '2026-09-27T00:00:00.000Z', creation: {
       agentId: 'main', projectId: null, execution: null, temporary: false, model: 'p/b', thinkingLevel: 'high',

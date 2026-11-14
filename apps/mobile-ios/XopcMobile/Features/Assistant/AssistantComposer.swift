@@ -4,6 +4,7 @@ import SwiftUI
 
 // swiftlint:disable:next type_body_length
 struct AssistantComposer: View {
+    @Environment(\.colorScheme) private var colorScheme
     let configuration: GatewayConfiguration
     var focusAllowed = true
     @Environment(\.locale) private var locale
@@ -22,14 +23,13 @@ struct AssistantComposer: View {
 
     @Binding var attachmentError: String?
     let canReferenceFiles: Bool
-    let canStartRealtimeVoice: Bool
     let isRunActive: Bool
     let onInputFocusChanged: (Bool) -> Void
     let onStop: () -> Void
     let onSend: () -> Void
     let onSteer: () -> Void
     let onNewConversation: () -> Void
-    let onRealtimeVoice: (RealtimeVoiceMode) -> Void
+    let onSearch: () -> Void
 
     @FocusState private var isComposerFocused: Bool
     @State private var previewAttachment: MessageAttachment?
@@ -71,11 +71,10 @@ struct AssistantComposer: View {
             if isActionPanelExpanded {
                 AssistantActionPanel(
                     canReferenceFiles: canReferenceFiles,
-                    canStartRealtimeVoice: canStartRealtimeVoice,
                     onSelect: selectAction,
-                    onRealtimeVoice: { mode in
+                    onSearch: {
                         isActionPanelExpanded = false
-                        onRealtimeVoice(mode)
+                        onSearch()
                     }
                 )
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
@@ -247,7 +246,7 @@ struct AssistantComposer: View {
                 .accessibilityIdentifier("assistant-chat-send")
             }
         }
-        .foregroundStyle(.blue)
+        .foregroundStyle(ChatAppearance.action(colorScheme))
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(Color(uiColor: .systemGray5), in: .rect(cornerRadius: 18))

@@ -105,7 +105,7 @@ describe('chat bottom region composition', () => {
     expect(chat).not.toContain("}.id('chat-bottom-region').width('100%').backgroundColor");
     expect(home).toContain(".id('secondary-bottom-region').width('100%')");
     expect(home).not.toContain("}.id('secondary-bottom-region').width('100%').backgroundColor");
-    expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.chat.canvas)");
+    expect(chat).toContain(".id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)");
     expect(chat).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
     expect(chat).toContain('.borderRadius(24).clip(true)');
     expect(home).toContain(".id('main-tab-dock').width('100%')");
@@ -113,7 +113,7 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('secondary-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)");
     expect(home).toContain('.borderRadius(24).clip(true)');
     expect(home).not.toContain('.backgroundBlurStyle(BlurStyle.COMPONENT_REGULAR)');
-    expect(chat).toContain(".id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.chat.composer)");
+    expect(chat).toContain(".id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)");
     expect(home).toContain(".id('home-quick-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)");
     expect(home).toContain('.borderRadius(18).clip(true).margin({ top: 8, bottom: 8 })');
     expect(home).not.toContain(".id('secondary-tab-dock')");
@@ -128,7 +128,7 @@ describe('chat bottom region composition', () => {
     expect(home).toContain(".id('home-quick-voice').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
     expect(home).toContain(".id('home-quick-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE)");
     expect(home).toContain("XopcChatActionPanel({ open: this.quickPanelOpen, idPrefix: 'home-quick-action'");
-    expect(chat).toContain('XopcChatActionPanel({ open: this.panelOpen');
+    expect(chat).toContain('XopcChatActionPanel({ open: this.panelOpen, showSearch: true');
     expect(actionPanel).toContain("this.actionTile('photos', $r('app.string.chat_photos')");
     expect(actionPanel).toContain("this.actionTile('reference-note', $r('app.string.chat_reference_note')");
     expect(actionPanel).toContain("this.actionTile('voice-call', $r('app.string.voice_call_action_natural')");
@@ -230,15 +230,17 @@ describe('chat bottom region composition', () => {
     expect(sessions).not.toContain("Button('+').id('sessions-new')");
   });
 
-  it('keeps routine Gateway connection progress quiet and renders capsule search and settings actions', () => {
+  it('keeps routine Gateway connection progress quiet and renders capsule voice call and settings actions', () => {
     expect(chat).toContain('if (this.hasConnectionIssue())');
     expect(chat).not.toContain("if (this.chat.connection !== 'connected')");
     expect(chat).toContain("this.chat.connection === 'gateway_update_required' || this.chat.connection.startsWith('error:')");
     const header = chat.slice(chat.indexOf('if (!this.embedded && !this.taskId)'), chat.indexOf('if (this.sendFlightActive)'));
     expect(header).toContain("$r('sys.symbol.gearshape')");
-    expect(header).toContain("$r('sys.symbol.magnifyingglass')");
+    expect(header).toContain("$r('sys.symbol.phone')");
     expect(header).toContain(".id('chat-header-actions')");
-    expect(header).toContain(".id('chat-header-search')");
+    expect(header).toContain(".id('chat-header-voice-call')");
+    expect(header).toContain('this.startVoiceCall()');
+    expect(header).not.toContain(".id('chat-header-search')");
     expect(header).toContain('this.personalSettingsOpen = true');
 
   });
@@ -338,7 +340,7 @@ describe('chat bottom region composition', () => {
 
   it('uses a compact horizontally swipeable action grid with common actions on the first page', () => {
     const panel = actionPanel;
-    const secondPage = panel.indexOf("this.actionTile('voice-call'");
+    const secondPage = panel.indexOf("this.actionTile('search', $r('app.string.search')");
 
     expect(panel).toContain('Swiper()');
     expect(panel).toContain(".id(this.idPrefix + '-panel').width('100%').height(196).loop(false).autoPlay(false)");

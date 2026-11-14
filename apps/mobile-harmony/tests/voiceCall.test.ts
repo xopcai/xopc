@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { connect: vi.fn(async () => {}), start: vi.fn(async () => {}), ensurePlaybackReady: vi.fn(async () => {}), request: vi.fn(), send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), duck: vi.fn(), setMuted: vi.fn(), now: 1000 };
+  return { connect: vi.fn(async () => {}), start: vi.fn(async () => {}), ensurePlaybackReady: vi.fn(async () => {}), request: vi.fn(), send: vi.fn(), enqueue: vi.fn(), finish: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), duck: vi.fn(), setSpeaker: vi.fn<(value: boolean) => Promise<void>>(), setMuted: vi.fn(), now: 1000 };
 });
 vi.mock('../entry/src/main/ets/service/settings.ets', () => ({ appSettings: { effectiveLanguage: () => 'zh' } }));
 vi.mock('@kit.AbilityKit', () => ({}));
@@ -42,6 +42,28 @@ describe('Harmony continuous voice call response handoff', () => {
     vi.clearAllMocks(); mocks.now = 1000; call = new XopcVoiceCall(); call.phase = 'connected';
     harness = call as unknown as CallHarness;
     harness.transport = { send: mocks.send, close: async () => {} };
+  });
+
+  it('updates the speaker immediately and applies rapid taps in order', async () => {
+    let applyFirst!: () => void;
+    mocks.setSpeaker.mockImplementationOnce(() => new Promise<void>(resolve => { applyFirst = resolve; }))
+      .mockResolvedValueOnce(undefined);
+    call.setSpeaker(true);
+    expect(call.speaker).toBe(true);
+    call.setSpeaker(false);
+    expect(call.speaker).toBe(false);
+    expect(mocks.setSpeaker.mock.calls).toEqual([[true]]);
+    applyFirst();
+    await vi.waitFor(() => expect(mocks.setSpeaker.mock.calls).toEqual([[true], [false]]));
+    expect(call.speaker).toBe(false);
+  });
+
+  it('restores the last confirmed speaker state after a route failure', async () => {
+    mocks.setSpeaker.mockRejectedValueOnce(new Error('Route unavailable'));
+    call.setSpeaker(true);
+    expect(call.speaker).toBe(true);
+    await vi.waitFor(() => expect(call.error).toBe('ROUTE_CHANGE_FAILED'));
+    expect(call.speaker).toBe(false);
   });
 
   it('releases a fully played response when its completion event arrives', () => {

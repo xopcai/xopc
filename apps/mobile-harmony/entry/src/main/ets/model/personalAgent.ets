@@ -1,4 +1,6 @@
-export interface XopcPersonalVoiceCallPreferences { openingGreetingEnabled: boolean; }
+export type XopcPersonalCallMode = 'auto' | 'natural' | 'assistant';
+export interface XopcPersonalVoiceCallPreferences { openingGreetingEnabled: boolean; enginePreference?: XopcPersonalCallMode; }
+export interface XopcPersonalVoiceCallPatch { openingGreetingEnabled?: boolean; enginePreference?: XopcPersonalCallMode; }
 
 export interface XopcPersonalAgentRecord {
   voiceCallPreferences?: XopcPersonalVoiceCallPreferences;
@@ -31,7 +33,7 @@ export interface XopcPersonalVoiceRoute { tts?: XopcPersonalVoicePreference; }
 export interface XopcPersonalVoicesResponse { ok: boolean; payload: XopcPersonalVoices; error?: string; }
 export interface XopcPersonalVoices { voices: XopcPersonalVoiceOption[]; }
 export interface XopcPersonalProfilePatch {
-  voiceCallPreferences?: XopcPersonalVoiceCallPreferences;
+  voiceCallPreferences?: XopcPersonalVoiceCallPatch;
   revision: number; displayName: string; appearance: string;
   voicePreference?: XopcPersonalVoicePreference | null;
 }

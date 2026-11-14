@@ -25,12 +25,13 @@ struct PersonalAgentTests {
             from: Data(#"""
             {"ok":true,"payload":{"agentId":"personal","conversationId":"fixed","state":"ready",
             "displayName":"Ada","appearance":"loopi-care","revision":4,
-            "voiceCallPreferences":{"openingGreetingEnabled":false},
+            "voiceCallPreferences":{"openingGreetingEnabled":false,"enginePreference":"natural"},
             "voicePreference":{"provider":"alibaba","model":"tts","voice":"voice-a"},
             "errorMessage":null}}
             """#.utf8)
         )
         #expect(configured.payload?.voiceCallPreferences?.openingGreetingEnabled == false)
+        #expect(configured.payload?.voiceCallPreferences?.enginePreference == .natural)
         #expect(ready.payload?.voiceCallPreferences == nil)
         #expect(configured.payload?.revision == 4)
         #expect(configured.payload?.voicePreference?.voice == "voice-a")

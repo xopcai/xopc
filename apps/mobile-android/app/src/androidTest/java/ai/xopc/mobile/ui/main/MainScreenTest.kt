@@ -402,7 +402,7 @@ class MainScreenTest {
       MainContent(selectedTab = selectedTab, onSelectTab = { selectedTab = it },
         connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
           selectedConversationId = id, messages = listOf(user, assistant)),
-        onOpenNote = { openedNote = it }, onOpenProgressTask = { openedTask = it },
+        onOpenNote = { openedNote = it }, onOpenTaskChat = { openedTask = it },
         onLoadMessageMedia = { _, _ -> "hello".toByteArray() })
       }
     }
@@ -430,7 +430,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-target-task-task-1").performScrollTo().performClick()
     composeTestRule.runOnIdle {
       assertEquals("task-1", openedTask)
-      assertEquals(HomeTab.Progress, selectedTab)
+      assertEquals(HomeTab.Assistant, selectedTab)
     }
   }
 
@@ -2432,7 +2432,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("tab-Assistant").assertExists()
   }
 
-  @Test fun assistantSecondActionPageOffersOneAutomaticVoiceCall() {
+  @Test fun assistantMovesSearchToSecondActionPageAndVoiceCallToHeader() {
     val id = "11111111-2222-3333-4444-555555555555"
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
@@ -2443,10 +2443,10 @@ class MainScreenTest {
     val firstRowTop = composeTestRule.onNodeWithTag("assistant-action-photos").fetchSemanticsNode().boundsInRoot.top
     composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
     composeTestRule.waitForIdle()
-    val secondRowTop = composeTestRule.onNodeWithTag("assistant-action-voice-call").fetchSemanticsNode().boundsInRoot.top
+    val secondRowTop = composeTestRule.onNodeWithTag("assistant-action-search").fetchSemanticsNode().boundsInRoot.top
     org.junit.Assert.assertEquals(firstRowTop, secondRowTop, 1f)
-    composeTestRule.onNodeWithTag("assistant-action-voice-call").assertIsEnabled()
-    composeTestRule.onNodeWithTag("assistant-action-voice-assistant").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-action-voice-call").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsEnabled()
   }
 
   @Test fun assistantKeepsConversationHeaderCompactAndMovesConfigurationIntoOptions() {
@@ -2502,7 +2502,9 @@ class MainScreenTest {
                 ConversationMedia("png", "diagram.png", "image", "image/png", 10, "image"))))))
       }
     }
-    composeTestRule.onNodeWithTag("chat-header-search").performClick()
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("assistant-action-search").performClick()
     val input = composeTestRule.onNodeWithTag("chat-message-search-input")
     input.assertIsFocused()
     val resolver = composeTestRule.activity.contentResolver
@@ -2537,7 +2539,9 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-detail-panel").assertExists()
     Espresso.closeSoftKeyboard()
     Espresso.pressBack()
-    composeTestRule.onNodeWithTag("chat-header-search").performClick()
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-panel").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("assistant-action-search").performClick()
     composeTestRule.onNodeWithTag("chat-search-close").performClick()
     composeTestRule.onNodeWithTag("chat-message-search-screen").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-composer-shell").assertExists()
@@ -2751,7 +2755,7 @@ class MainScreenTest {
             ConversationMessage("answer-latest", "assistant", "最新消息保持展开", "turn-latest"))))
     }
     composeTestRule.onNodeWithTag("message-preview-answer-long", useUnmergedTree = true).assertExists()
-    composeTestRule.onNodeWithTag("message-assistant-card-answer-long").performClick()
+    composeTestRule.onNodeWithTag("message-view-more-answer-long").performClick()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_message_detail)).assertDoesNotExist()
     composeTestRule.onNode(hasText("第9行内容", substring = true) and
       hasAnyAncestor(hasTestTag("message-detail-scroll"))).assertExists()

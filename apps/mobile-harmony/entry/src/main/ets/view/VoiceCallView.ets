@@ -4,6 +4,15 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcVoiceCall } from '../service/voiceCall';
 import { userErrorMessage } from '../common/userError';
 
+interface XopcVoiceCallControl {
+  label: Resource;
+  symbol: Resource;
+  controlId: string;
+  active: boolean;
+  available: boolean;
+  action: () => void;
+}
+
 @ComponentV2
 export struct XopcVoiceCallView {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -51,14 +60,33 @@ export struct XopcVoiceCallView {
     return $r('app.string.voice_call_listening');
   }
 
+  private errorMessage(): ResourceStr {
+    if (this.call.error === 'NO_RESPONSE_AUDIO') return $r('app.string.voice_call_text_only');
+    if (this.call.phase === 'connected') {
+      if (['INPUT_DROPPED', 'INPUT_BACKPRESSURE', 'EMPTY_UTTERANCE'].includes(this.call.error)) {
+        return $r('app.string.voice_call_repeat_input');
+      }
+      if (this.call.error === 'RESPONSE_FAILED') return $r('app.string.voice_call_reply_interrupted');
+      if (this.call.error === 'ROUTE_CHANGE_FAILED') return $r('app.string.voice_call_route_failed');
+    }
+    return userErrorMessage(this.call.error, 'generic');
+  }
+
   @Builder
-  control(label: Resource, symbol: Resource, active: boolean, action: () => void) {
-    Column({ space: 7 }) {
-      Button({ type: ButtonType.Circle }) { SymbolGlyph(symbol).fontSize(24).fontColor([active ? this.colors.accent : this.colors.foreground]) }
-        .width(54).height(54).padding(0).backgroundColor(active ? this.colors.accentSoft : this.colors.input)
-        .onClick(action)
-      Text(label).fontSize(12).fontColor(this.colors.secondary)
-    }.width(78)
+  control($$: XopcVoiceCallControl) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 7 }) {
+        Row() {
+          SymbolGlyph($$.symbol).fontSize(24).fontColor([$$.active ? this.colors.surface : this.colors.foreground])
+        }.width(54).height(54).borderRadius(27)
+          .justifyContent(FlexAlign.Center)
+          .backgroundColor($$.active ? this.colors.foreground : this.colors.input)
+        Text($$.label).fontSize(12).fontColor($$.active ? this.colors.foreground : this.colors.secondary)
+          .fontWeight($$.active ? FontWeight.Medium : FontWeight.Regular)
+      }.width('100%')
+    }.id($$.controlId).width(78).padding(0).backgroundColor(Color.Transparent)
+      .enabled($$.available).accessibilityText($$.label).accessibilitySelected($$.active)
+      .onClick((): void => { $$.action(); })
   }
 
   @Builder
@@ -100,9 +128,9 @@ export struct XopcVoiceCallView {
             SymbolGlyph($r('sys.symbol.waveform')).fontSize(62).fontColor([this.colors.accent])
           }.width(180).height(180)
           Text(this.call.name || $r('app.string.voice_call_title')).fontSize(25).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).margin({ top: 18 })
-          Text(this.status()).fontSize(15).fontColor(this.call.error ? this.colors.danger : this.colors.secondary).margin({ top: 8 })
+          Text(this.status()).fontSize(15).fontColor(this.call.phase === 'paused' && this.call.error ? this.colors.danger : this.colors.secondary).margin({ top: 8 })
           Text(this.elapsed()).fontSize(13).fontColor(this.colors.tertiary).margin({ top: 5 })
-          if (this.call.error) { Text(userErrorMessage(this.call.error, 'generic')).fontSize(12).fontColor(this.colors.danger).margin({ top: 8 }) }
+          if (this.call.error) { Text(this.errorMessage()).fontSize(12).fontColor(this.colors.danger).margin({ top: 8 }) }
           if (this.call.clarification || this.call.approval) {
             Column() { this.intervention() }.width('100%').padding({ left: 18, right: 18, top: 20 })
           } else if (this.call.assistantText || this.call.userText) {
@@ -116,10 +144,15 @@ export struct XopcVoiceCallView {
               .onClick((): void => { if (this.call.taskId) this.call.cancelTask(); else this.call.stopReply(); })
           }
           Row() {
-            this.control($r('app.string.voice_call_mute'), $r('sys.symbol.mic'), this.call.muted, (): void => { this.call.setMuted(!this.call.muted); })
-            this.control($r('app.string.voice_call_speaker'), $r('sys.symbol.speaker_wave_2'), this.call.speaker, (): void => { this.call.setSpeaker(!this.call.speaker); })
+            this.control({ label: $r('app.string.voice_call_mute'), controlId: 'voice-call-mute',
+              symbol: this.call.muted ? $r('sys.symbol.mic_slash_fill') : $r('sys.symbol.mic'),
+              active: this.call.muted, available: this.call.phase === 'connected', action: (): void => { this.call.setMuted(!this.call.muted); } })
+            this.control({ label: $r('app.string.voice_call_speaker'), controlId: 'voice-call-speaker',
+              symbol: $r('sys.symbol.speaker_wave_2'), active: this.call.speaker, available: this.call.phase === 'connected',
+              action: (): void => { this.call.setSpeaker(!this.call.speaker); } })
             if (this.call.phase === 'paused') {
-              this.control($r('app.string.voice_call_retry'), $r('sys.symbol.arrow_clockwise'), false, (): void => { this.call.resume(); })
+              this.control({ label: $r('app.string.voice_call_retry'), controlId: 'voice-call-retry',
+                symbol: $r('sys.symbol.arrow_clockwise'), active: false, available: true, action: (): void => { this.call.resume(); } })
             }
             Column({ space: 7 }) {
               Button({ type: ButtonType.Circle }) { SymbolGlyph($r('sys.symbol.xmark')).fontSize(24).fontColor([Color.White]) }

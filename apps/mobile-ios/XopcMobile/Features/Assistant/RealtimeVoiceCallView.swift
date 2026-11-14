@@ -4,6 +4,7 @@ struct RealtimeVoiceCallView: View {
     let call: RealtimeVoiceCall
 
     @Environment(\.locale) private var locale
+    @Environment(\.colorScheme) private var colorScheme
     @State private var answer = ""
 
     var body: some View {
@@ -104,11 +105,13 @@ struct RealtimeVoiceCallView: View {
             }
             HStack(spacing: 12) {
                 control("静音", image: call.muted ? "mic.slash.fill" : "mic", active: call.muted) {
-                    Task { await call.setMuted(!call.muted) }
+                    call.setMuted(!call.muted)
                 }
-                control("扬声器", image: "speaker.wave.2", active: call.speaker) {
+                .disabled(call.phase != .connected)
+                control("扬声器", image: call.speaker ? "speaker.wave.2.fill" : "speaker.wave.2", active: call.speaker) {
                     call.setSpeaker(!call.speaker)
                 }
+                .disabled(call.phase != .connected)
                 if call.phase == .paused {
                     control("重试", image: "arrow.clockwise", active: false) {
                         Task { await call.resume() }
@@ -177,6 +180,14 @@ struct RealtimeVoiceCallView: View {
             "语音服务暂时不可用，请稍后重试"
         case "NETWORK", "CONNECT_TIMEOUT", "AUDIO_INTERRUPTED":
             "通话已中断，请重试"
+        case "NO_RESPONSE_AUDIO":
+            "这条回复只有文字。"
+        case "RESPONSE_FAILED" where call.phase == .connected:
+            "这条回复的语音已中断，你可以继续说。"
+        case "INPUT_BACKPRESSURE", "EMPTY_UTTERANCE":
+            "刚才那句话没收到，请再说一次。"
+        case "INPUT_DROPPED" where call.phase == .connected:
+            "刚才那句话没收到，请再说一次。"
         case "TIME_LIMIT":
             "本次通话已达到时长上限"
         case "ROUTE_CHANGE_FAILED", "PLAYBACK_FAILED", "UNSUPPORTED_FORMAT", "AUDIO_UNAVAILABLE":
@@ -203,16 +214,19 @@ struct RealtimeVoiceCallView: View {
                     .font(.title3)
                     .frame(width: 56, height: 56)
                     .background(
-                        destructive ? Color.red : active ? Color.blue.opacity(0.13) : Color(uiColor: .secondarySystemGroupedBackground),
+                        destructive ? Color.red : active ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground),
                         in: .circle
                     )
-                    .foregroundStyle(destructive ? Color.white : active ? Color.blue : Color.primary)
-                Text(title).font(.caption).foregroundStyle(.secondary)
+                    .foregroundStyle(destructive ? Color.white : active ? (colorScheme == .dark ? Color.black : Color.white) : Color.primary)
+                Text(title).font(.caption.weight(active && !destructive ? .semibold : .regular))
+                    .foregroundStyle(active && !destructive ? Color.accentColor : Color.secondary)
             }
             .frame(maxWidth: .infinity)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(title))
+        .accessibilityAddTraits(active && !destructive ? .isSelected : [])
     }
 
     private func clarificationCard(_ clarification: ClarificationRequest) -> some View {

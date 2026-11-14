@@ -325,7 +325,7 @@ export class XopcChatRepository {
     if (!result.payload) throw new Error('INVALID_AGENT_CONFIG');
     return result.payload;
   }
-  async setModel(id: string, model: string, thinkingLevel?: string): Promise<void> {
+  async setModel(id: string, model: string, thinkingLevel?: string, configVersion?: number): Promise<XopcAgentConfig | undefined> {
     const scope = localSessionStore.scope();
     const connection = gatewaySession.connectionRevision();
     const draft = await this.draft(id);
@@ -336,8 +336,12 @@ export class XopcChatRepository {
       if (thinkingLevel !== undefined) draft.creation.thinkingLevel = thinkingLevel;
       await localSessionStore.save(draft, scope); return;
     }
-    const body: XopcAgentConfig = { model, thinkingLevel };
-    await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config', 'PATCH', JSON.stringify(body));
+    const body: XopcAgentConfig = { model, thinkingLevel, configVersion };
+    const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/agent-config',
+      'PATCH', JSON.stringify(body))) as XopcPayload<XopcAgentConfig>;
+    gatewaySession.assertConnection(connection);
+    if (!result.payload) throw new Error('INVALID_AGENT_CONFIG');
+    return result.payload;
   }
   async rememberModel(agentId: string, model: string, thinkingLevel?: string): Promise<void> {
     const gatewayId = gatewaySession.currentProfile()?.gatewayId;

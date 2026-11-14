@@ -11,9 +11,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,97 +45,237 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.ConversationModel
+import ai.xopc.mobile.gateway.ModelSelection
+
+internal typealias LoadPersonalModel = suspend (gatewayId: String, conversationId: String) -> ModelSelection
+internal typealias SavePersonalModel = suspend (gatewayId: String, conversationId: String, model: ConversationModel,
+  configVersion: Long?) -> ModelSelection
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> Unit,
   onLoadAgentVoices: () -> Unit,
-  onUpdateAgentProfile: (String, String, String?, Boolean) -> Unit,
-  onUploadAvatar: suspend (ByteArray) -> Unit) {
+  onUpdateAgentProfile: (String, String, String?, Boolean, String) -> Unit,
+  onUploadAvatar: suspend (ByteArray) -> Unit,
+  onLoadModel: LoadPersonalModel? = null, onSaveModel: SavePersonalModel? = null,
+  modelBusy: Boolean = false) {
   var agentName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var agentAppearance by rememberSaveable(state.gatewayId) { mutableStateOf("loopi") }
+  var callEngine by rememberSaveable(state.gatewayId) { mutableStateOf("auto") }
+  var voiceExpanded by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var greetingEnabled by rememberSaveable(state.gatewayId) { mutableStateOf(true) }
   var agentVoice by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var uploading by remember(state.gatewayId) { mutableStateOf(false) }
-  val busy = uploading || state.agentProfileSaving
+  val gatewayId = state.gatewayId
+  val conversationId = state.agent?.conversationId
+  val scope = rememberCoroutineScope()
+  var modelSelection by remember(state.gatewayId, conversationId) { mutableStateOf<ModelSelection?>(null) }
+  var modelError by remember(state.gatewayId, conversationId) { mutableStateOf(false) }
+  var modelSaving by remember(state.gatewayId, conversationId) { mutableStateOf(false) }
+  var modelPickerOpen by rememberSaveable(state.gatewayId, conversationId) { mutableStateOf(false) }
+  var query by rememberSaveable(state.gatewayId, conversationId) { mutableStateOf("") }
+  suspend fun reloadModels() {
+    val targetGateway = gatewayId ?: return
+    val targetConversation = conversationId ?: return
+    val load = onLoadModel ?: return
+    modelSelection = null
+    modelError = false
+    try {
+      modelSelection = load(targetGateway, targetConversation)
+    } catch (cancelled: CancellationException) {
+      throw cancelled
+    } catch (_: Exception) {
+      modelError = true
+    }
+  }
+  fun saveModel(model: ConversationModel) {
+    val targetGateway = gatewayId ?: return
+    val targetConversation = conversationId ?: return
+    val save = onSaveModel ?: return
+    val current = modelSelection ?: return
+    if (modelSaving || modelBusy || modelError) return
+    modelSaving = true
+    scope.launch {
+      try {
+        val saved = save(targetGateway, targetConversation, model, current.configVersion)
+        modelSelection = saved.copy(models = current.models)
+        modelPickerOpen = false
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        modelError = true
+      } finally {
+        modelSaving = false
+      }
+    }
+  }
+  LaunchedEffect(state.gatewayId, conversationId) { reloadModels() }
+  val busy = uploading || state.agentProfileSaving || modelSaving
   val currentBusy by rememberUpdatedState(busy)
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
     confirmValueChange = { it != SheetValue.Hidden || !currentBusy })
-  val agentSaveRevision = remember(state.gatewayId, state.agent?.agentId) { state.agentProfileSavedRevision }
+  fun saveProfile() {
+    val agent = state.agent ?: return
+    if (state.agentLoading || state.agentProfileSaving) return
+    onUpdateAgentProfile(agentName.trim().ifBlank { agent.displayName }, agentAppearance,
+      agentVoice.takeIf { state.agentVoiceChoices?.voices?.isNotEmpty() == true }, greetingEnabled, callEngine)
+  }
   LaunchedEffect(state.gatewayId, state.agent?.agentId, state.agent?.revision) {
     val agent = state.agent ?: return@LaunchedEffect
+    callEngine = agent.callEngine ?: "auto"
     greetingEnabled = agent.openingGreetingEnabled
     agentName = agent.displayName
     agentAppearance = agent.appearance
     agentVoice = agent.voicePreference?.voice?.takeUnless { it == "default" }.orEmpty()
   }
   LaunchedEffect(state.gatewayId) { onLoadAgentVoices() }
-  LaunchedEffect(state.agentProfileSavedRevision) {
-    if (state.agentProfileSavedRevision > agentSaveRevision) onDismiss()
+  val pendingName = agentName.isNotBlank() && state.agent != null && agentName.trim() != state.agent.displayName
+  LaunchedEffect(agentName, pendingName) {
+    if (pendingName && !state.agentProfileError) {
+      delay(700)
+      saveProfile()
+    }
   }
-  ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }, sheetState = sheetState,
+  val closeProfile = {
+    if (!busy) {
+      if (pendingName && !state.agentProfileError) saveProfile()
+      onDismiss()
+    }
+  }
+  val closePicker = { if (!modelSaving) modelPickerOpen = false }
+  ModalBottomSheet(onDismissRequest = closeProfile, sheetState = sheetState,
     modifier = Modifier.testTag("personal-agent-profile-sheet")) {
-    Column(Modifier.fillMaxWidth().fillMaxHeight(0.65f).imePadding()) {
-      Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(stringResource(R.string.personal_agent_settings_title, state.agent?.displayName?.takeIf { it.isNotBlank() } ?: "ADA"),
-          modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-        TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.personal_agent_done)) }
-      }
-      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        PersonalAvatarUpload(state, onUploadAvatar, { agentAppearance = "custom" }, busy || state.agentLoading, { uploading = it })
-        OutlinedTextField(agentName, { agentName = it.take(60) }, Modifier.fillMaxWidth(),
-          label = { Text(stringResource(R.string.personal_agent_name)) }, singleLine = true, enabled = !busy && !state.agentLoading)
-        state.agentVoiceChoices?.takeIf { it.voices.isNotEmpty() }?.let { choices ->
-          HorizontalDivider()
-          var expanded by remember { mutableStateOf(false) }
-          val options = listOf("" to stringResource(R.string.personal_agent_default_voice)) +
-            choices.voices.filter { it.id != "default" }.map {
-              it.id to (it.displayNames[if (Locale.current.language == "zh") "zh-CN" else "en"] ?: it.name)
-            } +
-            state.agent?.voicePreference?.takeIf { voice -> voice.voice != "default" && choices.voices.none { it.id == voice.voice } }
-              ?.let { listOf(it.voice to it.voice) }.orEmpty()
-          Box {
-            TextButton(onClick = { expanded = true }, enabled = !busy) {
-              Text(stringResource(R.string.personal_agent_voice) + " · " +
-                (options.firstOrNull { it.first == agentVoice }?.second ?: agentVoice))
-            }
-            DropdownMenu(expanded = expanded && !busy, onDismissRequest = { expanded = false }) {
-              options.forEach { (id, title) ->
-                DropdownMenuItem(text = { Text(title) }, onClick = { agentVoice = id; expanded = false })
-              }
+    val selection = modelSelection
+    val model = selection?.models?.firstOrNull { it.id == selection.selectedId }
+    if (modelPickerOpen) {
+      ChatOptionsPanel(stringResource(R.string.assistant_model), height = 576.dp, onClose = closePicker) {
+        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(),
+          label = { Text(stringResource(R.string.assistant_model_search)) }, singleLine = true)
+        if (modelError) {
+          Text(stringResource(R.string.assistant_model_error), color = MaterialTheme.colorScheme.error)
+          TextButton(onClick = { scope.launch { reloadModels() } }, enabled = !modelSaving) {
+            Text(stringResource(R.string.assistant_model_retry))
+          }
+        } else if (selection == null) ChatOptionsSkeleton()
+        val canSelect = !modelBusy && !modelSaving && !modelError
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          if (selection != null) items(selection.models.filter {
+            query.isBlank() || it.name.contains(query, true) || it.id.contains(query, true)
+          }, key = { it.id }) { option ->
+            ContextRow("${if (option.id == selection.selectedId) "✓ " else ""}${option.name}", option.id,
+              "personal-model-${option.id}", enabled = canSelect, flat = true, showChevron = false) {
+              if (option.id == selection.selectedId) closePicker() else saveModel(model = option)
             }
           }
         }
-        if (state.agent?.supportsOpeningGreeting == true) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-          Text(stringResource(R.string.personal_agent_opening_greeting), Modifier.weight(1f))
-          androidx.compose.material3.Switch(checked = greetingEnabled,
-            onCheckedChange = { greetingEnabled = it }, enabled = !busy && !state.agentLoading)
-        }
-        TextButton(onClick = onLoadAgentVoices, enabled = !busy) {
-          Text(stringResource(R.string.personal_agent_refresh_voices))
-        }
-        Text(stringResource(R.string.personal_agent_advanced_hint), style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
-      HorizontalDivider()
-      Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (state.agentProfileError) {
-          Text(stringResource(R.string.personal_agent_save_error), color = MaterialTheme.colorScheme.error)
+    } else {
+      Column(Modifier.fillMaxWidth().fillMaxHeight(0.65f).imePadding()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+          horizontalArrangement = Arrangement.End) {
+          TextButton(onClick = closeProfile, enabled = !busy) { Text(stringResource(R.string.personal_agent_done)) }
         }
-        Button(onClick = {
-          onUpdateAgentProfile(agentName.trim(), agentAppearance,
-            agentVoice.takeIf { state.agentVoiceChoices?.voices?.isNotEmpty() == true }, greetingEnabled)
-        }, enabled = !busy && !state.agentLoading && state.agent != null && agentName.isNotBlank(),
-          modifier = Modifier.fillMaxWidth().testTag("personal-agent-profile-save")) {
-          Text(stringResource(if (state.agentProfileSaving) R.string.personal_agent_saving else R.string.personal_agent_save))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
+          verticalArrangement = Arrangement.spacedBy(16.dp)) {
+          PersonalAvatarUpload(state, onUploadAvatar, { agentAppearance = "custom"; saveProfile() }, busy || state.agentLoading, { uploading = it })
+          OutlinedTextField(agentName, { agentName = it.take(60) }, Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.personal_agent_name)) }, singleLine = true, enabled = !busy && !state.agentLoading)
+          if (onLoadModel != null && onSaveModel != null && gatewayId != null && conversationId != null) {
+            HorizontalDivider()
+            Text(stringResource(R.string.personal_agent_chat_model), style = MaterialTheme.typography.titleSmall)
+            when {
+              modelError -> {
+                Text(stringResource(R.string.assistant_model_error), color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { scope.launch { reloadModels() } }, enabled = !busy) {
+                  Text(stringResource(R.string.assistant_model_retry))
+                }
+              }
+              selection == null -> ChatOptionsSkeleton()
+              selection.models.isEmpty() -> Text(stringResource(R.string.personal_agent_no_models),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+              else -> {
+                ContextRow(stringResource(R.string.assistant_model), model?.name ?: selection.selectedId,
+                  "personal-setting-model", enabled = !busy && !modelBusy, compact = true, flat = true) {
+                  query = ""
+                  modelPickerOpen = true
+                }
+              }
+            }
+          }
+          HorizontalDivider()
+          Text(stringResource(R.string.personal_agent_calls), style = MaterialTheme.typography.titleSmall)
+          var selectingEngine by remember { mutableStateOf(false) }
+          val engines = listOf("auto" to R.string.personal_agent_call_auto,
+            "natural" to R.string.personal_agent_call_natural, "assistant" to R.string.personal_agent_call_assistant)
+          Box {
+            ContextRow(stringResource(R.string.personal_agent_call_mode),
+              stringResource(engines.first { it.first == callEngine }.second),
+              "personal-setting-call-mode", enabled = !busy, compact = true, flat = true) {
+              selectingEngine = true
+            }
+            DropdownMenu(expanded = selectingEngine && !busy, onDismissRequest = { selectingEngine = false }) {
+              engines.forEach { (engine, label) ->
+                DropdownMenuItem(text = { Text(stringResource(label)) },
+                  onClick = { callEngine = engine; selectingEngine = false; saveProfile() },
+                  modifier = Modifier.testTag("personal-call-mode-$engine"))
+              }
+            }
+          }
+          if (callEngine != "natural") {
+            ContextRow(stringResource(R.string.personal_agent_voice_details), "",
+              "personal-setting-voice-details", enabled = !busy, compact = true, flat = true, showChevron = false,
+              iconRes = if (voiceExpanded) R.drawable.action_chevron_down else R.drawable.action_chevron_right) {
+              voiceExpanded = !voiceExpanded
+            }
+            if (voiceExpanded) {
+              state.agentVoiceChoices?.takeIf { it.voices.isNotEmpty() }?.let { choices ->
+                var expanded by remember { mutableStateOf(false) }
+                val options = listOf("" to stringResource(R.string.personal_agent_default_voice)) +
+                  choices.voices.filter { it.id != "default" }.map {
+                    it.id to (it.displayNames[if (Locale.current.language == "zh") "zh-CN" else "en"] ?: it.name)
+                  } +
+                  state.agent?.voicePreference?.takeIf { voice -> voice.voice != "default" && choices.voices.none { it.id == voice.voice } }
+                    ?.let { listOf(it.voice to it.voice) }.orEmpty()
+                Box {
+                  TextButton(onClick = { expanded = true }, enabled = !busy) {
+                    Text(stringResource(R.string.personal_agent_voice) + " · " +
+                      (options.firstOrNull { it.first == agentVoice }?.second ?: agentVoice))
+                  }
+                  DropdownMenu(expanded = expanded && !busy, onDismissRequest = { expanded = false }) {
+                    options.forEach { (id, title) ->
+                      DropdownMenuItem(text = { Text(title) }, onClick = { agentVoice = id; expanded = false; saveProfile() })
+                    }
+                  }
+                }
+              }
+              if (state.agent?.supportsOpeningGreeting == true) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.personal_agent_opening_greeting), Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = greetingEnabled,
+                  onCheckedChange = { greetingEnabled = it; saveProfile() }, enabled = !busy && !state.agentLoading)
+              }
+              if (state.agentVoiceChoices?.voices.isNullOrEmpty()) {
+                TextButton(onClick = onLoadAgentVoices, enabled = !busy) {
+                  Text(stringResource(R.string.personal_agent_refresh_voices))
+                }
+              }
+            }
+          }
+          if (state.agentProfileSaving) {
+            Text(stringResource(R.string.personal_agent_saving), color = MaterialTheme.colorScheme.onSurfaceVariant)
+          } else if (state.agentProfileError) {
+            Text(stringResource(R.string.personal_agent_save_error), color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = { saveProfile() }, enabled = agentName.isNotBlank()) {
+              Text(stringResource(R.string.personal_retry))
+            }
+          }
         }
       }
     }

@@ -1,4 +1,4 @@
-import { XopcPersonalAgentRecord, XopcPersonalAgentResponse,
+import { XopcPersonalAgentRecord, XopcPersonalAgentResponse, XopcPersonalCallMode, XopcPersonalVoiceCallPatch,
   XopcPersonalVoicePreference,
   XopcPersonalVoiceOption, XopcPersonalVoiceStatus, XopcPersonalVoicesResponse, XopcPersonalProfilePatch } from '../model/personalAgent';
 import { XopcHttpError } from '../service/transport';
@@ -49,31 +49,40 @@ export class XopcPersonalAgentSettingsViewModel {
     patch: XopcPersonalProfilePatch): XopcPersonalProfilePatch {
     const nameChanged = patch.displayName !== original.displayName;
     const appearanceChanged = patch.appearance !== original.appearance;
-    const greetingChanged = patch.voiceCallPreferences?.openingGreetingEnabled !== (original.voiceCallPreferences?.openingGreetingEnabled ?? true);
+    const greeting = patch.voiceCallPreferences?.openingGreetingEnabled;
+    const engine = patch.voiceCallPreferences?.enginePreference;
+    const latestGreeting = latest.voiceCallPreferences?.openingGreetingEnabled ?? true;
+    const latestEngine = latest.voiceCallPreferences?.enginePreference ?? 'auto';
     const voiceChanged = JSON.stringify(patch.voicePreference ?? null) !== JSON.stringify(original.voicePreference ?? null);
     if (latest.agentId !== original.agentId || latest.state !== 'ready' || !latest.revision ||
       (nameChanged && latest.displayName !== original.displayName && latest.displayName !== patch.displayName) ||
       (appearanceChanged && latest.appearance !== original.appearance && latest.appearance !== patch.appearance) ||
-      (greetingChanged && (latest.voiceCallPreferences?.openingGreetingEnabled ?? true) !== (original.voiceCallPreferences?.openingGreetingEnabled ?? true) &&
-        (latest.voiceCallPreferences?.openingGreetingEnabled ?? true) !== patch.voiceCallPreferences?.openingGreetingEnabled) ||
+      (greeting !== undefined && latestGreeting !== (original.voiceCallPreferences?.openingGreetingEnabled ?? true) && latestGreeting !== greeting) ||
+      (engine !== undefined && latestEngine !== (original.voiceCallPreferences?.enginePreference ?? 'auto') && latestEngine !== engine) ||
       (voiceChanged && JSON.stringify(latest.voicePreference ?? null) !== JSON.stringify(original.voicePreference ?? null) &&
         JSON.stringify(latest.voicePreference ?? null) !== JSON.stringify(patch.voicePreference ?? null))) {
       throw new Error('PERSONAL_PROFILE_CONFLICT');
     }
     return { revision: latest.revision, displayName: nameChanged ? patch.displayName : latest.displayName,
       appearance: appearanceChanged ? patch.appearance : latest.appearance,
-      voiceCallPreferences: greetingChanged ? patch.voiceCallPreferences : latest.voiceCallPreferences,
+      voiceCallPreferences: patch.voiceCallPreferences,
       voicePreference: voiceChanged ? patch.voicePreference : latest.voicePreference };
   }
 
   async saveProfile(name: string, appearance: string,
-    voiceId: string, greetingEnabled?: boolean): Promise<XopcPersonalAgentRecord | null> {
+    voiceId: string, greetingEnabled?: boolean, callMode?: XopcPersonalCallMode): Promise<XopcPersonalAgentRecord | null> {
     const record = this.record;
     if (this.saving || this.loading || !record?.revision || !name.trim() || name.trim().length > 60) return null;
     const generation = this.generation;
     const connection = gatewaySession.connectionRevision();
+    const callPreferences: XopcPersonalVoiceCallPatch = {};
+    if (record.voiceCallPreferences && greetingEnabled !== undefined &&
+      greetingEnabled !== record.voiceCallPreferences.openingGreetingEnabled) callPreferences.openingGreetingEnabled = greetingEnabled;
+    if (callMode !== undefined && callMode !== (record.voiceCallPreferences?.enginePreference ?? 'auto')) {
+      callPreferences.enginePreference = callMode;
+    }
     const patch: XopcPersonalProfilePatch = { revision: record.revision, displayName: name.trim(), appearance: appearance,
-      voiceCallPreferences: record.voiceCallPreferences ? { openingGreetingEnabled: greetingEnabled ?? record.voiceCallPreferences.openingGreetingEnabled } : undefined,
+      voiceCallPreferences: Object.keys(callPreferences).length ? callPreferences : undefined,
       voicePreference: voiceId === record.voicePreference?.voice || (!voiceId && record.voicePreference?.voice === 'default') ? record.voicePreference : this.voiceRoute ? (voiceId ? { provider: this.voiceRoute.provider,
         model: this.voiceRoute.model, voice: voiceId } : null) : record.voicePreference };
     this.saving = true; this.error = '';

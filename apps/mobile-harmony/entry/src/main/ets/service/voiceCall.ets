@@ -58,6 +58,8 @@ export class XopcVoiceCall {
   private transport?: XopcVoiceCallTransport;
   private context?: common.UIAbilityContext;
   private generation: number = 0;
+  private appliedSpeaker: boolean = false;
+  private speakerSwitch?: Promise<void>;
   private reconnectTimer: number = -1;
   private cleanup: Promise<void> = Promise.resolve();
   private releaseInProgress: boolean = false;
@@ -81,7 +83,7 @@ export class XopcVoiceCall {
   async start(context: common.UIAbilityContext, target: XopcVoiceCallTarget): Promise<void> {
     if (this.phase !== 'idle') { this.expanded = true; return; }
     this.context = context; this.target = target; this.mode = target.mode; this.name = target.name;
-    this.phase = 'connecting'; this.expanded = true; this.muted = false; this.speaker = false;
+    this.phase = 'connecting'; this.expanded = true; this.muted = false; this.speaker = false; this.appliedSpeaker = false;
     this.startedAt = Date.now(); this.error = ''; this.userText = ''; this.assistantText = '';
     this.reconnectAttempt = 0;
     this.logicalCallId = xopcVoiceUuid();
@@ -127,7 +129,11 @@ export class XopcVoiceCall {
       this.transport = transport;
       await transport.connect(auth.origin, session, recovering && this.reconnectAttempt % 2 === 1);
       if (generation !== this.generation) return;
-      if (this.speaker) await voiceCallAudio.setSpeaker(true);
+      this.appliedSpeaker = false;
+      if (this.speaker) {
+        await voiceCallAudio.setSpeaker(true);
+        if (generation === this.generation) this.appliedSpeaker = true;
+      }
       await voiceCallAudio.ensurePlaybackReady();
       if (generation !== this.generation) return;
       this.phase = 'connected'; this.connectedAt = Date.now();
@@ -155,7 +161,7 @@ export class XopcVoiceCall {
     if (this.congested) return;
     this.congested = true; this.syncInput();
     hilog.warn(0x0000, 'XopcVoice', 'Voice input paused for congestion: %{public}s', JSON.stringify(this.transport?.inputDiagnostics()));
-    if (!result.accepted) this.error = 'INPUT_DROPPED';
+    if (!result.accepted) this.reportTurnError('INPUT_DROPPED');
     clearInterval(this.queueTimer);
     const generation = this.generation;
     this.queueTimer = setInterval((): void => {
@@ -221,6 +227,7 @@ export class XopcVoiceCall {
     const payload = event.payload;
     if (event.type === 'response.created' && payload.responseId) this.timing.created(payload.responseId, this.now());
     if (event.type === 'input.speech_started' && !this.inputBlocked()) {
+      if (['INPUT_DROPPED', 'INPUT_BACKPRESSURE', 'EMPTY_UTTERANCE', 'RESPONSE_FAILED', 'NO_RESPONSE_AUDIO'].includes(this.error)) this.error = '';
       const id = payload.utteranceId ?? '';
       if (!this.speakingUtterances.includes(id) && this.speakingUtterances.length < 32) this.speakingUtterances.push(id);
       this.timing.speechStarted(); this.setSpeechActive(true);
@@ -263,10 +270,17 @@ export class XopcVoiceCall {
       voiceCallAudio.flush(); this.finishResponse('cancelled');
     } else if (event.type === 'response.done' && payload.responseId === this.responseId) {
       this.responseDone = true;
-      if (!payload.audio && this.assistantText && this.responseId !== this.session?.openingGreeting?.greetingResponseId) this.error = 'NO_RESPONSE_AUDIO';
+      if (payload.audio === false && this.assistantText && this.responseId !== this.session?.openingGreeting?.greetingResponseId) this.reportTurnError('NO_RESPONSE_AUDIO');
       if (!payload.audio || this.playedMs >= this.receivedMs) this.finishResponse();
       else voiceCallAudio.finish(this.responseId);
-    } else if (event.type === 'session.error' && payload.recoverable) this.error = payload.code ?? 'SERVICE_UNAVAILABLE';
+    } else if (event.type === 'session.error' && payload.recoverable) this.reportTurnError(payload.code ?? 'SERVICE_UNAVAILABLE');
+  }
+
+  private reportTurnError(code: string): void {
+    this.error = code;
+    hilog.warn(0x0000, 'XopcVoice', 'Voice turn issue: %{public}s',
+      JSON.stringify({ code, mode: this.mode, sessionId: this.session?.sessionId,
+        responseId: this.responseId, phase: this.phase, networkQuality: this.networkQuality, route: this.route }));
   }
 
   private finishResponse(outcome: string = 'completed'): void {
@@ -291,13 +305,36 @@ export class XopcVoiceCall {
     this.pendingReply.push(item); this.pendingReplyBytes += bytes;
   }
 
-  async setMuted(value: boolean): Promise<void> {
-    this.muted = value; this.syncInput();
+  setMuted(value: boolean): void {
+    if (this.muted === value) return;
+    this.muted = value;
+    this.syncInput();
   }
 
-  async setSpeaker(value: boolean): Promise<void> {
+  setSpeaker(value: boolean): void {
+    if (this.phase !== 'connected' || this.speaker === value) return;
     this.speaker = value;
-    try { await voiceCallAudio.setSpeaker(value); } catch (_error) { this.error = 'ROUTE_CHANGE_FAILED'; }
+    if (this.error === 'ROUTE_CHANGE_FAILED') this.error = '';
+    if (this.speakerSwitch) return;
+    const generation = this.generation;
+    this.speakerSwitch = this.applySpeaker(generation).finally((): void => { this.speakerSwitch = undefined; });
+  }
+
+  private async applySpeaker(generation: number): Promise<void> {
+    while (generation === this.generation && this.speaker !== this.appliedSpeaker) {
+      const requested = this.speaker;
+      try {
+        await voiceCallAudio.setSpeaker(requested);
+        if (generation !== this.generation) return;
+        this.appliedSpeaker = requested;
+      } catch (_error) {
+        if (generation !== this.generation) return;
+        if (this.speaker === requested) {
+          this.speaker = this.appliedSpeaker;
+          this.error = 'ROUTE_CHANGE_FAILED';
+        }
+      }
+    }
   }
 
   async stopReply(): Promise<void> {
@@ -420,7 +457,9 @@ export class XopcVoiceCall {
     clearInterval(this.approvalTimer); this.approvalTimer = -1;
     clearTimeout(this.limitTimer); this.limitTimer = -1;
     const transport = this.transport; this.transport = undefined;
-    await transport?.close(); await voiceCallAudio.stop();
+    await transport?.close();
+    await this.speakerSwitch;
+    await voiceCallAudio.stop();
     if (clearSession) this.session = undefined;
   }
 

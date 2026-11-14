@@ -28,11 +28,13 @@ class GeneratedMediaCardTest {
       MaterialTheme {
         Column {
           GeneratedMediaRows(listOf(song, video), false, null, { actions += "play:${it.id}" },
-            { actions += "confirm:${it.id}:${it.draftRevision}" })
+            { actions += "confirm:${it.id}:${it.draftRevision}" },
+            measuredDurations = mapOf("song" to 123_456))
         }
       }
     }
     compose.onNodeWithText("风从山南来").assertExists()
+    compose.onNodeWithText("2:03", substring = true).assertExists()
     compose.onNodeWithText("山南落日").assertExists()
     compose.onNodeWithTag("generated-media-play-song").performClick()
     compose.onNodeWithTag("generated-video-confirm-video").performClick()

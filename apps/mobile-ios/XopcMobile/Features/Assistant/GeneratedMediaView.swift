@@ -67,10 +67,10 @@ struct GeneratedMediaCard: Identifiable, Equatable, Sendable {
         kind == .music ? "music.note" : "film"
     }
 
-    var metadata: String {
+    func metadata(measuredDuration: Double?) -> String {
         if kind == .music {
             let version = item.versionNumber.map { AppLocalization.resolve("第 \($0) 版") }
-            let length = item.durationMs.map { formatGeneratedMediaTime(Double($0) / 1000) }
+            let length = (measuredDuration ?? item.durationMs.map { Double($0) / 1000 }).map(formatGeneratedMediaTime)
             return [version, length].compactMap(\.self).joined(separator: " · ")
         }
         let length = item.duration.map { $0 > 0 ? AppLocalization.resolve("\($0) 秒") : AppLocalization.resolve("自动时长") }
@@ -96,6 +96,7 @@ private struct GeneratedMediaResponse: Decodable {
 
 @MainActor @Observable
 final class GeneratedMediaState {
+    private(set) var measuredDurations: [String: Double] = [:]
     private(set) var cards: [GeneratedMediaCard] = []
     private(set) var canConfirm = false
     private(set) var submitting = false
@@ -116,6 +117,7 @@ final class GeneratedMediaState {
         if next != scope {
             scope = next
             cards = []
+            measuredDurations = [:]
             error = nil
             canConfirm = false
             submitting = false
@@ -190,6 +192,11 @@ final class GeneratedMediaState {
         }
     }
 
+    func recordDuration(_ seconds: Double, cardID: String, conversationID: String) {
+        guard scope?.id == conversationID, seconds.isFinite, seconds > 0 else { return }
+        measuredDurations[cardID] = seconds
+    }
+
     func cardsByReply(_ messages: [TimelineMessage]) -> [String: [GeneratedMediaCard]] {
         let replies = messages.filter { $0.role == "assistant" && $0.answerConfirmed }
         var anchors: [String: String] = [:]
@@ -215,6 +222,10 @@ struct GeneratedMediaRow: View {
     let conversationID: String
     let configuration: GatewayConfiguration
     let isPlayingInline: Bool
+    let measuredDuration: Double?
+    let onDuration: (Double) -> Void
+    let onRevealLyrics: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
     let onPlay: () -> Void
     let onConfirm: () -> Void
 
@@ -228,7 +239,7 @@ struct GeneratedMediaRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: card.isDraft ? AppLocalization.resolve("视频草稿") : card.title)
                         .font(.subheadline.weight(.semibold)).lineLimit(2)
-                    Text(verbatim: card.completed ? card.metadata : [card.status, card.metadata]
+                    Text(verbatim: [card.status, card.metadata(measuredDuration: measuredDuration)]
                         .filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -243,7 +254,8 @@ struct GeneratedMediaRow: View {
                 }
             }
             if isPlayingInline, card.completed {
-                GeneratedMediaInlinePlayer(card: card, conversationID: conversationID, configuration: configuration)
+                GeneratedMediaInlinePlayer(card: card, conversationID: conversationID, configuration: configuration,
+                                           measuredDuration: measuredDuration, onDuration: onDuration, onRevealLyrics: onRevealLyrics)
             }
             if card.isDraft {
                 Text(verbatim: card.item.summary ?? card.item.prompt ?? "").font(.subheadline).lineLimit(3)
@@ -274,7 +286,8 @@ struct GeneratedMediaRow: View {
         }
         .padding(12)
         .frame(maxWidth: 420, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemBackground), in: .rect(cornerRadius: 18))
+        .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 18))
+        .tint(ChatAppearance.action(colorScheme))
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("generated-media-\(card.id)")
     }
@@ -284,6 +297,9 @@ private struct GeneratedMediaInlinePlayer: View {
     let card: GeneratedMediaCard
     let conversationID: String
     let configuration: GatewayConfiguration
+    let measuredDuration: Double?
+    let onDuration: (Double) -> Void
+    let onRevealLyrics: () -> Void
 
     @State private var player: AVPlayer?
     @State private var localURL: URL?
@@ -301,10 +317,17 @@ private struct GeneratedMediaInlinePlayer: View {
                 } else {
                     musicControls(player)
                     if let lyrics = card.item.lyrics, !lyrics.isEmpty {
-                        DisclosureGroup("歌词", isExpanded: $showLyrics) {
-                            Text(verbatim: lyrics).font(.body).textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, 8)
+                        Button(showLyrics ? "收起歌词" : "歌词") { showLyrics.toggle() }
+                            .frame(minHeight: 44)
+                        if showLyrics {
+                            ViewThatFits(in: .vertical) {
+                                lyricsText(lyrics)
+                                ScrollView { lyricsText(lyrics) }
+                            }
+                            .frame(maxHeight: 160)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                                if height > 0 { onRevealLyrics() }
+                            }
                         }
                     }
                 }
@@ -332,12 +355,17 @@ private struct GeneratedMediaInlinePlayer: View {
         }
     }
 
+    private func lyricsText(_ lyrics: String) -> some View {
+        Text(verbatim: lyrics).font(.body).textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func musicControls(_ player: AVPlayer) -> some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { _ in
             let time = player.currentTime().seconds
             let position = time.isFinite ? max(0, time) : 0
-            let measured = player.currentItem?.duration.seconds ?? 0
-            let duration = measured.isFinite && measured > 0 ? measured : Double(card.item.durationMs ?? 0) / 1000
+            let duration = measuredDuration ?? Double(card.item.durationMs ?? 0) / 1000
             VStack(spacing: 6) {
                 Slider(value: Binding(get: { min(position, duration) }, set: {
                     player.seek(to: CMTime(seconds: $0, preferredTimescale: 600))
@@ -374,6 +402,11 @@ private struct GeneratedMediaInlinePlayer: View {
             let media = AVPlayer(url: url)
             player = media
             media.play()
+            if card.kind == .music, let asset = media.currentItem?.asset,
+               let duration = try? await asset.load(.duration), !Task.isCancelled {
+                let seconds = duration.seconds
+                if seconds.isFinite, seconds > 0 { onDuration(seconds) }
+            }
         } catch is CancellationError {
         } catch {
             if !Task.isCancelled {
