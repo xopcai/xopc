@@ -34,6 +34,22 @@ it('keeps keyboard focus in a labelled dialog and hides secondary connection act
   expect(document.querySelector('input')!.type).toBe('password');
 });
 
+it('shows the provider Token page and secret form together before approval', async () => {
+  mocks.data = { ...mocks.data, phase: 'approval_required', approveWithToken: true,
+    helpUrl: 'https://account.example.com/keys',
+    planApproval: { endpoint: 'https://docs.example.com/mcp', purpose: 'Read', sources: [{ url: 'https://docs.example.com/setup' }] } };
+  await render();
+  const input = document.querySelector('input')!;
+  expect(input.type).toBe('password');
+  expect(input.labels?.[0].textContent).toBe('MCP Token');
+  expect(document.querySelector<HTMLAnchorElement>('form a')?.href).toBe(mocks.data.helpUrl);
+  expect(document.querySelector('form')?.textContent).toContain('https://docs.example.com/mcp');
+  expect(button('保存并连接').disabled).toBe(true);
+  expect(button('允许这次连接')).toBeUndefined();
+  expect(button('重新检查')).toBeUndefined();
+  expect(mocks.fetch).not.toHaveBeenCalled();
+});
+
 it('offers first-time Token input for a blocked access refusal without claiming a key was rejected', async () => {
   mocks.data = { ...mocks.data, phase: 'blocked', errorCode: 'access_denied', canProvideToken: true, canReplaceToken: false };
   await render(); expect(document.querySelector('input')!.type).toBe('password');

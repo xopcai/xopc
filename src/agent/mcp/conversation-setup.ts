@@ -39,7 +39,7 @@ type Goal = { id: string; conversationId: string; transcriptId: string; agentId:
   purpose: string; expectedRevision: string; version: number; phase: Phase; expiresAt: number;
   authentication?: 'auto' | 'bearer' | 'header' | 'none'; tokenProvider?: string; secretProviders?: Record<string, string>; secretFields?: SetupSecretField[];
   transport?: 'streamable-http' | 'sse' | 'stdio'; execution?: LocalExecution; helpUrl?: string; objective?: 'connect_only' | 'complete_task';
-  reviewRequired?: boolean; publicOnly?: boolean; sources?: Array<{ url: string; hash: string }>;
+  reviewRequired?: boolean; publicOnly?: boolean; sources?: Array<{ url: string; hash: string }>; documentedTokenPortal?: boolean;
   diagnosis?: Pick<McpConnectionProbe, 'auth' | 'recovery' | 'observation'>; attempts?: number; nextRetryAt?: number; requestCounts?: Record<string, number>;
   committedRevision?: string; reloadRequired?: boolean; resumed?: boolean; errorCode?: string };
 export type McpSetupContext = { conversationId: string; agentId: string; canConfigure: boolean; canRequestWeixinSetup?: boolean; showSetupCard?: boolean;
@@ -96,15 +96,22 @@ export class McpConversationSetup {
     return !goal.publicOnly && (goal.phase === 'auth_unknown' || goal.phase === 'blocked' && goal.errorCode === 'access_denied') && !goal.tokenProvider && !goal.secretProviders
       && (url.protocol === 'https:' || ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname));
   }
+  private canApproveWithToken(goal: Goal) {
+    return goal.phase === 'approval_required' && goal.reviewRequired && !goal.channel
+      && goal.documentedTokenPortal && goal.authentication === 'bearer' && goal.transport !== 'stdio'
+      && Boolean(goal.sources?.length && goal.helpUrl?.startsWith('https://') && goal.url.startsWith('https://'));
+  }
   private view(goal: Goal, showSetupCard = false) {
+    const approveWithToken = this.canApproveWithToken(goal) === true;
     const expired = goal.expiresAt < Date.now() && goal.phase !== 'ready';
     const interactionPath = goal.channel ? `${goal.channel.origin}/#/mcp-setup/${goal.id}` : `/mcp-setup/${goal.id}`;
     const interactionLink = `[Complete connection](${interactionPath})`;
     const nextStep = showSetupCard
-      ? 'The app displays a secure connection action in this chat. Briefly explain why it is needed without printing a setup link or instructing the user to send credentials. Then stop; the host resumes after verification.'
+      ? 'The app displays a secure connection action in this chat. Briefly tell the user what to do in the form. Do not print a setup link, request credentials in chat, or offer alternate routes while this setup awaits the user. The host resumes after verification.'
       : `Use exactly ${interactionLink} and stop. Credentials belong in that secure form. The host resumes after verification.`;
     return { setupId: goal.id, serverId: goal.serverId, displayName: goal.displayName, version: goal.version, phase: goal.phase,
       expired, reloadRequired: goal.reloadRequired === true, canProvideToken: this.canProvideToken(goal),
+      approveWithToken, documentedTokenPortal: goal.documentedTokenPortal,
       secretFields: goal.secretFields, helpUrl: goal.helpUrl, objective: goal.objective,
       planApproval: goal.reviewRequired ? { sources: goal.sources ?? [], execution: goal.execution, endpoint: goal.transport === 'stdio' ? goal.execution?.command : goal.url, purpose: goal.purpose } : undefined,
       diagnosis: goal.diagnosis, nextRetryAt: goal.nextRetryAt, attempts: goal.attempts ?? 0,
@@ -117,7 +124,9 @@ export class McpConversationSetup {
         : expired ? 'This request expired. Start a new objective instead of reusing authorization.'
         : goal.phase === 'approval_required' ? goal.channel
           ? 'Send the exact trusted interactionPath to the user. The paired Weixin user has requested this service; an authenticated Gateway owner must approve this exact request on that page before any probe, credential submission or configuration change. Never ask for keys, callback URLs or a continue reply in chat. The result returns to this original Weixin conversation automatically.'
-          : `The owner needs to review the connection source. ${nextStep}`
+          : approveWithToken
+            ? `The MCP setup is prepared. Tell the user to open the service's Token page from the secure form, then paste the Token into that form and save. ${nextStep}`
+            : `The owner needs to review the connection source. ${nextStep}`
         : this.canProvideToken(goal) ? `The service refused access. A refusal alone does not establish its authentication method. ${nextStep}`
         : goal.phase === 'auth_unknown' ? `Authentication could not be verified. Check the official guide and exact endpoint; do not ask for a Token or claim OAuth works. ${nextStep}`
         : goal.phase === 'blocked' ? 'The connection check failed. Report the safe error code and the remaining blocker. Do not repeatedly retry without resolving the cause.'
@@ -239,6 +248,7 @@ export class McpConversationSetup {
       const existing = this.goals.values().find(goal => goal.conversationId === context.conversationId && goal.transcriptId === session.transcriptId
         && JSON.stringify([goal.transport ?? 'streamable-http', goal.execution, goal.secretFields, goal.helpUrl, goal.objective]) === JSON.stringify([args.transport ?? 'streamable-http', args.execution, args.secretFields, args.helpUrl, args.objective])
         && JSON.stringify(goal.sources) === JSON.stringify(selected?.sources)
+        && Boolean(goal.documentedTokenPortal) === Boolean(selected?.documentedTokenPortal)
         && goal.serverId === args.serverId && goal.url === url.href && goal.purpose === args.purpose && goal.displayName === args.displayName && (goal.authentication ?? 'auto') === (args.authentication ?? 'auto') && goal.phase !== 'cancelled' && goal.phase !== 'ready' && goal.expiresAt > Date.now());
       if (existing) return this.view(existing, showSetupCard);
       for (const previous of this.goals.values().filter(item => item.conversationId === context.conversationId && (item.phase !== 'ready' || !item.resumed) && item.phase !== 'cancelled')) {
@@ -247,7 +257,7 @@ export class McpConversationSetup {
       const goal: Goal = { id: randomUUID(), conversationId: context.conversationId, transcriptId: session.transcriptId,
         agentId: context.agentId, serverId: args.serverId, displayName: args.displayName, url: url.href, purpose: args.purpose, authentication: args.authentication,
         transport: args.transport, execution: args.execution, secretFields: args.secretFields, helpUrl: args.helpUrl, objective: args.objective,
-        reviewRequired: stdio || Boolean(selected), publicOnly: Boolean(selected && !stdio), sources: selected?.sources,
+        reviewRequired: stdio || Boolean(selected), publicOnly: Boolean(selected && !stdio), sources: selected?.sources, documentedTokenPortal: selected?.documentedTokenPortal,
         expectedRevision: mcpConfigRevision(server), version: 1, phase: channel || stdio || selected ? 'approval_required' : 'planned', ...(channel ? { channel } : {}), expiresAt: Date.now() + 15 * 60_000 };
       this.goals.set(goal.id, goal); this.notify(goal); return this.view(goal, showSetupCard);
     }
@@ -392,13 +402,14 @@ export class McpConversationSetup {
       await this.deliverReply(goal); return this.view(this.get(id));
     }
     if (goal.expiresAt < Date.now() || goal.phase === 'ready') throw new McpDraftError(409, 'This setup no longer accepts input.');
+    const approveWithToken = this.canApproveWithToken(goal);
     if (action === 'approve') {
-      if (!(goal.channel || goal.reviewRequired) || goal.phase !== 'approval_required' || !ownerPrincipalId) throw new McpDraftError(409, 'This request cannot be approved.');
+      if (!(goal.channel || goal.reviewRequired) || goal.phase !== 'approval_required' || approveWithToken || !ownerPrincipalId) throw new McpDraftError(409, 'This request cannot be approved.');
       goal.approvedBy = ownerPrincipalId; goal.phase = 'planned'; this.save(goal); return this.advance(goal);
     }
-    if (goal.phase === 'approval_required') throw new McpDraftError(409, 'Approve the exact Weixin request before continuing.');
+    if (goal.phase === 'approval_required' && !(action === 'token' && approveWithToken && ownerPrincipalId)) throw new McpDraftError(409, 'Approve the exact connection request before continuing.');
     if (action === 'token') {
-      if (!(goal.phase === 'token_required' || goal.phase === 'blocked' && (goal.tokenProvider || goal.secretProviders) || this.canProvideToken(goal))) throw new McpDraftError(400, 'A token is required for this setup.');
+      if (!(approveWithToken || goal.phase === 'token_required' || goal.phase === 'blocked' && (goal.tokenProvider || goal.secretProviders) || this.canProvideToken(goal))) throw new McpDraftError(400, 'A token is required for this setup.');
       if (goal.nextRetryAt && Date.now() < goal.nextRetryAt) throw new McpDraftError(409, 'The service cooldown has not expired. Wait before submitting credentials.');
       const fields = goal.secretFields?.length ? goal.secretFields : [{ id: 'token', name: 'Authorization', location: 'header' as const, prefix: 'Bearer ', label: 'Token' }];
       const values = typeof value === 'string' && fields.length === 1 ? { [fields[0].id]: value } : value;
@@ -414,7 +425,9 @@ export class McpConversationSetup {
         for (const field of fields) { const provider = connectorSecretProviderId(`mcp-setup-${id}-${goal.version}`, field.id); providers[field.id] = provider; await credentials.saveApiKey(provider, values[field.id].trim()); this.current(goal); }
         const old = this.draftIds.get(id);
         if (old) { try { this.drafts.remove('local-owner', old); } catch (error) { if (!(error instanceof McpDraftError) || error.status !== 404) throw error; } }
-        this.draftIds.delete(id); goal.secretProviders = providers; goal.tokenProvider = providers.token; goal.phase = 'planned'; goal.errorCode = undefined; goal.attempts = 0; goal.requestCounts = {}; goal.nextRetryAt = undefined; this.save(goal);
+        this.draftIds.delete(id); goal.secretProviders = providers; goal.tokenProvider = providers.token; goal.phase = 'planned'; goal.errorCode = undefined; goal.attempts = 0; goal.requestCounts = {}; goal.nextRetryAt = undefined;
+        if (approveWithToken) goal.approvedBy = ownerPrincipalId;
+        this.save(goal);
       } catch (error) { await Promise.all(Object.values(providers).map(provider => credentials.deleteProfile(`${provider}:default`))); throw error; }
       finally { this.busy.delete(id); }
     }

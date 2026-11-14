@@ -829,7 +829,7 @@ export function UserModelPage() {
   const [refreshFeedback, setRefreshFeedback] = useState<RefreshFeedback>('idle');
   const refreshResetTimer = useRef<number | undefined>(undefined);
 
-  const setView = (nextView: View) => {
+  const setView = useCallback((nextView: View) => {
     if (nextView === view) return;
     const main = document.getElementById('app-main-content');
     if (typeof main?.scrollTo === 'function') main.scrollTo({ top: 0, behavior: 'auto' });
@@ -840,7 +840,7 @@ export function UserModelPage() {
       else next.set('tab', nextView);
       return next;
     });
-  };
+  }, [setSearchParams, view]);
 
   const setUnderstandingParam = (key: string, value: string, replace = false) => {
     setSearchParams((previous) => {
@@ -898,9 +898,21 @@ export function UserModelPage() {
   useEffect(() => {
     setPageHeader({
       startExtra: null,
-      main: <h1 className="text-base font-semibold text-fg">{t.pageTitle}</h1>,
+      main: <h1 className="truncate text-base font-semibold text-fg">{t.pageTitle}</h1>,
       end: (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {view === 'overview' ? (
+            <Button
+              variant="ghost"
+              className="size-9 shrink-0 whitespace-nowrap p-0 sm:w-auto sm:px-3"
+              aria-label={t.privacy}
+              title={t.privacy}
+              onClick={() => setView('privacy')}
+            >
+              <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.privacy}</span>
+            </Button>
+          ) : null}
           <UnderstandingStatusButton />
           <Button
             variant="secondary"
@@ -919,7 +931,7 @@ export function UserModelPage() {
       ),
     });
     return clearPageHeader;
-  }, [clearPageHeader, refreshBusy, refreshFeedback, refreshLabel, refreshUserModel, setPageHeader, t]);
+  }, [clearPageHeader, refreshBusy, refreshFeedback, refreshLabel, refreshUserModel, setPageHeader, setView, t, view]);
 
   const act = async (id: string, operation: () => Promise<unknown>) => {
     setBusy(id);
@@ -1132,19 +1144,14 @@ export function UserModelPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 pb-4 pt-3 sm:space-y-8 sm:px-6 sm:pb-7 lg:px-8 lg:pb-10 lg:pt-4">
-      <nav aria-label={t.pageTitle} className="flex flex-wrap items-center justify-between gap-2">
-        {view !== 'overview' ? (
+      {view !== 'overview' ? (
+        <nav aria-label={t.pageTitle}>
           <Button variant="ghost" onClick={() => setView(view === 'work' ? 'privacy' : 'overview')}>
             <ArrowLeft className="size-4" aria-hidden="true" />
             {view === 'work' ? t.privacy : t.pageTitle}
           </Button>
-        ) : <span />}
-        {view === 'overview' ? (
-          <Button variant="ghost" onClick={() => setView('privacy')}>
-            <ShieldCheck className="size-4" aria-hidden="true" />{t.privacy}
-          </Button>
-        ) : null}
-      </nav>
+        </nav>
+      ) : null}
 
       <p role="status" className="sr-only">{actionMessage}</p>
       {actionError ? (

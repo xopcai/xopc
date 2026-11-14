@@ -65,7 +65,7 @@ beforeAll(() => {
 
 function HeaderEnd() {
   const end = usePageHeaderStore((state) => state.end);
-  return <div data-testid="header-end">{end}</div>;
+  return <header data-testid="header-end">{end}</header>;
 }
 
 function RouterState() {
@@ -96,8 +96,8 @@ describe('UserModelPage summary navigation', () => {
     root = createRoot(container);
     await act(async () => root.render(
       <MemoryRouter initialEntries={['/user-model']}>
-        <UserModelPage />
         <HeaderEnd />
+        <UserModelPage />
         <RouterState />
       </MemoryRouter>,
     ));
@@ -152,7 +152,11 @@ describe('UserModelPage summary navigation', () => {
   });
 
   it('loads work memory on demand from data and privacy', async () => {
-    await click('Data & privacy');
+    const headerPrivacy = container.querySelector<HTMLButtonElement>('[data-testid="header-end"] button');
+    expect(headerPrivacy?.getAttribute('aria-label')).toBe('Data & privacy');
+    expect(container.querySelector('nav')).toBeNull();
+    await act(async () => headerPrivacy?.click());
+    expect(container.querySelector('[data-testid="router-location"]')?.textContent).toBe('/user-model?tab=privacy');
     expect(useSWR.mock.calls.some(([key]) => key?.startsWith('/api/knowledge-memory'))).toBe(false);
     const manage = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
       .find((button) => button.textContent?.includes('Manage work memory'));
@@ -216,14 +220,14 @@ describe('UserModelPage summary navigation', () => {
   });
 
   it('places refresh in the shell header instead of the page footer', async () => {
-    const headerRefresh = container.querySelector<HTMLButtonElement>('[data-testid="header-end"] button');
+    const headerRefresh = container.querySelector<HTMLButtonElement>('[data-testid="header-end"] button[aria-label="Refresh"]');
     expect(headerRefresh?.textContent).toBe('');
     expect(headerRefresh?.getAttribute('aria-label')).toBe('Refresh');
     expect(container.querySelector('footer button')).toBeNull();
 
     await act(async () => headerRefresh?.click());
     expect(mutate).toHaveBeenCalledTimes(1);
-    const refreshed = container.querySelector<HTMLButtonElement>('[data-testid="header-end"] button');
+    const refreshed = container.querySelector<HTMLButtonElement>('[data-testid="header-end"] button[aria-label="Refreshed"]');
     expect(refreshed?.getAttribute('aria-label')).toBe('Refreshed');
     expect(refreshed?.querySelector('.lucide-check')).not.toBeNull();
   });

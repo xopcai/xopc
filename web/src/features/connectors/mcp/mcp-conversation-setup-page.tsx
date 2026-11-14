@@ -15,7 +15,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 type Setup = { setupId: string; serverId: string; conversationId: string; version: number;
   displayName?: string; returnChannel?: string; approval?: { accountId: string; peerId: string; endpoint: string; purpose: string };
   endpointOrigin: string;
-  canReplaceToken?: boolean; canProvideToken?: boolean;
+  canReplaceToken?: boolean; canProvideToken?: boolean; approveWithToken?: boolean; documentedTokenPortal?: boolean;
   purpose?: string;
   secretFields?: Array<{ id: string; label: string }>; helpUrl?: string; nextRetryAt?: number;
   diagnosis?: { recovery?: { reason?: string } };
@@ -24,6 +24,8 @@ type Setup = { setupId: string; serverId: string; conversationId: string; versio
   errorCode?: string; replyDelivery?: string; reloadRequired?: boolean; continuationQueued?: boolean; objective?: string };
 const copy = {
   zh: { title: '连接服务', secret: '访问密钥', hint: '仅保存到凭据服务，不进入聊天或模型。',
+    tokenPortal: '去服务方获取 MCP Token', tokenReady: '连接已准备好。获取 Token 后粘贴到下方。', tokenRecipient: '提交后将连接到',
+    sourceUnverified: '来源归属尚未独立核实。',
     invalidToken: '密钥未被接受，请核对后重新输入。',
     submit: '保存并连接', login: '继续登录', waiting: '在服务页面完成授权，这里会自动继续。',
     check: '重新检查', checking: '正在验证连接', cancel: '取消连接', back: '返回对话', close: '暂时关闭', later: '稍后继续', done: '完成',
@@ -38,6 +40,8 @@ const copy = {
     deliveryFailed: '连接已完成，结果暂未发送到微信。重发不会重新执行任务。', retryDelivery: '重试发送结果',
     secure: '安全连接', loading: '正在准备连接', checkingDescription: '正在检查服务和所需权限。' },
   en: { title: 'Connect service', secret: 'Access key', hint: 'Saved to credential storage, never chat or the model.',
+    tokenPortal: 'Get an MCP Token from the provider', tokenReady: 'Connection is prepared. Get your Token and paste it below.', tokenRecipient: 'Submitting connects to',
+    sourceUnverified: 'Publisher ownership has not been independently verified.',
     invalidToken: 'This key was rejected. Check it and try again.',
     submit: 'Save and connect', login: 'Continue sign-in', waiting: 'Finish authorizing on the service page. This will continue automatically.',
     check: 'Check again', checking: 'Verifying connection', cancel: 'Cancel connection', back: 'Return to chat', close: 'Close for now', later: 'Continue later', done: 'Done',
@@ -87,6 +91,7 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
   }, [data, busy, actionError, onClose, setupId]);
 
   const terminal = Boolean(data?.expired || data?.phase === 'cancelled');
+  const guidedToken = Boolean(data?.approveWithToken || data?.documentedTokenPortal && data.canReplaceToken && !data.returnChannel);
   const fields = data?.secretFields?.length ? data.secretFields : [{ id: 'token', label: t.secret }];
   const hasSecret = Boolean(token || Object.values(secrets).some(Boolean));
   const waitingRetry = Boolean(data?.nextRetryAt && data.nextRetryAt > Date.now());
@@ -94,8 +99,8 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
   const connected = data?.phase === 'ready' && !data.reloadRequired && !terminal;
   const approval = data?.phase === 'approval_required' && !terminal ? data.approval : undefined;
   const planApproval = data?.phase === 'approval_required' && !terminal ? data.planApproval : undefined;
-  const needsApproval = Boolean(approval || planApproval);
-  const tokenRequired = data && (data.phase === 'token_required' || data.phase === 'auth_unknown' && data.canProvideToken || data.phase === 'blocked' && (data.canReplaceToken || data.canProvideToken)) && !data.requiresRecheck && !terminal && !data.reloadRequired;
+  const needsApproval = Boolean(approval || planApproval && !data?.approveWithToken);
+  const tokenRequired = data && (data.approveWithToken || data.phase === 'token_required' || data.phase === 'auth_unknown' && data.canProvideToken || data.phase === 'blocked' && (data.canReplaceToken || data.canProvideToken)) && !data.requiresRecheck && !terminal && !data.reloadRequired;
   const authorizing = data?.phase === 'authorizing' && !terminal && !data.reloadRequired;
   const deliveryFailed = connected && data?.returnChannel === 'weixin' && data.replyDelivery === 'failed';
   const blocked = (data?.phase === 'blocked' || data?.phase === 'auth_unknown') && !tokenRequired && !terminal;
@@ -105,7 +110,7 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
       : busy ? t.checkingDescription
       : data?.phase === 'auth_unknown' && !data.canProvideToken ? (language === 'zh' ? '无法确认服务的认证方式。请核对官方接入文档和服务地址后重新检查。' : 'Could not verify the authentication method. Check the official setup guide and service address, then recheck.')
       : data?.phase === 'auth_unknown' ? (language === 'zh' ? '认证方式尚未确定。若服务提供 Token，可在此输入；如需 OAuth，请核实接入资料后重新检查。' : 'Authentication is not yet determined. Enter a Token only if your service provides one; for OAuth, verify the integration guide and recheck.')
-      : tokenRequired ? data.errorCode === 'credential_rejected' ? t.invalidToken : data.canProvideToken ? t.accessDeniedToken : t.tokenDescription : authorizing ? t.waiting : error || blocked || actionError ? t.failed : t.checkingDescription;
+      : tokenRequired ? data.errorCode === 'credential_rejected' ? t.invalidToken : guidedToken ? t.tokenReady : data.canProvideToken ? t.accessDeniedToken : t.tokenDescription : authorizing ? t.waiting : error || blocked || actionError ? t.failed : t.checkingDescription;
   const dismiss = () => { if (!busy) { setToken(''); setSecrets({}); onClose(data); } };
   const primaryClass = 'min-h-12 w-full rounded-xl text-[15px]';
   const Icon = connected ? Check : tokenRequired ? KeyRound : LockKeyhole;
@@ -122,8 +127,8 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
         <Dialog.Title ref={titleRef} tabIndex={-1} className="break-words text-xl font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           {connected ? t.connected : data?.displayName || t.title}
         </Dialog.Title>
-        {data ? <p className="mt-1 truncate text-[13px] text-fg-muted" title={data.endpointOrigin}>{data.endpointOrigin}</p> : null}
-        {data?.purpose && !needsApproval && !connected ? <p className="mt-2 break-words text-sm text-fg">{data.purpose}</p> : null}
+        {data && !guidedToken ? <p className="mt-1 truncate text-[13px] text-fg-muted" title={data.endpointOrigin}>{data.endpointOrigin}</p> : null}
+        {data?.purpose && !guidedToken && !needsApproval && !connected ? <p className="mt-2 break-words text-sm text-fg">{data.purpose}</p> : null}
         <Dialog.Description role={(data?.errorCode === 'credential_rejected' || !tokenRequired && (error || actionError || blocked || data?.expired || data?.reloadRequired)) ? 'alert' : undefined} className="mt-3 text-sm leading-relaxed text-fg-muted">{description}</Dialog.Description>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-4 sm:px-8" aria-busy={busy}>
@@ -136,7 +141,7 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
           </dl>
           <p className="text-xs leading-relaxed text-fg-muted">{t.shared}</p>
           {planApproval ? <div className="space-y-2 rounded-xl bg-surface-base p-3 text-xs"><p>{language === 'zh' ? '同时审阅本次来源与执行计划：' : 'Also review this source and execution plan:'}</p><pre className="whitespace-pre-wrap break-all">{JSON.stringify(planApproval, null, 2)}</pre></div> : null}
-        </section> : planApproval ? <section className="space-y-3 text-sm">
+        </section> : planApproval && needsApproval ? <section className="space-y-3 text-sm">
           <dl className="space-y-3 rounded-xl bg-surface-base p-4">
             <div><dt className="text-xs text-fg-muted">{t.purpose}</dt><dd className="break-words">{planApproval.purpose}</dd></div>
             <div><dt className="text-xs text-fg-muted">{t.endpoint}</dt><dd className="break-all">{planApproval.endpoint}</dd></div>
@@ -146,12 +151,17 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
             {planApproval.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center break-all text-accent-fg">{source.url}</a></li>)}
           </ul> : null}
         </section> : tokenRequired ? <form id="mcp-setup-secret-form" className="space-y-3" onSubmit={event => { event.preventDefault(); const value = data.secretFields?.length ? Object.fromEntries(fields.map(field => [field.id, field.id === 'token' ? token : secrets[field.id] ?? ''])) : token; setToken(''); setSecrets({}); void act('token', value); }}>
-          {fields.map(field => <div key={field.id} className="space-y-2"><label htmlFor={`mcp-setup-${field.id}`} className="block text-sm font-medium">{field.label}</label>
+          {guidedToken && data.helpUrl ? <a href={data.helpUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 flex-wrap items-center gap-x-2 text-sm font-medium text-accent-fg hover:underline">
+            {t.tokenPortal} <span className="break-all text-xs font-normal text-fg-muted">{new URL(data.helpUrl).hostname} ↗</span>
+          </a> : null}
+          {fields.map(field => <div key={field.id} className="space-y-2"><label htmlFor={`mcp-setup-${field.id}`} className="block text-sm font-medium">{guidedToken ? 'MCP Token' : field.label}</label>
             <SecretInput id={`mcp-setup-${field.id}`} value={field.id === 'token' ? token : secrets[field.id] ?? ''} onChange={value => { if (field.id === 'token') setToken(value); else setSecrets(previous => ({ ...previous, [field.id]: value })); setActionError(false); }} disabled={busy || waitingRetry} autoComplete="off" hideCopy className="[&_button]:size-11 [&_button]:p-3"
             ariaDescribedBy="mcp-secret-hint" ariaInvalid={data.errorCode === 'credential_rejected' || actionError}
             inputClassName="min-h-12 rounded-xl pr-14 text-base" labels={messages(language).connectorsSettings.secretInputLabels} /></div>)}
-          {data.helpUrl ? <a href={data.helpUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-accent-fg">{language === 'zh' ? '获取访问密钥' : 'Get an access key'}</a> : null}
-          <p id="mcp-secret-hint" className="flex items-start gap-1.5 text-xs leading-relaxed text-fg-muted"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" aria-hidden />{t.hint}</p>
+          {!guidedToken && data.helpUrl ? <a href={data.helpUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-accent-fg">{language === 'zh' ? '获取访问密钥' : 'Get an access key'}</a> : null}
+          <p id="mcp-secret-hint" className="flex items-start gap-1.5 text-xs leading-relaxed text-fg-muted"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" aria-hidden /><span>
+            {guidedToken ? <>{t.tokenRecipient} <span className="break-all">{data.planApproval?.endpoint ?? data.endpointOrigin}</span><br /></> : null}{t.hint}
+          </span></p>
           {actionError || data.phase === 'blocked' && !data.canProvideToken ? <p role="alert" className="text-sm text-danger">{t.failed}</p> : null}
         </form> : connected && data?.returnChannel === 'weixin' ? <p role="status" className="py-5 text-center text-sm text-fg-muted">{t.returnWeixin}</p>
           : error || actionError || blocked || data?.expired || data?.reloadRequired ? null
@@ -159,8 +169,12 @@ export function McpConversationSetupDialog({ setupId, onClose }: { setupId: stri
         {data && !terminal && !connected ? <details className="mt-5 text-sm text-fg-muted">
           <summary className="min-h-11 cursor-pointer py-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{t.details}</summary>
           <div className="space-y-2 pb-2">
-            {!approval ? <p className="break-all text-xs">{data.endpointOrigin}</p> : null}
-            {data.phase !== 'approval_required' ? <Button variant="ghost" className="min-h-11 w-full justify-start text-xs" disabled={busy || waitingRetry} onClick={() => { automatic.current = ''; void act('advance'); }}>{t.check}</Button> : null}
+            {!approval && !guidedToken ? <p className="break-all text-xs">{data.endpointOrigin}</p> : null}
+            {guidedToken && data.planApproval ? <>
+              <p className="text-xs">{t.sourceUnverified}</p>
+              {data.planApproval.sources.map(source => <a key={source.url} href={source.url} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center break-all text-xs text-accent-fg hover:underline">{source.url}</a>)}
+            </> : null}
+            {data.phase !== 'approval_required' && !guidedToken ? <Button variant="ghost" className="min-h-11 w-full justify-start text-xs" disabled={busy || waitingRetry} onClick={() => { automatic.current = ''; void act('advance'); }}>{t.check}</Button> : null}
             <Button variant="ghost" className="min-h-11 w-full justify-start text-xs" disabled={busy} onClick={() => void act('cancel')}>{t.cancel}</Button>
           </div>
         </details> : null}

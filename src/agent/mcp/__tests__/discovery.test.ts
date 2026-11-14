@@ -116,6 +116,28 @@ it('uses the documented manual Bearer credential when a plan leaves authenticati
   expect(proposed).toMatchObject({ candidates: [{ authentication: 'bearer', ownership: 'owner_review_required' }] });
 });
 
+it('recovers the Token portal and manual Bearer instructions from the guide cited only for its endpoint', async () => {
+  const endpoint = 'Server Access URL: https://service.example/mcp';
+  const text = [
+    'Official website of the MCP Open Platform: https://account.service.example/connect',
+    'Apply for MCP Token',
+    'Open the console and click Activate to request your MCP Token.',
+    endpoint,
+    'Authorization: Bearer YOUR_MCP_TOKEN',
+  ].join('\n');
+  research.read.mockResolvedValueOnce({ url: 'https://service.example/guide', text });
+  const found = await discover();
+  const proposed = await discovery.command('propose', {
+    discoveryId: found.discoveryId, expectedVersion: found.version,
+    plan: { displayName: 'Service', url: 'https://service.example/mcp', objective: 'complete_task' },
+    evidence: [{ documentId: found.documents[0].id, quote: endpoint }],
+  }, context()) as any;
+  const selected = await discovery.command('select', { discoveryId: found.discoveryId, expectedVersion: proposed.version, candidateId: proposed.candidates[0].candidateId }, context()) as any;
+  expect(discovery.selected(selected.planId, selected.expectedPlanVersion, context())).toMatchObject({
+    documentedTokenPortal: true, plan: { authentication: 'bearer', helpUrl: 'https://account.service.example/connect' },
+  });
+});
+
 it('distinguishes a completed empty search from incomplete discovery', async () => {
   research.search.mockResolvedValueOnce([]);
   await expect(discover()).resolves.toMatchObject({ outcome: 'no_match', documents: [] });

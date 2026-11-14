@@ -20,8 +20,10 @@ Use custom secret header fields for documented X-API-Key or similar; stdio crede
 SSE means the documented legacy HTTP+SSE transport, not merely an HTTP response with text/event-stream.
 For OAuth or ambiguous authentication use "auto". A Bearer challenge or an OAuth access token
 is not evidence of a manually supplied Token. For web results, give "bearer" only if the guide
-explicitly documents a manually obtained credential in Authorization: Bearer. The host probes
-the endpoint before presenting credentials and checks both resource and issuer metadata for OAuth.
+explicitly documents a manually obtained credential in Authorization: Bearer. Include helpUrl
+with the exact Token issuance page and quote the steps and URL from the same guide as the endpoint.
+When the host returns approveWithToken, the secure form shows the Token page and accepts the key in
+one step. For uncertain authentication the host checks resource and issuer metadata for OAuth.
 auth_unknown preserves absent/unreachable/invalid metadata. Explain uncertainty; use the secure page for a user-selected
 Token, or recheck documented OAuth. A 403 after credentials may mean permissions; do not always call it an invalid Token.
 For 404/405/HTML use the returned recovery and authoritative source to correct the endpoint, never guess /mcp or /sse.
