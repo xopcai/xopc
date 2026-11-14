@@ -42,8 +42,7 @@ class ProgressOverviewTest {
         XopcTheme {
           Surface(color = MaterialTheme.colorScheme.background) {
             ProgressScreen(ProgressUiState(needsUser = pending), PaddingValues(top = 24.dp),
-              {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {},
-              bottomChromeHeight = 140.dp)
+              {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
           }
         }
       }
@@ -68,7 +67,7 @@ class ProgressOverviewTest {
       ProgressAction("Review", "/tasks/task-$index")) }
     val state = mutableStateOf(ProgressUiState(needsUser = pending))
     rule.setContent {
-      XopcTheme { ProgressOverview(state.value, {}, {}, {}, {}, {}, {}, {}, {}, 0.dp, {}) }
+      XopcTheme { ProgressOverview(state.value, {}, {}, {}, {}, {}, {}, {}, {}, {}) }
     }
     rule.onNodeWithTag("progress-overview-list").performScrollToNode(hasTestTag("progress-item-pending-20"))
     val before = rule.onNodeWithTag("progress-item-pending-20").fetchSemanticsNode().boundsInRoot.top
@@ -109,7 +108,7 @@ class ProgressOverviewTest {
       XopcTheme {
         ProgressOverview(ProgressUiState(needsUser = listOf(pending), background = listOf(scheduled, running),
           automationMetrics = AutomationMetrics(1, 1, 0, 0, AutomationMetricsNext("fallback", "Duplicate upcoming", 2000))),
-          {}, {}, {}, {}, {}, { opened = it }, {}, {}, 0.dp, {})
+          {}, {}, {}, {}, {}, { opened = it }, {}, {}, {})
       }
     }
     rule.onNode(hasText("1") and hasAnyAncestor(hasTestTag("progress-running-count")), useUnmergedTree = true).assertExists()
@@ -135,7 +134,7 @@ class ProgressOverviewTest {
     rule.setContent {
       XopcTheme {
         ProgressOverview(ProgressUiState(), {}, {}, { clicked += "tasks" }, { clicked += "projects" },
-          { clicked += "automations" }, {}, {}, {}, 0.dp, {})
+          { clicked += "automations" }, {}, {}, {}, {})
       }
     }
     rule.onNodeWithTag("progress-pending-count").assertIsNotEnabled()

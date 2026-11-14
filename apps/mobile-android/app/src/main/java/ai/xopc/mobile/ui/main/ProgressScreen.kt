@@ -58,7 +58,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
@@ -96,9 +95,10 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onUpdateAutomation: (String, String, String, String, String) -> Unit = { _, _, _, _, _ -> },
   onDeleteAutomation: (String, String) -> Unit = { _, _ -> },
   onAutomationRunAction: (String, String) -> Unit = { _, _ -> },
-  onTopLevelChange: (Boolean) -> Unit = {},
+  initialPage: String = "overview",
+  initialItemId: String? = null,
+  onExit: (() -> Unit)? = null,
   chatBusy: Boolean = false,
-  bottomChromeHeight: Dp = 0.dp,
   initialDeliveryKind: String? = null,
   initialDeliveryId: String? = null,
   onCloseDelivery: () -> Unit = {},
@@ -108,10 +108,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     mutableStateOf(when (initialDeliveryKind) {
       "task" -> "detail"
       "automation" -> "automation-run"
-      else -> "overview"
+      else -> initialPage
     })
   }
-  LaunchedEffect(page) { onTopLevelChange(page == "overview") }
   var selectedTaskId by rememberSaveable(state.gatewayId) {
     mutableStateOf(initialDeliveryId.takeIf { initialDeliveryKind == "task" })
   }
@@ -147,8 +146,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var editOriginalProject by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf("") }
   var editStartedRevision by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf(0) }
   var discardEditOpen by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf(false) }
-  var selectedProjectId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
-  var selectedAutomationId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
+  var selectedProjectId by rememberSaveable(state.gatewayId) { mutableStateOf(initialItemId.takeIf { initialPage == "project" }) }
+  var selectedAutomationId by rememberSaveable(state.gatewayId) { mutableStateOf(initialItemId.takeIf { initialPage == "automation" }) }
   var automationReturnPage by rememberSaveable(state.gatewayId) { mutableStateOf("automations") }
   var selectedRunId by rememberSaveable(state.gatewayId) {
     mutableStateOf(initialDeliveryId.takeIf { initialDeliveryKind == "automation" })
@@ -192,15 +191,19 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       "create" -> if (createTitle.isNotBlank() || createBody.isNotBlank() ||
         createProjectId != selectedProjectId) discardCreateOpen = true else page = "project"
       "detail" -> if (detailReturnPage == "delivery") onCloseDelivery() else page = detailReturnPage
-      "project" -> page = "projects"
-      "tasks", "projects", "automations" -> page = if (openedFromAllWork) "work" else "overview"
+      "project" -> if (initialPage == "project" && selectedProjectId == initialItemId) onExit?.invoke() else page = "projects"
+      "tasks", "projects", "automations" -> {
+        if (page == initialPage && onExit != null) onExit()
+        else page = if (openedFromAllWork) "work" else "overview"
+      }
       "work" -> { openedFromAllWork = false; page = "overview" }
       "automation-run" -> if (runReturnPage == "delivery") onCloseDelivery() else page = runReturnPage
-      "automation" -> page = automationReturnPage
+      "automation" -> if (initialPage == "automation" && selectedAutomationId == initialItemId &&
+        automationReturnPage == "automations") onExit?.invoke() else page = automationReturnPage
       "automation-edit" -> if (automationEditDirty) discardAutomationEditOpen = true else page = "automation"
       "automation-create" -> if (automationName.isNotBlank() || automationInstruction.isNotBlank() ||
         automationCron != "0 9 * * *") discardAutomationOpen = true else page = "automations"
-      else -> page = "overview"
+      else -> onExit?.invoke()
     }
   }
   BackHandler(enabled = page != "overview") {
@@ -214,6 +217,10 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       requestedTaskId = id
       onOpenTask(id)
     }
+  }
+  LaunchedEffect(page, selectedProjectId, state.projectId) {
+    val id = selectedProjectId
+    if (page == "project" && id != null && state.projectId != id) onOpenProject(id)
   }
   LaunchedEffect(page, selectedAutomationId, selectedRunId,
     state.automations.selectedId, state.automations.selectedRunId) {
@@ -259,7 +266,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   }
   LaunchedEffect(page, state.automations.deletedId) {
     if (page == "automation" && state.automations.deletedId == selectedAutomationId) {
-      page = "automations"
+      if (initialPage == "automation" && selectedAutomationId == initialItemId) onExit?.invoke()
+      else page = "automations"
     }
   }
   val selectedTask = state.detailTask.takeIf { state.detailTaskId == selectedTaskId }
@@ -294,7 +302,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     Row(modifier = Modifier.fillMaxWidth()
       .padding(bottom = if (page == "overview") 12.dp else 0.dp).testTag("progress-header"),
       horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-      if (page != "overview") androidx.compose.material3.IconButton(onClick = { goBack() },
+      if (page != "overview" || onExit != null) androidx.compose.material3.IconButton(onClick = { goBack() },
         enabled = !state.commandBusy && !state.editBusy,
         modifier = Modifier.testTag("progress-back")) {
         androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.action_chevron_left),
@@ -306,12 +314,13 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         "detail" -> stringResource(R.string.progress_task_detail)
         "edit" -> stringResource(R.string.progress_edit_task)
         "projects" -> stringResource(R.string.progress_projects)
-        "project" -> state.project?.name ?: stringResource(R.string.progress_projects)
+        "project" -> state.project?.takeIf { it.id == selectedProjectId }?.name ?: stringResource(R.string.progress_projects)
         "create" -> stringResource(R.string.progress_new_task)
         "automations" -> stringResource(R.string.progress_automations)
         "automation-create" -> stringResource(R.string.automation_new)
         "automation-edit" -> stringResource(R.string.automation_edit)
-        "automation" -> state.automations.detail?.name ?: stringResource(R.string.progress_automations)
+        "automation" -> state.automations.detail?.takeIf { it.id == selectedAutomationId }?.name
+          ?: stringResource(R.string.progress_automations)
         "automation-run" -> state.automations.run?.automationName ?: stringResource(R.string.automation_run)
         else -> stringResource(R.string.tab_progress)
       }, style = if (page == "overview") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
@@ -431,7 +440,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         state.automations.createBusy, state.automations.createError) {
         onCreateAutomation(automationName, automationInstruction, automationCron, automationCreateKey)
       }
-      "automation" -> AutomationDetailContent(state.automations,
+      "automation" -> AutomationDetailContent(state.automations.takeIf { it.selectedId == selectedAutomationId }
+        ?: AutomationUiState(detailLoading = true),
         { selectedAutomationId?.let(onOpenAutomation) }, ::openRun,
         { action -> selectedAutomationId?.let { onAutomationAction(it, action) } },
         onEdit = {
@@ -471,7 +481,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         { action ->
           val taskId = action.reviewTaskId
           if (taskId != null) openTask(taskId) else pendingHomeAction = action
-        }, bottomChromeHeight, ::openRun)
+        }, ::openRun)
     }
   }
   if (discardAutomationOpen) AlertDialog(onDismissRequest = { discardAutomationOpen = false },

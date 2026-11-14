@@ -34,9 +34,8 @@ internal class TransientComposerNotice(private val scope: CoroutineScope) {
   fun clear() { expiry?.cancel(); expiry = null; message = "" }
 }
 
-internal fun ConnectionUiState.clearComposerFeedback(gatewayId: String?, conversationId: String?, quick: Boolean): ConnectionUiState =
+internal fun ConnectionUiState.clearComposerFeedback(gatewayId: String?, conversationId: String?): ConnectionUiState =
   if (profile?.gatewayId != gatewayId || selectedConversationId != conversationId) this
-  else if (quick) copy(quickError = false, quickAttachmentError = false)
   else copy(sendError = false, sendErrorDetail = null, attachmentError = false)
 
 @Composable

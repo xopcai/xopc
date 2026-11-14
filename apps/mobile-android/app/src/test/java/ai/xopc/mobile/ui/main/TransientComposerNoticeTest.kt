@@ -16,14 +16,13 @@ class TransientComposerNoticeTest {
     val pending = PendingInput("message", "Keep this input")
     val state = ConnectionUiState(selectedConversationId = "conversation", draftText = "Draft",
       sendError = true, sendRejected = true, sendErrorDetail = "Rejected", attachmentError = true,
-      pendingInput = pending, quickError = true)
-    val dismissed = state.clearComposerFeedback(null, "conversation", false)
+      pendingInput = pending)
+    val dismissed = state.clearComposerFeedback(null, "conversation")
     assertEquals(false, dismissed.sendError)
     assertEquals(false, dismissed.attachmentError)
-    assertEquals(true, dismissed.quickError)
     assertEquals("Draft", dismissed.draftText)
     assertSame(pending, dismissed.pendingInput)
-    assertSame(state, state.clearComposerFeedback(null, "another-conversation", false))
+    assertSame(state, state.clearComposerFeedback(null, "another-conversation"))
   }
 
   @Test fun expiresWithoutAnotherComposerAction() = runTest {

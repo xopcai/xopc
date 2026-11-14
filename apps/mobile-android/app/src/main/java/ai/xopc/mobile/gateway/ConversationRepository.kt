@@ -46,7 +46,7 @@ data class ProjectWelcomeInfo(val projectName: String, val blockedReason: String
 
 data class ConversationMedia(val id: String, val name: String, val type: String, val mimeType: String,
   val size: Long, val uri: String, val workspaceRelativePath: String? = null,
-  val durationSeconds: Double? = null)
+  val durationSeconds: Double? = null, val fileId: String? = null)
 data class ConversationReference(val kind: String, val sourceId: String, val version: String,
   val title: String, val url: String? = null)
 data class ConversationTarget(val kind: String, val id: String, val title: String,
@@ -124,16 +124,6 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     return attachmentStore?.previewFile(gatewayId, conversationId, item)
   }
 
-  fun quickImagePreview(item: ChatAttachment): Bitmap? {
-    val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
-    return attachmentStore?.previewImage(gatewayId, QUICK_ATTACHMENT_SCOPE, item)
-  }
-
-  fun quickFilePreview(item: ChatAttachment): ByteArray? {
-    val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
-    return attachmentStore?.previewFile(gatewayId, QUICK_ATTACHMENT_SCOPE, item)
-  }
-
   fun addComposerAttachment(gatewayId: String, conversationId: String, uri: Uri): ChatAttachment {
     require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
     return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
@@ -177,43 +167,17 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     if (refs.isEmpty()) pendingStore?.remove(key) else pendingStore?.write(key, array.toString())
   }
 
-  fun quickDraft(): String {
+  private fun quickDraft(): String {
     val gatewayId = gateway.currentProfile()?.gatewayId ?: return ""
     return pendingStore?.read("quick-composer.$gatewayId") ?: ""
   }
 
-  fun saveQuickDraft(content: String) {
-    val gatewayId = gateway.currentProfile()?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
-    val store = pendingStore ?: throw IllegalStateException("NO_SECURE_STORE")
-    val key = "quick-composer.$gatewayId"
-    if (content.isEmpty()) store.remove(key) else store.write(key, content)
-  }
-
-  fun quickAttachments(): List<ChatAttachment> {
+  private fun quickAttachments(): List<ChatAttachment> {
     val gatewayId = gateway.currentProfile()?.gatewayId ?: return emptyList()
     return attachmentStore?.list(gatewayId, QUICK_ATTACHMENT_SCOPE) ?: emptyList()
   }
 
-  fun addQuickAttachment(gatewayId: String, uri: Uri): ChatAttachment {
-    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
-    return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
-      .import(gatewayId, QUICK_ATTACHMENT_SCOPE, uri)
-  }
-
-  fun addQuickVoice(gatewayId: String, bytes: ByteArray, durationSeconds: Int): ChatAttachment {
-    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
-    return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
-      .addVoiceBytes(gatewayId, QUICK_ATTACHMENT_SCOPE, bytes, durationSeconds)
-  }
-
-  fun removeQuickAttachment(gatewayId: String, attachmentId: String) {
-    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
-    attachmentStore?.remove(gatewayId, QUICK_ATTACHMENT_SCOPE, attachmentId)
-  }
-
-  /** Finishes a previously interrupted quick-composer handoff before another draft can be created. */
-  @Synchronized
-  fun recoverQuickHandoff(): LocalConversationDraft? {
+  private fun recoverQuickHandoff(): LocalConversationDraft? {
     val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
     val store = pendingStore ?: return null
     val key = "quick-handoff.$gatewayId"
@@ -224,28 +188,34 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     require(runCatching { UUID.fromString(id) }.isSuccess && content.length <= 4_000) {
       "INVALID_QUICK_HANDOFF"
     }
-    val draft = draft(id)
-    if (draft == null) { store.remove(key); return null }
+    val draft = draft(id) ?: if (record.optBoolean("migration")) {
+      LocalConversationDraft(id, "main", "", "off", Instant.now().toString(), null, null).also {
+        persistLocalDraft(gatewayId, it)
+      }
+    } else {
+      store.remove(key)
+      return null
+    }
+    if (id !in draftIds(gatewayId)) persistLocalDraft(gatewayId, draft)
     saveComposerDraft(id, content)
     (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
       .moveAll(gatewayId, QUICK_ATTACHMENT_SCOPE, id)
-    saveQuickDraft("")
-    gateway.saveMainConversationId(id)
+    store.remove("quick-composer.$gatewayId")
     store.remove(key)
     return draft
   }
 
-  /** Creates one local conversation and durably hands it the quick text and attachment snapshots. */
+  /** Moves retired quick-composer text and attachment snapshots into an ordinary local draft. */
   @Synchronized
-  fun stageQuickDraft(agentId: String, content: String): LocalConversationDraft {
+  fun migrateQuickComposerDraft(): LocalConversationDraft? {
     recoverQuickHandoff()?.let { return it }
-    require(content.length <= 4_000 && (content.isNotBlank() || quickAttachments().isNotEmpty())) {
-      "EMPTY_QUICK_INPUT"
-    }
-    val gatewayId = gateway.currentProfile()?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
-    val store = pendingStore ?: throw IllegalStateException("NO_SECURE_STORE")
-    val draft = createDraft(agentId)
-    store.write("quick-handoff.$gatewayId", JSONObject().put("conversationId", draft.conversationId)
+    val content = quickDraft()
+    if (content.isBlank() && quickAttachments().isEmpty()) return null
+    require(content.length <= 4_000) { "INVALID_QUICK_HANDOFF" }
+    val gatewayId = gateway.currentProfile()?.gatewayId ?: return null
+    val store = pendingStore ?: return null
+    val id = UUID.randomUUID().toString()
+    store.write("quick-handoff.$gatewayId", JSONObject().put("conversationId", id).put("migration", true)
       .put("content", content).toString())
     return recoverQuickHandoff() ?: throw IllegalStateException("QUICK_HANDOFF_FAILED")
   }
@@ -275,11 +245,15 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       defaultProjectExecutionMode(projectId) else executionMode
     val draft = LocalConversationDraft(UUID.randomUUID().toString(), agentId, "", "off", Instant.now().toString(),
       projectId, resolvedMode)
+    persistLocalDraft(gatewayId, draft)
+    return draft
+  }
+
+  private fun persistLocalDraft(gatewayId: String, draft: LocalConversationDraft) {
     val store = pendingStore ?: throw IllegalStateException("NO_SECURE_STORE")
     store.write(draftKey(gatewayId, draft.conversationId), draftJson(draft).toString())
     val ids = draftIds(gatewayId).filterNot { it == draft.conversationId }
     store.write("draft-index.$gatewayId", JSONArray(listOf(draft.conversationId) + ids).toString())
-    return draft
   }
 
   fun draft(conversationId: String): LocalConversationDraft? {
@@ -1272,7 +1246,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
           row.optLong("size").coerceAtLeast(0), uri,
           row.optString("workspaceRelativePath").takeIf(String::isNotBlank)?.take(2_048),
           row.optDouble("duration", row.optDouble("durationSeconds", Double.NaN))
-            .takeIf { it.isFinite() && it > 0 })
+            .takeIf { it.isFinite() && it > 0 },
+          row.optString("fileId").takeIf(String::isNotBlank)?.take(512))
       }
     }
 

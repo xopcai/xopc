@@ -1,6 +1,9 @@
 package ai.xopc.mobile.gateway
 
+import android.app.Application
 import android.content.Context
+import ai.xopc.mobile.ui.main.GatewayViewModel
+import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import java.nio.ByteBuffer
 import java.math.BigInteger
@@ -13,6 +16,11 @@ import java.security.spec.ECPoint
 import java.security.spec.ECPublicKeySpec
 import java.util.Base64
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import org.bouncycastle.crypto.signers.Ed25519Signer
 import org.bouncycastle.asn1.ASN1EncodableVector
@@ -26,6 +34,42 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GatewaySessionTest {
+  @Test fun chatDefaultsToPersonalRestoresUserSelectionAndKeepsDraftWhenSwitchingImmediately() = runBlocking {
+    val app = ApplicationProvider.getApplicationContext<Application>()
+    val store = AndroidSecureStore(app, "home_chat_credentials_test_v1", "xopc.gateway.credentials.home.chat.test.v1")
+    val session = GatewaySession(app, FakeGateway(), DeviceIdentity("xopc.gateway.device.home.chat.test.v1"), store)
+    val owner = ViewModelStore()
+    val personal = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+    val ordinary = "11111111-2222-3333-4444-555555555555"
+    clear(store)
+    try {
+      session.pair(invitation()) {}
+      val repository = ConversationRepository(session, app)
+      val original = repository.composerDraft(personal)
+      try {
+        val first = GatewayViewModel(app, session)
+        withContext(Dispatchers.Main) { owner.put("first", first); first.restore() }
+        withTimeout(5_000) { first.state.first { it.selectedConversationId == personal && !it.historyLoading } }
+        assertNull(session.mainConversationId())
+        withContext(Dispatchers.Main) {
+          first.changeDraft("Keep this unfinished message")
+          first.selectConversation(ordinary)
+        }
+        withTimeout(5_000) { first.state.first { it.selectedConversationId == ordinary && !it.historyLoading } }
+        assertEquals("Keep this unfinished message", repository.composerDraft(personal))
+        assertEquals(ordinary, session.mainConversationId())
+        withContext(Dispatchers.Main) { owner.clear() }
+        val restarted = GatewayViewModel(app, session)
+        withContext(Dispatchers.Main) { owner.put("restarted", restarted); restarted.restore() }
+        withTimeout(5_000) { restarted.state.first { it.selectedConversationId == ordinary && !it.historyLoading } }
+        assertEquals(ordinary, session.mainConversationId())
+      } finally { repository.saveComposerDraft(personal, original) }
+    } finally {
+      withContext(Dispatchers.Main) { owner.clear() }
+      clear(store)
+    }
+  }
+
   @Test fun workspaceFileReferenceSurvivesRestartAndSendsPathWithoutPayload() {
     val app = ApplicationProvider.getApplicationContext<Context>()
     val store = ChatAttachmentStore(app)
@@ -505,6 +549,15 @@ class GatewaySessionTest {
       assertEquals(paired, restored.restore())
       assertEquals(conversationId, restored.mainConversationId())
       assertEquals("{\"status\":\"ok\"}", restored.request("/api/status"))
+      val files = FileRepository(restored)
+      val artifact = requireNotNull(files.resolveConversationFile(conversationId,
+        ConversationMedia("artifact", "brief.txt", "file", "text/plain", 16, "xopc-file:file-1")))
+      assertEquals(true, artifact.canSaveVersion)
+      assertEquals(false, artifact.copy(capabilities = emptySet()).canSaveVersion)
+      val fileVersionId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+      files.saveVersion(artifact, fileVersionId)
+      assertEquals(fileVersionId, fake.lastFileVersionRequest?.getString("id"))
+      assertEquals("revision-1", fake.lastFileVersionRequest?.getString("revision"))
       assertEquals(listOf("main", "research"), ConversationRepository(restored, context).agents().agents.map { it.id })
       val modelResult = ConversationRepository(restored, context).setModel(conversationId,
         ConversationModel("test/two", "Two", "off"), 12)
@@ -650,10 +703,6 @@ class GatewaySessionTest {
         assertEquals(listOf("/api/automation-runs/run-active/cancel",
           "/api/automation-runs/run-failed/rerun"), fake.automationRunActionPaths)
         assertThrows(IllegalArgumentException::class.java) { repository.delete(conversationId) }
-        repository.saveQuickDraft("New topic")
-        assertEquals("New topic", ConversationRepository(restored, context).quickDraft())
-        repository.saveQuickDraft("")
-        assertEquals("", repository.quickDraft())
         assertEquals(PendingInput(messageId, "Unconfirmed message"), repository.pendingInput(conversationId))
         assertEquals("run-restored", repository.send(conversationId, "Unconfirmed message", TurnClaim("endpoint", "claim")))
         assertNull(repository.pendingInput(conversationId))
@@ -704,32 +753,31 @@ class GatewaySessionTest {
           ConversationRepository(restored, context).composerDraft(creationDraft.conversationId))
         assertEquals(0, fake.inputPostCount)
         repository.discardDraft(creationDraft.conversationId)
-        repository.saveQuickDraft("Quick handoff")
+        pendingStore.write("quick-composer.$gatewayId", "Quick handoff")
         val quickAttachment = ChatAttachmentStore(context).addBytes(gatewayId.toString(),
           "00000000-0000-0000-0000-000000000000", "quick.txt", "text/plain",
           "snapshot".toByteArray())
-        val handoffDraft = repository.stageQuickDraft("main", "Quick handoff")
+        val handoffDraft = requireNotNull(repository.migrateQuickComposerDraft())
         newDraftId = handoffDraft.conversationId
         val afterHandoff = ConversationRepository(restored, context)
         assertEquals("Quick handoff", afterHandoff.composerDraft(handoffDraft.conversationId))
         assertEquals(listOf(quickAttachment), afterHandoff.composerAttachments(handoffDraft.conversationId))
-        assertEquals(emptyList<ChatAttachment>(), afterHandoff.quickAttachments())
-        assertEquals("", afterHandoff.quickDraft())
-        assertEquals(handoffDraft.conversationId, restored.mainConversationId())
-        assertNull(afterHandoff.recoverQuickHandoff())
+        assertEquals(emptyList<ChatAttachment>(), ChatAttachmentStore(context).list(gatewayId.toString(),
+          "00000000-0000-0000-0000-000000000000"))
+        assertNull(pendingStore.read("quick-composer.$gatewayId"))
+        assertNull(afterHandoff.migrateQuickComposerDraft())
         assertEquals(0, fake.inputPostCount)
         repository.discardDraft(handoffDraft.conversationId)
         val interrupted = repository.createDraft("main")
         newDraftId = interrupted.conversationId
-        repository.saveQuickDraft("Resume once")
+        pendingStore.write("quick-composer.$gatewayId", "Resume once")
         pendingStore.write("quick-handoff.$gatewayId", JSONObject()
           .put("conversationId", interrupted.conversationId).put("content", "Resume once").toString())
-        val resumed = ConversationRepository(restored, context).recoverQuickHandoff()
+        val resumed = ConversationRepository(restored, context).migrateQuickComposerDraft()
         assertEquals(interrupted.conversationId, resumed?.conversationId)
         assertEquals("Resume once", repository.composerDraft(interrupted.conversationId))
-        assertEquals(interrupted.conversationId, restored.mainConversationId())
-        assertNull(repository.recoverQuickHandoff())
-        assertEquals("", repository.quickDraft())
+        assertNull(repository.migrateQuickComposerDraft())
+        assertNull(pendingStore.read("quick-composer.$gatewayId"))
         repository.discardDraft(interrupted.conversationId)
         val quickDraft = repository.createDraft("main")
         newDraftId = quickDraft.conversationId
@@ -888,6 +936,7 @@ class GatewaySessionTest {
     var taskInputPostCount = 0
     var lastModelPatch: JSONObject? = null
     var lastDirectoryPatch: JSONObject? = null
+    var lastFileVersionRequest: JSONObject? = null
     var lastRename: String? = null
     val pinActions = mutableListOf<String>()
     val archiveActions = mutableListOf<String>()
@@ -946,6 +995,18 @@ class GatewaySessionTest {
       assertEquals(fakeOrigin, origin)
       val input = if (body.isEmpty()) JSONObject() else JSONObject(body)
       return when {
+        path == "/api/personal-agent" && method == "GET" ->
+          """{"ok":true,"payload":{"state":"ready","agentId":"personal","displayName":"Ada",
+            "conversationId":"bbbbbbbb-cccc-dddd-eeee-ffffffffffff"}}"""
+        path.startsWith("/api/sessions?limit=") -> """{"items":[],"hasMore":false}"""
+        path == "/api/files/file-1" && method == "GET" ->
+          """{"resource":{"id":"file-1","spaceId":"workspace","name":"brief.txt","relativePath":"brief.txt",
+             "kind":"file","mimeType":"text/plain","size":16,"revision":"revision-1",
+             "capabilities":["preview","save_version"]}}"""
+        path == "/api/files/file-1/versions" && method == "POST" -> {
+          lastFileVersionRequest = input
+          JSONObject().put("version", JSONObject().put("id", input.getString("id"))).toString()
+        }
         path == "/api/device-pairing/probe" -> signed(JSONObject()
           .put("gatewayId", fakeId.toString()).put("pairingId", fakePairingId.toString()).put("issuedAt", System.currentTimeMillis()))
         path.startsWith("/api/device-pairing/requests") -> {
@@ -1312,6 +1373,9 @@ class GatewaySessionTest {
         path == "/api/sessions/bbbbbbbb-cccc-dddd-eeee-ffffffffffff/history?view=compact&limit=20" && method == "GET" ->
           """{"session":{"key":"bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
             "transcriptId":"transcript-task","messages":[]}}"""
+        path == "/api/sessions/11111111-2222-3333-4444-555555555555/history?view=compact&limit=20" && method == "GET" ->
+          """{"session":{"key":"11111111-2222-3333-4444-555555555555",
+            "transcriptId":"transcript-root","messages":[]}}"""
         path == "/api/sessions/11111111-2222-3333-4444-555555555555/history?view=compact&limit=20&before=20" && method == "GET" -> {
           historyReadPaths += path
           """{"session":{"key":"11111111-2222-3333-4444-555555555555",
