@@ -54,6 +54,7 @@ final class RealtimeVoiceCall {
     private var receivedMilliseconds = 0
     private var playedMilliseconds = 0
     private var congested = false
+    private var disconnectReason: String?
     private var releaseInProgress = false
 
     private var logicalCallID = UUID().uuidString
@@ -182,6 +183,7 @@ final class RealtimeVoiceCall {
         phase = recovering ? .recovering : .connecting
         connectedAt = nil
         errorCode = nil
+        disconnectReason = nil
         do {
             let metrics = try await gateway.preflightRealtimeVoice(conversationID: conversationID, mode: mode)
             guard generation == current else { return }
@@ -281,13 +283,17 @@ final class RealtimeVoiceCall {
                 }
             }
             if generation == self.generation, phase != .idle, phase != .ending {
-                let reason = errorCode ?? "NETWORK"
+                let reason = disconnectReason ?? "NETWORK"
                 await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
             }
         } catch {
             if generation == self.generation, phase != .idle, phase != .ending {
-                let reason = error is RealtimeVoiceProtocolError
-                    || error as? RealtimeVoiceTransportError == .protocolMismatch ? "PROTOCOL_ERROR" : "NETWORK"
+                let reason: String
+                switch error as? RealtimeVoiceTransportError {
+                case .inputBackpressure: reason = "INPUT_DROPPED"
+                case .protocolMismatch: reason = "PROTOCOL_ERROR"
+                default: reason = error is RealtimeVoiceProtocolError ? "PROTOCOL_ERROR" : "NETWORK"
+                }
                 await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
             }
         }
@@ -431,10 +437,11 @@ private extension RealtimeVoiceCall {
             if payload.recoverable == true {
                 errorCode = reason
             } else {
+                disconnectReason = reason
                 await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
             }
         case "session.closed":
-            let reason = errorCode ?? payload.reason ?? "NETWORK"
+            let reason = disconnectReason ?? payload.reason ?? "NETWORK"
             await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
         default: break
         }

@@ -27,7 +27,10 @@ actor RealtimeVoiceTransport {
     private var inputStarted = false
     private var utteranceID = UUID().uuidString.lowercased()
     private var remainder = Data()
-    private var pendingBytes = 0
+    private var pendingAudioBytes = 0
+    private var inputEpoch = 0
+    private var inputMuted = false
+    private var muteRevision = 0
     private var sessionStartSent = false
     private var ready = false
     private var closed = true
@@ -50,7 +53,9 @@ actor RealtimeVoiceTransport {
         inputStarted = false
         utteranceID = UUID().uuidString.lowercased()
         remainder.removeAll()
-        pendingBytes = 0
+        pendingAudioBytes = 0
+        inputEpoch += 1
+        inputMuted = false
         closed = false
         return AsyncThrowingStream<RealtimeVoiceIncoming, Error> { continuation in
             self.continuation = continuation
@@ -66,19 +71,43 @@ actor RealtimeVoiceTransport {
         let message = RealtimeVoiceControlMessage(type: type, payload: payload)
         let data = try JSONEncoder().encode(message)
         guard let text = String(data: data, encoding: .utf8) else { throw RealtimeVoiceProtocolError.invalidEvent }
-        try await socket.send(.string(text))
-        if type == "input.mute", payload.muted == false {
-            utteranceID = UUID().uuidString.lowercased()
-            inputSequence = 0
-            inputStarted = false
-            remainder.removeAll()
+        if type == "input.mute", let muted = payload.muted {
+            muteRevision += 1
+            let revision = muteRevision
+            let epoch = streamEpoch
+            if !inputMuted {
+                inputEpoch += 1
+                pendingAudioBytes = 0
+                remainder.removeAll()
+            }
+            inputMuted = true
+            if !muted {
+                utteranceID = UUID().uuidString.lowercased()
+                inputSequence = 0
+                inputStarted = false
+            }
+            do {
+                try await socket.send(.string(text))
+            } catch {
+                if streamEpoch == epoch, !closed {
+                    continuation?.finish(throwing: error)
+                    close()
+                }
+                throw error
+            }
+            if streamEpoch == epoch, muteRevision == revision, !closed { inputMuted = muted }
+        } else {
+            try await socket.send(.string(text))
         }
     }
 
     func sendAudio(_ bytes: Data) throws -> Int {
         guard ready, !closed, let session else { throw RealtimeVoiceTransportError.disconnected }
-        let queueAgeMs = pendingBytes / 32
-        guard queueAgeMs < 300 else { throw RealtimeVoiceTransportError.inputBackpressure }
+        guard !inputMuted else { return 0 }
+        guard pendingAudioBytes + remainder.count + bytes.count <= 9_600 else {
+            throw RealtimeVoiceTransportError.inputBackpressure
+        }
+        let queuedAt = ProcessInfo.processInfo.systemUptime
         remainder.append(bytes)
         while remainder.count >= 640 {
             let audio = Data(remainder.prefix(640))
@@ -88,24 +117,25 @@ actor RealtimeVoiceTransport {
                 connectionEpoch: session.connectionEpoch,
                 utteranceID: utteranceID,
                 sequence: inputSequence,
-                capturedAtMonotonicMs: ProcessInfo.processInfo.systemUptime * 1000,
+                capturedAtMonotonicMs: queuedAt * 1000,
                 start: !inputStarted,
                 audio: audio
             )
             inputStarted = true
-            pendingBytes += frame.count
+            pendingAudioBytes += audio.count
             let currentEpoch = streamEpoch
+            let currentInput = inputEpoch
             let previous = audioQueue
             audioQueue = Task {
                 await previous?.value
-                await self.transmit(frame, epoch: currentEpoch)
+                await self.transmit(frame, epoch: currentEpoch, input: currentInput, queuedAt: queuedAt)
             }
         }
-        return pendingBytes / 32
+        return pendingAudioBytes / 32
     }
 
     func inputQueueAgeMs() -> Int {
-        pendingBytes / 32
+        pendingAudioBytes / 32
     }
 
     func close() {
@@ -123,7 +153,7 @@ actor RealtimeVoiceTransport {
         socket?.cancel(with: .normalClosure, reason: nil)
         socket = nil
         session = nil
-        pendingBytes = 0
+        pendingAudioBytes = 0
         remainder.removeAll()
         continuation?.finish()
         continuation = nil
@@ -242,14 +272,18 @@ actor RealtimeVoiceTransport {
         }
     }
 
-    private func transmit(_ frame: Data, epoch: Int) async {
-        guard streamEpoch == epoch else { return }
+    private func transmit(_ frame: Data, epoch: Int, input: Int, queuedAt: TimeInterval) async {
+        guard streamEpoch == epoch, inputEpoch == input, let socket, !closed else { return }
         defer {
-            if streamEpoch == epoch {
-                pendingBytes = max(0, pendingBytes - frame.count)
+            if streamEpoch == epoch, inputEpoch == input, !closed {
+                pendingAudioBytes -= 640
             }
         }
-        guard let socket, !closed else { return }
+        if ProcessInfo.processInfo.systemUptime - queuedAt >= 0.3 {
+            continuation?.finish(throwing: RealtimeVoiceTransportError.inputBackpressure)
+            close()
+            return
+        }
         do {
             try await socket.send(.data(frame))
         } catch {
