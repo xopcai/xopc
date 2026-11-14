@@ -47,6 +47,7 @@
   "productNavigation": {
     "primaryAria": "产品导航",
     "sectionsAria": "页面分区",
+    "space": "资料库",
     "domains": {
       "work": "工作",
       "automation": "自动化",

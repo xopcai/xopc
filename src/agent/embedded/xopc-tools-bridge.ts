@@ -37,7 +37,7 @@ const TOOL_PROMPT_HINTS: Record<string, { promptSnippet?: string; promptGuidelin
   },
   exec_command: {
     promptSnippet: 'Run tests, type checks, builds, package scripts, and safe inspection commands',
-    promptGuidelines: ['Use exec_command for verification and safe inspection, not routine file editing.'],
+    promptGuidelines: ['Use exec_command for verification and safe inspection of local engineering work. Keep routine file editing in the file tools. Use the selected browser or connector for web accounts, including verification.'],
   },
   update_plan: {
     promptSnippet: 'Update the visible multi-step coding plan',

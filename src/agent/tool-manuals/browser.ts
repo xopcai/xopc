@@ -16,7 +16,9 @@ Available actions:
 - \`sequence\`: run a short list of same-document ref actions.
 - \`close\`: close the task-owned browser session.
 
-For a delayed UI transition, pass an expectation when the action supports it, or use \`wait\` for a known result before acting on the next screen. Re-observe after navigation or a stale-observation response.
+For a delayed UI transition, pass an expectation when the action supports it, or use \`wait\` for a known result before acting on the next screen. A navigation or click can already return the new page observation. Use that observation directly when it answers the task; re-observe if it is missing, stale, or a transition is still in progress.
+
+A visible semantic node’s name and value are evidence of what the page displays. A textbox can display account data; read the returned label and value as shown. When the requested value and its context are visible on the expected page, report them and finish. Keep any necessary verification in this browser session, using an observation or screenshot. If the information is missing, report what could not be verified.
 
 The tool does not accept CSS, XPath, JavaScript, cookie, storage, or network-inspection commands. Browser actions execute directly under the configured allow/deny policy. Sensitive fields expose only their semantic identity and values are redacted.
 

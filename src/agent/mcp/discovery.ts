@@ -5,7 +5,6 @@ import type { Config } from '../../config/schema.js';
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-read-repository.js';
 import { loadTranscriptRowsForSession } from '../../storage/sqlite/transcript-repository.js';
-import { getEmbeddedExecutionRunId } from '../embedded/execution-context.js';
 import { fetchPublicText } from '../tools/fetch-text.js';
 import { extractReadableText } from '../tools/web.js';
 import { SearchProviderRegistry } from '../tools/search/registry.js';
@@ -21,15 +20,7 @@ function lastUserEntry(conversationId: string) {
   const row = loadTranscriptRowsForSession(conversationId).filter(entry => 'role' in entry && entry.role === 'user').at(-1);
   return row ? createHash('sha256').update(JSON.stringify(row)).digest('hex') : undefined;
 }
-type RecordState = { id: string; version: number; conversationId: string; agentId: string; transcriptId: string; name: string; purpose: string; expiresAt: number; documents: Document[]; candidates: Candidate[]; selectedId?: string; cancelled?: boolean; originalUserEntry?: string; runId?: string; outcome?: 'no_match' | 'references' | 'managed' | 'incomplete' };
-export function getMcpDiscoveryOutcome(conversationId: string, transcriptId: string, runId: string, serviceName: string) {
-  const normalize = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-  const target = normalize(serviceName);
-  return new DurableState<RecordState>('mcp.discovery').values(undefined, true).find(record =>
-    record.conversationId === conversationId && record.transcriptId === transcriptId && record.runId === runId
-    && !record.cancelled && record.expiresAt > Date.now() && normalize(record.name) === target)?.outcome;
-}
-
+type RecordState = { id: string; version: number; conversationId: string; agentId: string; transcriptId: string; name: string; purpose: string; expiresAt: number; documents: Document[]; candidates: Candidate[]; selectedId?: string; cancelled?: boolean; originalUserEntry?: string; outcome?: 'no_match' | 'references' | 'managed' | 'incomplete' };
 export interface McpResearch {
   search(query: string, signal?: AbortSignal): Promise<Array<{ url: string; title: string }>>;
   read(url: string, signal?: AbortSignal): Promise<{ url: string; text: string }>;
@@ -71,15 +62,14 @@ export class McpDiscovery {
       const args = z.object({ serviceName: z.string().min(1).max(100), purpose: z.string().min(1).max(1000) }).strict().parse(input);
       const session = getSessionMetadata(context.conversationId); if (!session || session.agentId !== context.agentId) throw new Error('Owner conversation required');
       const record: RecordState = { id: randomUUID(), version: 1, conversationId: context.conversationId, transcriptId: session.transcriptId, agentId: context.agentId, name: args.serviceName, purpose: args.purpose, expiresAt: Date.now() + 900_000, documents: [], candidates: [] };
-      record.runId = getEmbeddedExecutionRunId();
       record.originalUserEntry = lastUserEntry(context.conversationId);
       this.records.set(record.id, record);
       const managed = await this.findManaged?.(args.serviceName, context);
       this.current(record.id, context);
       if (managed?.length) {
-        record.outcome = 'managed';
-        this.records.set(record.id, record);
+        this.records.delete(record.id);
         return {
+          outcome: 'managed',
           managedIntegrations: managed.map(match => ({
             ...match, managementPath: context.managementOrigin ? `${context.managementOrigin}/#${match.managementPath}` : match.managementPath,
           })),

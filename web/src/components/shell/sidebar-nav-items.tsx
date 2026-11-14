@@ -113,7 +113,7 @@ export function SidebarNavItems({
         };
       });
   });
-  const space: MenuItem = { id: SPACE_NAV_ID, label: language === 'zh' ? '资料库' : 'Space', to: '/space', Icon: Archive, active: pathname === '/space' };
+  const space: MenuItem = { id: SPACE_NAV_ID, label: copy.space, to: '/space', Icon: Archive, active: pathname === '/space' };
   const shortcuts = [...builtins, ...extensionItems];
   const byId = new Map([...shortcuts, space].map((item) => [item.id, item]));
   const orderedIds = [...new Set([...order, ...shortcuts.map(item => item.id)])].filter((id) => byId.has(id));

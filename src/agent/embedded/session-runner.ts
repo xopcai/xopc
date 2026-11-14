@@ -22,7 +22,6 @@ import { deferredToolContract, getXopcToolMetadata } from './tool-metadata.js';
 import { getExternalToolRegistry } from '../external-tools/tool-registry.js';
 import { materializeNativeExternalTools } from './external-tool-discovery.js';
 import { type NativeMcpConfig, getNativePiAgentDir } from '../mcp/native-mcp.js';
-import { createMcpBrowserFallbackGuard } from '../mcp/browser-fallback-guard.js';
 import { createMcpSetupContinuationGuard } from '../mcp/continuation-guard.js';
 import { abortEmbeddedRun } from './runs.js';
 import { filterExecutionTools, resolveExecutionToolPolicy, type ExecutionToolPolicy } from './execution-tool-policy.js';
@@ -368,7 +367,6 @@ export class EmbeddedSessionRunnerPool {
       noExtensions: true,
       extensionFactories: [
         createMcpSetupContinuationGuard(runtimeId, tools.some(tool => tool.name === 'mcp_setup')),
-        ...(params.transcriptRuntime.persistent && tools.some(tool => tool.name === 'mcp_setup') ? [createMcpBrowserFallbackGuard(runtimeId)] : []),
         ...(mcp?.automationSourceRunId ? [createAutomationMcpSourceGuard(mcp.automationSourceRunId)] : []),
         ...(codemode ? [createXopcCodemodeExtension(codemode, tools, () => boundSession)] : []),
         ...(discovery ? [createXopcToolSearchExtension(tools, { nativeDiscovery, externalDiscovery, registry,

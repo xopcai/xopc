@@ -17,6 +17,7 @@ import { createWeixinConfigurationTestServer } from './weixin-configuration-test
 import { DatabaseSync } from 'node:sqlite';
 import { createConfigurationTestServers } from './conversation-configuration-test-server.mts';
 import { createDiscoveryFixtures } from './mcp-discovery-fixtures.mts';
+import { browserFallbackCases } from './task-capability-evaluation/browser-fallback-cases.mjs';
 import { cases as routingCases } from './task-capability-evaluation/cases.mjs';
 
 const { chromium } = createRequire(import.meta.url)('playwright-core') as typeof import('playwright-core');
@@ -29,12 +30,17 @@ const onlineFlow = stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_ONLINE 
 const nameFlow = stage === 'mcp' && process.env.XOPC_CONFIGURATION_E2E_NAME_FLOW === '1';
 const taskRoutingCaseId = process.env.XOPC_CONFIGURATION_E2E_TASK_ROUTING_CASE;
 const pointsReplay = taskRoutingCaseId === 'R14';
-if (pointsReplay) assert(process.env.DEEPSEEK_API_KEY, 'Set DEEPSEEK_API_KEY for the deepseek-flash replay');
+const browserReplay = taskRoutingCaseId === 'R15';
+const deepseekReplay = pointsReplay || browserReplay;
+const browserCase = browserReplay ? browserFallbackCases.find(item =>
+  item.id === (process.env.XOPC_CONFIGURATION_E2E_TASK_ROUTING_VARIANT ?? 'loyalty')) : undefined;
+assert(!browserReplay || browserCase, 'Select loyalty, support or billing for R15');
+if (deepseekReplay) assert(process.env.DEEPSEEK_API_KEY, 'Set DEEPSEEK_API_KEY for the deepseek-flash replay');
 const points = 738214;
 const deepseekModel = 'deepseek-flash';
 assert(!taskRoutingCaseId || (stage === 'mcp' && (
-  nameFlow ? ['R05', 'R14'].includes(taskRoutingCaseId) : ['R02', 'R07', 'R10'].includes(taskRoutingCaseId)
-)), 'Select R05 or R14 with fixture name discovery, or R02, R07, R10 with the MCP fixtures');
+  nameFlow ? ['R05', 'R14'].includes(taskRoutingCaseId) : ['R02', 'R07', 'R10', 'R15'].includes(taskRoutingCaseId)
+)), 'Select R05 or R14 with fixture name discovery, or R02, R07, R10, R15 with the MCP fixtures');
 const recordDemo = process.env.XOPC_CONFIGURATION_E2E_RECORD_DEMO === '1';
 assert(!recordDemo || ['automations', 'weixin'].includes(stage), 'Recording demo uses the automations or Weixin environment');
 assert(['skills', 'mcp', 'automations', 'weixin'].includes(stage), 'Choose skills, mcp or automations');
@@ -48,7 +54,7 @@ const evidence = resolve(process.env.XOPC_CONFIGURATION_E2E_OUT ?? `.xopc-evals/
 await mkdir(evidence, { recursive: true });
 const credentials = process.env.XOPC_CREDENTIALS_DIR ?? join(homedir(), '.xopc/credentials');
 const credentialFile = join(credentials, 'oauth/xopc-cloud.json');
-assert(pointsReplay || existsSync(credentialFile), 'A signed-in XOPC Cloud account is required');
+assert(deepseekReplay || existsSync(credentialFile), 'A signed-in XOPC Cloud account is required');
 const modelRequests: Array<{ status: number; elapsedMs: number; mcpSetupDeclared: boolean; toolSearchDeclared: boolean }> = [];
 let refreshing: Promise<void> | undefined;
 async function refreshCloudLogin() {
@@ -64,18 +70,18 @@ const proxy = createServer(async (request, response) => {
   try {
     let raw = ''; for await (const chunk of request) raw += chunk;
     assert(![...(testServers?.sensitive ?? [])].some(secret => raw.includes(secret)), 'A credential leaked into a model request');
-    const body = JSON.parse(raw); body.model = pointsReplay ? deepseekModel : 'openai-codex/gpt-5.6-sol';
+    const body = JSON.parse(raw); body.model = deepseekReplay ? deepseekModel : 'openai-codex/gpt-5.6-sol';
     if (stage === 'mcp') await writeFile(join(evidence, `request-${randomUUID()}.private.json`), JSON.stringify(body), { mode: 0o600 });
     assert(modelRequests.length < (nameFlow ? 450 : stage === 'skills' ? 160 : 260), 'Inference budget exceeded');
     let apiKey = process.env.DEEPSEEK_API_KEY;
-    if (!pointsReplay) {
+    if (!deepseekReplay) {
       let credential = JSON.parse(await readFile(credentialFile, 'utf8'));
       if (credential.expiresAt <= Date.now() + 60000) { await refreshCloudLogin(); credential = JSON.parse(await readFile(credentialFile, 'utf8')); }
       assert(credential.expiresAt > Date.now(), 'Cloud login expired; reconnect before running acceptance');
       apiKey = credential.access;
     }
     const before = Date.now();
-    const upstream = await fetch(pointsReplay ? 'https://api.deepseek.com/chat/completions' : 'https://router.xopc.ai/v1/chat/completions', { method: 'POST',
+    const upstream = await fetch(deepseekReplay ? 'https://api.deepseek.com/chat/completions' : 'https://router.xopc.ai/v1/chat/completions', { method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body), signal: AbortSignal.timeout(150_000) });
     const names = (body.tools ?? []).map((tool: any) => tool.function?.name ?? tool.name);
@@ -90,8 +96,28 @@ proxy.listen(0, '127.0.0.1'); await once(proxy, 'listening');
 const proxyPort = (proxy.address() as { port: number }).port;
 const archive = new AdmZip();
 archive.addFile('SKILL.md', Buffer.from('---\nname: weekly-report\ndescription: Summarize weekly sales with totals and the highest-selling product.\n---\nRead the supplied sales rows. Sum all amounts, identify the highest-selling product, and explain the result concisely. Never create schedules unless requested.\n'));
+const fallbackEvents: Array<{ type: 'search' | 'page' | 'read'; query?: string }> = [];
 const fixture = createServer((request, response) => {
   const path = new URL(request.url!, 'http://localhost').pathname;
+  if (browserCase && path === '/search') {
+    const query = new URL(request.url!, 'http://localhost').searchParams.get('q') ?? '';
+    fallbackEvents.push({ type: 'search', query });
+    response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ results: [] }));
+    return;
+  }
+  if (browserCase && path === '/account') {
+    fallbackEvents.push({ type: 'page' });
+    response.writeHead(200, { 'Content-Type': 'text/html' }).end(
+      `<!doctype html><title>${browserCase.service} account</title>
+      <h1>${browserCase.service} account</h1><form action="/account/details"><button>${browserCase.label}</button></form>`);
+    return;
+  }
+  if (browserCase && path === '/account/details') {
+    fallbackEvents.push({ type: 'read' });
+    response.writeHead(200, { 'Content-Type': 'text/html' }).end(
+      `<!doctype html><title>${browserCase.service} account details</title><h1>Account details</h1><label>${browserCase.resultLabel}<input readonly value="${browserCase.value}"></label>`);
+    return;
+  }
   if (taskRoutingCaseId && path === '/api/v1/packages') {
     response.writeHead(200, { 'Content-Type': 'application/json' })
       .end(JSON.stringify({ items: [], meta: { page: 1, pageSize: 50, total: 0, totalPages: 1 } }));
@@ -130,10 +156,16 @@ await writeFile(join(root, 'xopc.json'), JSON.stringify({
     type: 'http', url: testServers!.publicUrl, description: 'Unrelated feedback account verification', exposure: 'deferred',
   } } } } : {}),
   gateway: { bind: 'loopback', port, auth: { mode: 'token', token }, ...(weixin ? { publicUrl: base } : {}) },
+  ...(browserCase ? { browser: {
+    enabled: true,
+    driver: { kind: 'playwright', headless: true, executablePath: chromium.executablePath() },
+    security: { allowedPrivateHosts: ['127.0.0.1'] },
+  } } : {}),
+  ...(browserCase ? { tools: { web: { search: { providers: [{ type: 'searxng', url: new URL(artifactUrl).origin }] } } } } : {}),
   ...(discoveryFixtures ? { tools: { web: { search: { providers: [{ type: 'searxng', url: discoveryFixtures.local }] } } } } : {}),
   ...(weixin ? { session: { dmScope: 'per-account-channel-peer' }, channels: { weixin: { enabled: true, dmPolicy: 'pairing', allowFrom: ['alice@im.wechat', 'bob@im.wechat'], streamMode: 'off' } } } : {}), userContext: { enabled: false } }), { mode: 0o600 });
 await writeFile(join(root, 'models.json'), JSON.stringify({ providers: { 'configuration-live': { baseUrl: `http://127.0.0.1:${proxyPort}/v1`, api: 'openai-completions', apiKey: 'local-relay',
-  models: [{ id: 'sol', name: 'Real XOPC Cloud GPT-5.6 Sol', input: ['text'], reasoning: false, contextWindow: 128000, maxTokens: 4096 }] } } }));
+  models: [{ id: 'sol', name: deepseekReplay ? 'DeepSeek Flash' : 'Real XOPC Cloud GPT-5.6 Sol', input: ['text'], reasoning: false, contextWindow: 128000, maxTokens: 4096 }] } } }));
 if (weixin) {
   await mkdir(join(root, 'weixin/accounts'), { recursive: true });
   await writeFile(join(root, 'weixin/accounts.json'), JSON.stringify(Object.keys(weixin.tokens)));
@@ -144,7 +176,8 @@ db.openXopcDatabase();
 const { seedTestAgentCatalog } = await import('../src/agent-catalog/test-support.js');
 const { AgentDefaultsSchema } = await import('../src/agent-config/schema.js');
 seedTestAgentCatalog({ defaults: AgentDefaultsSchema.parse({ models: { chat: { primary: modelRef }, background: { primary: modelRef } }, runtime: { maxTurns: 32, timeoutMs: 300000, thinkingLevel: 'off' } }),
-  agents: [{ id: 'main', enabled: true, workspace: root, profile: { name: 'Ada', language: 'zh' } },
+  agents: [{ id: 'main', enabled: true, workspace: root, profile: { name: 'Ada', language: browserCase?.id === 'support' ? 'en' : 'zh' },
+    ...(browserCase ? { tools: { browser_use: { mode: 'allow' } } } : {}) },
     ...(stage === 'automations' ? [{ id: 'reviewer', enabled: true, workspace: root, profile: { name: 'Reviewer', language: 'zh' } }] : [])] });
 db.closeXopcDatabase();
 let child: ReturnType<typeof spawn>;
@@ -191,7 +224,7 @@ async function api(path: string) {
 let browser: Browser | undefined, page: Page, conversationId: string | undefined;
 let recordingContext: BrowserContext | undefined, recordedVideo: Video | null = null;
 const observedConversations = new Set<string>();
-const report: any = { stage, taskRoutingCase: taskRoutingCaseId, model: pointsReplay ? 'deepseek/deepseek-flash' : 'xopc-cloud/openai-codex/gpt-5.6-sol', inference: 'real', entry: 'production Web Chat, 390px',
+const report: any = { stage, taskRoutingCase: taskRoutingCaseId, model: deepseekReplay ? 'deepseek/deepseek-flash' : 'xopc-cloud/openai-codex/gpt-5.6-sol', inference: 'real', entry: 'production Web Chat, 390px',
   fixture: 'Local archive with deterministic sales instructions; no mocked model or direct management API writes', root, cases: [], passed: false };
 async function send(id: string, prompt: string, verify: (answer: string) => Promise<Record<string, boolean>>, fresh = false) {
   if (fresh || !conversationId) { await page.goto(base + '/#/chat/new'); conversationId = undefined; }
@@ -636,10 +669,6 @@ async function verifyNameDiscovery() {
           const firstDiscovery = toolCalls.findIndex(call => call.name === 'mcp_setup' && call.arguments?.command === 'discover');
           const browserCalls = toolCalls.filter(call => call.name === 'browser_use' || call.name.startsWith('device__web_page_')
             || call.name === 'xopc_use' && call.arguments?.mode === 'browser_setup');
-          const browserResults = browserCalls.map(call => messages.find(message => message.toolCallId === call.id));
-          const allBrowserAttemptsBlocked = browserResults.every(result =>
-            result?.isError && result.content.some((block: any) => block.text?.includes('Browser fallback')
-              || block.text?.includes('Browser fallback has not been established')));
           const unmatchedSearch = messages.some(message => {
             if (message.toolName !== 'tool_search') return false;
             const text = message.content?.[0]?.text;
@@ -649,8 +678,8 @@ async function verifyNameDiscovery() {
               && !result.connectionCandidates?.length && !result.installCandidates?.length;
           });
           assert(firstDiscovery >= 0 && unmatchedSearch, 'Expected unrelated tool results and MCP discovery');
-          assert(allBrowserAttemptsBlocked, 'Browser fallback must not dispatch while the MCP route is unresolved');
-          report.route = { firstDiscovery, unmatchedSearch, browserAttempts: browserCalls.length, allBrowserAttemptsBlocked,
+          assert.equal(browserCalls.length, 0, 'The model must choose MCP without attempting the browser when a connection is available');
+          report.route = { firstDiscovery, unmatchedSearch, browserAttempts: browserCalls.length,
             toolNames: toolCalls.map(call => call.name) };
         }
         if (taskRoutingCaseId) {
@@ -734,6 +763,39 @@ try {
     await verifyOnlineDiscovery();
   } else if (nameFlow) {
     await verifyNameDiscovery();
+  } else if (browserCase) {
+    report.variant = browserCase.id;
+    await send('R15-first-turn', browserCase.first, async answer => ({
+      noPrematureResult: !answer.includes(String(browserCase.value)),
+    }), true);
+    const accountUrl = new URL('/account', artifactUrl).href;
+    await send('R15-follow-up', browserCase.followUp.replace('{url}', accountUrl), async answer => {
+      const history = await api(`/api/sessions/${conversationId}?include=transcriptRows`);
+      const rows = history.transcriptRows as Array<{
+        toolName?: string; toolCallId?: string; role?: string; content?: Array<{ type: string; text?: string; id?: string; name?: string }>;
+      }>;
+      const discoveryResults = rows.flatMap((row, index) => {
+        if (row.toolName !== 'mcp_setup' && row.toolName !== 'xopc_use') return [];
+        try {
+          const payload = JSON.parse(row.content?.find(block => block.type === 'text')?.text ?? '');
+          return payload.outcome === 'no_match' ? [index] : [];
+        } catch { return []; }
+      });
+      const firstBrowser = rows.findIndex(row => row.role === 'assistant'
+        && row.content?.some(block => block.type === 'toolCall' && block.name === 'browser_use'));
+      const browserRead = rows.findIndex(row => row.toolName === 'browser_use'
+        && row.content?.some(block => block.text?.includes(String(browserCase.value))));
+      report.route = { discoveryResults, firstBrowser, browserRead, events: fallbackEvents };
+      const result = new RegExp(String(browserCase.value).replace(/\B(?=(\d{3})+(?!\d))/g, '[,，\\s]?'));
+      return {
+        namedMcpSearch: fallbackEvents.some(event => event.type === 'search'
+          && event.query?.toLowerCase().includes(browserCase.service.toLowerCase())),
+        noMatchBeforeBrowser: firstBrowser >= 0 && discoveryResults.some(index => index < firstBrowser),
+        browserObservedResult: browserRead > firstBrowser && fallbackEvents.some(event => event.type === 'read'),
+        deliveredValue: result.test(answer),
+        noConnectionDraft: !await setupCard().isVisible(),
+      };
+    });
   } else if (taskRoutingCaseId) {
     const configBefore = await readFile(join(root, 'xopc.json'), 'utf8');
     const test = routingCases.find(test => test.id === taskRoutingCaseId)!;

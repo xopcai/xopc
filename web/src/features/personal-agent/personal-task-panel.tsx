@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
 import { attachmentFromDeliverable } from '@/features/chat/attachments/attachment-utils-core';
 import { TASK_DETAIL_MODAL_PARAM, taskDetailModalHref } from '@/features/tasks/task-detail-route';
+import { messages } from '@/i18n/messages';
 import { formatMediumDateTime } from '@/lib/date-formatters';
 import { cn } from '@/lib/cn';
 import { preloadTaskDetailPage } from '@/lib/route-preload';
@@ -128,9 +129,10 @@ export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible 
   const mainPrompt = isOpenPersonalPrompt(prompt) && !attention.some(item => item.prompt?.id === prompt.id) ? prompt : null;
   const closePanel = onNavigate ?? (closeOnNavigate ? () => useRightWorkspaceStore.getState().setOpen(false, scope) : undefined);
   const row = (item: PersonalWorkItem, dateInHeading = false) => <li key={item.id}><WorkRow item={item} zh={zh} scope={scope} personalHref={personalHref} dateInHeading={dateInHeading} onNavigate={closePanel} /></li>;
+  const spaceLabel = messages(zh ? 'zh' : 'en').productNavigation.space;
   const tabs = [
     { id: 'tasks', label: zh ? '任务' : 'Tasks', Icon: ListTodo },
-    { id: 'deliverables', label: zh ? '交付物' : 'Deliverables', Icon: Files },
+    { id: 'deliverables', label: spaceLabel, Icon: Files },
   ] as const;
   const empty = !current.length && !data?.total && !mainPrompt;
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={zh ? '派发的任务' : 'Delegated tasks'}>
@@ -150,7 +152,7 @@ export function PersonalTaskPanel({ scope, zh, closeOnNavigate = false, visible 
         </p> : null}
       </div>
     </header>
-    <SlidingTabList role="tablist" aria-label={zh ? '任务与交付物' : 'Tasks and deliverables'} className="mx-4 mb-3 grid shrink-0 grid-cols-2 gap-1 rounded-full bg-surface-inset p-1 sm:mx-6"
+    <SlidingTabList role="tablist" aria-label={zh ? `任务与${spaceLabel}` : `Tasks and ${spaceLabel}`} className="mx-4 mb-3 grid shrink-0 grid-cols-2 gap-1 rounded-full bg-surface-inset p-1 sm:mx-6"
       indicatorClassName="rounded-full bg-surface-base shadow-sm dark:bg-surface-active dark:shadow-none">
       {tabs.map(({ id, label, Icon }) => <button key={id} type="button" role="tab" id={`${panelId}-${id}-tab`} aria-controls={`${panelId}-${id}`}
         aria-selected={tab === id} tabIndex={tab === id ? 0 : -1} onClick={() => {

@@ -189,7 +189,7 @@ export function buildToolingSection(params: {
         ].filter(Boolean).join(' and ')} for text/file discovery; use code graph or symbol tools when available for definitions and call relationships.`
       : '',
     hasExec
-      ? `Use \`${execToolName}\` for verification and safe inspection, not routine file editing. Commands already start in the workspace; use its cwd argument for another directory. Run checks directly (for example, cmd="pnpm test"), without cd, shell chains, pipes, or output filters; set maxOutputChars to bound returned output.`
+      ? `Use \`${execToolName}\` for local engineering verification and safe workspace inspection. For web account tasks, use the selected browser or connector for reading and verification. Use the file editing tools for routine edits. Commands already start in the workspace; use its cwd argument for another directory. Run checks directly (for example, cmd="pnpm test"), without cd, shell chains, pipes, or output filters; set maxOutputChars to bound returned output.`
       : '',
     !hasExec && (hasWrite || hasPatch) ? 'Without execution, inspect the named source and a public caller or data sample before selecting undocumented fields. If only file reading is available, use a bounded probe of conventional sibling input.json or package.json; a directory read failure does not mean sibling files are absent. Then make the bounded edit, inspect it once and deliver. Explicitly say tests could not be run because execution is unavailable; separately identify any unavailable review. Do not invent fields, expand the interface or repeatedly rewrite to compensate.' : '',
     availableTools.has('review_workspace')
