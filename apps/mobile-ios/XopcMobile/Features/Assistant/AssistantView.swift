@@ -18,6 +18,7 @@ struct AssistantView<Dock: View>: View {
     var showsFloatingHeader = true
     var onOpenSidebar: (() -> Void)?
     var onOpenProgress: () -> Void = {}
+    var onOpenPersonalOverview: () -> Void = {}
     var onConversationUnavailable: (String) async -> Void = { _ in }
     var pendingAttention = 0
     var sidebarOpen = false
@@ -27,6 +28,7 @@ struct AssistantView<Dock: View>: View {
     var onActionPanelVisibilityChanged: (Bool) -> Void = { _ in }
     var sessionActionsRequest = 0
     var messageSearchRequest = 0
+    var automationSetup = false
     var externalIntake: ExternalIntakeBatch?
     var onExternalIntakeFinished: (UUID, String?) -> Void = { _, _ in }
     let bottomDock: (AssistantComposer) -> Dock
@@ -47,18 +49,22 @@ struct AssistantView<Dock: View>: View {
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
     @State private var showingCameraPicker = false
-    @State private var showingVoiceRecorder = false
+    @State private var voiceMode = false
     @State private var showingReferencePicker = false
     @State private var referenceKind = ContextReferenceKind.note
     @State private var isActionPanelExpanded = false
     @State private var showingSessionActions = false
     @State private var showingPersonalProfile = false
+    @State private var showingAgentPicker = false
+    @State private var selectedPickerAgent: String?
+    @State private var searchAfterOptions = false
     @State private var showingMessageSearch = false
     @State private var executionPresentation: ExecutionActivityPresentation?
     @State private var readAloud = ChatReadAloud()
     @State private var assistantAudio = AssistantAudioAutoplay()
     @State private var generatedMedia = GeneratedMediaState()
-    @State private var playingGeneratedMedia: String?
+    @State private var playingGeneratedVideo: String?
+    private let music = GeneratedMusicPlayback.shared
     @State private var startingVoice = false
     @State private var voiceStartError: String?
     @State private var voiceMaterializationIDs: [String: String] = [:]
@@ -111,6 +117,10 @@ struct AssistantView<Dock: View>: View {
                 } else if readAloud.state != .idle {
                     readAloudBar
                 }
+                if isActive, !showingPhone, showsFloatingHeader,
+                   music.track?.conversationID != conversation?.id || !generatedMedia.cards.contains(where: { $0.id == music.track?.id }) {
+                    GeneratedMusicDock(playback: music)
+                }
                 if conversation != nil {
                     bottomDock(composer).padding(.bottom, 4)
                 }
@@ -134,14 +144,13 @@ struct AssistantView<Dock: View>: View {
                     .padding(.top, 8)
                     .padding(.bottom, 6)
                     .background {
-                        ChatAppearance.canvas(colorScheme)
-                            .mask(alignment: .top) {
-                                VStack(spacing: 0) {
-                                    Rectangle()
-                                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                                        .frame(height: 6)
-                                }
-                            }
+                        let canvas = ChatAppearance.canvas(colorScheme)
+                        LinearGradient(stops: [.init(color: canvas.opacity(0.94), location: 0),
+                                               .init(color: canvas.opacity(0.92), location: 0.82),
+                                               .init(color: .clear, location: 1)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
             }
         }
@@ -155,6 +164,15 @@ struct AssistantView<Dock: View>: View {
                 ChatMessageSearchView(messages: state.messages, configuration: configuration,
                                       conversationID: conversation?.id, assistantState: state, readAloud: readAloud,
                                       canReadAloud: realtimeVoiceCall.phase == .idle)
+            }
+            .sheet(isPresented: $showingAgentPicker, onDismiss: {
+                if let id = selectedPickerAgent {
+                    selectedPickerAgent = nil
+                    requestConversation(id)
+                }
+            }) {
+                AgentPicker(configuration: configuration, agents: state.agents,
+                            currentID: conversation?.agentId, personal: personalAgent, select: { selectedPickerAgent = $0 })
             }
             .sheet(isPresented: $showingPersonalProfile) {
                 if let personalAgent, let conversation {
@@ -177,17 +195,17 @@ struct AssistantView<Dock: View>: View {
             .onChange(of: isActive) {
                 if !isActive {
                     state.pauseConversation()
-                    playingGeneratedMedia = nil
+                    playingGeneratedVideo = nil
                 }
             }
             .onChange(of: conversation?.id, initial: true) {
                 attachmentError = nil
-                showingVoiceRecorder = false
+                voiceMode = false
                 showingPhotoPicker = false; showingFilePicker = false; showingCameraPicker = false
                 readAloud.stop()
                 assistantAudio.stop()
                 executionPresentation = nil
-                playingGeneratedMedia = nil
+                playingGeneratedVideo = nil
                 isAtBottom = true
                 showJumpBottom = false
                 followingBottom = true
@@ -269,14 +287,14 @@ struct AssistantView<Dock: View>: View {
             }
             .onChange(of: scenePhase) {
                 if scenePhase != .active {
-                    playingGeneratedMedia = nil
+                    playingGeneratedVideo = nil
                 }
             }
-            .onChange(of: conversation?.transcriptId) { playingGeneratedMedia = nil }
-            .onChange(of: configuration.baseURL) { playingGeneratedMedia = nil }
+            .onChange(of: conversation?.transcriptId) { playingGeneratedVideo = nil }
+            .onChange(of: configuration.baseURL) { playingGeneratedVideo = nil }
             .onChange(of: showingPhone) {
                 if showingPhone {
-                    playingGeneratedMedia = nil
+                    playingGeneratedVideo = nil
                 }
             }
     }
@@ -294,7 +312,12 @@ struct AssistantView<Dock: View>: View {
                 showingFilePicker: $showingFilePicker,
                 showingCameraPicker: $showingCameraPicker
             ))
-            .sheet(isPresented: $showingSessionActions) {
+            .sheet(isPresented: $showingSessionActions, onDismiss: {
+                if searchAfterOptions {
+                    searchAfterOptions = false
+                    showingMessageSearch = true
+                }
+            }) {
                 AssistantSessionActionsView(
                     configuration: configuration,
                     conversation: conversation,
@@ -310,7 +333,8 @@ struct AssistantView<Dock: View>: View {
                     onStartScopedConversation: { project, mode in
                         requestStart(.scoped(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main"))
                     },
-                    isTaskConversation: !showsFloatingHeader
+                    isTaskConversation: !showsFloatingHeader,
+                    onSearch: { searchAfterOptions = true; showingSessionActions = false }
                 )
             }
             .sheet(item: $executionPresentation) { presentation in
@@ -332,20 +356,6 @@ struct AssistantView<Dock: View>: View {
                         return
                     }
                     references.append(reference)
-                }
-            }
-            .sheet(isPresented: $showingVoiceRecorder) {
-                VoiceAttachmentRecorderView(configuration: configuration) { attachment in
-                    do {
-                        try AttachmentPolicy.validateChat(size: attachment.size, current: attachments)
-                        attachments.append(attachment)
-                    } catch {
-                        attachmentError = error.localizedDescription
-                        return
-                    }
-                } onTranscribed: { text in
-                    let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                    draft = existing.isEmpty ? text : "\(existing) \(text)"
                 }
             }
             .confirmationDialog("开始新对话？", isPresented: Binding(
@@ -438,7 +448,12 @@ struct AssistantView<Dock: View>: View {
                         clarificationCard
                         queueCard
                         personalConnectionCard
-                        welcome
+                        if automationSetup {
+                            ContentUnavailableView("用对话创建定时任务", systemImage: "clock",
+                                                   description: Text("告诉助理何时运行、要做什么。发送前可以编辑。"))
+                        } else {
+                            welcome
+                        }
                     }
                     .padding()
                     .frame(maxWidth: 720)
@@ -516,9 +531,9 @@ struct AssistantView<Dock: View>: View {
                                     scheduleBottomScroll(scroller)
                                 }
                             }
-                            generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth, scroller: scroller)
+                            generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth)
                         }
-                        generatedMediaRows(cards[""] ?? [], maximumWidth: maximumMessageWidth, scroller: scroller)
+                        generatedMediaRows(cards[""] ?? [], maximumWidth: maximumMessageWidth)
                         clarificationCard
                         if showsStagedProgress {
                             AssistantStagesView(progress: state.runProgress,
@@ -652,28 +667,35 @@ struct AssistantView<Dock: View>: View {
     }
 
     @ViewBuilder
-    private func generatedMediaRows(_ cards: [GeneratedMediaCard], maximumWidth: CGFloat, scroller: ScrollViewProxy) -> some View {
+    private func generatedMediaRows(_ cards: [GeneratedMediaCard], maximumWidth: CGFloat) -> some View {
         if let id = conversation?.id, conversation?.isDraft == false, !cards.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(cards) { card in
                     GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
                                       submitting: generatedMedia.submitting, error: card.isDraft ? generatedMedia.error : nil,
-                                      conversationID: id, configuration: configuration, isPlayingInline: playingGeneratedMedia == card.id,
-                                      measuredDuration: generatedMedia.measuredDurations[card.id],
-                                      onDuration: { generatedMedia.recordDuration($0, cardID: card.id, conversationID: id) },
-                                      onRevealLyrics: {
-                                          followingBottom = false
-                                          bottomScrollTask?.cancel()
-                                          bottomScrollTask = nil
-                                          scroller.scrollTo("generated-media-\(card.id)", anchor: .center)
-                                      },
+                                      conversationID: id, configuration: configuration,
+                                      isPlayingInline: card.kind == .music
+                                          ? music.track?.id == card.id && music.track?.conversationID == id && music.phase == .playing
+                                          : playingGeneratedVideo == card.id,
                                       onPlay: {
                                           readAloud.stop()
                                           assistantAudio.stop()
                                           bottomScrollTask?.cancel()
                                           bottomScrollTask = nil
                                           followingBottom = false
-                                          playingGeneratedMedia = playingGeneratedMedia == card.id ? nil : card.id
+                                          if card.kind == .music {
+                                              playingGeneratedVideo = nil
+                                              let track = GeneratedMusicTrack(configurationScope: ComposerDraftStore.accountScope(configuration),
+                                                  conversationID: id, id: card.id, title: card.title, source: conversationNavigationTitle,
+                                                  lyrics: card.item.lyrics, duration: card.item.durationMs.map { Double($0) / 1000 },
+                                                  sourceAgentID: conversation?.agentId)
+                                              music.play(track) {
+                                                  try await GatewayClient(configuration: configuration).downloadGeneratedMedia(card, conversationID: id)
+                                              }
+                                          } else {
+                                              music.yieldAudioSession()
+                                              playingGeneratedVideo = playingGeneratedVideo == card.id ? nil : card.id
+                                          }
                                       }, onConfirm: {
                                           Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
                                       })
@@ -723,6 +745,12 @@ struct AssistantView<Dock: View>: View {
         if isPersonalConversation {
             return personalAgent?.displayName ?? "Ada"
         }
+        if conversation?.isDraft == true {
+            if let agent = state.agents.first(where: { $0.id == conversation?.agentId }), agent.id != "main" {
+                return agent.localizedName(locale)
+            }
+            return AppLocalization.string("新对话", locale: locale)
+        }
         guard let title = conversation?.title, !showsConversationTitleInTimeline else {
             return AppLocalization.string("助手", locale: locale)
         }
@@ -745,8 +773,8 @@ struct AssistantView<Dock: View>: View {
     private var currentAgentName: String {
         isPersonalConversation
             ? (personalAgent?.displayName ?? "Ada")
-            : (state.agents.first(where: { $0.id == conversation?.agentId })?.displayName
-                ?? state.selectedAgent?.displayName ?? AppLocalization.string("未选择", locale: locale))
+            : (state.agents.first(where: { $0.id == conversation?.agentId })?.localizedName(locale)
+                ?? state.selectedAgent?.localizedName(locale) ?? AppLocalization.string("未选择", locale: locale))
     }
 
     private var assistantAudioObservation: AssistantAudioObservation {
@@ -841,7 +869,7 @@ struct AssistantView<Dock: View>: View {
             showingPhotoPicker: $showingPhotoPicker,
             showingFilePicker: $showingFilePicker,
             showingCameraPicker: $showingCameraPicker,
-            showingVoiceRecorder: $showingVoiceRecorder,
+            voiceMode: $voiceMode,
             showingReferencePicker: $showingReferencePicker,
             referenceKind: $referenceKind,
             isActionPanelExpanded: $isActionPanelExpanded,
@@ -854,8 +882,13 @@ struct AssistantView<Dock: View>: View {
             },
             onSend: { send(delivery: .next) },
             onSteer: { send(delivery: .steer) },
-            onNewConversation: { requestConversation(state.selectedAgentID ?? "main") },
-            onSearch: { showingMessageSearch = true }
+            onVoiceStart: {
+                music.yieldAudioSession()
+                readAloud.stop()
+                assistantAudio.stop()
+                playingGeneratedVideo = nil
+            },
+            onVoiceAttachment: { send(delivery: .next, voice: $0) }
         )
     }
 
@@ -865,6 +898,7 @@ struct AssistantView<Dock: View>: View {
 
     private func startRealtimeVoice() {
         guard canStartRealtimeVoice, let conversation else { return }
+        music.yieldAudioSession()
         isActionPanelExpanded = false
         startingVoice = true
         Task {
@@ -925,22 +959,19 @@ struct AssistantView<Dock: View>: View {
                         .accessibilityIdentifier("chat-header-sidebar")
                 }
                 if !isPersonalConversation {
-                    Menu {
-                        ForEach(state.agents) { agent in
-                            Button { requestConversation(agent.id) } label: { Text(verbatim: agent.displayName) }
-                        }
-                    } label: {
+                    Button { showingAgentPicker = true } label: {
                         Text(verbatim: conversationNavigationTitle)
                             .font(.subheadline.weight(.semibold)).lineLimit(1)
                             .padding(.horizontal, 10)
-                            .frame(minHeight: 44)
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("chat-header-agent")
                 }
                 if phone.summary?.available == true, isPersonalConversation {
                     phoneWorkspaceButton
                 }
-                Spacer(minLength: 0)
+                if isPersonalConversation { Spacer(minLength: 0) }
                 if phone.summary?.available == true, !isPersonalConversation {
                     phoneWorkspaceButton
                 }
@@ -954,38 +985,43 @@ struct AssistantView<Dock: View>: View {
                     .accessibilityIdentifier("chat-header-new")
                 } else {
                     headerButton(isPersonalConversation ? "配置助手" : "会话选项",
-                                 symbol: isPersonalConversation ? "slider.horizontal.3" : "ellipsis")
-                    {
-                        if isPersonalConversation {
-                            showingPersonalProfile = true
-                        } else {
-                            showingSessionActions = true
-                        }
+                                 symbol: isPersonalConversation ? "slider.horizontal.3" : "ellipsis") {
+                        if isPersonalConversation { showingPersonalProfile = true }
+                        else { showingSessionActions = true }
                     }
                     .accessibilityIdentifier("assistant-options")
                 }
             }
             if isPersonalConversation {
                 VStack(spacing: 4) {
-                    Button { showingPersonalProfile = true } label: {
+                    Button(action: onOpenPersonalOverview) {
                         VStack(spacing: 4) {
-                            PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 50, active: isActive)
+                            PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 62,
+                                                active: isActive && !showingPersonalProfile && !showingMessageSearch,
+                                                working: state.isRunActive || state.isSending)
                                 .accessibilityHidden(true)
-                            Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
                         }
                         .frame(maxWidth: 120)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("助理概览")
                     .accessibilityIdentifier("chat-header-personal")
                     if pendingAttention > 0 {
                         Button(action: onOpenProgress) {
-                            Label {
-                                Text("有 \(pendingAttention) 项待你处理")
-                            } icon: { Circle().fill(.orange).frame(width: 6, height: 6) }
-                                .font(.caption).foregroundStyle(.secondary)
+                            VStack(spacing: 2) {
+                                Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
+                                Label {
+                                    Text("有 \(pendingAttention) 项待你处理").lineLimit(1)
+                                } icon: { Circle().fill(.orange).frame(width: 6, height: 6) }
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 12).frame(minHeight: 44)
+                            .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 15))
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("chat-header-attention")
+                    } else {
+                        Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
                     }
                 }
             }

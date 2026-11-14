@@ -30,6 +30,7 @@ final class RealtimeVoiceAudio {
             throw RealtimeVoiceAudioError.microphonePermissionDenied
         }
         let session = AVAudioSession.sharedInstance()
+        GeneratedMusicPlayback.shared.yieldAudioSession()
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])
         // A preference: Bluetooth and other routes can select a larger hardware buffer.
         try? session.setPreferredIOBufferDuration(0.01)

@@ -307,22 +307,6 @@ extension GatewayClient {
         return response.run
     }
 
-    func createScheduledAutomation(name: String, instruction: String, cron: String, enabled: Bool = true,
-                                   projectID: String? = nil) async throws -> AutomationRecord
-    {
-        let mutation = ScheduledAutomationMutation(
-            name: name,
-            trigger: .init(kind: "schedule", schedule: .init(kind: "cron", expr: cron)),
-            action: .init(kind: "agent", instruction: instruction),
-            enabled: enabled,
-            conversationMode: "new_session",
-            projectId: projectID
-        )
-        let body = try encoder.encode(mutation)
-        let response: AutomationDetailEnvelope = try await request(path: "/api/automations", method: "POST", body: body)
-        return response.automation
-    }
-
     func updateScheduledAutomation(_ automation: AutomationRecord, name: String, instruction: String,
                                    cron: String, enabled: Bool) async throws -> AutomationRecord
     {
@@ -693,30 +677,6 @@ private struct AutomationRunIdentifier: Decodable {
 
 private struct AutomationCancelEnvelope: Decodable {
     let cancelled: Bool
-}
-
-private struct ScheduledAutomationMutation: Encodable {
-    let name: String
-    let trigger: Trigger
-    let action: Action
-    let enabled: Bool
-    let conversationMode: String
-    let projectId: String?
-
-    struct Trigger: Encodable {
-        let kind: String
-        let schedule: Schedule
-    }
-
-    struct Schedule: Encodable {
-        let kind: String
-        let expr: String
-    }
-
-    struct Action: Encodable {
-        let kind: String
-        let instruction: String
-    }
 }
 
 private struct ScheduledAutomationUpdateMutation: Encodable {

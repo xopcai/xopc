@@ -3,194 +3,6 @@ import Observation
 import SwiftUI
 import UIKit
 
-struct VoiceAttachmentRecorderView: View {
-    let configuration: GatewayConfiguration
-    let onComplete: (MessageAttachment) -> Void
-    let onTranscribed: (String) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.locale) private var locale
-    @State private var recorder = VoiceRecorder()
-    @State private var recordedAudio: RecordedAudio?
-    @State private var isTranscribing = false
-    @State private var transcriptionError: String?
-    @State private var previewPlayer: AVAudioPlayer?
-    @State private var isPreviewPlaying = false
-    @State private var previewResetTask: Task<Void, Never>?
-    @State private var transcriptionTask: Task<Void, Never>?
-    @State private var isVisible = false
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Image(systemName: recorder.isRecording ? "waveform.circle.fill" : "mic.circle")
-                    .font(.system(size: 72))
-                    .foregroundStyle(recorder.isRecording ? .red : .blue)
-                    .accessibilityHidden(true)
-                Text(recorder.duration, format: .number.precision(.fractionLength(1))) + Text(" 秒")
-                    .font(.title.monospacedDigit())
-                Text(recordedAudio == nil ? recorder.statusText : "录音已完成，可转为文字或发送语音")
-                    .foregroundStyle(.secondary)
-                if isTranscribing {
-                    ProgressView("正在转为文字…")
-                }
-                if let transcriptionError {
-                    TransientComposerFeedback(message: transcriptionError) { self.transcriptionError = nil }
-                }
-                if recorder.hasRecoverableInterruption {
-                    Text("录音被系统中断，已自动暂停。可以继续录音或保存当前内容。")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack(spacing: 16) {
-                    if recordedAudio != nil {
-                        Button(isPreviewPlaying ? "停止试听" : "试听", systemImage: isPreviewPlaying ? "stop.fill" : "play.fill") {
-                            togglePreview()
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(isTranscribing)
-                        Button("转为文字", systemImage: "text.cursor") {
-                            transcriptionTask = Task { await transcribe() }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(isTranscribing)
-                        Button("发送语音", systemImage: "waveform") { attachAudio() }
-                            .buttonStyle(.bordered)
-                            .disabled(isTranscribing)
-                    } else if recorder.isRecording {
-                        Button {
-                            recorder.togglePause()
-                        } label: {
-                            Label {
-                                Text(recorder.isPaused
-                                    ? LocalizedStringResource("继续")
-                                    : LocalizedStringResource("暂停"))
-                            } icon: {
-                                Image(systemName: recorder.isPaused ? "play.fill" : "pause.fill")
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        Button("完成", systemImage: "checkmark") { finishRecording() }
-                            .buttonStyle(.borderedProminent)
-                    } else {
-                        Button("开始录音", systemImage: "mic.fill") { Task { await recorder.start() } }
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
-                if recorder.isMicrophonePermissionDenied {
-                    Text("未获得麦克风权限，请在系统设置中允许访问。")
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                    MicrophonePermissionSettingsButton()
-                } else if let error = recorder.errorMessage {
-                    TransientComposerFeedback(message: error) { recorder.dismissError() }
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("语音")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { recorder.cancel(); dismiss() }
-                }
-            }
-            .onAppear { isVisible = true }
-            .onDisappear {
-                isVisible = false
-                transcriptionTask?.cancel()
-                stopPreview(); recorder.cancel()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
-                recorder.handleAudioInterruption($0)
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .interactiveDismissDisabled(isTranscribing)
-    }
-
-    private func finishRecording() {
-        recordedAudio = recorder.finishRecording()
-    }
-
-    private func togglePreview() {
-        transcriptionError = nil
-        recorder.dismissError()
-        if isPreviewPlaying {
-            stopPreview()
-            return
-        }
-        guard let recordedAudio else { return }
-        do {
-            let player = try AVAudioPlayer(data: recordedAudio.data)
-            player.prepareToPlay()
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
-            guard player.play() else { throw GatewayClientError.invalidResponse }
-            previewPlayer = player
-            isPreviewPlaying = true
-            let identity = ObjectIdentifier(player)
-            previewResetTask = Task {
-                try? await Task.sleep(for: .seconds(player.duration))
-                guard !Task.isCancelled, previewPlayer.map(ObjectIdentifier.init) == identity else { return }
-                stopPreview()
-            }
-        } catch {
-            transcriptionError = error.localizedDescription
-        }
-    }
-
-    private func stopPreview() {
-        let wasPlaying = previewPlayer != nil
-        previewResetTask?.cancel()
-        previewResetTask = nil
-        previewPlayer?.stop()
-        previewPlayer = nil
-        isPreviewPlaying = false
-        if wasPlaying {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        }
-    }
-
-    private func attachAudio() {
-        guard let audio = recordedAudio else { return }
-        stopPreview()
-        let attachment = MessageAttachment(
-            type: "audio",
-            name: audio.fileName,
-            mimeType: audio.mimeType,
-            size: audio.data.count,
-            data: audio.data.base64EncodedString()
-        )
-        onComplete(attachment)
-        dismiss()
-    }
-
-    @MainActor private func transcribe() async {
-        guard isVisible, !Task.isCancelled, let recordedAudio, !isTranscribing else { return }
-        stopPreview()
-        isTranscribing = true
-        transcriptionError = nil
-        recorder.dismissError()
-        defer { isTranscribing = false }
-        do {
-            let language = locale.language.languageCode?.identifier
-            let text = try await GatewayClient(configuration: configuration)
-                .transcribeVoice(recordedAudio, language: language)
-            guard isVisible, !Task.isCancelled else { return }
-            onTranscribed(text)
-            dismiss()
-        } catch is CancellationError {
-        } catch {
-            guard isVisible, !Task.isCancelled else { return }
-            transcriptionError = error.localizedDescription
-        }
-    }
-}
-
 @MainActor
 @Observable
 final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
@@ -230,6 +42,10 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         isMicrophonePermissionDenied = false
         hasRecoverableInterruption = false
         do {
+            GeneratedMusicPlayback.shared.yieldAudioSession()
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.record, mode: .default)
+            try session.setActive(true)
             let url = FileManager.default.temporaryDirectory
                 .appending(path: "xopc-voice-\(UUID().uuidString).wav")
             let recorder = try AVAudioRecorder(url: url, settings: [
@@ -241,7 +57,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
                 AVLinearPCMIsFloatKey: false
             ])
             recorder.delegate = self
-            recorder.record()
+            guard recorder.record() else { throw GatewayClientError.invalidResponse }
             self.recorder = recorder
             fileURL = url
             isRecording = true
@@ -260,6 +76,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             }
             scheduleInterruptionForUITest()
         } catch {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             errorMessage = error.localizedDescription
         }
     }
@@ -276,21 +93,8 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         isPaused.toggle()
     }
 
-    func finishAttachment() -> MessageAttachment? {
-        guard let audio = finishRecording() else { return nil }
-        return MessageAttachment(
-            type: "audio",
-            name: audio.fileName,
-            mimeType: audio.mimeType,
-            size: audio.data.count,
-            data: audio.data.base64EncodedString()
-        )
-    }
-
     func finishRecording(retainSource: Bool = false) -> RecordedAudio? {
-        recorder?.stop()
-        timer?.invalidate()
-        isRecording = false
+        stopCapture()
         guard let fileURL, let recordedData = try? Data(contentsOf: fileURL) else {
             errorMessage = "无法读取录音文件"
             return nil
@@ -322,8 +126,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         generation += 1
         dismissError()
         isMicrophonePermissionDenied = false
-        recorder?.stop()
-        timer?.invalidate()
+        stopCapture()
         if let fileURL {
             try? FileManager.default.removeItem(at: fileURL)
             self.fileURL = nil
@@ -331,6 +134,18 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         isRecording = false
         isPaused = false
         hasRecoverableInterruption = false
+    }
+
+    private func stopCapture() {
+        let hadRecorder = recorder != nil
+        recorder?.stop()
+        recorder = nil
+        timer?.invalidate()
+        timer = nil
+        isRecording = false
+        if hadRecorder {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     func handleAudioInterruption(_ notification: Notification) {

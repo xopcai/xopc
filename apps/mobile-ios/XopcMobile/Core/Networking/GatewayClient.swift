@@ -325,12 +325,14 @@ struct GatewayClient: GatewayServing, Sendable {
         path: String,
         queryItems: [URLQueryItem] = [],
         method: String = "GET",
-        body: Data? = nil
+        body: Data? = nil,
+        idempotencyKey: UUID? = nil
     ) async throws -> Response {
         let url = try makeURL(path: path, queryItems: queryItems)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
+        if let idempotencyKey { request.setValue(idempotencyKey.uuidString, forHTTPHeaderField: "Idempotency-Key") }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

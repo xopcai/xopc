@@ -32,7 +32,7 @@ struct GeneratedMediaCard: Identifiable, Equatable, Sendable {
     }
 
     var title: String {
-        item.title ?? item.summary ?? AppLocalization.resolve(isDraft ? "视频草稿" : "视频")
+        item.title ?? item.summary ?? AppLocalization.resolve(kind == .music ? "音乐" : (isDraft ? "视频草稿" : "视频"))
     }
 
     var isDraft: Bool {
@@ -67,10 +67,10 @@ struct GeneratedMediaCard: Identifiable, Equatable, Sendable {
         kind == .music ? "music.note" : "film"
     }
 
-    func metadata(measuredDuration: Double?) -> String {
+    var metadata: String {
         if kind == .music {
             let version = item.versionNumber.map { AppLocalization.resolve("第 \($0) 版") }
-            let length = (measuredDuration ?? item.durationMs.map { Double($0) / 1000 }).map(formatGeneratedMediaTime)
+            let length = item.durationMs.map { formatGeneratedMediaTime(Double($0) / 1000) }
             return [version, length].compactMap(\.self).joined(separator: " · ")
         }
         let length = item.duration.map { $0 > 0 ? AppLocalization.resolve("\($0) 秒") : AppLocalization.resolve("自动时长") }
@@ -96,7 +96,6 @@ private struct GeneratedMediaResponse: Decodable {
 
 @MainActor @Observable
 final class GeneratedMediaState {
-    private(set) var measuredDurations: [String: Double] = [:]
     private(set) var cards: [GeneratedMediaCard] = []
     private(set) var canConfirm = false
     private(set) var submitting = false
@@ -117,7 +116,6 @@ final class GeneratedMediaState {
         if next != scope {
             scope = next
             cards = []
-            measuredDurations = [:]
             error = nil
             canConfirm = false
             submitting = false
@@ -192,10 +190,6 @@ final class GeneratedMediaState {
         }
     }
 
-    func recordDuration(_ seconds: Double, cardID: String, conversationID: String) {
-        guard scope?.id == conversationID, seconds.isFinite, seconds > 0 else { return }
-        measuredDurations[cardID] = seconds
-    }
 
     func cardsByReply(_ messages: [TimelineMessage]) -> [String: [GeneratedMediaCard]] {
         let replies = messages.filter { $0.role == "assistant" && $0.answerConfirmed }
@@ -215,6 +209,7 @@ private struct GeneratedDraftConfirmation: Encodable {
 }
 
 struct GeneratedMediaRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     let card: GeneratedMediaCard
     let canConfirm: Bool
     let submitting: Bool
@@ -222,10 +217,6 @@ struct GeneratedMediaRow: View {
     let conversationID: String
     let configuration: GatewayConfiguration
     let isPlayingInline: Bool
-    let measuredDuration: Double?
-    let onDuration: (Double) -> Void
-    let onRevealLyrics: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
     let onPlay: () -> Void
     let onConfirm: () -> Void
 
@@ -239,23 +230,31 @@ struct GeneratedMediaRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: card.isDraft ? AppLocalization.resolve("视频草稿") : card.title)
                         .font(.subheadline.weight(.semibold)).lineLimit(2)
-                    Text(verbatim: [card.status, card.metadata(measuredDuration: measuredDuration)]
+                    Text(verbatim: [card.status, card.metadata]
                         .filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 if card.completed {
                     Button(action: onPlay) {
-                        Image(systemName: isPlayingInline ? "xmark" : "play.fill").frame(width: 44, height: 44)
+                        Image(systemName: isPlayingInline ? (card.kind == .music ? "pause.fill" : "xmark") : "play.fill").frame(width: 44, height: 44)
                             .background(.tint.opacity(0.12), in: .circle)
-                    }.buttonStyle(.plain).accessibilityLabel(isPlayingInline ? "关闭播放" : "播放")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isPlayingInline ? (card.kind == .music ? "暂停" : "关闭播放") : "播放")
+                    .accessibilityIdentifier("generated-\(card.kind.rawValue)-start-\(card.id)")
                 } else if card.active {
                     ProgressView().controlSize(.small).accessibilityHidden(true)
                 }
             }
-            if isPlayingInline, card.completed {
-                GeneratedMediaInlinePlayer(card: card, conversationID: conversationID, configuration: configuration,
-                                           measuredDuration: measuredDuration, onDuration: onDuration, onRevealLyrics: onRevealLyrics)
+            if isPlayingInline, card.completed, card.kind == .video {
+                GeneratedVideoInlinePlayer(card: card, conversationID: conversationID, configuration: configuration)
+            }
+            if card.kind == .music, GeneratedMusicPlayback.shared.track?.id == card.id,
+               GeneratedMusicPlayback.shared.track?.conversationID == conversationID {
+                Button("打开播放器", systemImage: "music.note") { GeneratedMusicPlayback.shared.expanded = true }
+                    .font(.caption)
+                    .accessibilityIdentifier("music-inline-player")
             }
             if card.isDraft {
                 Text(verbatim: card.item.summary ?? card.item.prompt ?? "").font(.subheadline).lineLimit(3)
@@ -289,48 +288,26 @@ struct GeneratedMediaRow: View {
         .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 18))
         .tint(ChatAppearance.action(colorScheme))
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("generated-media-\(card.id)")
     }
 }
 
-private struct GeneratedMediaInlinePlayer: View {
+private struct GeneratedVideoInlinePlayer: View {
     let card: GeneratedMediaCard
     let conversationID: String
     let configuration: GatewayConfiguration
-    let measuredDuration: Double?
-    let onDuration: (Double) -> Void
-    let onRevealLyrics: () -> Void
-
     @State private var player: AVPlayer?
     @State private var localURL: URL?
     @State private var error: String?
     @State private var retry = 0
-    @State private var showLyrics = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let player {
-                if card.kind == .video {
-                    VideoPlayer(player: player)
-                        .aspectRatio(card.item.ratio == "9:16" ? 1 : 16.0 / 9, contentMode: .fit)
-                        .clipShape(.rect(cornerRadius: 12))
-                } else {
-                    musicControls(player)
-                    if let lyrics = card.item.lyrics, !lyrics.isEmpty {
-                        Button(showLyrics ? "收起歌词" : "歌词") { showLyrics.toggle() }
-                            .frame(minHeight: 44)
-                        if showLyrics {
-                            ViewThatFits(in: .vertical) {
-                                lyricsText(lyrics)
-                                ScrollView { lyricsText(lyrics) }
-                            }
-                            .frame(maxHeight: 160)
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                                if height > 0 { onRevealLyrics() }
-                            }
-                        }
-                    }
-                }
+                VideoPlayer(player: player)
+                    .aspectRatio(card.item.ratio == "9:16" ? 1 : 16.0 / 9, contentMode: .fit)
+                    .clipShape(.rect(cornerRadius: 12))
                 if let localURL {
                     ShareLink(item: localURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
                         .font(.caption)
@@ -355,43 +332,6 @@ private struct GeneratedMediaInlinePlayer: View {
         }
     }
 
-    private func lyricsText(_ lyrics: String) -> some View {
-        Text(verbatim: lyrics).font(.body).textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func musicControls(_ player: AVPlayer) -> some View {
-        TimelineView(.periodic(from: .now, by: 0.25)) { _ in
-            let time = player.currentTime().seconds
-            let position = time.isFinite ? max(0, time) : 0
-            let duration = measuredDuration ?? Double(card.item.durationMs ?? 0) / 1000
-            VStack(spacing: 6) {
-                Slider(value: Binding(get: { min(position, duration) }, set: {
-                    player.seek(to: CMTime(seconds: $0, preferredTimescale: 600))
-                }), in: 0 ... max(1, duration)).disabled(duration == 0).accessibilityLabel("播放进度")
-                HStack {
-                    Button {
-                        if player.rate == 0 {
-                            if duration > 0, position >= duration - 0.1 {
-                                player.seek(to: .zero)
-                            }
-                            player.play()
-                        } else {
-                            player.pause()
-                        }
-                    } label: {
-                        Image(systemName: player.rate == 0 ? "play.fill" : "pause.fill")
-                            .frame(width: 44, height: 44).background(.tint.opacity(0.12), in: .circle)
-                    }.buttonStyle(.plain).accessibilityLabel(player.rate == 0 ? "播放" : "暂停")
-                    Spacer()
-                    Text(verbatim: "\(formatGeneratedMediaTime(position)) / \(formatGeneratedMediaTime(duration))")
-                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
     private func load() async {
         error = nil
         do {
@@ -402,11 +342,6 @@ private struct GeneratedMediaInlinePlayer: View {
             let media = AVPlayer(url: url)
             player = media
             media.play()
-            if card.kind == .music, let asset = media.currentItem?.asset,
-               let duration = try? await asset.load(.duration), !Task.isCancelled {
-                let seconds = duration.seconds
-                if seconds.isFinite, seconds > 0 { onDuration(seconds) }
-            }
         } catch is CancellationError {
         } catch {
             if !Task.isCancelled {
@@ -423,7 +358,12 @@ private func formatGeneratedMediaTime(_ value: Double) -> String {
 
 extension GatewayClient {
     func downloadGeneratedMedia(_ card: GeneratedMediaCard, conversationID: String) async throws -> URL {
-        var request = try URLRequest(url: makeURL(path: card.artifactPath(conversationID), queryItems: []))
+        try await downloadGeneratedMedia(path: card.artifactPath(conversationID),
+                                         fileName: card.kind == .music ? "music.mp3" : "video.mp4")
+    }
+
+    func downloadGeneratedMedia(path: String, fileName: String) async throws -> URL {
+        var request = try URLRequest(url: makeURL(path: path, queryItems: []))
         request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
         let (temporaryURL, response) = try await session.download(for: GatewayPairingService.shared.signedRequest(request))
         defer { try? FileManager.default.removeItem(at: temporaryURL) }
@@ -434,7 +374,7 @@ extension GatewayClient {
         try Task.checkCancellation()
         let directory = FileManager.default.temporaryDirectory.appending(path: "xopc-generation-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let destination = directory.appending(path: card.kind == .music ? "music.mp3" : "video.mp4")
+        let destination = directory.appending(path: fileName)
         do { try FileManager.default.moveItem(at: temporaryURL, to: destination) }
         catch { try? FileManager.default.removeItem(at: directory); throw error }
         return destination

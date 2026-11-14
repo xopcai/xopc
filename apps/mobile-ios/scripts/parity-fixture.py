@@ -2,11 +2,13 @@
 # Start this server before running that UI test class; no user credentials are required.
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
-import json, time, wave, io, math, struct
+import base64, json, time, wave, io, math, struct, sys
 now = int(time.time()*1000)
 parent = '11111111-1111-4111-8111-111111111111'
 child = '22222222-2222-4222-8222-222222222222'
 personal = '33333333-3333-4333-8333-333333333333'
+schedule_chat = '44444444-4444-4444-8444-444444444444'
+music_job = {'id':'fixture-song','title':'模拟器背景音乐','lyrics':'用于校验歌词和跨页播放。','state':'completed','createdAt':1,'durationMs':30000}
 long_body = '# 移动端阅读\n\n' + '\n\n'.join(f'{i}. **工作记录**\n   - 窄屏列表应该保留足够的阅读宽度，换行不重复占用左侧缩进。\n   - 保持信息清晰。' for i in range(1, 20))
 messages = [{'id':f'history-{i}','role':'user','content':f'移动端回归检查记录 {i}'} for i in range(12)] + [
  {'id':'long-ai','turnId':'turn-1','role':'assistant','content':long_body},
@@ -34,6 +36,10 @@ file_fixture = {'id':'fixture-file','spaceId':'workspace','name':'版本验收.t
                 'parentPath':'','kind':'file','mimeType':'text/plain','size':20,'modifiedAt':now,
                 'revision':'fixture-revision','capabilities':['preview','save_version']}
 version_attempts = set()
+# An independently decodable 72 ms MP3 frame of silence, repeated to match the Gateway's audio/mpeg response.
+music_bytes = base64.b64decode(
+ '/+MYxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+) * 417
 w=io.BytesIO()
 with wave.open(w,'wb') as audio:
  audio.setparams((1,2,8000,0,'NONE','not compressed'))
@@ -47,11 +53,23 @@ class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   keyboard_fixture = path.startswith('/keyboard/')
+  music_fixture = path.startswith('/music/')
   if keyboard_fixture: path = path.removeprefix('/keyboard')
+  if music_fixture: path = path.removeprefix('/music')
   length=int(self.headers.get('Content-Length','0')); body=self.rfile.read(length) if length else b''
   data=None; status=200
-  if path=='/api/agents': data=envelope({'defaultId':'main','agents':[{'id':'main','name':'Main','isDefault':True},{'id':'other','name':'Research'}]})
+  if path=='/api/agents': data=envelope({'defaultId':'main','agents':[{'id':'main','name':'Main','isDefault':True},{'id':'other','name':'Research'},{'id':'coder','name':'Coder','description':'Software development, debugging, refactoring, and tests.'}]})
   elif path=='/api/personal-agent': data=envelope(record)
+  elif path=='/api/personal-agent/activity':
+   if query.get('view') == ['deliverables']:
+    data=envelope({'items':[{'id':'personal-file','task':{'id':'task-header','title':'任务顶部栏检查','conversationId':parent},
+      'artifact':{'artifactId':'fixture-file','title':'版本验收.txt','mimeType':'text/plain','uri':'xopc-file:fixture-file','availability':'available','sizeBytes':20}}], 'nextOffset':None})
+   else:
+    data=envelope({'current':[{'id':'task-header','title':'任务顶部栏检查','phase':'running','operationalState':'needs_user',
+         'attention':{'kind':'prompt'},'updatedAt':now}] + [
+        {'id':f'active-{i}','title':f'进行中的助理任务 {i}','phase':'paused','updatedAt':now} for i in range(8)],
+       'items':[],'total':0})
+  elif path=='/api/personal-agent/schedules': data=envelope([])
   elif path=='/api/personal-agent/profile':
    patch=json.loads(body)
    if patch['revision']!=record['revision']: status=409;data={'ok':False,'error':'Settings changed'}
@@ -72,6 +90,8 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/sessions':
    items=[dict(row,key='draft',name='新对话',messageCount=0),row]
    data={'items':items,'total':2,'hasMore':False,'childrenByConversationId':{parent:{'total':1,'activeCount':0,'items':[{'taskId':'task-child','title':'移动端子任务','phase':'closed','activeConversationId':child}]}}}
+  elif path==f'/api/sessions/{schedule_chat}/history':
+   data={'session':{'key':schedule_chat,'agentId':'main','messages':[]},'pagination':{'hasMore':False}}
   elif path.endswith('/history'): data={'session':{'key':path.split('/')[3],'agentId':'main','messages':keyboard_messages if keyboard_fixture else messages},'pagination':{'hasMore':False}}
   elif path.endswith('/context-summary'): data={'summary':{'conversationId':path.split('/')[3],'work':{},'sources':[],'sourcesHasMore':False,'unavailableSections':[],'environment':{'kind':'local_checkout','rootPath':'/fixture','available':True}}}
   elif path.endswith('/agent-config'):
@@ -92,6 +112,16 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/projects': data={'ok':True,'items':[project],'total':1,'hasMore':False}
   elif path=='/api/projects/fixture-project': data={'ok':True,'project':project}
   elif path=='/api/projects/fixture-project/sessions': data={'ok':True,'sessions':[]}
+  elif path=='/api/automations/configuration-conversations' and self.command=='POST':
+   scope=json.loads(body or b'{}')
+   if scope not in ({}, {'projectId':'fixture-project'}, {'personalLocale':'zh'}, {'personalLocale':'en'}):
+    status=400; data={'message':'Invalid schedule scope'}
+   else: data={'conversationId':schedule_chat}
+  elif path==f'/api/music-generation/sessions/{personal}/jobs' and music_fixture:
+   data={'jobs':[music_job], 'configured':True}
+  elif path==f'/api/music-generation/sessions/{personal}/jobs/fixture-song/audio' and music_fixture:
+   payload=music_bytes
+   self.send_response(200);self.send_header('Content-Type','audio/mpeg');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
   elif path=='/api/automations': data={'automations':[] if 'projectId' in query else [automation]}
   elif path=='/api/automations/fixture-automation': data={'automation':automation}
   elif path=='/api/automation-runs': data={'runs':[automation_run]}
@@ -128,5 +158,6 @@ class Handler(BaseHTTPRequestHandler):
    print('unhandled', self.command,path,flush=True)
   payload=json.dumps(data,ensure_ascii=False).encode()
   self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload)
-print('Fixture ready on localhost:18791',flush=True)
-ThreadingHTTPServer(('127.0.0.1',18791),Handler).serve_forever()
+port=int(sys.argv[1]) if len(sys.argv) > 1 else 18791
+print(f'Fixture ready on localhost:{port}',flush=True)
+ThreadingHTTPServer(('127.0.0.1',port),Handler).serve_forever()

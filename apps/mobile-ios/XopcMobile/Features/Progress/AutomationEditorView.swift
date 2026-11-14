@@ -2,8 +2,7 @@ import SwiftUI
 
 struct AutomationEditorView: View {
     let configuration: GatewayConfiguration
-    var projectID: String?
-    var existing: AutomationRecord?
+    let existing: AutomationRecord
 
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
@@ -13,14 +12,13 @@ struct AutomationEditorView: View {
     @State private var isSaving = false
     @State private var error: String?
 
-    init(configuration: GatewayConfiguration, projectID: String? = nil, existing: AutomationRecord? = nil) {
+    init(configuration: GatewayConfiguration, existing: AutomationRecord) {
         self.configuration = configuration
-        self.projectID = projectID
         self.existing = existing
-        _name = State(initialValue: existing?.name ?? "")
-        _instruction = State(initialValue: existing?.action.instruction ?? "")
-        _cron = State(initialValue: existing?.trigger.schedule?.cronExpression ?? "")
-        _isEnabled = State(initialValue: existing?.enabled ?? true)
+        _name = State(initialValue: existing.name)
+        _instruction = State(initialValue: existing.action.instruction ?? "")
+        _cron = State(initialValue: existing.trigger.schedule?.cronExpression ?? "")
+        _isEnabled = State(initialValue: existing.enabled)
     }
 
     var body: some View {
@@ -40,15 +38,11 @@ struct AutomationEditorView: View {
                         .mobileTextStyle(.footnote)
                         .foregroundStyle(.secondary)
                     Toggle(isOn: $isEnabled) {
-                        Text(existing == nil
-                            ? LocalizedStringResource("创建后启用")
-                            : LocalizedStringResource("启用自动化"))
+                        Text("启用自动化")
                     }
                 }
             }
-            .navigationTitle(existing == nil
-                ? LocalizedStringResource("新建自动化")
-                : LocalizedStringResource("编辑自动化"))
+            .navigationTitle("编辑自动化")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
@@ -82,21 +76,11 @@ struct AutomationEditorView: View {
         defer { isSaving = false }
         do {
             let client = GatewayClient(configuration: configuration)
-            if let existing {
-                _ = try await client.updateScheduledAutomation(
-                    existing, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                    instruction: instruction.trimmingCharacters(in: .whitespacesAndNewlines),
-                    cron: cron.trimmingCharacters(in: .whitespacesAndNewlines), enabled: isEnabled
-                )
-            } else {
-                _ = try await client.createScheduledAutomation(
-                    name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                    instruction: instruction.trimmingCharacters(in: .whitespacesAndNewlines),
-                    cron: cron.trimmingCharacters(in: .whitespacesAndNewlines),
-                    enabled: isEnabled,
-                    projectID: projectID
-                )
-            }
+            _ = try await client.updateScheduledAutomation(
+                existing, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                instruction: instruction.trimmingCharacters(in: .whitespacesAndNewlines),
+                cron: cron.trimmingCharacters(in: .whitespacesAndNewlines), enabled: isEnabled
+            )
             dismiss()
         } catch {
             self.error = error.localizedDescription

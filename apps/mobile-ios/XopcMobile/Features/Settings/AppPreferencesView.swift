@@ -3,10 +3,17 @@ import SwiftUI
 struct AppSettingsView: View {
     let configuration: GatewayConfiguration
     let onOpenGatewaySettings: () -> Void
+    var showsProfile = false
     @Environment(\.locale) private var locale
 
     var body: some View {
         List {
+            if showsProfile {
+                NavigationLink(value: HomeDestination.profile) {
+                    Label("我的", systemImage: "person.crop.circle")
+                }
+                .accessibilityIdentifier("settings-personal-profile")
+            }
             Section("连接与通知") {
                 Button {
                     onOpenGatewaySettings()

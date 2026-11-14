@@ -394,6 +394,8 @@ struct ProjectRecord: Decodable, Identifiable, Hashable, Sendable {
     let sessionCount: Int?
     let taskCount: Int?
     let activeTaskCount: Int?
+    var version: Int? = nil
+    var pinnedAt: Int64? = nil
 }
 
 struct ProjectDetailEnvelope: Decodable, Sendable {

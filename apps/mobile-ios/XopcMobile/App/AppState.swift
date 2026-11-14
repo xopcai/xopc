@@ -261,10 +261,6 @@ final class AppState {
         selectHomeConversation(.draft(agentId: agentId))
     }
 
-    func startProjectConversation(_ project: ProjectRecord) {
-        selectHomeConversation(.projectDraft(project: project))
-    }
-
     func startScopedConversation(project: ProjectRecord?, executionMode: String?, agentId: String) {
         selectHomeConversation(project.map {
             .projectDraft(project: $0, executionMode: executionMode, agentId: agentId)
@@ -281,5 +277,5 @@ final class AppState {
 }
 
 enum HomeDestination: Hashable {
-    case conversations, progress, projects, automations, library, profile
+    case conversations, progress, projects, automations, library, profile, settings, personalOverview
 }

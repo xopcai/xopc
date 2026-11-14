@@ -57,9 +57,7 @@ struct ChatMessageLinkDestination: View {
             case "notes": NoteDetailView(configuration: appState.gatewayConfiguration, noteID: id, onOpenConversation: openConversation)
             case "tasks": TaskConversationView(configuration: appState.gatewayConfiguration, taskID: id, returnLabel: "返回会话")
             case "projects": ProjectDetailView(configuration: appState.gatewayConfiguration, projectID: id,
-                                               onOpenConversation: openConversation, onStartProjectConversation: { project in
-                                                   router.destination = nil; appState.startProjectConversation(project)
-                                               })
+                                               onOpenConversation: openConversation)
             case "automations": AutomationDetailView(configuration: appState.gatewayConfiguration, automationID: id,
                                                      onOpenConversation: openConversation)
             default: ChatLinkedFileView(link: link, configuration: appState.gatewayConfiguration, conversationID: appState.selectedConversation?.id)

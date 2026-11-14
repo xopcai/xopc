@@ -41,6 +41,19 @@ struct ComposerDraftStore {
         return root.appendingPathComponent(key + ".json")
     }
 
+    func readProjectDrafts(_ configuration: GatewayConfiguration, projectID: String) throws -> [ConversationSelection] {
+        let path = try url(Self.accountScope(configuration) + ":project-drafts:" + projectID)
+        do {
+            return try JSONDecoder().decode([ConversationSelection].self, from: Data(contentsOf: path))
+                .filter { $0.isDraft && $0.projectId == projectID }
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile { return [] }
+    }
+
+    func saveProjectDrafts(_ drafts: [ConversationSelection], _ configuration: GatewayConfiguration, projectID: String) throws {
+        let path = try url(Self.accountScope(configuration) + ":project-drafts:" + projectID)
+        try JSONEncoder().encode(drafts).write(to: path, options: [.atomic, .completeFileProtection])
+    }
+
     func saveSelection(_ selection: ConversationSelection, configuration: GatewayConfiguration) throws {
         try JSONEncoder().encode(selection).write(to: url(Self.accountScope(configuration) + ":selection"), options: [.atomic, .completeFileProtection])
     }

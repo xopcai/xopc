@@ -53,6 +53,7 @@ struct NoteAudioPlayerView: View {
             return
         }
         if let player {
+            GeneratedMusicPlayback.shared.yieldAudioSession()
             player.play()
             return
         }
@@ -68,6 +69,7 @@ struct NoteAudioPlayerView: View {
                 noteID: noteID,
                 attachmentID: attachment.id
             )
+            GeneratedMusicPlayback.shared.yieldAudioSession()
             let player = try AVAudioPlayer(data: data)
             player.prepareToPlay()
             player.play()
