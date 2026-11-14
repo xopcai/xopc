@@ -72,7 +72,7 @@ describe('Harmony color schemes', () => {
         for (const dark of [false, true]) {
           appThemeColors.apply(scheme, dark);
           const mode = dark ? 'dark' : 'light';
-          const { canvas, card, bubble, action, onAction, secondary } = appThemeColors.chat;
+          const { canvas, card, bubble, action, onAction, secondary, composer } = appThemeColors.chat;
           expect(canvas).toBe(appThemeColors.surface);
           for (const [role, resource] of Object.entries({ card, bubble, action })) {
             expect(resource).toBe(`app.color.chat_${scheme}_${role}_${mode}`);
@@ -85,6 +85,12 @@ describe('Harmony color schemes', () => {
             }
           }
           expect(contrast(color(action), color(onAction))).toBeGreaterThanOrEqual(4.5);
+          expect(Boolean(composer)).toBe(scheme === 'default' && !dark);
+          if (composer) {
+            expect(luminance(color(composer.fill))).toBeLessThan(luminance(color(appThemeColors.input)));
+            expect(contrast(color(composer.fill), color(canvas))).toBeGreaterThan(1.15);
+            expect(contrast(color(composer.fill), color(composer.placeholder))).toBeGreaterThanOrEqual(4.5);
+          }
         }
       }
     } finally {

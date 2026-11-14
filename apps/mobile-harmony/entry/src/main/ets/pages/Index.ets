@@ -10,6 +10,8 @@ import { layoutState } from '../service/layoutState';
 import { voiceCall, XopcVoiceCall } from '../service/voiceCall';
 import { XopcVoiceCallView } from '../view/VoiceCallView';
 import { appSettings, XopcSettings } from '../service/settings';
+import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
+import { XopcMusicPlayerView } from '../view/MusicPlaybackView';
 
 @Entry
 @ComponentV2
@@ -25,6 +27,7 @@ struct XopcIndex {
   @Local viewportWidth: number = 0;
   @Local viewportHeight: number = 0;
   @Local call: XopcVoiceCall = voiceCall;
+  @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local preferences: XopcSettings = appSettings;
   private invitationEditor: TextAreaController = new TextAreaController();
 
@@ -32,13 +35,22 @@ struct XopcIndex {
 
   private async restoreConnection(): Promise<void> {
     await this.connection.restore();
+    this.music.setGateway(this.connection.activeGatewayId);
+    this.music.consumeOpenRequest();
   }
+  @Monitor('connection.activeGatewayId')
+  onGatewayChanged(): void { this.music.setGateway(this.connection.activeGatewayId); }
+
+  @Monitor('music.openRevision')
+  onOpenMusic(): void { if (!this.connection.busy) this.music.consumeOpenRequest(); }
+
   @Monitor('connection.adding')
   onAddingGateway(): void {
     if (this.connection.adding) { this.invitation = ''; this.manualEntry = false; this.showHelp = false; this.showSettings = false; }
   }
   onBackPress(): boolean {
     if (this.call.phase !== 'idle' && this.call.expanded) { this.call.expanded = false; return true; }
+    if (this.music.expanded) { this.music.expanded = false; return true; }
     if (this.showSettings) { this.showSettings = false; return true; }
     if (this.connection.managing) { this.connection.closeGateways(); return true; }
     if (this.connection.adding) { if (!this.connection.busy) this.connection.cancel(); return true; }
@@ -196,6 +208,8 @@ struct XopcIndex {
         .onAreaChange((_previous: Area, current: Area): void => { this.contentHeight = Number(current.height); })
     }
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
+      .accessibilityLevel(this.music.expanded ? 'no-hide-descendants' : 'auto')
+    if (this.music.expanded) { XopcMusicPlayerView() }
     XopcVoiceCallView({ call: this.call, viewportWidth: this.viewportWidth, viewportHeight: this.viewportHeight })
     }.width('100%').height('100%')
       .onAreaChange((_previous: Area, current: Area): void => {

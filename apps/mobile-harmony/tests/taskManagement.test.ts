@@ -27,6 +27,24 @@ function detail(): XopcMobileTaskDetailResult {
 
 beforeEach(() => { mocks.request.mockReset(); mocks.uuid.mockClear(); });
 
+it('opens a configuration conversation with the correct scope instead of creating a schedule', async () => {
+  mocks.request.mockResolvedValue(JSON.stringify({ conversationId: 'setup-chat' }));
+  const repository = new XopcWorkspaceRepository();
+  expect(await repository.openAutomationConfiguration()).toBe('setup-chat');
+  expect(await repository.openAutomationConfiguration('project')).toBe('setup-chat');
+  expect(await repository.openAutomationConfiguration('', 'zh-CN')).toBe('setup-chat');
+  expect(mocks.request.mock.calls).toEqual([{}, { projectId: 'project' }, { personalLocale: 'zh' }].map(
+    body => ['/api/automations/configuration-conversations', 'POST', JSON.stringify(body)]));
+});
+
+it('does not create an automation through the native workspace form', async () => {
+  await expect(new XopcWorkspaceRepository().save('automations', {
+    id: '', title: ' Daily ', body: ' Summarize ', status: '', version: 0, actions: [], editable: true,
+    cron: '0 9 * * *', automationTimeZone: 'Asia/Shanghai',
+  }, 'key')).rejects.toThrow('AUTOMATION_NOT_MOBILE_EDITABLE');
+  expect(mocks.request).not.toHaveBeenCalled();
+});
+
 describe('Harmony task management', () => {
   it('preserves lifecycle, resolution, due date, waits and execution separately', () => {
     expect(taskDetailItem({ ...detail(), task: { ...detail().task, phase: 'closed', resolution: 'cancelled' },

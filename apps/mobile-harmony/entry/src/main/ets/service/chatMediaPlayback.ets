@@ -1,7 +1,16 @@
 import { media } from '@kit.MediaKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
+import { audio } from '@kit.AudioKit';
 
 export type XopcChatMediaPlaybackResult = 'completed' | 'failed' | 'interrupted';
+
+export interface XopcChatMediaPlaybackOptions {
+  music?: boolean;
+  initialPosition?: number;
+  onState?: (state: string) => void;
+  onPosition?: (position: number) => void;
+  onInterrupt?: () => void;
+}
 
 @ObservedV2
 export class XopcChatMediaPlayback {
@@ -14,10 +23,13 @@ export class XopcChatMediaPlayback {
   private file?: fs.File;
   private terminalResult?: XopcChatMediaPlaybackResult;
   private terminal?: (result: XopcChatMediaPlaybackResult) => void;
+  private options?: XopcChatMediaPlaybackOptions;
 
-  async open(path: string, length: number, autoPlay: boolean = false, onDuration?: (seconds: number) => void): Promise<void> {
+  async open(path: string, length: number, autoPlay: boolean = false, onDuration?: (seconds: number) => void,
+    options?: XopcChatMediaPlaybackOptions): Promise<void> {
     const cleanup = this.stop(); const generation = this.generation;
     await cleanup; if (generation !== this.generation) return;
+    this.options = options;
     this.terminalResult = undefined;
     this.state = 'loading'; this.error = '';
     try {
@@ -29,23 +41,47 @@ export class XopcChatMediaPlayback {
       this.player = player;
       player.on('stateChange', (state: string): void => {
         if (generation !== this.generation || this.player !== player) return;
-        if (state === 'initialized') player.prepare().catch((error: Error): void => { this.fail(error, generation); });
-        if (state === 'prepared') {
-          this.duration = player.duration / 1000;
-          onDuration?.(this.duration);
-          if (autoPlay) {
-            autoPlay = false;
-            player.play().catch((error: Error): void => { this.fail(error, generation); });
+        this.state = state;
+        if (state === 'initialized') {
+          try {
+            if (options?.music) {
+              player.audioRendererInfo = { usage: audio.StreamUsage.STREAM_USAGE_MUSIC, rendererFlags: 0 };
+            }
+            player.prepare().catch((error: Error): void => { this.fail(error, generation, options); });
+          } catch (error) {
+            this.fail(error as Error, generation, options);
+            return;
           }
         }
-        this.state = state;
+        if (state === 'prepared') {
+          if (options?.music) player.audioInterruptMode = audio.InterruptMode.INDEPENDENT_MODE;
+          this.duration = player.duration / 1000;
+          onDuration?.(this.duration);
+          if (options?.initialPosition) this.seek(options.initialPosition);
+          if (generation !== this.generation) return;
+          if (autoPlay) {
+            autoPlay = false;
+            player.play().catch((error: Error): void => { this.fail(error, generation, options); });
+          }
+        }
         if (state === 'completed') this.settle('completed');
+        options?.onState?.(state);
       });
-      player.on('timeUpdate', (time: number): void => { if (generation === this.generation) this.position = time / 1000; });
-      player.on('seekDone', (time: number): void => { if (generation === this.generation) this.position = time / 1000; });
-      player.on('error', (error: Error): void => { this.fail(error, generation); });
+      player.on('timeUpdate', (time: number): void => {
+        if (generation === this.generation) { this.position = time / 1000; options?.onPosition?.(this.position); }
+      });
+      player.on('seekDone', (time: number): void => {
+        if (generation === this.generation) { this.position = time / 1000; options?.onPosition?.(this.position); }
+      });
+      player.on('error', (error: Error): void => { this.fail(error, generation, options); });
+      if (options?.onInterrupt) {
+        player.on('audioInterrupt', (event: audio.InterruptEvent): void => {
+          if (generation === this.generation && (event.hintType === audio.InterruptHint.INTERRUPT_HINT_PAUSE ||
+            event.hintType === audio.InterruptHint.INTERRUPT_HINT_STOP)) options.onInterrupt?.();
+        });
+      }
       player.fdSrc = { fd: file.fd, offset: 0, length };
-    } catch (error) { this.fail(error as Error, generation); }
+    } catch (error) { this.fail(error as Error, generation, options); }
   }
 
   waitForTerminal(): Promise<XopcChatMediaPlaybackResult> {
@@ -63,11 +99,21 @@ export class XopcChatMediaPlayback {
   }
 
   async toggle(): Promise<void> {
+    if (this.state === 'playing') await this.pause();
+    else await this.play();
+  }
+
+  async play(): Promise<void> {
     const generation = this.generation;
     try {
-      if (this.state === 'playing') await this.player?.pause();
-      else if (['prepared', 'paused', 'completed'].includes(this.state)) await this.player?.play();
-    } catch (error) { this.fail(error as Error, generation); }
+      if (['prepared', 'paused', 'completed'].includes(this.state)) await this.player?.play();
+    } catch (error) { this.fail(error as Error, generation, this.options); }
+  }
+
+  async pause(): Promise<void> {
+    const generation = this.generation;
+    try { if (this.state === 'playing') await this.player?.pause(); }
+    catch (error) { this.fail(error as Error, generation, this.options); }
   }
 
   seek(seconds: number): void {
@@ -76,19 +122,21 @@ export class XopcChatMediaPlayback {
     try {
       this.player?.seek(Math.round(position * 1000));
       this.position = position;
-    } catch (error) { this.fail(error as Error, this.generation); }
+    } catch (error) { this.fail(error as Error, this.generation, this.options); }
   }
 
-  private fail(error: Error, generation: number): void {
+  private fail(error: Error, generation: number, options?: XopcChatMediaPlaybackOptions): void {
     if (generation !== this.generation) return;
     this.settle('failed');
     this.stop(); this.error = error.message; this.state = 'error';
+    options?.onState?.('error');
   }
 
   async stop(): Promise<void> {
     this.settle('interrupted');
     this.generation++; this.state = 'idle'; this.position = 0; this.duration = 0; this.error = '';
     const player = this.player; const file = this.file;
+    this.options = undefined;
     this.player = undefined; this.file = undefined;
     try { await player?.release(); } catch (_) {}
     if (file) { try { await fs.close(file); } catch (_) {} }

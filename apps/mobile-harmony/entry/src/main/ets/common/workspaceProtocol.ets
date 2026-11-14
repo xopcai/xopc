@@ -1,6 +1,6 @@
 import type {
   XopcTaskResult, XopcMobileTaskDetailResult, XopcProject, XopcAutomation, XopcWorkspaceItem,
-  XopcTaskCreate, XopcAutomationWrite
+  XopcTaskCreate, XopcAutomationWrite, XopcTrigger, XopcAutomationAction
 } from '../model/workspace';
 
 export function taskItem(result: XopcTaskResult): XopcWorkspaceItem {
@@ -47,21 +47,16 @@ export function newTask(title: string, body: string, idempotencyKey: string, pro
       approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'manual', outputDestinations: [] },
     activation: { mode: 'capture', phase: 'backlog' } };
 }
-export function scheduledAutomation(title: string, body: string, cron: string, create: boolean,
-  existing?: XopcAutomation, projectId?: string, timeZone?: string): XopcAutomationWrite {
-  const result: XopcAutomationWrite = { name: title.trim(), trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: cron.trim(), tz: timeZone?.trim() || undefined } },
-    action: { kind: 'agent', instruction: body.trim() }, projectId: projectId || existing?.projectId };
-  if (create) { result.enabled = true; result.conversationMode = 'new_session'; }
-  else if (existing) {
-    const original = JSON.parse(JSON.stringify(existing)) as XopcAutomation;
-    if (original.trigger.kind !== 'schedule' || original.trigger.schedule?.kind !== 'cron' || original.action.kind !== 'agent') {
-      throw new Error('AUTOMATION_NOT_MOBILE_EDITABLE');
-    }
-    original.trigger.schedule.expr = cron.trim();
-    if (timeZone !== undefined) original.trigger.schedule.tz = timeZone.trim() || undefined;
-    result.expectedRevision = existing.updatedAtMs;
-    original.action.instruction = body.trim();
-    result.trigger = original.trigger; result.action = original.action;
+export function scheduledAutomationPatch(title: string, body: string, cron: string, existing: XopcAutomation,
+  timeZone?: string): XopcAutomationWrite {
+  const trigger = JSON.parse(JSON.stringify(existing.trigger)) as XopcTrigger;
+  const action = JSON.parse(JSON.stringify(existing.action)) as XopcAutomationAction;
+  const schedule = trigger.schedule;
+  if (trigger.kind !== 'schedule' || schedule?.kind !== 'cron' || action.kind !== 'agent') {
+    throw new Error('AUTOMATION_NOT_MOBILE_EDITABLE');
   }
-  return result;
+  schedule.expr = cron.trim();
+  if (timeZone !== undefined) schedule.tz = timeZone.trim() || undefined;
+  action.instruction = body.trim();
+  return { name: title.trim(), expectedRevision: existing.updatedAtMs, trigger, action };
 }

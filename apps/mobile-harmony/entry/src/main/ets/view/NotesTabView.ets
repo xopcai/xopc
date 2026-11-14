@@ -1,3 +1,5 @@
+import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
+import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { XopcLocalRecording } from '../service/discussionRecordingStore';
 import { common } from '@kit.AbilityKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -16,6 +18,7 @@ import { xopcFormatCaptureTime } from '../common/discussionAudio';
 @ComponentV2
 export struct XopcNotesTabView {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local capture: XopcDiscussionCapture = discussionCapture;
   @Param activePage: boolean = false;
   @Param deliveries: XopcHomeDelivery[] = [];
@@ -373,6 +376,9 @@ export struct XopcNotesTabView {
           }
           }
         }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
+      if (this.activePage && this.music.track) {
+        XopcMusicMiniPlayer()
+      }
       if (this.category !== 'deliveries') {
         Button(this.category === 'notes' ? $r('app.string.new_note') : this.category === 'files'
           ? $r('app.string.upload') : $r('app.string.library_create_import'))

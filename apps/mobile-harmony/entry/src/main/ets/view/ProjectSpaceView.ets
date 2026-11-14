@@ -6,6 +6,7 @@ import { XopcWorkspaceItem } from '../model/workspace';
 import { XopcSessionItem } from '../model/chat';
 import { XopcProjectSpaceViewModel } from '../viewmodel/projectSpaceViewModel';
 import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
+import { XopcAutomationIdeas } from './AutomationIdeas';
 
 @ComponentV2
 export struct XopcProjectSpaceView {
@@ -141,7 +142,7 @@ export struct XopcProjectSpaceView {
       XopcHubRow({ heading: $r('app.string.new_note'), symbol: $r('sys.symbol.doc'),
         onOpen: (): void => { this.chooseAction('note-create'); } })
       XopcHubRow({ heading: $r('app.string.new_automation'), symbol: $r('sys.symbol.clock'),
-        onOpen: (): void => { this.chooseAction('automation-create'); } })
+        onOpen: (): void => { this.chooseAction('automation-setup'); } })
       XopcHubRow({ heading: $r('app.string.project_manage'), symbol: $r('sys.symbol.slider_horizontal_2'),
         onOpen: (): void => { this.chooseAction('project-settings'); } })
     }.width('100%').padding(18)
@@ -264,8 +265,12 @@ export struct XopcProjectSpaceView {
               ListItem() { Text($r('app.string.project_section_error')).fontSize(13).fontColor(this.colors.danger) }
             } else if (this.model.loading && !this.model.automations.length) {
               ListItem() { XopcListSkeleton() }
-            } else if (!this.model.automations.length) {
-              ListItem() { Text($r('app.string.project_no_automations')).fontSize(14).fontColor(this.colors.secondary).padding(14) }
+            } else if (this.model.project && !this.model.automations.length) {
+              ListItem() {
+                XopcAutomationIdeas({ projectScoped: true, onChoose: (prompt: string): void => {
+                  this.onNavigate({ page: 'automation-setup', itemId: '', projectId: this.projectId, prompt });
+                } })
+              }
             }
             ForEach(this.model.automations, (item: XopcWorkspaceItem) => {
               ListItem() { this.automationCard(item) }

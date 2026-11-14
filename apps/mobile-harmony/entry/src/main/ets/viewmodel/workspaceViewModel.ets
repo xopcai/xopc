@@ -10,6 +10,7 @@ export class XopcWorkspaceViewModel {
   @Trace busy: boolean = false;
   @Trace error: string = '';
   @Trace hasMore: boolean = false;
+  @Trace loadedSearch: string = '';
   @Trace title: string = '';
   @Trace body: string = '';
   @Trace cron: string = '';
@@ -38,6 +39,7 @@ export class XopcWorkspaceViewModel {
       if (generation !== this.generation) return;
       this.items = more ? this.items.concat(page.items.filter((item): boolean => !this.items.some((old): boolean => old.id === item.id))) : page.items;
       this.hasMore = page.hasMore;
+      this.loadedSearch = search.trim();
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.busy = false; }
   }
@@ -64,8 +66,8 @@ export class XopcWorkspaceViewModel {
     this.mutationId = ''; this.mutationSignature = '';
   }
   create(projectId: string = ''): void {
-    if (this.busy) return;
-    const item: XopcWorkspaceItem = { id: '', title: '', body: '', status: '', version: 0, editable: true, actions: [], cron: '0 9 * * *' };
+    if (this.busy || this.section === 'automations') return;
+    const item: XopcWorkspaceItem = { id: '', title: '', body: '', status: '', version: 0, editable: true, actions: [] };
     this.selected = item; this.editing = true; this.copyFields(item); this.projectId = projectId; this.error = ''; this.runs = [];
   }
   back(): void { if (!this.busy) { this.selected = undefined; this.editing = false; this.openingId = ''; this.error = ''; this.list(''); } }

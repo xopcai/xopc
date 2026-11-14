@@ -4,6 +4,10 @@ const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { create: vi.fn(), open: vi.fn(), close: vi.fn() };
 });
+vi.mock('@kit.AudioKit', () => ({ audio: {
+  StreamUsage: { STREAM_USAGE_MUSIC: 1 }, InterruptMode: { INDEPENDENT_MODE: 1 },
+  InterruptHint: { INTERRUPT_HINT_PAUSE: 2, INTERRUPT_HINT_STOP: 3 },
+} }));
 vi.mock('@kit.MediaKit', () => ({ media: { createAVPlayer: mocks.create } }));
 vi.mock('@kit.CoreFileKit', () => ({ fileIo: { open: mocks.open, close: mocks.close, OpenMode: { READ_ONLY: 0 } } }));
 import { XopcChatMediaPlayback } from '../entry/src/main/ets/service/chatMediaPlayback.ets';
@@ -11,7 +15,7 @@ import { XopcChatMediaPlayback } from '../entry/src/main/ets/service/chatMediaPl
 function playerFixture() {
   const listeners = new Map<string, (value: never) => void>();
   return { duration: 8000, fdSrc: undefined, prepare: vi.fn().mockResolvedValue(undefined), play: vi.fn().mockResolvedValue(undefined),
-    pause: vi.fn().mockResolvedValue(undefined), release: vi.fn().mockResolvedValue(undefined),
+    pause: vi.fn().mockResolvedValue(undefined), seek: vi.fn(), release: vi.fn().mockResolvedValue(undefined),
     on: (name: string, callback: (value: never) => void) => listeners.set(name, callback),
     emit: (name: string, value: unknown) => listeners.get(name)?.(value as never) };
 }
@@ -36,6 +40,21 @@ describe('chat attachment audio lifecycle', () => {
     native.emit('stateChange', 'initialized'); native.emit('stateChange', 'prepared');
     await Promise.resolve();
     expect(audio.duration).toBe(8); expect(native.play).toHaveBeenCalledOnce();
+  });
+  it('uses the music stream, restores position, and forwards audio-focus loss', async () => {
+    const native = playerFixture(); mocks.create.mockResolvedValue(native);
+    const audio = new XopcChatMediaPlayback();
+    const onInterrupt = vi.fn(), onState = vi.fn();
+    await audio.open('/cache/music.audio', 321, false, undefined, { music: true, initialPosition: 3, onInterrupt, onState });
+    native.emit('stateChange', 'initialized');
+    expect(native).toMatchObject({ audioRendererInfo: { usage: 1, rendererFlags: 0 } });
+    expect(native).not.toHaveProperty('audioInterruptMode');
+    native.emit('stateChange', 'prepared');
+    expect(native).toMatchObject({ audioInterruptMode: 1 });
+    expect(native.seek).toHaveBeenCalledWith(3000);
+    expect(onState).toHaveBeenLastCalledWith('prepared');
+    native.emit('audioInterrupt', { hintType: 2 });
+    expect(onInterrupt).toHaveBeenCalledOnce();
   });
   it('reports completion and distinguishes an explicit interruption', async () => {
     const native = playerFixture(); mocks.create.mockResolvedValue(native);

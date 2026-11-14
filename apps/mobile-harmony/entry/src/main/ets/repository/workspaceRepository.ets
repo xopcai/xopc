@@ -6,13 +6,15 @@ import {
   XopcProjectWrite, XopcTaskCommandBody,
   XopcAutomationRuns, XopcAutomationRun, XopcAutomationRunResult, XopcMobileTaskDetailResult
 } from '../model/workspace';
-import { taskItem, taskDetailItem, projectItem, automationItem, newTask, scheduledAutomation } from '../common/workspaceProtocol';
+import { taskItem, taskDetailItem, projectItem, automationItem, newTask, scheduledAutomationPatch } from '../common/workspaceProtocol';
 import { taskCommand, taskPatch, taskReviewMutation, taskRetryCommand } from '../common/taskManagement';
 
 interface XopcCreatedWorkspaceId { id: string; }
 interface XopcWorkspaceCreated {
-  task?: XopcCreatedWorkspaceId; project?: XopcCreatedWorkspaceId; automation?: XopcCreatedWorkspaceId;
+  task?: XopcCreatedWorkspaceId; project?: XopcCreatedWorkspaceId;
 }
+interface XopcAutomationConfiguration { conversationId: string; }
+interface XopcAutomationConfigurationScope { projectId?: string; personalLocale?: string; }
 
 export class XopcWorkspaceRepository {
   uuid(): string { return new XopcDeviceCrypto().uuid(); }
@@ -44,6 +46,16 @@ export class XopcWorkspaceRepository {
     throw new Error('INVALID_WORKSPACE_SECTION');
   }
 
+  async openAutomationConfiguration(projectId: string = '', personalLocale: string = ''): Promise<string> {
+    const scope: XopcAutomationConfigurationScope = {};
+    if (projectId) scope.projectId = projectId;
+    if (personalLocale) scope.personalLocale = personalLocale.startsWith('zh') ? 'zh' : 'en';
+    const result = JSON.parse(await gatewaySession.request('/api/automations/configuration-conversations', 'POST',
+      JSON.stringify(scope))) as XopcAutomationConfiguration;
+    if (typeof result.conversationId !== 'string' || !result.conversationId.trim()) throw new Error('INVALID_AUTOMATION_CONFIGURATION');
+    return result.conversationId;
+  }
+
   async save(section: XopcSection, item: XopcWorkspaceItem, idempotencyKey: string): Promise<string> {
     const create = !item.id;
     const path = '/api/' + section + (create ? '' : '/' + encodeURIComponent(item.id));
@@ -55,14 +67,14 @@ export class XopcWorkspaceRepository {
     } else if (section === 'projects') {
       const patch: XopcProjectWrite = { name: item.title.trim(), description: item.body }; body = JSON.stringify(patch);
     } else if (section === 'automations') {
-      if (!item.editable) throw new Error('AUTOMATION_NOT_MOBILE_EDITABLE');
-      body = JSON.stringify(scheduledAutomation(item.title, item.body, item.cron ?? '', create, item.automation, item.projectId, item.automationTimeZone));
+      if (create || !item.editable || !item.automation) throw new Error('AUTOMATION_NOT_MOBILE_EDITABLE');
+      body = JSON.stringify(scheduledAutomationPatch(item.title, item.body, item.cron ?? '', item.automation, item.automationTimeZone));
     } else throw new Error('INVALID_WORKSPACE_SECTION');
     const response = await gatewaySession.request(path, create ? 'POST' : 'PATCH', body,
       create && section !== 'tasks' ? idempotencyKey : '');
     if (!create) return item.id;
     const raw = JSON.parse(response) as XopcWorkspaceCreated;
-    const id = raw.task?.id || raw.project?.id || raw.automation?.id;
+    const id = raw.task?.id || raw.project?.id;
     if (!id) throw new Error('INVALID_WORKSPACE_RESPONSE');
     return id;
   }

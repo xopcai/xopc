@@ -94,7 +94,7 @@ export interface XopcAutomation {
   conversationMode?: string; state?: XopcAutomationState; projectId?: string; updatedAtMs?: number;
   management?: XopcAutomationManagement;
 }
-export interface XopcAutomationWrite { name: string; trigger: XopcTrigger; action: XopcAutomationAction; enabled?: boolean; conversationMode?: string; projectId?: string; expectedRevision?: number; }
+export interface XopcAutomationWrite { name: string; trigger: XopcTrigger; action: XopcAutomationAction; expectedRevision?: number; }
 export interface XopcAutomationList { automations: XopcAutomation[]; }
 export interface XopcAutomationResult { automation: XopcAutomation; }
 export interface XopcAutomationRun {

@@ -1,6 +1,7 @@
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcPersonalAgentSettings } from './PersonalAgentSettings';
+import { XopcPersonalAgentOverview } from './PersonalAgentOverview';
 import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcChatView } from './ChatView';
 import { XopcSessionsView } from './SessionsView';
@@ -20,6 +21,9 @@ import { XopcAboutYouView } from './AboutYouView';
 import { XopcShareIntakeDialog } from './ShareIntakeDialog';
 import { XopcIncomingShare } from '../model/share';
 import { XopcChatRepository } from '../repository/chatRepository';
+import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
+import { appSettings } from '../service/settings';
+import { XopcHttpError } from '../service/transport';
 import { XopcPersonalAgentViewModel } from '../viewmodel/personalAgentViewModel';
 import { userErrorMessage } from '../common/userError';
 import { shareIntake, XopcShareIntake } from '../service/shareIntake';
@@ -37,6 +41,8 @@ import { common } from '@kit.AbilityKit';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
 import { XopcDiscussionRecordingPanel } from '../viewmodel/discussionRecordingPanel';
 import { XopcDiscussionRecordingPanelView } from './DiscussionRecordingPanel';
+import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
+import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 
 @ComponentV2
 export struct XopcHomeView {
@@ -55,6 +61,8 @@ export struct XopcHomeView {
   @Local chatReady: boolean = false;
   @Local initialChatError: string = '';
   @Local detailVisible: boolean = false;
+  @Local detailRoute: string = '';
+  @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local layout: XopcLayoutState = layoutState;
   @Local attention: XopcProgressViewModel = new XopcProgressViewModel();
   @Computed get pendingAttention(): number { return this.attention.pendingCount; }
@@ -67,8 +75,10 @@ export struct XopcHomeView {
   @Local pendingChatId: string = '';
   @Local intake: XopcShareIntake = shareIntake;
   private chatRepository: XopcChatRepository = new XopcChatRepository();
+  private workspaceRepository: XopcWorkspaceRepository = new XopcWorkspaceRepository();
   @Local personalOpening: boolean = false;
   private taskOpening: boolean = false;
+  private automationOpening: boolean = false;
   private ordinaryOpening: boolean = false;
   private disposed: boolean = false;
   private navigationRevision: number = 0;
@@ -79,6 +89,11 @@ export struct XopcHomeView {
 
   aboutToAppear(): void {
     layoutState.dismissSidebar = (): boolean => this.closeSidebar();
+    this.pathStack.setInterception({
+      willShow: (_from: NavDestinationContext | NavBar, to: NavDestinationContext | NavBar): void => {
+        this.detailRoute = typeof to === 'string' ? '' : to.pathInfo.name;
+      }
+    });
     pushNotifications.restore();
     const captureContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
     void this.capture.restore(captureContext).catch((caught: Error): void => {
@@ -102,6 +117,17 @@ export struct XopcHomeView {
     void this.restoreInitialChat();
     this.attentionTimer = setInterval((): void => { if (this.layout.foreground) void this.attention.refresh(); }, 15000);
   }
+  @Monitor('music.sourceRevision')
+  onMusicSource(): void {
+    const track = this.music.track;
+    if (track) this.openConversationFromList(track.conversationId, false);
+  }
+
+  @Computed get showDetailMusic(): boolean {
+    return !!this.music.track && this.detailVisible && this.detailRoute !== 'library' &&
+      this.detailRoute !== 'project-chat' && this.detailRoute !== 'task-conversation' &&
+      this.detailRoute !== 'automation-configuration-chat';
+  }
   aboutToDisappear(): void {
     chatDraftIntake.clear();
     this.disposed = true;
@@ -110,10 +136,12 @@ export struct XopcHomeView {
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
   }
   private navigate(route: XopcMobileRoute): void {
+    if (route.page === 'automation-setup' && this.automationOpening) return;
     this.navigationRevision++;
     this.closeSidebar();
     if (route.page === 'project-new-chat') { void this.openProjectChat(route.projectId ?? '', route.title); return; }
     if (route.page === 'task-chat') { void this.openTaskChat(route); return; }
+    if (route.page === 'automation-setup') { void this.openAutomationChat(route); return; }
     if (route.page === 'understanding-chat') {
       void this.openUnderstandingChat(route);
       return;
@@ -123,6 +151,25 @@ export struct XopcHomeView {
       return;
     }
     this.pathStack.pushPath({ name: route.page, param: route });
+  }
+
+  private async openAutomationChat(route: XopcMobileRoute): Promise<void> {
+    const revision = this.navigationRevision;
+    const destination = this.detailRoute;
+    const depth = this.pathStack.size();
+    this.automationOpening = true;
+    try {
+      const id = await this.workspaceRepository.openAutomationConfiguration(route.projectId ?? '',
+        route.personalSchedule ? appSettings.effectiveLanguage() : '');
+      if (this.disposed || revision !== this.navigationRevision || destination !== this.detailRoute || depth !== this.pathStack.size()) return;
+      const target: XopcMobileRoute = { page: 'automation-configuration-chat', itemId: id, prompt: route.prompt };
+      this.pathStack.pushPath({ name: target.page, param: target });
+    } catch (error) {
+      if (!this.disposed && revision === this.navigationRevision && destination === this.detailRoute && depth === this.pathStack.size()) {
+        this.getUIContext().getPromptAction().showToast({ message: route.personalSchedule && error instanceof XopcHttpError && error.status === 400
+          ? $r('app.string.automation_setup_personal_update_gateway') : userErrorMessage((error as Error).message, 'save') });
+      }
+    } finally { this.automationOpening = false; }
   }
 
   private async openProjectChat(projectId: string, title: string = ''): Promise<void> {
@@ -190,6 +237,7 @@ export struct XopcHomeView {
     this.recordingPanel.fresh();
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     try {
+      await this.music.pause();
       await this.capture.start(context);
     } catch (caught) {
       const message = (caught as Error).message;
@@ -207,6 +255,7 @@ export struct XopcHomeView {
         if (result.index !== 1) { this.capture.reset(); return; }
         await this.capture.acknowledge(version);
         this.capture.reset();
+        await this.music.pause();
         await this.capture.start(context);
       } catch (error) {
         this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
@@ -401,9 +450,16 @@ export struct XopcHomeView {
       NavDestination() {
         XopcPersonalView({ record: this.personalAgent.record, goalsPage: page === 'personal-goals', onExit: (): void => { this.pathStack.pop(); }, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
+    } else if (page === 'personal-agent-overview') {
+      NavDestination() {
+        XopcPersonalAgentOverview({ record: this.personalAgent.record,
+          activePage: this.detailRoute === 'personal-agent-overview' && this.layout.foreground,
+          onClose: (): void => { this.pathStack.pop(); },
+          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+      }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'personal-agent-profile') {
       NavDestination() {
-        XopcPersonalAgentSettings({ record: this.personalAgent.record, chatOptions: this.profileOptions, showSearch: false,
+        XopcPersonalAgentSettings({ record: this.personalAgent.record, chatOptions: this.profileOptions,
           onReloadModels: (): void => {
             const record = this.personalAgent.record;
             if (record) void this.profileOptions.load(record.conversationId, record.agentId);
@@ -432,6 +488,21 @@ export struct XopcHomeView {
             onOpen: (): void => { this.navigate({ page: 'automations', itemId: '' }); } })
         }.width('100%').padding(20)
       }.title($r('app.string.all_work')).backgroundColor(this.colors.surface)
+    } else if (page === 'automation-configuration-chat') {
+      NavDestination() {
+        Column() {
+          XopcPageHeader({ heading: $r('app.string.automation_setup_title'), backVisible: true,
+            onBack: (): void => { this.pathStack.pop(); } })
+          XopcChatView({ requestedId: (param as XopcMobileRoute).itemId, embedded: true, automationSetup: true,
+            activePage: this.detailRoute === 'automation-configuration-chat' && this.layout.foreground,
+            intakeText: (param as XopcMobileRoute).prompt ?? '', intakeRevision: 1,
+            onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+            .width('100%').layoutWeight(1)
+        }.width('100%').height('100%').backgroundColor(this.colors.chat.canvas)
+      }.hideTitleBar(true).onBackPressed((): boolean => {
+        if (layoutState.dismissChatOverlay?.()) return true;
+        this.pathStack.pop(); return true;
+      })
     } else if (page === 'project-chat') {
       NavDestination() {
         Column() {
@@ -458,13 +529,13 @@ export struct XopcHomeView {
         initialTaskAction: page === 'task-edit' ? 'edit' : 'status', onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'tasks' || page === 'projects' || page === 'automations' || page === 'project-settings'
-      || page === 'task-create' || page === 'automation-create' || page === 'project-create') {
+      || page === 'task-create' || page === 'project-create') {
       XopcWorkspaceView({ section: page === 'tasks' || page === 'task-create' ? 'tasks'
         : page === 'projects' || page === 'project-settings' || page === 'project-create' ? 'projects' : 'automations',
         heading: page === 'tasks' || page === 'task-create' ? $r('app.string.tasks')
           : page === 'projects' || page === 'project-settings' || page === 'project-create' ? $r('app.string.projects') : $r('app.string.automations'),
         initialId: (param as XopcMobileRoute).itemId, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
-        createOnAppear: page === 'task-create' || page === 'automation-create' || page === 'project-create',
+        createOnAppear: page === 'task-create' || page === 'project-create',
         projectId: (param as XopcMobileRoute).projectId ?? '',
         onCreated: (target: string, id: string): void => {
           this.pathStack.pop();
@@ -498,68 +569,75 @@ export struct XopcHomeView {
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
-      Navigation(this.pathStack) {
-        Stack({ alignContent: Alignment.TopStart }) {
-          Column() {
-            if (this.chatReady) {
-              XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
-                personalAgent: this.personalAgent.record,
-                pendingAttention: this.pendingAttention,
-                onPersonalAgentSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
-                focusRevision: this.chatFocusRevision,
-                intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
-                activePage: !this.detailVisible,
-                sidebarSwipeWidth: this.recordingViewportWidth,
-                sidebarSwipeEnabled: !this.sidebarMounted && !this.pendingChatId,
-                onOpenSidebar: (): void => { this.openSidebar(); },
-                onSidebarDragStart: (offsetX: number): void => { this.startSidebarDrag(offsetX); },
-                onSidebarDragUpdate: (offsetX: number): void => { this.updateSidebarDrag(offsetX); },
-                onSidebarDragEnd: (offsetX: number, velocityX: number): void => { this.finishSidebarDrag(offsetX, velocityX); },
-                onSidebarDragCancel: (): void => { if (this.sidebarDragging) this.closeSidebar(); },
-                onNewOrdinaryChat: (): void => { void this.openOrdinaryChat(); },
-                onLocalChatCreated: (id: string): void => { this.rememberConversation(id); },
-                onConversationUnavailable: (id: string): void => { this.onConversationUnavailable(id); },
-                onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
-                onConversationChange: (id: string): void => {
-                  this.activeChatId = id;
-                  if (this.pendingChatId === id) this.pendingChatId = '';
-                } })
-            }
-          }.id('home-chat-viewport').width('100%').height('100%')
-            .accessibilityLevel(this.sidebarOpen ? 'no-hide-descendants' : 'auto')
-          if (!this.chatReady || this.pendingChatId) {
+      Column() {
+        Navigation(this.pathStack) {
+          Stack({ alignContent: Alignment.TopStart }) {
             Column() {
-              if (this.initialChatError) {
-                Row() {
-                  Button({ type: ButtonType.Circle }) {
-                    SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
-                  }.width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-                    .accessibilityText($r('app.string.chat_open_drawer')).onClick((): void => { this.openSidebar(); })
-                }.width('100%').padding({ left: 12, top: this.getUIContext().px2vp(this.layout.systemTopInsetPx) + 8 })
-                Column() {
-                  XopcErrorState({ error: this.initialChatError, onAction: (): void => { void this.restoreInitialChat(); } })
-                }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
-              } else {
-                XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })
+              if (this.chatReady) {
+                XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
+                  personalAgent: this.personalAgent.record,
+                  pendingAttention: this.pendingAttention,
+                  onPersonalAgentSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
+                  focusRevision: this.chatFocusRevision,
+                  intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
+                  activePage: !this.detailVisible,
+                  sidebarSwipeWidth: this.recordingViewportWidth,
+                  sidebarSwipeEnabled: !this.sidebarMounted && !this.pendingChatId,
+                  onOpenSidebar: (): void => { this.openSidebar(); },
+                  onSidebarDragStart: (offsetX: number): void => { this.startSidebarDrag(offsetX); },
+                  onSidebarDragUpdate: (offsetX: number): void => { this.updateSidebarDrag(offsetX); },
+                  onSidebarDragEnd: (offsetX: number, velocityX: number): void => { this.finishSidebarDrag(offsetX, velocityX); },
+                  onSidebarDragCancel: (): void => { if (this.sidebarDragging) this.closeSidebar(); },
+                  onNewOrdinaryChat: (): void => { void this.openOrdinaryChat(); },
+                  onOpenPersonalAgent: (): void => { void this.openPersonalChat(); },
+                  onLocalChatCreated: (id: string): void => { this.rememberConversation(id); },
+                  onConversationUnavailable: (id: string): void => { this.onConversationUnavailable(id); },
+                  onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
+                  onConversationChange: (id: string): void => {
+                    this.activeChatId = id;
+                    if (this.pendingChatId === id) this.pendingChatId = '';
+                  } })
               }
-            }.id('chat-navigation-loading').width('100%').height('100%')
-              .justifyContent(FlexAlign.Center).backgroundColor(this.colors.surface)
-          }
-          if (this.sidebarMounted) {
-            XopcChatSidebar({ personalAgent: this.personalAgent.record, personalBusy: this.personalOpening || this.personalAgent.creating,
-              reveal: this.sidebarProgress, drawerWidth: this.sidebarWidth, interactive: this.sidebarOpen,
-              currentId: this.activeChatId, pendingAttention: this.pendingAttention,
-              onClose: (): void => { this.closeSidebar(); },
-              onPersonal: (): void => { void this.openPersonalChat(); },
-              onNew: (): void => { void this.openOrdinaryChat(); },
-              onConversation: (id: string): void => { this.openConversationFromList(id); },
-              onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-          }
-        }.width('100%').height(LayoutPolicy.matchParent)
-          .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
-      }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)
-        .onNavBarStateChange((shown: boolean): void => { this.detailVisible = !shown; })
-        .width('100%').height('100%').backgroundColor(this.colors.surface)
+            }.id('home-chat-viewport').width('100%').height('100%')
+              .accessibilityLevel(this.sidebarOpen ? 'no-hide-descendants' : 'auto')
+            if (!this.chatReady || this.pendingChatId) {
+              Column() {
+                if (this.initialChatError) {
+                  Row() {
+                    Button({ type: ButtonType.Circle }) {
+                      SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(22).fontColor([this.colors.foreground])
+                    }.width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+                      .accessibilityText($r('app.string.chat_open_drawer')).onClick((): void => { this.openSidebar(); })
+                  }.width('100%').padding({ left: 12, top: this.getUIContext().px2vp(this.layout.systemTopInsetPx) + 8 })
+                  Column() {
+                    XopcErrorState({ error: this.initialChatError, onAction: (): void => { void this.restoreInitialChat(); } })
+                  }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
+                } else {
+                  XopcBrandLoading({ reduceMotion: this.layout.reduceMotion })
+                }
+              }.id('chat-navigation-loading').width('100%').height('100%')
+                .justifyContent(FlexAlign.Center).backgroundColor(this.colors.surface)
+            }
+            if (this.sidebarMounted) {
+              XopcChatSidebar({ personalAgent: this.personalAgent.record, personalBusy: this.personalOpening || this.personalAgent.creating,
+                reveal: this.sidebarProgress, drawerWidth: this.sidebarWidth, interactive: this.sidebarOpen,
+                currentId: this.activeChatId, pendingAttention: this.pendingAttention,
+                onClose: (): void => { this.closeSidebar(); },
+                onPersonal: (): void => { void this.openPersonalChat(); },
+                onNew: (): void => { void this.openOrdinaryChat(); },
+                onConversation: (id: string): void => { this.openConversationFromList(id); },
+                onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+            }
+          }.width('100%').height(LayoutPolicy.matchParent)
+            .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
+        }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)
+          .onNavBarStateChange((shown: boolean): void => { this.detailVisible = !shown; })
+          .width('100%').layoutWeight(1).backgroundColor(this.colors.surface)
+        if (this.showDetailMusic) {
+          Column() { XopcMusicMiniPlayer() }.width('100%').padding({ top: 4, bottom: 4 })
+            .backgroundColor(this.colors.surface)
+        }
+      }.width('100%').height('100%')
       if (!this.recordingPanel.dismissed && (this.capture.active || this.capture.phase === 'completed') && this.recordingViewportWidth > 0 && this.recordingViewportHeight > 0) {
         XopcDiscussionRecordingPanelView({ panel: this.recordingPanel,viewportWidth: this.recordingViewportWidth,viewportHeight: this.recordingViewportHeight,
           onSaved: (_id: string): void => {},

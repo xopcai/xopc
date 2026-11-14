@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TaskCreateRequestSchema } from '../../../packages/gateway-contract/src/tasks';
-import { CreateAutomationSchema } from '../../../src/automations/domain/validation';
-import { automationItem, newTask, projectItem, scheduledAutomation, taskItem } from '../entry/src/main/ets/common/workspaceProtocol';
+import { automationItem, newTask, projectItem, scheduledAutomationPatch, taskItem } from '../entry/src/main/ets/common/workspaceProtocol';
 import { historyRows } from '../entry/src/main/ets/common/chatProtocol';
 
 describe('Harmony workspace contracts', () => {
@@ -29,23 +28,14 @@ describe('Harmony workspace contracts', () => {
     expect(automationItem({ ...base, action: { kind: 'system' } }).editable).toBe(false);
     expect(automationItem({ ...base, trigger: { kind: 'webhook' } }).editable).toBe(false);
   });
-  it('preserves existing enabled/conversation/notification settings on automation edits', () => {
-    const edit = scheduledAutomation(' Updated ', ' Prompt ', '0 10 * * *', false);
-    expect(edit).not.toHaveProperty('enabled'); expect(edit).not.toHaveProperty('afterRun');
-    expect(edit).not.toHaveProperty('conversationMode'); expect(edit).not.toHaveProperty('notificationPolicy');
-    expect(edit.name).toBe('Updated');
-  });
-  it('creates valid scheduled automations', () => {
-    expect(CreateAutomationSchema.safeParse(scheduledAutomation('Daily', 'Summarize', '0 9 * * *', true)).success).toBe(true);
-    expect(scheduledAutomation('Daily', 'Summarize', '0 9 * * *', true, undefined, 'project-1').projectId).toBe('project-1');
-  });
   it('preserves advanced action fields and cron time zone without mutating the loaded record', () => {
-    const original = { id: 'a', name: 'Daily', enabled: false,
+    const original = { id: 'a', name: 'Daily', enabled: false, updatedAtMs: 7, projectId: 'project',
       trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 9 * * *', tz: 'Asia/Shanghai' } },
       action: { kind: 'agent', instruction: 'old', agentId: 'reviewer', model: 'provider/model', workingDirectory: '/workspace', timeoutSeconds: 120 } };
-    const edited = scheduledAutomation('New', 'new', '0 10 * * *', false, original);
-    expect(edited.action).toEqual({ ...original.action, instruction: 'new' });
-    expect(edited.trigger.schedule).toEqual({ ...original.trigger.schedule, expr: '0 10 * * *' });
+    const edited = scheduledAutomationPatch(' New ', 'new', '0 10 * * *', original);
+    expect(edited).toEqual({ name: 'New', expectedRevision: 7,
+      trigger: { ...original.trigger, schedule: { ...original.trigger.schedule, expr: '0 10 * * *' } },
+      action: { ...original.action, instruction: 'new' } });
     expect(original.action.instruction).toBe('old'); expect(original.trigger.schedule.expr).toBe('0 9 * * *');
   });
   it('renders message blocks without coercing objects or losing their role', () => {

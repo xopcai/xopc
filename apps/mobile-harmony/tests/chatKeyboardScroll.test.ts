@@ -205,7 +205,7 @@ describe('chat keyboard viewport following', () => {
     view.onMessageViewportChange({ width: 375, height: 420 }, { width: 375, height: 420 });
     vi.runAllTimers();
     expect(view.messagesScroller.scrollEdge).not.toHaveBeenCalled();
-    expect(source).toContain("@Monitor('bottomRegionHeight')");
+    expect(source).toContain("@Monitor('bottomRegionHeight', 'overlayHeaderHeight')");
     expect(source).toContain('.onAreaChange((previous: Area, current: Area): void => { this.onMessageViewportChange(previous, current); })');
     expect(source).toContain(".id('chat-reply-clearance')");
   });

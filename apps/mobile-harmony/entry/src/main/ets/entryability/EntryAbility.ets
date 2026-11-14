@@ -16,6 +16,10 @@ import { XopcIncomingShareAttachment } from '../model/share';
 import { decodeShareHandoff, shareIntake, SHARE_INTAKE_URI } from '../service/shareIntake';
 import { voiceCall } from '../service/voiceCall';
 import { localSessionStore } from '../service/localSessionStore';
+import { generatedMusicPlayback } from '../service/generatedMusicPlayback';
+import { assistantAudioAutoplay } from '../service/assistantAudioAutoplay';
+import { discussionCapture } from '../service/discussionCapture';
+import { MUSIC_OPEN_URI } from '../model/musicPlayback';
 
 export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
@@ -30,6 +34,9 @@ export default class EntryAbility extends UIAbility {
     this.mainWindow = undefined; layoutState.systemTopInsetPx = 0;
   }
   private receiveWant(want: Want): void {
+    if (want.uri === MUSIC_OPEN_URI) {
+      generatedMusicPlayback.requestOpen(); return;
+    }
     if (want.action === 'ohos.want.action.viewData' && want.uri?.startsWith('file://')) {
       void shareIntake.receiveFile(this.context.filesDir, want.uri); return;
     }
@@ -43,12 +50,22 @@ export default class EntryAbility extends UIAbility {
     }
     if (want.uri) notificationNavigation.receive(want.uri);
   }
-  onCreate(want: Want): void { this.receiveWant(want); }
+  onCreate(want: Want): void {
+    generatedMusicPlayback.attach(this.context, async (): Promise<boolean> => {
+      if (voiceCall.phase !== 'idle' || voiceCapture.state !== 'idle' || discussionCapture.active) return false;
+      await Promise.all([chatReadAloud.stop(), assistantAudioAutoplay.interrupt()]);
+      return voiceCall.phase === 'idle' && voiceCapture.state === 'idle' && !discussionCapture.active;
+    });
+    this.receiveWant(want);
+  }
   onNewWant(want: Want): void { this.receiveWant(want); }
   onConfigurationUpdate(configuration: Configuration): void { appSettings.syncSystemColorMode(configuration.colorMode); }
-  onForeground(): void { gatewaySession.setForeground(true); layoutState.foreground = true; voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
-  onBackground(): void { cancelAllDeviceLocations(); if (!hasActivePersonalPicker()) cancelAllDevicePersonalTools(); layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); if (!hasActivePersonalPicker()) realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
-  onDestroy(): void { voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
+  onForeground(): void { gatewaySession.setForeground(true); layoutState.foreground = true; generatedMusicPlayback.onForeground(); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
+  onBackground(): void { generatedMusicPlayback.checkpoint(); cancelAllDeviceLocations(); if (!hasActivePersonalPicker()) cancelAllDevicePersonalTools(); layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); if (!hasActivePersonalPicker()) realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
+  onDestroy(): void {
+    void generatedMusicPlayback.shutdown();
+    voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous();
+  }
   onWindowStageCreate(stage: window.WindowStage): void {
     this.restoreAndLoad(stage);
   }
