@@ -149,11 +149,10 @@ export class XopcVoiceCallAudio {
   }
 
   async setSpeaker(value: boolean): Promise<void> {
-    this.speaker = value;
-    const manager = audio.getAudioManager();
-    await manager.getRoutingManager().setCommunicationDevice(audio.CommunicationDeviceType.SPEAKER, value);
-    const renderer = this.renderer;
-    if (renderer) this.callbacks?.onRoute(this.routeName(await renderer.getCurrentOutputDevices()));
+    const generation = this.generation;
+    await audio.getAudioManager().getRoutingManager().setCommunicationDevice(audio.CommunicationDeviceType.SPEAKER, value);
+    if (generation === this.generation) this.speaker = value;
+    // The renderer's outputDeviceChange listener reports the resulting route.
   }
 
   enqueue(responseId: string, bytes: Uint8Array): void {

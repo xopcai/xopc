@@ -105,6 +105,19 @@ describe('Personal AI settings on HarmonyOS', () => {
     expect(model.saving).toBe(false);
   });
 
+  it('retries a call mode edit without overwriting a greeting changed on Web', async () => {
+    const model = new XopcPersonalAgentSettingsViewModel();
+    await model.load(record);
+    const latest = { ...record, revision: 8, voiceCallPreferences: { openingGreetingEnabled: false } };
+    mocks.request.mockRejectedValueOnce(new XopcHttpError(409))
+      .mockResolvedValueOnce(JSON.stringify({ ok: true, payload: latest }))
+      .mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...latest, revision: 9,
+        voiceCallPreferences: { openingGreetingEnabled: false, enginePreference: 'natural' } } }));
+    expect((await model.saveProfile('Ada', 'loopi', 'existing', true, 'natural'))
+      ?.voiceCallPreferences).toEqual({ openingGreetingEnabled: false, enginePreference: 'natural' });
+    expect(JSON.parse(mocks.request.mock.calls.at(-1)![2]).voiceCallPreferences).toEqual({ enginePreference: 'natural' });
+  });
+
   it('keeps profile editing available when voice is unavailable', async () => {
     mocks.request.mockImplementation(async (path: string) => {
       if (path === '/api/personal-agent') return JSON.stringify({ ok: true, payload: record });
@@ -122,7 +135,7 @@ describe('Personal AI settings on HarmonyOS', () => {
     await model.load(record);
     let resolve!: (value: string) => void;
     mocks.request.mockImplementationOnce(() => new Promise<string>(done => { resolve = done; }));
-    const pending = model.saveProfile('Changed', 'loopi', {}, 'existing');
+    const pending = model.saveProfile('Changed', 'loopi', 'existing');
     model.dispose();
     resolve(JSON.stringify({ ok: true, payload: { ...record, displayName: 'Changed' } }));
     expect(await pending).toBeNull();

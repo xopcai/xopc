@@ -1194,7 +1194,7 @@ export struct XopcChatView {
     Button({ type: ButtonType.Circle }) {
       SymbolGlyph(this.showVoice ? $r('sys.symbol.keyboard') : $r('sys.symbol.mic')).fontSize(22).fontColor([this.colors.chat.action])
     }.id('chat-voice-toggle').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
-      .backgroundColor(this.colors.chat.composer).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
+      .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
       .accessibilityText(this.showVoice ? $r('app.string.chat_switch_keyboard') : $r('app.string.record_voice'))
       .enabled(!this.chat.sending && !this.voice.busy && this.voice.state === 'idle')
       .onClick((): void => { this.toggleVoice(); })
@@ -1208,7 +1208,7 @@ export struct XopcChatView {
           SymbolGlyph(this.panelOpen ? $r('sys.symbol.xmark_circle') : $r('sys.symbol.plus_circle'))
             .fontSize(24).fontColor([this.colors.chat.action])
         }.id('chat-composer-actions').width(COMPOSER_TOOL_SIZE).height(COMPOSER_TOOL_SIZE).padding(0)
-          .backgroundColor(this.colors.chat.composer).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
+          .backgroundColor(this.colors.input).responseRegion({ x: -4, y: -4, width: 44, height: 44 })
           .accessibilityText($r('app.string.add_attachment'))
           .enabled(!!this.chat.selectedId && !this.pickingAttachment && !this.chat.sending && this.voice.state === 'idle' && !this.voice.busy)
           .onClick((): void => { this.setPanel(!this.panelOpen); })
@@ -1805,13 +1805,13 @@ export struct XopcChatView {
           this.composerRightActions()
         }.width('100%').padding({ left: 8, right: 8, bottom: 8 })
       }
-    }.id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.chat.composer)
+    }.id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor(this.colors.input)
       .borderRadius(18).clip(true).margin({ bottom: 8, top: 8 })
       .onAreaChange((_previous: Area, current: Area): void => { this.sendFlightComposer = this.sendFlightRect(current); })
-    XopcChatActionPanel({ open: this.panelOpen, disabledIds: this.disabledActionIds(),
+    XopcChatActionPanel({ open: this.panelOpen, showSearch: true, disabledIds: this.disabledActionIds(),
       onSelect: (id: string): void => { this.chooseAction(id); } })
     this.bottomDock()
-    }.id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.chat.canvas)
+    }.id('chat-bottom-surface').width('calc(100% - 16vp)').backgroundColor(this.colors.panel)
       .borderRadius(24).clip(true)
     }.id('chat-bottom-region').width('100%')
       .margin({ top: 4, bottom: 0 })
@@ -1859,26 +1859,39 @@ export struct XopcChatView {
     if (this.refs.length >= 5) ids.push('reference-note', 'reference-task');
     if (this.attachments.length >= MAX_ATTACHMENTS) ids.push('reference-file');
     if (this.chat.sending) ids.push('new-chat');
-    if (!this.chat.selectedId || this.call.phase !== 'idle') ids.push('voice-call');
     return ids;
   }
 
   private chooseAction(id: string): void {
-    if (!this.panelOpen || !this.visible || this.chat.sending || this.voice.busy || this.voice.state !== 'idle') return;
+    if (!this.panelOpen || !this.visible) return;
+    if (id === 'search') {
+      this.openMessageSearch();
+      return;
+    }
+    if (this.chat.sending || this.voice.busy || this.voice.state !== 'idle') return;
     this.setPanel(false);
     if (id === 'camera' || id === 'photos' || id === 'document') this.addAttachment(id);
     else if (id.startsWith('reference-')) this.openReference(id.slice('reference-'.length));
     else if (id === 'new-chat') this.newConversation();
     else if (id === 'record-voice' && !this.showVoice) this.toggleVoice();
-    else if (id === 'voice-call' && this.chat.selectedId) {
-      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-      this.stopGeneratedMediaPlayback();
-      this.reader.stop(); this.voice.cancel();
-      this.call.start(context, { conversationId: this.chat.selectedId,
-        mode: 'auto', background: true,
-        name: this.personalConversation ? this.personalAgent?.displayName ?? 'Ada'
-          : this.chat.title || this.options.modelName(appSettings.effectiveLanguage()) });
-    }
+    else if (id === 'voice-call') this.startVoiceCall();
+  }
+
+  private canStartVoiceCall(): boolean {
+    return !!this.chat.selectedId && !this.chat.sending && !this.voice.busy &&
+      this.voice.state === 'idle' && this.call.phase === 'idle';
+  }
+
+  private startVoiceCall(): void {
+    if (!this.visible || !this.canStartVoiceCall()) return;
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    this.dismissComposer();
+    this.stopGeneratedMediaPlayback();
+    this.reader.stop(); this.voice.cancel();
+    this.call.start(context, { conversationId: this.chat.selectedId,
+      mode: 'auto', background: true,
+      name: this.personalConversation ? this.personalAgent?.displayName ?? 'Ada'
+        : this.chat.title || this.options.modelName(appSettings.effectiveLanguage()) });
   }
 
   @Monitor('chat.selectedId', 'chat.connection', 'activePage', 'layout.foreground', 'phonePage')
@@ -1983,9 +1996,10 @@ export struct XopcChatView {
                 .accessibilityText($r('app.string.phone_open')).onClick((): void => { this.dismissComposer(); this.phonePage = 1; })
             }
             Button({ type: ButtonType.Circle }) {
-              SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.foreground])
-            }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).id('chat-header-search')
-              .accessibilityText($r('app.string.search')).onClick((): void => { this.dismissComposer(); this.searchQuery = ''; this.searchCategory = 'messages'; this.searchOpen = true; })
+              SymbolGlyph($r('sys.symbol.phone')).fontSize(22).fontColor([this.colors.foreground])
+            }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).id('chat-header-voice-call')
+              .accessibilityText($r('app.string.voice_call_action_natural')).enabled(this.canStartVoiceCall())
+              .onClick((): void => { this.startVoiceCall(); })
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.gearshape')).fontSize(22).fontColor([this.colors.foreground])
             }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).id('chat-header-actions')
@@ -2001,7 +2015,7 @@ export struct XopcChatView {
         bottomClearance: this.bottomRegionHeight,
         onToggle: (): void => { this.dismissComposer(); this.taskOverviewOpen = !this.taskOverviewOpen; },
         onClose: (): void => { this.onTaskClose(); },
-        onSearch: (): void => { this.taskOverviewOpen = false; this.dismissComposer(); this.searchOpen = true; },
+        onSearch: (): void => { this.taskOverviewOpen = false; this.openMessageSearch(); },
         onOptions: (): void => { this.taskOverviewOpen = false; this.openSheet('actions'); },
         onNavigate: (route: XopcMobileRoute): void => { this.taskOverviewOpen = false; this.onNavigate(route); } })
     }
@@ -2115,9 +2129,22 @@ export struct XopcChatView {
 
   @Builder
   personalSettingsSheet() {
-    XopcPersonalAgentSettings({ record: this.personalAgent,
+    XopcPersonalAgentSettings({ record: this.personalAgent, chatOptions: this.options,
+      modelBusy: this.chat.sending || !!this.chat.runId || !!this.options.queued.length,
+      onReloadModels: (): void => {
+        if (this.personalAgent?.conversationId === this.chat.selectedId && !this.options.saving) {
+          void this.options.load(this.chat.selectedId, this.personalAgent.agentId);
+        }
+      },
       onSaved: (record: XopcPersonalAgentRecord): void => { this.onPersonalAgentSaved(record); },
       onClose: (): void => { this.personalSettingsOpen = false; } })
+  }
+
+  private openMessageSearch(): void {
+    this.dismissComposer();
+    this.searchQuery = '';
+    this.searchCategory = 'messages';
+    this.searchOpen = true;
   }
 
   private closeMessageSearch(): void {

@@ -416,6 +416,9 @@
     <string name="voice_error_microphone">麦克风中断，请检查音频设备。</string>
     <string name="voice_error_playback">音频播放中断。</string>
     <string name="voice_error_input_dropped">网络延迟导致部分语音未发送，请重试通话并重说上一句。</string>
+    <string name="voice_reply_text_only">这条回复只有文字。</string>
+    <string name="voice_reply_interrupted">这条回复的语音已中断，你可以继续说。</string>
+    <string name="voice_repeat_input">刚才那句话没收到，请再说一次。</string>
     <string name="voice_error_route">无法切换音频输出。</string>
     <string name="voice_error_time_limit">已达到语音通话时长上限。</string>
     <string name="voice_error_background">语音通话已在后台暂停。</string>
@@ -698,7 +701,6 @@
     <string name="message_open_external_title">打开外部链接？</string>
     <string name="message_open_external">打开</string>
     <string name="personal_agent_refresh_voices">刷新音色</string>
-    <string name="personal_agent_settings_title">配置 %1$s</string>
     <string name="personal_agent_configure">配置我的助手</string>
     <string name="personal_agent_name">助手名称</string>
     <string name="personal_agent_address">怎么称呼你</string>
@@ -728,7 +730,6 @@
     <string name="personal_agent_none">无</string>
     <string name="personal_agent_occasional">偶尔</string>
     <string name="personal_agent_playful">活泼</string>
-    <string name="personal_agent_save">保存</string>
     <string name="personal_agent_save_error">无法保存助手设置，请重试。</string>
     <string name="execution_status_queued">排队中</string>
     <string name="execution_status_running">运行中</string>
@@ -769,7 +770,14 @@
     <string name="personal_agent_done">取消</string>
     <string name="personal_agent_saving">保存中…</string>
     <string name="personal_agent_outreach_hint">免打扰时段沿用 Gateway 设置。</string>
-    <string name="personal_agent_advanced_hint">更多设置请前往 PC 或 Web 端。</string>
+    <string name="personal_agent_chat_model">对话模型</string>
+    <string name="personal_agent_no_models">暂无可用模型</string>
+    <string name="personal_agent_calls">语音通话</string>
+    <string name="personal_agent_call_mode">通话模式</string>
+    <string name="personal_agent_call_auto">自动选择</string>
+    <string name="personal_agent_call_natural">直接对话</string>
+    <string name="personal_agent_call_assistant">语音助手</string>
+    <string name="personal_agent_voice_details">声音与问候</string>
     <string name="personal_agent_outreach_load_error">主动联系设置暂时无法加载，其他偏好仍可保存。</string>
     <string name="personal_agent_outreach_save_error">主动联系设置保存失败，已保留修改，请重试。</string>
     <string name="personal_goal_title_hint">例如：完成新应用上线</string>

@@ -100,7 +100,9 @@ internal class RealtimeVoiceController(private val context: Context, private val
   private var activeConversationId = ""
   private var connectedAt = 0L
   private var lastPongAt = 0L
-  private var requestedMute = false
+  var requestedMute by mutableStateOf(false); private set
+  private var appliedSpeaker = false
+  private var speakerJob: Job? = null
   @Volatile private var congestionMuted = false
   @Volatile private var captureMuted = false
   private var playbackQueue = Channel<Pair<String, ByteArray>>(64)
@@ -147,7 +149,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
     speaking = false
     clarification = null; approval = null; taskId = ""; taskCancelling = false; activity = ""
     requestedMute = restoreMute; congestionMuted = false; muted = restoreMute
-    captureMuted = restoreMute; speaker = restoreSpeaker
+    captureMuted = restoreMute; speaker = restoreSpeaker; appliedSpeaker = false
     try {
       require(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
         PackageManager.PERMISSION_GRANTED) { "MICROPHONE_PERMISSION_REQUIRED" }
@@ -157,7 +159,12 @@ internal class RealtimeVoiceController(private val context: Context, private val
       // Prepare the audio route while the server synthesizes the opening.
       captureMuted = true
       startAudio(current)
-      if (restoreSpeaker) changeSpeaker(true)
+      if (restoreSpeaker) {
+        val applied = withContext(Dispatchers.IO) { runCatching { applySpeakerRoute(true) }.isSuccess }
+        if (current != generation) return
+        appliedSpeaker = applied
+        speaker = applied
+      }
       val started = AtomicBoolean(false)
       val path = if (!fresh && reconnectAttempt % 2 == 1) VOICE_PROXY_WS_PATH else session.websocketPath
       try { connect(session, path, current, started) }
@@ -323,6 +330,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
         firstAudioTiming.created(incomingId)
         responseId = incomingId
         hasReply = incomingId.isNotEmpty()
+        if (error in setOf("INPUT_DROPPED", "INPUT_BACKPRESSURE", "EMPTY_UTTERANCE", "RESPONSE_FAILED", "NO_RESPONSE_AUDIO")) error = ""
         assistantText = ""; bufferedBytes = 0; receivedBytes = 0; responseDone = false
         responseStartFrame = (player?.playbackHeadPosition?.toLong() ?: 0L) and 0xffffffffL
         speaking = false
@@ -543,23 +551,41 @@ internal class RealtimeVoiceController(private val context: Context, private val
   }
 
   fun changeSpeaker(value: Boolean) {
-    runCatching {
-      if (Build.VERSION.SDK_INT >= 31) {
-        val route = audioManager.availableCommunicationDevices.firstOrNull { device ->
-          device.type == if (value) AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-            else AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+    if (phase != "connected" || speaker == value) return
+    speaker = value
+    if (error == "ROUTE_CHANGE_FAILED") error = ""
+    if (speakerJob?.isActive == true) return
+    val current = generation
+    speakerJob = scope.launch {
+      while (current == generation && speaker != appliedSpeaker) {
+        val requested = speaker
+        val result = withContext(Dispatchers.IO) { runCatching { applySpeakerRoute(requested) } }
+        if (current != generation) return@launch
+        if (result.isSuccess) {
+          appliedSpeaker = requested
+        } else if (speaker == requested) {
+          speaker = appliedSpeaker
+          error = "ROUTE_CHANGE_FAILED"
         }
-        if (route != null) require(audioManager.setCommunicationDevice(route)) {
-          "ROUTE_CHANGE_FAILED"
-        }
-        else if (!value) audioManager.clearCommunicationDevice()
-        else throw IllegalStateException("ROUTE_CHANGE_FAILED")
-      } else {
-        @Suppress("DEPRECATION")
-        audioManager.isSpeakerphoneOn = value
       }
-      speaker = value
-    }.onFailure { error = "ROUTE_CHANGE_FAILED" }
+    }
+  }
+
+  private fun applySpeakerRoute(value: Boolean) {
+    if (Build.VERSION.SDK_INT >= 31) {
+      val route = audioManager.availableCommunicationDevices.firstOrNull { device ->
+        device.type == if (value) AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+          else AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+      }
+      if (route != null) require(audioManager.setCommunicationDevice(route)) {
+        "ROUTE_CHANGE_FAILED"
+      }
+      else if (!value) audioManager.clearCommunicationDevice()
+      else throw IllegalStateException("ROUTE_CHANGE_FAILED")
+    } else {
+      @Suppress("DEPRECATION")
+      audioManager.isSpeakerphoneOn = value
+    }
   }
 
   fun stopReply() {
@@ -678,6 +704,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   }
 
   private suspend fun release() {
+    speakerJob?.join(); speakerJob = null
     duckJob?.cancel(); duckJob = null; playbackGain = 1f
     speakingUtterances.clear()
     playbackEpoch++

@@ -2,6 +2,28 @@ import AVFAudio
 import Observation
 import SwiftUI
 
+enum ChatAppearance {
+    static let messageWidthRatio: CGFloat = 0.84
+
+    static func bubble(_ scheme: ColorScheme, user: Bool) -> Color {
+        if scheme == .dark {
+            return user ? Color(red: 37 / 255, green: 47 / 255, blue: 64 / 255)
+                : Color(red: 52 / 255, green: 63 / 255, blue: 80 / 255)
+        }
+        return user ? Color(red: 228 / 255, green: 231 / 255, blue: 236 / 255) : .white
+    }
+
+    static func card(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(red: 34 / 255, green: 39 / 255, blue: 48 / 255)
+            : Color(red: 226 / 255, green: 232 / 255, blue: 241 / 255)
+    }
+
+    static func action(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(red: 168 / 255, green: 188 / 255, blue: 1)
+            : Color(red: 36 / 255, green: 83 / 255, blue: 214 / 255)
+    }
+}
+
 struct MessageBubble: View {
     let message: TimelineMessage
     let configuration: GatewayConfiguration
@@ -11,9 +33,11 @@ struct MessageBubble: View {
     let canReadAloud: Bool
     let previewEligible: Bool
     let onReuseUserText: (String) -> Void
+    var maximumWidth: CGFloat?
     var animateStreaming = false
     var onReading: () -> Void = {}
     @Environment(\.locale) private var locale
+    @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .body) private var previewHeight: CGFloat = 160
     @ScaledMetric(relativeTo: .body) private var previewFadeHeight: CGFloat = 48
     @State private var isActionsPresented = false
@@ -53,10 +77,10 @@ struct MessageBubble: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: message.role == "assistant" ? .infinity : nil, alignment: .leading)
-            .padding(.horizontal, message.role == "assistant" ? 12 : isUserAudioBubble ? 4 : 14)
+            .padding(.horizontal, isUserAudioBubble ? 4 : 14)
             .padding(.vertical, isUserAudioBubble ? 0 : 10)
-            .background(message.role == "user" ? Color.blue.opacity(0.12) : Color.secondary.opacity(0.1))
+            .frame(width: bubbleWidth, alignment: .leading)
+            .background(ChatAppearance.bubble(colorScheme, user: message.role == "user"))
             .clipShape(.rect(cornerRadius: 18))
             .environment(\.chatTextSelectionEnabled, false)
         }
@@ -105,6 +129,21 @@ struct MessageBubble: View {
         .alert(saveFeedback, isPresented: $isSaveFeedbackPresented) {
             Button("好", role: .cancel) {}
         }
+    }
+
+    private var bubbleWidth: CGFloat? {
+        guard let maximumWidth else { return nil }
+        if isUserAudioBubble { return min(maximumWidth, 132) }
+        if !message.attachments.isEmpty || !message.references.isEmpty || !message.taskReceipts.isEmpty
+            || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty || showsPreview
+            || (message.role == "assistant" && (message.revealAnswer || message.text.contains(where: { "\n#`*_~[]<>|".contains($0) })))
+        {
+            return maximumWidth
+        }
+        let longest = message.text.split(separator: "\n").map { line in
+            line.reduce(0.0) { $0 + ($1.isASCII ? 8.8 : 16) }
+        }.max() ?? 0
+        return min(maximumWidth, max(44, ceil(longest) + 30))
     }
 
     private var hasMessageActions: Bool {
@@ -209,6 +248,10 @@ struct MessageBubble: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("chat-message-preview-\(message.id)")
                 .accessibilityHint("打开完整消息")
+                Button("查看更多") { isDetailPresented = true }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(ChatAppearance.action(colorScheme))
+                    .frame(minHeight: 44)
             } else if message.role == "assistant" {
                 ConfirmedAnswerView(message: message, configuration: configuration, conversationID: conversationID,
                                     animate: animateStreaming)

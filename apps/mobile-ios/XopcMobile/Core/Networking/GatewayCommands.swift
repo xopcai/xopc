@@ -104,6 +104,7 @@ struct RenameConversationCommand: Encodable {
 struct AgentConfigurationCommand: Encodable {
     let model: String
     let thinkingLevel: String
+    let configVersion: Int?
 }
 
 struct ClarificationResponseCommand: Codable, Equatable {

@@ -6,6 +6,8 @@ import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.ConversationMessage
 import ai.xopc.mobile.gateway.ConversationReference
 import ai.xopc.mobile.gateway.ConversationTarget
+import ai.xopc.mobile.theme.CHAT_MESSAGE_WIDTH
+import ai.xopc.mobile.theme.LocalChatColors
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
@@ -25,8 +27,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -109,6 +109,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   onReading: () -> Unit = {}) {
   val pauseFollowing by rememberUpdatedState(onReading)
   val isUser = message.role == "user"
+  val chat = LocalChatColors.current
+  val bubbleColor = if (isUser) chat.user else chat.assistant
   val messageImages = (message.media.filter { mediaPreviewKind(it) == "image" } +
     message.outcome?.artifacts.orEmpty().filter { it.availability == "available" && it.uri != null &&
       (it.kind == "image" || it.mimeType?.startsWith("image/") == true) }.map {
@@ -126,10 +128,11 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       }
     }
   }) {
-    val maxBubbleWidth = maxWidth * if (isUser) 0.84f else 0.9f
+    val maxBubbleWidth = maxWidth * CHAT_MESSAGE_WIDTH
     val contentCount = message.media.size + message.references.size + message.targets.size +
       message.outcome?.artifacts.orEmpty().size
-    val wideAssistant = !isUser && (message.text.length > 30 || contentCount > 0 || message.turnId != null || message.hasNonTextContent)
+    val wideAssistant = !isUser && (streaming || revealAnswer || contentCount > 0 || message.hasNonTextContent ||
+      message.text.any { it in "\n#`*_~[]<>|" })
     val minimumWidth = if (isUser) when {
       voiceOnly -> 132.dp
       message.media.size == 1 && mediaPreviewKind(message.media.first()) == "audio" -> 180.dp
@@ -137,7 +140,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       message.media.any { mediaPreviewKind(it) == "image" } -> 148.dp
       contentCount == 1 -> 220.dp
       else -> 44.dp
-    } else 64.dp
+    } else 44.dp
     val longestLine = if (wideAssistant) 0.0 else message.text.lineSequence().maxOfOrNull { line ->
       line.sumOf { if (it.code > 255) 16.0 else 8.8 }
     } ?: 0.0
@@ -148,15 +151,14 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       verticalArrangement = Arrangement.spacedBy(2.dp)) {
     Column(modifier = Modifier.width(bubbleWidth)
       .clip(RoundedCornerShape(18.dp))
-      .background(if (isUser) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surface)
+      .background(bubbleColor)
       .then(if (actionsEnabled) Modifier.combinedClickable(
         onClick = { if (showPreview) onViewMore() }, onLongClick = onMore,
         onLongClickLabel = stringResource(R.string.assistant_message_more))
         .then(if (isUser) Modifier.testTag("message-more-${message.id}") else Modifier)
         else Modifier)
-      .padding(horizontal = if (voiceOnly) 4.dp else if (isUser) 14.dp else 12.dp,
-        vertical = if (voiceOnly) 0.dp else if (isUser) 10.dp else 14.dp)
+      .padding(horizontal = if (voiceOnly) 4.dp else 14.dp,
+        vertical = if (voiceOnly) 0.dp else 10.dp)
       .then(if (isUser) Modifier else Modifier.testTag("message-assistant-card-${message.id}")),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (!isUser) MessageReferences(message.references, onOpenTarget)
@@ -165,12 +167,12 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
           ChatTextSelection(textSelectable) {
           Text(message.text, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
             modifier = Modifier.fillMaxWidth().then(if (showPreview)
-              Modifier.messagePreviewFade(MaterialTheme.colorScheme.primaryContainer) else Modifier),
+              Modifier.messagePreviewFade(bubbleColor) else Modifier),
             maxLines = if (showPreview) messagePreviewLineLimit(message.role) else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis)
           }
         } else if (showPreview) MessageTextPreview(message.id, message.text,
-          messagePreviewLineLimit(message.role))
+          messagePreviewLineLimit(message.role), bubbleColor)
         else MarkdownContent(rememberAnswerText(message.text, revealAnswer), modifier = Modifier.fillMaxWidth(),
           onOpenLink = onOpenLink, onCopyCode = onCopy, streaming = streaming, selectable = textSelectable,
           renderImage = { source, alt ->
@@ -181,6 +183,9 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
               workspaceRelativePath = target?.takeIf { it.kind == "workspace_file" }?.id) }
             MessageReadingImage(media, loadMedia) { onOpenPreview(media, listOf(media)) }
           })
+      }
+      if (showPreview) TextButton(onClick = onViewMore, modifier = Modifier.testTag("message-view-more-${message.id}")) {
+        Text(stringResource(R.string.assistant_view_more), color = chat.action)
       }
       if (isUser) MessageReferences(message.references, onOpenTarget)
       if (message.media.isNotEmpty()) MessageMedia(message.id, message.media, isUser,
@@ -205,9 +210,9 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
 }
 
 @Composable
-private fun MessageTextPreview(messageId: String, text: String, lineLimit: Int) {
+private fun MessageTextPreview(messageId: String, text: String, lineLimit: Int, background: Color) {
   MarkdownContent(text, modifier = Modifier.testTag("message-preview-$messageId")
-    .messagePreviewFade(MaterialTheme.colorScheme.surface),
+    .messagePreviewFade(background),
     maxLines = lineLimit, selectable = false)
 }
 
@@ -281,22 +286,9 @@ private fun MessageMedia(messageId: String, items: List<ConversationMedia>, isUs
     if (!isUser) Text(stringResource(R.string.message_attachments), style = MaterialTheme.typography.labelMedium,
       color = MaterialTheme.colorScheme.onSurfaceVariant)
     (if (expanded) attachments else attachments.take(3)).forEach { item ->
-      Card(onClick = { onOpen(item, emptyList()) }, modifier = Modifier.fillMaxWidth()
-        .heightIn(min = 48.dp).testTag("message-media-${item.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-          verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          Text(mediaSymbol(item), style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
-              style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(mediaDetail(item.mimeType, item.size), style = MaterialTheme.typography.labelSmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant)
-          }
-          ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 16.dp)
-        }
-      }
+      MessageResultCapsule(title = item.name, icon = R.drawable.tab_notes,
+        metadata = mediaDetail(item.mimeType, item.size), enabled = true,
+        modifier = Modifier.testTag("message-media-${item.id}"), onClick = { onOpen(item, emptyList()) })
     }
     if (attachments.size > 3) TextButton(onClick = { expanded = !expanded },
       modifier = Modifier.heightIn(min = 48.dp).testTag("message-attachments-toggle-$messageId")) {
@@ -431,7 +423,6 @@ private fun MessageTargets(items: List<ConversationTarget>, onOpen: (Conversatio
   }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MessageResultCapsule(
   title: String,
@@ -444,25 +435,21 @@ private fun MessageResultCapsule(
   Surface(
     onClick = onClick,
     enabled = enabled,
-    modifier = modifier.heightIn(min = 44.dp),
+    modifier = modifier.widthIn(max = 320.dp).fillMaxWidth().heightIn(min = 44.dp),
     shape = RoundedCornerShape(18.dp),
-    color = MaterialTheme.colorScheme.surfaceContainerLow,
+    color = LocalChatColors.current.card,
   ) {
     Row(
-      modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+      modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       Icon(painterResource(icon), contentDescription = null,
-        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-      FlowRow(
-        modifier = Modifier.weight(1f, fill = false),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-      ) {
+        tint = LocalChatColors.current.action, modifier = Modifier.size(18.dp))
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis,
           style = MaterialTheme.typography.bodyMedium)
-        if (!metadata.isNullOrBlank()) Text("· $metadata",
+        if (!metadata.isNullOrBlank()) Text(metadata,
           maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant)
       }

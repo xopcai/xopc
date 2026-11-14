@@ -5,7 +5,7 @@ import org.json.JSONObject
 data class PersonalAgentRecord(val agentId: String, val conversationId: String,
   val state: String, val displayName: String, val appearance: String, val errorMessage: String?,
   val revision: Int = 0,
-  val voicePreference: PersonalVoicePreference? = null, val userCallName: String? = null, val openingGreetingEnabled: Boolean = true, val supportsOpeningGreeting: Boolean = false)
+  val voicePreference: PersonalVoicePreference? = null, val userCallName: String? = null, val openingGreetingEnabled: Boolean = true, val supportsOpeningGreeting: Boolean = false, val callEngine: String? = null)
 
 data class PersonalVoicePreference(val provider: String, val model: String, val voice: String)
 data class PersonalVoiceOption(val id: String, val name: String, val displayNames: Map<String, String> = emptyMap())
@@ -45,10 +45,16 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
   }
 
   fun updateProfile(record: PersonalAgentRecord, name: String, appearance: String,
-    voice: PersonalVoicePreference? = record.voicePreference, openingGreetingEnabled: Boolean = record.openingGreetingEnabled): PersonalAgentRecord {
+    voice: PersonalVoicePreference? = record.voicePreference, openingGreetingEnabled: Boolean = record.openingGreetingEnabled, callEngine: String? = null): PersonalAgentRecord {
     require(record.revision > 0 && name.isNotBlank() && name.length <= 60) { "INVALID_PERSONAL_PROFILE" }
+    require(callEngine == null || callEngine in listOf("auto", "natural", "assistant"))
+    val callPreferences = JSONObject()
+    if (record.supportsOpeningGreeting && openingGreetingEnabled != record.openingGreetingEnabled)
+      callPreferences.put("openingGreetingEnabled", openingGreetingEnabled)
+    if (callEngine != null && callEngine != (record.callEngine ?: "auto"))
+      callPreferences.put("enginePreference", callEngine)
     val body = JSONObject().put("revision", record.revision).put("displayName", name)
-      .apply { if (record.supportsOpeningGreeting) put("voiceCallPreferences", JSONObject().put("openingGreetingEnabled", openingGreetingEnabled)) }
+      .apply { if (callPreferences.length() > 0) put("voiceCallPreferences", callPreferences) }
       .put("appearance", appearance)
       .put("voicePreference", voice?.let {
         JSONObject().put("provider", it.provider).put("model", it.model).put("voice", it.voice)
@@ -117,12 +123,14 @@ class PersonalAgentRepository(private val gateway: GatewaySession) {
       val voice = payload.optJSONObject("voicePreference")?.let {
         PersonalVoicePreference(it.optString("provider"), it.optString("model"), it.optString("voice"))
       }
+      val call = payload.optJSONObject("voiceCallPreferences")
       return PersonalAgentRecord(agentId, conversationId, state,
         payload.optString("displayName").ifBlank { "Ada" },
         payload.optString("appearance").ifBlank { "loopi" },
         payload.optString("errorMessage").takeIf { !payload.isNull("errorMessage") && it.isNotBlank() },
         payload.optInt("revision"), voice, payload.optString("userCallName").takeIf { !payload.isNull("userCallName") && it.isNotBlank() },
-        payload.optJSONObject("voiceCallPreferences")?.optBoolean("openingGreetingEnabled", true) ?: true, payload.optJSONObject("voiceCallPreferences") != null)
+        call?.optBoolean("openingGreetingEnabled", true) ?: true, call != null,
+        call?.optString("enginePreference")?.takeIf { it in listOf("auto", "natural", "assistant") })
     }
   }
 }

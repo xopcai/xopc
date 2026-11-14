@@ -150,10 +150,11 @@ struct GatewayStub: GatewayServing {
         SessionAgentConfiguration(model: "model", thinkingLevel: "off", configVersion: 1)
     }
 
-    func updateAgentConfiguration(conversationID _: String, model _: String, thinkingLevel _: String) async throws {
+    func updateAgentConfiguration(conversationID _: String, model: String, thinkingLevel: String, configVersion: Int?) async throws -> SessionAgentConfiguration {
         if modelSaveFails {
             throw GatewayClientError.server("Save failed")
         }
+        return SessionAgentConfiguration(model: model, thinkingLevel: thinkingLevel, configVersion: (configVersion ?? 0) + 1)
     }
 
     func fetchClarification(conversationID _: String) async throws -> ClarificationRequest? {

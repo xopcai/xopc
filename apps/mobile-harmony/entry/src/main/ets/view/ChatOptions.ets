@@ -5,6 +5,24 @@ import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { appSettings } from '../service/settings';
 import { userErrorMessage } from '../common/userError';
 
+function chatThinkingLabel(level: string): ResourceStr {
+  if (level === 'off') return $r('app.string.chat_thinking_off');
+  if (level === 'minimal') return $r('app.string.chat_thinking_minimal');
+  if (level === 'low') return $r('app.string.chat_thinking_low');
+  if (level === 'medium') return $r('app.string.chat_thinking_medium');
+  if (level === 'high') return $r('app.string.chat_thinking_high');
+  if (level === 'xhigh') return $r('app.string.chat_thinking_xhigh');
+  if (level === 'max') return $r('app.string.chat_thinking_max');
+  return level;
+}
+
+function chatThinkingSummary(model: XopcChatOptionsViewModel): ResourceStr {
+  const mode = model.selectedModel()?.thinking?.mode;
+  if (mode === 'none' || !mode) return $r('app.string.chat_thinking_unsupported');
+  if (mode === 'fixed') return $r('app.string.chat_thinking_fixed');
+  return chatThinkingLabel(model.thinkingLevel);
+}
+
 @ComponentV2
 export struct XopcChatOptions {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -13,6 +31,8 @@ export struct XopcChatOptions {
   @Param mode: string = 'actions';
   @Param contextSummary: ResourceStr = '';
   @Param thinkingBusy: boolean = false;
+  @Param modelBusy: boolean = false;
+  @Param rememberModel: boolean = true;
   @Event onMode: (mode: string) => void = (_mode: string): void => {};
   @Event onContext: () => void = (): void => {};
   @Event onAgent: (id: string) => void = (_id: string): void => {};
@@ -29,21 +49,8 @@ export struct XopcChatOptions {
     if (image.data) return 'data:' + image.mimeType + ';base64,' + image.data;
     return image.uri?.startsWith('http') || image.uri?.startsWith('file:') || image.uri?.startsWith('data:') ? image.uri : '';
   }
-  private thinkingLabel(level: string): ResourceStr {
-    if (level === 'off') return $r('app.string.chat_thinking_off');
-    if (level === 'minimal') return $r('app.string.chat_thinking_minimal');
-    if (level === 'low') return $r('app.string.chat_thinking_low');
-    if (level === 'medium') return $r('app.string.chat_thinking_medium');
-    if (level === 'high') return $r('app.string.chat_thinking_high');
-    if (level === 'xhigh') return $r('app.string.chat_thinking_xhigh');
-    if (level === 'max') return $r('app.string.chat_thinking_max');
-    return level;
-  }
   private thinkingSummary(): ResourceStr {
-    const mode = this.model.selectedModel()?.thinking?.mode;
-    if (mode === 'none' || !mode) return $r('app.string.chat_thinking_unsupported');
-    if (mode === 'fixed') return $r('app.string.chat_thinking_fixed');
-    return this.thinkingLabel(this.model.thinkingLevel);
+    return chatThinkingSummary(this.model);
   }
 
   build() {
@@ -63,6 +70,9 @@ export struct XopcChatOptions {
         Text($r('app.string.chat_queue_drag_hint')).fontSize(12).fontColor(this.colors.secondary).width('100%')
       }
       if (this.model.loading) { XopcListSkeleton() }
+      if (this.mode === 'model' && !this.model.loading && !this.model.error && !this.model.models.length) {
+        Text($r('app.string.chat_models_empty')).fontColor(this.colors.secondary).width('100%')
+      }
       if (this.model.error && this.mode !== 'queue') {
         Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary)
         Button($r('app.string.refresh')).onClick((): void => { this.onRetry(); })
@@ -72,16 +82,16 @@ export struct XopcChatOptions {
           ForEach(this.model.models.filter((item: XopcChatModel): boolean => (item.name + ' ' + item.id).toLowerCase().includes(this.query.toLowerCase())), (item: XopcChatModel) => {
             ListItem() {
               XopcHubRow({ heading: (item.id === this.model.modelId ? '✓ ' : '') + (item.displayNames?.[appSettings.effectiveLanguage().startsWith('zh') ? 'zh-CN' : 'en'] || item.name || item.id),
-                summary: item.id, showChevron: false, onOpen: async (): Promise<void> => { if (await this.model.selectModel(item.id)) this.onClose(); } })
-            }.enabled(!this.model.saving)
+                summary: item.id, showChevron: false, onOpen: async (): Promise<void> => { if (await this.model.selectModel(item.id, this.rememberModel)) this.onClose(); } })
+            }.enabled(!this.model.loading && !this.model.saving && !this.modelBusy)
           }, (item: XopcChatModel): string => item.id)
         } else if (this.mode === 'thinking') {
           if (this.model.selectedModel()?.thinking?.mode === 'levels' || this.model.selectedModel()?.thinking?.mode === 'toggle') {
             ForEach(this.model.selectedModel()?.thinking?.options || [], (level: string) => {
               ListItem() {
-                XopcHubRow({ heading: this.thinkingLabel(level),
+                XopcHubRow({ heading: chatThinkingLabel(level),
                   summary: level === this.model.thinkingLevel ? $r('app.string.chat_thinking_selected') : '',
-                  onOpen: async (): Promise<void> => { if (await this.model.selectThinking(level)) this.onClose(); } })
+                  onOpen: async (): Promise<void> => { if (await this.model.selectThinking(level, this.rememberModel)) this.onClose(); } })
               }.enabled(!this.model.loading && !this.model.saving && !this.thinkingBusy)
             }, (level: string): string => level)
           } else {

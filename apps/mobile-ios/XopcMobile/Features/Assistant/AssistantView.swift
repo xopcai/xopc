@@ -140,7 +140,8 @@ struct AssistantView<Dock: View>: View {
             .sheet(isPresented: $showingPersonalProfile) {
                 if let personalAgent, let conversation {
                     PersonalAgentProfileView(configuration: configuration, record: personalAgent,
-                                             conversation: conversation, onSaved: onPersonalAgentUpdated)
+                                             conversation: conversation, onSaved: onPersonalAgentUpdated,
+                                             onModelSaved: onConversationUpdated)
                         .presentationDetents([.fraction(0.65)])
                 }
             }
@@ -422,6 +423,7 @@ struct AssistantView<Dock: View>: View {
     private var messageTimeline: some View {
         let cards = generatedMedia.cardsByReply(state.messages)
         return GeometryReader { viewport in
+            let maximumMessageWidth = max(0, min(viewport.size.width, 720) - 24) * ChatAppearance.messageWidthRatio
             ScrollViewReader { scroller in
                 ScrollView {
                     // Exact row heights keep long replies anchored during keyboard resize.
@@ -449,6 +451,7 @@ struct AssistantView<Dock: View>: View {
                                 canReadAloud: realtimeVoiceCall.phase == .idle,
                                 previewEligible: message.id != state.messages.last?.id,
                                 onReuseUserText: { draft = $0 },
+                                maximumWidth: maximumMessageWidth,
                                 animateStreaming: followingBottom && !userScrollingMessages,
                                 onReading: {
                                     followingBottom = false
@@ -461,9 +464,9 @@ struct AssistantView<Dock: View>: View {
                                     scheduleBottomScroll(scroller)
                                 }
                             }
-                            generatedMediaRows(cards[message.id] ?? [])
+                            generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth, scroller: scroller)
                         }
-                        generatedMediaRows(cards[""] ?? [])
+                        generatedMediaRows(cards[""] ?? [], maximumWidth: maximumMessageWidth, scroller: scroller)
                         clarificationCard
                         if showsStagedProgress {
                             AssistantStagesView(progress: state.runProgress,
@@ -597,23 +600,36 @@ struct AssistantView<Dock: View>: View {
     }
 
     @ViewBuilder
-    private func generatedMediaRows(_ cards: [GeneratedMediaCard]) -> some View {
-        if let id = conversation?.id, conversation?.isDraft == false {
-            ForEach(cards) { card in
-                GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
-                                  submitting: generatedMedia.submitting, error: card.isDraft ? generatedMedia.error : nil,
-                                  conversationID: id, configuration: configuration, isPlayingInline: playingGeneratedMedia == card.id,
-                                  onPlay: {
-                                      readAloud.stop()
-                                      assistantAudio.stop()
-                                      bottomScrollTask?.cancel()
-                                      bottomScrollTask = nil
-                                      followingBottom = false
-                                      playingGeneratedMedia = playingGeneratedMedia == card.id ? nil : card.id
-                                  }, onConfirm: {
-                                      Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
-                                  })
+    private func generatedMediaRows(_ cards: [GeneratedMediaCard], maximumWidth: CGFloat, scroller: ScrollViewProxy) -> some View {
+        if let id = conversation?.id, conversation?.isDraft == false, !cards.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(cards) { card in
+                    GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
+                                      submitting: generatedMedia.submitting, error: card.isDraft ? generatedMedia.error : nil,
+                                      conversationID: id, configuration: configuration, isPlayingInline: playingGeneratedMedia == card.id,
+                                      measuredDuration: generatedMedia.measuredDurations[card.id],
+                                      onDuration: { generatedMedia.recordDuration($0, cardID: card.id, conversationID: id) },
+                                      onRevealLyrics: {
+                                          followingBottom = false
+                                          bottomScrollTask?.cancel()
+                                          bottomScrollTask = nil
+                                          scroller.scrollTo("generated-media-\(card.id)", anchor: .center)
+                                      },
+                                      onPlay: {
+                                          readAloud.stop()
+                                          assistantAudio.stop()
+                                          bottomScrollTask?.cancel()
+                                          bottomScrollTask = nil
+                                          followingBottom = false
+                                          playingGeneratedMedia = playingGeneratedMedia == card.id ? nil : card.id
+                                      }, onConfirm: {
+                                          Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
+                                      })
+                    .id("generated-media-\(card.id)")
+                }
             }
+            .frame(maxWidth: maximumWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -768,7 +784,7 @@ struct AssistantView<Dock: View>: View {
     private var composer: AssistantComposer {
         AssistantComposer(
             configuration: configuration,
-            focusAllowed: !showingPhone && state.clarification?.kind != "approval",
+            focusAllowed: !showingPhone && !startingVoice && state.clarification?.kind != "approval",
             draft: $draft,
             attachments: $attachments,
             references: $references,
@@ -781,8 +797,6 @@ struct AssistantView<Dock: View>: View {
             isActionPanelExpanded: $isActionPanelExpanded,
             attachmentError: $attachmentError,
             canReferenceFiles: conversation?.isDraft == false,
-            canStartRealtimeVoice: conversation != nil && !startingVoice
-                && !state.isSending && realtimeVoiceCall.phase == .idle,
             isRunActive: state.isRunActive,
             onInputFocusChanged: onInputFocusChanged,
             onStop: {
@@ -791,36 +805,43 @@ struct AssistantView<Dock: View>: View {
             onSend: { send(delivery: .next) },
             onSteer: { send(delivery: .steer) },
             onNewConversation: { requestConversation(state.selectedAgentID ?? "main") },
-            onRealtimeVoice: { mode in
-                guard let conversation, !startingVoice, !state.isSending else { return }
-                startingVoice = true
-                Task {
-                    defer { startingVoice = false }
-                    let gateway = GatewayClient(configuration: configuration)
-                    let selected: ConversationSelection
-                    do {
-                        let commandID = voiceMaterializationIDs[conversation.id]
-                            ?? UUID().uuidString.lowercased()
-                        voiceMaterializationIDs[conversation.id] = commandID
-                        selected = try await gateway.materializeVoiceConversation(conversation, commandID: commandID)
-                    } catch {
-                        voiceStartError = error.localizedDescription
-                        return
-                    }
-                    voiceMaterializationIDs.removeValue(forKey: conversation.id)
-                    if selected.isDraft == false, conversation.isDraft {
-                        onConversationUpdated(selected)
-                    }
-                    readAloud.stop()
-                    await realtimeVoiceCall.start(
-                        conversationID: selected.id,
-                        mode: mode,
-                        name: selected.title,
-                        gateway: gateway
-                    )
-                }
-            }
+            onSearch: { showingMessageSearch = true }
         )
+    }
+
+    private var canStartRealtimeVoice: Bool {
+        conversation != nil && !startingVoice && !state.isSending && realtimeVoiceCall.phase == .idle
+    }
+
+    private func startRealtimeVoice() {
+        guard canStartRealtimeVoice, let conversation else { return }
+        isActionPanelExpanded = false
+        startingVoice = true
+        Task {
+            defer { startingVoice = false }
+            let gateway = GatewayClient(configuration: configuration)
+            let selected: ConversationSelection
+            do {
+                let commandID = voiceMaterializationIDs[conversation.id]
+                    ?? UUID().uuidString.lowercased()
+                voiceMaterializationIDs[conversation.id] = commandID
+                selected = try await gateway.materializeVoiceConversation(conversation, commandID: commandID)
+            } catch {
+                voiceStartError = error.localizedDescription
+                return
+            }
+            voiceMaterializationIDs.removeValue(forKey: conversation.id)
+            if selected.isDraft == false, conversation.isDraft {
+                onConversationUpdated(selected)
+            }
+            readAloud.stop()
+            await realtimeVoiceCall.start(
+                conversationID: selected.id,
+                mode: .automatic,
+                name: selected.title,
+                gateway: gateway
+            )
+        }
     }
 
     private func handleQuickChatHandoff() {
@@ -902,10 +923,12 @@ struct AssistantView<Dock: View>: View {
                             }
                     }.accessibilityLabel("查看手机").accessibilityIdentifier("chat-header-phone")
                 }
-                Button {
-                    showingMessageSearch = true
-                } label: { Image(systemName: "magnifyingglass").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(.rect) }
-                    .accessibilityLabel("搜索消息").accessibilityIdentifier("chat-header-search")
+                Button(action: startRealtimeVoice) {
+                    Image(systemName: "phone").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(.rect)
+                }
+                .disabled(!canStartRealtimeVoice)
+                .accessibilityLabel("语音通话")
+                .accessibilityIdentifier("chat-header-voice-call")
                 Button {
                     if isPersonalConversation {
                         showingPersonalProfile = true
@@ -928,12 +951,16 @@ struct PersonalAgentProfileView: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection
     let onSaved: (PersonalAgentRecord) -> Void
+    let onModelSaved: (ConversationSelection) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @State private var record: PersonalAgentRecord
     @State private var name: String
     @State private var appearance: String
+    @State private var callMode: PersonalCallMode
+    @State private var voiceExpanded = false
+    @State private var choosingCallMode = false
     @State private var greetingEnabled: Bool
     @State private var selectedVoice: String
     @State private var voiceProvider: String?
@@ -944,18 +971,25 @@ struct PersonalAgentProfileView: View {
     @State private var uploadingAvatar = false
     @State private var loadingVoices = true
     @State private var loadingProfile = true
+    @State private var loadedProfile = false
     @State private var saving = false
+    @State private var modelOptions = AssistantOptionsState()
+    @State private var modelPickerOpen = false
+    @State private var nameSaveTask: Task<Void, Never>?
     @State private var error: String?
 
     init(configuration: GatewayConfiguration, record: PersonalAgentRecord, conversation: ConversationSelection,
-         onSaved: @escaping (PersonalAgentRecord) -> Void)
+         onSaved: @escaping (PersonalAgentRecord) -> Void,
+         onModelSaved: @escaping (ConversationSelection) -> Void = { _ in })
     {
         self.configuration = configuration
         self.conversation = conversation
         self.onSaved = onSaved
+        self.onModelSaved = onModelSaved
         _record = State(initialValue: record)
         _name = State(initialValue: record.displayName)
         _appearance = State(initialValue: record.appearance)
+        _callMode = State(initialValue: record.voiceCallPreferences?.enginePreference ?? .auto)
         _greetingEnabled = State(initialValue: record.voiceCallPreferences?.openingGreetingEnabled ?? true)
         _selectedVoice = State(initialValue: record.voicePreference?.voice == "default" ? "" : record.voicePreference?.voice ?? "")
     }
@@ -979,13 +1013,96 @@ struct PersonalAgentProfileView: View {
                         .disabled(uploadingAvatar || saving || loadingProfile)
                     TextField("名称", text: $name)
                         .textInputAutocapitalization(.words)
+                        .onChange(of: name) { scheduleNameSave() }
+                        .onSubmit { saveNow() }
                 }
-                Section("通话声音") {
+                modelSettings
+                callSettings
+                if saving {
+                    Text("正在保存…").foregroundStyle(.secondary)
+                } else if let error {
+                    Text(error).foregroundStyle(.red)
+                    Button("重试") { saveNow() }
+                }
+            }
+            .disabled(saving || loadingProfile)
+            .redacted(reason: loadingProfile ? .placeholder : [])
+            .onChange(of: avatarItem) {
+                Task { await uploadAvatar() }
+            }
+            .task {
+                guard !loadedProfile else { return }
+                await reloadProfile()
+                if !Task.isCancelled { loadedProfile = true }
+                await loadVoices()
+            }
+            .task { await loadModelSettings() }
+            .navigationDestination(isPresented: $choosingCallMode) {
+                List {
+                    ForEach(PersonalCallMode.allCases) { mode in
+                        Button {
+                            callMode = mode
+                            choosingCallMode = false
+                            saveNow()
+                        } label: {
+                            HStack {
+                                Text(callModeTitle(mode))
+                                Spacer()
+                                if mode == callMode { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("通话模式")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .navigationDestination(isPresented: $modelPickerOpen) {
+                AssistantOptionPicker(configuration: configuration, conversation: conversation,
+                                      state: modelOptions, pickingModel: true,
+                                      onSave: onModelSaved, reloadAfterError: true)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("关闭", systemImage: "xmark") {
+                        nameSaveTask?.cancel()
+                        Task {
+                            if error != nil { dismiss(); return }
+                            if hasProfileChanges { await save() }
+                            if error == nil { dismiss() }
+                        }
+                    }
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("personal-setting-close")
+                    .disabled(saving || uploadingAvatar)
+                }
+            }
+            .interactiveDismissDisabled(saving || uploadingAvatar || hasProfileChanges)
+        }
+    }
+
+    private func callModeTitle(_ mode: PersonalCallMode) -> LocalizedStringKey {
+        switch mode {
+        case .auto: "自动选择"
+        case .natural: "直接对话"
+        case .assistant: "语音助手"
+        }
+    }
+
+    private var callSettings: some View {
+        Section("语音通话") {
+            Button {
+                choosingCallMode = true
+            } label: {
+                LabeledContent("通话模式") { Text(callModeTitle(callMode)) }
+            }
+            .accessibilityIdentifier("personal-setting-call-mode")
+            if callMode != .natural {
+                DisclosureGroup("声音与问候", isExpanded: $voiceExpanded) {
                     if loadingVoices {
-                        Text("通话声音").redacted(reason: .placeholder)
+                        Text("音色").redacted(reason: .placeholder)
                     } else if voiceOptions.isEmpty {
-                        Text("当前没有可用音色，请先在 Gateway 配置语音服务。")
-                            .foregroundStyle(.secondary)
+                        Button("刷新音色") { Task { await loadVoices() } }
                     } else {
                         Picker("音色", selection: $selectedVoice) {
                             Text("默认声音").tag("")
@@ -998,43 +1115,43 @@ struct PersonalAgentProfileView: View {
                             }
                         }
                         .accessibilityIdentifier("personal-agent-voice-choice")
+                        .onChange(of: selectedVoice) { saveNow() }
                     }
                     if record.voiceCallPreferences != nil {
                         Toggle(locale.language.languageCode?.identifier == "zh" ? "连接时打招呼" : "Greet me when connected",
                                isOn: $greetingEnabled)
+                            .onChange(of: greetingEnabled) { saveNow() }
                     }
-                    Button(locale.language.languageCode?.identifier == "zh" ? "刷新音色" : "Refresh voices") {
-                        Task { await loadVoices() }
-                    }.disabled(loadingVoices)
-                }
-                Section {
-                    Text(locale.language.languageCode?.identifier == "zh"
-                        ? "更多设置请前往 PC 或 Web 端。" : "For more settings, use the PC or Web app.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let error {
-                    Text(error).foregroundStyle(.red)
-                }
-            }
-            .disabled(saving || loadingProfile)
-            .redacted(reason: loadingProfile ? .placeholder : [])
-            .onChange(of: avatarItem) {
-                Task { await uploadAvatar() }
-            }
-            .task { await reloadProfile(); await loadVoices() }
-            .navigationTitle((locale.language.languageCode?.identifier == "zh" ? "配置 " : "Configure ")
-                + (record.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "ADA" : record.displayName))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await save() } }
-                        .disabled(saving || uploadingAvatar || loadingProfile || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
+    }
+
+    private var modelSettings: some View {
+        Section("对话模型") {
+            if modelOptions.isLoading {
+                Text("模型").redacted(reason: .placeholder)
+            } else if let error = modelOptions.errorMessage {
+                Text(error).foregroundStyle(.red)
+                Button("重试") { Task { await loadModelSettings() } }
+            } else {
+                Button {
+                    modelPickerOpen = true
+                } label: {
+                    LabeledContent("模型", value: modelOptions.selectedModel?.name
+                        ?? (modelOptions.selectedModelID.isEmpty ? "" : modelOptions.selectedModelID))
+                }
+                .disabled(modelOptions.models.isEmpty)
+                .accessibilityIdentifier("personal-setting-model")
+                if modelOptions.models.isEmpty {
+                    Text("暂无可用模型").foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func loadModelSettings() async {
+        await modelOptions.load(conversation, using: GatewayClient(configuration: configuration))
     }
 
     private func loadVoices() async {
@@ -1057,12 +1174,15 @@ struct PersonalAgentProfileView: View {
                 record = updated
                 name = updated.displayName
                 appearance = updated.appearance
+                callMode = updated.voiceCallPreferences?.enginePreference ?? .auto
                 greetingEnabled = updated.voiceCallPreferences?.openingGreetingEnabled ?? true
                 selectedVoice = updated.voicePreference?.voice == "default" ? "" : updated.voicePreference?.voice ?? ""
                 onSaved(updated)
                 error = nil
             }
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            if !Task.isCancelled { self.error = error.localizedDescription }
+        }
     }
 
     private func uploadAvatar() async {
@@ -1075,11 +1195,43 @@ struct PersonalAgentProfileView: View {
             else { throw GatewayClientError.server("头像不能超过 512 KB") }
             try await GatewayClient(configuration: configuration).uploadPersonalAvatar(data: jpeg)
             avatarPreview = image; appearance = "custom"
+            await save()
         } catch { self.error = error.localizedDescription }
     }
 
+    private var trimmedName: String {
+        let value = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
+        return value.isEmpty ? record.displayName : value
+    }
+
+    private var hasProfileChanges: Bool {
+        trimmedName != record.displayName || appearance != record.appearance
+            || callMode != (record.voiceCallPreferences?.enginePreference ?? .auto)
+            || greetingEnabled != (record.voiceCallPreferences?.openingGreetingEnabled ?? true)
+            || selectedVoice != savedVoice
+    }
+
+    private var savedVoice: String {
+        record.voicePreference?.voice == "default" ? "" : record.voicePreference?.voice ?? ""
+    }
+
+    private func scheduleNameSave() {
+        nameSaveTask?.cancel()
+        guard loadedProfile, trimmedName != record.displayName else { return }
+        nameSaveTask = Task {
+            do { try await Task.sleep(for: .milliseconds(700)) } catch { return }
+            await save()
+        }
+    }
+
+    private func saveNow() {
+        nameSaveTask?.cancel()
+        Task { await save() }
+    }
+
     private func save() async {
-        guard !saving else { return }
+        guard !loadingProfile, !saving, hasProfileChanges else { return }
+        error = nil
         saving = true
         defer { saving = false }
         let voicePreference: PersonalVoicePreference? = if selectedVoice == record.voicePreference?.voice
@@ -1096,14 +1248,14 @@ struct PersonalAgentProfileView: View {
         do {
             let updated = try await GatewayClient(configuration: configuration).updatePersonalAgentProfile(
                 record: record,
-                displayName: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)),
+                displayName: trimmedName,
                 appearance: appearance,
                 voicePreference: voicePreference,
-                openingGreetingEnabled: greetingEnabled
+                openingGreetingEnabled: greetingEnabled,
+                callMode: callMode
             )
             record = updated
             onSaved(updated)
-            dismiss()
         } catch {
             self.error = error.localizedDescription
         }

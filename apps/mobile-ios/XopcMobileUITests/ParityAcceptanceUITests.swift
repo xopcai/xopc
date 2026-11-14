@@ -795,11 +795,7 @@ final class ParityAcceptanceUITests: XCTestCase {
     func testRealtimeVoiceAssistantSessionAndControls() {
         openTab("对话")
         XCTAssertTrue(openCell(at: 3))
-        app.buttons["添加附件或引用"].tap()
-        let panel = app.collectionViews["assistant-action-panel"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 5))
-        panel.swipeLeft()
-        let voice = app.buttons["语音助手"]
+        let voice = app.buttons["chat-header-voice-call"]
         XCTAssertTrue(voice.waitForExistence(timeout: 5))
         XCTAssertTrue(voice.isEnabled)
         voice.tap()
@@ -822,11 +818,9 @@ final class ParityAcceptanceUITests: XCTestCase {
     func testRealtimeVoiceNaturalReportsFailureOrConnects() {
         openTab("对话")
         XCTAssertTrue(openCell(at: 3))
-        app.buttons["添加附件或引用"].tap()
-        let panel = app.collectionViews["assistant-action-panel"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 5))
-        panel.swipeLeft()
-        app.buttons["实时语音"].tap()
+        let voice = app.buttons["chat-header-voice-call"]
+        XCTAssertTrue(voice.waitForExistence(timeout: 5))
+        voice.tap()
         XCTAssertTrue(app.buttons["voice-call-minimize"].waitForExistence(timeout: 8))
         let paused = app.staticTexts["通话已暂停"]
         let connected = app.staticTexts["正在聆听"]
@@ -864,11 +858,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         capture("english-reference-picker")
         app.buttons["Cancel"].tap()
 
-        app.buttons["Add Attachments or References"].tap()
-        let panel = app.collectionViews["assistant-action-panel"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 5))
-        panel.swipeLeft()
-        let voice = app.buttons["Voice Assistant"]
+        let voice = app.buttons["chat-header-voice-call"]
         XCTAssertTrue(voice.waitForExistence(timeout: 5))
         voice.tap()
         XCTAssertTrue(app.buttons["voice-call-minimize"].waitForExistence(timeout: 8))
@@ -2056,7 +2046,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         let personal = app.buttons["conversations-personal-agent-entry"]
         XCTAssertTrue(personal.waitForExistence(timeout: 10))
         personal.tap()
-        XCTAssertTrue(app.buttons["chat-header-search"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["chat-header-voice-call"].waitForExistence(timeout: 10))
         let predicate = NSPredicate(format: "label CONTAINS %@", "任务顶部栏检查")
         let button = app.buttons.matching(predicate).firstMatch
         let receipt = button.waitForExistence(timeout: 3) ? button : app.links.matching(predicate).firstMatch
@@ -2065,8 +2055,20 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["task-chat-summary-toggle"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.textFields["assistant-chat-composer"].exists)
         app.buttons["task-chat-close"].tap()
-        XCTAssertTrue(app.buttons["chat-header-search"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["chat-header-voice-call"].waitForExistence(timeout: 5))
         XCTAssertTrue(receipt.isHittable)
+    }
+
+    private func openChatMessageSearch() {
+        let add = app.buttons["添加附件或引用"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        let panel = app.collectionViews["assistant-action-panel"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        panel.swipeLeft()
+        let search = app.buttons["chat-action-search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
     }
 
     func testMessageSearchBottomControlsAndClose() {
@@ -2074,9 +2076,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         let personal = app.buttons["conversations-personal-agent-entry"]
         XCTAssertTrue(personal.waitForExistence(timeout: 10))
         personal.tap()
-        let search = app.buttons["chat-header-search"]
-        XCTAssertTrue(search.waitForExistence(timeout: 10))
-        search.tap()
+        openChatMessageSearch()
         let input = app.textFields["chat-message-search-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
@@ -2088,21 +2088,85 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "所有改动均已记录")).firstMatch.waitForExistence(timeout: 5))
         capture("message-search-bottom-controls")
         app.buttons["chat-search-close"].tap()
-        XCTAssertTrue(app.buttons["chat-header-search"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["chat-header-voice-call"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.textFields["chat-message-search-input"].exists)
     }
 
-    func testPersonalChatHeaderSearchAndSettings() {
+    func testPersonalAgentSettingsSaveModel() {
         tab("conversations")
         let personal = app.buttons["conversations-personal-agent-entry"]
         XCTAssertTrue(personal.waitForExistence(timeout: 10))
         personal.tap()
-        let search = app.buttons["chat-header-search"]
-        XCTAssertTrue(search.waitForExistence(timeout: 10))
-        XCTAssertGreaterThanOrEqual(search.frame.height, 44)
+        let settings = app.buttons["assistant-options"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let model = app.buttons["personal-setting-model"]
+        XCTAssertTrue(model.waitForExistence(timeout: 5))
+        model.tap()
+        let alternate = app.buttons["Second Fixture Model"]
+        XCTAssertTrue(alternate.waitForExistence(timeout: 5))
+        alternate.tap()
+        XCTAssertTrue(model.waitForExistence(timeout: 5))
+        XCTAssertTrue(model.label.contains("Second Fixture Model"))
+        XCTAssertFalse(app.buttons["personal-setting-thinking"].exists)
+        app.buttons["personal-setting-close"].tap()
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        XCTAssertTrue(model.waitForExistence(timeout: 5))
+        XCTAssertTrue(model.label.contains("Second Fixture Model"))
+    }
+
+    func testPersonalCallModeSavesAndHidesVoiceDetailsForDirectConversation() {
+        tab("conversations")
+        let personal = app.buttons["conversations-personal-agent-entry"]
+        XCTAssertTrue(personal.waitForExistence(timeout: 10))
+        personal.tap()
+        let settings = app.buttons["assistant-options"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let mode = app.buttons["personal-setting-call-mode"]
+        let form = app.collectionViews.firstMatch
+        XCTAssertTrue(form.waitForExistence(timeout: 5))
+        form.swipeUp(velocity: .fast)
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        if mode.frame.maxY > form.frame.maxY - 20 { form.swipeUp(velocity: .fast) }
+        mode.tap()
+        let direct = app.buttons["直接对话"]
+        XCTAssertTrue(direct.waitForExistence(timeout: 5))
+        direct.tap()
+        XCTAssertTrue(direct.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["声音与问候"].waitForNonExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["保存"].exists)
+        let close = app.buttons["personal-setting-close"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: close)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+        close.tap()
+        XCTAssertTrue(mode.waitForNonExistence(timeout: 5))
+        settings.tap()
+        XCTAssertTrue(form.waitForExistence(timeout: 5))
+        form.swipeUp(velocity: .fast)
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        if mode.frame.maxY > form.frame.maxY - 20 { form.swipeUp(velocity: .fast) }
+        XCTAssertTrue(mode.label.contains("直接对话") || (mode.value as? String) == "直接对话")
+        mode.tap()
+        let assistant = app.buttons["语音助手"]
+        XCTAssertTrue(assistant.waitForExistence(timeout: 5))
+        assistant.tap()
+        XCTAssertTrue(assistant.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["声音与问候"].waitForExistence(timeout: 5))
+    }
+
+    func testPersonalChatHeaderVoiceAndSettings() {
+        tab("conversations")
+        let personal = app.buttons["conversations-personal-agent-entry"]
+        XCTAssertTrue(personal.waitForExistence(timeout: 10))
+        personal.tap()
+        let voice = app.buttons["chat-header-voice-call"]
+        XCTAssertTrue(voice.waitForExistence(timeout: 10))
+        XCTAssertGreaterThanOrEqual(voice.frame.height, 44)
         XCTAssertTrue(app.buttons["assistant-options"].exists)
         capture("personal-chat-capsule-header")
-        search.tap()
+        openChatMessageSearch()
         XCTAssertTrue(app.textFields["chat-message-search-input"].waitForExistence(timeout: 5))
         app.textFields["chat-message-search-input"].tap()
         app.textFields["chat-message-search-input"].typeText("检查结果")
@@ -2115,11 +2179,15 @@ final class MobileLayoutParityUITests: XCTestCase {
         capture("personal-ai-profile-settings")
         app.swipeUp()
         app.swipeUp()
+        let details = app.buttons["声音与问候"]
+        if !details.isHittable { app.swipeUp() }
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        details.tap()
         XCTAssertTrue(app.buttons["personal-agent-voice-choice"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Gateway 请求失败（404）"].exists)
-        XCTAssertTrue(app.staticTexts["更多设置请前往 PC 或 Web 端。"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["更多设置请前往 PC 或 Web 端。"].exists)
         capture("personal-ai-mobile-settings")
-        app.buttons["取消"].firstMatch.tap()
+        app.buttons["personal-setting-close"].tap()
     }
 
     func testConversationDraftFilteringChildrenAndPersonalEntry() {

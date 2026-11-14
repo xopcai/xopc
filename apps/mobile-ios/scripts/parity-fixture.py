@@ -17,10 +17,12 @@ messages[-1]['deliveries'] = [{'operation':'created','primary':{'kind':'task','i
 keyboard_messages = [{'id':'keyboard-user','role':'user','content':'Explain the result.'},
  {'id':'keyboard-answer','role':'assistant','content':'\n\n'.join(f'Paragraph {i}: a long answer spanning several screens.' for i in range(40))}]
 row={'key':parent,'agentId':'main','name':'移动端布局检查','status':'active','updatedAt':'2026-10-09T08:00:00Z','messageCount':len(messages)}
-record={'agentId':'personal','conversationId':personal,'state':'ready','displayName':'Ada','appearance':'loopi','revision':1,'preferences':{}}
-model={'id':'test/model','name':'Fixture Model','provider':'test','reasoning':True,'vision':False,'thinking':{'options':['off','low','medium','high'],'initialValue':'medium'}}
+record={'agentId':'personal','conversationId':personal,'state':'ready','displayName':'Ada','appearance':'loopi','revision':1,'preferences':{},'voiceCallPreferences':{'openingGreetingEnabled':True}}
+model={'id':'test/model','name':'Fixture Model','provider':'test','reasoning':True,'vision':False,'thinking':{'mode':'levels','options':['off','low','medium','high'],'initialValue':'medium'}}
 outreach={'revision':1,'mode':'balanced','timezone':'Asia/Shanghai','quietStart':22,'quietEnd':8,'dailyMessages':2,'dailyModelCalls':12}
 config={'model':'test/model','thinkingLevel':'medium','configVersion':1}
+personal_config=dict(config)
+second_model=dict(model,id='test/model-two',name='Second Fixture Model')
 project={'id':'fixture-project','name':'资料测试项目','status':'active','updatedAt':now}
 task={'id':'task-header','version':1,'title':'任务顶部栏检查','body':'验证任务对话入口','phase':'ready','delegateAgentId':'main','createdAt':now,'updatedAt':now}
 w=io.BytesIO()
@@ -44,7 +46,10 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/personal-agent/profile':
    patch=json.loads(body)
    if patch['revision']!=record['revision']: status=409;data={'ok':False,'error':'Settings changed'}
-   else: record.update(patch);record['revision']+=1;data=envelope(record)
+   else:
+    if 'voiceCallPreferences' in patch:
+     record['voiceCallPreferences'].update(patch.pop('voiceCallPreferences'))
+    record.update(patch);record['revision']+=1;data=envelope(record)
   elif path=='/api/personal-agent/proactivity':
    if body:
     patch=json.loads(body)
@@ -54,16 +59,20 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/personal-agent/avatar': data=envelope({'agentId':record['agentId']})
   elif path=='/api/voice/realtime/status': data=envelope({'tts':{'provider':'fixture','model':'tts'}})
   elif path=='/api/voice/tts-voices': data=envelope({'voices':[{'id':'fixture-voice','name':'Fixture voice'}]})
-  elif path=='/api/models': data=envelope({'defaultId':'test/model','models':[model]})
+  elif path=='/api/models': data=envelope({'defaultId':'test/model','models':[model,second_model]})
   elif path=='/api/sessions':
    items=[dict(row,key='draft',name='新对话',messageCount=0),row]
    data={'items':items,'total':2,'hasMore':False,'childrenByConversationId':{parent:{'total':1,'activeCount':0,'items':[{'taskId':'task-child','title':'移动端子任务','phase':'closed','activeConversationId':child}]}}}
   elif path.endswith('/history'): data={'session':{'key':path.split('/')[3],'agentId':'main','messages':keyboard_messages if keyboard_fixture else messages},'pagination':{'hasMore':False}}
   elif path.endswith('/context-summary'): data={'summary':{'conversationId':path.split('/')[3],'work':{},'sources':[],'sourcesHasMore':False,'unavailableSections':[],'environment':{'kind':'local_checkout','rootPath':'/fixture','available':True}}}
   elif path.endswith('/agent-config'):
+   current = personal_config if path.split('/')[3] == personal else config
    if body:
-    config.update(json.loads(body))
-   data=envelope(config)
+    patch=json.loads(body)
+    if patch.pop('configVersion',None) != current['configVersion']:
+     status=409;data={'ok':False,'error':{'message':'Settings changed'}}
+    else: current.update(patch);current['configVersion']+=1
+   if data is None: data=envelope(current)
   elif path.endswith('/clarification'): data=envelope({'clarification':None})
   elif path.endswith('/input-state'): data=envelope({'activeRunId':None,'inputs':[]})
   elif path.endswith('/run'): data=envelope({'active':child in path,'runId':'fixture-live' if child in path else None})

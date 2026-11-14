@@ -46,7 +46,8 @@ struct ChatAttachmentPreview: View {
             Task { await open() }
         } label: {
             if capsule {
-                ChatResultCapsuleLabel(title: attachment.name ?? String(localized: "附件"), systemImage: "doc")
+                ChatResultCapsuleLabel(title: attachment.name ?? String(localized: "附件"), systemImage: "doc",
+                                       status: attachment.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) })
             } else {
                 Label(attachment.name ?? "附件", systemImage: "doc")
                     .font(.caption)

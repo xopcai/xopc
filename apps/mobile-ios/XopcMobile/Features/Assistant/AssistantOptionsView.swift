@@ -133,7 +133,7 @@ struct AssistantSessionActionsView: View {
     }
 }
 
-private func thinkingLabel(_ level: String) -> String {
+func thinkingLabel(_ level: String) -> String {
     let label: String = switch level {
     case "off": "关闭"
     case "low": "低"
@@ -145,12 +145,13 @@ private func thinkingLabel(_ level: String) -> String {
     return AppLocalization.string(label, locale: AppLocalization.selectedLocale)
 }
 
-private struct AssistantOptionPicker: View {
+struct AssistantOptionPicker: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection
     let state: AssistantOptionsState
     let pickingModel: Bool
     let onSave: (ConversationSelection) -> Void
+    var reloadAfterError = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
@@ -158,7 +159,7 @@ private struct AssistantOptionPicker: View {
     var body: some View {
         List {
             if pickingModel {
-                ForEach(state.models.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { model in
+                ForEach(state.models.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.id.localizedCaseInsensitiveContains(search) }) { model in
                     Button {
                         state.selectModel(model.id)
                         save()
@@ -190,9 +191,16 @@ private struct AssistantOptionPicker: View {
             }
             if let error = state.errorMessage {
                 Text(error).foregroundStyle(.red)
-                Button("重试", action: save).disabled(state.isSaving)
+                if reloadAfterError {
+                    Button("重试") {
+                        Task { await state.load(conversation, using: GatewayClient(configuration: configuration)) }
+                    }.disabled(state.isLoading || state.isSaving)
+                } else {
+                    Button("重试", action: save).disabled(state.isSaving)
+                }
             }
         }
+        .disabled(state.isLoading)
         .searchable(text: $search, prompt: "搜索")
         .navigationTitle(pickingModel ? "模型" : "思考档位")
         .navigationBarTitleDisplayMode(.inline)

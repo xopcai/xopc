@@ -110,8 +110,10 @@ final class RealtimeVoiceAudio {
         guard engine.isRunning, player.isPlaying else { throw RealtimeVoiceAudioError.notStarted }
     }
 
-    func setSpeaker(_ speaker: Bool) throws {
-        try AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none)
+    func setSpeaker(_ speaker: Bool) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            try AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none)
+        }.value
         onRoute?(Self.routeName())
     }
 

@@ -140,6 +140,8 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onOpenPersonalAgent = gateway::openPersonalAgent,
             onLoadPersonalVoiceChoices = gateway::loadPersonalVoiceChoices,
             onUpdatePersonalAgentProfile = gateway::updatePersonalAgentProfile,
+            onLoadPersonalModel = gateway::loadPersonalModel,
+            onSavePersonalModel = gateway::savePersonalModel,
             onLoadPersonalProactivity = gateway::loadPersonalProactivity,
             onSavePersonalProactivity = gateway::savePersonalProactivity,
             onUploadPersonalAvatar = gateway::uploadPersonalAvatar,

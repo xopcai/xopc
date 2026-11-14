@@ -265,9 +265,8 @@ enum AssistantAction: String, CaseIterable, Identifiable {
 
 struct AssistantActionPanel: View {
     let canReferenceFiles: Bool
-    let canStartRealtimeVoice: Bool
     let onSelect: (AssistantAction) -> Void
-    let onRealtimeVoice: (RealtimeVoiceMode) -> Void
+    let onSearch: () -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -298,15 +297,12 @@ struct AssistantActionPanel: View {
             .frame(maxHeight: .infinity, alignment: .top)
 
             HStack(alignment: .top, spacing: 8) {
-                Button { onRealtimeVoice(.automatic) } label: {
-                    tile(title: Text("语音通话"), image: "waveform")
+                Button(action: onSearch) {
+                    tile(title: Text("搜索消息"), image: "magnifyingglass")
                 }
                 .buttonStyle(.plain)
-                .disabled(!canStartRealtimeVoice)
-                .accessibilityLabel(Text("语音通话"))
-                .accessibilityHint(canStartRealtimeVoice
-                    ? ""
-                    : AppLocalization.string("请先打开对话或等待语音准备完成", locale: AppLocalization.selectedLocale))
+                .accessibilityLabel("搜索消息")
+                .accessibilityIdentifier("chat-action-search")
                 .frame(maxWidth: .infinity)
                 ForEach(0 ..< 3, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity) }
             }

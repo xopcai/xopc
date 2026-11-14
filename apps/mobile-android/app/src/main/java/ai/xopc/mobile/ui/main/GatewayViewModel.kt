@@ -30,6 +30,7 @@ import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.ExecutionDetail
 import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
+import ai.xopc.mobile.gateway.ModelSelection
 import ai.xopc.mobile.gateway.QueuedInput
 import ai.xopc.mobile.gateway.QueuedInputState
 import ai.xopc.mobile.gateway.ConversationAgent
@@ -238,7 +239,6 @@ data class PersonalUiState(val gatewayId: String? = null, val summary: PersonalS
   val agent: PersonalAgentRecord? = null, val agentLoading: Boolean = false,
   val agentCreating: Boolean = false, val agentError: Boolean = false,
   val agentProfileSaving: Boolean = false, val agentProfileError: Boolean = false,
-  val agentProfileSavedRevision: Int = 0,
   val agentVoiceChoices: PersonalVoiceChoices? = null,
   val agentAvatar: Bitmap? = null,
   val loading: Boolean = false, val error: Boolean = false, val savingGoal: Boolean = false,
@@ -604,6 +604,34 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
     }
   }
 
+  suspend fun loadPersonalModel(gatewayId: String, conversationId: String): ModelSelection =
+    runInterruptible(Dispatchers.IO) {
+      val agent = personalModelTarget(gatewayId, conversationId)
+      conversations.modelSelection(conversationId, agent.agentId)
+    }
+
+  suspend fun savePersonalModel(gatewayId: String, conversationId: String, model: ConversationModel,
+    configVersion: Long?): ModelSelection {
+    val selection = runInterruptible(Dispatchers.IO) {
+      personalModelTarget(gatewayId, conversationId)
+      val state = mutableState.value
+      check(state.selectedConversationId != conversationId ||
+        (!state.modelSaving && !state.sending && state.activeRunId == null && state.pendingInput == null))
+      conversations.setModel(conversationId, model, configVersion)
+    }
+    if (mutableState.value.profile?.gatewayId == gatewayId &&
+      mutableState.value.selectedConversationId == conversationId) loadModels()
+    return selection
+  }
+
+  private fun personalModelTarget(gatewayId: String, conversationId: String): PersonalAgentRecord {
+    val state = mutableState.value
+    check(state.profile?.gatewayId == gatewayId && session.currentProfile()?.gatewayId == gatewayId)
+    return requireNotNull(state.personal.agent?.takeIf {
+      it.state == "ready" && it.conversationId == conversationId
+    })
+  }
+
   suspend fun loadPersonalProactivity(): ai.xopc.mobile.gateway.PersonalProactivitySettings {
     val gatewayId = mutableState.value.profile?.gatewayId
     val result = runInterruptible(Dispatchers.IO) { personalAgentRepository.proactivity() }
@@ -639,7 +667,7 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
   }
 
   fun updatePersonalAgentProfile(name: String, appearance: String,
-    voiceId: String?, openingGreetingEnabled: Boolean) {
+    voiceId: String?, openingGreetingEnabled: Boolean, callEngine: String) {
     val gatewayId = mutableState.value.profile?.gatewayId ?: return
     val agent = mutableState.value.personal.agent?.takeIf { it.state == "ready" } ?: return
     if (mutableState.value.personal.agentProfileSaving) return
@@ -653,12 +681,11 @@ class GatewayViewModel(application: Application) : AndroidViewModel(application)
           else if (voiceId.isEmpty()) null
           else PersonalVoicePreference(route.provider, route.model, voiceId)
         val updated = runInterruptible(Dispatchers.IO) {
-          personalAgentRepository.updateProfile(agent, name, appearance, voice, openingGreetingEnabled)
+          personalAgentRepository.updateProfile(agent, name, appearance, voice, openingGreetingEnabled, callEngine)
         }
         if (mutableState.value.profile?.gatewayId != gatewayId) return@launch
         mutableState.update { it.copy(personal = it.personal.copy(agent = updated,
-          agentProfileSaving = false, agentProfileError = false,
-          agentProfileSavedRevision = it.personal.agentProfileSavedRevision + 1)) }
+          agentProfileSaving = false, agentProfileError = false)) }
         if (updated.appearance == "custom") {
           val avatar = runInterruptible(Dispatchers.IO) { loadPersonalAvatar(updated) }
           if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {

@@ -8,6 +8,7 @@ final class AssistantOptionsState {
     private(set) var isLoading = false
     private(set) var isSaving = false
     private(set) var errorMessage: String?
+    private var configVersion: Int?
     var selectedModelID = ""
     var thinkingLevel = "off"
 
@@ -27,38 +28,44 @@ final class AssistantOptionsState {
             let catalog = try await gateway.fetchModels(agentID: conversation.agentId)
             models = catalog.models
             if conversation.isDraft {
+                configVersion = nil
                 selectedModelID = conversation.model ?? catalog.defaultId ?? models.first?.id ?? ""
                 selectThinking(conversation.thinkingLevel)
             } else {
                 let configuration = try await gateway.fetchAgentConfiguration(conversationID: conversation.id)
+                configVersion = configuration.configVersion
                 selectedModelID = configuration.model ?? catalog.defaultId ?? models.first?.id ?? ""
                 selectThinking(configuration.thinkingLevel)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            if !Task.isCancelled { errorMessage = error.localizedDescription }
         }
     }
 
     func selectModel(_ id: String) {
         selectedModelID = id
-        selectThinking(nil)
+        selectThinking(thinkingLevel)
     }
 
     func save(
         _ conversation: ConversationSelection,
         using gateway: any GatewayServing
     ) async -> ConversationSelection? {
-        guard !selectedModelID.isEmpty else { return nil }
+        guard !isSaving, !isLoading, !selectedModelID.isEmpty else { return nil }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
         do {
             if !conversation.isDraft {
-                try await gateway.updateAgentConfiguration(
+                let saved = try await gateway.updateAgentConfiguration(
                     conversationID: conversation.id,
                     model: selectedModelID,
-                    thinkingLevel: thinkingLevel
+                    thinkingLevel: thinkingLevel,
+                    configVersion: configVersion
                 )
+                configVersion = saved.configVersion
+                selectedModelID = saved.model ?? selectedModelID
+                selectThinking(saved.thinkingLevel ?? thinkingLevel)
             }
             return conversation.configured(model: selectedModelID, thinkingLevel: thinkingLevel)
         } catch {

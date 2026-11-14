@@ -106,17 +106,21 @@ extension GatewayClient {
     func updateAgentConfiguration(
         conversationID: String,
         model: String,
-        thinkingLevel: String
-    ) async throws {
-        let body = try encoder.encode(AgentConfigurationCommand(model: model, thinkingLevel: thinkingLevel))
+        thinkingLevel: String,
+        configVersion: Int?
+    ) async throws -> SessionAgentConfiguration {
+        let body = try encoder.encode(AgentConfigurationCommand(
+            model: model, thinkingLevel: thinkingLevel, configVersion: configVersion
+        ))
         let envelope: GatewayEnvelope<SessionAgentConfiguration> = try await request(
             path: "/api/sessions/\(conversationID)/agent-config",
             method: "PATCH",
             body: body
         )
-        guard envelope.isSuccessful else {
+        guard envelope.isSuccessful, let saved = envelope.payload else {
             throw GatewayClientError.server(envelope.error?.message ?? "无法更新会话配置")
         }
+        return saved
     }
 
     func fetchProjectEnvironmentOptions(projectID: String) async throws -> ProjectEnvironmentOptions {
