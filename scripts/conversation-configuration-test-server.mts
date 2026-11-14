@@ -17,9 +17,10 @@ export async function createConfigurationTestServers(options: { loyaltyPoints?: 
   const refusals: Array<{ service: string; status: number; hadCredential: boolean }> = [];
   async function mcp(request: IncomingMessage, response: ServerResponse, service: keyof typeof codes, authenticated: boolean, challenge?: string) {
     if (!authenticated) {
-      const status = service === 'token' ? options.tokenRefusalStatus ?? 401 : 401;
+      const explicitTokenEndpoint = service === 'token' && request.url === '/token-explicit';
+      const status = explicitTokenEndpoint && !request.headers.authorization ? 400 : service === 'token' ? options.tokenRefusalStatus ?? 401 : 401;
       refusals.push({ service, status, hadCredential: Boolean(request.headers.authorization) });
-      if (status === 403) json(response, { code: '0001', msg: 'Service refused access', data: null }, 403);
+      if (status === 403 || status === 400) json(response, { code: '0001', msg: 'Service refused access', data: null }, status);
       else response.writeHead(401, { 'WWW-Authenticate': challenge ?? 'Bearer' }).end();
       return;
     }

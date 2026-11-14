@@ -15,7 +15,26 @@ import { connectionPlanSchema, type ConnectionPlan } from './setup-plan.js';
 
 type Context = { managementOrigin?: string; conversationId: string; agentId: string; authorizeResearch?: (tool: 'web_search' | 'web_fetch', args: Record<string, unknown>) => Promise<boolean>; signal?: AbortSignal };
 type Document = { id: string; url: string; hash: string; text: string };
-type Candidate = { id: string; plan: ConnectionPlan; evidence: Array<{ documentId: string; quote: string }>; trusted: boolean };
+type Candidate = { id: string; plan: ConnectionPlan; evidence: Array<{ documentId: string; quote: string }>; trusted: boolean; documentedTokenPortal?: boolean };
+const manualCredential = /personal access token|integration token|api[ -]?key|static token|(?:create|generate|copy|get|acquire|obtain|apply for|request|activate) (?:an? |your |the )?(?:[\w-]+ ){0,2}token\b|个人访问令牌|集成令牌|访问密钥|(?:创建|生成|复制|申请|获取|激活).{0,12}(?:密钥|令牌|凭据|token)/i;
+const bearerHeader = /\bAuthorization["']?\s*:\s*["']?Bearer[ \t]+\S+/i;
+
+function documentedTokenPortal(document: Document, endpoint: string) {
+  const endpointIndex = document.text.indexOf(endpoint);
+  if (endpointIndex < 0) return;
+  const quote = document.text.slice(Math.max(0, endpointIndex - 2500), endpointIndex + 2500);
+  if (!bearerHeader.test(quote) || !manualCredential.test(quote) || /\boauth\b|\boauth2\b/i.test(quote)) return;
+  const links = new Set(quote.split('\n').flatMap(line => {
+    if (!manualCredential.test(line) && !/official (?:website|portal).*\bmcp\b|MCP.{0,16}开放平台/i.test(line)) return [];
+    return (line.match(/https:\/\/[^\s<>"'`\])]+/g) ?? []).map(link => link.replace(/[.,;:，。；]+$/, ''));
+  }).filter(link => {
+    if (!checkUrlSafety(link).safe) return false;
+    const url = new URL(link);
+    return url.href !== new URL(endpoint).href && !url.username && !url.password
+      && ![...url.searchParams.keys()].some(key => /token|secret|password|api.?key|authorization/i.test(key));
+  }));
+  if (links.size === 1) return { helpUrl: [...links][0], evidence: { documentId: document.id, quote } };
+}
 function lastUserEntry(conversationId: string) {
   const row = loadTranscriptRowsForSession(conversationId).filter(entry => 'role' in entry && entry.role === 'user').at(-1);
   return row ? createHash('sha256').update(JSON.stringify(row)).digest('hex') : undefined;
@@ -105,30 +124,45 @@ export class McpDiscovery {
       const args = base.extend({ plan: connectionPlanSchema, evidence: z.array(z.object({ documentId: z.string().uuid(), quote: z.string().min(1).max(10_000) }).strict()).min(1).max(12) }).strict().parse(input);
       const record = this.current(args.discoveryId, context, args.expectedVersion);
       const documents = args.evidence.map(e => { const doc = record.documents.find(d => d.id === e.documentId); if (!doc || !doc.text.includes(e.quote)) throw new Error('Evidence quote is missing from the retrieved document'); return doc; });
-      const text = args.evidence.map(e => e.quote).join('\n');
+      let text = args.evidence.map(e => e.quote).join('\n');
       const values = [args.plan.url, args.plan.helpUrl, ...args.plan.secretFields.map(f => f.name), args.plan.execution?.command, args.plan.execution?.cwd, ...(args.plan.execution?.args ?? [])].filter((v): v is string => Boolean(v));
       if (values.some(value => !text.includes(value))) throw new Error('Every endpoint, credential field and execution argument needs exact document evidence');
       if (args.plan.transport === 'sse' && !/\bsse\b/i.test(text) || args.plan.transport === 'stdio' && !/stdio|command/i.test(text)) throw new Error('Authentication or transport lacks documented evidence');
       if (args.plan.authentication === 'none' && !/no authentication|unauthenticated|无需认证|无需鉴权|公开服务/i.test(text)) throw new Error('No-authentication requires positive document evidence');
+      let hasDocumentedTokenPortal = false;
+      // Recover a documented token portal when the selected guide was quoted only for its endpoint.
+      if (args.plan.url && ['auto', 'bearer'].includes(args.plan.authentication)
+        && !/\boauth2?\b/i.test(text)) {
+        const portals = [...new Set(documents)]
+          .filter(document => args.evidence.some(item => item.documentId === document.id && item.quote.includes(args.plan.url!)))
+          .map(document => documentedTokenPortal(document, args.plan.url!)).filter(portal => portal !== undefined);
+        if (portals.length && portals.every(portal => portal.helpUrl === portals[0].helpUrl)
+          && (!args.plan.helpUrl || args.plan.helpUrl === portals[0].helpUrl)) {
+          args.plan.helpUrl = portals[0].helpUrl;
+          args.evidence.push(portals[0].evidence);
+          text += `\n${portals[0].evidence.quote}`;
+          hasDocumentedTokenPortal = true;
+        }
+      }
       const bearerField = args.plan.secretFields.find(field => field.prefix === 'Bearer ');
       const headerName = bearerField?.name ?? 'Authorization';
       const documentedBearer = documents.some(document => {
         const quoted = args.evidence.filter(item => item.documentId === document.id).map(item => item.quote).join('\n');
         return Boolean(args.plan.url && quoted.includes(args.plan.url)
-          && new RegExp(`\\b${headerName}\\s*:\\s*Bearer\\b`, 'i').test(quoted)
-          && /personal access token|integration token|api[ -]?key|static token|(?:create|generate|copy|get|acquire|obtain|apply for) (?:an? |your )?(?:access )?token (?:from|in|at) |个人访问令牌|集成令牌|访问密钥|(?:创建|生成|复制|申请|获取).{0,12}(?:密钥|令牌)/i.test(quoted));
+          && new RegExp(`\\b${headerName}["']?\\s*:\\s*["']?Bearer\\b`, 'i').test(quoted)
+          && manualCredential.test(quoted));
       });
       if ((args.plan.authentication === 'bearer' || bearerField) && !documentedBearer) {
         throw new Error('A Bearer header does not establish a manually supplied credential. Quote the endpoint, header and how to obtain the key from the same guide, or use auto.');
       }
       if (args.plan.authentication === 'auto' && !args.plan.secretFields.length && documentedBearer
-        && !/\boauth\b/i.test(text)) {
+        && !/\boauth2?\b/i.test(text)) {
         args.plan.authentication = 'bearer';
       }
       if (args.plan.execution && !documents.some(document => document.url === args.plan.execution!.sourceUrl)) throw new Error('The execution source must be one of the fetched documents');
       if (args.plan.url && !checkUrlSafety(args.plan.url).safe) throw new Error('Search-discovered endpoints must be public. Local endpoints require an explicit user-supplied address.');
       // Quoted configuration is not proof of publisher ownership. All discovered plans need review.
-      const candidate: Candidate = { id: randomUUID(), plan: args.plan, evidence: args.evidence, trusted: false };
+      const candidate: Candidate = { id: randomUUID(), plan: args.plan, evidence: args.evidence, trusted: false, documentedTokenPortal: hasDocumentedTokenPortal };
       record.candidates.push(candidate); record.version++; this.records.set(record.id, record);
       return { discoveryId: record.id, version: record.version, candidates: record.candidates.map(c => ({ candidateId: c.id, ...c.plan, ownership: 'owner_review_required' })), instruction: 'Select only the intended candidate. If multiple candidates match, ask one short disambiguation question first. Ownership is separate from protocol verification.' };
     }

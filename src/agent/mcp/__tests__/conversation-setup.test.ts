@@ -498,6 +498,26 @@ it.each([
   expect(config.mcp?.servers?.docs).toBeUndefined();
 });
 
+it('uses the submitted Token as owner approval and checks the prepared connection once', async () => {
+  vi.spyOn(McpDiscovery.prototype, 'selected').mockReturnValue({
+    id: 'candidate', trusted: false, documentedTokenPortal: true, evidence: [],
+    sources: [{ url: 'https://docs.example/guide', hash: 'fixture' }], purpose: 'Read',
+    plan: { displayName: 'Docs', url: 'https://data.example.com/mcp', transport: 'streamable-http',
+      authentication: 'bearer', secretFields: [], helpUrl: 'https://docs.example/keys', objective: 'complete_task' },
+  });
+  native.probeMcpConnection.mockResolvedValueOnce({ state: 'connected' });
+  const goal = await service.command('start', { planId: '00000000-0000-4000-8000-000000000000', expectedPlanVersion: 1, serverId: 'docs', purpose: 'Read' }, context) as any;
+  expect(goal).toMatchObject({ phase: 'approval_required', approveWithToken: true, helpUrl: 'https://docs.example/keys' });
+  await expect(service.interact(goal.setupId, 'approve', undefined, goal.version)).rejects.toThrow('cannot be approved');
+  await expect(service.interact(goal.setupId, 'token', '', goal.version)).rejects.toThrow('Provide every');
+  expect(native.probeMcpConnection).not.toHaveBeenCalled();
+  expect(config.mcp?.servers?.docs).toBeUndefined();
+  expect(await service.interact(goal.setupId, 'token', 'fixture-key', goal.version)).toMatchObject({ phase: 'ready' });
+  expect(native.probeMcpConnection).toHaveBeenCalledTimes(1);
+  expect(config.mcp?.servers?.docs).toBeDefined();
+  expect(JSON.stringify(config)).not.toContain('fixture-key');
+});
+
 it('uses an exact catalog match and ignores unrelated Store search results', async () => {
   const authorizeResearch = vi.fn(async () => false);
   const storeFetch = vi.fn(async (input: string) => {

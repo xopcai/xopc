@@ -311,7 +311,7 @@ function setupCard() {
 }
 
 async function openSetupInteraction() {
-  await setupCard().getByRole('link', { name: /^(查看来源|填写访问密钥|登录并继续|更新密钥|等待完成登录|查看连接|检查连接|Review source|Enter access key|Sign in and continue|Update key|Waiting for sign-in|View connection|Check connection)$/ }).click();
+  await setupCard().getByRole('link', { name: /^(配置 MCP Token|Set up MCP Token|查看来源|填写访问密钥|登录并继续|更新密钥|等待完成登录|查看连接|检查连接|Review source|Enter access key|Sign in and continue|Update key|Waiting for sign-in|View connection|Check connection)$/ }).click();
 }
 async function continuation(id: string, service: 'token' | 'oauth') {
   const code = testServers!.codes[service];
@@ -614,12 +614,18 @@ async function verifyOnlineDiscovery() {
     assert.equal(goal.url.replace(/\/$/, ''), 'https://mcp.mcd.cn'); assert.equal(goal.authentication, 'bearer');
     assert.equal(goal.objective, 'connect_only'); assert(goal.sources?.some((source: any) => /^https:\/\/(open\.mcd\.cn|github\.com\/M-China\/mcd-mcp-server|raw\.githubusercontent\.com\/M-China\/mcd-mcp-server\/main\/README\.md)(?:\/|$)/.test(source.url)));
     await openSetupInteraction();
-    const approval = page.getByRole('button', { name: /^(允许这次连接|Approve this connection)$/ });
-    if (await approval.isVisible()) await approval.click();
+    await assertTokenSetup('https://open.mcd.cn/mcp');
     await page.locator('input[type="password"]').first().waitFor();
     await page.screenshot({ path: join(evidence, 'online-mcd-secure-input.png'), fullPage: true });
-    report.cases.push({ id: 'online-mcd-secure-input', passed: true, checks: { officialSource: true, documentedEndpoint: true, bearerForm: true, noCredentialSupplied: true }, sources: goal.sources.map((source: any) => source.url) });
+    report.cases.push({ id: 'online-mcd-secure-input', passed: true, checks: { officialSource: true, documentedEndpoint: true, bearerForm: true, officialTokenPortal: true, noCredentialSupplied: true }, sources: goal.sources.map((source: any) => source.url) });
   } finally { observer.close(); }
+}
+
+async function assertTokenSetup(helpUrl: string) {
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('MCP Token', { exact: true }).waitFor();
+  assert.equal(await dialog.getByRole('link', { name: /去服务方获取 MCP Token|Get an MCP Token from the provider/ }).getAttribute('href'), helpUrl);
+  assert.equal(await dialog.getByRole('button', { name: /^(允许这次连接|Approve this connection|重新检查|Check again)$/ }).count(), 0);
 }
 
 async function verifyNameDiscovery() {
@@ -642,7 +648,7 @@ async function verifyNameDiscovery() {
     for (let round = 1; round <= rounds; round++) {
       for (const kind of kinds) {
         const key = kind;
-        const beforeCalls = servers.calls.length, beforeStdio = await fixtures.stdioReads(), beforePackage = await fixtures.packageReads(), beforeSearch = fixtures.searchLog.length;
+        const beforeCalls = servers.calls.length, beforeRefusals = servers.refusals.length, beforeStdio = await fixtures.stdioReads(), beforePackage = await fixtures.packageReads(), beforeSearch = fixtures.searchLog.length;
         const prompt = taskRoutingCaseId === 'R05'
           ? (process.env.XOPC_CONFIGURATION_E2E_TASK_ROUTING_VARIANT === 'en'
             ? `Find the verification code in my profile on ${fixtures.names[key]}.`
@@ -685,7 +691,7 @@ async function verifyNameDiscovery() {
         if (taskRoutingCaseId) {
           const card = setupCard();
           await card.waitFor();
-          assert.equal(await card.getByRole('link', { name: /^(查看来源|Review source)$/ }).count(), 1, 'Expected one source-review action');
+          assert.equal(await card.getByRole('link', { name: kind === 'token' ? /^(配置 MCP Token|Set up MCP Token)$/ : /^(查看来源|Review source)$/ }).count(), 1, 'Expected one setup action');
           assert.equal(await card.getByRole('link').count(), 1, 'Expected a single connection action');
           assert.equal(await page.locator('[data-chat-message-row] a[href*="/mcp-setup/"]').count(), 0, 'Chat must not duplicate the connection action');
           assert.equal(await page.locator('[data-chat-message-row]').filter({ hasText: /\/mcp-setup\// }).count(), 0, 'Chat must not print the setup route');
@@ -698,13 +704,20 @@ async function verifyNameDiscovery() {
         else assert(current.execution?.command && current.secretFields?.some((f: any) => f.name === 'FIXTURE_ACCESS_KEY'));
         assert.equal(current.objective, kind === 'public-only' ? 'connect_only' : 'complete_task');
         await openSetupInteraction();
-        await page.getByRole('button', { name: /^(允许这次连接|Approve this connection)$/ }).click();
+        if (kind === 'token') {
+          await assertTokenSetup('https://guides-fixture.example/keys');
+          assert.equal(goal().phase, 'approval_required', 'Credential submission also confirms the reviewed destination');
+          assert.equal(goal().attempts ?? 0, 0, 'Do not probe the endpoint without credentials');
+          assert.equal(servers.refusals.length, beforeRefusals, 'Do not send an unauthenticated request');
+          await captureScreenshot(`name-${round}-token-setup.png`);
+        } else {
+          await page.getByRole('button', { name: /^(允许这次连接|Approve this connection)$/ }).click();
+        }
         report.taskRoutingStage = 'authorization';
         if (taskRoutingCaseId && kind === 'token') {
           await page.locator('input[type="password"]').first().waitFor();
-          assert.equal(goal().phase, 'token_required', 'Documented Bearer plan must open the secure Token form');
           await page.reload();
-          await page.getByRole('dialog').waitFor();
+          await assertTokenSetup('https://guides-fixture.example/keys');
         }
         if (['token', 'unknown', 'header', 'legacy', 'stdio', 'package'].includes(kind)) {
           await page.locator('input[type="password"]').first().waitFor();
