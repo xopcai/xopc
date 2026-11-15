@@ -1901,7 +1901,7 @@ final class MobileLayoutParityUITests: XCTestCase {
     }
 
     func testLibraryUsesWorkspaceResultsWithVersionsFavoritesAndTrash() async throws {
-        var reset = URLRequest(url: try XCTUnwrap(URL(string: fixtureBase + "/fixture/space-reset")))
+        var reset = try URLRequest(url: XCTUnwrap(URL(string: fixtureBase + "/fixture/space-reset")))
         reset.httpMethod = "POST"
         let (_, response) = try await URLSession.shared.data(for: reset)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
@@ -2226,6 +2226,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     func testCapabilityCatalogDefaultsToPluginsAndSearchStaysInItsCategory() {
         tab("capabilities")
         let header = app.navigationBars["能力"]
@@ -2279,9 +2280,15 @@ final class MobileLayoutParityUITests: XCTestCase {
             capture("capability-\(category)")
             row.tap()
             XCTAssertTrue(close.waitForExistence(timeout: 5))
-            if category == "connections" { XCTAssertTrue(app.buttons["capability-panel-authorize"].waitForExistence(timeout: 5)) }
-            if category == "agents" { XCTAssertTrue(app.buttons["capability-start-chat"].exists) }
-            if category == "channels" { XCTAssertTrue(app.buttons["capability-panel-pair"].waitForExistence(timeout: 5)) }
+            if category == "connections" {
+                XCTAssertTrue(app.buttons["capability-panel-authorize"].waitForExistence(timeout: 5))
+            }
+            if category == "agents" {
+                XCTAssertTrue(app.buttons["capability-start-chat"].exists)
+            }
+            if category == "channels" {
+                XCTAssertTrue(app.buttons["capability-panel-pair"].waitForExistence(timeout: 5))
+            }
             XCTAssertFalse(app.buttons["capability-open-chat"].exists)
             close.tap()
         }

@@ -191,7 +191,9 @@ struct TimelineMessage: Equatable, Identifiable, Sendable {
     var agentReaction: AgentMessageReaction?
     var clientMessageID: String?
 
-    var scrollID: String { clientMessageID ?? id }
+    var scrollID: String {
+        clientMessageID ?? id
+    }
 }
 
 struct TimelineDetail: Equatable, Identifiable, Sendable {

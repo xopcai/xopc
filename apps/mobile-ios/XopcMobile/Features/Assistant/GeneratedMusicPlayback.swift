@@ -20,6 +20,7 @@ struct GeneratedMusicTrack: Equatable {
 }
 
 @MainActor @Observable
+// swiftlint:disable:next type_body_length
 final class GeneratedMusicPlayback {
     static let shared = GeneratedMusicPlayback()
 
@@ -453,7 +454,9 @@ private struct TimedLyric {
         var lines: [Self] = []
         for line in lyrics.split(whereSeparator: \.isNewline) {
             let value = line.trimmingCharacters(in: .whitespaces)
-            if value.isEmpty { continue }
+            if value.isEmpty {
+                continue
+            }
             guard value.first == "[", let end = value.firstIndex(of: "]") else { return [] }
             let parts = value[value.index(after: value.startIndex) ..< end].split(separator: ":")
             guard parts.count == 2, let minutes = Int(parts[0]), minutes >= 0,
@@ -472,13 +475,15 @@ struct MusicPreviewContent: View {
     var onPlay: (() -> Void)?
     @State private var showLyrics = false
 
-    private var isCurrent: Bool { playback.track?.key == track.key }
+    private var isCurrent: Bool {
+        playback.track?.key == track.key
+    }
 
     var body: some View {
         let lyrics = track.lyrics?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         VStack(spacing: 8) {
             Group {
-                if showLyrics && !lyrics.isEmpty {
+                if showLyrics, !lyrics.isEmpty {
                     ScrollView {
                         lyricContent(lyrics)
                             .frame(maxWidth: 480, alignment: .leading).padding(24)
@@ -495,7 +500,7 @@ struct MusicPreviewContent: View {
             .accessibilityIdentifier("music-player-content")
 
             VStack(spacing: 4) {
-                if isCurrent && playback.phase == .failed {
+                if isCurrent, playback.phase == .failed {
                     Text("无法播放音乐").font(.footnote).foregroundStyle(theme.secondary)
                 }
                 if !lyrics.isEmpty {
@@ -559,9 +564,17 @@ private struct GeneratedMusicTimeline: View {
     let track: GeneratedMusicTrack
     var onPlay: (() -> Void)?
 
-    private var current: Bool { playback.track?.key == track.key }
-    private var position: Double { current ? playback.position : 0 }
-    private var duration: Double { current ? playback.duration : track.duration ?? 0 }
+    private var current: Bool {
+        playback.track?.key == track.key
+    }
+
+    private var position: Double {
+        current ? playback.position : 0
+    }
+
+    private var duration: Double {
+        current ? playback.duration : track.duration ?? 0
+    }
 
     private var canSeek: Bool {
         current && duration > 0 && playback.phase != .failed && playback.phase != .loading

@@ -40,6 +40,7 @@ final class AssistantState {
         let references: [ContextReference]
         let delivery: MessageDelivery
     }
+
     @ObservationIgnored private var failedSend: (id: String, draft: SendDraft)?
 
     func historyTranscriptID(for conversation: ConversationSelection?) -> String? {
@@ -167,6 +168,7 @@ final class AssistantState {
         loadedConversationID == id
     }
 
+    // swiftlint:disable:next function_body_length
     func send(
         _ text: String,
         attachments: [MessageAttachment] = [],

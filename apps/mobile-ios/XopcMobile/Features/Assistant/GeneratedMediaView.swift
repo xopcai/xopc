@@ -357,7 +357,9 @@ struct GeneratedVideoDrawer: View {
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         } catch is CancellationError {
         } catch {
-            if !Task.isCancelled { self.error = error.localizedDescription }
+            if !Task.isCancelled {
+                self.error = error.localizedDescription
+            }
         }
     }
 }

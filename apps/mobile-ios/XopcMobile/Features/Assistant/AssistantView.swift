@@ -569,7 +569,7 @@ struct AssistantView<Dock: View>: View {
                             } action: { frame in
                                 if let frame, userScrollingMessages, let scope = timelineReadingScope {
                                     saveReadingAnchor(ChatReadingAnchor(id: message.scrollID,
-                                        offset: frame.minY - chatHeaderClearance, rowHeight: frame.height), scope: scope)
+                                                                        offset: frame.minY - chatHeaderClearance, rowHeight: frame.height), scope: scope)
                                 }
                             }
                         }
@@ -631,7 +631,9 @@ struct AssistantView<Dock: View>: View {
                     scheduleBottomScroll(scroller)
                 }
                 .modifier(ChatScrollInteraction(onStart: {
-                    if !userScrollingMessages { lastUserScrollTowardLatest = false }
+                    if !userScrollingMessages {
+                        lastUserScrollTowardLatest = false
+                    }
                     bottomJumpID = nil
                     userScrollingMessages = true
                     followingBottom = false
@@ -640,9 +642,13 @@ struct AssistantView<Dock: View>: View {
                     guard userScrollingMessages else { return }
                     followingBottom = lastUserScrollTowardLatest && isAtBottom
                     userScrollingMessages = false
-                    if followingBottom, let scope = timelineReadingScope { readingPositions.removeValue(forKey: scope) }
+                    if followingBottom, let scope = timelineReadingScope {
+                        readingPositions.removeValue(forKey: scope)
+                    }
                 }, onDirectionChange: { towardLatest in
-                    if userScrollingMessages { lastUserScrollTowardLatest = towardLatest }
+                    if userScrollingMessages {
+                        lastUserScrollTowardLatest = towardLatest
+                    }
                 }))
                 .overlay(alignment: .bottom) {
                     if positionedTimeline, !followingBottom, !isAtBottom {
@@ -651,7 +657,9 @@ struct AssistantView<Dock: View>: View {
                             bottomScrollTask?.cancel(); bottomScrollTask = nil
                             userScrollingMessages = false
                             followingBottom = true
-                            if let scope = timelineReadingScope { readingPositions.removeValue(forKey: scope) }
+                            if let scope = timelineReadingScope {
+                                readingPositions.removeValue(forKey: scope)
+                            }
                             let jumpID = UUID()
                             bottomJumpID = jumpID
                             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
@@ -793,7 +801,9 @@ struct AssistantView<Dock: View>: View {
     func followLatestAfterSend() {
         bottomJumpID = nil
         followingBottom = true
-        if let scope = timelineReadingScope { readingPositions.removeValue(forKey: scope) }
+        if let scope = timelineReadingScope {
+            readingPositions.removeValue(forKey: scope)
+        }
     }
 
     private var conversationNavigationTitle: String {

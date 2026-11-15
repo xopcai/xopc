@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AVKit
 import QuickLook
 import SwiftUI
@@ -80,7 +81,9 @@ struct PreviewVideo: View {
         .task(id: url) {
             let media = AVPlayer(url: url)
             player = media
-            if autoplay { media.play() }
+            if autoplay {
+                media.play()
+            }
         }
         .onDisappear { player?.pause(); player = nil }
     }

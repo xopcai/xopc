@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AVFoundation
 import SwiftUI
 
@@ -301,7 +302,7 @@ struct AppRootView: View {
         }
     }
 
-    // swiftlint:disable:next cyclomatic_complexity
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     @ViewBuilder private func destination(_ route: HomeDestination) -> some View {
         let configuration = appState.gatewayConfiguration
         switch route {
@@ -344,7 +345,7 @@ struct AppRootView: View {
                              },
                              onSetupChat: { prompt, language in
                                  appState.startCapabilityChat(agentId: defaultAgentID, prompt: prompt,
-                                     agentSetupLanguage: language)
+                                                              agentSetupLanguage: language)
                              },
                              onPersonalChanged: { Task { await personalAgent.refresh(using: configuration) } })
         case .personalOverview:
