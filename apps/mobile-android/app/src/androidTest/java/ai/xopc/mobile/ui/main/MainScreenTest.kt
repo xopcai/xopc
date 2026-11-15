@@ -100,8 +100,11 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
@@ -2515,6 +2518,44 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-composer-shell").assertDoesNotExist()
     composeTestRule.onNodeWithTag("personal-overview-close").performClick()
     composeTestRule.onNodeWithTag("assistant-input").assertTextContains("Keep this draft")
+  }
+
+  @Test fun floatingChatHeaderKeepsItsClearanceWhenAppearanceChangesDuringReading() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val agent = ai.xopc.mobile.gateway.PersonalAgentRecord("ada", "personal", "ready", "Ada", "loopi", null)
+    val dark = mutableStateOf(false)
+    val selectedId = mutableStateOf("personal")
+    val messages = List(20) { index -> ConversationMessage("reply-$index", "assistant", "Reply $index") }
+    composeTestRule.setContent {
+      val density = LocalDensity.current.density
+      CompositionLocalProvider(LocalDensity provides Density(density, 1.8f)) {
+        XopcTheme(darkTheme = dark.value) {
+          MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+            connection = ConnectionUiState(profile = profile, selectedConversationId = selectedId.value,
+              personal = PersonalUiState(gatewayId = "gateway", agent = agent), messages = messages, chatError = true,
+              progress = ProgressUiState(gatewayId = "gateway",
+                needsUser = listOf(ProgressItem("waiting", "Review", "", "Waiting", null, null)))))
+        }
+      }
+    }
+    fun checkHeader() {
+      val header = composeTestRule.onNodeWithTag("chat-floating-header").fetchSemanticsNode().boundsInRoot
+      val mask = composeTestRule.onNodeWithTag("chat-status-bar-background").fetchSemanticsNode().boundsInRoot
+      val retry = composeTestRule.onNodeWithTag("assistant-status-retry").fetchSemanticsNode().boundsInRoot
+      assertTrue("Only the status bar has a full-width background", mask.bottom <= header.top)
+      assertTrue("The connection banner starts below the title controls", retry.top >= header.bottom)
+    }
+    checkHeader()
+    val list = composeTestRule.onNodeWithTag("assistant-message-list")
+    list.performTouchInput { swipeDown() }
+    composeTestRule.runOnIdle { dark.value = true }
+    checkHeader()
+    composeTestRule.onNodeWithTag("chat-personal-overview").assertIsDisplayed()
+    composeTestRule.runOnIdle { selectedId.value = "ordinary" }
+    list.performTouchInput { swipeDown() }
+    composeTestRule.runOnIdle { dark.value = false }
+    checkHeader()
+    composeTestRule.onNodeWithTag("chat-header-agent").assertIsDisplayed()
   }
 
   @Test fun scheduleIdeaOpensUnsentConfigurationAndReturnsToList() {
