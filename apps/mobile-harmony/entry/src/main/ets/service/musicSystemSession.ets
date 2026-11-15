@@ -112,7 +112,7 @@ export class XopcMusicSystemSession {
   private async stopTask(context?: common.UIAbilityContext): Promise<void> {
     const id = this.taskId;
     this.taskId = -1;
-    if (context && id >= 0) await backgroundTaskManager.stopBackgroundRunning(context, id);
+    if (context && id >= 0) backgroundTaskManager.stopBackgroundRunning(context, id);
   }
 
   release(): Promise<void> {
