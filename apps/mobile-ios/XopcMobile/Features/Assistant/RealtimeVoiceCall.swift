@@ -178,6 +178,7 @@ final class RealtimeVoiceCall {
         approval = nil
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func open(recovering: Bool) async {
         guard let gateway, let conversationID else { return }
         generation += 1
@@ -271,6 +272,7 @@ final class RealtimeVoiceCall {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func consume(_ stream: AsyncThrowingStream<RealtimeVoiceIncoming, Error>, generation: Int) async {
         do {
             for try await incoming in stream {

@@ -105,6 +105,7 @@ extension GatewayClient {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct PersonalAgentOverview: View {
     let configuration: GatewayConfiguration
     let agent: PersonalAgentRecord

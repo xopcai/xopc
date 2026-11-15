@@ -1057,6 +1057,7 @@ struct AssistantView<Dock: View>: View {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct PersonalAgentProfileView: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection

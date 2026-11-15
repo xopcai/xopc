@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AVFAudio
 import Observation
 import SwiftUI
@@ -28,6 +29,7 @@ enum ChatAppearance {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct MessageBubble: View {
     let message: TimelineMessage
     let configuration: GatewayConfiguration

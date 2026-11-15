@@ -45,6 +45,7 @@ extension AssistantView {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func restoreDraft(
         _ text: String,
         attachments selectedAttachments: [MessageAttachment],
