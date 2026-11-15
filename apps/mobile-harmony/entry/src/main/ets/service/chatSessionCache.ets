@@ -85,7 +85,15 @@ export class XopcChatSessionCache {
     if (!gatewayId || !deviceId || !this.validPage(snapshot) || utf8(serialized).length > SESSION_CACHE_LIMIT) {
       return Promise.resolve();
     }
-    const entry: XopcCachedSessionList = { gatewayId, deviceId, savedAt: Date.now(), page: JSON.parse(serialized) as XopcSessionList };
+    const entry: XopcCachedSessionList = { gatewayId, deviceId, savedAt: Date.now(), page: {
+      total: snapshot.total, hasMore: snapshot.hasMore,
+      items: snapshot.items.map((item: XopcSessionItem): XopcSessionItem => ({
+        key: item.key, name: item.name, title: item.title, displayName: item.displayName,
+        messageCount: item.messageCount, updatedAt: item.updatedAt, status: item.status,
+        projectId: item.projectId, agentId: item.agentId,
+        customData: item.customData ? { origin: item.customData.origin } : undefined
+      }))
+    } };
     this.remember(entry);
     return this.serialize(async (): Promise<void> => {
       const retained = (await this.entries()).filter((row: XopcCachedSessionList): boolean => row.gatewayId !== gatewayId);
