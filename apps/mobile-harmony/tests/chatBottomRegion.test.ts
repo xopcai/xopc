@@ -90,7 +90,7 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain('this.chat.localDraft && !this.chat.rows.length');
     const profile = sidebar.slice(sidebar.indexOf("id('chat-sidebar-new')"));
     expect(profile).toContain("id('chat-sidebar-profile')");
-    expect(profile).toContain("this.go('personal')");
+    expect(profile).toContain("this.go('settings')");
     expect(sidebar).not.toContain("this.shortcut($r('app.string.personal')");
   });
 

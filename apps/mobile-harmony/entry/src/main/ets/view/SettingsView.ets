@@ -121,6 +121,9 @@ export struct XopcSettingsView {
   @Builder
   rootSettings() {
     if (gatewaySession.currentProfile()) {
+      XopcHubRow({ heading: $r('app.string.personal'), symbol: $r('sys.symbol.person'),
+        onOpen: (): void => { this.onNavigate({ page: 'personal', itemId: '' }); } })
+        .id('settings-personal-profile')
       XopcSectionLabel({ heading: $r('app.string.settings_connection_notifications') })
       XopcHubRow({ heading: gatewaySession.currentProfile()?.name ?? 'Gateway', summary: $r('app.string.connection'),
         symbol: $r('sys.symbol.link'), onOpen: (): void => { this.openSection('connection'); } })
