@@ -301,6 +301,7 @@ struct AppRootView: View {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     @ViewBuilder private func destination(_ route: HomeDestination) -> some View {
         let configuration = appState.gatewayConfiguration
         switch route {
@@ -319,9 +320,12 @@ struct AppRootView: View {
         case .capabilities:
             CapabilitiesView(configuration: configuration, personal: personalAgent.record(using: configuration),
                              onOpenAgent: { id, personal in
-                if personal { Task { await openPersonalAgent(remember: true) } }
-                else { appState.startConversation(agentId: id) }
-            }, onOpenDraft: { prompt in appState.startConversation(agentId: defaultAgentID, prompt: prompt) })
+                                 if personal {
+                                     Task { await openPersonalAgent(remember: true) }
+                                 } else {
+                                     appState.startConversation(agentId: id)
+                                 }
+                             }, onOpenDraft: { prompt in appState.startConversation(agentId: defaultAgentID, prompt: prompt) })
         case .personalOverview:
             if let agent = personalAgent.record(using: configuration) {
                 PersonalAgentOverview(configuration: configuration, agent: agent, attention: pendingAttention,

@@ -148,15 +148,18 @@ struct AssistantView<Dock: View>: View {
                 VStack(spacing: 4) {
                     floatingHeader.padding(.horizontal, 12)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                            if isPersonalConversation { personalHeaderHeight = height }
-                            else { ordinaryHeaderHeight = height }
+                            if isPersonalConversation {
+                                personalHeaderHeight = height
+                            } else {
+                                ordinaryHeaderHeight = height
+                            }
                         }
                     if pinsPlayingMusic {
                         GeneratedMusicDock(playback: music, sticky: true)
                     }
                 }
-                    .padding(.top, 8)
-                    .padding(.bottom, 6)
+                .padding(.top, 8)
+                .padding(.bottom, 6)
             }
         }
     }
@@ -298,7 +301,9 @@ struct AssistantView<Dock: View>: View {
         return .init(id: conversation.id, transcriptID: transcriptID, account: ComposerDraftStore.accountScope(configuration))
     }
 
-    private var mediaCards: [GeneratedMediaCard] { generatedMedia.cards(in: generatedMediaScope) }
+    private var mediaCards: [GeneratedMediaCard] {
+        generatedMedia.cards(in: generatedMediaScope)
+    }
 
     private var generatedMediaLifecycle: some View {
         let scope = generatedMediaScope
@@ -723,8 +728,11 @@ struct AssistantView<Dock: View>: View {
                                           return frame.maxY > header && frame.minY < viewportHeight
                                       } action: { visible in
                                           guard card.kind == .music else { return }
-                                          if visible { visibleMusicCardIDs.insert(card.id) }
-                                          else { visibleMusicCardIDs.remove(card.id) }
+                                          if visible {
+                                              visibleMusicCardIDs.insert(card.id)
+                                          } else {
+                                              visibleMusicCardIDs.remove(card.id)
+                                          }
                                       }
                                       .onDisappear { visibleMusicCardIDs.remove(card.id) }
                                       .id("generated-media-\(card.id)")

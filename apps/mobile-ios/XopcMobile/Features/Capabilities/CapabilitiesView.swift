@@ -58,6 +58,7 @@ private struct CapabilityCatalogItem: Decodable, Identifiable {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct CapabilitiesView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
@@ -221,7 +222,11 @@ struct CapabilitiesView: View {
                 .focused($searchFocused)
                 .submitLabel(.search)
                 .onSubmit { searchFocused = false }
-                .onChange(of: query) { _, value in if value.count > 160 { query = String(value.prefix(160)) } }
+                .onChange(of: query) { _, value in
+                    if value.count > 160 {
+                        query = String(value.prefix(160))
+                    }
+                }
                 .accessibilityIdentifier("capability-search")
             if !query.isEmpty {
                 Button("capability_clear", systemImage: "xmark.circle.fill") { query = "" }
@@ -243,7 +248,7 @@ struct CapabilitiesView: View {
 
     private func quoted(_ text: String) -> String {
         guard let encoded = try? JSONEncoder().encode(text) else { return "" }
-        return String(decoding: encoded, as: UTF8.self)
+        return String(bytes: encoded, encoding: .utf8) ?? ""
     }
 
     private func channelIssue(_ code: String) -> LocalizedStringKey {
@@ -299,6 +304,7 @@ struct CapabilitiesView: View {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     private func detailView(_ item: CapabilityCatalogItem) -> some View {
         let canStartChat = category == .agents && item.group != "disabled"
         return NavigationStack {

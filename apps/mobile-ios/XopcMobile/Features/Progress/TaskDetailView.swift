@@ -75,6 +75,7 @@ struct TaskDetailView: View {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct TaskConversationView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
@@ -208,7 +209,7 @@ struct TaskConversationView: View {
                         .background(mobileTheme.card, in: Circle())
                         .contentShape(.rect)
                 }
-                    .accessibilityLabel(Text(returnLabel)).accessibilityIdentifier("task-chat-close")
+                .accessibilityLabel(Text(returnLabel)).accessibilityIdentifier("task-chat-close")
             }
             Button { setExpanded(!overviewExpanded) } label: {
                 HStack(spacing: 8) {
@@ -247,7 +248,7 @@ struct TaskConversationView: View {
                     .background(mobileTheme.card, in: Circle())
                     .contentShape(.rect)
             }
-                .disabled(isWorking).accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
+            .disabled(isWorking).accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
         }.buttonStyle(.plain).foregroundStyle(mobileTheme.foreground).padding(.horizontal, 8).frame(minHeight: 64)
     }
 

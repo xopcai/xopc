@@ -36,6 +36,7 @@ final class AssistantState {
     func historyTranscriptID(for conversation: ConversationSelection?) -> String? {
         loadedConversationID == conversation?.id ? loadedTranscriptID ?? conversation?.transcriptId : conversation?.transcriptId
     }
+
     private var historyGeneration = 0
     private var contextGeneration = 0
     private var runObservation: Task<Void, Never>?

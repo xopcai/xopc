@@ -1982,6 +1982,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-agent"].waitForExistence(timeout: 6))
     }
 
+    // swiftlint:disable:next function_body_length
     func testGeneratedMusicContinuesAcrossConversationAndBackground() async throws {
         app.terminate()
         app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/music"
