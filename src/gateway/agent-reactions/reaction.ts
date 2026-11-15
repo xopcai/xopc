@@ -3,6 +3,8 @@ import type { SessionAgentReaction } from '@xopcai/gateway-contract';
 
 import { AgentCatalogRepository } from '../../agent-catalog/repository.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
+import type { Config } from '../../config/schema.js';
+import { resolveMessageReactionsEnabled } from '../../personal-agent/repository.js';
 import { resolveModel } from '../../providers/index.js';
 import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import { flattenMessageContent } from '../../session/client-history.js';
@@ -89,10 +91,15 @@ export class AgentReactionService {
 
   constructor(private readonly generate = generateDecision) {}
 
-  publishFallback(target: ReactionTarget, publish: (reaction: SessionAgentReaction) => void): void {
+  isEnabled(agentId: string, config: Config): boolean {
+    const agent = new AgentCatalogRepository().get(agentId);
+    return Boolean(agent && agent.enabled !== false && resolveMessageReactionsEnabled(agent.profile?.messageReactionsEnabled, config));
+  }
+
+  publishFallback(target: ReactionTarget, config: Config, publish: (reaction: SessionAgentReaction) => void): void {
     try {
       const profile = new AgentCatalogRepository().get(target.actorAgentId);
-      if (!profile || profile.enabled === false || profile.profile?.messageReactionsEnabled === false) return;
+      if (!profile || profile.enabled === false || !resolveMessageReactionsEnabled(profile.profile?.messageReactionsEnabled, config)) return;
       const entry = activeReactionEntry(target, { allowSteering: true });
       if (!entry) return;
       const saved = commitAgentReaction(target, entry.entryId, DEFAULT_AGENT_REACTION, profile.profile?.name ?? 'Ada');
@@ -111,8 +118,7 @@ export class AgentReactionService {
     const controller = new AbortController();
     const candidate = AbortSignal.any([signal, controller.signal]);
     const stillEligible = () => eligible() && getCurrentTranscriptId(target.conversationId) === target.transcriptId
-      && !getActiveConnectionWait(target.conversationId) && !getActiveClarification(target.conversationId)
-      && new AgentCatalogRepository().get(target.actorAgentId)?.profile?.messageReactionsEnabled !== false;
+      && !getActiveConnectionWait(target.conversationId) && !getActiveClarification(target.conversationId);
     const watchdog = setInterval(() => {
       try {
         if (performance.now() >= deadline || !stillEligible() || signal.aborted) controller.abort();

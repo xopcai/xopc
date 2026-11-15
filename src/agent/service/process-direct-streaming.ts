@@ -5,12 +5,13 @@ import { resolveAgentMainConversationId } from '../../routing/agent-session-key.
 import { resolveDefaultAgentId } from '../agent-scope.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
-import { parseUserTurnDocument, renderUserTurnDocument } from '@xopcai/gateway-contract';
+import { parseUserTurnDocument, renderUserTurnDocument, stripRuntimeUserMessageEnvelope } from '@xopcai/gateway-contract';
 
 import { stripEnvelopeTimestampPrefix } from '../../channels/envelope-timestamp.js';
 import { getConnectionResumeInput } from '../../storage/sqlite/connection-wait-repository.js';
 import { getClarificationResumeInput } from '../../storage/sqlite/clarification-wait-repository.js';
 import { listTaskUpdateTriggers } from '../../storage/sqlite/session-input-repository.js';
+import { withWorkbookTurn } from '../../space/workbook-turn.js';
 import type { Config } from '../../config/schema.js';
 import type { InboundAttachmentInput, MediaRef } from '../../channels/attachments/inbound-persist.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
@@ -458,6 +459,9 @@ async function* runProcessDirectStreamingInner(
             refId => sourceContexts.find(context => context.refId === refId)?.title ?? null,
           )
         : mergedUserText;
+      const workbookIntent = userTurnDocument
+        ? userTurnDocument.parts.map(part => part.type === 'text' ? part.text : ' ').join('')
+        : stripRuntimeUserMessageEnvelope(authoredText);
 
       const slash = await tryRunSlashCommand(
         deps,
@@ -558,7 +562,7 @@ async function* runProcessDirectStreamingInner(
       if (!isInternalResume) setPendingTranscriptUserMessage(conversationId, pendingUserMessage);
 
       try {
-        const result = await deps.agentManager.withSkillCapabilities(
+        const runTurn = () => deps.agentManager.withSkillCapabilities(
           conversationId,
           skillTurn.activatedCapabilityNames,
           () =>
@@ -591,6 +595,9 @@ async function* runProcessDirectStreamingInner(
               },
             ),
         );
+        const result = channel === 'webchat' && input.runId && !isInternalResume && !isTaskUpdate
+          ? await withWorkbookTurn({ conversationId, runId: input.runId, text: workbookIntent, sources: turnSourceContexts, signal }, runTurn)
+          : await runTurn();
 
         if (result.lastAssistantText) {
           deps.onTurnComplete?.(conversationId, result.lastAssistantText);

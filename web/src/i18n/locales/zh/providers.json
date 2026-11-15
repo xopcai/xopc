@@ -67,6 +67,7 @@
     "revokeConfirm": "撤销「{{name}}」的 OAuth 凭据？",
     "oauthStarting": "正在启动 OAuth…",
     "oauthProcessingCode": "正在处理授权…",
+    "oauthGrantRejected": "OpenAI 拒绝了本次授权码（invalid_grant）。请点击「OAuth 登录」重新发起授权。",
     "openAuthPage": "打开授权页",
     "cancelOAuth": "取消",
     "deviceCodeLabel": "一次性设备码",

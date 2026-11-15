@@ -11,7 +11,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory, type ClientHistoryMessage } from '../../../session/client-history.js';
 import { DEFAULT_AGENT_REACTION, readAgentReactions } from '../../../storage/sqlite/agent-reaction-repository.js';
-import { getPersonalAgentByConversation } from '../../../personal-agent/repository.js';
+import { getPersonalAgentByConversation, isPersonalConversation, resolveMessageReactionsEnabled } from '../../../personal-agent/repository.js';
 import { SessionStatus, type SessionType } from '../../../session/types.js';
 import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-references.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
@@ -28,7 +28,6 @@ import {
 } from '../../../storage/sqlite/sidebar-layout-repository.js';
 import { summarizeAiUsageByConversations } from '../../../storage/sqlite/ai-usage-repository.js';
 import { listSidebarTaskGroups } from '../../../tasks/task-sidebar-hierarchy.js';
-import { isPersonalConversation } from '../../../personal-agent/repository.js';
 
 const log = createGatewayRouteLogger('Sessions');
 
@@ -512,9 +511,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const actor = getPersonalAgentByConversation(key);
     const transcriptId = result.session.transcriptId;
     if (actor && transcriptId) {
-      const available = service.currentConfig?.experimental?.personalAgentMessageReactions === true;
-      result.session.agentReactions = { available, enabled: available && actor.messageReactionsEnabled };
-      if (result.session.agentReactions.enabled) {
+      const enabled = resolveMessageReactionsEnabled(actor.messageReactionsEnabled, service.currentConfig);
+      result.session.agentReactions = { available: true, enabled };
+      if (enabled) {
         const messages = result.session.messages as unknown as ClientHistoryMessage[];
         const entries = messages.flatMap(row => row.role === 'user' && row.transcriptEntryId ? [row.transcriptEntryId] : []);
         const reactions = new Map(readAgentReactions(key, transcriptId, entries, actor.displayName)

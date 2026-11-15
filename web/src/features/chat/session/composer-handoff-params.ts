@@ -42,6 +42,7 @@ export function searchParamsForComposerHandoff(search: string): string {
   const autoSend = sp.get('autoSend');
   const attachmentHandoff = sp.get('attachmentHandoff');
   const attachmentsHandoff = sp.get('attachmentsHandoff');
+  const workbookLaunch = sp.get('workbookLaunch');
   const agentSetup = sp.get('agentSetup');
   if (skill) next.set('skill', skill);
   if (slash) next.set('slash', slash);
@@ -49,6 +50,7 @@ export function searchParamsForComposerHandoff(search: string): string {
   if (autoSend === '1') next.set('autoSend', '1');
   if (attachmentHandoff) next.set('attachmentHandoff', attachmentHandoff);
   if (attachmentsHandoff) next.set('attachmentsHandoff', attachmentsHandoff);
+  if (workbookLaunch) next.set('workbookLaunch', workbookLaunch);
   if (sp.get('setup') === 'automation') next.set('setup', 'automation');
   if (agentSetup === '1') next.set('agentSetup', '1');
   if (sp.get('scene') === 'find-skills') next.set('scene', 'find-skills');

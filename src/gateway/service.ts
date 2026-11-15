@@ -8,6 +8,7 @@ import type { ClarificationSubmission } from '@xopcai/gateway-contract';
 import { PhoneStreamGateway } from '../phone/stream-gateway.js';
 import { configureGatewayHttpProxy } from '../infra/http-proxy-env.js';
 import { buildResultAgentContext } from '../agent/source-context/result-context.js';
+import { workbookReferenceContext } from '../space/workbook-turn.js';
 import { drainPersonalResultReads } from '../personal-agent/result-read-continuations.js';
 import { stopPersonalResultPreparations } from '../personal-agent/result-reader.js';
 import { PersonalProactivityService } from '../personal-agent/proactivity/service.js';
@@ -624,11 +625,6 @@ export class GatewayService {
     this.chatPreviews = new ChatPreviewService({ localApps: this.localApps });
 
     this.agentRunner = new GatewayAgentRunner({
-      canReact: endpointId => {
-        if (!this.config.experimental.personalAgentMessageReactions) return false;
-        const endpoint = this.endpointTools.registry.get(endpointId);
-        return endpoint?.kind === 'mobile' && endpoint.platform === 'harmonyos' && endpoint.availability === 'foreground';
-      },
       canResumeDeviceInteraction: (conversationId, checkpoint) => this.endpointTools.canResumeDeviceInteraction(conversationId, checkpoint),
       afterConnectionResume: (input, status) => this.mcpSetup.completeContinuation(input, status === 'ok'
         ? this.agentService.getLastAssistantPlainText(input.conversationId)
@@ -650,6 +646,7 @@ export class GatewayService {
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
       resolveTurnContext: async (ref, conversationId) => {
+        if (ref.kind === 'workbook') return workbookReferenceContext(ref.sourceId, ref.expectedVersion);
         if (ref.kind === 'result') return buildResultAgentContext(conversationId, ref.sourceId, ref.expectedVersion);
         if (ref.kind === 'task') return buildTaskAgentContext(new TaskRepository().get(ref.sourceId), ref.expectedVersion);
         if (ref.kind === 'user_assertion') {

@@ -21,6 +21,7 @@ const INTERNAL_ROUTE_ROOTS = new Set([
   'open',
   'projects',
   'settings',
+  'space',
   'skills',
   'tasks',
   'you',

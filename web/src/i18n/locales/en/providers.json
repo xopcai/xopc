@@ -67,6 +67,7 @@
     "revokeConfirm": "Revoke OAuth credentials for \"{{name}}\"?",
     "oauthStarting": "Starting OAuth…",
     "oauthProcessingCode": "Processing authorization…",
+    "oauthGrantRejected": "OpenAI rejected this authorization code (invalid_grant). Select OAuth to start a new sign-in.",
     "openAuthPage": "Open auth page",
     "cancelOAuth": "Cancel",
     "deviceCodeLabel": "One-time device code",

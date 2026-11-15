@@ -38,7 +38,7 @@ export interface ClientHistoryMessage {
     steered?: true;
     sourceContexts?: Array<{
       refId?: string;
-      kind: 'result' | 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'mcp_resource';
+      kind: 'result' | 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'workbook' | 'browser_page' | 'mcp_resource';
       sourceId: string;
       version: string;
       title: string;
@@ -114,7 +114,7 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
     const row = value as Record<string, unknown>;
     if (
       (row.kind !== 'note' && row.kind !== 'task' && row.kind !== 'file'
-        && row.kind !== 'session' && row.kind !== 'browser_tab' && row.kind !== 'result'
+        && row.kind !== 'session' && row.kind !== 'browser_tab' && row.kind !== 'workbook' && row.kind !== 'result'
         && row.kind !== 'browser_page' && row.kind !== 'mcp_resource')
       || typeof row.sourceId !== 'string'
       || typeof row.version !== 'string'

@@ -22,6 +22,37 @@ export const SpaceSaveVersionSchema = z.object({
 }).strict();
 
 export type SpaceVersionLink = { id: string; versionId: string };
+export const SpaceWorkbookReferenceSchema = z.strictObject({ id: z.uuid(), versionId: z.uuid() });
+export const SpaceWorkbookActionSchema = z.discriminatedUnion('action', [
+  z.strictObject({ action: z.literal('apply'), proposalId: z.uuid() }),
+  z.strictObject({ action: z.literal('undo'), versionId: z.uuid(), sourceVersionId: z.uuid() }),
+]);
+export type SpaceWorkbookCellValue = string | number | boolean | null;
+export type SpaceWorkbookCellChange = {
+  sheetId: string;
+  sheetName: string;
+  cell: string;
+  before: SpaceWorkbookCellValue;
+  after: SpaceWorkbookCellValue;
+  beforeFormula?: string;
+  afterFormula?: string;
+};
+export type SpaceWorkbookProposal = SpaceVersionLink & {
+  proposalId: string;
+  appliedVersionId?: string;
+  changes: SpaceWorkbookCellChange[];
+  effects: SpaceWorkbookCellChange[];
+};
+
+export function spaceWorkbookRoute(id: string, versionId?: string, options?: { sheetId?: string; range?: string; proposalId?: string; undo?: string }) {
+  const query = new URLSearchParams({ item: id });
+  if (versionId) query.set('version', versionId);
+  if (options?.sheetId) query.set('sheet', options.sheetId);
+  if (options?.range) query.set('range', options.range);
+  if (options?.proposalId) query.set('proposal', options.proposalId);
+  if (options?.undo) query.set('undo', options.undo);
+  return `/space?${query}`;
+}
 export type SpaceArtifactLink = SpaceVersionLink & { canSaveAsVersion: boolean };
 
 export type SpaceOrigin = {

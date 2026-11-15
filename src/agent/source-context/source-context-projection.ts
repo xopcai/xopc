@@ -41,7 +41,7 @@ export function projectSourceContextsForLlm<T extends { role: string; content?: 
       const contexts = envelope[2].replace(
         /<source_context kind="([^"]*)" id="([^"]*)" version="([^"]*)"(?: captured_at="(\d+)")?>\n([\s\S]*?)\n<\/source_context>/gu,
         (block, kind: string, id: string, version: string, capturedAt: string | undefined, body: string) => {
-          if (['note', 'file', 'task', 'session', 'result', 'user_assertion'].includes(kind)) {
+          if (['note', 'file', 'task', 'session', 'result', 'user_assertion', 'workbook'].includes(kind)) {
             if (!body.startsWith(`${SOURCE_CONTEXT_BOUNDARY}\n\n`)) return block;
             // Explicit references retain all distinct source versions and excerpts, without a TTL.
             const key = JSON.stringify([kind, id, version, createHash('sha256').update(body).digest('hex')]);

@@ -23,7 +23,7 @@ const READ_ONLY_SESSION_TOOLS = new Set([
     'exec_command', 'managed_job', 'read_file', 'list_dir', 'list_directory', 'find', 'grep',
     'web_search', 'web_fetch', 'knowledge_search', 'knowledge_get', 'knowledge_read',
     'session_status', 'session_search', 'session_recall', 'user_context_search', 'user_context_get',
-    'skills_list', 'skill_view', 'tool_manual', 'clarify', 'update_plan',
+    'skills_list', 'skill_view', 'tool_manual', 'clarify', 'update_plan', 'workbook_read',
 ]);
 
 export function isReadOnlySessionTool(name: string): boolean { return READ_ONLY_SESSION_TOOLS.has(name); }

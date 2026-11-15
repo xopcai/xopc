@@ -1,4 +1,4 @@
-import { Copy, MessageSquarePlus } from 'lucide-react';
+import { ArrowUp, Copy, MessageSquarePlus } from 'lucide-react';
 import { SPACE_WORKBOOK_SELECTION_MAX_BYTES, SPACE_WORKBOOK_SELECTION_MIME } from '@xopcai/gateway-contract';
 import { useEffect, useRef, useState } from 'react';
 import { useBeforeUnload, useNavigate } from 'react-router-dom';
@@ -14,6 +14,7 @@ import { useThemeStore } from '@/stores/theme-store';
 
 import { createSpaceWorkbook, saveSpaceWorkbook, spaceContent } from './space-api';
 import { WorkbookChatPicker, type WorkbookChatTarget } from './workbook-chat-picker';
+import { createWorkbookChatLaunch, previousWorkbookConversation } from './workbook-chat-launch';
 
 type Workbook = ReturnType<ReturnType<typeof createUniver>['univerAPI']['createWorkbook']>;
 type Editor = { univerAPI: ReturnType<typeof createUniver>['univerAPI']; workbook: Workbook };
@@ -32,7 +33,7 @@ async function finishCellEdit({ univerAPI, workbook }: Editor) {
   await formula.onCalculationResultApplied(5_000);
 }
 
-export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTrash, sourceConversationId, projectId, onSaved, onCopy }: {
+export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTrash, sourceConversationId, projectId, targetSheet, targetRange, onSaved, onCopy }: {
   id: string;
   versionId: string;
   title: string;
@@ -41,6 +42,8 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
   inTrash: boolean;
   sourceConversationId?: string;
   projectId?: string;
+  targetSheet?: string;
+  targetRange?: string;
   onSaved: (versionId: string) => void;
   onCopy: (id: string) => void;
 }) {
@@ -61,6 +64,7 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
   const [conflict, setConflict] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [selection, setSelection] = useState<{ file: File; label: string }>();
+  const [question, setQuestion] = useState('');
 
   useBeforeUnload(event => {
     if (!dirtyRef.current && !runtime.current?.workbook.isCellEditing()) return;
@@ -135,11 +139,26 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
     };
   }, [attempt, id, versionId]);
 
+  useEffect(() => {
+    if (state !== 'ready' || !targetSheet || !targetRange || !/^[A-Z]{1,2}[1-9]\d{0,3}(?::[A-Z]{1,2}[1-9]\d{0,3})?$/.test(targetRange)) return;
+    const frame = requestAnimationFrame(() => {
+      const workbook = runtime.current?.workbook;
+      const sheet = workbook?.getSheetBySheetId(targetSheet);
+      if (!sheet || sheet.isSheetHidden()) return;
+      const range = sheet.getRange(targetRange);
+      if (range.getLastRow() >= sheet.getMaxRows() || range.getLastColumn() >= sheet.getMaxColumns()) return;
+      workbook?.setActiveSheet(sheet);
+      sheet.setActiveRange(range);
+      sheet.scrollToCell(range.getRow(), range.getColumn());
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state, targetSheet, targetRange]);
+
   async function run(action: 'save' | 'copy' | 'ask') {
     const editor = runtime.current;
     if (!editor || pending.current) return;
     const hadEdits = dirtyRef.current || editor.workbook.isCellEditing();
-    if (action === 'save' && !hadEdits) return;
+    if (action === 'save' && !hadEdits) return baseVersion.current;
     pending.current = true;
     setBusy(true);
     setError('');
@@ -165,7 +184,7 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
           baseVersion.current = saved.versionId;
           onSaved(saved.versionId);
         } else onCopy(saved.id);
-        return;
+        return saved.versionId;
       }
 
       const sheet = editor.workbook.getActiveSheet();
@@ -199,6 +218,20 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
     }
   }
 
+  async function askWorkbook() {
+    const text = question.trim();
+    if (!text || pending.current) return;
+    const version = editable ? await run('save') : baseVersion.current;
+    if (!version) return;
+    const conversation = previousWorkbookConversation(id) ?? sourceConversationId;
+    const params = new URLSearchParams({ workbookLaunch: createWorkbookChatLaunch(text,
+      { kind: 'workbook', sourceId: id, expectedVersion: version, title }) });
+    if (!conversation && projectId) params.set('projectId', projectId);
+    if (!conversation && !projectId) params.set('projectScope', 'none');
+    navigate({ pathname: conversation ? `/chat/${encodeURIComponent(conversation)}` : '/chat/new', search: `?${params}` },
+      conversation ? undefined : { state: { forceNewChat: true } });
+  }
+
   function sendToChat(target: WorkbookChatTarget) {
     if (!selection) return;
     const search = new URLSearchParams({ attachmentHandoff: createComposerAttachmentHandoff(selection.file) });
@@ -221,6 +254,16 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
     {state === 'ready' ? <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-subtle px-3 py-2.5 text-xs">
       <span className="me-auto text-fg-muted" role="status">{!editable ? (zh ? '只读版本' : 'Read-only version') : busy
         ? (zh ? '正在处理…' : 'Working…') : dirty ? (zh ? '未保存的修改' : 'Unsaved changes') : (zh ? '已保存' : 'Saved')}</span>
+      {!inTrash ? <form onSubmit={event => { event.preventDefault(); void askWorkbook(); }}
+        className="flex min-h-10 min-w-48 flex-1 basis-56 items-center gap-1 rounded-lg border border-edge bg-surface-inset px-2.5 focus-within:border-accent">
+        <input value={question} onChange={event => setQuestion(event.target.value)} maxLength={1000}
+          aria-label={zh ? '问这份工作簿' : 'Ask about this workbook'} placeholder={zh ? '问这份工作簿…' : 'Ask about this workbook…'}
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-muted" />
+        <button type="submit" disabled={busy || !question.trim()} className="inline-flex min-h-8 items-center gap-1 rounded-md px-1.5 text-accent-fg hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-35"
+          aria-label={dirty ? (zh ? '保存并提问' : 'Save and ask') : (zh ? '发送问题' : 'Send workbook question')}>
+          {dirty ? <span>{zh ? '保存并提问' : 'Save and ask'}</span> : null}<ArrowUp className="size-4" aria-hidden />
+        </button>
+      </form> : null}
       {!inTrash ? <button ref={selectionButton} type="button" disabled={busy} onClick={() => void run('ask')}
         className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-accent-fg hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50">
         <MessageSquarePlus className="size-4" aria-hidden />{zh ? '在对话中使用选区' : 'Use selection in chat'}

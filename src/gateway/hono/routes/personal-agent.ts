@@ -6,7 +6,7 @@ import { HIGGS_REALTIME_REF, voiceCallPreferencesPatchSchema } from '@xopcai/rea
 import { writeAgentAvatarFromBase64 } from '../../agents-admin.js';
 import { getPersonalOwnerId } from '../../security/gateway-principal.js';
 import { markPersonalRead, personalUnreadSnapshot } from '../../../personal-agent/unread.js';
-import { getPersonalAgent, type PersonalAgentRecord } from '../../../personal-agent/repository.js';
+import { getPersonalAgent, resolveMessageReactionsEnabled, type PersonalAgentRecord } from '../../../personal-agent/repository.js';
 import { isPersonalSchedule, personalScheduleInput } from '../../../personal-agent/schedules.js';
 import { AutomationScheduleSchema } from '../../../automations/domain/validation.js';
 import { getAutomation } from '../../../automations/storage/index.js';
@@ -63,8 +63,11 @@ const PersonalSchedulePatchSchema = PersonalScheduleSchema.partial().extend({
 }).refine(value => Object.keys(value).length > 1);
 
 export function registerPersonalAgentRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const profilePayload = (record: PersonalAgentRecord | null) => record && ({ ...record,
-    messageReactionsAvailable: deps.service.currentConfig?.experimental?.personalAgentMessageReactions === true });
+  const profilePayload = (record: PersonalAgentRecord | null) => record && ({
+    ...record,
+    messageReactionsAvailable: true,
+    messageReactionsEnabled: resolveMessageReactionsEnabled(record.messageReactionsEnabled, deps.service.currentConfig),
+  });
   const owner = getPersonalOwnerId;
 
   registerProactivityRoutes(authenticated, deps, owner);

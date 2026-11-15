@@ -20,7 +20,7 @@ import { hasGatewayScope, type GatewayScope } from './security/gateway-scopes.js
 
 const log = createLogger('SessionContextSummary');
 const SOURCE_LIMIT = 20;
-const RECENT_SOURCE_KINDS = new Set(['note', 'file', 'session', 'browser_tab', 'mcp_resource', 'browser_page', 'app_context']);
+const RECENT_SOURCE_KINDS = new Set(['note', 'file', 'session', 'browser_tab', 'mcp_resource', 'workbook', 'browser_page', 'app_context']);
 
 function parseRecentSources(value: string | null): SessionContextSummary['sources'] {
   if (!value) return [];

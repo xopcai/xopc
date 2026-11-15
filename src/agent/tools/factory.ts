@@ -1,5 +1,6 @@
 import { getPhoneRuntime, phoneExecutionContext } from '../../phone/runtime.js';
 import { createPhoneUseTool } from './phone-use-tool.js';
+import { createWorkbookEditTool, createWorkbookReadTool } from './workbook-tools.js';
 import { createPersonalAttentionTool } from './personal-attention-tool.js';
 import { createPersonalMemoryTool } from './personal-memory-tool.js';
 import { withCoreToolExposure } from './toolExposure.js';
@@ -534,6 +535,9 @@ export class AgentToolsFactory {
       ? [createVideoDraftTool(webMediaConversation), createMusicGenerationTool(webMediaConversation)]
       : [];
     const optionalTools = [imageTool, imageGenerateTool, ...webMediaTools].filter((t) => t != null) as any[];
+    if (webMediaConversation() && !executionToolPolicy.taskExecution) {
+      optionalTools.push(createWorkbookReadTool(webMediaConversation), createWorkbookEditTool(webMediaConversation));
+    }
 
     const readTool = createReadFileTool(workspace, {
       allowOutsideWorkspace,

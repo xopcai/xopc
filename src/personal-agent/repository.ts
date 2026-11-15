@@ -3,6 +3,7 @@ import type { VoiceCallPreferences } from '@xopcai/realtime-protocol/voice';
 
 import { AgentCatalogRepository } from '../agent-catalog/repository.js';
 import type { StoredAgent } from '../agent-catalog/types.js';
+import type { Config } from '../config/schema.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
@@ -21,7 +22,7 @@ export interface PersonalAgentRecord {
   appearance: PersonalAppearance;
   voicePreference: { provider: string; model: string; voice: string } | null;
   voiceCallPreferences: VoiceCallPreferences;
-  messageReactionsEnabled: boolean;
+  messageReactionsEnabled?: boolean;
   revision: number;
   errorMessage: string | null;
 }
@@ -33,6 +34,10 @@ export function personalAgentId(ownerId: string): string {
 export function personalConversationId(ownerId: string): string {
   const hash = createHash('sha256').update(`personal-conversation:${ownerId}`).digest('hex');
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
+export function resolveMessageReactionsEnabled(preference: boolean | undefined, config: Config | undefined): boolean {
+  return preference ?? (config?.experimental?.personalAgentMessageReactions === true);
 }
 
 type PersonalSession = { conversation_id: string; agent_id: string };
@@ -66,7 +71,7 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
     appearance: appearanceFrom(agent),
     voicePreference: agent.profile?.voicePreference ?? null,
     voiceCallPreferences: agent.profile?.voiceCallPreferences ?? { openingGreetingEnabled: true },
-    messageReactionsEnabled: agent.profile?.messageReactionsEnabled !== false,
+    messageReactionsEnabled: agent.profile?.messageReactionsEnabled,
     revision: agent.revision,
     errorMessage: agent.provisioningError ?? null,
   };

@@ -50,7 +50,7 @@ export const sessionInputContentSchema = z.strictObject({
   interactionCapabilities: interactionCapabilitiesSchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
   contextRefs: z.array(z.strictObject({
-    kind: z.enum(['note', 'task', 'file', 'session', 'browser_tab', 'user_assertion', 'result']),
+    kind: z.enum(['note', 'task', 'file', 'session', 'browser_tab', 'user_assertion', 'result', 'workbook']),
     sourceId: z.string().trim().min(1), refId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
     expectedVersion: z.string().optional(),
   })).max(5).optional(),

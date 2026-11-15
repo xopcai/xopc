@@ -9,6 +9,7 @@ import type { UserTurnAttachment } from '../../user-turn-input.js';
 import { replaceLatestSessionTurn } from './session-input-handler.js';
 import { handleSessionCommand, handleSessionInputReceipt, handleSessionPreparationRetry } from './session-command-handler.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { deviceExecutionPrincipalId } from '../../../endpoint-tools/execution-actor.js';
 
 export function registerAgentStreamRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -59,6 +60,9 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
       ? undefined
       : parseTurnContextRefs(body.contextRefs);
     if (contextRefs === null) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid source context references' } }, 400);
+    if (contextRefs?.some(ref => ref.kind === 'workbook') && !hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.read')) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Workbook context requires workspace access' } }, 403);
+    }
     if (typeof body.content === 'string') {
       const document = parseUserTurnDocument(body.content);
       const refIds = new Set((contextRefs ?? []).flatMap(ref => ref.refId ? [ref.refId] : []));
