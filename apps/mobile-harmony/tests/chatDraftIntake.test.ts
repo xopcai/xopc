@@ -19,6 +19,7 @@ describe('chat entry handoff', () => {
   function home() {
     const view = handler('HomeView', '  private async openOrdinaryChat(', '  private openConversationFromList(', {
       userErrorMessage: (message: string) => message,
+      appSettings: { effectiveLanguage: () => 'en' },
     });
     Object.assign(view, {
       ordinaryOpening: false, navigationRevision: 1, disposed: false,
