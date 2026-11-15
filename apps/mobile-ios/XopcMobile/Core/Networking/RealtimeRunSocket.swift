@@ -63,7 +63,8 @@ actor RealtimeRunSocket {
             lastSequence = sequence
             let eventData = frame.payload.data
             if let conversationID {
-                guard eventName == "session.task-result", eventData?.conversationId == conversationID else { continue }
+                guard ["session.task-result", "session.agent-reaction", "session.agent-reaction.preference"].contains(eventName),
+                      eventData?.conversationId == conversationID else { continue }
             }
             let event = makeEvent(name: eventName, sequence: sequence, data: eventData)
             continuation.yield(event)

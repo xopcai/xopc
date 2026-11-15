@@ -87,6 +87,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
   Column(Modifier.fillMaxSize().padding(insets).testTag("share-center")) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically) {
+      PageBackButton("shares-back", onBack)
       Text(stringResource(R.string.share_center), modifier = Modifier.weight(1f),
         style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
       TextButton(onClick = { showInactive = !showInactive },

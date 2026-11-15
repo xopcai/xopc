@@ -62,7 +62,7 @@ struct GatewayProfilesView: View {
                     Section { Label(storageError, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
                 }
             }
-            .navigationTitle("Gateway 管理")
+            .mobilePageTitle(Text("Gateway 管理"))
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $detailProfile) { profile in
                 GatewayProfileDetailView(
@@ -288,7 +288,7 @@ private struct GatewayProfileDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("Gateway 详情")
+        .mobilePageTitle(Text("Gateway 详情"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -87,8 +87,7 @@ struct NoteDetailView: View {
                 )
             }
         }
-        .navigationTitle("笔记")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("笔记"))
         .toolbar {
             if showsCloseButton {
                 ToolbarItem(placement: .topBarLeading) {

@@ -381,9 +381,12 @@ export struct XopcSessionsView {
           }.id('sessions-back').width(44).height(44).padding(0)
             .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
             .accessibilityText($r('app.string.back')).onClick((): void => { if (!this.back()) this.onExit(); })
-          Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length)
-            : $r('app.string.history'))
-            .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
+          Row() {
+            Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length)
+              : $r('app.string.history'))
+              .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+              .constraintSize({ maxWidth: '90%' }).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }.layoutWeight(1)
           if (!this.sessions.selecting) {
             XopcPageSearchButton({ searchId: 'sessions-open-search', open: this.searchOpen,
               label: $r('app.string.sessions_search'), onToggle: (): void => {

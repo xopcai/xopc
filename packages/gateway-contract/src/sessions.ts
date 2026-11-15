@@ -106,13 +106,28 @@ export interface SessionTranscriptSummary {
   compactionCount: number;
 }
 
+export interface SessionAgentReaction {
+  conversationId: string;
+  transcriptId: string;
+  clientMessageId: string;
+  entryId: string;
+  actorAgentId: string;
+  actorName: string;
+  runId: string;
+  emoji: string;
+  createdAtMs: number;
+}
+
 export interface SessionMessage {
+  transcriptEntryId?: string;
+  agentReaction?: SessionAgentReaction;
   role: string;
   content: string | unknown[];
   timestamp?: string | number;
 }
 
 export interface SessionDetail extends SessionMetadata {
+  agentReactions?: { available: boolean; enabled: boolean };
   messages: SessionMessage[];
   transcriptSummary?: SessionTranscriptSummary;
   transcriptRows?: unknown[];

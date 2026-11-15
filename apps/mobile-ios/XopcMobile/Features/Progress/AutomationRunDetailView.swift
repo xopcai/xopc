@@ -119,7 +119,7 @@ struct AutomationRunDetailView: View {
                 }
             }
         }
-        .navigationTitle("运行详情")
+        .mobilePageTitle(Text("运行详情"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: "\(runID):\(pollRevision)") { await poll() }
         .refreshable { await load() }

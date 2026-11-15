@@ -66,6 +66,27 @@ export function useChatSessionWindowEvents(opts: {
   }, [conversationId, loadSessionById, loadTimelineById]);
 
   useEffect(() => {
+    const reactionChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ conversationId?: string; enabled?: boolean }>).detail;
+      if (!conversationId || detail?.conversationId !== conversationId) return;
+      if (detail.enabled === false) {
+        useChatSessionStore.getState().updateSessionMessages(conversationId, rows => rows.map(row =>
+          row.agentReaction ? { ...row, agentReaction: undefined } : row));
+      }
+      void loadSessionById(conversationId, 0);
+    };
+    window.addEventListener('session-agent-reaction', reactionChanged);
+    window.addEventListener('session-agent-reaction-preference', reactionChanged);
+    const recover = () => { if (conversationId) void loadSessionById(conversationId, 0); };
+    window.addEventListener('gateway-realtime-connected', recover);
+    return () => {
+      window.removeEventListener('session-agent-reaction', reactionChanged);
+      window.removeEventListener('session-agent-reaction-preference', reactionChanged);
+      window.removeEventListener('gateway-realtime-connected', recover);
+    };
+  }, [conversationId, loadSessionById]);
+
+  useEffect(() => {
     const onConfigReload = (event: Event) => {
       if (isSkillsOnlyConfigReload((event as CustomEvent<unknown>).detail)) return;
       const key = conversationIdRef.current;

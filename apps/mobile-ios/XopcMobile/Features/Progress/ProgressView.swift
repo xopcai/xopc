@@ -74,14 +74,14 @@ struct ProgressHubView: View {
                     Text("常用工作").mobileTextStyle(.rowTitle).padding(.top, 12)
                     HStack(spacing: 12) {
                         NavigationLink {
-                            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("任务")
+                            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("任务"))
                         } label: { toolRow("任务", symbol: "checkmark.circle") }
                         NavigationLink {
-                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("项目")
+                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("项目"))
                         } label: { toolRow("项目", symbol: "folder") }
                     }.buttonStyle(.plain)
                     NavigationLink {
-                        AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("自动化")
+                        AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("自动化"))
                     } label: { toolRow("自动化", symbol: "clock") }.buttonStyle(.plain)
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
@@ -96,22 +96,21 @@ struct ProgressHubView: View {
                 NavigationLink {
                     List {
                         NavigationLink("任务") {
-                            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("任务")
+                            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("任务"))
                         }
                         NavigationLink("项目") {
-                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("项目")
+                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("项目"))
                         }
                         NavigationLink("自动化") {
-                            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("自动化")
+                            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("自动化"))
                         }
                     }
-                    .navigationTitle("全部工作")
+                    .mobilePageTitle(Text("全部工作"))
                 } label: { Image(systemName: "square.grid.2x2").frame(width: 44, height: 44) }
                     .accessibilityLabel("全部工作")
             }
         }
-        .navigationTitle("进展")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("进展"))
         .refreshable { await load() }
         .task(id: configuration) { await load() }
         .onChange(of: locale.identifier) { Task { await load() } }
@@ -237,16 +236,16 @@ struct ProgressHubView: View {
     private func destination(for route: HomeOpenRoute) -> some View {
         switch route {
         case .tasks:
-            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("任务")
+            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("任务"))
         case let .task(id):
             TaskDetailView(configuration: configuration, taskID: id)
         case .projects:
-            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("项目")
+            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("项目"))
         case let .project(id):
             ProjectDetailView(configuration: configuration, projectID: id,
                               onOpenConversation: onOpenConversation)
         case .automations:
-            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).navigationTitle("自动化")
+            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("自动化"))
         case let .automation(id):
             AutomationDetailView(configuration: configuration, automationID: id,
                                  onOpenConversation: onOpenConversation)

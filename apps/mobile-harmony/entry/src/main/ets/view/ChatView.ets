@@ -3,6 +3,7 @@ import { XopcTaskChatHeader } from './TaskChatHeader';
 import { XopcPhoneViewModel } from '../viewmodel/phoneViewModel';
 import { XopcPhoneView } from './PhoneView';
 import { XopcChatRenderKeys } from '../common/chatRenderKeys';
+import type { XopcAgentReaction } from '../model/chat';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { voiceInputErrorMessage } from '../common/voiceInputError';
@@ -289,6 +290,22 @@ export struct XopcChatView {
   }
   @Computed get presentationRows(): XopcChatRow[] {
     return chatPresentationRows(this.chat.rows, this.chat.liveRow || this.chat.liveActivityRow, this.chat.runId);
+  }
+  @Computed get reservesReactionSpace(): boolean {
+    return this.personalConversation && (this.chat.reactionsAvailable ?? this.personalAgent?.messageReactionsAvailable) === true;
+  }
+  private reactionFor(row: XopcChatRow): XopcAgentReaction | undefined {
+    if (!this.reservesReactionSpace || !this.chat.reactionsAllowed) return undefined;
+    const live = this.chat.liveReaction;
+    if (live && live.transcriptId === this.chat.transcriptId &&
+      (live.clientMessageId === row.id || live.entryId === row.transcriptEntryId)) return live;
+    return row.agentReaction;
+  }
+  private reactionDuration(row: XopcChatRow): number {
+    const reaction = this.reactionFor(row);
+    return reaction && this.chat.animatedReactionEntry === reaction.entryId && this.chat.runId === reaction.runId
+      && Date.now() - reaction.createdAtMs < 1500 && this.atBottom && this.activePage && this.layout.foreground
+      && !this.layout.reduceMotion ? 260 : 0;
   }
   @Computed get attachmentPreviews(): XopcHistoryMedia[] {
     return this.attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => {
@@ -1476,22 +1493,32 @@ export struct XopcChatView {
                     .enabled(!this.chat.sending && !this.chat.loading && !this.chat.cachedHistory)
                     .onClick((): void => { this.retryMessage(item.item.id); })
                 }
-                Column() {
+                Stack({ alignContent: Alignment.TopStart }) {
+                  Column() {
                   XopcChatMessageContent({ row: item.item, onReading: (): void => { this.atBottom = false; this.initialScrollPending = false; clearTimeout(this.scrollTimer); this.scrollTimer = -1; }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
                     previewEligible: item.item.id !== this.latestMessageId,
                     onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
                     reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
                     onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
-                }.id('chat-user-bubble-' + item.item.id).width(this.userBubbleWidth(item.item))
-                  .constraintSize({ minWidth: 44, maxWidth: CHAT_MESSAGE_MAX_WIDTH }).flexShrink(1)
+                  }.id('chat-user-bubble-' + item.item.id).width('100%')
                   .padding(this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }
-                    : { left: 14, right: 14, top: 10, bottom: 10 }).alignItems(HorizontalAlign.Start)
+                    : { left: 14, right: 14, top: this.reservesReactionSpace ? 18 : 10, bottom: 10 }).alignItems(HorizontalAlign.Start)
+                  .margin({ top: this.reservesReactionSpace ? 8 : 0 })
                   .borderRadius(this.colors.corner(18)).backgroundColor(this.colors.chat.bubble)
                   .opacity(this.sendFlightRowId === item.item.id ? 0 : 1)
                   .onAreaChange((_previous: Area, current: Area): void => {
                     this.onSendFlightTarget(item.item.id, current);
                   })
                   .bindContextMenu(item.item.text ? this.userMessageMenu(item.item) : undefined, ResponseType.LongPress)
+                  if (this.reactionFor(item.item)) {
+                    Text(this.reactionFor(item.item)?.emoji ?? '').id('chat-agent-reaction-' + item.item.id)
+                      .fontSize(15).maxFontScale(1).width(33).height(25).textAlign(TextAlign.Center)
+                      .backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(14))
+                      .position({ x: -4, y: 1 }).hitTestBehavior(HitTestMode.None)
+                      .accessibilityText((this.reactionFor(item.item)?.actorName ?? '') + ' ' + (this.reactionFor(item.item)?.emoji ?? ''))
+                      .transition(TransitionEffect.OPACITY.animation({ duration: this.reactionDuration(item.item), curve: Curve.EaseOut }))
+                  }
+                }.width(this.userBubbleWidth(item.item)).constraintSize({ minWidth: 44, maxWidth: CHAT_MESSAGE_MAX_WIDTH }).flexShrink(1)
               }.width('100%').justifyContent(FlexAlign.End)
             }.width('100%').alignItems(HorizontalAlign.End)
           } else if (item.item.role === 'assistant') {
@@ -2015,8 +2042,18 @@ export struct XopcChatView {
   }
 
   @Builder
+  agentPickerButton() {
+    Button({ type: ButtonType.Circle }) {
+      SymbolGlyph($r('sys.symbol.person')).fontSize(21).fontColor([this.colors.foreground])
+    }.id('chat-header-agent').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+      .border(this.colors.panelStroke).accessibilityText($r('app.string.chat_agent'))
+      .onClick((): void => { this.dismissComposer(); this.openSheet('agent'); })
+  }
+
+  @Builder
   conversationActions() {
     Row({ space: 3 }) {
+      if (!this.personalConversation) this.agentPickerButton()
       if (this.phone.summary?.available) {
         Button({ type: ButtonType.Circle }) {
           Stack({ alignContent: Alignment.TopEnd }) {
@@ -2098,13 +2135,9 @@ export struct XopcChatView {
       } else if (this.isStandaloneDraft()) {
         Row() {
           this.sidebarButton()
-          Button({ type: ButtonType.Normal }) {
-            Text(this.options.agentId && this.options.agentId !== 'main' ? this.options.agentName() : $r('app.string.new_chat'))
-              .id('chat-ordinary-title').fontSize(17).fontWeight(FontWeight.Bold)
-              .fontColor(this.colors.foreground).textAlign(TextAlign.Center).width('100%')
-          }.height(44).padding(0).layoutWeight(1).backgroundColor(Color.Transparent)
-            .onClick((): void => { this.dismissComposer(); this.openSheet('agent'); })
+          Blank().layoutWeight(1)
           Row({ space: 3 }) {
+            this.agentPickerButton()
             this.voiceCallButton()
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(20).fontColor([this.colors.foreground])
@@ -2115,12 +2148,7 @@ export struct XopcChatView {
       } else {
         Row({ space: 8 }) {
           this.sidebarButton()
-          Button({ type: ButtonType.Normal }) {
-            Text(this.chat.title || this.options.agentName() || $r('app.string.new_chat')).id('chat-ordinary-title').fontSize(16)
-              .fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%').textAlign(TextAlign.Center)
-          }.layoutWeight(1).height(44).padding(0).backgroundColor(Color.Transparent)
-            .onClick((): void => { this.dismissComposer(); this.openSheet('agent'); })
+          Blank().layoutWeight(1)
           this.conversationActions()
         }.width('100%').padding({ left: 12, right: 12 })
       }

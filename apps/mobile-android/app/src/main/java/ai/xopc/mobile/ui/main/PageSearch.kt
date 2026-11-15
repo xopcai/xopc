@@ -17,6 +17,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
 @Composable
+internal fun PageBackButton(tag: String, onClick: () -> Unit) {
+  IconButton(onClick = onClick, modifier = Modifier.size(48.dp).testTag(tag)) {
+    ActionIcon(R.drawable.action_chevron_left, contentDescription = stringResource(R.string.progress_back))
+  }
+}
+
+@Composable
 internal fun PageSearchButton(open: Boolean, @StringRes label: Int, tag: String, onClick: () -> Unit) {
   val focusManager = LocalFocusManager.current
   val keyboard = LocalSoftwareKeyboardController.current

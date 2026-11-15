@@ -2990,6 +2990,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             previewEligible = message.id != latestMessageId && connection.messages.any { it.id == message.id },
             onViewMore = { messageDetailId = message.id },
             revealAnswer = connection.liveMessages.any { it.answerConfirmed && it.id in message.sourceIds },
+            reservesReactionSpace = isPersonalChat,
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
             generatedCards[message.renderId]?.let { cards ->
               GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
@@ -3045,7 +3046,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       .testTag("chat-status-bar-background"))
     if (connection.automationConfigurationChat || projectChatTitle != null) {
       Row(Modifier.align(Alignment.TopCenter).fillMaxWidth()
-        .background(MaterialTheme.colorScheme.background)
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
         verticalAlignment = Alignment.CenterVertically) {
@@ -3075,23 +3075,16 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, 62.dp,
               active = !personalSettingsOpen && !messageSearchOpen)
           }
-          else {
-            val selectedAgent = connection.agents.firstOrNull { it.id == connection.selectedAgentId }
-            Text(selected?.takeUnless { it.isLocalDraft }?.title
-              ?: selectedAgent?.takeUnless { it.id == "main" }?.let { agentDisplayName(it) }
-              ?: stringResource(R.string.assistant_new_conversation),
-            Modifier.align(Alignment.Center).padding(horizontal = if (phoneAvailable) 112.dp else 96.dp)
-              .clickable {
-                focusManager.clearFocus()
-                keyboardController?.hide()
-                agentQuery = ""
-                onReloadAgents()
-                agentPickerOpen = true
-              }
-              .testTag("chat-ordinary-title"), style = MaterialTheme.typography.titleMedium,
-              maxLines = 1, overflow = TextOverflow.Ellipsis)
-          }
           Row(Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (personalAgent == null) IconButton(onClick = {
+              focusManager.clearFocus()
+              keyboardController?.hide()
+              agentQuery = ""
+              onReloadAgents()
+              agentPickerOpen = true
+            }, modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-agent")) {
+              Icon(painterResource(R.drawable.tab_assistant), stringResource(R.string.assistant_agent), Modifier.size(22.dp))
+            }
             if (phoneAvailable) IconButton(onClick = onOpenPhone,
               modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
               Box {
@@ -4030,7 +4023,8 @@ private fun ConversationsScreen(
       }
       Text(if (selecting) stringResource(R.string.conversations_selected, selectedIds.size)
         else stringResource(R.string.tab_conversations), style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold, fontSize = 28.sp, modifier = Modifier.weight(1f))
+        fontWeight = FontWeight.Bold, fontSize = 28.sp, modifier = Modifier.weight(1f).padding(end = 12.dp),
+        maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (selecting) TextButton(onClick = { selecting = false; selectedIds = emptyList() },
         enabled = !connection.batchConversationBusy,
         modifier = Modifier.testTag("conversations-selection-cancel")) {

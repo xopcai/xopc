@@ -211,7 +211,7 @@ export function storedTranscriptEntryId(row: TranscriptStoredRow): string | unde
 
 export function transcriptEntryRowToStoredRow(row: TranscriptEntryRow): TranscriptStoredRow {
   const payload = JSON.parse(row.payload_json) as TranscriptStoredRow;
-  if (row.role === 'assistant') storedTranscriptEntryIds.set(payload, row.entry_id);
+  if (row.role === 'assistant' || row.role === 'user') storedTranscriptEntryIds.set(payload, row.entry_id);
   return payload;
 }
 

@@ -624,6 +624,11 @@ export class GatewayService {
     this.chatPreviews = new ChatPreviewService({ localApps: this.localApps });
 
     this.agentRunner = new GatewayAgentRunner({
+      canReact: endpointId => {
+        if (!this.config.experimental.personalAgentMessageReactions) return false;
+        const endpoint = this.endpointTools.registry.get(endpointId);
+        return endpoint?.kind === 'mobile' && endpoint.platform === 'harmonyos' && endpoint.availability === 'foreground';
+      },
       canResumeDeviceInteraction: (conversationId, checkpoint) => this.endpointTools.canResumeDeviceInteraction(conversationId, checkpoint),
       afterConnectionResume: (input, status) => this.mcpSetup.completeContinuation(input, status === 'ok'
         ? this.agentService.getLastAssistantPlainText(input.conversationId)

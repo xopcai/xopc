@@ -64,7 +64,8 @@ extension AssistantState {
                 resultLinks: resultLinks,
                 unavailableOutputs: unavailableOutputs,
                 taskReceipts: receipts,
-                generatedMediaIds: message.generatedMediaIds ?? []
+                generatedMediaIds: message.generatedMediaIds ?? [],
+                agentReaction: message.role == "user" ? message.agentReaction : nil
             )
         }
     }

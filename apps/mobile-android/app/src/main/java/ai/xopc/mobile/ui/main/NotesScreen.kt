@@ -351,7 +351,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
 
         Text(if (fileBrowserOpen) stringResource(R.string.notes_files) else stringResource(R.string.tab_notes),
           style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
-          modifier = Modifier.weight(1f))
+          modifier = Modifier.weight(1f).padding(end = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(if (fileBrowserOpen) "" else if (!editorOpen ||
           state.draft?.version == state.draftSyncedVersion) stringResource(R.string.notes_saved)
           else if (state.draftSaving) stringResource(R.string.notes_syncing)
@@ -363,7 +363,8 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           modifier = Modifier.width(72.dp), maxLines = 1)
       } else {
         Text(stringResource(R.string.library_title), style = MaterialTheme.typography.headlineSmall,
-          fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+          fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(end = 12.dp),
+          maxLines = 1, overflow = TextOverflow.Ellipsis)
         PageSearchButton(searchOpen, R.string.library_search, "notes-open-search", ::toggleSearch)
         IconButton(onClick = { fileBrowserOpen = true }, modifier = Modifier.testTag("notes-files")) {
           ActionIcon(R.drawable.action_folder, size = 24.dp, contentDescription = stringResource(R.string.notes_files))

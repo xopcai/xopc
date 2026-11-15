@@ -20,6 +20,7 @@ export interface WireContentBlock {
 }
 
 export interface WireMessage {
+  agentReaction?: unknown;
   id?: string;
   transcriptEntryId?: string;
   stopReason?: string;

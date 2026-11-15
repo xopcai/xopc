@@ -37,6 +37,7 @@ export struct XopcPersonalAgentSettings {
   @Local callMode: XopcPersonalCallMode = 'auto';
   @Local voiceExpanded: boolean = false;
   @Local greetingEnabled: boolean = true;
+  @Local messageReactionsEnabled: boolean = true;
   @Local voiceId: string = '';
   @Local uploading: boolean = false;
   @Local avatarPreview: string = '';
@@ -54,6 +55,7 @@ export struct XopcPersonalAgentSettings {
     this.assistantName = current.displayName; this.appearance = current.appearance;
     this.callMode = current.voiceCallPreferences?.enginePreference ?? 'auto';
     this.greetingEnabled = current.voiceCallPreferences?.openingGreetingEnabled ?? true;
+    this.messageReactionsEnabled = current.messageReactionsEnabled ?? true;
     this.voiceId = current.voicePreference?.voice === 'default' ? '' : current.voicePreference?.voice ?? '';
   }
   private scheduleNameSave(): void {
@@ -69,8 +71,9 @@ export struct XopcPersonalAgentSettings {
     const savedVoice = record.voicePreference?.voice === 'default' ? '' : record.voicePreference?.voice ?? '';
     if (name === record.displayName && this.appearance === record.appearance &&
       this.callMode === (record.voiceCallPreferences?.enginePreference ?? 'auto') &&
-      this.greetingEnabled === (record.voiceCallPreferences?.openingGreetingEnabled ?? true) && this.voiceId === savedVoice) return;
-    const updated = await this.model.saveProfile(name, this.appearance, this.voiceId, this.greetingEnabled, this.callMode);
+      this.greetingEnabled === (record.voiceCallPreferences?.openingGreetingEnabled ?? true) && this.voiceId === savedVoice &&
+      this.messageReactionsEnabled === (record.messageReactionsEnabled ?? true)) return;
+    const updated = await this.model.saveProfile(name, this.appearance, this.voiceId, this.greetingEnabled, this.callMode, this.messageReactionsEnabled);
     if (updated) this.onSaved(updated);
   }
   private async close(): Promise<void> {
@@ -168,6 +171,14 @@ export struct XopcPersonalAgentSettings {
                   compact: true, onOpen: (): void => { this.modelPickerOpen = true; } })
                   .id('personal-setting-model').enabled(!this.chatOptions.saving)
 
+              }
+              if (this.model.record?.messageReactionsAvailable === true) {
+                Row() {
+                  Text(this.label('消息表情', 'Message reactions')).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1)
+                  Toggle({ type: ToggleType.Switch, isOn: this.messageReactionsEnabled }).id('personal-setting-message-reactions')
+                    .enabled(!this.model.saving).accessibilityText(this.label('消息表情', 'Message reactions'))
+                    .onChange((enabled: boolean): void => { this.messageReactionsEnabled = enabled; void this.save(); })
+                }.width('100%')
               }
               Text(this.label('语音通话', 'Voice calls')).fontSize(13).fontColor(this.colors.secondary).width('100%')
               this.settingChoice({ heading: this.label('通话模式', 'Call mode'), options: [

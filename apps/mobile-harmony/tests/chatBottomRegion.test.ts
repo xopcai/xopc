@@ -158,7 +158,7 @@ describe('chat bottom region composition', () => {
 
   });
 
-  it('centers the personal avatar and exposes live attention alongside the ordinary conversation title', () => {
+  it('centers the personal avatar and leaves the ordinary conversation header blank between the controls', () => {
     const header = chat.slice(chat.indexOf('  conversationHeader()'), chat.indexOf('  chatWorkspace()'));
     expect(header).toContain('if (this.personalConversation)');
     expect(header).toContain('Stack({ alignContent: Alignment.Top })');
@@ -166,7 +166,12 @@ describe('chat bottom region composition', () => {
     expect(header).toContain('this.personalAgent?.displayName');
     expect(header).toContain("$r('app.string.chat_attention_count', this.pendingAttention)");
     expect(header).toContain("this.onNavigate({ page: 'progress', itemId: '' })");
-    expect(header).toContain("this.chat.title || this.options.agentName() || $r('app.string.new_chat')");
+    const ordinary = header.slice(header.indexOf('} else if (this.isStandaloneDraft())'));
+    expect(ordinary.match(/Blank\(\)\.layoutWeight\(1\)/g)).toHaveLength(2);
+    expect(ordinary).not.toContain('this.chat.title');
+    expect(ordinary).not.toContain('this.options.agentName()');
+    expect(ordinary).toContain('this.agentPickerButton()');
+    expect(ordinary).toContain('this.conversationActions()');
     expect(home).toContain('pendingAttention: this.pendingAttention');
     expect(home).toContain('return this.attention.pendingCount;');
     expect(home).toContain('XopcProgressView({ activePage: true, model: this.attention');

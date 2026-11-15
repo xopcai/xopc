@@ -1127,6 +1127,8 @@ export const ExperimentalConfigSchema = z
   .object({
     /** First-run activation that analyzes one explicitly selected local folder. */
     workDiscoveryOnboarding: z.boolean().default(true),
+    /** Opt-in preview of model-generated reactions for Personal Agent chat. */
+    personalAgentMessageReactions: z.boolean().optional(),
   })
   .strict()
   .default({ workDiscoveryOnboarding: true });

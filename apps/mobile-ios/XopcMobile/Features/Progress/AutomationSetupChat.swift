@@ -123,8 +123,7 @@ struct ScopedAssistantChat: View {
                       }, onPersonalAgentUpdated: { _ in },
                       onOpenSettings: {}, onInputFocusChanged: { _ in }, showsFloatingHeader: false,
                       automationSetup: automationSetup) { $0 }
-            .navigationTitle(heading)
-            .navigationBarTitleDisplayMode(.inline)
+            .mobilePageTitle(Text(heading))
             .toolbar {
                 if automationSetup {
                     ToolbarItem(placement: .cancellationAction) {

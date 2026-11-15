@@ -702,9 +702,16 @@ export const MessageBubble = memo(function MessageBubble({
                 : 'text-base leading-[1.6875]',
             isUser &&
               'w-fit max-w-full rounded-2xl bg-surface-hover/80 px-4 py-3 text-left dark:bg-surface-hover/50',
+            isUser && personal && 'relative mt-2 pt-[18px]',
             showPersonalThinkingBubble && 'bg-transparent p-0',
           )}
         >
+          {isUser && personal && !isUserMessageFailed && message.agentReaction ? (
+            <span role="img" aria-label={`${message.agentReaction.actorName} ${message.agentReaction.emoji}`}
+              className="pointer-events-none absolute -left-1 -top-[7px] grid h-[25px] w-[33px] select-none place-items-center rounded-full border border-edge bg-surface-panel text-[15px] leading-none">
+              {message.agentReaction.emoji}
+            </span>
+          ) : null}
           <div className="flex min-w-0 flex-col gap-2">
             {showPersonalThinkingBubble ? (
               <div className="xopc-personal-thinking" role="status" aria-label={m.chat.thinkingLabel}>

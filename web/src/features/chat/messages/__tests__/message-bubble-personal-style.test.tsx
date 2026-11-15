@@ -118,6 +118,17 @@ describe('Personal AI message styling', () => {
     expect(container.querySelector('.chat-user-message')?.classList.contains('rounded-tr-sm')).toBe(false);
   });
 
+  it('shows only a passive reaction on the Personal Agent user bubble', () => {
+    const message: Message = { role: 'user', content: [{ type: 'text', text: 'We shipped' }],
+      agentReaction: { emoji: '🎉', actorName: 'Ada', entryId: 'user-row', clientMessageId: 'input' } };
+    render(message, true, false);
+    const badge = container.querySelector('.chat-user-message [role="img"]');
+    expect(badge?.getAttribute('aria-label')).toBe('Ada 🎉');
+    expect(badge?.closest('button')).toBeNull();
+    render(message, false, false);
+    expect(container.querySelector('.chat-user-message [role="img"]')).toBeNull();
+  });
+
   it('shows the waiting bubble until an assistant answer starts', () => {
     render({ role: 'assistant', content: [], pendingResponseStatus: 'waiting' }, true, true);
     expect(container.querySelector('[data-status-phase="waiting"]')).toBeNull();

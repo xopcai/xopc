@@ -55,8 +55,7 @@ struct TaskDetailView: View {
                 ProgressListSkeleton()
             }
         }
-        .navigationTitle("任务详情")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("任务详情"))
         .navigationDestination(isPresented: $showingConversation) {
             TaskConversationView(configuration: configuration, taskID: taskID)
         }
@@ -163,8 +162,7 @@ struct TaskConversationView: View {
         .navigationDestination(item: $nestedTaskID) { id in
             TaskConversationView(configuration: configuration, taskID: id)
         }
-        .navigationTitle("任务对话")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("任务对话"))
         .toolbar(returnLabel == nil ? .visible : .hidden, for: .navigationBar)
         .task(id: taskID) { await load() }
         .task(id: conversation?.id) {
@@ -221,11 +219,12 @@ struct TaskConversationView: View {
                                 }
                             }.font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    }.frame(maxWidth: 156, alignment: .leading)
                     Image(systemName: overviewExpanded ? "chevron.up" : "chevron.down").font(.caption)
                 }.frame(minHeight: 48).contentShape(.rect)
             }.disabled(detail == nil).accessibilityIdentifier("task-chat-summary-toggle")
                 .accessibilityValue(overviewExpanded ? "展开" : "收起")
+            Spacer(minLength: 12)
             Menu {
                 if let detail {
                     Button("编辑") { editingTask = detail.task }
@@ -240,7 +239,6 @@ struct TaskConversationView: View {
             } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).contentShape(.rect) }
                 .disabled(isWorking).accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
         }.buttonStyle(.plain).padding(.horizontal, 8).frame(minHeight: 64)
-            .background(mobileTheme.canvas)
     }
 
     private func overview(_ detail: TaskDetailEnvelope) -> some View {

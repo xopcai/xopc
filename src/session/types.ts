@@ -145,6 +145,7 @@ export interface SessionTranscriptSummary {
 
 /** Session detail (metadata + messages) */
 export interface SessionDetail extends SessionMetadata {
+  agentReactions?: { available: boolean; enabled: boolean };
   messages: Message[];
   /** Present when loaded with `includeTranscriptSummary` (gateway `?include=transcript`). */
   transcriptSummary?: SessionTranscriptSummary;

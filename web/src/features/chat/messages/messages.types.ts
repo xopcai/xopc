@@ -122,7 +122,10 @@ export interface MessageContextRef {
   truncated?: boolean;
 }
 
+export interface AgentMessageReaction { emoji: string; actorName: string; entryId: string; clientMessageId: string; }
+
 export interface Message {
+  agentReaction?: AgentMessageReaction;
   transcriptEntryId?: string;
   role: 'user' | 'assistant' | 'task';
   content: MessageContent[];

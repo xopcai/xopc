@@ -179,28 +179,30 @@ export struct XopcTaskChatHeader {
             SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(18).fontColor([this.colors.foreground])
           }.id('task-chat-close').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
             .accessibilityText($r('app.string.back')).onClick((): void => { this.onClose(); })
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 8 }) {
-              Column({ space: 2 }) {
-                Text(this.item?.title || $r('app.string.task_detail_title')).fontSize(15).fontWeight(FontWeight.Medium)
-                  .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                Row({ space: 4 }) {
-                  Text(this.item ? this.phaseLabel() : $r('app.string.task_detail_title')).fontSize(12).fontColor(this.colors.secondary)
-                  if (this.latestReceipt()?.summary) {
-                    Text('· ' + (this.latestReceipt()?.summary ?? '')).fontSize(12).fontColor(this.colors.secondary)
-                      .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-                  }
-                }.width('100%')
-              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
-            }.width('100%')
-          }.id('task-chat-summary-toggle').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
-            .onClick((): void => { this.onToggle(); })
+          Row() {
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: 8 }) {
+                Column({ space: 2 }) {
+                  Text(this.item?.title || $r('app.string.task_detail_title')).fontSize(15).fontWeight(FontWeight.Medium)
+                    .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                  Row({ space: 4 }) {
+                    Text(this.item ? this.phaseLabel() : $r('app.string.task_detail_title')).fontSize(12).fontColor(this.colors.secondary)
+                    if (this.latestReceipt()?.summary) {
+                      Text('· ' + (this.latestReceipt()?.summary ?? '')).fontSize(12).fontColor(this.colors.secondary)
+                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                    }
+                  }.width('100%')
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
+              }.width('100%')
+            }.id('task-chat-summary-toggle').constraintSize({ maxWidth: '85%' }).height(48).padding(0).backgroundColor(Color.Transparent)
+              .onClick((): void => { this.onToggle(); })
+          }.layoutWeight(1)
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.foreground])
           }.id('task-chat-menu').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
             .accessibilityText($r('app.string.more')).bindMenu(this.taskMenu)
-        }.id('task-chat-header').width('100%').height(64).padding({ left: 8, right: 8 }).backgroundColor(this.colors.surface)
+        }.id('task-chat-header').width('100%').height(64).padding({ left: 8, right: 8 })
         if (this.expanded) { this.overview() }
       }.width('100%').padding({ top: this.topInset }).backgroundColor(Color.Transparent)
     }.width('100%').height('100%').hitTestBehavior(HitTestMode.Transparent)

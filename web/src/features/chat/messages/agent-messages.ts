@@ -233,6 +233,7 @@ function usageEquivalent(a: Message['usage'], b: Message['usage']): boolean {
  * Keep prior message references when the visible turn is already equivalent.
  */
 export function reconcileSessionSnapshot(prev: Message[], loaded: Message[]): Message[] {
+  if (prev.some((message, index) => message.role === 'user' && message.agentReaction?.entryId !== loaded[index]?.agentReaction?.entryId)) return loaded;
   if (prev.length === 0 || loaded.length === 0) return loaded;
 
   const prevLastIdx = lastAssistantIndex(prev);
@@ -355,6 +356,12 @@ function buildUserMessage(m: WireMessage): Message {
   const contentRaw = m.content;
   const metadata = asRecord(m.metadata);
   const clientMessageId = metadata?.steered === true ? metadata.clientMessageId : undefined;
+  const reaction = asRecord(m.agentReaction);
+  const agentReaction = reaction && typeof reaction.emoji === 'string' && reaction.emoji.length <= 32
+    && typeof reaction.actorName === 'string' && typeof reaction.entryId === 'string'
+    && typeof reaction.clientMessageId === 'string' && m.transcriptEntryId === reaction.entryId
+    ? { emoji: reaction.emoji, actorName: reaction.actorName, entryId: reaction.entryId, clientMessageId: reaction.clientMessageId }
+    : undefined;
   const clarificationChoice = clarificationChoiceReceiptSchema.safeParse(metadata?.clarificationChoice);
   const blocks =
     typeof contentRaw === 'string'
@@ -366,6 +373,8 @@ function buildUserMessage(m: WireMessage): Message {
 
   return {
     role: 'user',
+    transcriptEntryId: m.transcriptEntryId,
+    agentReaction,
     ...(clarificationChoice.success ? { clarificationChoice: clarificationChoice.data } : {}),
     ...(m.turnId ? { turnId: m.turnId } : {}),
     ...(typeof clientMessageId === 'string' ? { clientMessageId } : {}),

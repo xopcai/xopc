@@ -58,7 +58,7 @@ struct AppSettingsView: View {
                 }
             }
         }
-        .navigationTitle(AppLocalization.string("设置", locale: locale))
+        .mobilePageTitle(Text(verbatim: AppLocalization.string("设置", locale: locale)))
     }
 }
 
@@ -105,7 +105,7 @@ private struct ShareCenterView: View {
                 ContentUnavailableView("暂无分享", systemImage: "square.and.arrow.up")
             }
         }
-        .navigationTitle("分享中心")
+        .mobilePageTitle(Text("分享中心"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(showInactive ? "隐藏失效" : "显示失效") { showInactive.toggle() }
@@ -149,7 +149,7 @@ private struct NotificationSettingsView: View {
                 Text("通知权限可在 iOS 系统设置中管理。")
             }
         }
-        .navigationTitle("通知")
+        .mobilePageTitle(Text("通知"))
     }
 }
 
@@ -166,8 +166,7 @@ private struct LanguageSettingsView: View {
                 .pickerStyle(.inline)
             }
         }
-        .navigationTitle(AppLocalization.string("语言", locale: locale))
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text(verbatim: AppLocalization.string("语言", locale: locale)))
     }
 }
 
@@ -205,8 +204,7 @@ private struct AppearanceSettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(mobileTheme.canvas)
-        .navigationTitle(AppLocalization.string("主题", locale: locale))
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text(verbatim: AppLocalization.string("主题", locale: locale)))
     }
 
     private func themeSwatch(_ preset: MobileThemePreset, dark: Bool) -> some View {

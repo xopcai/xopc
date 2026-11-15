@@ -47,6 +47,7 @@ import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { recordPersonalPerformance } from '../../personal-agent/performance.js';
 import { findSessionInputByRunId } from '../../storage/sqlite/session-input-repository.js';
 import { resolveAgentTurnTimeoutMs } from '../../agent/orchestration/run-agent-turn-with-timeout.js';
+import type { AgentReactionService } from '../agent-reactions/reaction.js';
 const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = ChatStreamEvent;
@@ -72,6 +73,8 @@ export type RunGatewayAgentDeps = {
   emit: (type: string, payload: unknown) => void;
   publishRealtime: (topic: string, event: string, data: unknown) => void;
   completeRealtimeTopic: (topic: string) => void;
+  reactions?: AgentReactionService;
+  canReact?: (endpointId: string) => boolean;
 };
 
 /**
@@ -91,6 +94,7 @@ export async function *runGatewayAgent(
   const runStartedMonotonic = performance.now();
   const inputReceivedAtMs = runOptions?.inputReceivedAtMs ?? runStartedAtMs;
   let firstTextSeen = false;
+  let reactionWindow: AbortController | undefined;
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
       ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
@@ -200,7 +204,11 @@ export async function *runGatewayAgent(
   };
   const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
     for (const event of events) {
+      if (event.type === 'clarify_request' || event.type === 'review' || event.type === 'error' || event.type === 'run_end') {
+        reactionWindow?.abort();
+      }
       if (!firstTextSeen && event.type === 'assistant_delta' && event.payload.delta.trim()) {
+        reactionWindow?.abort();
         firstTextSeen = true;
         const latencyMs = performance.now() - runStartedMonotonic;
         const queueMs = Math.max(0, runStartedAtMs - inputReceivedAtMs);
@@ -253,6 +261,16 @@ export async function *runGatewayAgent(
         }));
         registeredActiveWebchatRun = true;
         publishRealtime('sessions', 'run.started', { conversationId, runId, ...runOptions?.inputIdentity });
+        const identity = runOptions?.inputIdentity;
+        if (personalTurn && deps.reactions && webchatTranscriptId && !runOptions?.presentation && !runOptions?.taskRunId
+          && identity && origin.type === 'endpoint' && deps.canReact?.(origin.endpointId)) {
+          reactionWindow = new AbortController();
+          const endpointId = origin.endpointId;
+          void deps.reactions.consider({ target: { ...identity, conversationId, runId, transcriptId: webchatTranscriptId,
+            actorAgentId: webchatMetadata!.agentId }, text: message, started: runStartedMonotonic,
+          signal: AbortSignal.any([mergedSignal, reactionWindow.signal]), eligible: () => deps.canReact?.(endpointId) === true,
+          publish: reaction => publishRealtime('sessions', 'session.agent-reaction', reaction) }).catch(() => {});
+        }
       }
       let streamError: string | undefined;
       let embeddedAborted = false;
@@ -342,6 +360,7 @@ export async function *runGatewayAgent(
         runTopicCompleted = true;
         return { status: 'error', summary: streamError };
       } finally {
+        reactionWindow?.abort();
         if (mergedSignal.aborted) {
           terminalStatus = 'cancelled';
           taskRunStatus = 'cancelled';
@@ -449,6 +468,7 @@ export async function *runGatewayAgent(
     }
     throw error;
   } finally {
+    reactionWindow?.abort();
     if (personalTurn) recordPersonalPerformance({ phase: 'turn_complete', conversationId: streamConversationId,
       inputId, runId, durationMs: Math.max(0, runStartedAtMs - inputReceivedAtMs) + performance.now() - runStartedMonotonic,
       status: terminalStatus === 'success' ? 'success' : terminalStatus === 'cancelled' ? 'cancelled' : 'error' });

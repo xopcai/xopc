@@ -292,8 +292,7 @@ struct AutomationDetailView: View {
                 ProgressView("正在读取自动化…")
             }
         }
-        .navigationTitle("自动化")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("自动化"))
         .task { await load() }
         .sheet(item: $editingAutomation, onDismiss: { Task { await load() } }) { automation in
             AutomationEditorView(configuration: configuration, existing: automation)

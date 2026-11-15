@@ -51,8 +51,7 @@ struct FileLibraryView: View {
                 ProgressView()
             }
         }
-        .navigationTitle("文件")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("文件"))
         .refreshable { await load() }
         .task { await load() }
     }
@@ -138,7 +137,7 @@ struct FilesView: View {
                 ProgressView()
             }
         }
-        .navigationTitle(space?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale))
+        .mobilePageTitle(Text(verbatim: space?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale)))
         .toolbar {
             Button("刷新", systemImage: "arrow.clockwise") { Task { await load() } }
                 .disabled(isLoading)
@@ -226,8 +225,7 @@ private struct FileFolderView: View {
                 ProgressView()
             }
         }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text(verbatim: title))
         .toolbar {
             Button("刷新", systemImage: "arrow.clockwise") { Task { await load() } }
                 .disabled(isLoading)
@@ -316,8 +314,7 @@ struct FilePreviewView: View {
             SaveFileVersionControl(configuration: configuration, file: file, revision: file.revision)
                 .disabled(isLoading || error != nil || !hasLoaded)
         }
-        .navigationTitle(file.name)
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text(verbatim: file.name))
         .toolbar {
             Button("刷新", systemImage: "arrow.clockwise") { Task { await load() } }
                 .disabled(isLoading)

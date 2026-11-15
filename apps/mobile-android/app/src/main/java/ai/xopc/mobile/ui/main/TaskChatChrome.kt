@@ -135,7 +135,7 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
     if (expanded) Box(Modifier.fillMaxSize().padding(top = 64.dp, bottom = bottomClearance)
       .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.12f))
       .clickable { expanded = false }.testTag("task-chat-scrim"))
-    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
+    Column(Modifier.fillMaxWidth()) {
       Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp).testTag("task-chat-header"),
         verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose, modifier = Modifier.testTag("task-chat-close")) {
@@ -145,21 +145,23 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
             else -> R.string.task_chat_return_history
           }))
         }
-        Row(Modifier.weight(1f).clickable { focus.clearFocus(); expanded = !expanded }
-          .padding(horizontal = 8.dp).testTag("task-chat-summary-toggle"), verticalAlignment = Alignment.CenterVertically) {
-          Column(Modifier.weight(1f)) {
-            Text(task?.title ?: title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(task?.let { current ->
-              when (current.resolution) {
-                "done" -> stringResource(R.string.progress_resolution_done)
-                "cancelled" -> stringResource(R.string.progress_resolution_cancelled)
-                else -> progressPhaseLabel(current.phase)
-              } + current.latestResult.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
-            } ?: stringResource(R.string.progress_task_detail),
-              style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-              maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.weight(1f)) {
+          Row(Modifier.fillMaxWidth(0.85f).clickable { focus.clearFocus(); expanded = !expanded }
+            .padding(horizontal = 8.dp).testTag("task-chat-summary-toggle"), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+              Text(task?.title ?: title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+              Text(task?.let { current ->
+                when (current.resolution) {
+                  "done" -> stringResource(R.string.progress_resolution_done)
+                  "cancelled" -> stringResource(R.string.progress_resolution_cancelled)
+                  else -> progressPhaseLabel(current.phase)
+                } + current.latestResult.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+              } ?: stringResource(R.string.progress_task_detail),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(if (expanded) "⌃" else "⌄", Modifier.padding(8.dp))
           }
-          Text(if (expanded) "⌃" else "⌄", Modifier.padding(8.dp))
         }
         Box {
           IconButton(onClick = { menuOpen = true }, modifier = Modifier.semantics { contentDescription = moreLabel }.testTag("task-chat-menu")) {
@@ -180,7 +182,8 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
         }
       }
       if (expanded) Column(Modifier.fillMaxWidth().height(panelHeight)
-        .verticalScroll(rememberScrollState()).padding(20.dp).testTag("task-chat-overview"),
+        .background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState())
+        .padding(20.dp).testTag("task-chat-overview"),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (state.detailError || state.commandError) TextButton(onClick = onReload) { Text(stringResource(R.string.progress_refresh)) }
         if (task == null) BrandLoadingPanel() else TaskChatOverview(task)

@@ -34,7 +34,7 @@ export function startAiUsageCall(model: AiUsageModel, context: AiUsageContext, i
   getExecutionAuthority()?.reserveModel(model);
   const observation = startObservation(context.operation, 'generation', context);
   observation.update({ 'gen_ai.request.model': model.id, 'gen_ai.system': model.provider });
-  observation.input(input);
+  if (!context.metadataOnly) observation.input(input);
   const operation = context.operation;
   const scenario = resolveAiUsageScenario(operation);
   const id = randomUUID();
@@ -84,11 +84,13 @@ export function startAiUsageCall(model: AiUsageModel, context: AiUsageContext, i
         'langfuse.observation.cost_details': costSource === 'unknown' ? undefined : JSON.stringify({ total: result.usage?.cost?.total }),
         'xopc.costSource': costSource,
       });
-      observation.finish(result.status === 'failed' ? 'error' : result.status === 'aborted' ? 'cancelled' : 'success', result.output ?? result.errorSummary);
+      observation.finish(result.status === 'failed' ? 'error' : result.status === 'aborted' ? 'cancelled' : 'success',
+        context.metadataOnly ? undefined : result.output ?? result.errorSummary);
       if (!persisted) return;
       try {
         finishAiUsageEvent(id, {
           ...result,
+          ...(context.metadataOnly ? { errorSummary: undefined, output: undefined } : {}),
           estimatedCostMicrousd: costSource === 'local'
             ? 0
             : costSource === 'unknown' ? undefined : dollarsToMicrousd(result.usage?.cost?.total),
