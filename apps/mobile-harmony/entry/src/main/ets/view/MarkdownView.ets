@@ -166,7 +166,10 @@ export struct XopcMarkdownView {
   private openInternalLink(href: string): void {
     const target = internalMessageLink(href);
     if (!target) return;
-    if (target.kind === 'route') { this.onNavigate({ page: target.page, itemId: target.itemId }); return; }
+    if (target.kind === 'route') {
+      this.onNavigate({ page: target.page, itemId: target.itemId,
+        prompt: target.page === 'capability-mcp-setup' ? target.path : undefined }); return;
+    }
     const name = target.path.split('/').pop() || target.path;
     this.linkedFile = { id: href, name, uri: '', workspaceRelativePath: target.path,
       type: 'file', mimeType: normalizedFileMimeType(name, ''), size: 0 };
@@ -246,7 +249,7 @@ export struct XopcMarkdownView {
                 .height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
                 .onClick((): void => { this.toggleBlock(item.item.id); })
             }
-          }.padding(12).width('100%').borderRadius(8).backgroundColor(this.colors.grouped)
+          }.padding(12).width('100%').borderRadius(this.colors.corner(8)).backgroundColor(this.colors.grouped)
         } else if (item.item.kind === 'table') {
           Column() {
           Scroll() {

@@ -96,6 +96,9 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path.startsWith('/api/voice') || path.startsWith('/api/media') || path.startsWith('/api/clarifications')) {
     return 'sessions.write';
   }
+  if (method === 'GET' && path === '/api/capabilities/mobile-catalog') return 'agents.read';
+  if (method === 'GET' && /^\/api\/capabilities\/mobile-actions\/(?:skills|(?:agent|plugin)\/[^/]+)$/.test(path)) return 'agents.read';
+  if (method === 'POST' && /^\/api\/capabilities\/mobile-actions\/(?:skills|mcp(?:\/[^/]+)?|(?:agent|plugin)\/[^/]+)$/.test(path)) return 'sessions.write';
   if (method === 'GET' && path === '/api/chat/skills') return 'agents.read';
   if (path.startsWith('/api/commands') || path.startsWith('/api/skills')) {
     return methodScope(method, 'agents.read', 'gateway.admin');

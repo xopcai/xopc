@@ -107,6 +107,7 @@ extension GatewayClient {
 
 // swiftlint:disable:next type_body_length
 struct PersonalAgentOverview: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let agent: PersonalAgentRecord
     let attention: Int
@@ -130,12 +131,13 @@ struct PersonalAgentOverview: View {
     @State private var nextDelivery: Int?
     @State private var workLoaded = false
     @State private var deliveryLoaded = false
+    @State private var libraryOpened = false
     @State private var workLoading = false
     @State private var scheduleLoading = false
-    @State private var deliveryLoading = false
+    @State private var deliveryLoadingOffset: Int?
     @State private var workError = false
     @State private var scheduleError = false
-    @State private var deliveryError = false
+    @State private var deliveryRetryReset: Bool?
 
     private enum SectionTab: Hashable { case tasks, library }
 
@@ -167,11 +169,16 @@ struct PersonalAgentOverview: View {
                 }
             }
         }
-        .background(ChatAppearance.canvas(colorScheme))
+        .background(mobileTheme.canvas)
         .toolbar(.hidden, for: .navigationBar)
         .task { await refreshTasks() }
-        .task(id: tab) {
-            if tab == .library, !deliveryLoaded {
+        .onChange(of: tab) {
+            if tab == .library {
+                libraryOpened = true
+            }
+        }
+        .task(id: libraryOpened) {
+            if libraryOpened, !deliveryLoaded, deliveryRetryReset == nil {
                 await loadDeliveries(reset: true)
             }
         }
@@ -204,13 +211,12 @@ struct PersonalAgentOverview: View {
                 Label { Text("有 \(count) 项待你处理") } icon: { Circle().fill(.orange).frame(width: 6, height: 6) }
                     .font(.subheadline).foregroundStyle(.secondary)
             }
-            Picker("助理概览", selection: $tab) {
-                Label("任务", systemImage: "checklist").tag(SectionTab.tasks)
-                Label("资料库", systemImage: "doc.on.doc").tag(SectionTab.library)
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("personal-overview-tabs")
-            .padding(.top, 8)
+            SegmentedTabs(options: [
+                SegmentOption(id: SectionTab.tasks, title: "任务", icon: "checklist", count: count > 0 ? count : nil, accessibilityID: "personal-overview-tasks-tab"),
+                SegmentOption(id: .library, title: "资料库", icon: "doc.on.doc", accessibilityID: "personal-overview-library-tab")
+            ], selected: tab, label: "助理概览") { tab = $0 }
+                .accessibilityIdentifier("personal-overview-tabs")
+                .padding(.top, 8)
         }
         .padding(.horizontal, 18)
         .padding(.bottom, 8)
@@ -276,10 +282,14 @@ struct PersonalAgentOverview: View {
     }
 
     @ViewBuilder private var library: some View {
+        if !deliveryLoaded, deliveryRetryReset == nil {
+            librarySkeleton
+        }
         ForEach(deliveries) { item in
             let scope = item.task?.conversationId ?? agent.conversationId
             if let attachment = item.artifact?.attachment {
-                ChatAttachmentPreview(attachment: attachment, configuration: configuration, conversationID: scope, capsule: true)
+                ChatAttachmentPreview(attachment: attachment, configuration: configuration, conversationID: scope,
+                                      capsule: true, showLibraryActions: false)
             } else {
                 Button { openDelivery(item, conversationID: scope) } label: {
                     row(item.artifact?.title ?? item.reference?.title ?? item.task?.title ?? "",
@@ -288,16 +298,38 @@ struct PersonalAgentOverview: View {
                 .buttonStyle(.plain)
             }
         }
-        if deliveryLoading {
-            ProgressView().frame(maxWidth: .infinity, minHeight: 48)
-        }
-        if deliveryError {
-            Button("重试") { Task { await loadDeliveries(reset: !deliveryLoaded) } }
-        } else if deliveryLoaded, deliveries.isEmpty {
+        if let offset = deliveryLoadingOffset, offset > 0 {
+            ProgressView().controlSize(.small).frame(maxWidth: .infinity, minHeight: 44)
+                .accessibilityIdentifier("personal-overview-library-loading-more")
+        } else if let reset = deliveryRetryReset {
+            Button("重试") { Task { await loadDeliveries(reset: reset) } }
+                .frame(maxWidth: .infinity, minHeight: 44)
+        } else if deliveryLoaded, deliveries.isEmpty, deliveryLoadingOffset == nil {
             ContentUnavailableView("暂无资料", systemImage: "doc.on.doc")
         } else if nextDelivery != nil {
-            Button("加载更多") { Task { await loadDeliveries(reset: false) } }.disabled(deliveryLoading)
+            Button("加载更多") { Task { await loadDeliveries(reset: false) } }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .disabled(deliveryLoadingOffset != nil)
         }
+    }
+
+    private var librarySkeleton: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(0 ..< 3, id: \.self) { _ in
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: mobileTheme.corner(5)).fill(.quaternary).frame(width: 20, height: 20)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Capsule().fill(.quaternary).frame(width: 128, height: 12)
+                        Capsule().fill(.quaternary).frame(width: 84, height: 8)
+                    }
+                }
+                .frame(minHeight: 44)
+                .padding(.horizontal, 8)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("正在读取文件…")
+        .accessibilityIdentifier("personal-overview-library-loading")
     }
 
     private func taskRow(_ task: PersonalOverviewWork) -> some View {
@@ -402,16 +434,16 @@ struct PersonalAgentOverview: View {
     }
 
     private func loadDeliveries(reset: Bool) async {
-        guard !deliveryLoading, let offset = reset ? 0 : nextDelivery else { return }
-        deliveryLoading = true
-        defer { deliveryLoading = false }
+        guard deliveryLoadingOffset == nil, let offset = reset ? 0 : nextDelivery else { return }
+        deliveryLoadingOffset = offset
+        deliveryRetryReset = nil
+        defer { deliveryLoadingOffset = nil }
         do {
             let page = try await GatewayClient(configuration: configuration).personalOverviewDeliveries(offset: offset)
             try Task.checkCancellation()
             deliveries = reset ? page.items : deliveries + page.items.filter { item in !deliveries.contains { $0.id == item.id } }
             nextDelivery = page.nextOffset
             deliveryLoaded = true
-            deliveryError = false
-        } catch is CancellationError {} catch { deliveryError = true }
+        } catch is CancellationError {} catch { deliveryRetryReset = reset }
     }
 }

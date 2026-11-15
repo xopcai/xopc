@@ -64,7 +64,7 @@ export struct XopcGatewayProfilesView {
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 12 }) {
                   Column() { SymbolGlyph($r('sys.symbol.link')).fontSize(22).fontColor([this.colors.accent]) }
-                    .width(44).height(44).justifyContent(FlexAlign.Center).backgroundColor(this.colors.accentSoft).borderRadius(14)
+                    .width(44).height(44).justifyContent(FlexAlign.Center).backgroundColor(this.colors.accentSoft).borderRadius(this.colors.corner(14))
                   Column({ space: 4 }) {
                     Text(profile.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
                       .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -73,7 +73,7 @@ export struct XopcGatewayProfilesView {
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   if (profile.gatewayId === this.connection.activeGatewayId) {
                     Text($r('app.string.gateways_current')).fontSize(11).fontColor(this.colors.accent)
-                      .padding({ left: 7, right: 7, top: 3, bottom: 3 }).backgroundColor(this.colors.accentSoft).borderRadius(7)
+                      .padding({ left: 7, right: 7, top: 3, bottom: 3 }).backgroundColor(this.colors.accentSoft).borderRadius(this.colors.corner(7))
                   }
                   SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.tertiary])
                 }.width('100%').constraintSize({ minHeight: 56 })
@@ -106,7 +106,7 @@ export struct XopcGatewayProfilesView {
               }
               if (profile.gatewayId !== this.connection.activeGatewayId) {
                 Button($r('app.string.gateways_switch')).id('gateway-switch-' + profile.gatewayId)
-                  .width('100%').height(46).fontSize(15).fontColor(Color.White).backgroundColor(this.colors.accent)
+                  .width('100%').height(46).fontSize(15).fontColor(this.colors.onAccent).backgroundColor(this.colors.accent)
                   .enabled(!this.connection.busy && (this.connection.probeState(profile.gatewayId)?.phase === 'online'
                     || this.connection.probeState(profile.gatewayId)?.phase === 'degraded'))
                   .onClick((): void => { void this.connection.activate(profile.gatewayId); })
@@ -139,7 +139,7 @@ export struct XopcGatewayProfilesView {
                 }.width('100%')
               }
               }
-            }.width('100%').padding(16).borderRadius(18)
+            }.width('100%').padding(16).borderRadius(this.colors.corner(18))
               .backgroundColor(profile.gatewayId === this.connection.activeGatewayId ? this.colors.accentSoft : this.colors.panel)
           }
         }, (profile: XopcProfile): string => profile.gatewayId + ':' + profile.name)
@@ -147,9 +147,9 @@ export struct XopcGatewayProfilesView {
           ListItem() {
             Column({ space: 10 }) {
               Text($r('app.string.gateways_empty')).fontSize(15).fontColor(this.colors.secondary)
-              Button($r('app.string.gateways_add')).height(44).fontColor(Color.White).backgroundColor(this.colors.accent)
+              Button($r('app.string.gateways_add')).height(44).fontColor(this.colors.onAccent).backgroundColor(this.colors.accent)
                 .onClick((): void => { this.connection.addGateway(); })
-            }.width('100%').padding(20).backgroundColor(this.colors.panel).borderRadius(18)
+            }.width('100%').padding(20).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18))
           }
         }
         if (this.connection.busy) {

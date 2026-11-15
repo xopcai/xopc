@@ -29,8 +29,10 @@ struct XopcPreferenceOption {
         Text(this.label).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
         if (this.selected) { SymbolGlyph($r('sys.symbol.checkmark')).fontSize(20).fontColor([this.colors.accent]) }
       }.width('100%').height(56).padding({ left: 16, right: 16 })
-    }.id(this.optionId).width('100%').padding(0).borderRadius(14)
-      .backgroundColor(this.selected ? this.colors.accentSoft : this.colors.panel).margin({ bottom: 8 })
+    }.id(this.optionId).width('100%').padding(0)
+      .backgroundColor(this.selected ? this.colors.accentSoft : this.colors.panel)
+      .border(this.colors.panelStroke).borderRadius(this.colors.corner(14)).margin({ bottom: 8 })
+      .accessibilitySelected(this.selected)
       .onClick(this.onSelect)
   }
 }
@@ -99,7 +101,7 @@ export struct XopcSettingsView {
         Row() {
           this.schemePreviewHalf(xopcThemePreview(scheme, false))
           this.schemePreviewHalf(xopcThemePreview(scheme, true))
-        }.width('100%').borderRadius(8).clip(true)
+        }.width('100%').borderRadius(this.colors.corner(8)).clip(true)
         Row() {
           Text(label).fontSize(13).fontWeight(FontWeight.Medium)
             .fontColor(this.selectedScheme === scheme ? this.colors.accent : this.colors.secondary)
@@ -109,8 +111,9 @@ export struct XopcSettingsView {
           }
         }.width('100%')
       }.width('100%').alignItems(HorizontalAlign.Start)
-    }.id(id).width('100%').height(84).padding(8).borderRadius(12)
+    }.id(id).width('100%').height(84).padding(8)
       .backgroundColor(this.selectedScheme === scheme ? this.colors.accentSoft : this.colors.panel)
+      .border(this.colors.panelStroke).borderRadius(this.colors.corner(12)).accessibilitySelected(this.selectedScheme === scheme)
       .onClick((): void => { this.choose(this.selectedLanguage, this.selectedTheme, scheme); })
   }
   @Builder

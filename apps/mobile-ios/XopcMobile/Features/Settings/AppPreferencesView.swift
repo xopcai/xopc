@@ -98,7 +98,6 @@ private struct ShareCenterView: View {
                                 Button("\(days) 天") { Task { await extend(share, days: days) } }
                             }
                         }
-                        .tint(.blue)
                     }
                 }
             }
@@ -174,19 +173,50 @@ private struct LanguageSettingsView: View {
 
 private struct AppearanceSettingsView: View {
     @Environment(\.locale) private var locale
+    @Environment(\.mobileTheme) private var mobileTheme
     @AppStorage("app.appearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage("app.colorPreset") private var colorPreset = MobileThemePreset.default.rawValue
 
     var body: some View {
         Form {
-            Section {
+            Section("display_mode") {
                 Picker("主题", selection: $appearance) {
                     ForEach(AppAppearance.allCases) { item in Text(item.title).tag(item.rawValue) }
                 }
                 .pickerStyle(.inline)
+                .listRowBackground(mobileTheme.panel)
+            }
+            Section("color_scheme") {
+                Picker("color_scheme", selection: $colorPreset) {
+                    ForEach(MobileThemePreset.allCases) { preset in
+                        HStack(spacing: 12) {
+                            Text(preset.title)
+                            Spacer()
+                            themeSwatch(preset, dark: false)
+                            themeSwatch(preset, dark: true)
+                        }
+                        .tag(preset.rawValue)
+                        .accessibilityIdentifier("color-scheme-\(preset.rawValue)")
+                    }
+                }
+                .pickerStyle(.inline)
+                .listRowBackground(mobileTheme.panel)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(mobileTheme.canvas)
         .navigationTitle(AppLocalization.string("主题", locale: locale))
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func themeSwatch(_ preset: MobileThemePreset, dark: Bool) -> some View {
+        let preview = MobileTheme(preset: preset, dark: dark)
+        let shape = RoundedRectangle(cornerRadius: preview.corner(6))
+        return shape.fill(preview.canvas)
+            .overlay(shape.strokeBorder(preview.edge))
+            .overlay { Circle().fill(preview.action).frame(width: 8, height: 8) }
+            .frame(width: 24, height: 20)
+            .accessibilityHidden(true)
     }
 }
 

@@ -72,7 +72,7 @@ export struct XopcShareIntakeDialog {
                     .accessibilityText($r('app.string.remove_attachment')).onClick((): void => {
                       this.intake.removeAttachment(file.path).catch((error: Error): void => { this.error = error.message; });
                     })
-                }.padding(12).width('100%').backgroundColor(this.colors.input).borderRadius(10)
+                }.padding(12).width('100%').backgroundColor(this.colors.input).borderRadius(this.colors.corner(10))
               }, (file: XopcIncomingShareAttachment): string => file.path)
               ForEach(this.intake.pending.issues ?? [], (issue: string): void => {
                 Text(issue).fontSize(12).fontColor(this.colors.danger).width('100%')
@@ -82,7 +82,7 @@ export struct XopcShareIntakeDialog {
               TextInput({ placeholder: $r('app.string.intake_search_chat'), text: this.query }).height(48)
                 .enabled(!this.saving).onChange((text: string): void => { this.query = text; void this.search(); })
               if (this.searching) {
-                Column().width('100%').height(48).backgroundColor(this.colors.input).borderRadius(10)
+                Column().width('100%').height(48).backgroundColor(this.colors.input).borderRadius(this.colors.corner(10))
               } else {
                 ForEach(this.sessions, (session: XopcSessionItem): void => {
                   this.targetOption(session.key, (session.name || session.title || session.key) + ' · ' + (session.agentId || ''))
@@ -93,7 +93,7 @@ export struct XopcShareIntakeDialog {
           }.layoutWeight(1).width('100%')
           Text($r('app.string.intake_draft_hint')).fontSize(12).fontColor(this.colors.secondary).width('100%')
           Button($r('app.string.intake_add_chat')).width('100%').height(50).enabled(!this.saving && (!!this.intake.pending.attachments?.length || !!this.intake.pending.sharedText))
-            .backgroundColor(this.colors.accent).fontColor(Color.White).onClick((): void => { void this.explore(); })
+            .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).onClick((): void => { void this.explore(); })
           Button($r('app.string.share_intake_save')).width('100%').height(44).enabled(!this.saving && (!!this.intake.pending.attachments?.length || !!this.intake.pending.sharedText))
             .backgroundColor(this.colors.input).fontColor(this.colors.foreground).onClick((): void => { void this.saveNote(); })
           Button($r('app.string.dismiss')).width('100%').height(44).enabled(!this.saving).backgroundColor(Color.Transparent)

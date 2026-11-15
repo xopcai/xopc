@@ -177,6 +177,18 @@ it('makes the small direct configuration entry available without relaxing host a
   expect(resume).toHaveBeenCalledTimes(1);
 });
 
+it('prepares a public mobile form without probing or granting the device configuration authority', async () => {
+  const mobile = { ...context, canConfigure: false, canOpenMobileForm: true };
+  const input = { serverId: 'sample', url: 'https://sample.example/mcp', purpose: 'Connect' };
+  const result = await service.command('start', input, mobile);
+  expect(result).toMatchObject({ state: 'mobile_form_required',
+    interactionPath: 'xopc://capabilities/mcp?id=sample&url=https%3A%2F%2Fsample.example%2Fmcp' });
+  expect(native.probeMcpConnection).not.toHaveBeenCalled();
+  expect(await service.currentForConversation(context.conversationId)).toEqual({ setup: null });
+  await expect(service.command('start', { ...input, url: 'https://127.0.0.1/mcp' }, mobile)).rejects.toThrow('public HTTPS');
+  await expect(service.command('remove', { serverId: 'sample' }, mobile)).rejects.toThrow('active owner');
+});
+
 it('commits the tested server, preserves unrelated config and resumes once', async () => {
   const goal = await start();
   const ready = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;

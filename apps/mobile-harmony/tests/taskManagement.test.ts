@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { request: vi.fn(), uuid: vi.fn(() => 'mutation-id') };
 });
-vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request, connectionRevision: () => 0, assertConnection: () => undefined } }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request, currentProfile: () => ({ gatewayId: 'task-test', deviceId: 'test-device' }), connectionRevision: () => 0, assertConnection: () => undefined } }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class { uuid = mocks.uuid; } }));
 import { XopcWorkspaceRepository } from '../entry/src/main/ets/repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../entry/src/main/ets/viewmodel/workspaceViewModel';

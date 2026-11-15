@@ -87,7 +87,7 @@ export struct XopcChatMessageContent {
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.chat.secondary])
       }.width('100%').height('100%').alignItems(VerticalAlign.Center)
     }.id('chat-reference-' + ref.kind + '-' + ref.sourceId).width('100%').height(40)
-      .padding({ left: 10, right: 8 }).borderRadius(10).backgroundColor(this.colors.chat.card)
+      .padding({ left: 10, right: 8 }).borderRadius(this.colors.corner(10)).backgroundColor(this.colors.chat.card)
       .onClick((): void => {
         this.onNavigate({ page: ref.kind === 'task' ? 'tasks' : ref.kind === 'user_assertion' ? 'about-you' : 'notes', itemId: ref.sourceId });
       })
@@ -150,11 +150,11 @@ export struct XopcChatMessageContent {
                     if (finding.filePath) { Text(finding.filePath + (finding.lineStart ? ':' + finding.lineStart : '')).fontSize(12).fontFamily('monospace').fontColor(this.colors.chat.secondary).copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None) }
                     XopcMarkdownView({ textSelectable: this.textSelectable, content: finding.body, conversationId: this.conversationId, compactReading: true,
                       onNavigate: this.onNavigate })
-                  }.width('100%').padding(10).borderRadius(8).backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
+                  }.width('100%').padding(10).borderRadius(this.colors.corner(8)).backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
                 }, (finding: XopcReviewFinding, index: number): string => index + ':' + finding.title)
                 if (item.item.review.overallExplanation) { XopcMarkdownView({ textSelectable: this.textSelectable, content: item.item.review.overallExplanation,
                   conversationId: this.conversationId, compactReading: true, onNavigate: this.onNavigate }) }
-              }.id('chat-review-' + item.item.id).width('100%').padding(12).borderRadius(12)
+              }.id('chat-review-' + item.item.id).width('100%').padding(12).borderRadius(this.colors.corner(12))
                 .backgroundColor(this.colors.grouped).alignItems(HorizontalAlign.Start)
             }
           }).key((block: XopcChatBlock): string => block.id)

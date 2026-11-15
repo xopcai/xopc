@@ -34,6 +34,7 @@ export struct XopcChatMediaView {
   @Param compactThumbnail: boolean = false;
   @Param compactAvailable: boolean = false;
   @Param resultCapsule: boolean = false;
+  @Param showLibraryActions: boolean = true;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local versionsOpen: boolean = false;
   @Param compactDisclosure: boolean = true;
@@ -80,7 +81,10 @@ export struct XopcChatMediaView {
   private sourceIdentity: string = '';
   aboutToAppear(): void {
     if (this.previewOnly) { this.sourceIdentity = this.sourceKey(); this.openPreview(); }
-    else if (this.resultCapsule) { this.sourceIdentity = this.sourceKey(); void this.document.inspect(this.file, this.conversationId); }
+    else if (this.resultCapsule) {
+      this.sourceIdentity = this.sourceKey();
+      if (this.showLibraryActions) void this.document.inspect(this.file, this.conversationId);
+    }
   }
   @Monitor('previewRequest')
   onPreviewRequest(): void {
@@ -94,7 +98,9 @@ export struct XopcChatMediaView {
     const key = this.sourceKey(); if (key === this.sourceIdentity) return;
     this.reset(); this.sourceIdentity = key;
     if (this.previewOnly) this.openPreview();
-    else if (this.resultCapsule) void this.document.inspect(this.file, this.conversationId);
+    else if (this.resultCapsule) {
+      if (this.showLibraryActions) void this.document.inspect(this.file, this.conversationId);
+    }
     else if (!this.compact || (this.compactThumbnail && this.previewKind() === 'image')) this.load();
   }
   private activeFile(): XopcHistoryMedia { return this.galleryFile || this.file; }
@@ -451,7 +457,7 @@ export struct XopcChatMediaView {
           .accessibilityText(this.audioPlayer.state === 'playing' ? $r('app.string.stop') : $r('app.string.chat_media_play'))
           .onClick((): void => { this.toggleInlineAudio(); })
       } else if (this.compact && this.resultCapsule) {
-        if (this.document.canVersion()) {
+        if (this.showLibraryActions && this.document.canVersion()) {
           Row({ space: 12 }) {
             Button($r('app.string.file_view_in_library'), { type: ButtonType.Normal }).height(44).padding(0)
               .fontSize(13).fontColor(this.colors.secondary).backgroundColor(Color.Transparent)
@@ -464,7 +470,8 @@ export struct XopcChatMediaView {
           }.width('100%')
         }
         XopcChatResultCapsule({ title: this.file.name || this.file.type,
-          subtitle: this.file.size > 0 ? this.fileSizeLabel() : '', symbol: this.mediaSymbol(),
+          subtitle: this.file.size > 0 ? $r('app.string.chat_artifact_available_size', this.fileSizeLabel())
+            : $r('app.string.chat_artifact_available'), successful: true, symbol: this.mediaSymbol(),
           canOpen: !this.busy && this.previewable(), entryId: 'chat-preview-' + this.file.id,
           onOpen: (): void => { this.openPreview(); } })
       } else if (this.compact) {
@@ -476,7 +483,7 @@ export struct XopcChatMediaView {
                   .width(this.compactThumbnailWidth || (this.compactMetadata ? 36 : 48))
                   .height(this.compactThumbnailHeight || (this.compactMetadata ? 36 : 48))
                   .objectFit(this.compactThumbnailContain ? ImageFit.Contain : ImageFit.Cover)
-                  .borderRadius(8).accessibilityText(this.file.name)
+                  .borderRadius(this.colors.corner(8)).accessibilityText(this.file.name)
               } else {
                 Stack({ alignContent: Alignment.Center }) {
                   if (this.busy) {
@@ -487,7 +494,7 @@ export struct XopcChatMediaView {
                 }.id('chat-compact-thumbnail-placeholder-' + this.file.id)
                   .width(this.compactThumbnailWidth || (this.compactMetadata ? 36 : 48))
                   .height(this.compactThumbnailHeight || (this.compactMetadata ? 36 : 48))
-                  .borderRadius(8).backgroundColor(this.colors.grouped)
+                  .borderRadius(this.colors.corner(8)).backgroundColor(this.colors.grouped)
               }
             } else {
               SymbolGlyph(this.mediaSymbol()).fontSize(20).fontColor([this.mediaSecondaryColor])
@@ -520,17 +527,17 @@ export struct XopcChatMediaView {
         Image(this.picture).width(this.readingImage ? this.readingWidth : this.draftPreview ? 120 : '100%')
           .constraintSize({ maxWidth: '100%' })
           .height(this.readingImage ? this.readingWidth / Math.max(0.01, this.pictureRatio) : this.noteInlineImage ? Math.max(220, Math.min(420, 320 / Math.max(0.2, this.pictureRatio))) : this.draftPreview ? 100 : 200)
-          .objectFit(this.noteInlineImage ? ImageFit.Cover : ImageFit.Contain).borderRadius(12)
+          .objectFit(this.noteInlineImage ? ImageFit.Cover : ImageFit.Contain).borderRadius(this.colors.corner(12))
           .id('chat-image-' + this.file.id).accessibilityText(this.file.name).onClick((): void => { this.openPreview(); })
       } else if (this.readingImage && this.error) {
         Column({ space: 8 }) {
           Text(this.file.name).fontSize(13).fontColor(this.mediaSecondaryColor).maxLines(2)
           Button($r('app.string.retry')).height(44).onClick((): void => { this.load(); })
         }.width(320).constraintSize({ maxWidth: '100%' }).height(180).padding(12)
-          .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.grouped).borderRadius(10)
+          .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.grouped).borderRadius(this.colors.corner(10))
       } else if (this.file.mimeType.startsWith('image/') && !this.error) {
         Column() {}.width(this.readingImage ? 320 : '100%').constraintSize({ maxWidth: '100%' })
-          .height(this.readingImage ? 180 : 160).borderRadius(10).backgroundColor(this.colors.grouped)
+          .height(this.readingImage ? 180 : 160).borderRadius(this.colors.corner(10)).backgroundColor(this.colors.grouped)
           .accessibilityText($r('app.string.chat_media_loading'))
       }
       if (!this.inlineVoice && !this.compact && !this.noteInlineImage && !this.readingImage) {
@@ -563,7 +570,8 @@ export struct XopcChatMediaView {
       .backgroundColor(this.conversationCard && !this.compact ? this.colors.chat.card : Color.Transparent).onAreaChange((_old: Area, area: Area): void => {
       if (this.readingImage) this.readingAvailableWidth = Math.max(1, Math.min(320, Number(area.width)));
     }).onVisibleAreaChange([0.1], (visible: boolean): void => {
-      if (!visible || this.previewOnly || this.inlineVoice || this.attempted) return;
+      if (!visible || this.previewOnly || this.inlineVoice || this.attempted ||
+        (this.resultCapsule && !this.showLibraryActions)) return;
       if (this.compact && this.previewKind() === 'html') this.prefetchHtml();
       else if (!this.compact || this.compactThumbnail) this.load();
     })
@@ -576,7 +584,7 @@ export struct XopcChatMediaView {
           this.htmlLoading = false; this.htmlError = false; this.htmlDataLoaded = false; this.clearPlayback();
           this.restoreOriginalFile();
           this.versionsOpen = false;
-          if (!this.resultCapsule) this.document.reset();
+          if (!this.resultCapsule || !this.showLibraryActions) this.document.reset();
           this.onPreviewClosed();
         } })
   }
@@ -620,9 +628,11 @@ export struct XopcChatMediaView {
         .fontColor(this.colors.danger).padding({ left: 16, right: 16 }) }
       if (this.document.canVersion() && !this.document.editing) {
         Row({ space: 8 }) {
-          Button($r('app.string.file_save_version')).id('file-preview-save-version').height(44)
-            .fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft)
-            .enabled(!this.document.busy).onClick((): void => { void this.saveVersion(); })
+          if (this.showLibraryActions) {
+            Button($r('app.string.file_save_version')).id('file-preview-save-version').height(44)
+              .fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft)
+              .enabled(!this.document.busy).onClick((): void => { void this.saveVersion(); })
+          }
           Button($r('app.string.file_version_history')).id('file-preview-version-history').height(44)
             .fontColor(this.colors.secondary).backgroundColor(Color.Transparent)
             .onClick((): void => { this.versionsOpen = !this.versionsOpen; if (this.versionsOpen) void this.document.loadVersions(); })
@@ -637,7 +647,7 @@ export struct XopcChatMediaView {
           .padding(16).enabled(!this.document.busy)
           .onChange((content: string): void => { this.document.content = content; })
       } else if (this.busy && this.previewKind() !== 'html' && !this.picture) {
-        Column() {}.width('100%').layoutWeight(1).borderRadius(12).backgroundColor(this.colors.grouped)
+        Column() {}.width('100%').layoutWeight(1).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.grouped)
       } else if (this.previewKind() === 'image') {
         Column() {
           XopcChatImagePager({ files: this.imageGallery.length ? this.imageGallery : [this.file],
@@ -724,11 +734,11 @@ export struct XopcChatMediaView {
               Text(this.activeFile().name || this.activeFile().type).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
                 .maxLines(2).textAlign(TextAlign.Center)
               Text($r('app.string.chat_html_unavailable')).fontSize(14).fontColor(this.colors.secondary).textAlign(TextAlign.Center)
-              Button($r('app.string.chat_open_with_app')).height(44).backgroundColor(this.colors.accent).fontColor(Color.White)
+              Button($r('app.string.chat_open_with_app')).height(44).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
                 .width('100%').enabled(!this.busy && this.transferable()).onClick((): void => { this.openWithSystem(); })
               Button($r('app.string.download')).height(44).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
                 .width('100%').enabled(!this.busy && this.transferable()).onClick((): void => { this.save(); })
-            }.width(300).padding(20).borderRadius(12).backgroundColor(this.colors.grouped)
+            }.width(300).padding(20).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.grouped)
           }
         }.layoutWeight(1).width('100%')
       } else if (this.previewKind() === 'binary') {
@@ -742,11 +752,11 @@ export struct XopcChatMediaView {
               .fontSize(13).lineHeight(19).textAlign(TextAlign.Center).fontColor(this.colors.secondary).width('100%')
             Row({ space: 8 }) {
               Button($r('app.string.chat_open_with_app')).height(44).layoutWeight(1).backgroundColor(this.colors.accent)
-                .fontColor(Color.White).enabled(!this.busy && this.transferable()).onClick((): void => { this.openWithSystem(); })
+                .fontColor(this.colors.onAccent).enabled(!this.busy && this.transferable()).onClick((): void => { this.openWithSystem(); })
               Button($r('app.string.download')).height(44).layoutWeight(1).backgroundColor(this.colors.grouped)
                 .fontColor(this.colors.foreground).enabled(!this.busy && this.transferable()).onClick((): void => { this.save(); })
             }.width('100%')
-          }.width('100%').padding(16).borderRadius(12).backgroundColor(this.colors.input)
+          }.width('100%').padding(16).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
           if (this.previewText) {
             Scroll() { Text(this.previewText).id('chat-media-extracted-text').fontSize(14).fontFamily('monospace')
               .fontColor(this.colors.foreground).copyOption(CopyOptions.InApp).width('100%') }.layoutWeight(1).width('100%')

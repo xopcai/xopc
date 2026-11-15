@@ -22,18 +22,30 @@ class ConnectionWaitCardTest {
       ConnectionWaitInfo("wait-1", "conversation", 1, "needs_connection",
         "Connect calendar", listOf(need), "next week · Asia/Shanghai")))
     var retries = 0
-    composeTestRule.setContent { ConnectionWaitCard(state) { retries++ } }
+    val actions = mutableListOf<Pair<String, String?>>()
+    composeTestRule.setContent {
+      ConnectionWaitCard(state, onRetry = { retries++ }) { snapshot, action, key, _ ->
+        assertEquals(state.snapshot, snapshot)
+        actions += action to key
+        null
+      }
+    }
     composeTestRule.onNodeWithTag("connection-wait-card").assertExists()
     composeTestRule.onNodeWithText("Connect calendar").assertExists()
     composeTestRule.onNodeWithTag("connection-wait-details").performClick()
     composeTestRule.onNodeWithTag("connection-wait-need-calendar").assertExists()
-    composeTestRule.runOnIdle { assertEquals(0, retries) }
+    composeTestRule.runOnIdle {
+      assertEquals(0, retries)
+      assertEquals(emptyList<Pair<String, String?>>(), actions)
+    }
+    composeTestRule.onNodeWithTag("connection-wait-connect-calendar").performClick()
+    composeTestRule.runOnIdle { assertEquals(listOf("connect" to "calendar"), actions) }
   }
 
   @Test fun readyWaitDoesNotCoverTheConversation() {
     val state = ConnectionWaitUiState(snapshot = ConnectionWaitSnapshot("transcript", 3,
       ConnectionWaitInfo("wait-1", "conversation", 2, "ready", "Ready", emptyList(), null)))
-    composeTestRule.setContent { ConnectionWaitCard(state) {} }
+    composeTestRule.setContent { ConnectionWaitCard(state, onRetry = {}) { _, _, _, _ -> null } }
     composeTestRule.onNodeWithTag("connection-wait-card").assertDoesNotExist()
   }
 }

@@ -110,7 +110,7 @@ export struct XopcAutomationRunView {
                 }
                 Text(this.statusLabel(this.run.status)).fontSize(13).fontWeight(FontWeight.Medium)
                   .fontColor(this.problem(this.run.status) ? this.colors.danger : this.colors.accent)
-                  .padding({ left: 11, right: 11, top: 5, bottom: 5 }).borderRadius(12).backgroundColor(this.colors.accentSoft)
+                  .padding({ left: 11, right: 11, top: 5, bottom: 5 }).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.accentSoft)
               }.width('100%').alignItems(HorizontalAlign.Start)
               XopcSectionLabel({ heading: $r('app.string.result') })
               Column({ space: 10 }) {
@@ -122,10 +122,10 @@ export struct XopcAutomationRunView {
                     .onClick((): void => { this.cancelRun(); })
                 } else if (this.problem(this.run.status) || this.run.status === 'cancelled') {
                   Button($r('app.string.rerun')).width('100%').constraintSize({ minHeight: 46 })
-                    .backgroundColor(this.colors.accent).fontColor(Color.White).enabled(!this.busy)
+                    .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).enabled(!this.busy)
                     .onClick((): void => { this.rerun(); })
                 }
-              }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(18).backgroundColor(this.colors.panel)
+              }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
               if (this.run.conversationId) {
                 XopcHubRow({ heading: $r('app.string.open_chat'), symbol: $r('sys.symbol.message'), onOpen: (): void => {
                   if (this.run?.conversationId) this.onNavigate({ page: 'chat', itemId: this.run.conversationId });

@@ -46,51 +46,62 @@ export struct XopcProgressView {
     } catch (error) { this.model.actionError = (error as Error).message; }
     finally { this.actionInFlight = false; }
   }
+  private attentionSummary(summary: string): ResourceStr {
+    if (summary.includes('provider_setup_required')) return $r('app.string.progress_provider_setup');
+    if (summary.includes('run was still active') && summary.includes('automatic recovery')) {
+      return $r('app.string.progress_run_interrupted');
+    }
+    return summary;
+  }
+
   @Builder
   attention(item: XopcHomeItem) {
-    Column({ space: 12 }) {
+    Column({ space: 10 }) {
       Button({ type: ButtonType.Normal }) {
         Column({ space: 8 }) {
           Row({ space: 6 }) {
-            Column().width(7).height(7).borderRadius(4).backgroundColor($r('app.color.chat_attention_dot'))
+            Circle().width(6).height(6).fill(this.colors.attentionForeground).accessibilityLevel('no')
             Text($r('app.string.progress_action_required')).fontSize(12).fontWeight(FontWeight.Medium)
-              .fontColor($r('app.color.chat_attention_dot'))
-          }.width('100%')
+              .fontColor(this.colors.secondary)
+          }.padding({ left: 8, right: 8, top: 4, bottom: 4 }).borderRadius(this.colors.corner(10)).backgroundColor(this.colors.grouped)
           Text(item.title).width('100%').fontSize(16).lineHeight(23).fontWeight(FontWeight.Medium)
             .fontColor(this.colors.foreground).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
           if (item.summary && item.summary !== item.title) {
-            Text(item.summary).width('100%').fontSize(13).lineHeight(19).fontColor(this.colors.secondary)
+            Text(this.attentionSummary(item.summary)).width('100%').fontSize(13).lineHeight(19).fontColor(this.colors.secondary)
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
-          if (item.openAction) {
+          if (item.openAction && !item.secondaryActions.some((action: XopcHomeAction): boolean =>
+            !!action.href && action.href === item.openAction?.href)) {
             Row({ space: 4 }) {
               Text(item.openAction.label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
               SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.accent])
-            }.width('100%').margin({ top: 4 })
+            }.width('100%')
           }
         }.width('100%').alignItems(HorizontalAlign.Start)
       }.width('100%').padding(0).backgroundColor(Color.Transparent)
         .onClick((): void => { if (item.openAction) this.runAction(item.openAction); })
       if ((item.primaryAction && item.primaryAction.type !== 'open') || item.secondaryActions.length > 0) {
-        if (item.recommendation) {
+        if (item.recommendation && !item.summary.includes('provider_setup_required')) {
           Text(item.recommendation).width('100%').fontSize(12).lineHeight(18)
             .fontColor(this.colors.secondary).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
         Row({ space: 8 }) {
           if (item.primaryAction && item.primaryAction.type !== 'open') {
-            Button(item.primaryAction.label).layoutWeight(1).constraintSize({ minHeight: 44 })
-              .backgroundColor(this.colors.accentSoft).fontColor(this.colors.accent).enabled(!this.model.pending && !this.actionInFlight)
+            Button(item.primaryAction.label).constraintSize({ minHeight: 44 })
+              .padding({ left: 18, right: 18 }).fontSize(14)
+              .backgroundColor(this.colors.grouped).fontColor(this.colors.foreground).enabled(!this.model.pending && !this.actionInFlight)
               .onClick((): void => { if (item.primaryAction) this.runAction(item.primaryAction); })
           }
           ForEach(item.secondaryActions, (action: XopcHomeAction) => {
-            Button(action.label).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
-              .fontColor(this.colors.secondary).enabled(!this.model.pending && !this.actionInFlight)
+            Button(action.label).constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent).fontSize(14)
+              .fontColor(this.colors.accent).enabled(!this.model.pending && !this.actionInFlight)
               .onClick((): void => { this.runAction(action); })
           }, (action: XopcHomeAction): string => action.type + ':' + action.label)
         }.width('100%')
       }
-    }.width('100%').padding(16).borderRadius(18).backgroundColor(this.colors.panel)
-      .margin({ bottom: 14 }).alignItems(HorizontalAlign.Start)
+    }.width('100%').padding(16).backgroundColor(this.colors.panel)
+      .border(this.colors.panelStroke).borderRadius(this.colors.corner(16))
+      .margin({ bottom: 8 }).alignItems(HorizontalAlign.Start)
   }
   @Builder
   sectionHeading(heading: ResourceStr, trailing: ResourceStr = '', page: string = '') {
@@ -118,13 +129,6 @@ export struct XopcProgressView {
       }
       Refresh({ refreshing: this.pulling }) {
         List() {
-          ListItem() {
-            Column({ space: 8 }) {
-              Text($r('app.string.progress_title')).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)
-                .fontColor(this.colors.foreground)
-              Text($r('app.string.progress_intro')).fontSize(14).lineHeight(21).fontColor(this.colors.secondary)
-            }.width('100%').alignItems(HorizontalAlign.Start).margin({ top: 16, bottom: 4 })
-          }
           if (this.model.loading) { ListItem() { XopcListSkeleton() } }
           else {
             if (this.model.homeError) {

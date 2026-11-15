@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.theme.CHAT_MESSAGE_WIDTH
 import ai.xopc.mobile.theme.LocalChatColors
 import ai.xopc.mobile.gateway.ClarificationCommand
@@ -20,6 +21,7 @@ import android.provider.Settings
 import android.widget.Toast
 import java.net.URI
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.CapabilityPage
 import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.ConversationTaskChild
 import ai.xopc.mobile.gateway.ConversationTaskGroup
@@ -27,6 +29,7 @@ import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.GeneratedMediaAccess
 import ai.xopc.mobile.gateway.GeneratedMediaItem
 import ai.xopc.mobile.gateway.GeneratedMediaKind
+import ai.xopc.mobile.gateway.GeneratedMediaScope
 import ai.xopc.mobile.playback.MusicPhase
 import ai.xopc.mobile.playback.MusicPlayback
 import ai.xopc.mobile.playback.MusicTrack
@@ -163,6 +166,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -213,7 +219,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 
-internal enum class HomeTab { Assistant, Conversations, Progress, Projects, Automations, Notes, Me }
+internal enum class HomeTab { Assistant, Conversations, Progress, Projects, Automations, Notes, Capabilities, Me }
 private data class LinkedDetail(val source: HomeTab, val destination: HomeTab, val id: String)
 
 private data class WelcomeRecommendation(val title: String, val reason: String, val prompt: String)
@@ -328,7 +334,7 @@ private fun AssistantHistorySkeleton() {
     verticalArrangement = Arrangement.spacedBy(16.dp)) {
     repeat(4) { index ->
       Box(modifier = Modifier.fillMaxWidth(if (index % 2 == 0) 0.9f else 0.7f)
-        .height(64.dp).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)))
+        .height(64.dp).background(MaterialTheme.colorScheme.surface, themedCorners(12)))
     }
   }
 }
@@ -342,6 +348,9 @@ fun MainScreen(
   onCancelPairing: () -> Unit = {},
   onConversationSearchChange: (String) -> Unit = {},
   onRefreshConversations: () -> Unit = {},
+  onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
+  onCreateAgentConversation: (String) -> Unit = {},
+  onCapabilityConversation: (String) -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onLoadOlderHistory: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
@@ -395,6 +404,7 @@ fun MainScreen(
   onRefreshClarification: () -> Unit = {},
   onRespondToClarification: (ClarificationCommand) -> Unit = {},
   onRefreshConnectionWait: () -> Unit = {},
+  onConnectionWaitAction: suspend (ai.xopc.mobile.gateway.ConnectionWaitSnapshot, String, String?, String?) -> String? = { _, _, _, _ -> null },
   onRefreshProgress: () -> Unit = {},
   onRefreshProgressHome: () -> Unit = {},
   onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
@@ -651,6 +661,9 @@ fun MainScreen(
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
     onRefreshConversations = onRefreshConversations,
+    onLoadCapabilities = onLoadCapabilities,
+    onCreateAgentConversation = onCreateAgentConversation,
+    onCapabilityConversation = onCapabilityConversation,
     onLoadMoreConversations = onLoadMoreConversations, onLoadOlderHistory = onLoadOlderHistory,
     onSelectConversation = onSelectConversation,
     onRestoreConversation = onRestoreConversation,
@@ -702,6 +715,7 @@ fun MainScreen(
     onRefreshClarification = onRefreshClarification,
     onRespondToClarification = onRespondToClarification,
     onRefreshConnectionWait = onRefreshConnectionWait,
+    onConnectionWaitAction = onConnectionWaitAction,
     onRefreshProgress = onRefreshProgress, onLoadMoreProgressTasks = onLoadMoreProgressTasks,
     onRefreshProgressHome = onRefreshProgressHome, onRefreshProgressTasks = onRefreshProgressTasks,
     onProgressHomeAction = onProgressHomeAction,
@@ -845,6 +859,9 @@ internal fun MainContent(
   pairingScanError: Boolean = false,
   onConversationSearchChange: (String) -> Unit = {},
   onRefreshConversations: () -> Unit = {},
+  onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
+  onCreateAgentConversation: (String) -> Unit = {},
+  onCapabilityConversation: (String) -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onLoadOlderHistory: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
@@ -894,6 +911,7 @@ internal fun MainContent(
   onRefreshClarification: () -> Unit = {},
   onRespondToClarification: (ClarificationCommand) -> Unit = {},
   onRefreshConnectionWait: () -> Unit = {},
+  onConnectionWaitAction: suspend (ai.xopc.mobile.gateway.ConnectionWaitSnapshot, String, String?, String?) -> String? = { _, _, _, _ -> null },
   onRefreshProgress: () -> Unit = {},
   onRefreshProgressHome: () -> Unit = {},
   onProgressHomeAction: (ProgressHomeAction) -> Unit = {},
@@ -1390,6 +1408,11 @@ internal fun MainContent(
     if (inputVoiceHeld && inputVoiceElapsed >= 120) finishInputVoice(inputVoiceDestination)
   }
   val focusManager = LocalFocusManager.current
+  val openMusicPlayer: () -> Unit = {
+    focusManager.clearFocus(force = true)
+    keyboardController?.hide()
+    musicPlayerOpen = true
+  }
   var phonePage by remember(gatewayId, conversationId) { mutableStateOf(false) }
   var messageSearchOpen by remember(gatewayId, conversationId, selectedTab, phonePage) { mutableStateOf(false) }
   val phoneController = rememberPhoneWorkspace(phoneRepository, conversationId,
@@ -1429,8 +1452,11 @@ internal fun MainContent(
   val tabStateHolder = rememberSaveableStateHolder()
   val sidebar = remember(gatewayId) { ChatSidebarState() }
   var returnToSidebar by rememberSaveable(gatewayId) { mutableStateOf(false) }
+  var startConversationSearch by rememberSaveable(gatewayId) { mutableStateOf(false) }
   val conversationsSearch by rememberUpdatedState(connection.conversationSearch)
   val clearConversationSearch by rememberUpdatedState(onConversationSearchChange)
+  val refreshSidebarConversations by rememberUpdatedState(onRefreshConversations)
+  val loadingSidebarConversations by rememberUpdatedState(connection.conversationsLoading)
   val closeKeyboard: () -> Unit = {
     focusManager.clearFocus(force = true)
     keyboardController?.hide()
@@ -1439,6 +1465,7 @@ internal fun MainContent(
     assistantActionsOpen = false
     closeKeyboard()
     if (conversationsSearch.isNotEmpty()) clearConversationSearch("")
+    else if (!loadingSidebarConversations) refreshSidebarConversations()
     sidebar.open = true
   }
   val exitDestination: () -> Unit = {
@@ -1454,6 +1481,7 @@ internal fun MainContent(
   }
   LaunchedEffect(selectedTab) {
     if (selectedTab != HomeTab.Assistant) sidebar.open = false
+    if (selectedTab != HomeTab.Conversations) startConversationSearch = false
   }
   BackHandler(enabled = selectedTab != HomeTab.Assistant && isPaired) { exitDestination() }
   BackHandler(enabled = sidebar.open) { sidebar.open = false }
@@ -1483,7 +1511,7 @@ internal fun MainContent(
     containerColor = MaterialTheme.colorScheme.background,
     bottomBar = {
       if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-          if (showMusicMini) MusicMiniPlayer(activeMusic, { musicPlayerOpen = true },
+          if (showMusicMini) MusicMiniPlayer(activeMusic, openMusicPlayer,
             Modifier.padding(horizontal = 12.dp).padding(bottom = 4.dp))
           MainBottomSurface("assistant-bottom-surface", assistantActionsOpen) {
             AssistantComposer(connection, assistantComposerValue, { value ->
@@ -1528,7 +1556,7 @@ internal fun MainContent(
           }
         Spacer(Modifier.fillMaxWidth().navigationBarsPadding().testTag("bottom-content-mask"))
       } else if (showMusicMini && !showOverview) {
-        MusicMiniPlayer(activeMusic, { musicPlayerOpen = true }, Modifier.navigationBarsPadding()
+        MusicMiniPlayer(activeMusic, openMusicPlayer, Modifier.navigationBarsPadding()
           .padding(horizontal = 12.dp, vertical = 7.dp))
       }
     },
@@ -1570,7 +1598,7 @@ internal fun MainContent(
           onUpdateQueuedInput, onCancelQueuedInput, onReloadAgents, onSwitchAgent,
           onReloadContext,
           onLoadContextPanel, onSetContextDirectory, onAddContextFile, onCreateContextConversation,
-          onRefreshClarification, onRespondToClarification, onRefreshConnectionWait,
+          onRefreshClarification, onRespondToClarification, onRefreshConnectionWait, onConnectionWaitAction,
           onOpenExecution, onRetryExecution, onCloseExecution,
           onCopyMessageText, onSaveMessageAsNote, onReuseMessage, onRegenerateMessage,
           onLoadMessageMedia, onResolveMessageFile,
@@ -1641,8 +1669,7 @@ internal fun MainContent(
           generatedMediaAccess = generatedMediaAccess.takeUnless { phonePage },
           activeMusic = activeMusic,
           onInlineMusic = { inlineMusicKey = it },
-          onExpandMusic = { musicPlayerOpen = true },
-          onDownloadMusic = downloadMusic,
+          onExpandMusic = openMusicPlayer,
           taskChrome = { search, options ->
             TaskConversationChrome(connection, taskNavigation, onRestoreConversation, onSelectTab,
               onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, onSaveProgressTask,
@@ -1665,7 +1692,7 @@ internal fun MainContent(
         }, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
           onTogglePin, onToggleArchive, onBatchConversations,
           onBeginConversationShare, onConfirmConversationShare,
-          onDismissConversationShare, onScheduleDelete, onUndoDelete, exitDestination)
+          onDismissConversationShare, onScheduleDelete, onUndoDelete, exitDestination, startConversationSearch)
       }
       HomeTab.Progress, HomeTab.Projects, HomeTab.Automations -> if (!isPaired) PairingScreen(
         stringResource(R.string.tab_progress), connection, onPair, onCancelPairing, onScanPairing,
@@ -1733,6 +1760,12 @@ internal fun MainContent(
           },
         )
       }
+      HomeTab.Capabilities -> CapabilitiesScreen(rootInsets, connection.personal, connection.agentAvatars, onLoadCapabilities,
+        onOpenAgent = { item ->
+          if (item.personal) onOpenPersonalAgent() else onCreateAgentConversation(item.id)
+          onSelectTab(HomeTab.Assistant)
+        }, onOpenDraft = onCapabilityConversation, onExit = exitDestination,
+        administrationOrigin = connection.profile?.let { profile -> profile.routes.firstOrNull { it.id == profile.activeRouteId }?.url })
       HomeTab.Notes -> if (!isPaired) PairingScreen(
         stringResource(R.string.library_title), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
@@ -1873,7 +1906,7 @@ internal fun MainContent(
               }
             }
           }, modifier = Modifier.weight(1f))
-          if (activeMusic != null) MusicMiniPlayer(activeMusic, { musicPlayerOpen = true },
+          if (activeMusic != null) MusicMiniPlayer(activeMusic, openMusicPlayer,
             Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
           Spacer(Modifier.navigationBarsPadding())
         }
@@ -1883,8 +1916,7 @@ internal fun MainContent(
         onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel)
       overviewMedia?.let { request ->
         ModalBottomSheet(onDismissRequest = { overviewMedia = null }) {
-          MessageMediaPreview(request, onLoadMessageMedia, onResolveMessageFile,
-            { file, key -> onSaveFileVersion(gatewayId, file, key) }) { overviewMedia = null }
+          MessageMediaPreview(request, onLoadMessageMedia) { overviewMedia = null }
         }
       }
     }
@@ -1895,6 +1927,13 @@ internal fun MainContent(
         returnToSidebar = destination == HomeTab.Conversations
         if (destination == HomeTab.Me) { personalPage = "settings"; settingsFromSidebar = true }
         onSelectTab(destination)
+      },
+      onSearch = {
+        sidebar.open = false
+        linkedDetails = emptyList()
+        returnToSidebar = true
+        startConversationSearch = true
+        onSelectTab(HomeTab.Conversations)
       },
       onPersonal = {
         sidebar.open = false
@@ -2051,7 +2090,7 @@ private fun ConnectionUiState.matchesComposer(gatewayId: String?, conversationId
 private fun MainBottomSurface(tag: String, expanded: Boolean,
   content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag(tag)
-    .background(if (expanded) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent, RoundedCornerShape(28.dp)),
+    .background(if (expanded) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent, themedCorners(28)),
     content = content)
 }
 
@@ -2076,7 +2115,7 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
             scopeKey, item.id, item.size) {
             value = true to runCatching { onPreviewImage(item) }.getOrNull()
           }
-          Box(modifier = Modifier.size(96.dp).clip(RoundedCornerShape(12.dp))
+          Box(modifier = Modifier.size(96.dp).clip(themedCorners(12))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable { previewId = item.id }
             .semantics { contentDescription = "$previewLabel: ${item.name}" }
@@ -2101,7 +2140,7 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
           }
         } else {
           Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh,
-            RoundedCornerShape(12.dp)).padding(start = 12.dp)
+            themedCorners(12)).padding(start = 12.dp)
             .clickable { previewId = item.id }
             .testTag("$tagPrefix-attachment-${item.id}"),
             verticalAlignment = Alignment.CenterVertically) {
@@ -2232,7 +2271,7 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
         actionsOpen -> Color.Transparent
         MaterialTheme.colorScheme.background.luminance() < .35f -> MaterialTheme.colorScheme.surfaceContainer
         else -> MaterialTheme.colorScheme.surfaceContainerHighest
-      }, RoundedCornerShape(28.dp)).testTag("assistant-composer-shell")) {
+      }, themedCorners(28)).testTag("assistant-composer-shell")) {
       Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Bottom) {
         if (!expandedComposer) AssistantAddAction(connection, actionsOpen, toggleActions, voiceBusy || voiceHeld)
@@ -2407,7 +2446,7 @@ private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOp
           }, enabled = enabled, modifier = Modifier.weight(1f).height(84.dp).testTag("assistant-action-$id"),
             contentPadding = PaddingValues(0.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-              Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(14.dp)),
+              Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, themedCorners(14)),
                 contentAlignment = Alignment.Center) {
                 Icon(painterResource(icon), null, Modifier.size(24.dp),
                   tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .5f))
@@ -2492,6 +2531,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   onRefreshClarification: () -> Unit,
   onRespondToClarification: (ClarificationCommand) -> Unit,
   onRefreshConnectionWait: () -> Unit,
+  onConnectionWaitAction: suspend (ai.xopc.mobile.gateway.ConnectionWaitSnapshot, String, String?, String?) -> String?,
   onOpenExecution: (String) -> Unit,
   onRetryExecution: () -> Unit, onCloseExecution: () -> Unit,
   onCopyMessageText: (String) -> Unit,
@@ -2530,7 +2570,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   activeMusic: MusicTrack? = null,
   onInlineMusic: (String?) -> Unit = {},
   onExpandMusic: () -> Unit = {},
-  onDownloadMusic: (MusicTrack) -> Unit = {},
   taskChrome: @Composable (() -> Unit, () -> Unit) -> Unit = { _, _ -> }) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -2600,17 +2639,22 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     it.answerConfirmed && it.text.isNotBlank() }
   val latestConnection by rememberUpdatedState(connection)
   val selectedMessageConversationId = connection.selectedConversationId
-  val mediaScope = Triple(connection.profile?.gatewayId, selectedMessageConversationId, connection.historyTranscriptId)
-  val generatedMedia = remember(mediaScope) { GeneratedMediaChatState() }
+  val mediaScope = connection.profile?.let { profile ->
+    selectedMessageConversationId?.let { id ->
+      connection.historyTranscriptId?.let { transcript -> GeneratedMediaScope(profile.gatewayId, profile.deviceId, id, transcript) }
+    }
+  }
+  val generatedMedia = remember(generatedMediaAccess, mediaScope) {
+    GeneratedMediaChatState(mediaScope?.let { generatedMediaAccess?.snapshot(it) }.orEmpty())
+  }
   val mediaCoroutine = rememberCoroutineScope()
   val mediaLifecycle = LocalLifecycleOwner.current.lifecycle
   val mediaRunActive = connection.activeRunId != null || connection.sending
   LaunchedEffect(generatedMedia, generatedMediaAccess, mediaRunActive, mediaLifecycle) {
     val access = generatedMediaAccess ?: return@LaunchedEffect
-    val id = mediaScope.second ?: return@LaunchedEffect
-    if (mediaScope.third == null) return@LaunchedEffect
+    val scope = mediaScope ?: return@LaunchedEffect
     mediaLifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-      generatedMedia.observe(access, id, mediaRunActive)
+      generatedMedia.observe(access, scope, mediaRunActive)
     }
   }
   val generatedCards = remember(generatedMedia.items, displayMessages) {
@@ -2623,35 +2667,47 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val musicPlayback = MusicPlayback.state.collectAsStateWithLifecycle()
   val musicPlaying by remember { derivedStateOf { musicPlayback.value?.phase == MusicPhase.Playing } }
   LaunchedEffect(musicPlaying) {
-    if (musicPlaying) { generatedMedia.playingVideoId = null; reader.stop() }
+    if (musicPlaying) { generatedMedia.presentedVideo = null; reader.stop() }
   }
   val playGeneratedMedia: (GeneratedMediaItem) -> Unit = { item ->
     reader.stop()
-    if (item.kind == GeneratedMediaKind.Music && mediaScope.first != null && selectedMessageConversationId != null) {
-      generatedMedia.playingVideoId = null
-      playGeneratedMusic(context, generatedMediaAccess, MusicTrack(requireNotNull(mediaScope.first),
-        selectedMessageConversationId, item.id, item.title.orEmpty().ifBlank { context.getString(R.string.music_notification_channel) },
+    if (item.kind == GeneratedMediaKind.Music && mediaScope != null) {
+      generatedMedia.presentedVideo = null
+      playGeneratedMusic(context, generatedMediaAccess, MusicTrack(mediaScope.gatewayId,
+        mediaScope.conversationId, item.id, item.title.orEmpty().ifBlank { context.getString(R.string.music_notification_channel) },
         connection.personal.agent?.displayName?.takeIf { isPersonalChat }
           ?: connection.conversations.firstOrNull { it.id == selectedMessageConversationId }?.title.orEmpty(),
         item.lyrics, (item.duration ?: 0).coerceIn(0, Int.MAX_VALUE / 1000) * 1000))
-    } else if (item.kind == GeneratedMediaKind.Video) {
-      if (generatedMedia.playingVideoId != item.id) MusicPlayback.pause()
-      generatedMedia.playingVideoId = item.id.takeUnless { it == generatedMedia.playingVideoId }
+    } else if (item.kind == GeneratedMediaKind.Video && mediaScope != null && generatedMediaAccess != null) {
+      focusManager.clearFocus(force = true)
+      keyboardController?.hide()
+      MusicPlayback.pause()
+      generatedMedia.presentedVideo = item
     }
   }
+  val openGeneratedMedia: (GeneratedMediaItem) -> Unit = { item ->
+    if (item.kind == GeneratedMediaKind.Video) {
+      playGeneratedMedia(item)
+    } else {
+      if (activeMusic?.id != item.id || activeMusic.conversationId != selectedMessageConversationId) playGeneratedMedia(item)
+      onExpandMusic()
+    }
+  }
+  var musicCardBounds by remember(activeMusic?.key, selectedMessageConversationId) { mutableStateOf<Rect?>(null) }
+  var chatContentBounds by remember { mutableStateOf<Rect?>(null) }
   val confirmGeneratedMedia: (GeneratedMediaItem) -> Unit = { card ->
-    if (!mediaRunActive && selectedMessageConversationId != null && generatedMediaAccess != null) {
-      mediaCoroutine.launch { generatedMedia.confirm(generatedMediaAccess, selectedMessageConversationId, card) }
+    if (!mediaRunActive && mediaScope != null && generatedMediaAccess != null) {
+      mediaCoroutine.launch { generatedMedia.confirm(generatedMediaAccess, mediaScope, card) }
     }
   }
   DisposableEffect(generatedMedia, generatedMediaAccess, mediaLifecycle) {
     val observer = LifecycleEventObserver { _, event ->
-      if (event == Lifecycle.Event.ON_STOP) generatedMedia.playingVideoId = null
+      if (event == Lifecycle.Event.ON_STOP) generatedMedia.presentedVideo = null
     }
     mediaLifecycle.addObserver(observer)
     onDispose {
       mediaLifecycle.removeObserver(observer)
-      generatedMedia.playingVideoId = null
+      generatedMedia.presentedVideo = null
     }
   }
   val externalLinkFailure = stringResource(R.string.message_open_link_failed)
@@ -2793,7 +2849,17 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   }
   val chatTopInset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
   val headerClearance = chatTopInset + if (isPersonalChat) 110.dp else 72.dp
+  val topClearancePx = with(LocalDensity.current) { headerClearance.toPx() }
+  val bottomClearancePx = with(LocalDensity.current) { bottomChromeHeight.toPx() }
+  val showStickyMusic = musicPlaying && activeMusic?.conversationId == selectedMessageConversationId &&
+    generatedMedia.items.any { it.kind == GeneratedMediaKind.Music && it.id == activeMusic?.id } &&
+    chatContentBounds?.let { viewport ->
+      musicCardBounds?.let { card ->
+        card.height <= 0 || card.bottom <= viewport.top + topClearancePx || card.top >= viewport.bottom - bottomClearancePx
+      } ?: true
+    } == true
   Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(insets)
+    .onGloballyPositioned { chatContentBounds = it.boundsInWindow() }
     .pointerInput(focusManager, keyboardController) {
       awaitPointerEventScope {
         while (true) {
@@ -2833,7 +2899,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           .testTag("assistant-read-aloud-error"), scopeKey = reader)
       else if (reader.state.phase != "idle") Row(modifier = Modifier.fillMaxWidth()
         .padding(top = if (statusIssue == null) headerClearance else 0.dp)
-        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+        .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(16))
         .padding(horizontal = 8.dp).testTag("assistant-read-aloud-controls"),
         verticalAlignment = Alignment.CenterVertically) {
         if (reader.state.phase == "loading") BrandLoadingIndicator(extent = 20.dp)
@@ -2906,8 +2972,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         generatedCards[""]?.let { cards ->
           item(key = "generated-media-unanchored") {
             GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
-              playGeneratedMedia, confirmGeneratedMedia, generatedMedia.playingVideoId, selectedMessageConversationId,
-              generatedMediaAccess, activeMusic, onExpandMusic, onDownloadMusic)
+              playGeneratedMedia, confirmGeneratedMedia, selectedMessageConversationId, activeMusic, openGeneratedMedia) { musicCardBounds = it }
           }
         }
         val latestMessageId = displayMessages.lastOrNull {
@@ -2928,8 +2993,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
             generatedCards[message.renderId]?.let { cards ->
               GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
-                playGeneratedMedia, confirmGeneratedMedia, generatedMedia.playingVideoId, selectedMessageConversationId,
-              generatedMediaAccess, activeMusic, onExpandMusic, onDownloadMusic)
+                playGeneratedMedia, confirmGeneratedMedia, selectedMessageConversationId, activeMusic, openGeneratedMedia) { musicCardBounds = it }
             }
           }
         }
@@ -2970,6 +3034,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
       }
     }
   }
+    if (showStickyMusic && activeMusic != null) {
+      MusicMiniPlayer(activeMusic, onExpandMusic,
+        Modifier.align(Alignment.TopCenter).padding(top = headerClearance + 4.dp, start = 12.dp, end = 12.dp), sticky = true)
+    }
     val canvas = MaterialTheme.colorScheme.background
     Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(headerClearance + 16.dp)
       .background(Brush.verticalGradient(0f to canvas, 0.3f to canvas.copy(alpha = .94f),
@@ -3061,7 +3129,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         if (personalAgent != null) {
           val attention = connection.progress.needsUser.size
           Column(horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = if (attention > 0) Modifier.clip(RoundedCornerShape(14.dp))
+            modifier = if (attention > 0) Modifier.clip(themedCorners(14))
               .background(LocalChatColors.current.card)
               .clickable { onOpenMessageTarget(ConversationTarget("progress", "", "")) }
               .padding(horizontal = 12.dp, vertical = 2.dp) else Modifier) {
@@ -3082,7 +3150,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   }
   if (showConnectionWait && connection.clarification == null) Box(modifier = Modifier.align(Alignment.BottomCenter)
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
-    ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait)
+    ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait, onConnectionWaitAction)
   }
   if (showJumpBottom && positionedAtLatest && !followBottom && messageListState.canScrollBackward) {
     val jumpLabel = stringResource(R.string.assistant_jump_bottom)
@@ -3120,6 +3188,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   }
   }
   val referenceFileSaving by rememberUpdatedState(referenceKind == "file" && connection.contextPanel.saving)
+  val presentedVideo = generatedMedia.presentedVideo
+  if (presentedVideo != null && mediaScope != null && generatedMediaAccess != null) {
+    GeneratedVideoSheet(presentedVideo, mediaScope.conversationId, generatedMediaAccess) { generatedMedia.presentedVideo = null }
+  }
   if (referenceKind != null) ModalBottomSheet(onDismissRequest = { if (!referenceFileSaving) onReferenceKindChange(null) },
     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
       confirmValueChange = { it != androidx.compose.material3.SheetValue.Hidden || !referenceFileSaving })) {
@@ -3143,18 +3215,13 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           modifier = Modifier.weight(1f))
         TextButton(onClick = { onReferenceKindChange(null) }, enabled = !panel.saving) { Text(stringResource(R.string.assistant_close)) }
       }
-      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      SegmentedTabs(
         listOf("note" to R.string.assistant_action_reference_note,
-          "task" to R.string.assistant_action_reference_task,
-          "file" to R.string.assistant_action_reference_file).forEach { (kind, label) ->
-          TextButton(onClick = { filePath = ""; onReferenceQueryChange(""); onReferenceKindChange(kind) },
-            enabled = !panel.saving,
-            modifier = Modifier.weight(1f).testTag("assistant-reference-tab-$kind")) {
-            Text(stringResource(label), color = if (referenceKind == kind) MaterialTheme.colorScheme.primary
-              else MaterialTheme.colorScheme.onSurfaceVariant)
-          }
-        }
-      }
+          "task" to R.string.assistant_action_reference_task, "file" to R.string.assistant_action_reference_file)
+          .map { (kind, label) -> SegmentOption(kind, stringResource(label), "assistant-reference-tab-$kind") },
+        referenceKind, { kind -> filePath = ""; onReferenceQueryChange(""); onReferenceKindChange(kind) },
+        enabled = !panel.saving,
+      )
       OutlinedTextField(value = referenceQuery, onValueChange = { if (it.length <= 4096) onReferenceQueryChange(it) },
         label = { Text(stringResource(R.string.assistant_reference_search)) },
         modifier = Modifier.fillMaxWidth().testTag("assistant-reference-search"), singleLine = true, enabled = !panel.saving)
@@ -3324,7 +3391,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
                 else -> { closeOptions(); onSwitchAgent(agent.id, false) }
               }
             }, enabled = !connection.creatingConversation, modifier = Modifier.fillMaxWidth().testTag("agent-${agent.id}"),
-              shape = RoundedCornerShape(14.dp), color = LocalChatColors.current.card) {
+              shape = themedCorners(14), color = LocalChatColors.current.card) {
               Row(Modifier.heightIn(min = 60.dp).padding(10.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (personal != null) PersonalAgentAvatar(connection.personal.agentAvatar, personal.appearance, 40.dp, false)
@@ -3763,9 +3830,10 @@ private fun ConversationsScreen(
   onScheduleDelete: (String) -> Unit,
   onUndoDelete: () -> Unit,
   onExit: () -> Unit,
+  startSearching: Boolean,
 ) {
   var menuConversationId by rememberSaveable { mutableStateOf<String?>(null) }
-  var searchOpen by rememberSaveable { mutableStateOf(true) }
+  var searchOpen by remember(startSearching) { mutableStateOf(startSearching) }
   var expandedTaskParents by rememberSaveable { mutableStateOf(emptyList<String>()) }
   var collapsedTaskParents by rememberSaveable { mutableStateOf(emptyList<String>()) }
   var selecting by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf(false) }
@@ -3943,6 +4011,13 @@ private fun ConversationsScreen(
     dismissButton = { TextButton(onClick = { confirmBatchDelete = false }) {
       Text(stringResource(R.string.conversations_cancel))
     } })
+  fun closeSearch() {
+    if (connection.conversationSearch.isNotEmpty()) onSearchChange("")
+    searchOpen = false
+    focusManager.clearFocus(force = true)
+    keyboardController?.hide()
+  }
+  BackHandler(enabled = searchOpen && !selecting, onBack = ::closeSearch)
   val clearLabel = stringResource(R.string.conversations_clear)
   val newConversationLabel = stringResource(R.string.assistant_new_action)
   val searchLabel = stringResource(R.string.conversations_search)
@@ -3977,12 +4052,12 @@ private fun ConversationsScreen(
           modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
       }
     }
-    if (searchOpen) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+    if (searchOpen && !selecting) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       BasicTextField(value = connection.conversationSearch, onValueChange = onSearchChange,
         modifier = Modifier.weight(1f).heightIn(min = 44.dp)
-          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(24.dp))
-          .padding(horizontal = 16.dp, vertical = 10.dp).testTag("conversations-search"),
+          .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(24))
+          .padding(horizontal = 16.dp, vertical = 10.dp).then(searchInputFocus()).testTag("conversations-search"),
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
         singleLine = true,
         decorationBox = { innerTextField ->
@@ -3994,12 +4069,8 @@ private fun ConversationsScreen(
             innerTextField()
           }
         })
-      IconButton(onClick = {
-        if (connection.conversationSearch.isNotEmpty()) onSearchChange("")
-        searchOpen = false
-        focusManager.clearFocus(force = true)
-        keyboardController?.hide()
-      }, modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
+      IconButton(onClick = ::closeSearch,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = clearLabel }
         .testTag("conversations-clear")) {
         Text("×", style = MaterialTheme.typography.headlineMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -4148,7 +4219,7 @@ private fun ConversationCard(conversation: ConversationSummary, showTime: Boolea
     }.combinedClickable(onClick = onClick,
     onLongClick = onMenu?.let { action -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); action() } },
     onLongClickLabel = if (onMenu != null) stringResource(R.string.conversations_more_actions) else null),
-    shape = RoundedCornerShape(16.dp),
+    shape = themedCorners(16),
     colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
       else MaterialTheme.colorScheme.surfaceContainer)) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -4201,7 +4272,7 @@ private fun ConversationTaskRow(child: ConversationTaskChild, onOpen: (String) -
     else -> status
   }
   Row(modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-    .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(12.dp))
+    .background(MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(12))
     .clickable(enabled = child.activeConversationId != null) {
       child.activeConversationId?.let(onOpen)
     }.testTag("conversation-task-${child.taskId}")
@@ -4642,7 +4713,7 @@ private fun PairingScreen(
         modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
       connection.confirmationCode?.let { code ->
         Column(modifier = Modifier.fillMaxWidth().padding(top = 32.dp)
-          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp))
+          .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(20))
           .padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.spacedBy(12.dp)) {
           Text(code, style = MaterialTheme.typography.headlineLarge,
@@ -4655,7 +4726,7 @@ private fun PairingScreen(
       if (manualEntry && !connection.pairing && !connection.restoring) {
         BasicTextField(invitation, { invitation = it }, enabled = !scanning,
           modifier = Modifier.fillMaxWidth().height(112.dp).padding(top = 24.dp)
-            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(16))
             .padding(16.dp).testTag("pairing-link"),
           textStyle = MaterialTheme.typography.bodyMedium.copy(
             color = MaterialTheme.colorScheme.onSurface), maxLines = 5,

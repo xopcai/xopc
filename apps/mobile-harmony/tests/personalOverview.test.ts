@@ -54,3 +54,24 @@ it('uses only the scoped Personal schedules and deliveries feeds', async () => {
   expect(model.deliveries.map(item => item.id)).toEqual(['one', 'two']);
   expect(model.nextDeliveryOffset).toBeNull();
 });
+
+it('keeps displayed deliveries and retries the page that failed', async () => {
+  const model = new XopcPersonalOverviewViewModel();
+  request.mockResolvedValueOnce(JSON.stringify({ payload: { items: [{ id: 'one' }], nextOffset: 15 } }));
+  await model.loadDeliveries();
+
+  request.mockRejectedValueOnce(new Error('Refresh failed'));
+  await model.loadDeliveries();
+  expect(model.deliveries.map(item => item.id)).toEqual(['one']);
+  request.mockResolvedValueOnce(JSON.stringify({ payload: { items: [{ id: 'new' }], nextOffset: 15 } }));
+  await model.retryDeliveries();
+  expect(request).toHaveBeenLastCalledWith('/api/personal-agent/activity?view=deliverables&limit=15&offset=0');
+
+  request.mockRejectedValueOnce(new Error('Next page failed'));
+  await model.loadDeliveries(true);
+  expect(model.deliveries.map(item => item.id)).toEqual(['new']);
+  request.mockResolvedValueOnce(JSON.stringify({ payload: { items: [{ id: 'next' }], nextOffset: null } }));
+  await model.retryDeliveries();
+  expect(request).toHaveBeenLastCalledWith('/api/personal-agent/activity?view=deliverables&limit=15&offset=15');
+  expect(model.deliveries.map(item => item.id)).toEqual(['new', 'next']);
+});

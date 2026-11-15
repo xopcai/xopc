@@ -52,7 +52,7 @@ export struct XopcChatStepsView {
             XopcWaitingDot({ dotIndex: index, animate: this.animateDots })
           }, (index: number): string => index.toString())
         }.id('chat-waiting-dots-' + this.row.id).width(72).height(44).justifyContent(FlexAlign.Center)
-          .borderRadius(22).backgroundColor(this.colors.input)
+          .borderRadius(this.colors.corner(22)).backgroundColor(this.colors.input)
           .accessibilityText($r('app.string.chat_steps_working'))
         if (!this.staged && this.narration) {
           Text(this.narration).fontSize(13).fontColor(this.colors.secondary).maxLines(2)

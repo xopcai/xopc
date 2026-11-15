@@ -182,7 +182,7 @@ export struct XopcChatExecutionDetailView {
             Text($r('app.string.chat_execution_unavailable')).fontSize(14).fontColor(this.colors.secondary)
             Button($r('app.string.refresh')).height(44).fontColor(this.colors.accent)
               .backgroundColor(Color.Transparent).onClick((): void => { this.onRetry(); })
-          }.width('100%').padding(16).borderRadius(12).backgroundColor(this.colors.grouped)
+          }.width('100%').padding(16).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.grouped)
         }
         ForEach(this.groups, (group: XopcExecutionGroup) => {
           if (group.kind === 'tool') {

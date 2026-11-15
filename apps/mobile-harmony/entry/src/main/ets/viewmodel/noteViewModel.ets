@@ -49,11 +49,16 @@ export class XopcNoteViewModel {
   private saveTimer: number = -1;
   private projectId: string = '';
   private draftsReady?: Promise<void>;
+  private listInFlight: boolean = false;
 
   async start(context: common.Context, initialId: string = '', initialStatus: XopcNoteStatus | '' = '', projectId: string = ''): Promise<void> {
     this.projectId = projectId;
     this.status = initialStatus;
     if (initialId) this.openingId = initialId;
+    else if (!projectId && !initialStatus) {
+      const cached = this.repository.cachedList();
+      if (cached) this.items = cached.items;
+    }
     try {
       this.draftsReady = this.drafts.initialize(context);
       if (initialId) {
@@ -77,10 +82,11 @@ export class XopcNoteViewModel {
     this.cancelSaveTimer();
   }
 
-  async list(more: boolean = false): Promise<void> {
-    if (this.loading || this.loadingMore) return;
+  async list(more: boolean = false, replace: boolean = false): Promise<void> {
+    if ((this.loading || this.loadingMore) && !(replace && this.listInFlight)) return;
+    this.listInFlight = true;
     const generation = ++this.generation;
-    if (more) this.loadingMore = true; else this.loading = true;
+    this.loadingMore = more; this.loading = !more;
     this.error = '';
     try {
       const remoteRequest = this.repository.list(this.search, this.status, more ? this.items.length : 0, this.projectId);
@@ -89,7 +95,9 @@ export class XopcNoteViewModel {
       if (generation !== this.generation) return;
       const remoteItems = more ? this.items.concat(result.items.filter((item: XopcNoteIndexEntry): boolean =>
         !this.items.some((current: XopcNoteIndexEntry): boolean => current.id === item.id))) : result.items;
-      this.items = more ? remoteItems : await this.mergePendingDrafts(remoteItems);
+      const items = more ? remoteItems : await this.mergePendingDrafts(remoteItems);
+      if (generation !== this.generation) return;
+      this.items = items;
       this.hasMore = result.hasMore ?? false;
     } catch (error) {
       if (generation === this.generation) {
@@ -98,7 +106,7 @@ export class XopcNoteViewModel {
       }
     }
     finally {
-      if (generation === this.generation) { this.loading = false; this.loadingMore = false; }
+      if (generation === this.generation) { this.listInFlight = false; this.loading = false; this.loadingMore = false; }
     }
   }
 

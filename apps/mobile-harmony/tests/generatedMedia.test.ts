@@ -31,6 +31,8 @@ describe('generated media in chat', () => {
     const cards = [...generatedMediaCards('music', { jobs: [song] }), ...generatedMediaCards('video', video)];
     expect([...generatedMediaByReply(cards, rows).keys()]).toEqual(['tools', 'video-reply']);
     expect(generatedMediaByReply(cards, []).get('')).toEqual(cards);
+    expect(generatedMediaByReply(cards, rows.slice(-1)).get('')).toEqual(cards);
+    expect(generatedMediaByReply(cards, rows.slice(1)).get('')).toEqual([cards[0]]);
   });
 
   it('filters old video jobs and only enables confirmation for the configured draft model', () => {
@@ -53,7 +55,7 @@ describe('generated media in chat', () => {
     });
     const model = new XopcGeneratedMediaViewModel();
     try {
-      model.observe('chat', 'scope', true, false);
+      model.observe('chat', 'scope', 'active', true, false);
       await vi.waitFor(() => expect(model.cards).toHaveLength(1));
       await model.confirm(model.cards[0]);
       expect(request).toHaveBeenCalledWith('/api/video-generation/sessions/chat/jobs/confirm-draft',
@@ -69,12 +71,49 @@ describe('generated media in chat', () => {
       ? old : Promise.resolve(JSON.stringify({ jobs: [] })));
     const model = new XopcGeneratedMediaViewModel();
     try {
-      model.observe('old', 'old', true, false);
-      model.observe('new', 'new', true, false);
+      model.observe('old', 'old', 'transcript-old', true, false);
+      model.observe('new', 'new', 'transcript-new', true, false);
       resolveOld(JSON.stringify({ jobs: [song] }));
       await old;
       await Promise.resolve();
       expect(model.cards).toEqual([]);
+    } finally { model.stop(); }
+  });
+
+  it('restores only the original transcript and retains jobs when a refresh omits them', async () => {
+    const queuedSong = { ...song, state: 'queued' };
+    const savedVideo = { id: 'saved-video', transcriptId: 'active', state: 'completed', createdAt: 4 };
+    request.mockImplementation(async (path: string) =>
+      JSON.stringify(path.includes('/video-generation/') ? { ...video, jobs: [savedVideo] }
+        : { transcriptId: 'active', jobs: [queuedSong] }));
+    const model = new XopcGeneratedMediaViewModel();
+    try {
+      model.observe('revisit', 'gateway:device:revisit:active', 'active', true, false);
+      await vi.waitFor(() => expect(model.cards).toHaveLength(3));
+      model.observe('other', 'gateway:device:other:active', 'active', false, false);
+      expect(model.cards).toEqual([]);
+      model.observe('revisit', 'gateway:other-device:revisit:active', 'active', false, false);
+      expect(model.cards).toEqual([]);
+      model.observe('revisit', 'gateway:device:revisit:reset', 'reset', false, false);
+      expect(model.cards).toEqual([]);
+
+      request.mockResolvedValue(JSON.stringify({ transcriptId: 'mismatched', jobs: [] }));
+      model.observe('revisit', 'gateway:device:revisit:active', 'active', true, false);
+      expect(model.cards.map(card => card.item.id)).toEqual([song.id, draft.id, savedVideo.id]);
+      expect(model.cards[1].canConfirm).toBe(false);
+      await Promise.resolve();
+      expect(model.cards).toHaveLength(3);
+
+      request.mockResolvedValue(JSON.stringify({ transcriptId: 'active', jobs: [] }));
+      model.observe('revisit', 'gateway:device:revisit:active', 'active', true, false);
+      await vi.waitFor(() => expect(model.cards.map(card => card.item.id)).toEqual([song.id, savedVideo.id]));
+      expect(model.cards[0].item.state).toBe('queued');
+
+      request.mockImplementation(async (path: string) => JSON.stringify({
+        transcriptId: 'active', jobs: path.includes('/music-generation/') ? [song] : [],
+      }));
+      model.observe('revisit', 'gateway:device:revisit:active', 'active', true, false);
+      await vi.waitFor(() => expect(model.cards.map(card => card.item)).toEqual([song, savedVideo]));
     } finally { model.stop(); }
   });
 });

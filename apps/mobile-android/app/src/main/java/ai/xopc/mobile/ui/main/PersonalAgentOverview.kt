@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.AutomationSummary
 import ai.xopc.mobile.gateway.PersonalAgentRecord
@@ -28,6 +29,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,9 +55,10 @@ internal fun PersonalAgentOverview(access: PersonalOverviewAccess?, agent: Perso
   var library by rememberSaveable(agent.conversationId) { mutableStateOf(false) }
   var work by remember(agent.conversationId) { mutableStateOf(PersonalOverviewList<PersonalWorkPage>()) }
   var schedules by remember(agent.conversationId) { mutableStateOf(PersonalOverviewList<List<AutomationSummary>>()) }
-  var deliveries by remember(agent.conversationId) { mutableStateOf(PersonalOverviewList<PersonalDeliveryPage>()) }
+  var deliveries by remember(access, agent.conversationId) { mutableStateOf(PersonalOverviewList<PersonalDeliveryPage>()) }
+  var libraryOpened by remember(access, agent.conversationId) { mutableStateOf(library) }
   var workOffset by remember(agent.conversationId) { mutableIntStateOf(0) }
-  var deliveryOffset by remember(agent.conversationId) { mutableIntStateOf(0) }
+  var deliveryOffset by remember(access, agent.conversationId) { mutableIntStateOf(0) }
   var workRevision by remember { mutableIntStateOf(0) }
   var scheduleRevision by remember { mutableIntStateOf(0) }
   var deliveryRevision by remember { mutableIntStateOf(0) }
@@ -78,9 +82,8 @@ internal fun PersonalAgentOverview(access: PersonalOverviewAccess?, agent: Perso
     } catch (e: CancellationException) { throw e }
     catch (_: Exception) { schedules = PersonalOverviewList(previous, loading = false, failed = true) }
   }
-  LaunchedEffect(access, agent.conversationId, library, deliveryRevision, deliveryOffset) {
-    if (!library || (deliveries.value != null && !deliveries.loading && !deliveries.failed &&
-        (deliveries.value?.nextOffset ?: -1) != deliveryOffset)) return@LaunchedEffect
+  LaunchedEffect(access, agent.conversationId, libraryOpened, deliveryRevision, deliveryOffset) {
+    if (!libraryOpened) return@LaunchedEffect
     val previous = deliveries.value
     deliveries = PersonalOverviewList(previous)
     try {
@@ -90,7 +93,10 @@ internal fun PersonalAgentOverview(access: PersonalOverviewAccess?, agent: Perso
     } catch (e: CancellationException) { throw e }
     catch (_: Exception) { deliveries = PersonalOverviewList(previous, loading = false, failed = true) }
   }
-  PersonalOverviewContent(agent, avatar, clarification, library, { library = it }, work, schedules, deliveries,
+  PersonalOverviewContent(agent, avatar, clarification, library, {
+    library = it
+    if (it) libraryOpened = true
+  }, work, schedules, deliveries,
     onClose, onEdit, onTask, onSchedule, onOpenSchedule, onDelivery,
     onWorkMore = {
       if (work.failed) workRevision++ else workOffset = work.value?.history?.size ?: 0
@@ -133,18 +139,23 @@ internal fun PersonalOverviewContent(agent: PersonalAgentRecord, avatar: Bitmap?
         .testTag(if (library) "personal-overview-library-list" else "personal-overview-task-list"),
         contentPadding = PaddingValues(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         if (library) {
-          if (deliveries.loading && deliveries.value == null) item { BrandLoadingPanel() }
+          if (deliveries.loading && deliveries.value == null) item { DeliveryListSkeleton() }
           items(deliveries.value?.items.orEmpty(), key = { it.id }) { delivery ->
             OverviewRow(delivery.title, delivery.taskTitle ?: stringResource(R.string.personal_overview_source),
               R.drawable.tab_notes, "personal-overview-delivery-${delivery.id}") { onDelivery(delivery) }
           }
-          if (deliveries.value?.items?.isEmpty() == true) item {
+          if (deliveries.value?.items?.isEmpty() == true && !deliveries.loading && !deliveries.failed) item {
             Text(stringResource(R.string.personal_overview_no_deliveries), Modifier.padding(12.dp),
               color = MaterialTheme.colorScheme.onSurfaceVariant)
           }
-          if (deliveries.failed || deliveries.value?.nextOffset != null) item {
-            TextButton(onClick = onDeliveryMore, enabled = !deliveries.loading) {
-              Text(stringResource(if (deliveries.failed) R.string.progress_refresh else R.string.progress_load_more))
+          if (deliveries.loading && deliveries.value != null) item("delivery-footer") {
+            Box(Modifier.fillMaxWidth().height(48.dp).testTag("personal-overview-library-loading-more"),
+              contentAlignment = Alignment.Center) {
+              BrandLoadingIndicator(extent = 22.dp, compact = true)
+            }
+          } else if (deliveries.failed || deliveries.value?.nextOffset != null) item("delivery-footer") {
+            TextButton(onClick = onDeliveryMore, modifier = Modifier.fillMaxWidth()) {
+              Text(stringResource(if (deliveries.failed) R.string.personal_retry else R.string.progress_load_more))
             }
           }
         } else {
@@ -230,25 +241,30 @@ private fun PersonalOverviewHeader(agent: PersonalAgentRecord, avatar: Bitmap?, 
         else stringResource(R.string.personal_overview_running, running),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp)
-      .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(28.dp)).padding(4.dp),
-      horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-      PersonalOverviewTab(Modifier.weight(1f), R.drawable.action_task_list,
-        stringResource(R.string.progress_tasks) + if (attention > 0) "  $attention" else "",
-        !library, "personal-overview-tasks-tab") { onTab(false) }
-      PersonalOverviewTab(Modifier.weight(1f), R.drawable.tab_notes, stringResource(R.string.personal_overview_library),
-        library, "personal-overview-library-tab") { onTab(true) }
-    }
+    SegmentedTabs(
+      listOf(
+        SegmentOption(false, stringResource(R.string.progress_tasks), "personal-overview-tasks-tab", icon = R.drawable.action_task_list, count = attention.takeIf { it > 0 }),
+        SegmentOption(true, stringResource(R.string.personal_overview_library), "personal-overview-library-tab", icon = R.drawable.tab_notes),
+      ), library, onTab, Modifier.padding(top = 12.dp, bottom = 8.dp),
+    )
   }
 }
 
 @Composable
-private fun PersonalOverviewTab(modifier: Modifier, icon: Int, label: String, selected: Boolean, tag: String, onClick: () -> Unit) {
-  Surface(onClick = onClick, selected = selected, modifier = modifier.testTag(tag), shape = CircleShape,
-    color = if (selected) MaterialTheme.colorScheme.surfaceContainerHighest else androidx.compose.ui.graphics.Color.Transparent) {
-    Row(Modifier.height(44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally)) {
-      Icon(painterResource(icon), null, Modifier.size(17.dp))
-      Text(label, style = MaterialTheme.typography.labelLarge)
+private fun DeliveryListSkeleton() {
+  val label = stringResource(R.string.brand_loading)
+  val placeholder = MaterialTheme.colorScheme.surfaceContainerHighest
+  Column(Modifier.fillMaxWidth().semantics { contentDescription = label }
+    .testTag("personal-overview-library-loading"), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    repeat(3) {
+      Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(19.dp).background(placeholder, RoundedCornerShape(5.dp)))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Box(Modifier.fillMaxWidth(.58f).height(12.dp).background(placeholder, CircleShape))
+          Box(Modifier.fillMaxWidth(.34f).height(8.dp).background(placeholder, CircleShape))
+        }
+      }
     }
   }
 }
@@ -273,7 +289,7 @@ private fun OverviewTaskRow(task: PersonalWork, onTask: (String) -> Unit) {
 
 @Composable
 private fun OverviewRow(title: String, description: String, icon: Int, tag: String, attention: Boolean = false, onClick: () -> Unit) {
-  Surface(onClick, Modifier.fillMaxWidth().testTag(tag), shape = RoundedCornerShape(12.dp),
+  Surface(onClick, Modifier.fillMaxWidth().testTag(tag), shape = themedCorners(12),
     color = androidx.compose.ui.graphics.Color.Transparent) {
     Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 8.dp, vertical = 5.dp),
       verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

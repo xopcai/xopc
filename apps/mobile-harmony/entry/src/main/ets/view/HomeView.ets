@@ -1,3 +1,5 @@
+import { XopcCapabilitiesView } from './CapabilitiesView';
+import { XopcCapabilitySetupView } from './CapabilitySetupView';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcPersonalAgentSettings } from './PersonalAgentSettings';
@@ -114,6 +116,8 @@ export struct XopcHomeView {
     };
     notificationNavigation.consume();
     void this.attention.refresh();
+    void this.chatRepository.restoreRecent().catch((): void => {});
+    void this.chatRepository.refreshRecent().catch((): void => {});
     void this.restoreInitialChat();
     this.attentionTimer = setInterval((): void => { if (this.layout.foreground) void this.attention.refresh(); }, 15000);
   }
@@ -385,13 +389,21 @@ export struct XopcHomeView {
     }
   }
 
-  private async openOrdinaryChat(): Promise<void> {
+  private async openOrdinaryChat(agentId: string = '', prompt: string = ''): Promise<void> {
     if (this.ordinaryOpening) return;
     this.ordinaryOpening = true;
     const revision = this.navigationRevision;
     try {
-      const id = await this.chatRepository.create();
-      if (!this.disposed && revision === this.navigationRevision) this.openConversationFromList(id);
+      const resolvedAgent = prompt && !agentId ? (await this.chatRepository.agents()).defaultId : agentId;
+      if (this.disposed || revision !== this.navigationRevision) return;
+      const id = await this.chatRepository.create(undefined, resolvedAgent || undefined);
+      if (!this.disposed && revision === this.navigationRevision) {
+        if (prompt) {
+          chatDraftIntake.stage(id, prompt, []);
+          this.rememberConversation(id);
+          this.switchToChat(id, '', true);
+        } else this.openConversationFromList(id);
+      }
     } catch (error) {
       if (!this.disposed && revision === this.navigationRevision) {
         this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
@@ -426,8 +438,8 @@ export struct XopcHomeView {
 
   @Builder
   destination(page: string, param: Object) {
-    if (page === 'sessions') {
-      XopcSessionsView({ currentId: this.activeChatId, personalAgent: this.personalAgent.record,
+    if (page === 'sessions' || page === 'sessions-search') {
+      XopcSessionsView({ startSearching: page === 'sessions-search', currentId: this.activeChatId, personalAgent: this.personalAgent.record,
         onExit: (): void => { this.pathStack.pop(); this.openSidebar(); },
         onOpen: (id: string): void => { this.openConversationFromList(id); },
         onTask: (id: string): void => { this.navigate({ page: 'task-chat', itemId: id }); },
@@ -437,6 +449,22 @@ export struct XopcHomeView {
       NavDestination() {
         XopcProgressView({ activePage: true, model: this.attention, onExit: (): void => { this.pathStack.pop(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+      }.hideTitleBar(true).backgroundColor(this.colors.surface)
+    } else if (page === 'capability-mcp-setup') {
+      NavDestination() {
+        Column() {
+          XopcPageHeader({ heading: $r('app.string.cap_native_mcp'), onBack: (): void => { this.pathStack.pop(); } })
+          XopcCapabilitySetupView({ mode: 'mcp', itemId: (param as XopcMobileRoute).itemId,
+            initialUrl: (param as XopcMobileRoute).prompt ?? '' })
+        }.width('100%').height('100%')
+      }.hideTitleBar(true).backgroundColor(this.colors.surface)
+    } else if (page === 'capabilities') {
+      NavDestination() {
+        XopcCapabilitiesView({ personal: this.personalAgent.record, onExit: (): void => { this.pathStack.pop(); },
+          onOpenDraft: (prompt: string): void => { void this.openOrdinaryChat('', prompt); },
+          onOpenAgent: (id: string, personal: boolean): void => {
+            if (personal) void this.openPersonalChat(); else void this.openOrdinaryChat(id);
+          } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'library') {
       NavDestination() {

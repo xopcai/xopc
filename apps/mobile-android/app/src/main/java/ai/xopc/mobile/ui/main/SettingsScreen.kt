@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.theme.AppearancePreference
@@ -71,7 +72,7 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
             "dark" to R.string.settings_dark).forEach { (mode, label) ->
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
               .background(if (appearanceMode == mode) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(14.dp))
+                else MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(14))
               .clickable { onAppearanceModeChange(mode) }
               .padding(horizontal = 16.dp).testTag("appearance-$mode"),
               verticalAlignment = Alignment.CenterVertically) {
@@ -87,7 +88,7 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
                 val selected = colorScheme == scheme
                 Column(Modifier.weight(1f).heightIn(min = 96.dp)
                   .background(if (selected) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(12.dp))
+                    else MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(12))
                   .clickable { onColorSchemeChange(scheme) }
                   .padding(8.dp).testTag("scheme-$scheme"),
                   verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -113,7 +114,7 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
             "en-US" to R.string.settings_language_en).forEach { (option, label) ->
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
               .background(if (language == option) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(14.dp))
+                else MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(14))
               .clickable { onLanguageChange(option) }
               .padding(horizontal = 16.dp).testTag("language-$option"),
               verticalAlignment = Alignment.CenterVertically) {
@@ -188,7 +189,7 @@ private fun SettingsSectionLabel(label: Int) {
 @Composable
 private fun SettingsRow(title: String, summary: String, navigable: Boolean, onClick: () -> Unit) {
   Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
-    .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(16.dp))
+    .background(MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(16))
     .then(if (navigable) Modifier.clickable(onClick = onClick) else Modifier)
     .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

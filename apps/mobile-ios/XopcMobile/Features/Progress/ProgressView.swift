@@ -2,6 +2,7 @@
 import SwiftUI
 
 struct ProgressHubView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
 
@@ -28,7 +29,7 @@ struct ProgressHubView: View {
                             withAnimation { scroller.scrollTo("progress-section-running", anchor: .top) }
                         }
                     }
-                    .padding(16).background(Color.blue.opacity(0.09), in: .rect(cornerRadius: 20))
+                    .padding(16).background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
                     if isLoading, home == nil {
                         ProgressListSkeleton()
                     }
@@ -39,7 +40,8 @@ struct ProgressHubView: View {
                     if !deliveries.isEmpty {
                         Text("已交付").mobileTextStyle(.rowTitle).padding(.top, 12)
                         ForEach(deliveries.prefix(5)) { item in
-                            HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation)
+                            HomeDeliveryLink(item: item, configuration: configuration, onOpenConversation: onOpenConversation,
+                                             progressCard: true)
                         }
                     }
                     if !runningItems.isEmpty {
@@ -185,15 +187,16 @@ struct ProgressHubView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 10) {
-                    Circle().fill(.orange).frame(width: 6, height: 6).padding(.top, 7)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(item.title).mobileTextStyle(.rowTitle).fontWeight(.semibold).lineLimit(3)
-                        Text(item.summary).mobileTextStyle(.footnote).foregroundStyle(.secondary).lineLimit(2)
-                        if let recommendation = item.recommendation, !recommendation.isEmpty {
-                            Text(recommendation).mobileTextStyle(.footnote).foregroundStyle(.secondary)
-                        }
-                    }
+                HStack(spacing: 6) {
+                    Circle().fill(.orange).frame(width: 6, height: 6).accessibilityHidden(true)
+                    Text("待处理").mobileTextStyle(.caption).foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(.primary.opacity(0.06), in: .capsule)
+                Text(item.title).mobileTextStyle(.rowTitle).fontWeight(.semibold).lineLimit(3)
+                Text(item.summary).mobileTextStyle(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                if let recommendation = item.recommendation, !recommendation.isEmpty {
+                    Text(recommendation).mobileTextStyle(.footnote).foregroundStyle(.secondary)
                 }
                 if let open = item.openAction {
                     actionControl(open)
@@ -203,7 +206,7 @@ struct ProgressHubView: View {
                 }
                 ForEach(item.secondaryActions ?? []) { action in actionControl(action) }
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+                .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
                 .accessibilityIdentifier("progress-item-\(item.id)")
         }
     }
@@ -275,24 +278,24 @@ private extension ProgressHubView {
     func toolRow(_ title: LocalizedStringKey, symbol: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: symbol).font(.system(size: 18)).frame(width: 34, height: 34)
-                .background(Color.blue.opacity(0.08), in: .circle).accessibilityHidden(true)
+                .background(mobileTheme.action.opacity(0.10), in: .circle).accessibilityHidden(true)
             Text(title).mobileTextStyle(.body).frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
         }.padding(.horizontal, 14).frame(minHeight: 64)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(14)))
             .foregroundStyle(.primary)
     }
 
     func compactRow(title: String, subtitle: String, symbol: String) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: symbol).frame(width: 24).foregroundStyle(.blue).accessibilityHidden(true)
+            Image(systemName: symbol).frame(width: 24).foregroundStyle(.tint).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).mobileTextStyle(.secondary).fontWeight(.medium).lineLimit(2)
                 Text(subtitle).mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(2)
             }.frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
         }.padding(14).frame(minHeight: 64)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(14)))
             .foregroundStyle(.primary)
     }
 
@@ -340,9 +343,11 @@ extension HomeDelivery {
 }
 
 struct HomeDeliveryLink: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let item: HomeDelivery
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
+    var progressCard = false
 
     var body: some View {
         if let route = item.destination {
@@ -357,14 +362,33 @@ struct HomeDeliveryLink: View {
                     EmptyView()
                 }
             } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.title).mobileTextStyle(.rowTitle)
-                    if !item.summary.isEmpty {
-                        Text(item.summary).mobileTextStyle(.secondary).foregroundStyle(.secondary).lineLimit(2)
+                if progressCard {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle").font(.system(size: 18))
+                            .frame(width: 36, height: 36)
+                            .background(.primary.opacity(0.06), in: .rect(cornerRadius: mobileTheme.corner(9)))
+                            .foregroundStyle(.secondary).accessibilityHidden(true)
+                        deliveryLabel.frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
                     }
+                    .padding(16)
+                    .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
+                    .foregroundStyle(.primary)
+                } else {
+                    deliveryLabel
                 }
             }
             .accessibilityIdentifier("delivery-\(item.id)")
+        }
+    }
+
+    private var deliveryLabel: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.title).mobileTextStyle(.rowTitle).lineLimit(2)
+            if !item.summary.isEmpty {
+                Text(item.summary).mobileTextStyle(.secondary).foregroundStyle(.secondary).lineLimit(2)
+            }
         }
     }
 }
@@ -416,12 +440,13 @@ private struct TasksView: View {
 
     var body: some View {
         List {
-            Picker("筛选", selection: $filter) {
-                Text("进行中").tag("open")
-                Text("已关闭").tag("closed")
-                Text("全部").tag("all")
-            }
-            .pickerStyle(.segmented)
+            SegmentedTabs(options: [
+                SegmentOption(id: "open", title: "进行中", accessibilityID: "tasks-filter-open"),
+                SegmentOption(id: "closed", title: "已关闭", accessibilityID: "tasks-filter-closed"),
+                SegmentOption(id: "all", title: "全部", accessibilityID: "tasks-filter-all")
+            ], selected: filter, label: "筛选") { filter = $0 }
+                .accessibilityIdentifier("tasks-filter-tabs")
+                .listRowBackground(Color.clear)
             if isLoading, items.isEmpty {
                 ProgressListSkeleton()
             } else if visibleItems.isEmpty {
@@ -474,24 +499,28 @@ private struct TasksView: View {
 }
 
 struct ProjectsView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
 
     @State private var items: [ProjectRecord] = []
     @State private var filter = "active"
     @State private var searchText = ""
+    @State private var searchOpen = false
+    @FocusState private var isSearchFocused: Bool
     @State private var isLoading = false
     @State private var error: String?
     @State private var creating = false
 
     var body: some View {
         List {
-            Picker("筛选", selection: $filter) {
-                Text("活跃").tag("active")
-                Text("已归档").tag("archived")
-                Text("全部").tag("all")
-            }
-            .pickerStyle(.segmented)
+            SegmentedTabs(options: [
+                SegmentOption(id: "active", title: "活跃", accessibilityID: "projects-filter-active"),
+                SegmentOption(id: "archived", title: "已归档", accessibilityID: "projects-filter-archived"),
+                SegmentOption(id: "all", title: "全部", accessibilityID: "projects-filter-all")
+            ], selected: filter, label: "筛选") { filter = $0 }
+                .accessibilityIdentifier("projects-filter-tabs")
+                .listRowBackground(Color.clear)
             if isLoading, items.isEmpty {
                 ProgressListSkeleton()
             } else if visibleItems.isEmpty {
@@ -523,11 +552,21 @@ struct ProjectsView: View {
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "搜索项目")
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if searchOpen {
+                PageSearchField("搜索项目", text: $searchText, focused: $isSearchFocused,
+                                accessibilityID: "projects-search")
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                    .background(mobileTheme.canvas)
+            }
+        }
         .refreshable { await load() }
         .task { await load() }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                PageSearchButton("搜索项目", isOpen: $searchOpen, query: $searchText,
+                                 accessibilityID: "projects-open-search")
                 Button("新建项目", systemImage: "plus") { creating = true }
                     .accessibilityIdentifier("project-create")
             }
@@ -564,9 +603,19 @@ struct ProjectsView: View {
     }
 
     @MainActor private func load() async {
+        let scope = ComposerDraftStore.accountScope(configuration)
+        let requestedAt = Date.now
+        if items.isEmpty {
+            items = MobileListCache.shared.read(.projects, scope: scope) ?? []
+        }
         isLoading = true
         defer { isLoading = false }
-        do { items = try await GatewayClient(configuration: configuration).fetchProjects().items; error = nil }
-        catch is CancellationError {} catch { self.error = error.localizedDescription }
+        do {
+            let loaded = try await GatewayClient(configuration: configuration).fetchProjects().items
+            try Task.checkCancellation()
+            items = loaded
+            MobileListCache.shared.write(loaded, to: .projects, scope: scope, requestedAt: requestedAt)
+            error = nil
+        } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
 }

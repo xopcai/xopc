@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -54,7 +54,7 @@ internal fun ChatOptionsSkeleton() {
     verticalArrangement = Arrangement.spacedBy(8.dp)) {
     repeat(4) {
       Box(Modifier.fillMaxWidth().height(52.dp)
-        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp)))
+        .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(12)))
     }
   }
 }

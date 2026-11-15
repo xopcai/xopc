@@ -30,6 +30,7 @@ export class XopcPersonalOverviewViewModel {
   @Trace deliveryLoaded: boolean = false;
   @Trace deliveryError: string = '';
   @Trace nextDeliveryOffset: number | null = null;
+  private deliveryRetryMore: boolean = false;
   private generation: number = 0;
   private promptRevision: number = 0;
   private repository: XopcPersonalOverviewRepository = new XopcPersonalOverviewRepository();
@@ -110,6 +111,10 @@ export class XopcPersonalOverviewViewModel {
     finally { if (generation === this.generation) this.schedulesLoading = false; }
   }
 
+  retryDeliveries(): Promise<void> {
+    return this.loadDeliveries(this.deliveryRetryMore);
+  }
+
   async loadDeliveries(more: boolean = false): Promise<void> {
     if (this.deliveryLoading || (more && this.nextDeliveryOffset === null)) return;
     const generation = this.generation;
@@ -123,7 +128,11 @@ export class XopcPersonalOverviewViewModel {
         ? this.deliveries.concat(page.items.filter((item: XopcPersonalDelivery): boolean => !seen.has(item.id))) : page.items;
       this.nextDeliveryOffset = page.nextOffset;
       this.deliveryLoaded = true;
-    } catch (error) { if (generation === this.generation) this.deliveryError = (error as Error).message; }
-    finally { if (generation === this.generation) this.deliveryLoading = false; }
+    } catch (error) {
+      if (generation === this.generation) {
+        this.deliveryRetryMore = more;
+        this.deliveryError = (error as Error).message;
+      }
+    } finally { if (generation === this.generation) this.deliveryLoading = false; }
   }
 }

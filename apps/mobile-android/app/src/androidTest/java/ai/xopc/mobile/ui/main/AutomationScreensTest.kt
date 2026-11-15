@@ -31,7 +31,7 @@ class AutomationScreensTest {
   @Test fun automationListFiltersAndOpensDetail() {
     var opened = ""
     composeTestRule.setContent {
-      AutomationListContent(AutomationUiState(items = listOf(enabled, paused)), "gateway-1", {}, { opened = it })
+      AutomationListContent(AutomationUiState(items = listOf(enabled, paused)), "gateway-1", {}, { opened = it }, searchOpen = true)
     }
     composeTestRule.onNodeWithTag("automation-filter-paused").performClick()
     composeTestRule.onNodeWithTag("automation-auto-1").assertDoesNotExist()
@@ -47,7 +47,7 @@ class AutomationScreensTest {
   @Test fun emptySchedulesOfferEditablePromptAndHideExamplesDuringSearch() {
     var draft = ""
     composeTestRule.setContent {
-      AutomationListContent(AutomationUiState(listLoaded = true), "gateway-1", {}, {}, onSchedule = { draft = it })
+      AutomationListContent(AutomationUiState(listLoaded = true), "gateway-1", {}, {}, searchOpen = true, onSchedule = { draft = it })
     }
     composeTestRule.onNodeWithTag("automation-idea-morning").performClick()
     assertEquals(composeTestRule.activity.getString(ai.xopc.mobile.R.string.automation_idea_morning_prompt), draft)

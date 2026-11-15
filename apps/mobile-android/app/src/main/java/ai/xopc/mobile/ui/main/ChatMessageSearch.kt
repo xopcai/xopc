@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ConversationMessage
 import androidx.compose.foundation.background
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -21,8 +21,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,7 +64,7 @@ internal fun ChatMessageSearch(messages: List<ConversationMessage>, hasOlder: Bo
       LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("chat-search-results"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(results, key = { it.first.id }) { (message, text) ->
-          Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+          Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, themedCorners(16))
             .clickable { keyboard?.hide(); onSelect(message.id) }.padding(16.dp)
             .testTag("chat-search-result-${message.id}")) {
             Text(text, maxLines = 4, overflow = TextOverflow.Ellipsis,
@@ -84,18 +82,12 @@ internal fun ChatMessageSearch(messages: List<ConversationMessage>, hasOlder: Bo
       }
       Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        SegmentedTabs(
           listOf("messages" to R.string.chat_search_messages, "files" to R.string.chat_search_files,
-            "links" to R.string.chat_search_links, "images" to R.string.chat_search_images).forEach { (id, label) ->
-            FilledTonalButton(onClick = { kind = id; focus.requestFocus(); keyboard?.show() },
-              colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = if (kind == id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface),
-              shape = RoundedCornerShape(18.dp), contentPadding = PaddingValues(horizontal = 12.dp),
-              modifier = Modifier.heightIn(min = 44.dp).testTag("chat-search-category-$id").semantics { selected = kind == id }) {
-              Text(stringResource(label))
-            }
-          }
-        }
+            "links" to R.string.chat_search_links, "images" to R.string.chat_search_images).map { (id, label) ->
+            SegmentOption(id, stringResource(label), "chat-search-category-$id")
+          }, kind, { id -> kind = id; focus.requestFocus(); keyboard?.show() },
+        )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           Row(Modifier.weight(1f).heightIn(min = 48.dp).background(MaterialTheme.colorScheme.surface, CircleShape)
             .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,

@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalSummary
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
@@ -109,30 +109,26 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
       AssertionDetail(state, onRetryDetail, onSaveStatement, onDeleteAssertion,
         onStartChat, chatBusy)
     } else {
-      Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("overview" to R.string.about_you_overview,
-          "understanding" to R.string.personal_understanding).forEach { (value, label) ->
-          FilterChip(selected = section == value, onClick = {
-            section = value
-            if (value == "understanding") onOpenList()
-          }, label = { Text(stringResource(label)) },
-            modifier = Modifier.weight(1f).testTag("about-you-tab-$value"))
-        }
-      }
+      SegmentedTabs(
+        listOf("overview" to R.string.about_you_overview, "understanding" to R.string.personal_understanding)
+          .map { (value, label) -> SegmentOption(value, stringResource(label), "about-you-tab-$value") },
+        section, { value ->
+          section = value
+          if (value == "understanding") onOpenList()
+        }, Modifier.padding(horizontal = 20.dp),
+      )
       if (section == "overview") AboutOverview(state.summary,
         { section = "understanding"; onOpenList() }, onOpenDetail, onOpenNotes, ::editProfile)
       else {
         if (searchOpen) OutlinedTextField(query, { query = it.take(100) },
           modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("about-you-search"),
           placeholder = { Text(stringResource(R.string.about_you_search)) }, singleLine = true)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-          .padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SegmentedTabs(
           listOf("all" to R.string.about_you_all, "explicit" to R.string.personal_explicit,
-            "learned" to R.string.personal_learned, "review" to R.string.personal_review)
-            .forEach { (value, label) -> FilterChip(selected = filter == value,
-              onClick = { filter = value }, label = { Text(stringResource(label)) }) }
-        }
+            "learned" to R.string.personal_learned, "review" to R.string.personal_review).map { (value, label) ->
+            SegmentOption(value, stringResource(label), "about-you-filter-$value")
+          }, filter, { filter = it }, Modifier.padding(horizontal = 20.dp),
+        )
         AssertionList(state, filter, query, onOpenDetail,
           onLoadMore = { onLoadList(filter, query.trim(), true) },
           onRetry = { onLoadList(filter, query.trim(), false) }, modifier = Modifier.weight(1f))
@@ -254,7 +250,7 @@ private fun AboutOverview(summary: PersonalSummary?, onOpenList: () -> Unit,
     }
     Card(onClick = onOpenNotes, modifier = Modifier.fillMaxWidth().testTag("about-you-work-memory"),
       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-      shape = RoundedCornerShape(18.dp)) {
+      shape = themedCorners(18)) {
       Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AboutLabel(stringResource(R.string.about_you_work_memory))
         Text(stringResource(R.string.personal_work_memory, summary?.counts?.workMemory ?: 0))
@@ -303,7 +299,7 @@ private fun AssertionRow(item: PersonalAssertion, onOpenDetail: (String) -> Unit
   Card(onClick = { onOpenDetail(item.id) }, modifier = Modifier.fillMaxWidth()
     .testTag("assertion-${item.id}"),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    shape = RoundedCornerShape(16.dp)) {
+    shape = themedCorners(16)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       Text(item.statement, style = MaterialTheme.typography.bodyLarge,
         maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -438,7 +434,7 @@ private fun assertionSourceLabel(item: PersonalAssertion): String = stringResour
 @Composable private fun AboutCard(content: @Composable () -> Unit) {
   Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
     containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-    shape = RoundedCornerShape(18.dp)) {
+    shape = themedCorners(18)) {
     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
   }
 }

@@ -419,7 +419,7 @@ function readConnectorManifestFromArchive(buffer: Buffer): unknown {
   }
 }
 
-export async function listStoreConnectors(config: Config, params: SkillsStoreListParams) {
+export async function listStoreConnectorCatalog(config: Config, params: SkillsStoreListParams) {
   const base = resolveSkillsStoreBaseUrl(config);
   const first = await listConnectorPackages(base, { ...params, page: 1, pageSize: 50 });
   const items = [...first.items];
@@ -428,7 +428,11 @@ export async function listStoreConnectors(config: Config, params: SkillsStoreLis
     const next = await listConnectorPackages(base, { ...params, page, pageSize: 50 });
     items.push(...next.items);
   }
-  const visible = items.filter((item) => !isExcludedStoreConnector(item.name));
+  return items.filter((item) => !isExcludedStoreConnector(item.name));
+}
+
+export async function listStoreConnectors(config: Config, params: SkillsStoreListParams) {
+  const visible = await listStoreConnectorCatalog(config, params);
   const pageSize = Math.max(1, Math.min(params.pageSize ?? 20, 50));
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
   const page = Math.max(1, Math.min(params.page ?? 1, totalPages));

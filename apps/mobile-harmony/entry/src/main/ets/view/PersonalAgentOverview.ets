@@ -1,3 +1,4 @@
+import { XopcSegmentedTabs } from './SegmentedTabs';
 import { artifactMedia, chatProductCapability } from '../common/chatRichContent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcProductReference } from '../model/chat';
@@ -19,6 +20,7 @@ interface XopcOverviewRow {
   stamp: string;
   symbol: Resource;
   marker?: ResourceColor;
+  attention?: boolean;
   onOpen: () => void;
 }
 
@@ -57,7 +59,7 @@ export struct XopcPersonalAgentOverview {
   private selectLibrary(selected: boolean): void {
     if (this.librarySelected === selected) return;
     this.librarySelected = selected;
-    if (selected && !this.model.deliveryLoaded) void this.model.loadDeliveries();
+    if (selected && !this.model.deliveryLoaded && !this.model.deliveryError) void this.model.loadDeliveries();
   }
 
   private scrollHeader(xOffset: number, yOffset: number, source: ScrollSource): OffsetResult {
@@ -106,10 +108,11 @@ export struct XopcPersonalAgentOverview {
   private marker(item: XopcPersonalWorkItem): ResourceColor | undefined {
     const status = item.presentation?.status ?? item.operationalState ?? '';
     if (status === 'failed') return this.colors.danger;
-    if (item.attention || ['needsUser', 'review', 'waiting', 'blocked', 'paused'].includes(status)) {
-      return $r('app.color.chat_attention_dot');
+    if (item.attention || ['needsUser', 'review', 'waiting', 'blocked'].includes(status)) {
+      return this.colors.attentionForeground;
     }
-    if (['running', 'verifying', 'completed'].includes(status)) return this.colors.accent;
+    if (status === 'completed') return this.colors.success;
+    if (['running', 'verifying'].includes(status)) return this.colors.accent;
     return undefined;
   }
 
@@ -169,15 +172,18 @@ export struct XopcPersonalAgentOverview {
             .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           Row({ space: 6 }) {
             if ($$.marker !== undefined) { Circle().width(6).height(6).fill($$.marker) }
-            Text($$.subtitle).fontSize(13).fontColor(this.colors.secondary).maxLines(1)
+            Text($$.subtitle).fontSize(13)
+              .fontColor($$.attention ? this.colors.attentionForeground : this.colors.secondary).maxLines(1)
             if ($$.stamp) {
               Text('·').fontSize(13).fontColor(this.colors.tertiary)
               Text($$.stamp).fontSize(13).fontColor(this.colors.tertiary).maxLines(1)
             }
           }.width('100%').alignItems(VerticalAlign.Center)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      }.width('100%').padding({ left: 8, right: 8, top: 8, bottom: 8 })
-    }.width('100%').constraintSize({ minHeight: 58 }).padding(0).borderRadius(12).backgroundColor(Color.Transparent)
+      }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
+    }.width('100%').constraintSize({ minHeight: 58 }).padding(0)
+      .backgroundColor(this.colors.light ? ($$.attention ? this.colors.attentionFill : this.colors.panel) : Color.Transparent)
+      .border($$.attention ? this.colors.attentionStroke : this.colors.panelStroke).borderRadius(this.colors.corner(14))
       .onClick((): void => { $$.onOpen(); })
   }
 
@@ -186,10 +192,11 @@ export struct XopcPersonalAgentOverview {
       .width('100%').padding({ left: 8, right: 8, top: 12, bottom: 4 })
   }
 
-  @Builder workRow(item: XopcPersonalWorkItem) {
+  @Builder workRow(item: XopcPersonalWorkItem, attention: boolean = false) {
     Column() {
       this.entry({ title: item.title, subtitle: this.status(item), stamp: this.time(item.updatedAt),
-        symbol: $r('sys.symbol.checkmark_circle'), marker: this.marker(item),
+        symbol: attention ? $r('sys.symbol.bell') : $r('sys.symbol.checkmark_circle'),
+        marker: attention ? this.colors.attentionForeground : this.marker(item), attention,
         onOpen: (): void => { this.onNavigate({ page: 'tasks', itemId: item.id }); } })
     }.id('personal-overview-task-' + item.id).width('100%')
   }
@@ -210,9 +217,9 @@ export struct XopcPersonalAgentOverview {
         this.groupHeading($r('app.string.personal_overview_attention'))
         if (this.model.prompt) {
           this.entry({ title: this.model.prompt.question, subtitle: $r('app.string.personal_overview_attention'), stamp: '',
-            symbol: $r('sys.symbol.checkmark_circle'), marker: $r('app.color.chat_attention_dot'), onOpen: this.onClose })
+            symbol: $r('sys.symbol.bell'), marker: this.colors.attentionForeground, attention: true, onOpen: this.onClose })
         }
-        ForEach(this.model.attention, (item: XopcPersonalWorkItem) => { this.workRow(item) },
+        ForEach(this.model.attention, (item: XopcPersonalWorkItem) => { this.workRow(item, true) },
           (item: XopcPersonalWorkItem): string => item.id)
       }
       if (this.model.active.length) {
@@ -262,14 +269,14 @@ export struct XopcPersonalAgentOverview {
 
   @Builder library() {
     Column({ space: 6 }) {
-      if (this.model.deliveryLoading && !this.model.deliveryLoaded) { XopcListSkeleton() }
+      if (!this.model.deliveryLoaded && !this.model.deliveryError) { XopcListSkeleton() }
       ForEach(this.model.deliveries, (item: XopcPersonalDelivery) => {
         Column({ space: 2 }) {
           if (item.artifact?.availability === 'available' &&
             (item.artifact.workspaceRelativePath || item.artifact.uri?.startsWith('xopc-file:') ||
               item.artifact.uri?.startsWith('xopc-file-version:') || item.artifact.uri?.startsWith('media://'))) {
             XopcChatMediaView({ file: artifactMedia(item.artifact), conversationId: item.task?.conversationId ?? this.record?.conversationId ?? '',
-              compact: true, embedded: true, compactAvailable: true, resultCapsule: true, onNavigate: this.onNavigate })
+              compact: true, embedded: true, compactAvailable: true, resultCapsule: true, showLibraryActions: false })
           } else {
             this.entry({ title: item.artifact?.title ?? item.reference?.title ?? $r('app.string.untitled'),
               subtitle: item.task?.title ?? $r('app.string.personal_overview_source'), stamp: this.time(item.createdAt),
@@ -277,32 +284,23 @@ export struct XopcPersonalAgentOverview {
           }
         }.id('personal-overview-delivery-' + item.id).width('100%').alignItems(HorizontalAlign.Start)
       }, (item: XopcPersonalDelivery): string => item.id)
-      if (this.model.deliveryLoaded && !this.model.deliveries.length && !this.model.deliveryError) {
+      if (this.model.deliveryLoaded && !this.model.deliveries.length && !this.model.deliveryError && !this.model.deliveryLoading) {
         Text($r('app.string.personal_overview_no_deliveries')).fontSize(14).fontColor(this.colors.secondary)
           .textAlign(TextAlign.Center).width('100%').padding(20)
       }
-      if (this.model.deliveryError || this.model.nextDeliveryOffset !== null) {
+      if (this.model.deliveryLoaded && this.model.deliveryLoading) {
+        Row() { LoadingProgress().width(22).height(22).color(this.colors.secondary) }
+          .id('personal-overview-library-loading-more').height(44).width('100%').justifyContent(FlexAlign.Center)
+          .accessibilityText($r('app.string.loading'))
+      } else if (this.model.deliveryError || this.model.nextDeliveryOffset !== null) {
         Button(this.model.deliveryError ? $r('app.string.retry') : $r('app.string.load_more'))
-          .height(44).width('100%').backgroundColor(Color.Transparent).fontColor(this.colors.accent).enabled(!this.model.deliveryLoading)
-          .onClick((): void => { void this.model.loadDeliveries(this.model.nextDeliveryOffset !== null); })
+          .height(44).width('100%').backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+          .onClick((): void => {
+            if (this.model.deliveryError) void this.model.retryDeliveries();
+            else void this.model.loadDeliveries(true);
+          })
       }
     }.id('personal-overview-library-list').width('100%').alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder tab(library: boolean) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 7 }) {
-        SymbolGlyph(library ? $r('sys.symbol.doc_text') : $r('sys.symbol.checkmark_circle')).fontSize(17)
-          .fontColor([this.librarySelected === library ? this.colors.foreground : this.colors.secondary])
-        Text(library ? $r('app.string.personal_overview_library') : $r('app.string.tasks')).fontSize(14)
-          .fontColor(this.librarySelected === library ? this.colors.foreground : this.colors.secondary)
-        if (!library && this.model.attentionCount) {
-          Text(this.model.attentionCount.toString()).fontSize(13).fontColor(this.colors.secondary)
-        }
-      }
-    }.id(library ? 'personal-overview-library-tab' : 'personal-overview-tasks-tab').layoutWeight(1)
-      .height(44).padding(0).borderRadius(22).backgroundColor(this.librarySelected === library ? this.colors.active : Color.Transparent)
-      .accessibilitySelected(this.librarySelected === library).onClick((): void => { this.selectLibrary(library); })
   }
 
   build() {
@@ -326,7 +324,7 @@ export struct XopcPersonalAgentOverview {
           Stack() {
             SymbolGlyph($r('sys.symbol.pencil_line')).fontSize(18 - 3 * this.headerProgress).fontColor([this.colors.foreground])
           }.width(44 - 10 * this.headerProgress).height(44 - 10 * this.headerProgress)
-            .borderRadius(22).backgroundColor(this.colors.chat.card)
+            .borderRadius(this.colors.corner(22)).backgroundColor(this.colors.chat.card)
         }.id('personal-overview-edit').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .translate({ x: 7 * this.headerProgress, y: 7 * this.headerProgress })
           .accessibilityText($r('app.string.personal_overview_edit'))
@@ -337,18 +335,21 @@ export struct XopcPersonalAgentOverview {
         .width('100%').padding({ left: 16, right: 16, top: 8 - 4 * this.headerProgress })
       Row({ space: 6 }) {
         if (this.model.attentionCount) {
-          Circle().width(6).height(6).fill($r('app.color.chat_attention_dot'))
-          Text($r('app.string.chat_attention_count', this.model.attentionCount)).fontSize(14).fontColor(this.colors.secondary)
+          Circle().width(6).height(6).fill(this.colors.attentionForeground)
+          Text($r('app.string.chat_attention_count', this.model.attentionCount)).fontSize(14)
+            .fontColor(this.colors.attentionForeground)
         } else if (this.model.runningCount) {
           Circle().width(6).height(6).fill(this.colors.accent)
           Text($r('app.string.personal_overview_running', this.model.runningCount)).fontSize(14).fontColor(this.colors.secondary)
         }
       }.constraintSize({ minHeight: 24 }).margin({ top: 4 - 2 * this.headerProgress })
-      Row({ space: 4 }) {
-        this.tab(false)
-        this.tab(true)
-      }.width('100%').padding(4).borderRadius(26).backgroundColor(this.colors.grouped)
-        .margin({ top: 14 - 6 * this.headerProgress, bottom: 8 })
+      Column() {
+        XopcSegmentedTabs({ options: [
+          { key: 'tasks', label: $r('app.string.tasks'), icon: $r('sys.symbol.checkmark_circle'), count: this.model.attentionCount || undefined, testId: 'personal-overview-tasks-tab' },
+          { key: 'library', label: $r('app.string.personal_overview_library'), icon: $r('sys.symbol.doc_text'), testId: 'personal-overview-library-tab' }
+        ], selectedKey: this.librarySelected ? 'library' : 'tasks',
+          onSelect: (key: string): void => { this.selectLibrary(key === 'library'); } })
+      }.width('100%').margin({ top: 14 - 6 * this.headerProgress, bottom: 8 })
       if (this.librarySelected) {
         Scroll() { this.library() }.width('100%').layoutWeight(1).scrollBar(BarState.Auto)
           .onWillScroll((x: number, y: number, _state: ScrollState, source: ScrollSource): OffsetResult =>

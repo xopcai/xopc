@@ -36,11 +36,6 @@ class XopcThemeTokens {
   }
 }
 
-interface XopcChatComposerColors {
-  fill: Resource;
-  placeholder: Resource;
-}
-
 export interface XopcChatThemeColors {
   canvas: Resource;
   card: Resource;
@@ -48,11 +43,12 @@ export interface XopcChatThemeColors {
   action: Resource;
   onAction: Resource;
   secondary: Resource;
-  composer?: XopcChatComposerColors;
 }
 
 @ObservedV2
 export class XopcThemeColors {
+  @Trace light: boolean = true;
+  @Trace scheme: XopcColorScheme = 'default';
   @Trace surface: Resource;
   @Trace panel: Resource;
   @Trace foreground: Resource;
@@ -66,6 +62,50 @@ export class XopcThemeColors {
   @Trace accentSoft: Resource;
   @Trace active: Resource;
   @Trace chat: XopcChatThemeColors;
+
+  get panelStroke(): BorderOptions {
+    return { width: this.light ? 1 : 0, color: this.border };
+  }
+
+  get controlStroke(): BorderOptions {
+    return { width: 1, color: this.light
+      ? this.scheme === 'default' ? $r('app.color.theme_control_light') : this.tertiary
+      : this.border };
+  }
+
+  // Follow the WebUI's tighter Emerald and softer Clay and Dawn shapes.
+  corner(base: number): number {
+    switch (this.scheme) {
+      case 'emerald': return Math.round(base * 0.8);
+      case 'clay': return Math.round(base * 1.2);
+      case 'dawn': return Math.round(base * 1.25);
+      default: return base;
+    }
+  }
+
+  get onAccent(): Resource {
+    if (this.scheme === 'emerald' || (!this.light && this.scheme === 'default')) {
+      return $r('app.color.theme_on_accent_ink');
+    }
+    if (!this.light && this.scheme !== 'default') return this.surface;
+    return $r('app.color.theme_default_panel_light');
+  }
+
+  get attentionFill(): Resource {
+    return this.light ? $r('app.color.theme_attention_fill_light') : this.panel;
+  }
+
+  get attentionForeground(): Resource {
+    return this.light ? $r('app.color.theme_attention_foreground_light') : $r('app.color.theme_attention_foreground_dark');
+  }
+
+  get attentionStroke(): BorderOptions {
+    return { width: this.light ? 1 : 0, color: $r('app.color.theme_attention_border_light') };
+  }
+
+  get success(): Resource {
+    return this.light ? $r('app.color.theme_success_light') : this.accent;
+  }
 
   constructor(tokens: XopcThemeTokens) {
     this.surface = tokens.surface;
@@ -85,6 +125,8 @@ export class XopcThemeColors {
 
   apply(scheme: XopcColorScheme, dark: boolean): void {
     const tokens = xopcThemeTokens(scheme, dark);
+    this.scheme = scheme;
+    this.light = !dark;
     this.surface = tokens.surface;
     this.panel = tokens.panel;
     this.foreground = tokens.foreground;
@@ -334,13 +376,9 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
         onAction: canvas, secondary,
       } : {
         canvas,
-        card: $r('app.color.chat_default_card_light'),
+        card: $r('app.color.theme_default_panel_light'),
         bubble: $r('app.color.chat_default_bubble_light'),
-        action: $r('app.color.chat_default_action_light'),
-        composer: {
-          fill: $r('app.color.chat_default_composer_light'),
-          placeholder: $r('app.color.chat_default_composer_placeholder_light')
-        },
+        action: $r('app.color.theme_default_accent_light'),
         onAction: $r('app.color.theme_default_panel_light'), secondary,
       };
   }

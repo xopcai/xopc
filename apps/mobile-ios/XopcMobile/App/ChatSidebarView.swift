@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ChatSidebarView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let personal: PersonalAgentRecord?
     let openingPersonal: Bool
@@ -16,7 +17,6 @@ struct ChatSidebarView: View {
     let onNew: () -> Void
     let onRetry: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 8) {
@@ -29,8 +29,9 @@ struct ChatSidebarView: View {
                     .accessibilityIdentifier("chat-sidebar-close")
             }
             .padding(.leading, 10)
-            row("搜索对话", symbol: "magnifyingglass") { onNavigate(.conversations) }
-                .background(ChatAppearance.card(colorScheme), in: Capsule())
+            row("搜索对话", symbol: "magnifyingglass") { onNavigate(.conversationSearch) }
+                .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(20)))
+                .overlay(RoundedRectangle(cornerRadius: mobileTheme.corner(20)).strokeBorder(mobileTheme.edge))
                 .accessibilityIdentifier("chat-sidebar-search")
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
@@ -43,6 +44,8 @@ struct ChatSidebarView: View {
                         .accessibilityIdentifier("chat-sidebar-automations")
                     row("资料", symbol: "doc") { onNavigate(.library) }
                         .accessibilityIdentifier("chat-sidebar-library")
+                    row("capability_title", symbol: "puzzlepiece") { onNavigate(.capabilities) }
+                        .accessibilityIdentifier("chat-sidebar-capabilities")
                     Text("最近对话").font(.footnote).foregroundStyle(.secondary)
                         .padding(.leading, 10).padding(.top, 14)
                     ForEach(recent.filter { $0.id != personal?.conversationId && $0.status != "archived" && $0.messageCount > 0 }.prefix(6)) { item in
@@ -50,8 +53,8 @@ struct ChatSidebarView: View {
                             Text(verbatim: item.displayName)
                                 .lineLimit(1).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                 .padding(.horizontal, 10)
-                                .background(selectedID == item.id ? ChatAppearance.card(colorScheme) : .clear,
-                                            in: .rect(cornerRadius: 12))
+                                .background(selectedID == item.id ? mobileTheme.card : .clear,
+                                            in: .rect(cornerRadius: mobileTheme.corner(12)))
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
@@ -79,8 +82,8 @@ struct ChatSidebarView: View {
                         .font(.subheadline.weight(.semibold))
                         .frame(minHeight: 46)
                         .padding(.horizontal, 18)
-                        .foregroundStyle(colorScheme == .dark ? Color.black : .white)
-                        .background(ChatAppearance.action(colorScheme), in: Capsule())
+                        .foregroundStyle(mobileTheme.onAction)
+                        .background(mobileTheme.action, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("chat-sidebar-new")
@@ -91,7 +94,7 @@ struct ChatSidebarView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color("LaunchBackground").ignoresSafeArea(edges: .vertical))
+        .background(mobileTheme.panel.ignoresSafeArea(edges: .vertical))
         .accessibilityAction(.escape, onClose)
     }
 
@@ -117,8 +120,8 @@ struct ChatSidebarView: View {
             }
             .padding(.horizontal, 10)
             .frame(minHeight: 62)
-            .background(personal?.conversationId == selectedID && personal != nil ? ChatAppearance.card(colorScheme) : .clear,
-                        in: .rect(cornerRadius: 14))
+            .background(personal?.conversationId == selectedID && personal != nil ? mobileTheme.card : .clear,
+                        in: .rect(cornerRadius: mobileTheme.corner(14)))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -130,7 +133,7 @@ struct ChatSidebarView: View {
         Button(action: action) {
             Image(systemName: symbol).font(.title3)
                 .frame(width: 46, height: 46)
-                .background(ChatAppearance.card(colorScheme), in: Circle())
+                .background(mobileTheme.card, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -148,8 +151,8 @@ struct ChatSidebarView: View {
                     Text(badge > 99 ? "99+" : String(badge))
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .foregroundStyle(ChatAppearance.action(colorScheme))
-                        .background(ChatAppearance.action(colorScheme).opacity(0.15), in: Capsule())
+                        .foregroundStyle(mobileTheme.action)
+                        .background(mobileTheme.action.opacity(0.15), in: Capsule())
                 }
             }
             .frame(minHeight: 46)
@@ -157,12 +160,5 @@ struct ChatSidebarView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-    }
-}
-
-extension ChatAppearance {
-    static func canvas(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 21 / 255, green: 24 / 255, blue: 29 / 255)
-            : Color(uiColor: .systemGroupedBackground)
     }
 }

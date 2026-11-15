@@ -134,13 +134,13 @@ struct XopcIndex {
           Text(this.connection.confirmationCode).id('pairing-confirmation-code').fontSize(40).fontWeight(FontWeight.Medium)
             .letterSpacing(6).fontColor(this.colors.foreground)
           Text($r('app.string.pair_compare')).fontSize(13).lineHeight(20).fontColor(this.colors.secondary).textAlign(TextAlign.Center)
-        }.width('100%').padding(24).margin({ top: 16 }).borderRadius(20).backgroundColor(this.colors.panel)
+        }.width('100%').padding(24).margin({ top: 16 }).borderRadius(this.colors.corner(20)).backgroundColor(this.colors.panel)
       }
       if (this.manualEntry && !this.connection.busy) {
         TextArea({ text: this.invitation, placeholder: $r('app.string.invitation_hint'), controller: this.invitationEditor })
           .id('pairing-link').width('100%').height(112).fontSize(15).padding(16)
           .backgroundColor(this.colors.input).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-          .borderRadius(16)
+          .borderRadius(this.colors.corner(16))
           .onChange((text: string): void => { this.invitation = text; this.connection.errorMessage = ''; })
       }
       if (this.connection.errorMessage) {
@@ -158,10 +158,10 @@ struct XopcIndex {
           .backgroundColor(this.colors.input).fontColor(this.colors.secondary).onClick((): void => { this.connection.cancel(); })
       } else if (this.showHelp) {
         Button($r('app.string.pair_ready')).height(52).width('100%').fontSize(16)
-          .backgroundColor(this.colors.accent).fontColor(Color.White).onClick((): void => { this.closeSecondary(); })
+          .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).onClick((): void => { this.closeSecondary(); })
       } else if (this.manualEntry) {
         Button($r('app.string.connect')).id('pairing-connect').height(52).width('100%').fontSize(16)
-          .backgroundColor(this.colors.accent).fontColor(Color.White).enabled(this.invitation.trim().length > 0)
+          .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).enabled(this.invitation.trim().length > 0)
           .onClick((): void => { this.invitationEditor.stopEditing(); this.connection.connect(this.invitation); })
       } else {
         Button({ type: ButtonType.Normal }) {
@@ -169,7 +169,7 @@ struct XopcIndex {
             SymbolGlyph($r('sys.symbol.qrcode')).fontSize(22).fontColor([Color.White])
             Text($r('app.string.pair_scan')).fontSize(16).fontWeight(FontWeight.Medium).fontColor(Color.White)
           }.justifyContent(FlexAlign.Center).width('100%')
-        }.id('pairing-scan').height(52).width('100%').borderRadius(16).backgroundColor(this.colors.accent)
+        }.id('pairing-scan').height(52).width('100%').borderRadius(this.colors.corner(16)).backgroundColor(this.colors.accent)
           .enabled(!this.scanning).accessibilityText($r('app.string.pair_scan')).onClick((): void => { this.scan(); })
         Button($r('app.string.pair_manual')).id('pairing-manual').height(48).width('100%').fontSize(15)
           .backgroundColor(Color.Transparent).fontColor(this.colors.secondary).enabled(!this.scanning)
@@ -181,6 +181,11 @@ struct XopcIndex {
       Text($r('app.string.pair_requirement')).fontSize(12).fontColor(this.colors.tertiary).textAlign(TextAlign.Center)
         .width('100%').margin({ top: 20 })
     }.width('100%').padding({ bottom: 24 })
+  }
+
+  @Builder
+  musicPlayerSheet() {
+    XopcMusicPlayerView()
   }
 
   build() {
@@ -208,8 +213,9 @@ struct XopcIndex {
         .onAreaChange((_previous: Area, current: Area): void => { this.contentHeight = Number(current.height); })
     }
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
-      .accessibilityLevel(this.music.expanded ? 'no-hide-descendants' : 'auto')
-    if (this.music.expanded) { XopcMusicPlayerView() }
+      .bindSheet(this.music.expanded, this.musicPlayerSheet, { height: '88%', dragBar: true,
+        showClose: false, backgroundColor: this.colors.chat.canvas,
+        onDisappear: (): void => { this.music.expanded = false; } })
     XopcVoiceCallView({ call: this.call, viewportWidth: this.viewportWidth, viewportHeight: this.viewportHeight })
     }.width('100%').height('100%')
       .onAreaChange((_previous: Area, current: Area): void => {

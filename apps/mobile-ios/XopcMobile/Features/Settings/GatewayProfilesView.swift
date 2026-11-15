@@ -202,7 +202,7 @@ private struct GatewayProfileRow: View {
                 HStack(spacing: 12) {
                     Image(systemName: "link")
                         .mobileTextStyle(.sectionTitle)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.tint)
                         .frame(width: 44, height: 44)
                         .background(.blue.opacity(0.1), in: .rect(cornerRadius: 14))
                     VStack(alignment: .leading, spacing: 4) {
@@ -214,7 +214,7 @@ private struct GatewayProfileRow: View {
                     if isActive {
                         Text("当前")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(.tint)
                     }
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
                         .font(.caption.weight(.semibold))

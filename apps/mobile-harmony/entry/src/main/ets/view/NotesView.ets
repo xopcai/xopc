@@ -1,3 +1,4 @@
+import { XopcSegmentedTabs } from './SegmentedTabs';
 import { common } from '@kit.AbilityKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcNote, XopcNoteAttachment, XopcNoteHistoryEntry, XopcNoteIndexEntry, XopcNoteStatus } from '../model/note';
@@ -166,7 +167,7 @@ export struct XopcNotesView {
   noteAttachment(note: XopcNote, attachment: XopcNoteAttachment, editing: boolean = false) {
     if (attachment.type === 'audio') {
       XopcChatMediaView({ file: this.attachmentMedia(note, attachment), conversationId: note.id, inlineVoice: true })
-        .padding({ left: 8, right: 8 }).borderRadius(12).backgroundColor(this.colors.input)
+        .padding({ left: 8, right: 8 }).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
     } else if (attachment.type === 'image') {
       XopcChatMediaView({ file: this.attachmentMedia(note, attachment), conversationId: note.id,
         noteInlineImage: true })
@@ -198,33 +199,28 @@ export struct XopcNotesView {
   }
 
   @Builder
-  filterChip(label: ResourceStr, status: XopcNoteStatus | '') {
-    Button(label).fontSize(13).fontColor(this.model.status === status ? Color.White : this.colors.secondary)
-      .height(36).padding({ left: 14, right: 14 }).borderRadius(18)
-      .backgroundColor(this.model.status === status ? this.colors.accent : this.colors.input)
-      .onClick((): void => { this.model.status = status; void this.model.list(); })
-  }
-
-  @Builder
   list() {
     Column({ space: 12 }) {
       Row({ space: 8 }) {
         TextInput({ text: this.model.search, placeholder: $r('app.string.search_notes') })
-          .layoutWeight(1).height(44).backgroundColor(this.colors.input).borderRadius(14)
+          .layoutWeight(1).height(44).backgroundColor(this.colors.light ? this.colors.panel : this.colors.input)
+          .border(this.colors.controlStroke).borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .onChange((value: string): void => { this.model.search = value; })
           .onSubmit((): void => { void this.model.list(); })
         Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary]) }
-          .width(44).height(44).padding(0).backgroundColor(this.colors.input).borderRadius(14)
+          .width(44).height(44).padding(0).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
           .accessibilityText($r('app.string.refresh')).onClick((): void => { void this.model.list(); })
       }.width('100%')
-      Scroll() {
-        Row({ space: 8 }) {
-          this.filterChip($r('app.string.note_all'), '')
-          this.filterChip($r('app.string.inbox'), 'inbox')
-          this.filterChip($r('app.string.note_processed'), 'processed')
-          this.filterChip($r('app.string.archive'), 'archived')
-        }
-      }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
+      XopcSegmentedTabs({ options: [
+        { key: '', label: $r('app.string.note_all') },
+        { key: 'inbox', label: $r('app.string.inbox') },
+        { key: 'processed', label: $r('app.string.note_processed') },
+        { key: 'archived', label: $r('app.string.archive') }
+      ], selectedKey: this.model.status,
+        onSelect: (key: string): void => {
+          this.model.status = key as XopcNoteStatus | '';
+          void this.model.list(false, true);
+        } })
       if (this.model.loading) {
         XopcListSkeleton()
       } else if (!this.model.items.length) {
@@ -259,7 +255,8 @@ export struct XopcNotesView {
                       : $r('sys.symbol.circle')).fontSize(21).fontColor([this.colors.accent])
                   }
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
-              }.width('100%').constraintSize({ minHeight: 96 }).padding(0).borderRadius(16).backgroundColor(this.colors.panel)
+              }.width('100%').constraintSize({ minHeight: 96 }).padding(0).backgroundColor(this.colors.panel)
+                .border(this.colors.panelStroke).borderRadius(this.colors.corner(16))
                 .onClick((): void => { if (this.model.selecting) this.model.toggleSelection(item.id); else void this.model.open(item.id); })
                 .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => { this.model.toggleSelection(item.id); }))
             }
@@ -294,9 +291,9 @@ export struct XopcNotesView {
           Button($r('app.string.note_use_remote')).layoutWeight(1).height(42).backgroundColor(this.colors.input)
             .fontColor(this.colors.foreground).onClick((): void => { void this.model.resolveConflict(false); })
           Button($r('app.string.note_keep_local')).layoutWeight(1).height(42).backgroundColor(this.colors.accent)
-            .fontColor(Color.White).onClick((): void => { void this.model.resolveConflict(true); })
+            .fontColor(this.colors.onAccent).onClick((): void => { void this.model.resolveConflict(true); })
         }.width('100%')
-      }.width('100%').padding(14).borderRadius(14).backgroundColor(this.colors.accentSoft)
+      }.width('100%').padding(14).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.accentSoft)
     }
   }
 
@@ -336,7 +333,7 @@ export struct XopcNotesView {
         Button($r('app.string.note_add_attachment')).id('note-add-attachment').layoutWeight(1).height(42).backgroundColor(this.colors.input)
           .fontColor(this.colors.foreground).enabled(!this.model.saving).onClick((): void => { this.openSheet('attachment'); })
         Button($r('app.string.note_done')).id('note-done').layoutWeight(1).height(42).backgroundColor(this.colors.accent)
-          .fontColor(Color.White).enabled(!this.model.saving).onClick((): void => { void this.model.closeEditor(); })
+          .fontColor(this.colors.onAccent).enabled(!this.model.saving).onClick((): void => { void this.model.closeEditor(); })
       }.width('100%')
     }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 12 }).alignItems(HorizontalAlign.Start)
   }
@@ -373,7 +370,7 @@ export struct XopcNotesView {
                         Text('#' + tag).fontSize(12).fontColor(this.colors.accent)
                           .height(30).constraintSize({ maxWidth: 200 }).maxLines(1)
                           .textOverflow({ overflow: TextOverflow.Ellipsis })
-                          .padding({ left: 10, right: 10 }).borderRadius(15).backgroundColor(this.colors.accentSoft)
+                          .padding({ left: 10, right: 10 }).borderRadius(this.colors.corner(15)).backgroundColor(this.colors.accentSoft)
                       }, (tag: string): string => tag)
                     }
                   }.layoutWeight(1).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
@@ -381,7 +378,7 @@ export struct XopcNotesView {
                   Text($r('app.string.note_manage_tags')).layoutWeight(1).fontSize(13).fontColor(this.colors.tertiary)
                 }
                 Button() { SymbolGlyph($r('sys.symbol.flag')).fontSize(18).fontColor([this.colors.secondary]) }
-                  .width(38).height(38).padding(0).borderRadius(12).backgroundColor(this.colors.input)
+                  .width(38).height(38).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
                   .accessibilityText($r('app.string.note_manage_tags')).onClick((): void => {
                     this.tagsText = this.model.selected?.tags?.join(', ') ?? ''; this.openSheet('tags');
                   })
@@ -447,7 +444,7 @@ export struct XopcNotesView {
           SymbolGlyph($r('sys.symbol.trash')).fontSize(19).fontColor([this.colors.danger])
           Text($r('app.string.delete')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.danger)
         }.width('100%').padding({ left: 12, right: 12 })
-      }.width('100%').height(48).padding(0).borderRadius(12).backgroundColor(Color.Transparent)
+      }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(Color.Transparent)
         .onClick((): void => { this.sheetOpen = false; void this.confirmDelete(); })
     }.width('100%').padding({ left: 20, right: 20, top: 4, bottom: 20 })
       .backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
@@ -462,7 +459,7 @@ export struct XopcNotesView {
       } else if (this.model.snapshot) {
         Scroll() { Column({ space: 12 }) {
           XopcMarkdownView({ content: this.model.snapshot?.markdown ?? '' })
-          Button($r('app.string.note_restore_version')).width('100%').height(44).backgroundColor(this.colors.accent).fontColor(Color.White)
+          Button($r('app.string.note_restore_version')).width('100%').height(44).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
             .onClick((): void => { this.model.restoreSnapshotToDraft(); this.sheetOpen = false; })
         }.width('100%').alignItems(HorizontalAlign.Start) }.layoutWeight(1).width('100%')
       } else if (!this.model.history.length) {
@@ -488,16 +485,16 @@ export struct XopcNotesView {
           Column({ space: 12 }) {
             Text($r('app.string.note_ai_before')).fontSize(13).fontWeight(FontWeight.Bold).fontColor(this.colors.tertiary).width('100%')
             Column() { XopcMarkdownView({ content: this.model.aiOriginalMarkdown() }) }
-              .width('100%').padding(12).borderRadius(12).backgroundColor(this.colors.input)
+              .width('100%').padding(12).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
             Text($r('app.string.note_ai_after')).fontSize(13).fontWeight(FontWeight.Bold).fontColor(this.colors.accent).width('100%')
             Column() { XopcMarkdownView({ content: this.model.aiPreviewMarkdown() }) }
-              .width('100%').padding(12).borderRadius(12).backgroundColor(this.colors.accentSoft)
+              .width('100%').padding(12).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.accentSoft)
           }.width('100%').alignItems(HorizontalAlign.Start)
         }.layoutWeight(1).width('100%')
         Row({ space: 8 }) {
           Button($r('app.string.cancel')).layoutWeight(1).height(44).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
             .onClick((): void => { this.model.discardAiPreview(); })
-          Button($r('app.string.note_apply_ai')).layoutWeight(1).height(44).backgroundColor(this.colors.accent).fontColor(Color.White)
+          Button($r('app.string.note_apply_ai')).layoutWeight(1).height(44).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
             .onClick((): void => { void this.model.applyAiPreview(); this.sheetOpen = false; })
         }.width('100%')
       } else {
@@ -509,8 +506,8 @@ export struct XopcNotesView {
           }
         }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
         TextArea({ text: this.aiInstruction, placeholder: $r('app.string.note_ai_instruction') }).height(150)
-          .backgroundColor(this.colors.input).borderRadius(14).onChange((value: string): void => { this.aiInstruction = value; })
-        Button($r('app.string.note_generate_preview')).width('100%').height(46).backgroundColor(this.colors.accent).fontColor(Color.White)
+          .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).onChange((value: string): void => { this.aiInstruction = value; })
+        Button($r('app.string.note_generate_preview')).width('100%').height(46).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
           .enabled(!this.model.loading && Boolean(this.aiInstruction.trim()))
           .onClick((): void => { void this.model.previewAi(this.aiInstruction); })
       }
@@ -525,8 +522,8 @@ export struct XopcNotesView {
     Column({ space: 16 }) {
       Text($r('app.string.note_manage_tags')).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
       TextInput({ text: this.tagsText, placeholder: $r('app.string.note_tags_placeholder') }).height(46)
-        .backgroundColor(this.colors.input).borderRadius(14).onChange((value: string): void => { this.tagsText = value; })
-      Button($r('app.string.save')).width('100%').height(46).backgroundColor(this.colors.accent).fontColor(Color.White)
+        .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).onChange((value: string): void => { this.tagsText = value; })
+      Button($r('app.string.save')).width('100%').height(46).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
         .onClick((): void => {
           void this.model.updateTags(this.tagsText.split(',')).then((): void => {
             if (!this.model.error) this.sheetOpen = false;
@@ -561,7 +558,7 @@ export struct XopcNotesView {
           Button($r('app.string.chat_media_play')).layoutWeight(1).height(46).backgroundColor(this.colors.input)
             .fontColor(this.colors.foreground).enabled(!this.voice.busy).onClick((): void => { void this.voice.play(); })
           Button($r('app.string.note_attach_recording')).layoutWeight(1).height(46).backgroundColor(this.colors.accent)
-            .fontColor(Color.White).enabled(!this.voice.busy).onClick((): void => {
+            .fontColor(this.colors.onAccent).enabled(!this.voice.busy).onClick((): void => {
               void this.voice.send(async (attachment): Promise<boolean> => {
                 const result = await this.model.attachPayload(attachment); if (result) this.sheetOpen = false; return result;
               });

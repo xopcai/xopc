@@ -3,6 +3,7 @@ import SwiftUI
 
 // swiftlint:disable:next type_body_length
 struct NotesView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
 
@@ -10,6 +11,8 @@ struct NotesView: View {
     @Environment(\.locale) private var locale
     @State private var section = LibrarySection.all
     @State private var search = ""
+    @State private var searchOpen = false
+    @FocusState private var isSearchFocused: Bool
     @State private var recentFiles: [FileResource] = []
     @State private var deliveries: [HomeDelivery] = []
     @State private var deliveryError: String?
@@ -29,18 +32,20 @@ struct NotesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            notesSearchField
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-            Picker("资料类型", selection: $section) {
-                ForEach(LibrarySection.allCases) { item in
-                    Text(item.title).tag(item)
+            if searchOpen {
+                PageSearchField("搜索资料", text: $search, focused: $isSearchFocused,
+                                accessibilityID: "notes-search-field")
+                {
+                    Task { await searchLibrary() }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
             }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("library-category")
-            .padding(.horizontal, 20)
+            SegmentedTabs(options: LibrarySection.allCases.map { item in
+                SegmentOption(id: item, title: item.title, accessibilityID: "library-category-\(item.rawValue)")
+            }, selected: section, label: "资料类型") { section = $0 }
+                .accessibilityIdentifier("library-category")
+                .padding(.horizontal, 20)
             List {
                 if section.showsNotes, pendingVoiceNote != nil || pendingVoiceNoteLoadFailed {
                     Button {
@@ -99,11 +104,20 @@ struct NotesView: View {
             .contentMargins(.top, 0, for: .scrollContent)
             .refreshable { await refreshLibrary() }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(mobileTheme.canvas)
         .navigationTitle("资料")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                PageSearchButton("搜索资料", isOpen: $searchOpen, query: $search,
+                                 accessibilityID: "notes-open-search")
+                NavigationLink {
+                    FileLibraryView(configuration: configuration, recentFiles: recentFiles)
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .accessibilityLabel("文件")
+                .accessibilityIdentifier("notes-files-button")
                 Button("新建笔记", systemImage: "plus") { presentedSheet = .choice }
             }
         }
@@ -182,33 +196,6 @@ struct NotesView: View {
             Button("重试") { Task { await load() } }
             Button("取消", role: .cancel) {}
         } message: { Text(error ?? "未知错误") }
-    }
-
-    private var notesSearchField: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField("搜索资料", text: $search)
-                    .textFieldStyle(.plain)
-                    .submitLabel(.search)
-                    .onSubmit { Task { await searchLibrary() } }
-                    .accessibilityIdentifier("notes-search-field")
-            }
-            .padding(.horizontal, 16)
-            .frame(minHeight: 48)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
-            NavigationLink {
-                FileLibraryView(configuration: configuration, recentFiles: recentFiles)
-            } label: {
-                Image(systemName: "folder")
-                    .frame(width: 48, height: 48)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
-            }
-            .accessibilityLabel("文件")
-            .accessibilityIdentifier("notes-files-button")
-        }
     }
 
     private var visibleFiles: [FileResource] {
@@ -293,14 +280,15 @@ struct NotesView: View {
     }
 
     private var statusPicker: some View {
-        Picker("状态", selection: $status) {
-            Text("全部").tag("")
-            Text("收件箱").tag("inbox")
-            Text("已处理").tag("processed")
-            Text("已归档").tag("archived")
-        }
-        .pickerStyle(.segmented)
-        .listRowSeparator(.hidden)
+        SegmentedTabs(options: [
+            SegmentOption(id: "", title: "全部", accessibilityID: "library-status-all"),
+            SegmentOption(id: "inbox", title: "收件箱", accessibilityID: "library-status-inbox"),
+            SegmentOption(id: "processed", title: "已处理", accessibilityID: "library-status-processed"),
+            SegmentOption(id: "archived", title: "已归档", accessibilityID: "library-status-archived")
+        ], selected: status, label: "状态") { status = $0 }
+            .accessibilityIdentifier("library-status-tabs")
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 
     private var emptyTitle: LocalizedStringResource {
@@ -347,6 +335,12 @@ struct NotesView: View {
         let revision = notesLoadRevision
         let query = search
         let selectedStatus = status
+        let scope = ComposerDraftStore.accountScope(configuration)
+        let requestedAt = Date.now
+        let unfiltered = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedStatus.isEmpty
+        if unfiltered, let cached: [NoteSummary] = MobileListCache.shared.read(.notes, scope: scope) {
+            notes = cached
+        }
         isLoading = true
         defer {
             if revision == notesLoadRevision {
@@ -356,8 +350,11 @@ struct NotesView: View {
         do {
             let loaded = try await GatewayClient(configuration: configuration)
                 .fetchNotes(search: query, status: selectedStatus).items
-            guard revision == notesLoadRevision else { return }
+            guard revision == notesLoadRevision, !Task.isCancelled else { return }
             notes = loaded
+            if unfiltered {
+                MobileListCache.shared.write(loaded, to: .notes, scope: scope, requestedAt: requestedAt)
+            }
             error = nil
         } catch is CancellationError {
         } catch {
@@ -370,6 +367,11 @@ struct NotesView: View {
     private func loadMatchingFiles() async {
         matchedFiles = []
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let scope = ComposerDraftStore.accountScope(configuration)
+        let requestedAt = Date.now
+        if query.isEmpty, recentFiles.isEmpty {
+            recentFiles = MobileListCache.shared.read(.recentFiles, scope: scope) ?? []
+        }
         fileSearchRevision += 1
         let revision = fileSearchRevision
         isSearchingFiles = true
@@ -385,6 +387,7 @@ struct NotesView: View {
                   search.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
             if query.isEmpty {
                 recentFiles = files
+                MobileListCache.shared.write(files, to: .recentFiles, scope: scope, requestedAt: requestedAt)
             } else {
                 matchedFiles = files
             }
@@ -433,7 +436,7 @@ struct NoteRow: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Image(systemName: note.kind == "voice" ? "waveform" : "note.text")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.tint)
                     .accessibilityHidden(true)
                 Text(note.displayTitle)
                     .mobileTextStyle(.rowTitle)
@@ -461,7 +464,7 @@ struct NoteRow: View {
             if let tags = note.tags, !tags.isEmpty {
                 Text(tags.prefix(3).map { "#\($0)" }.joined(separator: "  "))
                     .mobileTextStyle(.caption)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.tint)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -498,7 +501,7 @@ private enum LibrarySection: String, CaseIterable, Identifiable {
         self == .all || self == .deliveries
     }
 
-    var title: LocalizedStringKey {
+    var title: LocalizedStringResource {
         switch self {
         case .all: "全部"
         case .notes: "笔记"

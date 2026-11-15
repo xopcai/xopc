@@ -46,7 +46,7 @@ import XCTest
     }
 
     private func openConversation(_ phase: String) {
-        app.openHomeDestination("conversations")
+        app.openHomeDestination("search")
         let search = app.textFields["conversations-search-field"]
         XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap()
         if let value = search.value as? String, value != search.placeholderValue {

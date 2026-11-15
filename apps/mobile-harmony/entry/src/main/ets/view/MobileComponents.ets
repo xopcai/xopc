@@ -33,6 +33,10 @@ export struct XopcPageHeader {
   @Param heading: ResourceStr = '';
   @Param backVisible: boolean = false;
   @Event onBack: () => void = (): void => {};
+  @Param searchId: string = '';
+  @Param searchOpen: boolean = false;
+  @Param searchLabel: Resource = $r('app.string.search');
+  @Event onSearch: () => void = (): void => {};
   @Param actionLabel: ResourceStr = '';
   @Param actionIcon: Resource = $r('sys.symbol.arrow_clockwise');
   @Event onAction: () => void = (): void => {};
@@ -47,17 +51,64 @@ export struct XopcPageHeader {
       if (this.backVisible) {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground])
-        }.width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+        }.width(44).height(44).padding(0)
+          .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
       }
       Text(this.heading).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)
         .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      if (this.searchId) {
+        XopcPageSearchButton({ searchId: this.searchId, open: this.searchOpen, label: this.searchLabel, onToggle: this.onSearch })
+      }
       if (this.actionLabel !== '') {
         Button() { SymbolGlyph(this.actionIcon).fontSize(22).fontColor([this.colors.foreground]) }
-          .width(44).height(44).backgroundColor(Color.Transparent)
+          .width(44).height(44)
+          .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
           .accessibilityText(this.actionText()).onClick((): void => { this.onAction(); })
       }
     }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
+  }
+}
+
+@ComponentV2
+export struct XopcPageSearchButton {
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Param searchId: string = '';
+  @Param open: boolean = false;
+  @Param label: Resource = $r('app.string.search');
+  @Event onToggle: () => void = (): void => {};
+
+  build() {
+    Button({ type: ButtonType.Circle }) {
+      SymbolGlyph(this.open ? $r('sys.symbol.xmark') : $r('sys.symbol.magnifyingglass'))
+        .fontSize(21).fontColor([this.colors.foreground])
+    }.id(this.open ? this.searchId + '-close' : this.searchId)
+      .width(44).height(44).padding(0)
+      .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
+      .accessibilityText(this.open ? $r('app.string.close') : this.label).onClick((): void => { this.onToggle(); })
+  }
+}
+
+@ComponentV2
+export struct XopcPageSearchField {
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Param searchId: string = '';
+  @Param text: string = '';
+  @Param placeholder: ResourceStr = $r('app.string.search');
+  @Event onChange: (text: string) => void = (_text: string): void => {};
+  @Event onSubmit: () => void = (): void => {};
+  private focusTimer: number = -1;
+
+  build() {
+    TextInput({ text: this.text, placeholder: this.placeholder }).id(this.searchId).width('100%').height(46)
+      .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input)
+      .border(this.colors.controlStroke).borderRadius(this.colors.corner(23)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
+      .enterKeyType(EnterKeyType.Search).defaultFocus(true)
+      .onChange(this.onChange).onSubmit(this.onSubmit)
+      .onAppear((): void => {
+        this.focusTimer = setTimeout((): void => { this.getUIContext().getFocusController().requestFocus(this.searchId); }, 50);
+      })
+      .onDisAppear((): void => { clearTimeout(this.focusTimer); })
   }
 }
 
@@ -71,16 +122,21 @@ export struct XopcHubRow {
   @Param showChevron: boolean = true;
   @Param compact: boolean = false;
   @Event onOpen: () => void = (): void => {};
+  @Param attention: boolean = false;
 
   build() {
     Button({ type: ButtonType.Normal }) {
       Row({ space: this.compact ? 10 : 12 }) {
-        SymbolGlyph(this.symbol).fontSize(this.compact ? 20 : 23).fontColor([this.colors.secondary])
+        Stack() {
+          SymbolGlyph(this.symbol).fontSize(this.compact ? 17 : 19)
+            .fontColor([this.attention ? this.colors.attentionForeground : this.colors.secondary])
+        }.width(this.compact ? 30 : 36).height(this.compact ? 30 : 36).borderRadius(this.colors.corner(9))
+          .backgroundColor(this.colors.light && !this.attention ? this.colors.grouped : Color.Transparent)
         Column({ space: this.compact ? 2 : 4 }) {
           Text(this.heading).fontSize(this.compact ? 15 : 16).lineHeight(this.compact ? 21 : 23).fontWeight(FontWeight.Medium)
             .fontColor(this.colors.foreground).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           if (this.summary !== '') {
-            Text(this.summary).fontSize(13).lineHeight(18).fontColor(this.colors.secondary)
+            Text(this.summary).fontSize(13).lineHeight(18).fontColor(this.colors.tertiary)
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
@@ -88,7 +144,10 @@ export struct XopcHubRow {
       }.width('100%').constraintSize({ minHeight: this.compact ? 52 : 64 })
         .padding({ left: this.compact ? 12 : 16, right: this.compact ? 12 : 16,
           top: this.compact ? 6 : 12, bottom: this.compact ? 6 : 12 })
-    }.width('100%').padding(0).borderRadius(this.compact ? 12 : 14).backgroundColor(this.colors.panel)
+    }.width('100%').padding(0)
+      .backgroundColor(this.attention ? this.colors.attentionFill : this.colors.panel)
+      .border(this.attention ? this.colors.attentionStroke : this.colors.panelStroke)
+      .borderRadius(this.colors.corner(this.compact ? 12 : 16))
       .margin({ bottom: 8 })
       .onClick((): void => { if (this.navigable) this.onOpen(); })
   }
@@ -144,7 +203,7 @@ export function XopcListSkeleton() {
     Column({ space: 18 }) {
       ForEach(['first', 'second', 'third'], (key: string) => {
         Row({ space: 12 }) {
-          Column().width(28).height(28).borderRadius(6).backgroundColor(appThemeColors.input)
+          Column().width(28).height(28).borderRadius(appThemeColors.corner(6)).backgroundColor(appThemeColors.input)
           Column({ space: 8 }) {
             Column().width('75%').height(16).borderRadius(4).backgroundColor(appThemeColors.input)
             Column().width('50%').height(12).borderRadius(4).backgroundColor(appThemeColors.input)

@@ -6,6 +6,14 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('routes the mobile catalog through the capability bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/capabilities/mobile-catalog')?.id).toBe('capabilities');
+    for (const route of ['skills', 'mcp', 'mcp/id', 'plugin/id', 'agent/id']) {
+      expect(findAuthenticatedLazyRouteBundle('/api/capabilities/mobile-actions/' + route)?.id).toBe('capabilities');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/capabilities-other/mobile-catalog')).toBeUndefined();
+  });
+
   it('routes file versions through the authenticated files bundle', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/files/file-id/versions')?.id).toBe('files');
     expect(findAuthenticatedLazyRouteBundle('/api/files/file-id/versions/version-id/content')?.id).toBe('files');

@@ -17,7 +17,7 @@ export struct XopcChatActionPanel {
       Column({ space: 6 }) {
         Row() {
           SymbolGlyph(symbol).fontSize(24).fontColor([this.colors.foreground])
-        }.width(48).height(48).justifyContent(FlexAlign.Center).borderRadius(14).backgroundColor(this.colors.input)
+        }.width(48).height(48).justifyContent(FlexAlign.Center).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
         Text(label).fontSize(12).fontColor(this.colors.secondary).maxLines(2)
           .textAlign(TextAlign.Center).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.width('100%')

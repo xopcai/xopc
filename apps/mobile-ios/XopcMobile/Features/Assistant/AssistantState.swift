@@ -32,6 +32,10 @@ final class AssistantState {
     var isUpdatingQueue = false
     private var loadedConversationID: String?
     private var loadedTranscriptID: String?
+
+    func historyTranscriptID(for conversation: ConversationSelection?) -> String? {
+        loadedConversationID == conversation?.id ? loadedTranscriptID ?? conversation?.transcriptId : conversation?.transcriptId
+    }
     private var historyGeneration = 0
     private var contextGeneration = 0
     private var runObservation: Task<Void, Never>?
@@ -92,7 +96,7 @@ final class AssistantState {
         if let conversation,
            !conversation.isDraft,
            conversation.id == loadedConversationID,
-           conversation.transcriptId == loadedTranscriptID,
+           conversation.transcriptId == nil || conversation.transcriptId == loadedTranscriptID,
            !messages.isEmpty
         {
             await resumeConversation(conversation, using: gateway)
@@ -116,6 +120,7 @@ final class AssistantState {
             guard generation == historyGeneration, !Task.isCancelled else { return }
             let projected = await projectHistory(history)
             guard generation == historyGeneration, !Task.isCancelled else { return }
+            loadedTranscriptID = history.session.transcriptId ?? conversation.transcriptId
             messages = projected
             isLoadingHistory = false
             let run = try await gateway.fetchActiveRun(conversationID: conversation.id)
@@ -337,6 +342,7 @@ final class AssistantState {
             flushStream()
             var saved = await projectHistory(history)
             guard isObserving(conversation, generation: generation) else { return }
+            loadedTranscriptID = history.session.transcriptId ?? loadedTranscriptID
             if retainLive {
                 for index in saved.indices where streamBuffer.containsLive(saved[index].id) {
                     saved[index].isPending = true

@@ -13,7 +13,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -96,7 +95,7 @@ internal class ChatSidebarState {
 @Composable
 internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: ConnectionUiState,
   onClose: () -> Unit, onRetry: () -> Unit, onDestination: (HomeTab) -> Unit, onPersonal: () -> Unit,
-  onNew: () -> Unit, onConversation: (String) -> Unit) {
+  onNew: () -> Unit, onConversation: (String) -> Unit, onSearch: () -> Unit) {
   LaunchedEffect(state.open, state.dragFraction != null) {
     val fraction = state.dragFraction
     if (fraction != null) return@LaunchedEffect
@@ -130,10 +129,10 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
         }
       }
       SidebarRow(R.string.conversations_search, R.drawable.action_search, "chat-sidebar-search",
-        Modifier.clip(CircleShape).background(scheme.surfaceContainer)) { onDestination(HomeTab.Conversations) }
+        Modifier.clip(MaterialTheme.shapes.large).background(scheme.surfaceContainer), onClick = onSearch)
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 8.dp)) {
         val personal = connection.personal.agent?.takeIf { it.state == "ready" }
-        Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).clip(RoundedCornerShape(16.dp))
+        Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).clip(MaterialTheme.shapes.medium)
           .background(if (personal?.conversationId == connection.selectedConversationId && personal != null)
             scheme.surfaceContainerHigh else Color.Transparent)
           .clickable(enabled = !connection.personal.agentCreating, role = Role.Button, onClick = onPersonal)
@@ -163,22 +162,27 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
         SidebarRow(R.string.library_title, R.drawable.tab_notes, "chat-sidebar-library") {
           onDestination(HomeTab.Notes)
         }
+        SidebarRow(R.string.capability_title, R.drawable.action_capabilities, "chat-sidebar-capabilities") {
+          onDestination(HomeTab.Capabilities)
+        }
         Text(stringResource(R.string.chat_recent_conversations),
           Modifier.padding(start = 10.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.labelMedium,
           color = scheme.onSurfaceVariant)
-        val recent = connection.conversations.takeIf { connection.conversationResultsQuery.isEmpty() }
-          .orEmpty().asSequence().filter {
+        val rows = connection.recentConversations ?: connection.conversations
+          .takeIf { connection.conversationResultsQuery.isEmpty() }.orEmpty()
+        val recent = rows.filter {
           it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.status != "archived" && !it.isLocalDraft
         }.take(6)
         recent.forEach { item ->
-          Text(item.title, Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+          Text(item.title, Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
             .background(if (item.id == connection.selectedConversationId) scheme.surfaceContainerHigh else Color.Transparent)
             .clickable(role = Role.Button) { onConversation(item.id) }.heightIn(min = 46.dp)
             .padding(horizontal = 10.dp, vertical = 12.dp).testTag("chat-sidebar-session-${item.id}"),
             maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
         }
-        if (connection.conversationsLoading) BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp)
-        else if (connection.conversationsError) Row(Modifier.fillMaxWidth().padding(start = 10.dp),
+        if (connection.conversationsLoading && connection.recentConversations == null && rows.isEmpty())
+          BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp)
+        else if (connection.conversationsError && rows.isEmpty()) Row(Modifier.fillMaxWidth().padding(start = 10.dp),
           verticalAlignment = Alignment.CenterVertically) {
           Text(stringResource(R.string.chat_load_error), Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)

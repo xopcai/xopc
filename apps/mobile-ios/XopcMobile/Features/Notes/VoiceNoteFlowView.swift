@@ -356,7 +356,7 @@ struct DiscussionProcessingSection: View {
                                 HStack(spacing: 8) {
                                     if let startedAtMs = segment.startedAtMs {
                                         Text(Self.captureTime(startedAtMs))
-                                            .foregroundStyle(.blue)
+                                            .foregroundStyle(.tint)
                                     }
                                     if let speaker = segment.speakerLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !speaker.isEmpty {
                                         Text(speaker).foregroundStyle(.secondary)

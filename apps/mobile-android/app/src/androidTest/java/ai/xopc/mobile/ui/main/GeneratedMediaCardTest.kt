@@ -17,18 +17,22 @@ import org.junit.Test
 class GeneratedMediaCardTest {
   @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-  @Test fun completedSongAndVideoDraftExposeTheirOwnActions() {
+  @Test fun completedVideoOpensFromTheCardAndDraftStillRequiresConfirmation() {
     val song = parseGeneratedMedia(JSONObject("""{"jobs":[{"id":"song","title":"风从山南来",
       "state":"completed","durationMs":329000,"createdAt":1}]}"""), GeneratedMediaKind.Music).single()
     val video = parseGeneratedMedia(JSONObject("""{"jobs":[],"transcriptId":"t","configured":true,"modelRef":"model",
       "draft":{"id":"video","summary":"山南落日","modelRef":"model","revision":2,"estimatedCostFen":150,
       "createdAt":2}}"""), GeneratedMediaKind.Video).single()
+    val completedVideo = parseGeneratedMedia(JSONObject("""{"transcriptId":"t","jobs":[{"id":"completed-video",
+      "transcriptId":"t","title":"暮色","prompt":"A private creative prompt","duration":5,
+      "resolution":"720P","ratio":"16:9","state":"completed","createdAt":3}]}"""),
+      GeneratedMediaKind.Video).single()
     val actions = mutableListOf<String>()
     compose.setContent {
       MaterialTheme {
         Column {
-          GeneratedMediaRows(listOf(song, video), false, null, { actions += "play:${it.id}" },
-            { actions += "confirm:${it.id}:${it.draftRevision}" })
+          GeneratedMediaRows(listOf(song, video, completedVideo), false, null, { actions += "play:${it.id}" },
+            { actions += "confirm:${it.id}:${it.draftRevision}" }, onOpen = { actions += "open:${it.id}" })
         }
       }
     }
@@ -36,7 +40,13 @@ class GeneratedMediaCardTest {
     compose.onNodeWithText("5:29", substring = true).assertExists()
     compose.onNodeWithText("山南落日").assertExists()
     compose.onNodeWithTag("generated-media-play-song").performClick()
+    compose.onNodeWithTag("generated-video-open-completed-video").performClick()
+    compose.onNodeWithText("创作详情").assertDoesNotExist()
+    compose.onNodeWithText("Details").assertDoesNotExist()
+    compose.onNodeWithText("A private creative prompt").assertDoesNotExist()
+    compose.onNodeWithText("720P", substring = true).assertDoesNotExist()
+    compose.onNodeWithText("16:9", substring = true).assertDoesNotExist()
     compose.onNodeWithTag("generated-video-confirm-video").performClick()
-    compose.runOnIdle { assertEquals(listOf("play:song", "confirm:video:2"), actions) }
+    compose.runOnIdle { assertEquals(listOf("play:song", "open:completed-video", "confirm:video:2"), actions) }
   }
 }

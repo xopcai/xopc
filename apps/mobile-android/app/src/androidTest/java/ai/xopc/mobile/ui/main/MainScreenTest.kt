@@ -63,6 +63,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -1331,13 +1332,18 @@ class MainScreenTest {
       composeTestRule.onNodeWithTag(tag).performClick()
     }
     selectSidebar("chat-sidebar-library")
-    composeTestRule.onNodeWithTag("notes-search").performTextInput("persistent")
+    composeTestRule.onNodeWithTag("notes-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("notes-open-search").performClick()
+    composeTestRule.onNodeWithTag("notes-search").assertIsFocused().performTextInput("persistent")
     Espresso.closeSoftKeyboard()
     composeTestRule.onNodeWithTag("library-back").performClick()
     selectSidebar("chat-sidebar-profile")
-    composeTestRule.onNodeWithTag("personal-back").performClick()
+    composeTestRule.onNodeWithTag("settings-screen").assertIsDisplayed()
+    Espresso.pressBack()
     selectSidebar("chat-sidebar-library")
     composeTestRule.onNodeWithTag("notes-search").assertTextContains("persistent")
+    composeTestRule.onNodeWithTag("notes-open-search-close").performClick()
+    composeTestRule.onNodeWithTag("notes-search").assertDoesNotExist()
   }
 
   @Test fun sidebarAcceptsAnInContentSwipeAndReleasesTheSystemEdge() {
@@ -1513,21 +1519,28 @@ class MainScreenTest {
   }
 
   @Test fun progressOverviewShowsAndOpensTheUpcomingAutomation() {
-    val state = ProgressUiState(automationMetrics = AutomationMetrics(3, 2, 0, 0,
-      AutomationMetricsNext("auto-next", "Morning brief", 2_000L)))
+    val state = mutableStateOf(ProgressUiState(automationMetrics = AutomationMetrics(3, 2, 0, 0,
+      AutomationMetricsNext("auto-next", "Morning brief", 2_000L))))
+    val automation = AutomationSummary("auto-next", "Morning brief", "Summarizes the day", true,
+      "manual", "", "", null, null, null, null, null)
     var openedAutomation: String? = null
     composeTestRule.setContent {
-      ProgressScreen(state, androidx.compose.foundation.layout.PaddingValues(),
+      ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(),
         onRefreshHome = {}, onRefreshTasks = {}, onLoadMore = {}, onOpenTask = {},
         onSearchChange = {}, onSubmitSearch = {}, onTaskCommand = {}, onStartTask = {},
         onCreateTaskWithChat = {}, onLoadProjects = {}, onOpenProject = {},
         onCreateTask = { _, _, _ -> }, onOpenTaskChat = {}, onSaveTask = { _, _, _ -> },
-        onOpenChat = {}, onOpenAutomation = { openedAutomation = it })
+        onOpenChat = {}, onOpenAutomation = { id ->
+          openedAutomation = id
+          state.value = state.value.copy(automations = AutomationUiState(selectedId = id, detail = automation))
+        })
     }
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.progress_upcoming))
       .performScrollTo().assertExists()
     composeTestRule.onNodeWithTag("progress-upcoming-auto-next").performScrollTo().performClick()
     assert(openedAutomation == "auto-next")
+    composeTestRule.onAllNodesWithText("Morning brief").assertCountEquals(1)
+    composeTestRule.onNodeWithText("Summarizes the day").assertExists()
   }
 
   @Test fun progressOpensTaskOutsideLoadedPageAndCanRetryDetail() {
@@ -1969,12 +1982,18 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar-projects").performClick()
-    composeTestRule.onNodeWithTag("progress-project-search").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("progress-project-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("projects-open-search").performClick()
+    composeTestRule.onNodeWithTag("progress-project-search").assertIsFocused()
+    composeTestRule.onNodeWithTag("projects-open-search-close").performClick()
     composeTestRule.runOnIdle { assertEquals(1, projectReads) }
     composeTestRule.onNodeWithTag("progress-back").performClick()
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar-automations").performClick()
-    composeTestRule.onNodeWithTag("automation-search").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("automation-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("automation-open-search").performClick()
+    composeTestRule.onNodeWithTag("automation-search").assertIsFocused()
+    composeTestRule.onNodeWithTag("automation-open-search-close").performClick()
     composeTestRule.runOnIdle { assertEquals(1, automationReads) }
     Espresso.pressBack()
     composeTestRule.onNodeWithTag("chat-header-sidebar").assertIsDisplayed()
@@ -2121,7 +2140,9 @@ class MainScreenTest {
         connection = ConnectionUiState(profile = profile, conversationSearch = query.value),
         onConversationSearchChange = { text -> query.value = text; changes += text })
     }
-    composeTestRule.onNodeWithTag("conversations-search").performTextInput("alpha")
+    composeTestRule.onNodeWithTag("conversations-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("conversations-open-search").performClick()
+    composeTestRule.onNodeWithTag("conversations-search").assertIsFocused().performTextInput("alpha")
     assert(changes.last() == "alpha")
     composeTestRule.onNodeWithTag("conversations-clear").performClick()
     assert(query.value == "")
@@ -2130,13 +2151,83 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("conversations-search").assertExists()
   }
 
+  @Test fun capabilityCatalogDefaultsToPluginsAndSearchStaysInItsCategory() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val drafts = mutableListOf<String>()
+    composeTestRule.setContent {
+      MainScreen(connection = ConnectionUiState(profile = profile), onCapabilityConversation = { drafts += it }, onLoadCapabilities = { category ->
+        ai.xopc.mobile.gateway.CapabilityPage(
+          if (category == "plugins") listOf(
+            ai.xopc.mobile.gateway.CapabilityItem("meeting-plugin", "Meeting Plugin", group = "installed"),
+            ai.xopc.mobile.gateway.CapabilityItem("document-plugin", "Document Plugin", group = "available"),
+          ) else listOf(ai.xopc.mobile.gateway.CapabilityItem(category, "Meeting $category", group = "available")),
+        )
+      })
+    }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
+    composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-search").performTextInput("Meeting")
+    composeTestRule.onNodeWithTag("capability-row-document-plugin").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("capability-discover").performClick()
+    composeTestRule.runOnIdle { assert(drafts.last().contains("Meeting")) }
+    for (kind in listOf("skills", "connections", "agents", "channels")) {
+      composeTestRule.onNodeWithTag("capability-category").performClick()
+      composeTestRule.onNodeWithTag("capability-category-$kind").performClick()
+      composeTestRule.onNodeWithTag("capability-row-$kind").assertIsDisplayed()
+      composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertDoesNotExist()
+      composeTestRule.onNodeWithTag("capability-row-$kind").performClick()
+      composeTestRule.onNodeWithTag("capability-open-chat").performClick()
+      composeTestRule.runOnIdle { assert(drafts.last().contains("\"$kind\"")) }
+    }
+    composeTestRule.onNodeWithTag("capability-category").performClick()
+    composeTestRule.onNodeWithTag("capability-category-plugins").performClick()
+    composeTestRule.onNodeWithTag("capability-row-document-plugin").assertIsDisplayed()
+  }
+
+  @Test fun sidebarKeepsCachedRecentsWhileSearchAndRefreshRun() {
+    val cached = ConversationSummary("cached", "Cached conversation", "", 3, "main")
+    val searchResult = ConversationSummary("filtered", "Filtered conversation", "", 1, "main")
+    val latest = ConversationSummary("latest", "Latest conversation", "", 2, "main")
+    val connection = mutableStateOf(ConnectionUiState(
+      profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
+      conversations = listOf(searchResult), conversationResultsQuery = "filtered",
+      recentConversations = listOf(cached), conversationsLoading = true))
+    composeTestRule.setContent { MainScreen(connection = connection.value) }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-session-cached").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-sidebar-session-filtered").assertDoesNotExist()
+    composeTestRule.runOnIdle {
+      connection.value = connection.value.copy(conversationsLoading = false, conversationsError = true)
+    }
+    composeTestRule.onNodeWithTag("chat-sidebar-session-cached").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-sidebar-retry").assertDoesNotExist()
+    composeTestRule.runOnIdle {
+      connection.value = connection.value.copy(recentConversations = listOf(latest), conversationsError = false)
+    }
+    composeTestRule.onNodeWithTag("chat-sidebar-session-cached").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("chat-sidebar-session-latest").assertIsDisplayed()
+  }
+
+  @Test fun sidebarSearchOpensFocusedWhileHistoryStartsCollapsed() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      MainScreen(connection = ConnectionUiState(profile = profile))
+    }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-history").performClick()
+    composeTestRule.onNodeWithTag("conversations-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("conversations-back").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-search").performClick()
+    composeTestRule.onNodeWithTag("conversations-search").assertIsFocused()
+  }
+
   @Test fun conversationHeaderSearchAndNewIconsShareVerticalCenter() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {},
         connection = ConnectionUiState(profile = profile))
     }
-    composeTestRule.onNodeWithTag("conversations-clear").performClick()
     val search = composeTestRule.onNodeWithTag("conversations-search-icon", useUnmergedTree = true)
       .fetchSemanticsNode().boundsInRoot
     val add = composeTestRule.onNodeWithTag("conversations-new-icon", useUnmergedTree = true)

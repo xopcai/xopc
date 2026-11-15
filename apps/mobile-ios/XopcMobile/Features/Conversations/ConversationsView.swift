@@ -1,11 +1,13 @@
 import SwiftUI
 
 struct ConversationsView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let onSelect: (ConversationSummary) -> Void
     let onStartNew: () -> Void
     let personalConversationID: String?
     let onOpenSettings: () -> Void
+    var startSearching = false
     var onDelete: (String) -> Void = { _ in }
 
     private var visibleConversations: [ConversationSummary] {
@@ -15,6 +17,8 @@ struct ConversationsView: View {
     @Environment(\.locale) private var locale
 
     @State private var state = ConversationsState()
+    @State private var searchOpen = false
+    @FocusState private var isSearchFocused: Bool
     @State private var renameTarget: ConversationSummary?
     @State private var renameText = ""
     @State private var expandedConversations: Set<String> = []
@@ -22,9 +26,12 @@ struct ConversationsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            conversationSearchField
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+            if searchOpen {
+                PageSearchField("搜索对话", text: $state.searchText, focused: $isSearchFocused,
+                                accessibilityID: "conversations-search-field")
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+            }
 
             Group {
                 if state.isLoading, visibleConversations.isEmpty {
@@ -72,23 +79,31 @@ struct ConversationsView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
-                    .background(Color(uiColor: .systemGroupedBackground))
+                    .background(mobileTheme.canvas)
                     .refreshable {
                         await state.load(using: GatewayClient(configuration: configuration))
                     }
                 }
             }
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(mobileTheme.canvas)
         .navigationTitle("对话")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                PageSearchButton("搜索对话", isOpen: $searchOpen, query: $state.searchText,
+                                 accessibilityID: "conversations-open-search")
                 Button("新建对话", systemImage: "plus", action: onStartNew)
+            }
+        }
+        .task {
+            if startSearching {
+                searchOpen = true
             }
         }
         .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText, personalConversationID: personalConversationID)) {
             state.personalConversationID = personalConversationID
+            state.cacheScope = ComposerDraftStore.accountScope(configuration)
             if !state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 try? await Task.sleep(for: .milliseconds(300))
             }
@@ -107,21 +122,6 @@ struct ConversationsView: View {
         } message: {
             Text("这会永久删除对话及其历史记录。")
         }
-    }
-
-    private var conversationSearchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            TextField("搜索对话", text: $state.searchText)
-                .textFieldStyle(.plain)
-                .submitLabel(.search)
-                .accessibilityIdentifier("conversations-search-field")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
     }
 
     private func conversationButton(for conversation: ConversationSummary) -> some View {
@@ -179,7 +179,7 @@ struct ConversationsView: View {
                 conversationButton(for: conversation)
             }
             .padding(.horizontal, 16)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
             if expandedConversations.contains(conversation.id), let group = state.childrenByConversationID[conversation.id] {
                 ForEach(group.items) { child in
                     NavigationLink {
@@ -193,7 +193,7 @@ struct ConversationsView: View {
                                 .mobileTextStyle(.caption).foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 24).frame(minHeight: 52)
-                        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+                        .background(mobileTheme.grouped, in: .rect(cornerRadius: mobileTheme.corner(16)))
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("conversation-child-\(child.id)")
@@ -353,12 +353,83 @@ private extension ConversationSummary {
 }
 
 private struct ConversationLoadingSkeleton: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     var body: some View {
         VStack(spacing: 12) {
             ForEach(0 ..< 5) { _ in
-                RoundedRectangle(cornerRadius: 16).fill(.quaternary).frame(height: 64)
+                RoundedRectangle(cornerRadius: mobileTheme.corner(16)).fill(.quaternary).frame(height: 64)
             }
             Spacer()
         }.padding(20).accessibilityLabel("正在读取对话")
+    }
+}
+
+struct PageSearchButton: View {
+    let title: LocalizedStringKey
+    @Binding var isOpen: Bool
+    @Binding var query: String
+    let accessibilityID: String
+
+    init(_ title: LocalizedStringKey, isOpen: Binding<Bool>, query: Binding<String>, accessibilityID: String) {
+        self.title = title
+        _isOpen = isOpen
+        _query = query
+        self.accessibilityID = accessibilityID
+    }
+
+    var body: some View {
+        Button(isOpen ? "关闭" : title, systemImage: isOpen ? "xmark" : "magnifyingglass") {
+            isOpen.toggle()
+            if !isOpen {
+                query = ""
+            }
+        }
+        .accessibilityIdentifier(isOpen ? accessibilityID + "-close" : accessibilityID)
+    }
+}
+
+struct PageSearchField: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    let prompt: LocalizedStringKey
+    @Binding var text: String
+    @FocusState.Binding var focused: Bool
+    let accessibilityID: String
+    var onSubmit: () -> Void
+
+    init(_ prompt: LocalizedStringKey, text: Binding<String>, focused: FocusState<Bool>.Binding,
+         accessibilityID: String, onSubmit: @escaping () -> Void = {})
+    {
+        self.prompt = prompt
+        _text = text
+        _focused = focused
+        self.accessibilityID = accessibilityID
+        self.onSubmit = onSubmit
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            TextField(prompt, text: $text)
+                .textFieldStyle(.plain)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .focused($focused)
+                .onSubmit { focused = false; onSubmit() }
+                .accessibilityIdentifier(accessibilityID)
+            if !text.isEmpty {
+                Button("清除搜索", systemImage: "xmark.circle.fill") { text = "" }
+                    .buttonStyle(.borderless)
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 48)
+        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
+        .task { focused = true }
+        .onDisappear { focused = false }
     }
 }

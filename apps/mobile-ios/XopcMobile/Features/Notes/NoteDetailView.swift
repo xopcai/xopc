@@ -35,7 +35,7 @@ struct NoteDetailView: View {
                         if note.pinned == true {
                             Label("已置顶", systemImage: "pin.fill")
                                 .mobileTextStyle(.caption)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(.tint)
                         }
                         HStack {
                             Label(note.status.noteStatusLabel, systemImage: "circle.fill")

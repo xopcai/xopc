@@ -1,6 +1,5 @@
 {
   "color": [
-    { "name": "chat_attention_dot", "value": "#995D15" },
     {
       "name": "surface",
       "value": "#EEF1F5"
@@ -47,7 +46,7 @@
     },
     {
       "name": "theme_default_surface_light",
-      "value": "#EEF1F5"
+      "value": "#E9EDF3"
     },
     {
       "name": "theme_default_panel_light",
@@ -55,43 +54,43 @@
     },
     {
       "name": "theme_default_foreground_light",
-      "value": "#111111"
+      "value": "#142033"
     },
     {
       "name": "theme_default_secondary_light",
-      "value": "#666666"
+      "value": "#46566C"
     },
     {
       "name": "theme_default_tertiary_light",
-      "value": "#999999"
+      "value": "#52627A"
     },
     {
       "name": "theme_default_accent_light",
-      "value": "#3A6BFF"
+      "value": "#0054C6"
     },
     {
       "name": "theme_default_danger_light",
-      "value": "#FF5D5D"
+      "value": "#A12632"
     },
     {
       "name": "theme_default_grouped_light",
-      "value": "#F1F3F6"
+      "value": "#F2F5F9"
     },
     {
       "name": "theme_default_input_light",
-      "value": "#E8ECF1"
+      "value": "#D8E0EB"
     },
     {
       "name": "theme_default_border_light",
-      "value": "#ECECEC"
+      "value": "#CBD4E1"
     },
     {
       "name": "theme_default_accent_soft_light",
-      "value": "#EEF3FF"
+      "value": "#E5F0FF"
     },
     {
       "name": "theme_default_active_light",
-      "value": "#DFE5EC"
+      "value": "#E5F0FF"
     },
     {
       "name": "theme_default_surface_dark",
@@ -159,7 +158,7 @@
     },
     {
       "name": "theme_porcelain_tertiary_light",
-      "value": "#776B63"
+      "value": "#685749"
     },
     {
       "name": "theme_porcelain_accent_light",
@@ -255,7 +254,7 @@
     },
     {
       "name": "theme_dawn_tertiary_light",
-      "value": "#666D75"
+      "value": "#4C617B"
     },
     {
       "name": "theme_dawn_accent_light",
@@ -351,7 +350,7 @@
     },
     {
       "name": "theme_emerald_tertiary_light",
-      "value": "#15803D"
+      "value": "#4C6458"
     },
     {
       "name": "theme_emerald_accent_light",
@@ -447,7 +446,7 @@
     },
     {
       "name": "theme_clay_tertiary_light",
-      "value": "#9A9A9A"
+      "value": "#62554B"
     },
     {
       "name": "theme_clay_accent_light",
@@ -525,11 +524,13 @@
       "name": "theme_clay_active_dark",
       "value": "#2D4545"
     },
-    { "name": "chat_default_card_light", "value": "#E2E8F1" },
-    { "name": "chat_default_bubble_light", "value": "#E4E7EC" },
-    { "name": "chat_default_action_light", "value": "#2453D6" },
-    { "name": "chat_default_composer_light", "value": "#D5DDE8" },
-    { "name": "chat_default_composer_placeholder_light", "value": "#535D6D" },
+    { "name": "theme_control_light", "value": "#6B7A90" },
+    { "name": "theme_attention_fill_light", "value": "#FFF2D2" },
+    { "name": "theme_attention_foreground_light", "value": "#734600" },
+    { "name": "theme_attention_border_light", "value": "#B4710A" },
+    { "name": "theme_attention_foreground_dark", "value": "#FFBC63" },
+    { "name": "theme_success_light", "value": "#176141" },
+    { "name": "chat_default_bubble_light", "value": "#D5E6FF" },
     { "name": "chat_default_card_dark", "value": "#222730" },
     { "name": "chat_default_bubble_dark", "value": "#252F40" },
     { "name": "chat_default_action_dark", "value": "#A8BCFF" },
@@ -557,6 +558,7 @@
     { "name": "chat_clay_card_dark", "value": "#1A2B2A" },
     { "name": "chat_clay_bubble_dark", "value": "#1B3030" },
     { "name": "chat_clay_action_dark", "value": "#FFB084" },
-    { "name": "chat_clay_secondary_light", "value": "#5F584C" }
+    { "name": "chat_clay_secondary_light", "value": "#5F584C" },
+    { "name": "theme_on_accent_ink", "value": "#000000" }
   ]
 }

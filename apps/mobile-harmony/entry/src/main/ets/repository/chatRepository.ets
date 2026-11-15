@@ -1,3 +1,4 @@
+import { chatSessionCache } from '../service/chatSessionCache';
 import { gatewaySession } from '../service/gatewaySession';
 import { realtimeClient } from '../service/realtimeClient';
 import { XopcDeviceCrypto } from '../service/deviceCrypto';
@@ -31,6 +32,9 @@ interface XopcTaskConversationResult { ok: boolean; conversationId: string; }
 interface XopcTaskInputState { activeRunId?: string; }
 interface XopcTaskInputPayload { conversationId?: string; state?: XopcTaskInputState; }
 interface XopcTaskInputResponse { ok: boolean; payload?: XopcTaskInputPayload; }
+
+let recentLoad: Promise<XopcSessionList> | undefined;
+let recentConnection: number = -1;
 
 export class XopcChatRepository {
   async ensureTaskConversation(taskId: string): Promise<string> {
@@ -87,6 +91,37 @@ export class XopcChatRepository {
     const gatewayId = gatewaySession.currentProfile()?.gatewayId;
     if (gatewayId) await this.store.write('main-chat.' + gatewayId, id);
   }
+  cachedRecent(): XopcSessionList | undefined {
+    const profile = gatewaySession.currentProfile();
+    return profile ? chatSessionCache.peek(profile.gatewayId, profile.deviceId) : undefined;
+  }
+
+  async restoreRecent(): Promise<XopcSessionList | undefined> {
+    const profile = gatewaySession.currentProfile();
+    if (!profile) return undefined;
+    const connection = gatewaySession.connectionRevision();
+    const cached = await chatSessionCache.read(profile.gatewayId, profile.deviceId).catch((): undefined => undefined);
+    gatewaySession.assertConnection(connection);
+    return cached;
+  }
+
+  refreshRecent(): Promise<XopcSessionList> {
+    const profile = gatewaySession.currentProfile();
+    if (!profile) return Promise.reject(new Error('NOT_PAIRED'));
+    const connection = gatewaySession.connectionRevision();
+    if (recentLoad && recentConnection === connection) return recentLoad;
+    recentConnection = connection;
+    const request = this.list('', 0, 20, '', true).then((page: XopcSessionList): XopcSessionList => {
+      gatewaySession.assertConnection(connection);
+      if (recentLoad === request) {
+        void chatSessionCache.write(profile.gatewayId, profile.deviceId, page).catch((): void => {});
+      }
+      return page;
+    }).finally((): void => { if (recentLoad === request) recentLoad = undefined; });
+    recentLoad = request;
+    return request;
+  }
+
   async list(search: string = '', offset: number = 0, limit: number = 30, channel: string = 'webchat', roots: boolean = false): Promise<XopcSessionList> {
     const result = JSON.parse(await gatewaySession.request('/api/sessions?limit=' + limit + '&offset=' + offset
       + (channel ? '&channel=' + encodeURIComponent(channel) : '')
@@ -408,6 +443,18 @@ export class XopcChatRepository {
     const body: XopcAbort = { runId };
     await gatewaySession.request('/api/agent/abort', 'POST', JSON.stringify(body));
   }
+  private removeCachedRecent(id: string): void {
+    const profile = gatewaySession.currentProfile();
+    if (!profile) return;
+    const page = chatSessionCache.peek(profile.gatewayId, profile.deviceId);
+    if (!page) return;
+    const items = page.items.filter((row: XopcSessionItem): boolean => row.key !== id);
+    if (items.length === page.items.length) return;
+    recentLoad = undefined;
+    void chatSessionCache.write(profile.gatewayId, profile.deviceId,
+      { items, total: Math.max(0, page.total - 1), hasMore: page.hasMore }).catch((): void => {});
+  }
+
   async rename(id: string, name: string): Promise<void> {
     const body: XopcRename = { name };
     await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/rename', 'POST', JSON.stringify(body));
@@ -422,6 +469,8 @@ export class XopcChatRepository {
     gatewaySession.assertConnection(connection);
     try {
       await gatewaySession.request(action === 'delete' ? path : path + '/' + action, action === 'delete' ? 'DELETE' : 'POST', '{}');
+      gatewaySession.assertConnection(connection);
+      if (action === 'delete' || action === 'archive' || action === 'reset') this.removeCachedRecent(id);
     } finally {
       if (gatewayId && (action === 'delete' || action === 'reset')) await chatHistoryCache.remove(gatewayId, id);
     }

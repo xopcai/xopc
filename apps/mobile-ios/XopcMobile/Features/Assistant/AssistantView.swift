@@ -4,6 +4,7 @@ import SwiftUI
 // swiftlint:disable file_length
 // swiftlint:disable:next type_body_length
 struct AssistantView<Dock: View>: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let isActive: Bool
     let realtimeVoiceCall: RealtimeVoiceCall
@@ -63,8 +64,9 @@ struct AssistantView<Dock: View>: View {
     @State private var readAloud = ChatReadAloud()
     @State private var assistantAudio = AssistantAudioAutoplay()
     @State private var generatedMedia = GeneratedMediaState()
-    @State private var playingGeneratedVideo: String?
+    @State private var presentedGeneratedVideo: GeneratedMediaCard?
     private let music = GeneratedMusicPlayback.shared
+    @State private var visibleMusicCardIDs: Set<String> = []
     @State private var startingVoice = false
     @State private var voiceStartError: String?
     @State private var voiceMaterializationIDs: [String: String] = [:]
@@ -118,7 +120,7 @@ struct AssistantView<Dock: View>: View {
                     readAloudBar
                 }
                 if isActive, !showingPhone, showsFloatingHeader,
-                   music.track?.conversationID != conversation?.id || !generatedMedia.cards.contains(where: { $0.id == music.track?.id })
+                   music.track?.conversationID != conversation?.id || !mediaCards.contains(where: { $0.id == music.track?.id })
                 {
                     GeneratedMusicDock(playback: music)
                 }
@@ -128,11 +130,11 @@ struct AssistantView<Dock: View>: View {
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomDockHeight = $0 }
         }
-        .background(ChatAppearance.canvas(colorScheme).ignoresSafeArea())
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { messageViewportHeight = $0 }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { chatTopInset = $0 }
         .overlay(alignment: .top) {
-            ChatAppearance.canvas(colorScheme)
+            mobileTheme.canvas
                 .frame(height: chatTopInset)
                 .offset(y: -chatTopInset)
                 .allowsHitTesting(false)
@@ -140,12 +142,16 @@ struct AssistantView<Dock: View>: View {
         }
         .overlay(alignment: .top) {
             if showsFloatingHeader {
-                floatingHeader
-                    .padding(.horizontal, 12)
+                VStack(spacing: 4) {
+                    floatingHeader.padding(.horizontal, 12)
+                    if pinsPlayingMusic {
+                        GeneratedMusicDock(playback: music, sticky: true)
+                    }
+                }
                     .padding(.top, 8)
                     .padding(.bottom, 6)
                     .background {
-                        let canvas = ChatAppearance.canvas(colorScheme)
+                        let canvas = mobileTheme.canvas
                         LinearGradient(stops: [.init(color: canvas.opacity(0.94), location: 0),
                                                .init(color: canvas.opacity(0.92), location: 0.82),
                                                .init(color: .clear, location: 1)],
@@ -155,6 +161,12 @@ struct AssistantView<Dock: View>: View {
                     }
             }
         }
+    }
+
+    private var pinsPlayingMusic: Bool {
+        guard isActive, !showingPhone, music.phase == .playing, let track = music.track,
+              track.conversationID == conversation?.id, !visibleMusicCardIDs.contains(track.id) else { return false }
+        return mediaCards.contains { $0.kind == .music && $0.id == track.id }
     }
 
     private var chatLifecycle: some View {
@@ -196,7 +208,7 @@ struct AssistantView<Dock: View>: View {
             .onChange(of: isActive) {
                 if !isActive {
                     state.pauseConversation()
-                    playingGeneratedVideo = nil
+                    presentedGeneratedVideo = nil
                 }
             }
             .onChange(of: conversation?.id, initial: true) {
@@ -206,7 +218,7 @@ struct AssistantView<Dock: View>: View {
                 readAloud.stop()
                 assistantAudio.stop()
                 executionPresentation = nil
-                playingGeneratedVideo = nil
+                presentedGeneratedVideo = nil
                 isAtBottom = true
                 showJumpBottom = false
                 followingBottom = true
@@ -276,26 +288,37 @@ struct AssistantView<Dock: View>: View {
             }
     }
 
+    private var generatedMediaScope: GeneratedMediaState.Scope? {
+        guard let conversation, !conversation.isDraft, let transcriptID = state.historyTranscriptID(for: conversation) else { return nil }
+        return .init(id: conversation.id, transcriptID: transcriptID, account: ComposerDraftStore.accountScope(configuration))
+    }
+
+    private var mediaCards: [GeneratedMediaCard] { generatedMedia.cards(in: generatedMediaScope) }
+
     private var generatedMediaLifecycle: some View {
+        let scope = generatedMediaScope
         let key = GeneratedMediaObservationKey(configuration: configuration, conversationID: conversation?.id,
-                                               transcriptID: conversation?.transcriptId, busy: state.isRunActive,
+                                               transcriptID: scope?.transcriptID, busy: state.isRunActive,
                                                visible: isActive && scenePhase == .active && !showingPhone)
         return chatLifecycle
             .task(id: key) {
-                await generatedMedia.observe(conversation?.isDraft == false ? key.conversationID : nil,
-                                             transcriptID: key.transcriptID, client: GatewayClient(configuration: key.configuration),
+                await generatedMedia.observe(scope, client: GatewayClient(configuration: key.configuration),
                                              visible: key.visible, busy: key.busy)
             }
             .onChange(of: scenePhase) {
                 if scenePhase != .active {
-                    playingGeneratedVideo = nil
+                    presentedGeneratedVideo = nil
                 }
             }
-            .onChange(of: conversation?.transcriptId) { playingGeneratedVideo = nil }
-            .onChange(of: configuration.baseURL) { playingGeneratedVideo = nil }
+            .onChange(of: scope) { presentedGeneratedVideo = nil }
+            .sheet(item: $presentedGeneratedVideo) { card in
+                if let id = scope?.id {
+                    GeneratedVideoDrawer(card: card, conversationID: id, configuration: configuration)
+                }
+            }
             .onChange(of: showingPhone) {
                 if showingPhone {
-                    playingGeneratedVideo = nil
+                    presentedGeneratedVideo = nil
                 }
             }
     }
@@ -430,10 +453,10 @@ struct AssistantView<Dock: View>: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if state.isLoadingHistory {
+        } else if state.isLoadingHistory, mediaCards.isEmpty {
             ProgressView("正在读取消息…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if state.messages.isEmpty, generatedMedia.cards.isEmpty, !showsStagedProgress {
+        } else if state.messages.isEmpty, mediaCards.isEmpty, !showsStagedProgress {
             GeometryReader { viewport in
                 ScrollView {
                     LazyVStack(spacing: 16) {
@@ -489,7 +512,7 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var messageTimeline: some View {
-        let cards = generatedMedia.cardsByReply(state.messages)
+        let cards = generatedMedia.cardsByReply(state.messages, in: generatedMediaScope)
         return GeometryReader { viewport in
             let maximumMessageWidth = max(0, min(viewport.size.width, 720) - 24) * ChatAppearance.messageWidthRatio
             ScrollViewReader { scroller in
@@ -532,9 +555,9 @@ struct AssistantView<Dock: View>: View {
                                     scheduleBottomScroll(scroller)
                                 }
                             }
-                            generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth)
+                            generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth, viewportHeight: viewport.size.height)
                         }
-                        generatedMediaRows(cards[""] ?? [], maximumWidth: maximumMessageWidth)
+                        generatedMediaRows(cards[""] ?? [], maximumWidth: maximumMessageWidth, viewportHeight: viewport.size.height)
                         clarificationCard
                         if showsStagedProgress {
                             AssistantStagesView(progress: state.runProgress,
@@ -668,43 +691,64 @@ struct AssistantView<Dock: View>: View {
     }
 
     @ViewBuilder
-    private func generatedMediaRows(_ cards: [GeneratedMediaCard], maximumWidth: CGFloat) -> some View {
+    private func generatedMediaRows(_ cards: [GeneratedMediaCard], maximumWidth: CGFloat, viewportHeight: CGFloat) -> some View {
         if let id = conversation?.id, conversation?.isDraft == false, !cards.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .trailing, spacing: 12) {
                 ForEach(cards) { card in
                     GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
                                       submitting: generatedMedia.submitting, error: card.isDraft ? generatedMedia.error : nil,
-                                      conversationID: id, configuration: configuration,
-                                      isPlayingInline: card.kind == .music
-                                          ? music.track?.id == card.id && music.track?.conversationID == id && music.phase == .playing
-                                          : playingGeneratedVideo == card.id,
-                                      onPlay: {
-                                          readAloud.stop()
-                                          assistantAudio.stop()
-                                          bottomScrollTask?.cancel()
-                                          bottomScrollTask = nil
-                                          followingBottom = false
-                                          if card.kind == .music {
-                                              playingGeneratedVideo = nil
-                                              let track = GeneratedMusicTrack(configurationScope: ComposerDraftStore.accountScope(configuration),
-                                                                              conversationID: id, id: card.id, title: card.title, source: conversationNavigationTitle,
-                                                                              lyrics: card.item.lyrics, duration: card.item.durationMs.map { Double($0) / 1000 },
-                                                                              sourceAgentID: conversation?.agentId)
-                                              music.play(track) {
-                                                  try await GatewayClient(configuration: configuration).downloadGeneratedMedia(card, conversationID: id)
-                                              }
+                                      isMusicPlaying: card.kind == .music && music.track?.id == card.id
+                                          && music.track?.conversationID == id && music.phase == .playing,
+                                      onPlay: { playGeneratedMedia(card, conversationID: id) },
+                                      onOpen: {
+                                          if card.kind == .video {
+                                              playGeneratedMedia(card, conversationID: id)
                                           } else {
-                                              music.yieldAudioSession()
-                                              playingGeneratedVideo = playingGeneratedVideo == card.id ? nil : card.id
+                                              if music.track?.id != card.id || music.track?.conversationID != id {
+                                                  playGeneratedMedia(card, conversationID: id)
+                                              }
+                                              music.expanded = true
                                           }
                                       }, onConfirm: {
                                           Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
                                       })
+                                      .onGeometryChange(for: Bool.self) { proxy in
+                                          let frame = proxy.frame(in: .named("chat-scroll"))
+                                          let header = chatTopInset + (isPersonalConversation ? 114 : 64)
+                                          return frame.maxY > header && frame.minY < viewportHeight
+                                      } action: { visible in
+                                          guard card.kind == .music else { return }
+                                          if visible { visibleMusicCardIDs.insert(card.id) }
+                                          else { visibleMusicCardIDs.remove(card.id) }
+                                      }
+                                      .onDisappear { visibleMusicCardIDs.remove(card.id) }
                                       .id("generated-media-\(card.id)")
                 }
             }
-            .frame(maxWidth: maximumWidth, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: maximumWidth, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    private func playGeneratedMedia(_ card: GeneratedMediaCard, conversationID: String) {
+        readAloud.stop()
+        assistantAudio.stop()
+        bottomScrollTask?.cancel()
+        bottomScrollTask = nil
+        followingBottom = false
+        if card.kind == .music {
+            presentedGeneratedVideo = nil
+            let track = GeneratedMusicTrack(configurationScope: ComposerDraftStore.accountScope(configuration),
+                                            conversationID: conversationID, id: card.id, title: card.title,
+                                            source: conversationNavigationTitle, lyrics: card.item.lyrics,
+                                            duration: card.item.durationMs.map { Double($0) / 1000 },
+                                            sourceAgentID: conversation?.agentId)
+            music.play(track) {
+                try await GatewayClient(configuration: configuration).downloadGeneratedMedia(card, conversationID: conversationID)
+            }
+        } else {
+            music.yieldAudioSession()
+            presentedGeneratedVideo = card
         }
     }
 
@@ -796,7 +840,7 @@ struct AssistantView<Dock: View>: View {
     private var readAloudBar: some View {
         HStack(spacing: 12) {
             Image(systemName: "speaker.wave.2.fill")
-                .foregroundStyle(.blue)
+                .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
                 Text(readAloud.state == .failed
                     ? LocalizedStringResource("朗读失败")
@@ -887,7 +931,7 @@ struct AssistantView<Dock: View>: View {
                 music.yieldAudioSession()
                 readAloud.stop()
                 assistantAudio.stop()
-                playingGeneratedVideo = nil
+                presentedGeneratedVideo = nil
             },
             onVoiceAttachment: { send(delivery: .next, voice: $0) }
         )
@@ -1023,7 +1067,7 @@ struct AssistantView<Dock: View>: View {
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                             .padding(.horizontal, 12).frame(minHeight: 44)
-                            .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 15))
+                            .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(15)))
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("chat-header-attention")
@@ -1050,7 +1094,7 @@ struct AssistantView<Dock: View>: View {
     private func headerButton(_ title: LocalizedStringKey, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.title3).frame(width: 44, height: 44)
-                .background(ChatAppearance.card(colorScheme), in: Circle())
+                .background(mobileTheme.card, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -1386,6 +1430,7 @@ struct PersonalAgentProfileView: View {
 }
 
 private struct ErrorBanner: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let message: String
 
     @Environment(\.locale) private var locale
@@ -1396,7 +1441,7 @@ private struct ErrorBanner: View {
             .foregroundStyle(.red)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.red.opacity(0.08), in: .rect(cornerRadius: 12))
+            .background(Color.red.opacity(0.08), in: .rect(cornerRadius: mobileTheme.corner(12)))
             .accessibilityLabel(AppLocalization.resolve("错误：\(message)", locale: locale))
     }
 }
@@ -1490,6 +1535,7 @@ private enum PendingConversationStart {
 }
 
 private struct ChatMessageSearchView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let messages: [TimelineMessage]
     let configuration: GatewayConfiguration
     let conversationID: String?
@@ -1503,10 +1549,13 @@ private struct ChatMessageSearchView: View {
     @State private var selectedMessage: TimelineMessage?
     @FocusState private var focused: Bool
 
-    private var categories: [(String, String)] {
-        let chinese = locale.language.languageCode?.identifier == "zh"
-        return [("messages", chinese ? "消息" : "Messages"), ("files", chinese ? "文件" : "Files"),
-                ("links", chinese ? "链接" : "Links"), ("images", chinese ? "图片" : "Images")]
+    private var categories: [SegmentOption<String>] {
+        [
+            SegmentOption(id: "messages", title: "chat_search_category_messages", accessibilityID: "chat-search-category-messages"),
+            SegmentOption(id: "files", title: "chat_search_category_files", accessibilityID: "chat-search-category-files"),
+            SegmentOption(id: "links", title: "chat_search_category_links", accessibilityID: "chat-search-category-links"),
+            SegmentOption(id: "images", title: "chat_search_category_images", accessibilityID: "chat-search-category-images")
+        ]
     }
 
     private func content(_ message: TimelineMessage) -> String {
@@ -1539,7 +1588,7 @@ private struct ChatMessageSearchView: View {
                         selectedMessage = message
                     } label: {
                         Text(content(message)).lineLimit(4).frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(16).background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+                            .padding(16).background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
                     }.buttonStyle(.plain).accessibilityIdentifier("chat-search-result-\(message.id)")
                 }
                 if !query.isEmpty, results.isEmpty {
@@ -1548,18 +1597,12 @@ private struct ChatMessageSearchView: View {
                 }
             }.padding(20)
         }
-        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .background(mobileTheme.canvas.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
-                    ForEach(categories, id: \.0) { item in
-                        Button { category = item.0; focused = true } label: {
-                            Text(item.1).foregroundStyle(category == item.0 ? Color.accentColor : Color.primary)
-                                .padding(.horizontal, 14).frame(minHeight: 44)
-                                .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
-                        }.buttonStyle(.plain).accessibilityIdentifier("chat-search-category-\(item.0)")
-                            .accessibilityAddTraits(category == item.0 ? .isSelected : [])
-                    }
+                SegmentedTabs(options: categories, selected: category, label: "筛选") {
+                    category = $0
+                    focused = true
                 }
                 HStack(spacing: 10) {
                     HStack(spacing: 10) {
@@ -1568,15 +1611,15 @@ private struct ChatMessageSearchView: View {
                             .onSubmit { focused = false }
                             .accessibilityIdentifier("chat-message-search-input")
                     }.padding(.horizontal, 16).frame(minHeight: 48)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .capsule)
+                        .background(mobileTheme.panel, in: .capsule)
                     Button { focused = false; dismiss() } label: {
                         Image(systemName: "xmark").frame(width: 48, height: 48)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .circle)
+                            .background(mobileTheme.panel, in: .circle)
                     }.buttonStyle(.plain).accessibilityLabel("关闭")
                         .accessibilityIdentifier("chat-search-close")
                 }
             }.padding(.horizontal, 16).padding(.vertical, 8)
-                .background(Color(uiColor: .systemGroupedBackground))
+                .background(mobileTheme.canvas)
         }
         .task { focused = true }
         .sheet(item: $selectedMessage) { message in

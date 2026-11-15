@@ -122,6 +122,7 @@ export interface XopcUseToolDeps {
   canConfigureFromConversation?: () => boolean;
   canShowMcpSetupCard?: () => boolean;
   canRequestWeixinMcpSetup?: () => boolean;
+  canOpenMobileMcpForm?: () => boolean;
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('../mcp/conversation-setup.js').McpConversationSetup | undefined;
@@ -1370,7 +1371,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
             return !deps.authorizeCapability || await deps.authorizeCapability(tool, params);
           },
           canConfigure: deps.canConfigureFromConversation?.() === true, canRequestWeixinSetup: deps.canRequestWeixinMcpSetup?.() === true,
-          showSetupCard: deps.canShowMcpSetupCard?.() === true }, dryRun) }); }
+          showSetupCard: deps.canShowMcpSetupCard?.() === true, canOpenMobileForm: deps.canOpenMobileMcpForm?.() === true }, dryRun) }); }
         catch (error) { return errorText(error instanceof Error ? error.message : String(error), details); }
       }
       if (mode === 'automation' && command === 'prepare_source') {

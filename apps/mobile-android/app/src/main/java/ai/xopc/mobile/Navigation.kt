@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
@@ -33,6 +34,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
         entry<Main> {
           val gateway: GatewayViewModel = viewModel()
           val connection by gateway.state.collectAsStateWithLifecycle()
+          val catalogLocale = LocalConfiguration.current.locales[0].toLanguageTag()
           LaunchedEffect(gateway) { gateway.restore() }
           GatewayForegroundRecovery(onForeground = gateway::onForeground, onBackground = gateway::onBackground)
           MainScreen(phoneRepository = gateway.phoneRepository,connection = connection, onPair = gateway::pair,
@@ -44,6 +46,8 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             language = language, onLanguageChange = onLanguageChange,
             onConversationSearchChange = gateway::updateConversationSearch,
             onRefreshConversations = { gateway.loadConversations() },
+            onLoadCapabilities = { gateway.loadCapabilities(it, catalogLocale) }, onCreateAgentConversation = gateway::createAgentConversation,
+            onCapabilityConversation = gateway::startCapabilityConversation,
             onLoadMoreConversations = gateway::loadMoreConversations,
             onLoadOlderHistory = gateway::loadOlderHistory,
             onSelectConversation = gateway::selectConversation, onCreateConversation = gateway::createConversation,
@@ -85,6 +89,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onRefreshClarification = gateway::refreshClarification,
             onRespondToClarification = gateway::respondToClarification,
             onRefreshConnectionWait = gateway::refreshConnectionWait,
+            onConnectionWaitAction = gateway::actOnConnectionWait,
             onRefreshProgress = gateway::refreshProgress,
             onRefreshProgressHome = gateway::refreshProgressHome,
             onProgressHomeAction = gateway::actOnProgressHome,

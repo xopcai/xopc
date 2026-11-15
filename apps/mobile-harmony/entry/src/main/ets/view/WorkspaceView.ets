@@ -1,3 +1,4 @@
+import { XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import {
   XopcSection, XopcWorkspaceItem, XopcAutomationRun, XopcMobileTaskDetail,
@@ -10,7 +11,7 @@ import { taskCriterionState, taskPhaseAction, taskReviewAction, taskSignoffResul
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcBrandLoading, XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField } from './MobileComponents';
 import { XopcMobileRoute } from '../model/home';
 import { userErrorMessage } from '../common/userError';
 import { XopcChatRepository } from '../repository/chatRepository';
@@ -31,6 +32,7 @@ export struct XopcWorkspaceView {
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local model: XopcWorkspaceViewModel = new XopcWorkspaceViewModel();
   @Local search: string = '';
+  @Local searchOpen: boolean = false;
   @Local filter: string = 'all';
   @Local agentId: string = '';
   @Local agents: XopcChatAgent[] = [];
@@ -97,7 +99,7 @@ export struct XopcWorkspaceView {
       Text($r('app.string.chat_agent')).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         .width('100%').padding({ top: 12 })
       TextInput({ text: this.agentQuery, placeholder: $r('app.string.search') }).height(48)
-        .backgroundColor(this.colors.input).borderRadius(14).padding({ left: 14, right: 14 })
+        .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).padding({ left: 14, right: 14 })
         .onChange((text: string): void => { this.agentQuery = text; })
       List({ space: 8 }) {
         ForEach(this.matchingAgents(), (agent: XopcChatAgent) => {
@@ -114,7 +116,7 @@ export struct XopcWorkspaceView {
                   SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([this.colors.accent])
                 }
               }.width('100%').padding(14)
-            }.width('100%').padding(0).borderRadius(14).backgroundColor(this.colors.input)
+            }.width('100%').padding(0).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
               .onClick((): void => { this.agentId = agent.id; this.sheetOpen = false; this.agentQuery = ''; })
           }
         }, (agent: XopcChatAgent): string => agent.id)
@@ -129,7 +131,19 @@ export struct XopcWorkspaceView {
       .backgroundColor(this.colors.panel).alignItems(HorizontalAlign.Start)
   }
 
+  private toggleSearch(): void {
+    this.searchOpen = !this.searchOpen;
+    if (!this.searchOpen) {
+      this.getUIContext().getFocusController().clearFocus();
+      this.search = '';
+    }
+  }
+
   private async goBack(): Promise<void> {
+    if (!this.model.selected && !this.model.openingId && this.searchOpen) {
+      this.toggleSearch();
+      return;
+    }
     if (this.model.openingId) {
       this.model.cancelOpening();
       if (this.initialId) this.onExit();
@@ -225,6 +239,7 @@ export struct XopcWorkspaceView {
   }
 
   private matchesFilter(item: XopcWorkspaceItem, filter: string = this.filter): boolean {
+    if (this.section !== 'tasks' && !item.title.toLowerCase().includes(this.search.trim().toLowerCase())) return false;
     if (filter === 'all') return true;
     if (this.section === 'tasks') return filter === 'primary' ? item.status !== 'closed' : item.status === 'closed';
     if (this.section === 'projects') return filter === 'primary' ? item.status !== 'archived' : item.status === 'archived';
@@ -241,6 +256,18 @@ export struct XopcWorkspaceView {
 
   private filterCount(filter: string): number {
     return this.model.items.filter((item: XopcWorkspaceItem): boolean => this.matchesFilter(item, filter)).length;
+  }
+
+  private filterOptions(): XopcSegmentOption[] {
+    const options: XopcSegmentOption[] = [
+      { key: 'all', label: $r('app.string.filter_all'), count: this.filterCount('all') },
+      { key: 'primary', label: this.firstFilterLabel(), count: this.filterCount('primary') },
+      { key: 'secondary', label: this.secondFilterLabel(), count: this.filterCount('secondary') }
+    ];
+    if (this.section === 'automations') {
+      options.push({ key: 'attention', label: $r('app.string.progress_action_required'), count: this.filterCount('attention') });
+    }
+    return options;
   }
 
   private formatTime(timestamp?: number): string {
@@ -380,7 +407,7 @@ export struct XopcWorkspaceView {
       }.width('100%')
       if (this.primaryTaskAction(item)) {
         Button(this.label(this.primaryTaskAction(item))).width('100%').height(48)
-          .backgroundColor(this.colors.accent).fontColor(Color.White).enabled(!this.model.busy)
+          .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).enabled(!this.model.busy)
           .onClick((): void => {
             if (this.primaryTaskAction(item) === 'start') this.openSheet('status');
             else this.action(this.primaryTaskAction(item));
@@ -417,7 +444,7 @@ export struct XopcWorkspaceView {
                   SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([this.colors.accent])
                 }
               }.width('100%').padding({ left: 16, right: 16 })
-            }.width('100%').height(48).padding(0).borderRadius(12).backgroundColor(this.colors.input)
+            }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
               .enabled(!this.model.busy && !!taskPhaseAction(item, phase))
               .onClick((): void => { this.applySheetAction(taskPhaseAction(item, phase)); })
           }
@@ -445,7 +472,7 @@ export struct XopcWorkspaceView {
                 .value(this.selectedAgentName()).width('100%').height(48).fontColor(this.colors.foreground)
                 .backgroundColor(this.colors.input).enabled(!this.model.busy && !this.agentsLoading)
                 .onSelect((index: number): void => { this.agentId = this.agents[index]?.id || ''; })
-              Button(this.label('start')).width('100%').height(48).backgroundColor(this.colors.accent).fontColor(Color.White)
+              Button(this.label('start')).width('100%').height(48).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
                 .enabled(!this.model.busy && !this.agentsLoading && this.agents.some((agent: XopcChatAgent): boolean => agent.id === this.agentId))
                 .onClick((): void => { this.applySheetAction('start'); })
             }.width('100%').alignItems(HorizontalAlign.Start)
@@ -512,20 +539,6 @@ export struct XopcWorkspaceView {
   }
 
   @Builder
-  filterChip(filter: string, label: ResourceStr) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 6 }) {
-        Text(label).fontSize(13).fontWeight(FontWeight.Medium)
-          .fontColor(this.filter === filter ? this.colors.accent : this.colors.secondary)
-        Text(this.filterCount(filter).toString()).fontSize(11)
-          .fontColor(this.filter === filter ? this.colors.accent : this.colors.tertiary)
-      }.padding({ left: 14, right: 14 })
-    }.height(36).padding(0).borderRadius(18)
-      .backgroundColor(this.filter === filter ? this.colors.accentSoft : this.colors.panel)
-      .onClick((): void => { this.filter = filter; })
-  }
-
-  @Builder
   workspaceCard(item: XopcWorkspaceItem) {
     Button({ type: ButtonType.Normal }) {
       Column({ space: 10 }) {
@@ -539,7 +552,8 @@ export struct XopcWorkspaceView {
             Text(item.title || $r('app.string.untitled')).fontSize(16).lineHeight(22).fontWeight(FontWeight.Medium)
               .fontColor(this.colors.foreground).width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
             Text(this.statusLabel(item.status)).fontSize(12).fontWeight(FontWeight.Medium)
-              .fontColor(item.status === 'failed' ? this.colors.danger : item.enabled || item.status === 'active'
+              .fontColor(item.status === 'failed' ? this.colors.danger : item.status === 'review' ? this.colors.attentionForeground
+                : item.enabled || item.status === 'active'
                 || item.status === 'in_progress' || item.status === 'ready' ? this.colors.accent : this.colors.secondary)
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
@@ -558,7 +572,7 @@ export struct XopcWorkspaceView {
             }
             if (this.section === 'tasks' && item.priority) {
               Text(item.priority).fontSize(11).fontColor(this.colors.secondary).backgroundColor(this.colors.input)
-                .borderRadius(9).padding({ left: 8, right: 8, top: 2, bottom: 2 })
+                .borderRadius(this.colors.corner(9)).padding({ left: 8, right: 8, top: 2, bottom: 2 })
             }
             if (this.section === 'projects' && item.outcome) {
               SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(13).fontColor([this.colors.tertiary])
@@ -577,7 +591,7 @@ export struct XopcWorkspaceView {
           }.width('100%')
         }
       }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-    }.width('100%').padding(0).borderRadius(18).backgroundColor(this.colors.panel)
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(18))
       .onClick((): void => {
         if (this.section === 'projects') this.onNavigate({ page: 'project-detail', itemId: item.id });
         else { this.model.open(item.id); }
@@ -587,23 +601,23 @@ export struct XopcWorkspaceView {
   @Builder
   list() {
     Column({ space: 12 }) {
-      Row({ space: 8 }) {
-        TextInput({ text: this.search, placeholder: $r('app.string.search') }).layoutWeight(1).height(44)
-          .backgroundColor(this.colors.input).borderRadius(22).padding({ left: 16, right: 16 })
-          .onChange((text: string): void => { this.search = text; }).onSubmit((): void => { this.model.list(this.search); })
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.foreground])
-        }.width(44).height(44).padding(0).backgroundColor(this.colors.panel).enabled(!this.model.busy)
-          .accessibilityText($r('app.string.refresh')).onClick((): void => { this.model.list(this.search); })
-      }.width('100%')
-      Scroll() {
-      Row({ space: 6 }) {
-        this.filterChip('all', $r('app.string.filter_all'))
-        this.filterChip('primary', this.firstFilterLabel())
-        this.filterChip('secondary', this.secondFilterLabel())
-        if (this.section === 'automations') this.filterChip('attention', $r('app.string.progress_action_required'))
+      if (this.section === 'tasks') {
+        Row({ space: 8 }) {
+          TextInput({ text: this.search, placeholder: $r('app.string.search') }).layoutWeight(1).height(44)
+            .backgroundColor(this.colors.input).borderRadius(this.colors.corner(22)).padding({ left: 16, right: 16 })
+            .onChange((text: string): void => { this.search = text; }).onSubmit((): void => { this.model.list(this.search); })
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.foreground])
+          }.width(44).height(44).padding(0).backgroundColor(this.colors.panel).enabled(!this.model.busy)
+            .accessibilityText($r('app.string.refresh')).onClick((): void => { this.model.list(this.search); })
+        }.width('100%')
+      } else if (this.searchOpen) {
+        XopcPageSearchField({ searchId: this.section + '-search', text: this.search,
+          onChange: (text: string): void => { this.search = text; },
+          onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); } })
       }
-      }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+      XopcSegmentedTabs({ options: this.filterOptions(), selectedKey: this.filter,
+        onSelect: (key: string): void => { this.filter = key; } })
     }.width('100%').padding({ left: 20, right: 20, bottom: 8 }).alignItems(HorizontalAlign.Start)
     List({ space: 12 }) {
       if (this.model.busy && !this.model.items.length) {
@@ -615,7 +629,7 @@ export struct XopcWorkspaceView {
       if (this.model.hasMore) {
         ListItem() {
           Button($r('app.string.load_more')).width('100%').height(44).backgroundColor(this.colors.input)
-            .fontColor(this.colors.foreground).onClick((): void => { this.model.list(this.search, true); })
+            .fontColor(this.colors.foreground).onClick((): void => { this.model.list(this.model.loadedSearch, true); })
         }
       }
       if (!this.model.busy && this.section === 'automations' && !this.model.error && !this.model.items.length
@@ -636,7 +650,8 @@ export struct XopcWorkspaceView {
         ListItem() {
           Column({ space: 10 }) {
             SymbolGlyph($r('sys.symbol.list_bullet')).fontSize(30).fontColor([this.colors.tertiary])
-            Text(this.model.items.length ? $r('app.string.workspace_no_matches') : $r('app.string.empty_list'))
+            Text(this.model.items.length || (this.section !== 'tasks' && this.search.trim())
+              ? $r('app.string.workspace_no_matches') : $r('app.string.empty_list'))
               .fontSize(14).fontColor(this.colors.secondary).textAlign(TextAlign.Center)
           }.width('100%').padding({ top: 32, bottom: 32 })
         }
@@ -695,7 +710,8 @@ export struct XopcWorkspaceView {
             Text(item.body).fontSize(14).lineHeight(20).fontColor(this.colors.secondary).width('100%')
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
-        }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(17).backgroundColor(this.colors.panel)
+        }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
+          .backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(17))
       }
       ListItem() {
         Row({ space: 12 }) {
@@ -747,7 +763,7 @@ export struct XopcWorkspaceView {
               Text(this.taskStatusLabel(item)).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
               SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(13).fontColor([this.colors.accent])
             }.padding({ left: 12, right: 12 })
-          }.height(44).padding(0).borderRadius(12).backgroundColor(this.colors.accentSoft)
+          }.height(44).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.accentSoft)
             .accessibilityText($r('app.string.task_adjust_status')).enabled(!this.model.busy)
             .onClick((): void => { this.openSheet('status'); })
           Text(item.title || $r('app.string.untitled')).fontSize(21).lineHeight(29).fontWeight(FontWeight.Bold)
@@ -766,7 +782,7 @@ export struct XopcWorkspaceView {
             }
           }
         }.width('100%').padding(18).alignItems(HorizontalAlign.Start)
-          .borderRadius(20).backgroundColor(this.colors.panel)
+          .borderRadius(this.colors.corner(20)).backgroundColor(this.colors.panel)
       }
       if ((info.phaseChanges?.length ?? 0) > 0) {
         ForEach(info.phaseChanges ?? [], (change: XopcTaskPhaseChange) => {
@@ -782,7 +798,7 @@ export struct XopcWorkspaceView {
               Text(change.actor.kind + ' · ' + (change.actor.id ?? '') + ' · ' + change.source + ' · ' + this.formatTime(change.createdAt))
                 .fontSize(12).fontColor(this.colors.secondary)
               if (change.toResolution) { Text(change.toResolution).fontSize(12).fontColor(this.colors.secondary) }
-            }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(16).backgroundColor(this.colors.panel)
+            }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
           }
         }, (change: XopcTaskPhaseChange): string => change.id)
       }
@@ -790,12 +806,12 @@ export struct XopcWorkspaceView {
         ListItem() {
           Column({ space: 9 }) {
             Text($r('app.string.task_needs_attention')).fontSize(15).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.foreground)
+              .fontColor(this.colors.attentionForeground)
             ForEach(info.attention, (attention: XopcMobileTaskAttention) => {
               Text(attention.summary).fontSize(14).lineHeight(21).fontColor(this.colors.foreground).width('100%')
             }, (attention: XopcMobileTaskAttention, index: number): string => attention.kind + ':' + index.toString())
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-            .borderRadius(16).backgroundColor(this.colors.accentSoft)
+            .backgroundColor(this.colors.attentionFill).border(this.colors.attentionStroke).borderRadius(this.colors.corner(16))
         }
       }
       ListItem() {
@@ -806,7 +822,7 @@ export struct XopcWorkspaceView {
             if ((info.acceptanceChecks?.length ?? 0) > 0) {
               Text(this.passedCount(info).toString() + '/' + (info.acceptanceChecks?.length ?? 0).toString())
                 .fontSize(12).fontColor(this.colors.secondary).padding({ left: 9, right: 9, top: 4, bottom: 4 })
-                .borderRadius(10).backgroundColor(this.colors.input)
+                .borderRadius(this.colors.corner(10)).backgroundColor(this.colors.input)
             }
           }.width('100%')
           Text(info.contract?.objective || item.title).fontSize(15).lineHeight(23).fontColor(this.colors.foreground)
@@ -852,7 +868,7 @@ export struct XopcWorkspaceView {
             }, (output: string, index: number): string => index.toString() + ':' + output)
           }
         }.width('100%').padding(18).alignItems(HorizontalAlign.Start)
-          .borderRadius(18).backgroundColor(this.colors.panel)
+          .borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
       }
       if (this.latestTaskReceipt(info)) {
         ListItem() {
@@ -868,7 +884,7 @@ export struct XopcWorkspaceView {
               }, (work: string, index: number): string => index.toString() + ':' + work)
             }
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-            .borderRadius(16).backgroundColor(this.colors.panel)
+            .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
         }
       }
       if (info.context.some((edge: XopcMobileTaskContext): boolean => edge.role === 'deliverable' || edge.role === 'evidence')
@@ -893,7 +909,7 @@ export struct XopcWorkspaceView {
               }.width('100%')
             }, (evidence: XopcMobileTaskEvidence): string => evidence.title + ':' + (evidence.uri ?? ''))
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-            .borderRadius(16).backgroundColor(this.colors.panel)
+            .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
         }
       }
       if (info.sessions.length > 0 || info.runs.length > 0 || info.dependencies.length > 0 || info.dependents.length > 0) {
@@ -912,7 +928,7 @@ export struct XopcWorkspaceView {
                       .fontSize(14).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
                     SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary])
                   }.width('100%').padding({ left: 12, right: 12 })
-                }.width('100%').height(44).padding(0).borderRadius(12).backgroundColor(this.colors.input)
+                }.width('100%').height(44).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
                   .onClick((): void => {
                     if (session.conversationId === info.activeConversationId) {
                       this.onNavigate({ page: 'task-chat', itemId: item.id, title: item.title, projectId: item.projectId });
@@ -944,7 +960,7 @@ export struct XopcWorkspaceView {
               }
             }
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-            .borderRadius(16).backgroundColor(this.colors.panel)
+            .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
         }
       }
       if (item.body && item.body !== info.contract?.objective) {
@@ -954,7 +970,7 @@ export struct XopcWorkspaceView {
               .fontColor(this.colors.secondary)
             XopcMarkdownView({ content: item.body })
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-            .borderRadius(16).backgroundColor(this.colors.panel)
+            .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
         }
       }
       if (item.priority || item.updatedAt || info.operationalState) {
@@ -971,7 +987,7 @@ export struct XopcWorkspaceView {
             if (item.priority) { Text(this.priorityLabel(item.priority)).fontSize(13).fontColor(this.colors.foreground) }
             if (item.updatedAt) { Text(this.formatTime(item.updatedAt)).fontSize(13).fontColor(this.colors.secondary) }
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-            .borderRadius(16).backgroundColor(this.colors.panel)
+            .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
         }
       }
       ListItem() { Column().height(24) }
@@ -991,7 +1007,7 @@ export struct XopcWorkspaceView {
           Column({ space: 8 }) {
             Text($r('app.string.name')).fontSize(13).fontColor(this.colors.secondary).width('100%')
             TextInput({ text: this.model.title, placeholder: $r('app.string.name') }).height(48)
-              .backgroundColor(this.colors.input).borderRadius(14).padding({ left: 14, right: 14 })
+              .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).padding({ left: 14, right: 14 })
             .onChange((text: string): void => { this.model.title = text; })
           }.width('100%').alignItems(HorizontalAlign.Start)
         }
@@ -1000,7 +1016,7 @@ export struct XopcWorkspaceView {
             Text($r('app.string.workspace_description'))
               .fontSize(13).fontColor(this.colors.secondary).width('100%')
             TextArea({ text: this.model.body, placeholder: $r('app.string.description') }).height(220)
-              .backgroundColor(this.colors.input).borderRadius(14).padding(14)
+              .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).padding(14)
               .onChange((text: string): void => { this.model.body = text; })
           }.width('100%').alignItems(HorizontalAlign.Start)
         }
@@ -1009,14 +1025,14 @@ export struct XopcWorkspaceView {
             Column({ space: 8 }) {
               Text($r('app.string.schedule')).fontSize(14).fontColor(this.colors.secondary).width('100%')
               TextInput({ text: this.model.cron, placeholder: $r('app.string.cron_help') }).id('automation-edit-cron')
-                .height(50).backgroundColor(this.colors.input).borderRadius(14).onChange((text: string): void => { this.model.cron = text; })
+                .height(50).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).onChange((text: string): void => { this.model.cron = text; })
             }.width('100%')
           }
           ListItem() {
             Column({ space: 8 }) {
               Text($r('app.string.automation_timezone')).fontSize(14).fontColor(this.colors.secondary).width('100%')
               TextInput({ text: this.model.automationTimeZone, placeholder: $r('app.string.automation_gateway_timezone') })
-                .id('automation-edit-timezone').height(50).backgroundColor(this.colors.input).borderRadius(14)
+                .id('automation-edit-timezone').height(50).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
                 .onChange((text: string): void => { this.model.automationTimeZone = text; })
             }.width('100%')
           }
@@ -1065,7 +1081,7 @@ export struct XopcWorkspaceView {
         ListItem() {
           Button(this.section === 'automations' ? $r('app.string.automation_save_rule') : $r('app.string.save'))
             .id('workspace-save').width('100%').height(48).backgroundColor(this.colors.accent)
-            .fontColor(Color.White).enabled(!this.model.busy && !!this.model.title.trim())
+            .fontColor(this.colors.onAccent).enabled(!this.model.busy && !!this.model.title.trim())
             .onClick(async (): Promise<void> => {
               const id = await this.model.save();
               if (!id || this.model.error) return;
@@ -1080,7 +1096,7 @@ export struct XopcWorkspaceView {
               Text(this.statusLabel(item.status)).fontSize(12).fontWeight(FontWeight.Medium)
                 .fontColor(item.status === 'active' || item.status === 'in_progress' || item.status === 'ready'
                   ? this.colors.accent : this.colors.secondary)
-                .padding({ left: 10, right: 10, top: 5, bottom: 5 }).borderRadius(10).backgroundColor(this.colors.accentSoft)
+                .padding({ left: 10, right: 10, top: 5, bottom: 5 }).borderRadius(this.colors.corner(10)).backgroundColor(this.colors.accentSoft)
               Text(item.title || $r('app.string.untitled')).fontSize(20).lineHeight(28).fontWeight(FontWeight.Bold)
                 .fontColor(this.colors.foreground).width('100%')
             } else {
@@ -1101,7 +1117,7 @@ export struct XopcWorkspaceView {
                 Text(this.projectName(item.projectId)).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
               }.width('100%')
             }
-          }.width('100%').padding(18).alignItems(HorizontalAlign.Start).borderRadius(20).backgroundColor(this.colors.panel)
+          }.width('100%').padding(18).alignItems(HorizontalAlign.Start).borderRadius(this.colors.corner(20)).backgroundColor(this.colors.panel)
         }
         if (item.body || this.section !== 'tasks') {
           ListItem() { Text($r('app.string.workspace_description')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary) }
@@ -1110,7 +1126,7 @@ export struct XopcWorkspaceView {
               if (item.body) { XopcMarkdownView({ content: item.body }) }
               else { Text($r('app.string.workspace_no_description')).fontSize(14).fontColor(this.colors.tertiary).width('100%') }
             }
-              .width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(16).backgroundColor(this.colors.panel)
+              .width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
           }
         }
         if (item.projectId || item.priority || item.updatedAt || item.outcome) {
@@ -1138,7 +1154,7 @@ export struct XopcWorkspaceView {
               if (item.outcome) {
                 Text(item.outcome).fontSize(14).lineHeight(20).fontColor(this.colors.foreground).width('100%')
               }
-            }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(16).backgroundColor(this.colors.panel)
+            }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
           }
         }
         if (this.section === 'tasks' && item.id) {
@@ -1150,11 +1166,11 @@ export struct XopcWorkspaceView {
                   Text($r('app.string.task_open_conversation')).fontSize(14).fontWeight(FontWeight.Medium)
                     .fontColor(this.colors.accent)
                 }
-              }.layoutWeight(1).height(48).backgroundColor(this.colors.accentSoft).borderRadius(14)
+              }.layoutWeight(1).height(48).backgroundColor(this.colors.accentSoft).borderRadius(this.colors.corner(14))
                 .onClick((): void => { this.onNavigate({ page: 'task-chat', itemId: item.id, title: item.title, projectId: item.projectId }); })
               if (item.editable) {
                 Button($r('app.string.edit')).height(48).backgroundColor(this.colors.input)
-                  .fontColor(this.colors.foreground).borderRadius(14)
+                  .fontColor(this.colors.foreground).borderRadius(this.colors.corner(14))
                   .onClick((): void => { this.model.editing = true; })
               }
             }.width('100%')
@@ -1175,7 +1191,7 @@ export struct XopcWorkspaceView {
                     .fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
                   SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
                 }.width('100%').padding({ left: 16, right: 16 })
-              }.width('100%').height(48).padding(0).borderRadius(14).backgroundColor(this.colors.input)
+              }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
                 .enabled(!this.agentsLoading && this.agents.length > 0)
                 .onClick((): void => { this.agentQuery = ''; this.openSheet('agent'); })
               if (this.agentsError) {
@@ -1190,7 +1206,7 @@ export struct XopcWorkspaceView {
         }
         ForEach(this.supportedActions(item), (action: string) => {
           ListItem() {
-            Button(this.label(action)).width('100%').height(action === 'close' ? 52 : 46).borderRadius(14)
+            Button(this.label(action)).width('100%').height(action === 'close' ? 52 : 46).borderRadius(this.colors.corner(14))
               .backgroundColor(action === 'start' || action === 'mark_ready' || action === 'request_review' || action === 'close'
                 ? this.colors.accent : action === 'delete' ? Color.Transparent : this.colors.input)
               .fontColor(action === 'start' || action === 'mark_ready' || action === 'request_review' || action === 'close'
@@ -1212,7 +1228,7 @@ export struct XopcWorkspaceView {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(20).fontColor([this.colors.foreground])
         }.width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.back')).enabled(!this.model.busy || !!this.model.openingId)
+          .accessibilityText($r('app.string.back')).enabled(!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen))
           .onClick((): void => { this.goBack(); })
         Text(this.model.editing && !this.model.selected?.id ? this.createLabel()
           : this.section === 'tasks' && this.model.selected
@@ -1221,6 +1237,14 @@ export struct XopcWorkspaceView {
             ? this.model.editing ? $r('app.string.edit_automation') : $r('app.string.automation_detail_title')
             : this.heading).layoutWeight(1).fontSize(22).lineHeight(30).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         if (!this.model.selected && !this.model.openingId) {
+          if (this.section !== 'tasks') {
+            XopcPageSearchButton({ searchId: this.section + '-open-search', open: this.searchOpen,
+              onToggle: (): void => { this.toggleSearch(); } })
+            Button({ type: ButtonType.Circle }) {
+              SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary])
+            }.width(44).height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.model.busy)
+              .accessibilityText($r('app.string.refresh')).onClick((): void => { this.model.list(''); })
+          }
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.accent])
           }.width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
@@ -1256,9 +1280,9 @@ export struct XopcWorkspaceView {
         onDisappear: (): void => { this.agentQuery = ''; this.projectQuery = ''; }
       })
     }.hideTitleBar(true).onShown((): void => {
-      if (this.section === 'automations' && !this.model.selected && !this.model.openingId) void this.model.list(this.search);
+      if (this.section === 'automations' && !this.model.selected && !this.model.openingId) void this.model.list('');
     }).onBackPressed((): boolean => {
-      if (!this.model.busy || !!this.model.openingId) this.goBack(); return true;
+      if (!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen)) this.goBack(); return true;
     })
   }
 }

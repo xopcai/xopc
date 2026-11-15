@@ -18,7 +18,7 @@ describe('chat message layout parity', () => {
     expect(userLayout).toContain(".justifyContent(FlexAlign.End)");
     expect(userLayout).toContain(".alignItems(HorizontalAlign.End)");
     expect(userLayout).toContain('.backgroundColor(this.colors.chat.bubble)');
-    expect(userLayout).toContain('.borderRadius(18)');
+    expect(userLayout).toContain('.borderRadius(this.colors.corner(18))');
     expect(chat).toContain("if (this.userVoiceOnly(row)) return '132vp'");
     expect(chat).toContain('if (this.userVoiceMessage(row)) return chatTextBubbleWidth(row.text, 180)');
     expect(chat).toContain('if (payloadCount > 1) return chatTextBubbleWidth(row.text, 264)');
@@ -36,7 +36,7 @@ describe('chat message layout parity', () => {
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id)");
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width('100%')");
     expect(assistantLayout).toContain('.constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)');
-    expect(chat).toContain(".width(CHAT_MESSAGE_MAX_WIDTH).alignItems(HorizontalAlign.Start).padding({ top: 6 })");
+    expect(chat).toContain(".width(CHAT_MESSAGE_MAX_WIDTH).alignItems(HorizontalAlign.End).padding({ top: 6 })");
     expect(assistantLayout).not.toContain('.backgroundColor(this.colors.chat.assistant)');
     expect(content).toContain(": this.colors.chat.canvas;");
     expect(chat).toContain('Repeat<XopcChatRow>(this.presentationRows)');

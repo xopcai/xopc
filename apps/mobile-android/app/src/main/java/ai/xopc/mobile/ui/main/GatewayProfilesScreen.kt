@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GatewayProfile
 import androidx.compose.foundation.background
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
@@ -74,7 +74,7 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
         val active = state.profile?.gatewayId == id
         val probe = state.gatewayProbes[id]
         Column(Modifier.fillMaxWidth().background(if (active) MaterialTheme.colorScheme.primaryContainer
-          else MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(18.dp))
+          else MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(18))
           .padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
           Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { expandedId = if (expandedId == id) "" else id }
             .testTag("gateway-select-$id"), verticalAlignment = Alignment.CenterVertically,

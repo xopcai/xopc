@@ -59,6 +59,16 @@ class Handler(BaseHTTPRequestHandler):
   length=int(self.headers.get('Content-Length','0')); body=self.rfile.read(length) if length else b''
   data=None; status=200
   if path=='/api/agents': data=envelope({'defaultId':'main','agents':[{'id':'main','name':'Main','isDefault':True},{'id':'other','name':'Research'},{'id':'coder','name':'Coder','description':'Software development, debugging, refactoring, and tests.'}]})
+  elif path=='/api/capabilities/mobile-catalog':
+   catalog = {
+    'plugins': [{'id':'meeting-plugin','name':'Meeting Plugin','description':'Plan meetings','group':'installed'},
+                {'id':'document-plugin','name':'Document Plugin','group':'available'}],
+    'skills': [{'id':'meeting-skill','name':'Meeting Skill','group':'installed'}],
+    'connections': [{'id':'drive-connection','name':'Drive Connection','group':'connected'}],
+    'agents': [{'id':'coder','name':'Coding Expert','group':'expert'}],
+    'channels': [{'id':'mail-channel','name':'Mail Channel','group':'configured'}],
+   }
+   data=envelope({'items':catalog[query.get('category',['plugins'])[0]]})
   elif path=='/api/personal-agent': data=envelope(record)
   elif path=='/api/personal-agent/activity':
    if query.get('view') == ['deliverables']:
@@ -92,7 +102,9 @@ class Handler(BaseHTTPRequestHandler):
    data={'items':items,'total':2,'hasMore':False,'childrenByConversationId':{parent:{'total':1,'activeCount':0,'items':[{'taskId':'task-child','title':'移动端子任务','phase':'closed','activeConversationId':child}]}}}
   elif path==f'/api/sessions/{schedule_chat}/history':
    data={'session':{'key':schedule_chat,'agentId':'main','messages':[]},'pagination':{'hasMore':False}}
-  elif path.endswith('/history'): data={'session':{'key':path.split('/')[3],'agentId':'main','messages':keyboard_messages if keyboard_fixture else messages},'pagination':{'hasMore':False}}
+  elif path.endswith('/history'):
+   key=path.split('/')[3]
+   data={'session':{'key':key,'transcriptId':f'transcript-{key}','agentId':'main','messages':keyboard_messages if keyboard_fixture else messages},'pagination':{'hasMore':False}}
   elif path.endswith('/context-summary'): data={'summary':{'conversationId':path.split('/')[3],'work':{},'sources':[],'sourcesHasMore':False,'unavailableSections':[],'environment':{'kind':'local_checkout','rootPath':'/fixture','available':True}}}
   elif path.endswith('/agent-config'):
    current = personal_config if path.split('/')[3] == personal else config
@@ -118,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
     status=400; data={'message':'Invalid schedule scope'}
    else: data={'conversationId':schedule_chat}
   elif path==f'/api/music-generation/sessions/{personal}/jobs' and music_fixture:
-   data={'jobs':[music_job], 'configured':True}
+   data={'jobs':[music_job], 'configured':True, 'transcriptId':f'transcript-{personal}'}
   elif path==f'/api/music-generation/sessions/{personal}/jobs/fixture-song/audio' and music_fixture:
    payload=music_bytes
    self.send_response(200);self.send_header('Content-Type','audio/mpeg');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return

@@ -264,7 +264,7 @@ private struct ContextRow: View {
             }
         } icon: {
             Image(systemName: icon)
-                .foregroundStyle(.blue)
+                .foregroundStyle(.tint)
         }
     }
 }

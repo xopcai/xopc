@@ -1,17 +1,19 @@
 import SwiftUI
 
 struct ChatResultCapsuleLabel: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let title: String
     let systemImage: String
     var status: String?
     var canOpen = true
+    var loading = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
                 .font(.system(size: 18))
-                .foregroundStyle(ChatAppearance.action(colorScheme))
+                .foregroundStyle(mobileTheme.action)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 titleLabel
@@ -19,7 +21,9 @@ struct ChatResultCapsuleLabel: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .layoutPriority(1)
-            if canOpen {
+            if loading {
+                ProgressView().controlSize(.small).frame(width: 13, height: 13)
+            } else if canOpen {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13))
                     .foregroundStyle(.tertiary)
@@ -30,8 +34,8 @@ struct ChatResultCapsuleLabel: View {
         .padding(.vertical, 8)
         .frame(minHeight: 44)
         .frame(maxWidth: 320, alignment: .leading)
-        .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 18))
-        .contentShape(.rect(cornerRadius: 18))
+        .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(18)))
+        .contentShape(.rect(cornerRadius: mobileTheme.corner(18)))
         .accessibilityElement(children: .combine)
     }
 

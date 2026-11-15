@@ -106,7 +106,7 @@ export struct XopcPhoneView {
         Text($r('app.string.phone_action_failed')).fontSize(14).fontColor(this.colors.danger)
       }
       Button($r('app.string.phone_send')).id('phone-text-send').width('100%').height(48)
-        .backgroundColor(this.colors.accent).fontColor(Color.White)
+        .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
         .enabled(!this.phone.busy && !!this.textDraft.trim() && this.phone.state?.ownControl === true)
         .onClick((): void => { void this.sendText(); })
     }.width('100%').padding(24)
@@ -157,13 +157,13 @@ export struct XopcPhoneView {
               .fontSize(16).fontColor(this.colors.foreground).textAlign(TextAlign.Center)
             Button($r('app.string.phone_retry')).onClick((): void => { this.phone.retry(); })
           } else {
-            Column().width('70%').height(28).borderRadius(8).backgroundColor(this.colors.input)
-            Column().width('90%').height(180).borderRadius(16).backgroundColor(this.colors.input)
+            Column().width('70%').height(28).borderRadius(this.colors.corner(8)).backgroundColor(this.colors.input)
+            Column().width('90%').height(180).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.input)
             Text($r('app.string.phone_connecting')).fontSize(14).fontColor(this.colors.secondary)
           }
         }.padding(24).width('100%').height('100%').justifyContent(FlexAlign.Center).backgroundColor(this.colors.panel)
       }
-    }.width('100%').layoutWeight(1).clip(true).backgroundColor(this.colors.panel).borderRadius(16)
+    }.width('100%').layoutWeight(1).clip(true).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
       .onAreaChange((_previous: Area, current: Area): void => { this.areaWidth = Number(current.width); this.areaHeight = Number(current.height); })
       .onTouch((event: TouchEvent): void => { this.touch(event); })
   }
@@ -205,7 +205,7 @@ export struct XopcPhoneView {
       }
       if (this.canControl) {
         Button(this.primaryTitle)
-          .id('phone-control').width('100%').height(52).borderRadius(26).fontSize(17).fontWeight(FontWeight.Medium)
+          .id('phone-control').width('100%').height(52).borderRadius(this.colors.corner(26)).fontSize(17).fontWeight(FontWeight.Medium)
           .fontColor(Color.White)
           .backgroundColor(this.colors.accent)
           .enabled(!this.phone.busy && (this.phone.state?.ownControl || this.phone.state?.report.reconnectRequired || this.phone.phase === 'playing' || this.phone.phase === 'fallback' && this.phone.snapshotReady()))

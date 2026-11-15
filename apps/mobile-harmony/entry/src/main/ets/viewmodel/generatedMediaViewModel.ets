@@ -1,8 +1,10 @@
 import { generatedMediaCards, generatedMediaPath } from '../common/generatedMedia';
 import { XopcGeneratedMediaCard, XopcGeneratedMediaItem, XopcGeneratedMediaJobs, XopcGeneratedMediaKind } from '../model/generatedMedia';
 import { gatewaySession } from '../service/gatewaySession';
+import { XopcListSnapshots } from '../service/listSnapshots';
 
 interface XopcVideoDraftConfirmation { id: string; revision: number; }
+const mediaSnapshots = new XopcListSnapshots<XopcGeneratedMediaCard[]>();
 
 @ObservedV2
 export class XopcGeneratedMediaViewModel {
@@ -11,19 +13,27 @@ export class XopcGeneratedMediaViewModel {
   @Trace failedDraftId: string = '';
   private conversationId: string = '';
   private scope: string = '';
+  private transcriptId: string = '';
   private observing: boolean = false;
+  private connectionRevision: number = 0;
   private generation: number = 0;
   private videoRevision: number = 0;
   private timer: number = -1;
 
-  observe(id: string, scope: string, visible: boolean, busy: boolean): void {
+  observe(id: string, scope: string, transcriptId: string, visible: boolean, busy: boolean): void {
     this.stop();
     if (scope !== this.scope) {
       this.scope = scope; this.videoRevision++;
-      this.conversationId = id; this.cards = []; this.submitting = false; this.failedDraftId = '';
+      this.conversationId = id; this.transcriptId = transcriptId;
+      this.cards = (mediaSnapshots.read(scope, 'jobs') ?? []).map((card: XopcGeneratedMediaCard): XopcGeneratedMediaCard =>
+        card.canConfirm ? { kind: card.kind, item: card.item, draft: card.draft, canConfirm: false } : card);
+      this.submitting = false; this.failedDraftId = '';
     }
-    this.observing = visible && !!id;
-    if (this.observing) void this.poll(id, busy, this.generation);
+    this.observing = visible && !!id && !!scope && !!transcriptId;
+    if (this.observing) {
+      this.connectionRevision = gatewaySession.connectionRevision();
+      void this.poll(id, busy, this.generation);
+    }
   }
 
   stop(): void {
@@ -33,8 +43,12 @@ export class XopcGeneratedMediaViewModel {
 
   private async load(kind: XopcGeneratedMediaKind, id: string, generation: number, videoRevision: number): Promise<void> {
     try {
+      const connection = this.connectionRevision;
+      gatewaySession.assertConnection(connection);
       const response = JSON.parse(await gatewaySession.request(generatedMediaPath(kind, id))) as XopcGeneratedMediaJobs;
+      gatewaySession.assertConnection(connection);
       if (generation !== this.generation || !Array.isArray(response.jobs)) return;
+      if (response.transcriptId && response.transcriptId !== this.transcriptId) return;
       if (kind === 'video' && (this.submitting || videoRevision !== this.videoRevision)) return;
       this.replace(kind, generatedMediaCards(kind, response));
     } catch (_) {
@@ -60,12 +74,16 @@ export class XopcGeneratedMediaViewModel {
       const previous = previousById.get(card.item.id);
       return previous && JSON.stringify(previous) === JSON.stringify(card) ? previous : card;
     });
-    const next = this.cards.filter((card: XopcGeneratedMediaCard): boolean => card.kind !== kind).concat(updated)
+    const incoming = new Set<string>(updated.map((card: XopcGeneratedMediaCard): string => card.item.id));
+    // Job snapshots can lag or omit older results. Drafts are governed by the current response.
+    const next = this.cards.filter((card: XopcGeneratedMediaCard): boolean =>
+      card.kind !== kind || (!card.draft && !incoming.has(card.item.id))).concat(updated)
       .sort((left: XopcGeneratedMediaCard, right: XopcGeneratedMediaCard): number =>
         (left.item.draftCreatedAt ?? left.item.createdAt) - (right.item.draftCreatedAt ?? right.item.createdAt)
         || left.item.id.localeCompare(right.item.id));
     if (next.length !== this.cards.length
       || next.some((card: XopcGeneratedMediaCard, index: number): boolean => card !== this.cards[index])) this.cards = next;
+    mediaSnapshots.write(this.scope, 'jobs', next, Date.now());
   }
 
   async confirm(card: XopcGeneratedMediaCard): Promise<void> {
@@ -74,9 +92,10 @@ export class XopcGeneratedMediaViewModel {
     if (!this.observing || !id || this.submitting || !card.draft || !card.canConfirm || revision === undefined) return;
     this.submitting = true; this.failedDraftId = '';
     const request = ++this.videoRevision;
-    const connection = gatewaySession.connectionRevision();
+    const connection = this.connectionRevision;
     const payload: XopcVideoDraftConfirmation = { id: card.item.id, revision };
     try {
+      gatewaySession.assertConnection(connection);
       const job = JSON.parse(await gatewaySession.request(generatedMediaPath('video', id) + '/confirm-draft',
         'POST', JSON.stringify(payload))) as XopcGeneratedMediaItem;
       gatewaySession.assertConnection(connection);

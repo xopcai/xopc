@@ -93,11 +93,14 @@ data class LocalConversationDraft(
   val executionMode: String? = null,
 )
 
+private const val RECENT_CACHE_AGE = 72 * 60 * 60 * 1000L
+
 /** Assistant and Conversations read the same Gateway-backed conversation data. */
 class ConversationRepository(private val gateway: GatewaySession, context: Context? = null,
   private val pendingStore: AndroidSecureStore? = context?.let(::AndroidSecureStore),
   private val attachmentStore: ChatAttachmentStore? = context?.let(::ChatAttachmentStore)) {
 
+  @Synchronized
   fun removeGatewayLocal(gatewayId: String) {
     UUID.fromString(gatewayId)
     val store = pendingStore ?: return
@@ -106,7 +109,35 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     store.remove("draft-index.$gatewayId")
     store.remove("quick-composer.$gatewayId")
     store.remove("quick-handoff.$gatewayId")
+    store.remove("recent-sessions.$gatewayId")
     attachmentStore?.removeGateway(gatewayId)
+  }
+
+  @Synchronized
+  fun cachedRecent(profile: GatewayProfile): List<ConversationSummary>? = runCatching {
+    val raw = pendingStore?.read("recent-sessions.${profile.gatewayId}") ?: return null
+    val record = JSONObject(raw)
+    val elapsed = System.currentTimeMillis() - record.getLong("savedAt")
+    if (record.getString("deviceId") != profile.deviceId || elapsed !in 0..RECENT_CACHE_AGE) return null
+    parseList(raw).items
+  }.getOrNull()
+
+  @Synchronized
+  fun cacheRecent(profile: GatewayProfile, rows: List<ConversationSummary>, requestedAt: Long) {
+    val current = gateway.currentProfile()
+    if (current?.gatewayId != profile.gatewayId || current.deviceId != profile.deviceId) return
+    val store = pendingStore ?: return
+    val key = "recent-sessions.${profile.gatewayId}"
+    runCatching {
+      val previous = runCatching { store.read(key)?.let(::JSONObject) }.getOrNull()
+      if (previous?.optString("deviceId") == profile.deviceId && previous.optLong("savedAt") > requestedAt) return
+      val items = rows.asSequence().filterNot { it.isLocalDraft }.take(20).map {
+        JSONObject().put("key", it.id).put("displayName", it.title).put("updatedAt", it.updatedAt)
+          .put("messageCount", it.messageCount).put("agentId", it.agentId).put("status", it.status)
+      }.toList()
+      store.write(key, JSONObject().put("deviceId", profile.deviceId).put("savedAt", requestedAt)
+        .put("items", JSONArray(items)).put("hasMore", false).toString())
+    }
   }
 
   fun composerAttachments(conversationId: String): List<ChatAttachment> {

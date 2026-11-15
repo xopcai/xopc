@@ -59,8 +59,10 @@ describe('chat bottom region composition', () => {
     expect(chat.match(/TextArea\(\{ text: this.draft/g)).toHaveLength(1);
     expect(chat).toContain("Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.chat.canvas)");
     expect(chat).toContain(".id('chat-composer-shell').width('100%')");
-    expect(chat).toContain(".backgroundColor(this.panelOpen ? Color.Transparent : this.colors.chat.composer?.fill ?? this.colors.input)");
-    expect(chat).toContain(".width('calc(100% - 24vp)').borderRadius(28).backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent)");
+    expect(chat).toContain('.backgroundColor(this.panelOpen ? Color.Transparent : this.colors.input)');
+    expect(chat).toContain('.border(this.panelOpen ? { width: 0 } : this.colors.controlStroke)');
+    expect(chat).toContain(".width('calc(100% - 24vp)').backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent)");
+    expect(chat).toContain('.border(this.panelOpen ? this.colors.panelStroke : { width: 0 }).borderRadius(this.colors.corner(28))');
     expect(chat).toContain(".id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)");
     expect(chat).toContain(".id('chat-bottom-region').width('100%')");
     expect(chat).toContain(".id('chat-reply-clearance')");
@@ -120,7 +122,9 @@ describe('chat bottom region composition', () => {
   });
 
   it('keeps history reachable from the sidebar and reserves the system back edge', () => {
-    expect(home).toContain("if (page === 'sessions')");
+    expect(home).toContain("if (page === 'sessions' || page === 'sessions-search')");
+    expect(home).toContain("startSearching: page === 'sessions-search'");
+    expect(sessions).toContain('@Local searchOpen: boolean = false;');
     expect(home).toContain('onExit: (): void => { this.pathStack.pop(); this.openSidebar(); }');
     expect(home).toContain('layoutState.dismissSidebar = (): boolean => this.closeSidebar();');
     expect(sessions).toContain('.virtualScroll({ totalCount: this.rows.length })');
@@ -203,7 +207,7 @@ describe('chat bottom region composition', () => {
   });
 
   it('uses a compact icon capsule without duplicate recording instructions', () => {
-    const feedback = chat.slice(chat.indexOf('  voiceGestureFeedback() {'), chat.indexOf('  emptyDock() {}'));
+    const feedback = chat.slice(chat.indexOf('  voiceGestureFeedback() {'), chat.indexOf('  private disabledActionIds()'));
     expect(feedback).toContain(".constraintSize({ maxWidth: 340 }).height(80)");
     expect(feedback).toContain("$r('sys.symbol.xmark')");
     expect(feedback).toContain("$r('sys.symbol.text_alignleft')");

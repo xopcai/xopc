@@ -96,7 +96,7 @@ export struct XopcVoiceCallView {
         onRespond: (command: XopcClarificationCommand): void => { this.call.submitClarification(command); } })
     } else if (this.call.approval) {
       Column({ space: 10 }) {
-        Text($r('app.string.voice_call_approval')).fontSize(13).fontColor(this.colors.secondary).width('100%')
+        Text($r('app.string.voice_call_approval')).fontSize(13).fontColor(this.colors.attentionForeground).width('100%')
         Text(this.call.approval.actionId).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
         Row({ space: 8 }) {
           Button($r('app.string.voice_call_deny')).layoutWeight(1).height(38).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
@@ -104,7 +104,7 @@ export struct XopcVoiceCallView {
           Button($r('app.string.voice_call_approve')).layoutWeight(1).height(38).backgroundColor(this.colors.accent)
             .onClick((): void => { this.call.respondApproval(true); })
         }.width('100%')
-      }.width('100%').padding(14).backgroundColor(this.colors.panel).borderRadius(18)
+      }.width('100%').padding(14).backgroundColor(this.colors.attentionFill).border(this.colors.attentionStroke).borderRadius(this.colors.corner(18))
     }
   }
 
@@ -119,7 +119,7 @@ export struct XopcVoiceCallView {
             Blank()
             Text(this.call.mode === 'assistant' ? $r('app.string.voice_call_assistant') : $r('app.string.voice_call_natural'))
               .fontSize(12).fontColor(this.colors.secondary).padding({ left: 11, right: 11, top: 6, bottom: 6 })
-              .backgroundColor(this.colors.input).borderRadius(14)
+              .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
           }.width('100%')
           Blank()
           Stack() {
@@ -172,7 +172,7 @@ export struct XopcVoiceCallView {
           Button() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([Color.White]) }
             .width(38).height(38).padding(0).backgroundColor(this.colors.danger).borderRadius(19).onClick((): void => { this.call.end(); })
         }.id('voice-call-mini').width('92%').height(62).padding({ left: 14, right: 10 }).backgroundColor(this.colors.panel)
-          .borderRadius(18).position({ x: this.miniX, y: this.miniY }).zIndex(60)
+          .borderRadius(this.colors.corner(18)).position({ x: this.miniX, y: this.miniY }).zIndex(60)
           .gesture(PanGesture({ fingers: 1, direction: PanDirection.All, distance: 6 })
             .onActionStart((_event: GestureEvent): void => { this.dragStartX = this.miniX; this.dragStartY = this.miniY; })
             .onActionUpdate((event: GestureEvent): void => {

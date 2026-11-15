@@ -7,6 +7,7 @@ final class AppState {
     var homePath: [HomeDestination] = []
     private(set) var externalIntake: ExternalIntakeBatch?
     private(set) var externalIntakeRevision = 0
+    private(set) var listCacheRevision = 0
     private(set) var externalIntakeError: String?
     func openExternalIntake(_ batch: ExternalIntakeBatch, conversation: ConversationSelection) {
         guard batch.target?.scope == ComposerDraftStore.accountScope(gatewayConfiguration) else { externalIntakeRevision += 1; return }
@@ -30,16 +31,6 @@ final class AppState {
     private var remembersCurrentConversation = false
 
     private var selectionScope = ""
-    private func restoreConversationSelection() {
-        let scope = ComposerDraftStore.accountScope(gatewayConfiguration)
-        guard scope != selectionScope else { return }
-        selectionScope = scope
-        homePath = []
-        do { selectedConversation = try ComposerDraftStore().readSelection(configuration: gatewayConfiguration) }
-        catch { selectedConversation = nil; connectionStorageError = error.localizedDescription }
-        remembersCurrentConversation = selectedConversation != nil
-    }
-
     private(set) var connectionStorageError: String?
     private(set) var gatewayProfiles: [GatewayProfile]
     private(set) var activeGatewayProfileID: String?
@@ -104,6 +95,12 @@ final class AppState {
         }
         do {
             try GatewayPairingService.shared.save(connection, profileID: profile.id)
+            if let previousProfile {
+                let scope = ComposerDraftStore.accountScope(identity: previousProfile.id)
+                MobileListCache.shared.remove(scope: scope)
+                await RecentConversationsStore.shared.remove(scope: scope)
+                listCacheRevision += 1
+            }
             gatewayConfiguration = try configurationStore.activateProfile(id: profile.id)
             gatewayProfiles = configurationStore.loadProfiles()
             activeGatewayProfileID = profile.id
@@ -192,7 +189,10 @@ final class AppState {
                 gatewayRefreshTask?.cancel()
                 gatewayTokenExpiry = nil
             }
+            let scope = ComposerDraftStore.accountScope(identity: id)
             try configurationStore.removeProfile(id: id)
+            MobileListCache.shared.remove(scope: scope)
+            Task { await RecentConversationsStore.shared.remove(scope: scope) }
             GatewayPairingService.shared.remove(profileID: id)
             gatewayTokenExpiries.removeValue(forKey: id)
             gatewayProfiles = configurationStore.loadProfiles()
@@ -258,7 +258,21 @@ final class AppState {
     }
 
     func startConversation(agentId: String) {
-        selectHomeConversation(.draft(agentId: agentId))
+        startConversation(agentId: agentId, prompt: nil)
+    }
+
+    func startConversation(agentId: String, prompt: String?) {
+        let draft = ConversationSelection.draft(agentId: agentId)
+        if let prompt {
+            do {
+                try ComposerDraftStore().save(SavedComposerDraft(text: prompt),
+                    scope: ComposerDraftStore.scope(gatewayConfiguration, conversationID: draft.id))
+            } catch {
+                connectionStorageError = error.localizedDescription
+                return
+            }
+        }
+        selectHomeConversation(draft)
     }
 
     func startScopedConversation(project: ProjectRecord?, executionMode: String?, agentId: String) {
@@ -276,6 +290,18 @@ final class AppState {
     }
 }
 
+private extension AppState {
+    func restoreConversationSelection() {
+        let scope = ComposerDraftStore.accountScope(gatewayConfiguration)
+        guard scope != selectionScope else { return }
+        selectionScope = scope
+        homePath = []
+        do { selectedConversation = try ComposerDraftStore().readSelection(configuration: gatewayConfiguration) }
+        catch { selectedConversation = nil; connectionStorageError = error.localizedDescription }
+        remembersCurrentConversation = selectedConversation != nil
+    }
+}
+
 enum HomeDestination: Hashable {
-    case conversations, progress, projects, automations, library, profile, settings, personalOverview
+    case conversations, conversationSearch, progress, projects, automations, library, capabilities, profile, settings, personalOverview
 }

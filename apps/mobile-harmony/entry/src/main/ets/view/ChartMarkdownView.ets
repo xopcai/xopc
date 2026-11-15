@@ -131,7 +131,7 @@ export struct XopcChartMarkdownView {
     Column() {
       if (!this.expanded) { this.chartContent(false) }
       else { Text('图表已在预览中打开。').padding(16).fontColor(this.colors.secondary) }
-    }.width('100%').borderRadius(10).backgroundColor(this.colors.grouped).id('markdown-chart')
+    }.width('100%').borderRadius(this.colors.corner(10)).backgroundColor(this.colors.grouped).id('markdown-chart')
       .onVisibleAreaChange([0, 0.1], (visible: boolean, ratio: number): void => { this.visible = visible && ratio > 0; })
       .bindSheet($$this.expanded, this.preview, { height: SheetSize.LARGE, showClose: true, dragBar: true })
   }

@@ -131,7 +131,7 @@ final class ParityAcceptanceUITests: XCTestCase {
             throw XCTSkip("The image conversation is outside the currently loaded 50 conversations")
         }
 
-        openTab("对话")
+        app.openHomeDestination("search")
         let search = app.textFields["conversations-search-field"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
@@ -164,7 +164,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let session = try XCTUnwrap(envelope["session"] as? [String: Any])
         let title = try XCTUnwrap(session["name"] as? String)
-        openTab("对话")
+        app.openHomeDestination("search")
         let search = app.textFields["conversations-search-field"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
@@ -196,7 +196,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let session = try XCTUnwrap(envelope["session"] as? [String: Any])
         let title = try XCTUnwrap(session["name"] as? String)
-        openTab("对话")
+        app.openHomeDestination("search")
         let search = app.textFields["conversations-search-field"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
@@ -230,7 +230,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         let voiceID = try XCTUnwrap(messages.flatMap { $0["media"] as? [[String: Any]] ?? [] }
             .first(where: { $0["type"] as? String == "voice" })?["id"] as? String)
 
-        openTab("对话")
+        app.openHomeDestination("search")
         let search = app.textFields["conversations-search-field"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
@@ -621,6 +621,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         let all = app.buttons["automation-filter-all"]
         XCTAssertTrue(all.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["管理定时运行、状态与最近结果"].exists)
+        app.buttons["automation-open-search"].tap()
         let search = app.textFields["automation-search"]
         XCTAssertTrue(search.exists)
         search.tap()
@@ -671,6 +672,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.launch()
         openTab("进展")
         app.buttons["自动化"].tap()
+        app.buttons["automation-open-search"].tap()
         let search = app.textFields["automation-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         search.tap()
@@ -710,6 +712,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.launch()
         openTab("进展")
         app.buttons["自动化"].tap()
+        app.buttons["automation-open-search"].tap()
         let search = app.textFields["automation-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         search.tap()
@@ -750,6 +753,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.launch()
         openTab("进展")
         app.buttons["自动化"].tap()
+        app.buttons["automation-open-search"].tap()
         let search = app.textFields["automation-search"]
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         search.tap()
@@ -837,10 +841,10 @@ final class ParityAcceptanceUITests: XCTestCase {
         app.buttons["Reference Note"].tap()
         XCTAssertTrue(app.navigationBars["Add Reference"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.searchFields["Search Notes"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.segmentedControls.buttons["Notes"].exists)
-        app.segmentedControls.buttons["Tasks"].tap()
+        XCTAssertTrue(app.buttons["reference-tab-note"].exists)
+        app.buttons["reference-tab-task"].tap()
         XCTAssertTrue(app.searchFields["Search Tasks"].waitForExistence(timeout: 5))
-        app.segmentedControls.buttons["Files"].tap()
+        app.buttons["reference-tab-file"].tap()
         XCTAssertTrue(app.searchFields["Search Files"].waitForExistence(timeout: 5))
         capture("english-reference-picker")
         app.buttons["Cancel"].tap()
@@ -909,7 +913,8 @@ final class ParityAcceptanceUITests: XCTestCase {
             relaunch()
             openTab("资料")
             XCTAssertTrue(app.navigationBars["资料"].waitForExistence(timeout: 5))
-            XCTAssertTrue(app.textFields["notes-search-field"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["notes-open-search"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.textFields["notes-search-field"].exists)
         }
         XCTAssertTrue(app.buttons["notes-files-button"].exists)
         app.buttons["新建笔记"].tap()
@@ -999,8 +1004,7 @@ final class ParityAcceptanceUITests: XCTestCase {
         openTab("进展")
         app.buttons["Projects"].tap()
         XCTAssertTrue(openCell(at: 1))
-        let sections = app.segmentedControls.firstMatch
-        sections.buttons["Tasks"].tap()
+        app.buttons["project-tab-tasks"].tap()
         app.buttons["New Project Task"].tap()
         XCTAssertTrue(app.navigationBars["New Project Task"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Task Goal"].exists)
@@ -1046,23 +1050,23 @@ final class ParityAcceptanceUITests: XCTestCase {
         openTab("进展")
         tapIfExists("项目")
         capture("19-projects-list")
-        XCTAssertTrue(app.segmentedControls.buttons["已归档"].exists)
+        XCTAssertTrue(app.buttons["projects-filter-archived"].exists)
         let projectRow = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-")).firstMatch
         if projectRow.waitForExistence(timeout: 2) {
             projectRow.tap()
             capture("20-project-detail")
             XCTAssertTrue(app.buttons["新建项目对话"].waitForExistence(timeout: 5))
-            let sections = app.segmentedControls.firstMatch
-            for section in ["概览", "对话", "任务", "笔记", "自动化"] {
-                XCTAssertTrue(sections.buttons[section].exists, "Missing project section: \(section)")
+            let sections = ["overview", "conversations", "tasks", "notes", "automations"]
+            for section in sections {
+                XCTAssertTrue(app.buttons["project-tab-\(section)"].exists, "Missing project section: \(section)")
             }
-            for section in ["对话", "任务", "笔记", "自动化"] {
-                sections.buttons[section].tap()
+            for section in sections.dropFirst() {
+                app.buttons["project-tab-\(section)"].tap()
                 capture("21-project-\(section)")
             }
-            checkProjectCreationForms(in: sections)
-            sections.buttons["对话"].tap()
+            checkProjectCreationForms()
+            app.buttons["project-tab-conversations"].tap()
             app.buttons["新建项目对话"].tap()
             XCTAssertTrue(app.buttons["添加附件或引用"].waitForExistence(timeout: 8))
             capture("21-project-new-conversation")
@@ -1071,19 +1075,19 @@ final class ParityAcceptanceUITests: XCTestCase {
         }
     }
 
-    private func checkProjectCreationForms(in sections: XCUIElement) {
+    private func checkProjectCreationForms() {
         for (section, action, formTitle) in [
-            ("任务", "新建项目任务", "新建项目任务"),
-            ("笔记", "新建项目笔记", "新建笔记"),
-            ("自动化", "新建项目自动化", "用对话创建定时任务")
+            ("tasks", "新建项目任务", "新建项目任务"),
+            ("notes", "新建项目笔记", "新建笔记"),
+            ("automations", "新建项目自动化", "用对话创建定时任务")
         ] {
-            sections.buttons[section].tap()
+            app.buttons["project-tab-\(section)"].tap()
             let create = app.buttons[action]
             XCTAssertTrue(create.waitForExistence(timeout: 5), "Missing project action: \(action)")
             create.tap()
             XCTAssertTrue(app.navigationBars[formTitle].waitForExistence(timeout: 5))
             capture("21-project-create-\(section)")
-            app.buttons[section == "自动化" ? "automation-setup-close" : "取消"].tap()
+            app.buttons[section == "automations" ? "automation-setup-close" : "取消"].tap()
         }
     }
 
@@ -1539,9 +1543,9 @@ final class ParityAcceptanceUITests: XCTestCase {
     }
 
     private func checkTaskFilters() {
-        XCTAssertTrue(app.segmentedControls.buttons["已关闭"].exists)
-        app.segmentedControls.buttons["已关闭"].tap()
-        app.segmentedControls.buttons["进行中"].tap()
+        XCTAssertTrue(app.buttons["tasks-filter-closed"].exists)
+        app.buttons["tasks-filter-closed"].tap()
+        app.buttons["tasks-filter-open"].tap()
     }
 
     private func captureTextNoteJourneys() {
@@ -1905,11 +1909,18 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertFalse(app.textFields["Cron 表达式"].exists)
         app.buttons["automation-setup-close"].tap()
         XCTAssertTrue(scroll.waitForExistence(timeout: 6))
-        let library = app.segmentedControls["personal-overview-tabs"].buttons["资料库"]
+        let library = app.buttons["personal-overview-library-tab"]
         XCTAssertTrue(library.waitForExistence(timeout: 5))
         library.tap()
-        XCTAssertTrue(app.buttons["chat-attachment-preview-fixture-file"].waitForExistence(timeout: 6))
+        XCTAssertTrue(library.isSelected)
+        XCTAssertFalse(app.buttons["personal-overview-tasks-tab"].isSelected)
+        let attachment = app.buttons["chat-attachment-preview-fixture-file"]
+        XCTAssertTrue(attachment.waitForExistence(timeout: 6))
         capture("ios-personal-overview-library")
+        attachment.tap()
+        XCTAssertTrue(app.staticTexts["File version fixture"].waitForExistence(timeout: 6))
+        XCTAssertFalse(app.buttons["file-save-version"].exists)
+        app.navigationBars["版本验收.txt"].buttons["关闭"].tap()
         app.buttons["personal-overview-close"].tap()
         XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 5))
     }
@@ -1919,7 +1930,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         let project = app.descendants(matching: .any)["project-fixture-project"].firstMatch
         XCTAssertTrue(project.waitForExistence(timeout: 5))
         project.tap()
-        app.segmentedControls.buttons["对话"].tap()
+        app.buttons["project-tab-conversations"].tap()
+        XCTAssertTrue(app.buttons["project-tab-conversations"].isSelected)
         let create = app.buttons["新建项目对话"]
         XCTAssertTrue(create.waitForExistence(timeout: 6))
         create.tap()
@@ -1950,10 +1962,20 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.openHomeSidebar())
         app.buttons["chat-sidebar-personal"].tap()
-        let play = app.buttons["generated-music-start-fixture-song"]
-        XCTAssertTrue(play.waitForExistence(timeout: 10))
-        play.tap()
-        XCTAssertTrue(app.buttons["music-inline-player"].waitForExistence(timeout: 6))
+        let musicCard = app.buttons["generated-music-open-fixture-song"]
+        XCTAssertTrue(musicCard.waitForExistence(timeout: 10))
+        musicCard.tap()
+        XCTAssertTrue(app.staticTexts["music-elapsed"].waitForExistence(timeout: 6))
+        XCTAssertTrue(app.buttons["music-play-toggle"].waitForExistence(timeout: 6))
+        let progress = app.sliders["music-progress"]
+        let seekReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: progress)
+        await fulfillment(of: [seekReady], timeout: 6)
+        progress.adjust(toNormalizedSliderPosition: 0)
+        app.buttons["music-minimize"].tap()
+        XCTAssertTrue(musicCard.waitForExistence(timeout: 6))
+        app.swipeDown()
+        let sticky = app.descendants(matching: .any)["music-sticky-player"].firstMatch
+        XCTAssertTrue(sticky.waitForExistence(timeout: 6))
         XCTAssertTrue(app.openHomeSidebar())
         let recent = app.buttons["chat-sidebar-session-11111111-1111-4111-8111-111111111111"]
         XCTAssertTrue(recent.waitForExistence(timeout: 5))
@@ -1972,10 +1994,24 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertEqual(app.buttons["music-play-toggle"].label, "暂停")
         app.buttons["music-play-toggle"].tap()
         XCTAssertEqual(app.buttons["music-play-toggle"].label, "播放")
-        XCTAssertTrue(app.staticTexts["用于校验歌词和跨页播放。"].exists)
+        progress.adjust(toNormalizedSliderPosition: 0)
+        XCTAssertEqual(elapsed.label, "0:00")
+        app.buttons["music-skip-forward"].tap()
+        XCTAssertEqual(elapsed.label, "0:15")
+        app.buttons["music-skip-back"].tap()
+        XCTAssertEqual(elapsed.label, "0:00")
+        let lyrics = app.staticTexts["music-lyrics-text"]
+        XCTAssertTrue(lyrics.waitForExistence(timeout: 5))
+        let controlY = app.buttons["music-play-toggle"].frame.midY
+        app.buttons["music-lyrics"].tap()
+        XCTAssertFalse(lyrics.exists)
+        XCTAssertEqual(app.buttons["music-play-toggle"].frame.midY, controlY, accuracy: 1)
+        app.buttons["music-lyrics"].tap()
+        XCTAssertTrue(lyrics.waitForExistence(timeout: 5))
         capture("ios-global-music-player")
-        app.buttons["返回来源对话"].tap()
+        app.buttons["music-return-source"].tap()
         XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 6))
+        XCTAssertTrue(musicCard.waitForExistence(timeout: 6))
     }
 
     func testSidebarSwipeAndSecondaryDestinations() {
@@ -2005,6 +2041,63 @@ final class MobileLayoutParityUITests: XCTestCase {
             XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 5))
             XCTAssertFalse(app.textFields["assistant-chat-composer"].isHittable)
         }
+    }
+
+    func testCapabilityCatalogDefaultsToPluginsAndSearchStaysInItsCategory() {
+        tab("capabilities")
+        let category = app.buttons["capability-category"]
+        let plugin = app.buttons["capability-row-meeting-plugin"]
+        XCTAssertTrue(plugin.waitForExistence(timeout: 5))
+        let search = app.textFields["capability-search"]
+        search.tap()
+        search.typeText("Meeting")
+        XCTAssertTrue(plugin.exists)
+        XCTAssertFalse(app.buttons["capability-row-meeting-skill"].exists)
+        XCTAssertFalse(app.buttons["capability-row-document-plugin"].exists)
+        for (title, id) in [
+            ("技能", "meeting-skill"), ("连接", "drive-connection"), ("助手与专家", "coder"), ("消息通道", "mail-channel")
+        ] {
+            category.tap()
+            app.buttons[title].tap()
+            XCTAssertTrue(app.buttons["capability-row-\(id)"].waitForExistence(timeout: 5))
+            XCTAssertFalse(plugin.exists)
+            XCTAssertNotEqual(search.value as? String, "Meeting")
+        }
+        app.buttons["capability-row-mail-channel"].tap()
+        app.buttons["capability-open-chat"].tap()
+        let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 6))
+        XCTAssertTrue((composer.value as? String)?.contains("mail-channel") == true)
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "mail-channel")).firstMatch.exists)
+    }
+
+    func testSecondarySearchOpensFromHeaderAndSidebarShortcut() {
+        for (destination, buttonID, fieldID) in [
+            ("conversations", "conversations-open-search", "conversations-search-field"),
+            ("projects", "projects-open-search", "projects-search"),
+            ("automations", "automation-open-search", "automation-search"),
+            ("notes", "notes-open-search", "notes-search-field")
+        ] {
+            tab(destination)
+            let header = app.navigationBars.firstMatch
+            let searchButton = header.buttons[buttonID]
+            XCTAssertTrue(searchButton.waitForExistence(timeout: 5))
+            let field = app.textFields[fieldID]
+            XCTAssertFalse(field.exists)
+            searchButton.tap()
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.typeText("layout-query")
+            XCTAssertEqual(field.value as? String, "layout-query")
+            header.buttons[buttonID + "-close"].tap()
+            XCTAssertFalse(field.exists)
+            searchButton.tap()
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            XCTAssertNotEqual(field.value as? String, "layout-query")
+            header.buttons[buttonID + "-close"].tap()
+        }
+
+        tab("search")
+        XCTAssertTrue(app.textFields["conversations-search-field"].waitForExistence(timeout: 5))
     }
 
     func testStartupRestoresTheLastSelectedConversationAndItsDraft() {
@@ -2040,7 +2133,7 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testLibraryVersionSaveRetriesWithTheSameRequest() {
         tab("notes")
-        let files = app.segmentedControls.buttons["文件"]
+        let files = app.buttons["library-category-files"]
         XCTAssertTrue(files.waitForExistence(timeout: 5))
         files.tap()
         let file = app.buttons["note-file-result-fixture-file"]
@@ -2087,7 +2180,7 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testLibraryResultMatchesProgressAndProjectAndReturnsToResults() {
         tab("notes")
-        let results = app.segmentedControls.buttons["成果"]
+        let results = app.buttons["library-category-deliveries"]
         XCTAssertTrue(results.waitForExistence(timeout: 10))
         results.tap()
         let result = app.descendants(matching: .any)["delivery-task:fixture-delivery"].firstMatch
@@ -2439,6 +2532,9 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testProgressNotesAndProfileLayout() {
         tab("progress")
+        XCTAssertTrue(app.navigationBars["进展"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["工作进展"].exists)
+        XCTAssertFalse(app.staticTexts["查看助理的工作、需要你的决定和最新交付。"].exists)
         XCTAssertTrue(app.staticTexts["需要验收"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["进行中的工作"].exists)
         XCTAssertTrue(app.staticTexts["明日计划"].exists)
@@ -2448,7 +2544,10 @@ final class MobileLayoutParityUITests: XCTestCase {
         capture("progress-sections")
         tab("notes")
         XCTAssertTrue(app.staticTexts["布局检查笔记"].waitForExistence(timeout: 10))
+        app.buttons["notes-open-search"].tap()
+        XCTAssertTrue(app.textFields["notes-search-field"].waitForExistence(timeout: 5))
         capture("notes-search-icons")
+        app.buttons["notes-open-search-close"].tap()
         tab("profile")
         app.buttons["settings-personal-profile"].tap()
         XCTAssertTrue(app.buttons["profile-personal-agent-configure"].waitForExistence(timeout: 10))
@@ -2507,7 +2606,7 @@ extension XCUIApplication {
             buttons["chat-sidebar-close"].tap()
             return
         }
-        let identifier = ["conversations": "search", "notes": "library"][destination] ?? destination
+        let identifier = ["conversations": "history", "notes": "library"][destination] ?? destination
         let button = buttons["chat-sidebar-\(identifier)"]
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()

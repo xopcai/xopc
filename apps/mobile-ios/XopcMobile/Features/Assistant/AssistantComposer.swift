@@ -4,6 +4,7 @@ import SwiftUI
 
 // swiftlint:disable:next type_body_length
 struct AssistantComposer: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.colorScheme) private var colorScheme
     let configuration: GatewayConfiguration
     var focusAllowed = true
@@ -96,7 +97,7 @@ struct AssistantComposer: View {
             NavigationStack {
                 ComposerAttachmentImage(attachment: attachment, maxPointSize: 900)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(uiColor: .systemBackground))
+                    .background(mobileTheme.panel)
                     .navigationTitle(attachment.name)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -155,7 +156,7 @@ struct AssistantComposer: View {
                 }
             }
             .frame(maxHeight: 240)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+            .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(14)))
         }
     }
 
@@ -259,11 +260,11 @@ struct AssistantComposer: View {
                 .accessibilityIdentifier("assistant-chat-send")
             }
         }
-        .foregroundStyle(ChatAppearance.action(colorScheme))
+        .foregroundStyle(mobileTheme.action)
         .padding(.horizontal, 8)
         .padding(.vertical, 1)
-        .background(ChatAppearance.composer(colorScheme), in: .rect(cornerRadius: 24))
-        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color.primary.opacity(0.12)))
+        .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(24)))
+        .overlay(RoundedRectangle(cornerRadius: mobileTheme.corner(24)).strokeBorder(Color.primary.opacity(0.12)))
     }
 
     private var attachmentStrip: some View {
@@ -307,7 +308,7 @@ struct AssistantComposer: View {
                         }
                         .frame(width: 96, height: 96)
                         .background(Color.secondary.opacity(0.12))
-                        .clipShape(.rect(cornerRadius: 12))
+                        .clipShape(.rect(cornerRadius: mobileTheme.corner(12)))
                     } else {
                         HStack(spacing: 6) {
                             Image(systemName: "doc")
@@ -380,7 +381,7 @@ struct AssistantComposer: View {
                     .font(.caption)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
-                    .background(Color.blue.opacity(0.1), in: .capsule)
+                    .background(mobileTheme.action.opacity(0.10), in: .capsule)
                 }
             }
         }

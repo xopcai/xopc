@@ -5,10 +5,11 @@ const workspace = readFileSync(new URL('../entry/src/main/ets/view/WorkspaceView
 
 describe('workspace mobile information architecture', () => {
   it('offers section-aware filters including automation attention', () => {
-    expect(workspace).toContain("this.filterChip('all'");
-    expect(workspace).toContain("this.filterChip('primary'");
-    expect(workspace).toContain("this.filterChip('secondary'");
-    expect(workspace).toContain("this.filterChip('attention'");
+    expect(workspace).toContain('XopcSegmentedTabs({ options: this.filterOptions()');
+    expect(workspace).toContain("key: 'all', label:");
+    expect(workspace).toContain("key: 'primary', label:");
+    expect(workspace).toContain("key: 'secondary', label:");
+    expect(workspace).toContain("key: 'attention', label:");
   });
 
   it('uses dedicated cards with status, summaries, and type-specific metadata', () => {

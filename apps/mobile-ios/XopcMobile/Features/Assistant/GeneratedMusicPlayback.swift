@@ -277,7 +277,9 @@ final class GeneratedMusicPlayback {
 }
 
 struct GeneratedMusicDock: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let playback: GeneratedMusicPlayback
+    var sticky = false
 
     var body: some View {
         if let track = playback.track {
@@ -300,86 +302,233 @@ struct GeneratedMusicDock: View {
                     .frame(width: 44, height: 44)
             }
             .padding(.horizontal, 6)
-            .background(.regularMaterial, in: .rect(cornerRadius: 18))
+            .background(.regularMaterial, in: .rect(cornerRadius: mobileTheme.corner(18)))
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
             .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("music-mini-player")
+            .accessibilityIdentifier(sticky ? "music-sticky-player" : "music-mini-player")
             .accessibilityHidden(playback.expanded)
         }
     }
 }
 
 struct GeneratedMusicPlayButton: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let playback: GeneratedMusicPlayback
     var identifier = "music-play-toggle"
+    var prominent = false
+
+    private var title: LocalizedStringKey {
+        switch playback.phase {
+        case .loading: "正在加载音乐"
+        case .playing: "暂停"
+        case .failed: "重试"
+        default: "播放"
+        }
+    }
+
+    private var icon: String {
+        switch playback.phase {
+        case .playing: "pause.fill"
+        case .failed: "arrow.clockwise"
+        default: "play.fill"
+        }
+    }
 
     var body: some View {
-        if playback.phase == .loading {
-            ProgressView().frame(width: 44, height: 44)
-        } else {
-            Button(playback.phase == .playing ? "暂停" : "播放",
-                   systemImage: playback.phase == .playing ? "pause.fill" : "play.fill", action: playback.toggle)
-                .labelStyle(.iconOnly).frame(width: 44, height: 44)
-                .accessibilityIdentifier(identifier)
+        Button(action: playback.toggle) {
+            Group {
+                if playback.phase == .loading {
+                    ProgressView().tint(prominent ? mobileTheme.onAction : mobileTheme.action)
+                } else {
+                    Image(systemName: icon).font(.system(size: prominent ? 26 : 17, weight: .semibold))
+                }
+            }
+            .foregroundStyle(prominent ? mobileTheme.onAction : mobileTheme.action)
+            .frame(width: prominent ? 64 : 44, height: prominent ? 64 : 44)
+            .background(prominent ? mobileTheme.action : Color.clear, in: .circle)
+            .contentShape(.circle)
         }
+        .buttonStyle(.plain)
+        .disabled(playback.phase == .loading)
+        .accessibilityLabel(Text(title))
+        .accessibilityIdentifier(identifier)
     }
 }
 
 struct GeneratedMusicPlayer: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let playback: GeneratedMusicPlayback
     let onSource: (GeneratedMusicTrack) -> Void
+    @State private var showLyrics = true
 
     var body: some View {
         if let track = playback.track {
-            NavigationStack {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        Image(systemName: "music.note").font(.system(size: 55, weight: .semibold))
-                            .frame(maxWidth: .infinity, minHeight: 138)
-                            .foregroundStyle(.tint)
-                            .background(Color.accentColor.opacity(0.11), in: .rect(cornerRadius: 24))
-                            .accessibilityHidden(true)
-                        Text(track.title).font(.title2.bold()).multilineTextAlignment(.center)
-                        Text(track.source).foregroundStyle(.secondary)
-                        Slider(value: Binding(get: { playback.position }, set: { value in playback.seek(value) }),
-                               in: 0 ... max(1, playback.duration))
-                            .disabled(playback.duration == 0).accessibilityLabel("播放进度")
-                        HStack {
-                            Text(time(playback.position)).accessibilityIdentifier("music-elapsed")
-                            Spacer()
-                            Text(time(playback.duration))
+            VStack(spacing: 4) {
+                header
+                trackHeader(track)
+                Group {
+                    if showLyrics, let lyrics = track.lyrics, hasLyrics(track) {
+                        ScrollView {
+                            Text(lyrics).font(.title3.weight(.semibold)).lineSpacing(10)
+                                .textSelection(.enabled).accessibilityIdentifier("music-lyrics-text")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 24).padding(.vertical, 20)
+                                .frame(maxWidth: 480).frame(maxWidth: .infinity)
                         }
-                        .font(.caption.monospacedDigit())
-                        GeneratedMusicPlayButton(playback: playback)
-                        if playback.phase == .failed {
-                            Text("无法播放音乐").foregroundStyle(.secondary)
+                        .accessibilityIdentifier("music-player-content")
+                    } else {
+                        ViewThatFits(in: .vertical) {
+                            GeneratedMusicCover().frame(width: 232, height: 232)
+                            GeneratedMusicCover().frame(width: 128, height: 128)
+                            Spacer(minLength: 0)
                         }
-                        HStack {
-                            Button("返回来源对话", systemImage: "bubble.left") { onSource(track) }
-                            if let url = playback.localURL {
-                                ShareLink(item: url) { Label("导出音频", systemImage: "square.and.arrow.up") }
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        if let lyrics = track.lyrics, !lyrics.isEmpty {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("歌词").font(.headline)
-                                Text(lyrics).textSelection(.enabled)
-                            }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(track.key)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if playback.phase == .failed {
+                        Text("无法播放音乐").font(.footnote).foregroundStyle(mobileTheme.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        }
                     }
-                    .padding(20)
+                    trackActions(track)
+                    GeneratedMusicTimeline(playback: playback)
                 }
-                .navigationTitle("正在播放").navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("关闭", systemImage: "xmark") { playback.expanded = false }.labelStyle(.iconOnly)
-                    }
+                .padding(.horizontal, 24).padding(.bottom, 12)
+                .frame(maxWidth: 480)
+            }
+            .padding(.top, 14)
+            .foregroundStyle(mobileTheme.foreground)
+            .onChange(of: track.key) { showLyrics = true }
+            .presentationDetents([.fraction(0.88), .large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(mobileTheme.corner(28))
+            .presentationBackground(mobileTheme.canvas)
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 0) {
+            Button("收起播放器", systemImage: "chevron.down") { playback.expanded = false }
+                .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                .accessibilityIdentifier("music-minimize")
+            Text("正在播放").font(.subheadline.weight(.medium)).foregroundStyle(mobileTheme.secondary)
+                .frame(maxWidth: .infinity)
+            Button("停止播放", systemImage: "xmark", action: playback.stop)
+                .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                .accessibilityIdentifier("music-player-close")
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12).frame(maxWidth: 480)
+    }
+
+    private func trackHeader(_ track: GeneratedMusicTrack) -> some View {
+        HStack(spacing: 12) {
+            GeneratedMusicCover().frame(width: 52, height: 52)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(track.title).font(.headline).lineLimit(2).accessibilityAddTraits(.isHeader)
+                Group {
+                    if track.source.isEmpty { Text("音乐") } else { Text(track.source) }
                 }
+                .font(.footnote).foregroundStyle(mobileTheme.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button("返回来源对话", systemImage: "bubble.left") { onSource(track) }
+                .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                .foregroundStyle(mobileTheme.secondary)
+                .buttonStyle(.plain).accessibilityIdentifier("music-return-source")
+        }
+        .padding(.horizontal, 24).padding(.vertical, 4).frame(maxWidth: 480)
+    }
+
+    private func hasLyrics(_ track: GeneratedMusicTrack) -> Bool {
+        track.lyrics?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private func trackActions(_ track: GeneratedMusicTrack) -> some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 8))
+        return layout {
+            if let url = playback.localURL {
+                ShareLink(item: url) { actionLabel("导出音频", icon: "square.and.arrow.up") }
+            }
+            if hasLyrics(track) {
+                Button { showLyrics.toggle() } label: {
+                    actionLabel(showLyrics ? "收起歌词" : "歌词", icon: "quote.bubble")
+                }
+                .accessibilityIdentifier("music-lyrics")
             }
         }
+        .buttonStyle(.plain)
+    }
+
+    private func actionLabel(_ title: LocalizedStringKey, icon: String) -> some View {
+        Label(title, systemImage: icon).font(.footnote.weight(.medium)).foregroundStyle(mobileTheme.action)
+            .padding(.horizontal, 8).frame(minHeight: 44)
+    }
+}
+
+private struct GeneratedMusicCover: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let shape = RoundedRectangle(cornerRadius: mobileTheme.corner(width < 80 ? 12 : 24))
+            ZStack {
+                shape.fill(LinearGradient(colors: [mobileTheme.action.opacity(0.13), mobileTheme.card],
+                                          startPoint: .topLeading, endPoint: .bottomTrailing))
+                shape.strokeBorder(mobileTheme.edge)
+                Circle().strokeBorder(mobileTheme.edge).frame(width: width * 0.74)
+                Circle().strokeBorder(mobileTheme.edge).frame(width: width * 0.56)
+                Circle().fill(mobileTheme.canvas).frame(width: width * 0.39)
+                Image(systemName: "music.note").font(.system(size: width * 0.2, weight: .semibold))
+                    .foregroundStyle(mobileTheme.action)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct GeneratedMusicTimeline: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    let playback: GeneratedMusicPlayback
+
+    private var canSeek: Bool { playback.duration > 0 && playback.phase != .failed && playback.phase != .loading }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Slider(value: Binding(get: { playback.position }, set: { playback.seek($0) }),
+                   in: 0 ... max(1, playback.duration))
+                .tint(mobileTheme.action).disabled(!canSeek)
+                .accessibilityLabel("播放进度").accessibilityIdentifier("music-progress")
+            HStack {
+                Text(time(playback.position)).accessibilityIdentifier("music-elapsed")
+                Spacer()
+                Text(playback.duration > 0 ? time(playback.duration) : "–:–")
+            }
+            .font(.caption.monospacedDigit()).foregroundStyle(mobileTheme.secondary)
+            HStack(spacing: 32) {
+                skipButton(-15)
+                GeneratedMusicPlayButton(playback: playback, prominent: true)
+                skipButton(15)
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    private func skipButton(_ delta: Double) -> some View {
+        Button(delta < 0 ? "后退 15 秒" : "前进 15 秒", systemImage: delta < 0 ? "gobackward.15" : "goforward.15") {
+            playback.seek(playback.position + delta)
+        }
+        .labelStyle(.iconOnly).font(.system(size: 21, weight: .medium)).frame(width: 48, height: 48)
+        .background(mobileTheme.grouped, in: .circle)
+        .buttonStyle(.plain).disabled(!canSeek)
+        .foregroundStyle(canSeek ? mobileTheme.foreground : mobileTheme.secondary)
+        .accessibilityIdentifier(delta < 0 ? "music-skip-back" : "music-skip-forward")
     }
 
     private func time(_ seconds: Double) -> String {
