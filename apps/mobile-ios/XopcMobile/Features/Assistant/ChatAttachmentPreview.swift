@@ -7,6 +7,7 @@ struct ChatAttachmentPreview: View {
     let configuration: GatewayConfiguration
     let conversationID: String?
     var capsule = false
+    var showLibraryActions = true
 
     @State private var previewURL: URL?
     @State private var temporaryDirectory: URL?
@@ -49,7 +50,8 @@ struct ChatAttachmentPreview: View {
         } label: {
             if capsule {
                 ChatResultCapsuleLabel(title: attachment.name ?? String(localized: "附件"), systemImage: "doc",
-                                       status: attachment.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) })
+                                       status: attachment.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) },
+                                       loading: isLoading)
             } else {
                 Label(attachment.name ?? "附件", systemImage: "doc")
                     .font(.caption)
@@ -64,7 +66,9 @@ struct ChatAttachmentPreview: View {
         .accessibilityIdentifier("chat-attachment-preview-\(attachment.id)")
         .contextMenu {
             if isManaged {
-                Button("打开文件详情", systemImage: "pencil") { Task { await openManagedFile() } }
+                if showLibraryActions {
+                    Button("打开文件详情", systemImage: "pencil") { Task { await openManagedFile() } }
+                }
                 Button("创建分享链接", systemImage: "square.and.arrow.up") { Task { await createShare() } }
             }
         }
@@ -155,7 +159,7 @@ struct ChatAttachmentPreview: View {
         defer { isLoading = false }
         do {
             let loader = ChatAttachmentLoader(configuration: configuration)
-            let resource = isManaged && isTextPreview
+            let resource = showLibraryActions && isManaged && isTextPreview
                 ? try await loader.resolveManagedFile(attachment, conversationID: conversationID)
                 : nil
             let bytes = try await loader.load(attachment, conversationID: conversationID, matching: resource)

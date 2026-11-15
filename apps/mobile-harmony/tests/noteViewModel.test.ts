@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { list: vi.fn(), detail: vi.fn(), load: vi.fn(), initialize: vi.fn(), pending: vi.fn(), uuid: vi.fn() };
+  return { cachedList: vi.fn(), list: vi.fn(), detail: vi.fn(), load: vi.fn(), initialize: vi.fn(), pending: vi.fn(), uuid: vi.fn() };
 });
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn() } }));
 vi.mock('../entry/src/main/ets/repository/noteRepository.ets', () => ({ XopcNoteRepository: class {
+  cachedList = mocks.cachedList;
   list = mocks.list;
   detail = mocks.detail;
 } }));
@@ -45,6 +46,19 @@ describe('native notes list', () => {
     expect(vm.items.map((item) => item.id)).toEqual(['first']);
   });
 
+  it('shows a cached unfiltered page before the refresh completes', async () => {
+    mocks.cachedList.mockReturnValueOnce(page(['cached']));
+    let finish!: (result: ReturnType<typeof page>) => void;
+    mocks.list.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const vm = new XopcNoteViewModel();
+    const loading = vm.start({} as never);
+    expect(vm.items.map((item) => item.id)).toEqual(['cached']);
+    expect(vm.loading).toBe(true);
+    finish(page(['latest']));
+    await loading;
+    expect(vm.items.map((item) => item.id)).toEqual(['latest']);
+  });
+
   it('keeps existing notes visible on refresh failure and replaces them after retry', async () => {
     const vm = new XopcNoteViewModel();
     await vm.start({} as never);
@@ -57,6 +71,23 @@ describe('native notes list', () => {
     expect(vm.items.map((item) => item.id)).toEqual(['second']);
     expect(vm.error).toBe('');
     expect(mocks.list).toHaveBeenCalledTimes(3);
+  });
+
+  it('restores the unfiltered list when search closes before the search response', async () => {
+    const vm = new XopcNoteViewModel();
+    await vm.start({} as never);
+    let finishSearch!: (result: ReturnType<typeof page>) => void;
+    mocks.list.mockReturnValueOnce(new Promise((resolve) => { finishSearch = resolve; }));
+    vm.search = 'match';
+    const searching = vm.list(false, true);
+    expect(mocks.list).toHaveBeenLastCalledWith('match', '', 0, '');
+    vm.search = '';
+    await vm.list(false, true);
+    finishSearch(page(['filtered']));
+    await searching;
+    expect(mocks.list).toHaveBeenLastCalledWith('', '', 0, '');
+    expect(vm.items.map((item) => item.id)).toEqual(['first']);
+    expect(vm.loading).toBe(false);
   });
 
   it('waits for draft initialization when navigation opens a recorded note during startup', async () => {

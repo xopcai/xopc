@@ -71,6 +71,10 @@ export class XopcFilesViewModel {
     this.busy = true; this.error = ''; const generation = ++this.generation;
     const library = !this.contextId && !this.space && !search.trim();
     const scope = this.libraryScope();
+    if (library && scope && scope === fileLibrarySnapshot.scope && !this.items.length) {
+      this.spaces = fileLibrarySnapshot.spaces;
+      this.items = fileLibrarySnapshot.items;
+    }
     try {
       if (library || !this.spaces.length) {
         const spaces = JSON.parse(await gatewaySession.request('/api/files/spaces')) as XopcFileSpaces;

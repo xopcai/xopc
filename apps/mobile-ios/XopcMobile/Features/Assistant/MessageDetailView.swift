@@ -236,7 +236,7 @@ private struct ExecutionToolGroupView: View {
             } label: {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: ExecutionCategory.icon(group.category))
-                        .font(.body).foregroundStyle(.blue)
+                        .font(.body).foregroundStyle(.tint)
                         .frame(width: 34, height: 34)
                         .background(Color.blue.opacity(0.09), in: .circle)
                     VStack(alignment: .leading, spacing: 4) {

@@ -305,6 +305,11 @@
 "切换 Agent" = "切换 Agent";
 "打开播放器" = "打开播放器";
 "正在播放" = "正在播放";
+"正在加载音乐" = "正在加载音乐";
+"收起播放器" = "收起播放器";
+"播放进度" = "播放进度";
+"后退 15 秒" = "后退 15 秒";
+"前进 15 秒" = "前进 15 秒";
 "返回来源对话" = "返回来源对话";
 "导出音频" = "导出音频";
 "无法播放音乐" = "无法播放音乐";
@@ -315,6 +320,7 @@
 "键盘输入" = "键盘输入";
 "音乐" = "音乐";
 "歌词" = "歌词";
+"收起歌词" = "收起歌词";
 "停止播放" = "停止播放";
 "项目设置" = "项目设置";
 "添加到项目" = "添加到项目";
@@ -326,3 +332,56 @@
 "有 %lld 项待你处理" = "有 %lld 项待你处理";
 
 "搜索项目" = "搜索项目";
+
+"chat_search_category_messages" = "消息";
+"chat_search_category_files" = "文件";
+"chat_search_category_links" = "链接";
+"chat_search_category_images" = "图片";
+
+"capability_disabled" = "已停用";
+"capability_discover" = "让助理查找";
+"capability_open_chat" = "在对话中处理";
+"capability_web_manage" = "打开管理页";
+"capability_web_open_failed" = "无法打开管理页";
+"capability_version_label" = "版本 %1$@";
+"capability_channel_telegram" = "需要配置 Telegram 机器人账号。";
+"capability_channel_weixin" = "需要登录微信账号。";
+"capability_channel_feishu" = "需要授权飞书或 Lark 应用。";
+"capability_channel_config" = "通道还缺少必填配置。";
+"capability_find_prompt" = "帮我在 xopc 里找适合我的「%1$@」。先看看有哪些可用选项，如果需求不明确就问我，再推荐合适的方案。";
+"capability_find_query_prompt" = "帮我在「%1$@」里查找与 %2$@ 相关的选项，说明推荐理由，再跟我确认下一步。";
+"capability_plugin_prompt" = "检查目录 ID 为 %1$@ 的 xopc 插件，告诉我它能做什么、是否已经安装或授权。如果需要配置，请引导我到管理页审核。";
+"capability_skill_prompt" = "帮我检查目录 ID 为 %1$@ 的技能，告诉我怎么用、还缺什么。如果我要求修改，请用技能工具处理并告诉我结果。";
+"capability_connection_prompt" = "帮我检查目录 ID 为 %1$@ 的连接是否可用，并帮我连接或排查问题。有授权流程就引导我完成。请勿在对话中收集凭据。";
+"capability_agent_prompt" = "帮我查看 ID 为 %1$@ 的助手或专家，说明它的职责和现有能力。如果我想调整，请先跟我确认方案。";
+"capability_channel_prompt" = "帮我检查目录 ID 为 %1$@ 的消息通道能否接收消息，以及还缺什么配置。如果需要登录、配对或填写凭据，请引导我到管理页。";
+"capability_title" = "能力";
+"capability_plugins" = "插件";
+"capability_skills" = "技能";
+"capability_connections" = "连接";
+"capability_agents" = "助手与专家";
+"capability_channels" = "消息通道";
+"capability_my_assistants" = "我的助手";
+"capability_experts" = "专家";
+"capability_installed" = "已安装";
+"capability_connected" = "已连接";
+"capability_configured" = "已配置";
+"capability_attention" = "待处理";
+"capability_available" = "可用";
+"capability_load_failed" = "暂时无法读取能力目录";
+"capability_partial" = "部分目录来源暂不可用";
+"capability_empty" = "此分类暂无内容";
+"capability_no_matches" = "没有匹配的结果";
+"capability_retry" = "重试";
+"capability_clear" = "清空搜索";
+"capability_start_chat" = "开始对话";
+"capability_personal_description" = "你的个人助理";
+"capability_search" = "搜索%@";
+
+"display_mode" = "显示模式";
+"color_scheme" = "配色方案";
+"color_scheme_default" = "默认";
+"color_scheme_porcelain" = "暖瓷";
+"color_scheme_dawn" = "晨曦";
+"color_scheme_emerald" = "翡翠";
+"color_scheme_clay" = "陶土";

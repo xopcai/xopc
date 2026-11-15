@@ -77,7 +77,11 @@ export function registerMusicGenerationRoutes(app: Hono, deps: AuthenticatedRout
     if (!session?.transcriptId || session.sourceChannel !== 'webchat' || session.sessionType !== 'chat') {
       return c.json({ error: 'Conversation not found' }, 404);
     }
-    return c.json({ configured: Boolean(await configuredMusicModel()), jobs: listMusicJobs(conversationId, session.transcriptId) });
+    return c.json({
+      transcriptId: session.transcriptId,
+      configured: Boolean(await configuredMusicModel()),
+      jobs: listMusicJobs(conversationId, session.transcriptId),
+    });
   });
 
   app.get(`${path}/:jobId/audio`, async c => {

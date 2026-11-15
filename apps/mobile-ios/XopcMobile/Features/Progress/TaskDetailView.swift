@@ -77,6 +77,7 @@ struct TaskDetailView: View {
 }
 
 struct TaskConversationView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let taskID: String
     var returnLabel: LocalizedStringKey?
@@ -142,7 +143,7 @@ struct TaskConversationView: View {
                     if overviewExpanded, let detail {
                         overview(detail)
                             .frame(height: max(0, min(geometry.size.height * 0.5, geometry.size.height - composerHeight - 64)))
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .background(mobileTheme.panel)
                             .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 14, bottomTrailingRadius: 14))
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -239,7 +240,7 @@ struct TaskConversationView: View {
             } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).contentShape(.rect) }
                 .disabled(isWorking).accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
         }.buttonStyle(.plain).padding(.horizontal, 8).frame(minHeight: 64)
-            .background(Color(uiColor: .systemGroupedBackground))
+            .background(mobileTheme.canvas)
     }
 
     private func overview(_ detail: TaskDetailEnvelope) -> some View {

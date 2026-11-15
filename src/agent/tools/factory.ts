@@ -96,6 +96,7 @@ import type { MemoryManager } from '../memory/manager.js';
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
 import type { SessionStore } from '../../session/store.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
+import { createCapabilityCatalogTool } from './capability-catalog-tool.js';
 import { createImageTool } from './image-tool.js';
 import { createMusicGenerationTool } from './music-generation-tool.js';
 import { createVideoDraftTool } from './video-draft-tool.js';
@@ -177,6 +178,7 @@ export interface ToolFactoryDeps {
   getPhoneSetupService?: () => import('../../phone/setup/service.js').PhoneSetupService | undefined;
   getBrowserSetupService?: () => import('../../browser/setup/service.js').BrowserSetupService | undefined;
   getMcpSetupService?: () => import('../mcp/conversation-setup.js').McpConversationSetup | undefined;
+  getCapabilityChannelState?: () => import('../../capabilities/capability-catalog.js').CapabilityChannelState;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: enables the `xopc_use` product-object tool. */
   getNotesService?: () => NotesService | undefined;
@@ -560,6 +562,12 @@ export class AgentToolsFactory {
         const kind = this.deps.endpointTools?.registry.get(origin.endpointId)?.kind;
         return kind === 'web' || kind === 'desktop';
       },
+      canOpenMobileMcpForm: () => {
+        const origin = this.deps.getCurrentContext()?.origin;
+        if (origin?.type !== 'endpoint') return false;
+        const endpoint = this.deps.endpointTools?.registry.get(origin.endpointId);
+        return endpoint?.kind === 'mobile' && endpoint.platform === 'harmonyos';
+      },
       canConfigureFromConversation: () => {
         const origin = this.deps.getCurrentContext()?.origin;
         return origin?.type === 'system' && origin.source === 'cli'
@@ -590,6 +598,17 @@ export class AgentToolsFactory {
         getConfig: () => this.deps.getConfig?.(),
       }),
       createToolManualTool(),
+      createCapabilityCatalogTool(() => {
+        const config = this.deps.getConfig?.();
+        const origin = this.deps.getCurrentContext()?.origin;
+        if (!config || !(origin?.type === 'endpoint' || origin?.type === 'system' && origin.source === 'cli')) return undefined;
+        const manager = getSkillMgr?.();
+        const enabled = new Set(manager?.getEnabledSkills().map(skill => skill.filePath));
+        return { ...this.deps.getCapabilityChannelState?.(), config, skills: (manager?.getSkills() ?? []).map(skill => ({
+          directoryId: skill.baseDir.split(/[\\/]/).at(-1) ?? skill.name, name: skill.name, description: skill.description,
+          localizations: skill.localizations, enabled: enabled.has(skill.filePath),
+        })) };
+      }),
       createClarifyTool({
         resolveAskUser: (toolCallId) => {
           const req = this.deps.gatewayClarify?.requestClarification;

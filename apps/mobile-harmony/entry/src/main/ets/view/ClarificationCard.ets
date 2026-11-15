@@ -22,7 +22,8 @@ export struct XopcClarificationCard {
   private questionId: string = '';
   @Monitor('prompt')
   onQuestionChange(): void { if (this.questionId === this.prompt.id) return; this.questionId = this.prompt.id; this.draft = ''; this.selectedId = ''; this.editing = false; this.expanded = false; }
-  private disabled(): boolean { return this.submitting || (this.prompt.expiresAt !== undefined && this.prompt.expiresAt <= this.now); }
+  private expired(): boolean { return this.prompt.expiresAt !== undefined && this.prompt.expiresAt <= this.now; }
+  private disabled(): boolean { return this.submitting || this.expired(); }
   private send(action: string, choiceId: string = '', text: string = '', decision: string = ''): void {
     if (this.disabled()) return;
     const command: XopcClarificationCommand = { action };
@@ -44,7 +45,8 @@ export struct XopcClarificationCard {
     Scroll() {
       Column({ space: 8 }) {
         Text(this.prompt.kind === 'approval' ? $r('app.string.clarify_approval_title') : $r('app.string.clarify_title'))
-          .fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+          .fontSize(15).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.light && !this.expired() ? this.colors.attentionForeground : this.colors.foreground).width('100%')
         Text(this.prompt.question).fontSize(14).fontColor(this.colors.foreground).width('100%')
         if (this.prompt.expiresAt !== undefined) {
           Text(this.prompt.expiresAt <= this.now ? $r('app.string.clarify_expired') : $r('app.string.clarify_remaining', Math.max(0, Math.ceil((this.prompt.expiresAt - this.now) / 1000))))
@@ -62,7 +64,9 @@ export struct XopcClarificationCard {
           }
           Text($r('app.string.clarify_once')).fontSize(12).fontColor(this.colors.secondary).width('100%')
           Row({ space: 8 }) {
-            Button($r('app.string.clarify_deny')).height(44).enabled(!this.disabled()).onClick((): void => { this.send('answer', '', '', 'deny'); })
+            Button($r('app.string.clarify_deny')).height(44).enabled(!this.disabled())
+              .backgroundColor(this.colors.panel).fontColor(this.colors.foreground)
+              .onClick((): void => { this.send('answer', '', '', 'deny'); })
             Button($r('app.string.clarify_approve')).height(44).enabled(!this.disabled()).onClick((): void => { this.send('answer', '', '', 'approve'); })
           }
         } else {
@@ -99,6 +103,9 @@ export struct XopcClarificationCard {
         if (this.submitting) { Text($r('app.string.clarify_submitting')).fontSize(12).fontColor(this.colors.secondary) }
         if (this.errorMessage) { Text(this.errorMessage).fontSize(12).fontColor(this.colors.danger).width('100%') }
       }.padding(12).width('100%')
-    }.constraintSize({ maxHeight: 400 }).width('100%').borderRadius(16).backgroundColor(this.colors.grouped)
+    }.constraintSize({ maxHeight: 400 }).width('100%')
+      .backgroundColor(this.colors.light && !this.expired() ? this.colors.attentionFill : this.colors.grouped)
+      .border(this.colors.light && !this.expired() ? this.colors.attentionStroke : this.colors.panelStroke)
+      .borderRadius(this.colors.corner(16))
   }
 }

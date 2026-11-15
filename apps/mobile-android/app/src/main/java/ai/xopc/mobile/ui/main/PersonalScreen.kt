@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalGoal
@@ -15,19 +16,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextField
@@ -161,7 +159,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
     ProfileCard(state.summary, connected, onOpenAbout)
     Spacer(Modifier.height(16.dp))
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-      shape = RoundedCornerShape(22.dp),
+      shape = themedCorners(22),
       modifier = Modifier.fillMaxWidth().testTag("personal-agent-card")) {
       Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically,
@@ -236,7 +234,7 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
             TextField(title, { title = it.take(120) },
               Modifier.fillMaxWidth().testTag("goal-title"), enabled = !state.savingGoal,
               placeholder = { Text(stringResource(R.string.personal_goal_title_hint)) },
-              singleLine = true, shape = RoundedCornerShape(16.dp), colors = fieldColors,
+              singleLine = true, shape = themedCorners(16), colors = fieldColors,
               keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
               keyboardActions = KeyboardActions(onNext = { outcomeFocus.requestFocus() }))
           }
@@ -246,13 +244,13 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
               Modifier.fillMaxWidth().focusRequester(outcomeFocus).testTag("goal-outcome"),
               enabled = !state.savingGoal, minLines = 3, maxLines = 5,
               placeholder = { Text(stringResource(R.string.personal_goal_outcome_hint)) },
-              shape = RoundedCornerShape(16.dp), colors = fieldColors)
+              shape = themedCorners(16), colors = fieldColors)
           }
           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.personal_goal_date_optional), style = MaterialTheme.typography.labelLarge)
             Card(onClick = { keyboard?.hide(); datePickerOpen = true }, enabled = !state.savingGoal,
               modifier = Modifier.fillMaxWidth().testTag("goal-date"),
-              shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+              shape = themedCorners(16), colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
               Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically) {
@@ -267,13 +265,12 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
               Text(stringResource(R.string.personal_goal_date_clear))
             }
           }
-          if (editingId != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          if (editingId != null) SegmentedTabs(
             listOf("active" to R.string.personal_active, "paused" to R.string.personal_paused,
-              "achieved" to R.string.personal_achieved).forEach { (value, label) ->
-              FilterChip(selected = status == value, onClick = { status = value },
-                enabled = !state.savingGoal, label = { Text(stringResource(label)) })
-            }
-          }
+              "achieved" to R.string.personal_achieved).map { (value, label) ->
+              SegmentOption(value, stringResource(label), "goal-status-$value")
+            }, status, { status = it }, enabled = !state.savingGoal,
+          )
           if (state.goalError) Text(stringResource(R.string.personal_goal_save_error),
             color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.testTag("goal-save-error"))
@@ -328,7 +325,7 @@ private fun goalDateText(timestamp: Long): String = Instant.ofEpochMilli(timesta
 @Composable
 private fun ProfileCard(summary: PersonalSummary?, connected: Boolean, onOpenAbout: () -> Unit) {
   Card(onClick = onOpenAbout, modifier = Modifier.fillMaxWidth().testTag("personal-profile"),
-    shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(
+    shape = themedCorners(22), colors = CardDefaults.cardColors(
       containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
     Row(Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
       verticalAlignment = Alignment.CenterVertically) {
@@ -436,7 +433,7 @@ private fun PersonalCard(onClick: (() -> Unit)? = null, tag: String? = null,
   val modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
     .then(if (tag != null) Modifier.testTag(tag) else Modifier)
     .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-  Card(modifier, shape = RoundedCornerShape(16.dp),
+  Card(modifier, shape = themedCorners(16),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
   }

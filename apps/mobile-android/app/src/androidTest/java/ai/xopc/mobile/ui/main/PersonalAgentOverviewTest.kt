@@ -30,6 +30,7 @@ class PersonalAgentOverviewTest {
     }
     val file = PersonalDelivery("delivery", "Weekly report", "Reporting", "source", null, null, null)
     val library = mutableStateOf(false)
+    val deliveries = mutableStateOf(PersonalOverviewList<PersonalDeliveryPage>())
     var opened = ""
     compose.setContent {
       MaterialTheme {
@@ -37,7 +38,7 @@ class PersonalAgentOverviewTest {
           null, null, library.value, { library.value = it },
           PersonalOverviewList(PersonalWorkPage(work, emptyList(), 0), loading = false),
           PersonalOverviewList(emptyList(), loading = false),
-          PersonalOverviewList(PersonalDeliveryPage(listOf(file), null), loading = false),
+          deliveries.value,
           {}, {}, {}, {}, {}, { opened = it.id }, {}, {}, {}, Modifier)
       }
     }
@@ -49,7 +50,14 @@ class PersonalAgentOverviewTest {
     tasks.performTouchInput { swipeDown() }
     portrait.assertWidthIsEqualTo(116.dp)
     compose.onNodeWithTag("personal-overview-library-tab").performClick()
-    compose.onNodeWithTag("personal-overview-delivery-delivery").performClick()
+    val skeleton = compose.onNodeWithTag("personal-overview-library-loading")
+    skeleton.assertExists()
+    val item = compose.onNodeWithTag("personal-overview-delivery-delivery")
+    item.assertDoesNotExist()
+    compose.runOnIdle { deliveries.value = PersonalOverviewList(PersonalDeliveryPage(listOf(file), 15)) }
+    skeleton.assertDoesNotExist()
+    compose.onNodeWithTag("personal-overview-library-loading-more").assertExists()
+    item.performClick()
     assertEquals("delivery", opened)
   }
 }

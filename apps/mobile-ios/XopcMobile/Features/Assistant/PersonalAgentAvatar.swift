@@ -79,7 +79,9 @@ struct ConfiguredAgentAvatar: View {
                     data = bytes
                 } else {
                     let id = agent.id.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")) ?? ""
-                    data = try await GatewayClient(configuration: configuration).requestData(path: "/api/agents/\(id)/avatar?resolve=1")
+                    data = try await GatewayClient(configuration: configuration).requestData(
+                        path: "/api/agents/\(id)/avatar", queryItems: [URLQueryItem(name: "resolve", value: "1")]
+                    )
                 }
                 guard !Task.isCancelled, !data.isEmpty, data.count <= 512 * 1024 else { return }
                 picture = UIImage(data: data)

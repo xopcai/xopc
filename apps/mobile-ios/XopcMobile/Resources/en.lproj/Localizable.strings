@@ -220,7 +220,6 @@
 "暂无项目说明" = "No project description";
 "状态" = "Status";
 "健康度" = "Health";
-"工作进展" = "Progress";
 "进行中" = "Active";
 "目标" = "Goal";
 "任务详情" = "Task Details";
@@ -1133,6 +1132,11 @@
 "切换 Agent" = "Switch agent";
 "打开播放器" = "Open player";
 "正在播放" = "Now playing";
+"正在加载音乐" = "Loading music";
+"收起播放器" = "Minimize player";
+"播放进度" = "Playback position";
+"后退 15 秒" = "Go back 15 seconds";
+"前进 15 秒" = "Go forward 15 seconds";
 "返回来源对话" = "Back to source conversation";
 "导出音频" = "Export audio";
 "无法播放音乐" = "Unable to play music";
@@ -1143,6 +1147,7 @@
 "键盘输入" = "Keyboard input";
 "音乐" = "Music";
 "歌词" = "Lyrics";
+"收起歌词" = "Hide lyrics";
 "停止播放" = "Stop playback";
 "项目设置" = "Project settings";
 "添加到项目" = "Add to project";
@@ -1152,3 +1157,56 @@
 "对话草稿" = "Conversation draft";
 
 "搜索项目" = "Search projects";
+
+"chat_search_category_messages" = "Messages";
+"chat_search_category_files" = "Files";
+"chat_search_category_links" = "Links";
+"chat_search_category_images" = "Images";
+
+"capability_disabled" = "Disabled";
+"capability_discover" = "Find with assistant";
+"capability_open_chat" = "Continue in Chat";
+"capability_web_manage" = "Open administration";
+"capability_web_open_failed" = "Could not open administration";
+"capability_version_label" = "Version %1$@";
+"capability_channel_telegram" = "A Telegram bot account needs authorization.";
+"capability_channel_weixin" = "A Weixin account needs to sign in.";
+"capability_channel_feishu" = "A Feishu or Lark app needs authorization.";
+"capability_channel_config" = "Required channel settings are missing.";
+"capability_find_prompt" = "Help me find %1$@ in XOPC. Check what is available first, ask what I need if it is unclear, and recommend suitable options before making changes.";
+"capability_find_query_prompt" = "Find %1$@ for this request: %2$@. Check what is available and recommend suitable options before making changes.";
+"capability_plugin_prompt" = "Check the installation and authorization status of the XOPC plugin with catalog ID %1$@. Explain what it can do and guide me through the owner review if setup is needed.";
+"capability_skill_prompt" = "Check the XOPC skill with catalog ID %1$@. Explain how to use it and what it needs. If I ask to change it, use the Skill tools and report the result.";
+"capability_connection_prompt" = "Check the XOPC connection with catalog ID %1$@. Verify its status and help me connect or troubleshoot. Use the authorized setup flow if one is available. Keep credentials out of chat.";
+"capability_agent_prompt" = "Review the XOPC assistant or expert with ID %1$@. Explain its role and available capabilities. Discuss any requested changes with me before applying them.";
+"capability_channel_prompt" = "Check the messaging channel with catalog ID %1$@. Tell me whether it can receive messages and what setup is still required. If sign-in, pairing, or credentials are needed, guide me to the owner administration page.";
+"capability_title" = "Capabilities";
+"capability_plugins" = "Plugins";
+"capability_skills" = "Skills";
+"capability_connections" = "Connections";
+"capability_agents" = "Assistants & Experts";
+"capability_channels" = "Messaging Channels";
+"capability_my_assistants" = "My Assistants";
+"capability_experts" = "Experts";
+"capability_installed" = "Installed";
+"capability_connected" = "Connected";
+"capability_configured" = "Configured";
+"capability_attention" = "Needs Attention";
+"capability_available" = "Available";
+"capability_load_failed" = "Could not load the catalog";
+"capability_partial" = "Some catalog sources are unavailable";
+"capability_empty" = "Nothing here yet";
+"capability_no_matches" = "No matching results";
+"capability_retry" = "Retry";
+"capability_clear" = "Clear Search";
+"capability_start_chat" = "Start Chat";
+"capability_personal_description" = "Your personal assistant";
+"capability_search" = "Search %@";
+
+"display_mode" = "Mode";
+"color_scheme" = "Color scheme";
+"color_scheme_default" = "Default";
+"color_scheme_porcelain" = "Porcelain";
+"color_scheme_dawn" = "Dawn";
+"color_scheme_emerald" = "Emerald";
+"color_scheme_clay" = "Clay";

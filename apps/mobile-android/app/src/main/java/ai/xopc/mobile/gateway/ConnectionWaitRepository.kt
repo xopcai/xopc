@@ -1,9 +1,13 @@
 package ai.xopc.mobile.gateway
 
 import org.json.JSONObject
+import java.util.UUID
 
 data class ConnectionWaitNeed(val key: String, val label: String, val phase: String,
-  val authorizationMode: String, val capabilities: List<String>, val reason: String?)
+  val authorizationMode: String, val capabilities: List<String>, val reason: String?,
+  val accounts: List<ConnectionWaitAccount> = emptyList())
+
+data class ConnectionWaitAccount(val id: String, val label: String)
 
 data class ConnectionWaitInfo(val id: String, val conversationId: String, val version: Long,
   val phase: String, val summary: String, val needs: List<ConnectionWaitNeed>,
@@ -12,6 +16,8 @@ data class ConnectionWaitInfo(val id: String, val conversationId: String, val ve
 data class ConnectionWaitSnapshot(val transcriptId: String, val revision: Long,
   val wait: ConnectionWaitInfo?)
 
+internal data class ConnectionWaitActionResult(val snapshot: ConnectionWaitSnapshot, val authorizationUrl: String?)
+
 class ConnectionWaitRepository(private val gateway: GatewaySession) {
   fun snapshot(conversationId: String): ConnectionWaitSnapshot {
     require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
@@ -19,11 +25,30 @@ class ConnectionWaitRepository(private val gateway: GatewaySession) {
       gateway.request("/api/sessions/$conversationId/connection-wait"))
   }
 
+  internal fun act(conversationId: String, snapshot: ConnectionWaitSnapshot, action: String,
+    needKey: String?, accountId: String?): ConnectionWaitActionResult {
+    require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
+    val wait = requireNotNull(snapshot.wait)
+    require(wait.conversationId == conversationId)
+    val body = JSONObject().put("waitId", wait.id).put("expectedTranscriptId", snapshot.transcriptId)
+      .put("expectedVersion", wait.version).put("idempotencyKey", UUID.randomUUID().toString()).put("action", action)
+    needKey?.let { body.put("needKey", it) }
+    accountId?.let { body.put("accountId", it) }
+    val response = JSONObject(gateway.request("/api/sessions/$conversationId/connection-wait/actions", "POST", body.toString()))
+    require(response.optBoolean("ok")) { "CONNECTION_ACTION_FAILED" }
+    val payload = response.getJSONObject("payload")
+    return ConnectionWaitActionResult(parsePayload(conversationId, payload.getJSONObject("snapshot")),
+      payload.optString("authorizationUrl").takeIf { it.isNotBlank() && it != "null" })
+  }
+
   companion object {
     fun parseSnapshot(conversationId: String, raw: String): ConnectionWaitSnapshot {
       val response = JSONObject(raw)
       require(response.optBoolean("ok")) { "INVALID_CONNECTION_WAIT" }
-      val payload = response.getJSONObject("payload")
+      return parsePayload(conversationId, response.getJSONObject("payload"))
+    }
+
+    private fun parsePayload(conversationId: String, payload: JSONObject): ConnectionWaitSnapshot {
       val transcriptId = payload.getString("transcriptId")
       val revision = payload.getLong("revision")
       require(transcriptId.isNotBlank() && transcriptId.length <= 256 && revision >= 0) {
@@ -53,10 +78,16 @@ class ConnectionWaitRepository(private val gateway: GatewaySession) {
             mode in setOf("browser", "desktop") && capabilities.length() <= 20) {
             "INVALID_CONNECTION_WAIT"
           }
+          val accounts = need.optJSONArray("accounts")
           ConnectionWaitNeed(key, label, needPhase, mode,
             (0 until capabilities.length()).map { capabilityIndex ->
               capabilities.getString(capabilityIndex).take(160)
-            }, need.optString("reason").takeIf(String::isNotBlank)?.take(500))
+            }, need.optString("reason").takeIf(String::isNotBlank)?.take(500),
+            (0 until (accounts?.length() ?: 0).coerceAtMost(30)).mapNotNull { accountIndex ->
+              val account = accounts?.optJSONObject(accountIndex) ?: return@mapNotNull null
+              val accountId = account.optString("id").takeIf { it.isNotBlank() && it.length <= 256 } ?: return@mapNotNull null
+              ConnectionWaitAccount(accountId, account.optString("label").take(240))
+            })
         }
         val timeRange = row.optJSONObject("timeRange")?.let { range ->
           listOf(range.optString("expression"), range.optString("timezone"))

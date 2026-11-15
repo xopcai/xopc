@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressItem
@@ -92,7 +93,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
           verticalArrangement = Arrangement.spacedBy(18.dp)) {
           repeat(3) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-              Box(Modifier.size(28.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(6.dp)))
+              Box(Modifier.size(28.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, themedCorners(6)))
               Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.fillMaxWidth(0.75f).height(16.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(4.dp)))
                 Box(Modifier.fillMaxWidth(0.5f).height(12.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(4.dp)))
@@ -181,7 +182,7 @@ internal fun ProgressOverview(state: ProgressUiState, onRefresh: () -> Unit,
 @Composable
 private fun ProgressCount(count: Int, label: Int, tag: String, modifier: Modifier, onClick: () -> Unit) {
   Card(onClick = onClick, enabled = count > 0, modifier = modifier.testTag(tag),
-    shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+    shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(
       containerColor = MaterialTheme.colorScheme.surfaceContainer,
       disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer)) {
     val countColor = if (count > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -221,7 +222,7 @@ private fun ProgressChevron(color: androidx.compose.ui.graphics.Color = Material
 
 @Composable
 private fun ProgressShortcut(label: Int, icon: Int, onClick: () -> Unit, modifier: Modifier) {
-  Card(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(16.dp),
+  Card(onClick = onClick, modifier = modifier, shape = MaterialTheme.shapes.medium,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
     Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -238,7 +239,7 @@ private fun ProgressShortcut(label: Int, icon: Int, onClick: () -> Unit, modifie
 private fun ProgressHubRow(title: String, summary: String, icon: Int, tag: String,
   navigable: Boolean = true, onOpen: () -> Unit) {
   Card(onClick = onOpen, enabled = navigable, modifier = Modifier.fillMaxWidth().testTag(tag),
-    shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(
+    shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(
       containerColor = MaterialTheme.colorScheme.surfaceContainer,
       disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer)) {
     Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -262,14 +263,19 @@ private fun ProgressAttentionRow(item: ProgressItem, busy: Boolean, onOpen: () -
   var reviewExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
   val canOpen = item.openAction?.href?.let(::progressDestination) != null
   val hasActions = item.primaryAction != null || item.secondaryActions.isNotEmpty()
-  Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+  Card(shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth(),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Column(Modifier.fillMaxWidth().testTag("progress-item-${item.id}").clickable(enabled = canOpen, onClick = onOpen),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item.statusLabel?.takeIf(String::isNotBlank)?.let { status ->
-          Text(status, fontSize = 12.sp, fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary)
+          Row(Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, themedCorners(10))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(6.dp).background(MaterialTheme.colorScheme.tertiary, RoundedCornerShape(50)))
+            Text(status, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
         }
         Text(item.title, fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,
           maxLines = 3, overflow = TextOverflow.Ellipsis)

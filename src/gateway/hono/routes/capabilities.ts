@@ -9,6 +9,8 @@ import {
   listStoreConnectors,
 } from '../../../capabilities/store-connector.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { listCapabilities, mobileCapabilityCategories } from '../../../capabilities/capability-catalog.js';
+import { registerMobileCapabilityActions } from './mobile-capability-actions.js';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -22,6 +24,23 @@ function optionalVersion(body: unknown): string | undefined {
 
 export function registerCapabilityRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+  registerMobileCapabilityActions(authenticated, deps);
+
+  authenticated.get('/api/capabilities/mobile-catalog', async (c) => {
+    const requested = c.req.query('category') ?? 'plugins';
+    const category = mobileCapabilityCategories.find(value => value === requested);
+    if (!category) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Unknown capability category' } }, 400);
+    const locale = c.req.query('locale') ?? c.req.header('Accept-Language') ?? 'en';
+    const loader = service.getExtensionLoader();
+    const payload = await listCapabilities({
+      config: service.currentConfig,
+      extensions: category === 'plugins' ? loader?.discoverExtensions() ?? [] : undefined,
+      skills: category === 'skills' ? service.marketplace.getSkillsApi().catalog : [],
+      channelSnapshot: category === 'channels' ? loader?.getManifestSnapshot() : undefined,
+      runningChannels: category === 'channels' ? new Set(service.getRunningChannelIds()) : undefined,
+    }, category, locale);
+    return c.json({ ok: true, payload });
+  });
 
   authenticated.get('/api/capabilities/connectors', async (c) => {
     try {

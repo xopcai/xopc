@@ -1,9 +1,10 @@
+import { fileUri } from '@kit.CoreFileKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { generatedMediaTime } from '../common/generatedMedia';
 import { XopcGeneratedMediaCard } from '../model/generatedMedia';
 import { downloadGeneratedMedia, removeGeneratedMediaFile } from '../service/generatedMediaFile';
 import { XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
-import { XopcMusicPlayButton, XopcMusicProgress } from './MusicPlaybackView';
+import { XopcMusicPlayButton } from './MusicPlaybackView';
 
 function mediaTitle(card: XopcGeneratedMediaCard, zh: boolean): string {
   return card.item.title || card.item.summary || (card.kind === 'music' ? (zh ? '音乐' : 'Music')
@@ -30,70 +31,74 @@ export struct XopcGeneratedMediaRow {
   @Param submitting: boolean = false;
   @Param confirmationFailed: boolean = false;
   @Param zh: boolean = false;
-  @Param playbackId: string = '';
   @Require @Param music: XopcGeneratedMusicPlayback;
   @Param conversationId: string = '';
   @Local colors: XopcThemeColors = appThemeColors;
-  @Local detailsOpen: boolean = false;
   @Event onPlay: () => void = (): void => {};
-  @Event onCloseMusic: () => void = (): void => {};
-  @Event onLyricsExpanded: () => void = (): void => {};
+  @Event onOpen: () => void = (): void => {};
+  @Event onMusicAreaChange: () => void = (): void => {};
   @Event onConfirm: () => void = (): void => {};
 
   @Computed get musicSelected(): boolean {
     return this.card.kind === 'music' && this.music.matches(this.conversationId, this.card.item.id);
   }
-  @Computed get videoSelected(): boolean { return this.card.kind === 'video' && this.playbackId === this.card.item.id; }
 
-  private metadata(): string {
+  private cardSubtitle(): string {
+    const status = mediaStatus(this.card, this.zh);
+    if (this.card.kind === 'video') return status;
     const item = this.card.item;
-    if (this.card.kind === 'music') {
-      const parts: string[] = [];
-      if (item.versionNumber) parts.push(this.zh ? '第 ' + item.versionNumber + ' 版' : 'Version ' + item.versionNumber);
-      const duration = this.music.durationFor(this.conversationId, item.id, item.durationMs);
-      if (duration > 0) parts.push(generatedMediaTime(duration));
-      return parts.join(' · ');
-    }
-    return [item.duration === -1 ? (this.zh ? '自动时长' : 'Auto duration')
-      : item.duration ? item.duration + (this.zh ? ' 秒' : ' s') : '', item.resolution ?? '',
-      item.ratio === 'adaptive' ? '' : item.ratio ?? ''].filter((part: string): boolean => !!part).join(' · ');
+    const parts: string[] = [status];
+    if (item.versionNumber) parts.push(this.zh ? '第 ' + item.versionNumber + ' 版' : 'Version ' + item.versionNumber);
+    const duration = this.music.durationFor(this.conversationId, item.id, item.durationMs);
+    if (duration > 0) parts.push(generatedMediaTime(duration));
+    return parts.join(' · ');
+  }
+
+  @Builder
+  cardLabel() {
+    Row({ space: 10 }) {
+      Stack() {
+        if (this.card.kind === 'music') {
+          Text('♫').fontSize(23).fontColor(this.colors.chat.secondary)
+        } else {
+          SymbolGlyph($r('sys.symbol.film')).fontSize(21).fontColor([this.colors.chat.secondary])
+        }
+      }.width(42).height(42).borderRadius(this.colors.corner(13)).backgroundColor(this.colors.chat.canvas)
+      Column({ space: 3 }) {
+        Text(mediaTitle(this.card, this.zh)).fontSize(16).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.foreground).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(this.cardSubtitle()).fontSize(12)
+          .fontColor(this.card.item.state === 'completed' ? this.colors.success : this.colors.chat.secondary)
+          .maxLines(this.card.kind === 'video' ? 1 : 2).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+    }.width('100%')
   }
 
   build() {
     Column({ space: 8 }) {
       Row({ space: 10 }) {
-        Stack() {
-          if (this.card.kind === 'music') {
-            Text('♫').fontSize(23).fontColor(this.colors.chat.secondary)
-          } else {
-            SymbolGlyph($r('sys.symbol.film')).fontSize(21).fontColor([this.colors.chat.secondary])
-          }
-        }.width(42).height(42).borderRadius(13).backgroundColor(this.colors.chat.canvas)
-        Column({ space: 3 }) {
-          Text(mediaTitle(this.card, this.zh)).fontSize(16).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.foreground).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text([mediaStatus(this.card, this.zh), this.metadata()].filter((part: string): boolean => !!part).join(' · '))
-            .fontSize(12).fontColor(this.colors.chat.secondary).maxLines(2)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+        if (this.card.item.state === 'completed') {
+          Button({ type: ButtonType.Normal }) { this.cardLabel() }
+            .id('generated-' + this.card.kind + '-open-' + this.card.item.id).layoutWeight(1)
+            .height(48).padding(0).backgroundColor(Color.Transparent)
+            .accessibilityText($r('app.string.music_expand', mediaTitle(this.card, this.zh)))
+            .onClick((): void => { this.onOpen(); })
+        } else {
+          Column() { this.cardLabel() }.layoutWeight(1)
+        }
         if (this.card.item.state === 'completed') {
           if (this.musicSelected) {
             XopcMusicPlayButton({ primary: true, buttonId: 'generated-media-toggle-' + this.card.item.id })
           } else {
             Button({ type: ButtonType.Circle }) {
-              SymbolGlyph(this.videoSelected ? $r('sys.symbol.xmark') : $r('sys.symbol.play_fill')).fontSize(17).fontColor([this.colors.chat.action])
+              SymbolGlyph($r('sys.symbol.play_fill')).fontSize(17).fontColor([this.colors.chat.action])
             }.id('generated-media-play-' + this.card.item.id).width(44).height(44).padding(0)
               .backgroundColor(this.colors.chat.bubble)
-              .accessibilityText(this.videoSelected ? (this.zh ? '关闭播放' : 'Close player') : (this.zh ? '播放' : 'Play'))
+              .accessibilityText($r('app.string.chat_media_play'))
               .onClick((): void => { this.onPlay(); })
           }
         }
       }.width('100%')
-      if (this.musicSelected) {
-        XopcGeneratedMusicControls({ card: this.card, music: this.music, zh: this.zh,
-          onClose: this.onCloseMusic, onLyricsExpanded: this.onLyricsExpanded })
-      } else if (this.videoSelected) {
-        XopcGeneratedVideoPlayer({ card: this.card, conversationId: this.conversationId, zh: this.zh })
-      }
       if (this.card.draft) {
         if (this.card.item.estimatedCreditMicro !== undefined) {
           Text(this.zh ? '预估 ' + (this.card.item.estimatedCreditMicro / 1000000).toFixed(2) + ' 积分'
@@ -117,25 +122,20 @@ export struct XopcGeneratedMediaRow {
         Text(this.confirmationFailed ? (this.zh ? '提交未完成，请检查当前草稿后重试。' : 'Submission failed. Review the current draft and try again.')
           : this.card.item.error).fontSize(13).fontColor(this.colors.danger)
       }
-      if (this.card.item.prompt) {
-        Button(this.detailsOpen ? (this.zh ? '收起创作详情' : 'Hide details') : (this.zh ? '创作详情' : 'Details'))
-          .height(44).padding({ left: 0, right: 12 }).fontSize(13).backgroundColor(Color.Transparent).fontColor(this.colors.chat.secondary)
-          .onClick((): void => { this.detailsOpen = !this.detailsOpen; })
-        if (this.detailsOpen) {
-          Text(this.card.item.prompt).fontSize(14).fontColor(this.colors.chat.secondary).width('100%')
-        }
-      }
     }.id('generated-media-card-' + this.card.item.id).width('100%').constraintSize({ maxWidth: 440 })
-      .alignItems(HorizontalAlign.Start).padding(16).borderRadius(18)
-      .backgroundColor(this.colors.chat.card)
+      .alignItems(HorizontalAlign.Start).padding(16)
+      .backgroundColor(this.colors.light && this.card.draft && this.card.canConfirm ? this.colors.attentionFill : this.colors.chat.card)
+      .border(this.card.draft && this.card.canConfirm ? this.colors.attentionStroke : this.colors.panelStroke).borderRadius(this.colors.corner(18))
+      .onAreaChange((): void => { if (this.musicSelected) this.onMusicAreaChange(); })
   }
 }
 
 @ComponentV2
-struct XopcGeneratedVideoPlayer {
+export struct XopcGeneratedVideoDrawer {
   @Require @Param card: XopcGeneratedMediaCard;
   @Require @Param conversationId: string;
   @Param zh: boolean = false;
+  @Event onClose: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local path: string = '';
   @Local loading: boolean = false;
@@ -171,74 +171,44 @@ struct XopcGeneratedVideoPlayer {
   }
 
   build() {
-    Column({ space: 6 }) {
-      if (this.loading) {
-        LoadingProgress().width(32).height(32).color(this.colors.chat.action)
-      } else if (this.failed) {
-        Text(this.zh ? '无法播放这段视频' : 'Unable to play this video').fontColor(this.colors.danger)
-        Button($r('app.string.refresh')).height(44).onClick((): void => {
-          const path = this.path;
-          this.path = '';
-          void removeGeneratedMediaFile(path).then((): void => { void this.load(); });
-        })
-      } else if (this.path) {
-        Video({ src: this.path, controller: this.video }).width('100%')
-          .aspectRatio(this.card.item.ratio === '9:16' ? 1 : 16 / 9)
-          .autoPlay(true).controls(true).objectFit(ImageFit.Contain).borderRadius(12)
-          .onError((): void => { this.failed = true; })
-      }
-    }.id('generated-media-inline-' + this.card.item.id).width('100%').alignItems(HorizontalAlign.Start)
-  }
-}
-
-@ComponentV2
-struct XopcGeneratedMusicControls {
-  @Require @Param card: XopcGeneratedMediaCard;
-  @Require @Param music: XopcGeneratedMusicPlayback;
-  @Param zh: boolean = false;
-  @Local colors: XopcThemeColors = appThemeColors;
-  @Local lyricsOpen: boolean = false;
-  @Event onClose: () => void = (): void => {};
-  @Event onLyricsExpanded: () => void = (): void => {};
-
-  build() {
-    Column({ space: 4 }) {
-      XopcMusicProgress()
-      if (this.music.failed) {
-        Text($r('app.string.music_retry_hint')).fontSize(13).fontColor(this.colors.danger)
-      }
-      Row() {
-        if (this.card.item.lyrics) {
-          Button(this.lyricsOpen ? (this.zh ? '收起歌词' : 'Hide lyrics') : (this.zh ? '歌词' : 'Lyrics'))
-            .id('generated-music-lyrics-toggle-' + this.card.item.id)
-            .height(44).padding({ left: 0, right: 12 }).fontSize(13)
-            .backgroundColor(Color.Transparent).fontColor(this.colors.chat.secondary)
-            .onClick((): void => { this.lyricsOpen = !this.lyricsOpen; })
-        }
-        Blank()
-        Button($r('app.string.music_now_playing')).id('generated-music-expand-' + this.card.item.id)
-          .height(44).padding({ left: 8, right: 8 }).fontSize(13).backgroundColor(Color.Transparent)
-          .fontColor(this.colors.chat.action).onClick((): void => { this.music.open(); })
+    Column() {
+      Row({ space: 12 }) {
+        Column({ space: 4 }) {
+          Text(mediaTitle(this.card, this.zh)).fontSize(20).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([this.colors.chat.secondary])
-        }.id('generated-music-close-' + this.card.item.id)
-          .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText(this.zh ? '关闭播放' : 'Close player')
-          .onClick((): void => { this.onClose(); })
-      }.width('100%')
-      if (this.lyricsOpen && this.card.item.lyrics) {
-        Scroll() {
-          Text(this.card.item.lyrics).width('100%').fontSize(16).lineHeight(26)
-            .padding({ right: 8 }).fontColor(this.colors.foreground)
-            .textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)
-        }.id('generated-music-lyrics-' + this.card.item.id)
-          .width('100%').constraintSize({ maxHeight: 160 }).scrollBar(BarState.Auto)
-          .edgeEffect(EdgeEffect.None)
-          .nestedScroll({ scrollForward: NestedScrollMode.SELF_FIRST, scrollBackward: NestedScrollMode.SELF_FIRST })
-          .onAreaChange((previous: Area, current: Area): void => {
-            if (Number(previous.height) === 0 && Number(current.height) > 0) this.onLyricsExpanded();
-          })
-      }
-    }.id('generated-media-inline-' + this.card.item.id).width('100%').alignItems(HorizontalAlign.Start)
+          SymbolGlyph($r('sys.symbol.xmark')).fontSize(20).fontColor([this.colors.foreground])
+        }.id('video-player-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+          .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
+      }.width('100%').padding({ bottom: 14 })
+      Stack() {
+        if (this.failed) {
+          Column({ space: 8 }) {
+            Text(this.zh ? '无法播放这段视频' : 'Unable to play this video').fontColor(this.colors.danger)
+            Button($r('app.string.refresh')).height(44).onClick((): void => {
+              const path = this.path;
+              this.path = '';
+              void removeGeneratedMediaFile(path).then((): void => { void this.load(); });
+            })
+          }
+        } else if (this.loading || !this.path) {
+          LoadingProgress().width(32).height(32).color(this.colors.chat.action)
+        } else {
+          this.videoSurface()
+        }
+      }.width('100%').layoutWeight(1)
+    }.id('video-player-drawer').width('100%').height('100%')
+      .padding({ top: 12, left: 20, right: 20, bottom: 16 }).alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
+  videoSurface() {
+    Video({ src: fileUri.getUriFromPath(this.path), controller: this.video })
+      .id('generated-video-player-' + this.card.item.id).width('100%')
+      .aspectRatio(this.card.item.ratio === '16:9' ? 16 / 9 : this.card.item.ratio === '9:16' ? 9 / 16 : 1)
+      .constraintSize({ maxHeight: '100%' })
+      .autoPlay(true).controls(true).objectFit(ImageFit.Contain).borderRadius(this.colors.corner(12))
+      .onError((): void => { this.failed = true; })
   }
 }

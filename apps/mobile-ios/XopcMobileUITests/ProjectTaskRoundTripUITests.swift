@@ -33,7 +33,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
         project.tap()
-        app.segmentedControls.firstMatch.buttons["任务"].tap()
+        app.buttons["project-tab-tasks"].tap()
         app.buttons["新建项目任务"].tap()
         let objective = app.textFields["描述需要完成的事项"]
         XCTAssertTrue(objective.waitForExistence(timeout: 5))
@@ -81,7 +81,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
         project.tap()
-        app.segmentedControls.firstMatch.buttons["笔记"].tap()
+        app.buttons["project-tab-notes"].tap()
         app.buttons["新建项目笔记"].tap()
         XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["note-markdown-toolbar"].exists)
@@ -126,7 +126,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
         project.tap()
-        app.segmentedControls.firstMatch.buttons["自动化"].tap()
+        app.buttons["project-tab-automations"].tap()
         app.buttons["新建项目自动化"].tap()
         XCTAssertTrue(app.navigationBars["新建自动化"].waitForExistence(timeout: 5))
         let nameField = app.textFields["名称"]

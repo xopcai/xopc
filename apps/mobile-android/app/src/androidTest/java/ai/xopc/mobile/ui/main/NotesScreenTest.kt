@@ -98,7 +98,7 @@ class NotesScreenTest {
     var more = 0
     composeTestRule.setContent {
       NotesListContent(NotesUiState(items = listOf(note), hasMore = true), query,
-        { query = it }, { submitted = query }, { status = it }, { opened = it }, { more++ })
+        { query = it }, { submitted = query }, { status = it }, { opened = it }, { more++ }, searchOpen = true)
     }
     composeTestRule.onNodeWithTag("notes-search").performTextInput("idea")
     composeTestRule.onNodeWithTag("notes-refresh").performClick()
@@ -399,6 +399,8 @@ class NotesScreenTest {
         onNoteFiles = { _, _, search -> if (search.isNotEmpty()) listOf(file) else emptyList() },
         onNoteFileContent = { "test".toByteArray() })
     }
+    composeTestRule.onNodeWithTag("notes-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("notes-open-search").performClick()
     composeTestRule.onNodeWithTag("notes-search").performTextInput("readme")
     composeTestRule.waitUntil(5_000) {
       composeTestRule.onAllNodesWithTag("notes-file-${file.id}").fetchSemanticsNodes().isNotEmpty()

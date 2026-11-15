@@ -54,7 +54,7 @@ export struct XopcShareResultView {
             })
           LoadingProgress().width(32).height(32).color(this.colors.accent)
             .visibility(this.share.shareUrl ? Visibility.Hidden : Visibility.Visible)
-        }.width('100%').layoutWeight(1).borderRadius(14).clip(true)
+        }.width('100%').layoutWeight(1).borderRadius(this.colors.corner(14)).clip(true)
       } else {
         Scroll() {
           Column({ space: 16 }) {
@@ -63,7 +63,7 @@ export struct XopcShareResultView {
               Text(shareReachabilityText(this.share, appSettings.effectiveLanguage().startsWith('zh')))
                 .fontSize(13).lineHeight(20).fontColor(this.colors.secondary).width('100%')
               Text(new Date(this.share.expiresAt).toLocaleString()).fontSize(12).fontColor(this.colors.tertiary).width('100%')
-            }.width('100%').padding(16).borderRadius(16).backgroundColor(this.colors.input)
+            }.width('100%').padding(16).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.input)
             Row({ space: 8 }) {
               Button(this.copied ? $r('app.string.share_copied') : $r('app.string.chat_copy_link')).layoutWeight(1).height(48)
                 .backgroundColor(this.colors.grouped).fontColor(this.colors.secondary).onClick((): void => { this.copy(); })
@@ -74,7 +74,7 @@ export struct XopcShareResultView {
               Button($r('app.string.share_preview')).layoutWeight(1).height(48).backgroundColor(this.colors.grouped)
                 .fontColor(this.colors.secondary).onClick((): void => { this.mode = 'preview'; })
               Button($r('app.string.chat_system_share')).layoutWeight(1).height(48).backgroundColor(this.colors.accent)
-                .fontColor(Color.White).onClick((): void => { this.systemShare(); })
+                .fontColor(this.colors.onAccent).onClick((): void => { this.systemShare(); })
             }.width('100%')
           }.width('100%')
         }.layoutWeight(1).width('100%').scrollBar(BarState.Off)

@@ -1,7 +1,9 @@
 package ai.xopc.mobile.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -9,6 +11,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun XopcTheme(
@@ -17,13 +20,20 @@ fun XopcTheme(
   content: @Composable () -> Unit,
 ) {
   val palette = xopcPalette(scheme, darkTheme)
-  val onAccent = if (palette.accent.luminance() > 0.45f) Color.Black else Color.White
+  val onAccent = if (palette.accent.luminance() > 0.179f) Color.Black else Color.White
   val colors = if (darkTheme) darkColorScheme(
     primary = palette.accent, onPrimary = onAccent,
     primaryContainer = palette.accentSoft, onPrimaryContainer = palette.foreground,
     background = palette.surface, onBackground = palette.foreground,
     surface = palette.panel, onSurface = palette.foreground,
     surfaceContainer = palette.input, surfaceContainerLow = palette.grouped,
+    surfaceContainerHigh = palette.active, surfaceContainerHighest = palette.active,
+    outlineVariant = palette.border,
+    secondary = palette.secondary, onSecondary = palette.panel,
+    secondaryContainer = palette.grouped, onSecondaryContainer = palette.foreground,
+    tertiary = palette.accent, onTertiary = onAccent,
+    tertiaryContainer = palette.accentSoft, onTertiaryContainer = palette.foreground,
+    error = palette.danger, onError = if (palette.danger.luminance() > 0.179f) Color.Black else Color.White,
     onSurfaceVariant = palette.secondary, outline = palette.border,
   ) else lightColorScheme(
     primary = palette.accent, onPrimary = onAccent,
@@ -31,13 +41,39 @@ fun XopcTheme(
     background = palette.surface, onBackground = palette.foreground,
     surface = palette.panel, onSurface = palette.foreground,
     surfaceContainer = palette.input, surfaceContainerLow = palette.grouped,
+    surfaceContainerHigh = palette.active, surfaceContainerHighest = palette.active,
+    outlineVariant = palette.border,
+    secondary = palette.secondary, onSecondary = palette.panel,
+    secondaryContainer = palette.grouped, onSecondaryContainer = palette.foreground,
+    tertiary = palette.accent, onTertiary = onAccent,
+    tertiaryContainer = palette.accentSoft, onTertiaryContainer = palette.foreground,
+    error = palette.danger, onError = if (palette.danger.luminance() > 0.179f) Color.Black else Color.White,
     onSurfaceVariant = palette.secondary, outline = palette.border,
   )
-  CompositionLocalProvider(LocalChatColors provides chatColors(scheme, darkTheme, palette.surface)) {
-    MaterialTheme(colorScheme = colors, typography = Typography, content = content)
+  val factor = when (scheme) {
+    "emerald" -> 0.8f
+    "clay" -> 1.2f
+    "dawn" -> 1.25f
+    else -> 1f
+  }
+  val shapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp * factor),
+    small = RoundedCornerShape(12.dp * factor),
+    medium = RoundedCornerShape(16.dp * factor),
+    large = RoundedCornerShape(20.dp * factor),
+    extraLarge = RoundedCornerShape(28.dp * factor),
+  )
+  CompositionLocalProvider(LocalCornerScale provides factor, LocalChatColors provides chatColors(scheme, darkTheme, palette.surface)) {
+    MaterialTheme(colorScheme = colors, typography = Typography, shapes = shapes, content = content)
   }
 }
 
+
+private val LocalCornerScale = staticCompositionLocalOf { 1f }
+
+@Composable
+internal fun themedCorners(radius: Int): RoundedCornerShape =
+  RoundedCornerShape(radius.dp * LocalCornerScale.current)
 
 internal const val CHAT_MESSAGE_WIDTH = 0.84f
 

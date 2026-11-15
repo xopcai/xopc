@@ -6,13 +6,18 @@ import ai.xopc.mobile.gateway.ProgressProjectSession
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import org.junit.Rule
 import org.junit.Test
@@ -20,9 +25,42 @@ import org.junit.Test
 class ProgressProjectFilterTest {
   @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
+  @Test fun selectedIndicatorSlidesAndRetargetsWithoutJumping() {
+    val selection = mutableStateOf("first")
+    composeTestRule.setContent {
+      SegmentedTabs(listOf(
+        SegmentOption("first", "First", "segment-first"),
+        SegmentOption("second", "Second", "segment-second"),
+        SegmentOption("third", "Third", "segment-third"),
+      ), selection.value, { selection.value = it })
+    }
+    val indicator = composeTestRule.onNodeWithTag("segmented-tab-indicator", useUnmergedTree = true)
+    val first = composeTestRule.onNodeWithTag("segment-first")
+    val second = composeTestRule.onNodeWithTag("segment-second")
+    val third = composeTestRule.onNodeWithTag("segment-third")
+    val start = indicator.fetchSemanticsNode().boundsInRoot.left
+    val end = third.fetchSemanticsNode().boundsInRoot.left
+    composeTestRule.mainClock.autoAdvance = false
+    try {
+      third.performSemanticsAction(SemanticsActions.OnClick)
+      composeTestRule.mainClock.advanceTimeBy(96)
+      val moving = indicator.fetchSemanticsNode().boundsInRoot.left
+      check(moving > start && moving < end)
+      third.assertIsSelected()
+      second.performSemanticsAction(SemanticsActions.OnClick)
+      composeTestRule.mainClock.advanceTimeBy(320)
+      val settled = indicator.fetchSemanticsNode().boundsInRoot.left
+      check(kotlin.math.abs(settled - second.fetchSemanticsNode().boundsInRoot.left) <= 1f)
+      second.assertIsSelected()
+      check(first.fetchSemanticsNode().boundsInRoot.left == start)
+    } finally {
+      composeTestRule.mainClock.autoAdvance = true
+    }
+  }
+
   @Test fun projectStatusFilterCombinesWithSearchAndKeepsNavigation() {
     val projects = listOf(
-      ProgressProject("active-1", "Alpha", "", "active", ""),
+      ProgressProject("active-1", "Alpha", "Alpha project brief", "active", ""),
       ProgressProject("paused-1", "Beta", "", "paused", ""),
       ProgressProject("archived-1", "Gamma", "", "archived", ""))
     val state = mutableStateOf(ProgressUiState(gatewayId = "test-gateway", projects = projects))
@@ -54,11 +92,18 @@ class ProgressProjectFilterTest {
     composeTestRule.onNodeWithTag("progress-project-filter-archived").performClick()
     composeTestRule.onNodeWithTag("progress-project-active-1").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-project-archived-1").assertExists()
+    composeTestRule.onNodeWithTag("progress-project-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("projects-open-search").performClick()
     composeTestRule.onNodeWithTag("progress-project-search").performTextInput("Alpha")
     composeTestRule.onNodeWithTag("progress-project-archived-1").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("projects-open-search-close").performClick()
+    composeTestRule.onNodeWithTag("progress-project-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("progress-project-archived-1").assertExists()
     composeTestRule.onNodeWithTag("progress-project-filter-all").performClick()
     composeTestRule.onNodeWithTag("progress-project-active-1").performClick()
     composeTestRule.runOnIdle { check(opened == "active-1") }
+    composeTestRule.onAllNodesWithText("Alpha").assertCountEquals(1)
+    composeTestRule.onNodeWithText("Alpha project brief").assertExists()
     composeTestRule.onNodeWithTag("progress-project-detail-status").assertTextEquals(
       composeTestRule.activity.getString(R.string.progress_project_status_active))
   }

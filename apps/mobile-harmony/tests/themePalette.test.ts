@@ -52,11 +52,14 @@ describe('Harmony color schemes', () => {
     }
   });
 
-  it('keeps default panels and active controls visibly separated from the canvas', () => {
+  it('uses the approved light palette for the canvas, panels, inputs, and emphasis', () => {
     const palette = new Map(colors.color.map((item) => [item.name, item.value]));
-    expect(palette.get('theme_default_surface_light')).toBe('#EEF1F5');
-    expect(palette.get('theme_default_panel_light')).toBe('#FFFFFF');
-    expect(palette.get('theme_default_active_light')).toBe('#DFE5EC');
+    for (const [token, value] of Object.entries({
+      surface: '#E9EDF3', panel: '#FFFFFF', input: '#D8E0EB', foreground: '#142033',
+      secondary: '#46566C', tertiary: '#52627A', accent: '#0054C6', active: '#E5F0FF', border: '#CBD4E1',
+    })) expect(palette.get(`theme_default_${token}_light`)).toBe(value);
+    expect(palette.get('chat_default_bubble_light')).toBe('#D5E6FF');
+    expect(palette.get('theme_attention_fill_light')).toBe('#FFF2D2');
   });
 
   it('applies distinct Chat surfaces and readable foregrounds for all ten appearances', () => {
@@ -72,10 +75,12 @@ describe('Harmony color schemes', () => {
         for (const dark of [false, true]) {
           appThemeColors.apply(scheme, dark);
           const mode = dark ? 'dark' : 'light';
-          const { canvas, card, bubble, action, onAction, secondary, composer } = appThemeColors.chat;
+          const { canvas, card, bubble, action, onAction, secondary } = appThemeColors.chat;
           expect(canvas).toBe(appThemeColors.surface);
-          for (const [role, resource] of Object.entries({ card, bubble, action })) {
-            expect(resource).toBe(`app.color.chat_${scheme}_${role}_${mode}`);
+          expect(bubble).toBe(`app.color.chat_${scheme}_bubble_${mode}`);
+          if (scheme === 'default' && !dark) {
+            expect(card).toBe(appThemeColors.panel);
+            expect(action).toBe(appThemeColors.accent);
           }
           expect(new Set([canvas, card, bubble].map(color)).size).toBe(3);
           for (const surface of [canvas, card, bubble]) {
@@ -85,11 +90,16 @@ describe('Harmony color schemes', () => {
             }
           }
           expect(contrast(color(action), color(onAction))).toBeGreaterThanOrEqual(4.5);
-          expect(Boolean(composer)).toBe(scheme === 'default' && !dark);
-          if (composer) {
-            expect(luminance(color(composer.fill))).toBeLessThan(luminance(color(appThemeColors.input)));
-            expect(contrast(color(composer.fill), color(canvas))).toBeGreaterThan(1.15);
-            expect(contrast(color(composer.fill), color(composer.placeholder))).toBeGreaterThanOrEqual(4.5);
+          expect(contrast(color(appThemeColors.accent), color(appThemeColors.onAccent))).toBeGreaterThanOrEqual(4.5);
+          if (!dark) {
+            const control = color(appThemeColors.controlStroke.color);
+            expect(contrast(control, color(canvas))).toBeGreaterThanOrEqual(3);
+            expect(contrast(control, color(appThemeColors.panel))).toBeGreaterThanOrEqual(3);
+            expect(contrast(control, color(appThemeColors.input))).toBeGreaterThanOrEqual(3);
+            expect(contrast(color(appThemeColors.tertiary), color(appThemeColors.input))).toBeGreaterThanOrEqual(4.5);
+            expect(contrast(color(appThemeColors.attentionForeground), color(appThemeColors.attentionFill)))
+              .toBeGreaterThanOrEqual(4.5);
+            expect(contrast(color(appThemeColors.success), color(card))).toBeGreaterThanOrEqual(4.5);
           }
         }
       }

@@ -82,7 +82,7 @@ struct ClarificationCard: View {
                                     HStack {
                                         Text(choice.label)
                                         if choice.id == clarification.recommendedChoiceId {
-                                            Text("推荐").font(.caption).foregroundStyle(.blue)
+                                            Text("推荐").font(.caption).foregroundStyle(.tint)
                                         }
                                     }
                                     if let description = choice.description {
@@ -212,7 +212,7 @@ private struct ClarificationWizard: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text((answer?.choiceId == choice.id ? "✓ " : "") + choice.label)
                                     if choice.id == question.recommendedChoiceId {
-                                        Text("推荐").font(.caption).foregroundStyle(.blue)
+                                        Text("推荐").font(.caption).foregroundStyle(.tint)
                                     }
                                     if let description = choice.description {
                                         Text(description).font(.caption).foregroundStyle(.secondary)

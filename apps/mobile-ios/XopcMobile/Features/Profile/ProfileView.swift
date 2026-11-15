@@ -27,7 +27,7 @@ struct ProfileView: View {
                     } label: {
                         HStack(spacing: 14) {
                             Text(String((summary.profile.callName ?? summary.suggestedCallName ?? "X").prefix(2)))
-                                .mobileTextStyle(.detailTitle).foregroundStyle(.blue)
+                                .mobileTextStyle(.detailTitle).foregroundStyle(.tint)
                                 .frame(width: 64, height: 64)
                                 .background(.blue.opacity(0.1), in: .circle)
                             VStack(alignment: .leading, spacing: 5) {
@@ -104,7 +104,7 @@ struct ProfileView: View {
             } else if error != nil {
                 Section {
                     HStack(spacing: 14) {
-                        Text("X").mobileTextStyle(.detailTitle).foregroundStyle(.blue)
+                        Text("X").mobileTextStyle(.detailTitle).foregroundStyle(.tint)
                             .frame(width: 64, height: 64).background(.blue.opacity(0.1), in: .circle)
                         VStack(alignment: .leading, spacing: 5) {
                             Text("你").mobileTextStyle(.detailTitle)
@@ -217,11 +217,12 @@ private struct UserUnderstandingView: View {
 
     var body: some View {
         List {
-            Picker("内容", selection: $section) {
-                Text("概览").tag(0)
-                Text("记住的你").tag(1)
-            }
-            .pickerStyle(.segmented)
+            SegmentedTabs(options: [
+                SegmentOption(id: 0, title: "概览", accessibilityID: "about-you-tab-overview"),
+                SegmentOption(id: 1, title: "记住的你", accessibilityID: "about-you-tab-understanding")
+            ], selected: section, label: "内容") { section = $0 }
+                .accessibilityIdentifier("about-you-tabs")
+                .listRowBackground(Color.clear)
             if section == 0 {
                 Section("基本信息") {
                     LabeledContent("称呼", value: summary.profile.callName ?? summary.suggestedCallName ?? "你")
@@ -259,13 +260,14 @@ private struct UserUnderstandingView: View {
                     Text("事实、决定和经验保存在资料库中。").foregroundStyle(.secondary)
                 }
             } else {
-                Picker("筛选", selection: $filter) {
-                    Text("全部").tag("all")
-                    Text("你说过的").tag("explicit")
-                    Text("协作中发现").tag("learned")
-                    Text("待确认").tag("review")
-                }
-                .pickerStyle(.menu)
+                SegmentedTabs(options: [
+                    SegmentOption(id: "all", title: "全部", accessibilityID: "about-you-filter-all"),
+                    SegmentOption(id: "explicit", title: "你说过的", accessibilityID: "about-you-filter-explicit"),
+                    SegmentOption(id: "learned", title: "协作中发现", accessibilityID: "about-you-filter-learned"),
+                    SegmentOption(id: "review", title: "待确认", accessibilityID: "about-you-filter-review")
+                ], selected: filter, label: "筛选") { filter = $0 }
+                    .accessibilityIdentifier("about-you-filter-tabs")
+                    .listRowBackground(Color.clear)
                 ForEach(assertions) { item in
                     memoryRow(item)
                 }

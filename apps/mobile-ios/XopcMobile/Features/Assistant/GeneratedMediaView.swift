@@ -67,14 +67,11 @@ struct GeneratedMediaCard: Identifiable, Equatable, Sendable {
         kind == .music ? "music.note" : "film"
     }
 
-    var metadata: String {
-        if kind == .music {
-            let version = item.versionNumber.map { AppLocalization.resolve("第 \($0) 版") }
-            let length = item.durationMs.map { formatGeneratedMediaTime(Double($0) / 1000) }
-            return [version, length].compactMap(\.self).joined(separator: " · ")
-        }
-        let length = item.duration.map { $0 > 0 ? AppLocalization.resolve("\($0) 秒") : AppLocalization.resolve("自动时长") }
-        return [length, item.resolution, item.ratio == "adaptive" ? nil : item.ratio].compactMap(\.self).joined(separator: " · ")
+    var cardSubtitle: String {
+        guard kind == .music else { return status }
+        let version = item.versionNumber.map { AppLocalization.resolve("第 \($0) 版") }
+        let length = item.durationMs.map { formatGeneratedMediaTime(Double($0) / 1000) }
+        return [status, version, length].compactMap(\.self).joined(separator: " · ")
     }
 
     func jobsPath(_ conversationID: String) -> String {
@@ -100,44 +97,53 @@ final class GeneratedMediaState {
     private(set) var canConfirm = false
     private(set) var submitting = false
     private(set) var error: String?
-    private struct Scope: Equatable {
-        let id: String?
-        let transcriptID: String?
-        let gateway: URL
-        let identity: String?
+    struct Scope: Equatable {
+        let id: String
+        let transcriptID: String
+        let account: String
+
+        var cacheKey: String { [account, id, transcriptID].joined(separator: ":") }
+
+        func accepts(_ transcriptID: String?) -> Bool {
+            transcriptID == nil || transcriptID == self.transcriptID
+        }
     }
 
     private var scope: Scope?
     private var videoRequest = 0
 
-    func observe(_ id: String?, transcriptID: String?, client: GatewayClient, visible: Bool, busy: Bool) async {
-        let next = Scope(id: id, transcriptID: transcriptID, gateway: client.configuration.baseURL,
-                         identity: client.configuration.localIdentity)
+    func cards(in requestedScope: Scope?) -> [GeneratedMediaCard] {
+        guard let requestedScope else { return [] }
+        if scope == requestedScope { return cards }
+        return MobileListCache.shared.read(.generatedMedia, scope: requestedScope.cacheKey) ?? []
+    }
+
+    func observe(_ next: Scope?, client: GatewayClient, visible: Bool, busy: Bool) async {
         if next != scope {
+            cards = cards(in: next)
             scope = next
-            cards = []
             error = nil
             canConfirm = false
             submitting = false
             videoRequest += 1
         }
-        guard visible, let id else { return }
+        guard visible, let next else { return }
         while !Task.isCancelled {
-            await refresh(id, scope: next, client: client)
+            await refresh(next, client: client)
             try? await Task.sleep(for: .seconds(busy || cards.contains(where: \.active) ? 3 : 20))
         }
     }
 
-    private func refresh(_ id: String, scope: Scope, client: GatewayClient) async {
+    private func refresh(_ scope: Scope, client: GatewayClient) async {
         let request = videoRequest
-        async let music = fetch(.music, id: id, client: client)
-        async let video = fetch(.video, id: id, client: client)
+        async let music = fetch(.music, id: scope.id, client: client)
+        async let video = fetch(.video, id: scope.id, client: client)
         let (musicResult, videoResult) = await (music, video)
         guard !Task.isCancelled, self.scope == scope else { return }
-        if let musicResult {
+        if let musicResult, scope.accepts(musicResult.transcriptId) {
             replace(.music, with: musicResult.jobs)
         }
-        if let videoResult, request == videoRequest, !submitting {
+        if let videoResult, scope.accepts(videoResult.transcriptId), request == videoRequest, !submitting {
             applyVideo(videoResult)
         }
     }
@@ -147,21 +153,28 @@ final class GeneratedMediaState {
     }
 
     private func applyVideo(_ response: GeneratedMediaResponse) {
-        canConfirm = response.configured && response.draft?.modelRef == response.modelRef
+        canConfirm = response.configured && response.modelRef != nil && response.draft?.modelRef == response.modelRef
         let jobs = response.jobs.filter { $0.transcriptId == response.transcriptId }
-        replace(.video, with: jobs + (response.draft.map { [$0] } ?? []))
+        let draft = response.draft.flatMap { draft in jobs.contains { $0.id == draft.id } ? nil : draft }
+        replace(.video, with: jobs + (draft.map { [$0] } ?? []))
     }
 
     private func replace(_ kind: GeneratedMediaCard.Kind, with items: [GeneratedMediaPayload]) {
-        let next = (cards.filter { $0.kind != kind } + items.map { GeneratedMediaCard(kind: kind, item: $0) })
+        let incoming = Set(items.map(\.id))
+        let next = (cards.filter { $0.kind != kind || (!$0.isDraft && !incoming.contains($0.id)) }
+            + items.map { GeneratedMediaCard(kind: kind, item: $0) })
             .sorted { ($0.order, $0.id) < ($1.order, $1.id) }
         if next != cards {
             cards = next
         }
+        if let scope {
+            MobileListCache.shared.write(next, to: .generatedMedia, scope: scope.cacheKey, requestedAt: .now)
+        }
     }
 
     func confirm(_ card: GeneratedMediaCard, conversationID: String, client: GatewayClient) async {
-        guard !submitting, let scope, scope.id == conversationID, card.isDraft, canConfirm,
+        guard !submitting, let scope, scope.id == conversationID,
+              scope.account == ComposerDraftStore.accountScope(client.configuration), card.isDraft, canConfirm,
               let revision = card.item.revision else { return }
         submitting = true
         error = nil
@@ -177,20 +190,20 @@ final class GeneratedMediaState {
                 path: card.jobsPath(conversationID) + "/confirm-draft", method: "POST",
                 body: client.encoder.encode(GeneratedDraftConfirmation(id: card.id, revision: revision))
             )
-            guard self.scope == scope, videoRequest == request else { return }
+            guard self.scope == scope, videoRequest == request, scope.accepts(job.transcriptId) else { return }
             replace(.video, with: cards.filter { $0.kind == .video && $0.id != job.id && !$0.isDraft }.map(\.item) + [job])
         } catch {
             guard self.scope == scope, videoRequest == request else { return }
             self.error = error.localizedDescription
             if let response = await fetch(.video, id: conversationID, client: client),
-               self.scope == scope, videoRequest == request
+               self.scope == scope, videoRequest == request, scope.accepts(response.transcriptId)
             {
                 applyVideo(response)
             }
         }
     }
 
-    func cardsByReply(_ messages: [TimelineMessage]) -> [String: [GeneratedMediaCard]] {
+    func cardsByReply(_ messages: [TimelineMessage], in scope: Scope?) -> [String: [GeneratedMediaCard]] {
         let replies = messages.filter { $0.role == "assistant" && $0.answerConfirmed }
         var anchors: [String: String] = [:]
         for reply in replies {
@@ -198,7 +211,7 @@ final class GeneratedMediaState {
                 anchors[id] = reply.id
             }
         }
-        return Dictionary(grouping: cards) { anchors[$0.id] ?? replies.last?.id ?? "" }
+        return Dictionary(grouping: cards(in: scope)) { anchors[$0.id] ?? "" }
     }
 }
 
@@ -208,56 +221,41 @@ private struct GeneratedDraftConfirmation: Encodable {
 }
 
 struct GeneratedMediaRow: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     @Environment(\.colorScheme) private var colorScheme
     let card: GeneratedMediaCard
     let canConfirm: Bool
     let submitting: Bool
     let error: String?
-    let conversationID: String
-    let configuration: GatewayConfiguration
-    let isPlayingInline: Bool
+    let isMusicPlaying: Bool
     let onPlay: () -> Void
+    let onOpen: () -> Void
     let onConfirm: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Image(systemName: card.symbol).font(.title3.weight(.semibold))
-                    .frame(width: 44, height: 44)
-                    .background(.tint.opacity(0.12), in: .rect(cornerRadius: 12))
-                    .foregroundStyle(.tint).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(verbatim: card.isDraft ? AppLocalization.resolve("视频草稿") : card.title)
-                        .font(.subheadline.weight(.semibold)).lineLimit(2)
-                    Text(verbatim: [card.status, card.metadata]
-                        .filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.caption).foregroundStyle(.secondary)
+                if card.completed {
+                    Button(action: onOpen) { cardLabel }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("generated-\(card.kind.rawValue)-open-\(card.id)")
+                } else {
+                    cardLabel
                 }
-                Spacer(minLength: 0)
                 if card.completed {
                     Button(action: onPlay) {
-                        Image(systemName: isPlayingInline ? (card.kind == .music ? "pause.fill" : "xmark") : "play.fill").frame(width: 44, height: 44)
+                        Image(systemName: isMusicPlaying ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
                             .background(.tint.opacity(0.12), in: .circle)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(isPlayingInline ? (card.kind == .music ? "暂停" : "关闭播放") : "播放")
+                    .accessibilityLabel(isMusicPlaying ? "暂停" : "播放")
                     .accessibilityIdentifier("generated-\(card.kind.rawValue)-start-\(card.id)")
                 } else if card.active {
                     ProgressView().controlSize(.small).accessibilityHidden(true)
                 }
             }
-            if isPlayingInline, card.completed, card.kind == .video {
-                GeneratedVideoInlinePlayer(card: card, conversationID: conversationID, configuration: configuration)
-            }
-            if card.kind == .music, GeneratedMusicPlayback.shared.track?.id == card.id,
-               GeneratedMusicPlayback.shared.track?.conversationID == conversationID
-            {
-                Button("打开播放器", systemImage: "music.note") { GeneratedMusicPlayback.shared.expanded = true }
-                    .font(.caption)
-                    .accessibilityIdentifier("music-inline-player")
-            }
             if card.isDraft {
-                Text(verbatim: card.item.summary ?? card.item.prompt ?? "").font(.subheadline).lineLimit(3)
+                if let summary = card.item.summary, !summary.isEmpty { Text(verbatim: summary).font(.subheadline).lineLimit(3) }
                 if let estimate = card.item.estimatedCreditMicro {
                     Text("预计 \(Double(estimate) / 1_000_000, format: .number.precision(.fractionLength(2))) 积分")
                         .font(.caption).foregroundStyle(.secondary)
@@ -276,24 +274,67 @@ struct GeneratedMediaRow: View {
             if let error = error ?? card.item.error {
                 Text(verbatim: error).font(.caption).foregroundStyle(.secondary)
             }
-            if let prompt = card.item.prompt, !prompt.isEmpty, !card.isDraft || card.item.summary != nil {
-                DisclosureGroup("创作详情") {
-                    Text(verbatim: prompt).font(.caption).foregroundStyle(.secondary)
-                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                }.font(.caption).tint(.secondary)
-            }
         }
         .padding(12)
         .frame(maxWidth: 420, alignment: .leading)
-        .background(ChatAppearance.card(colorScheme), in: .rect(cornerRadius: 18))
-        .tint(ChatAppearance.action(colorScheme))
+        .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(18)))
+        .tint(mobileTheme.action)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("generated-media-\(card.id)")
     }
+
+    private var cardLabel: some View {
+        HStack(spacing: 12) {
+            Image(systemName: card.symbol).font(.title3.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .background(.tint.opacity(0.12), in: .rect(cornerRadius: mobileTheme.corner(12)))
+                .foregroundStyle(.tint).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: card.isDraft ? AppLocalization.resolve("视频草稿") : card.title)
+                    .font(.subheadline.weight(.semibold)).lineLimit(2)
+                Text(verbatim: card.cardSubtitle)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(card.kind == .video ? 1 : 2)
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(.rect)
+    }
+
 }
 
-private struct GeneratedVideoInlinePlayer: View {
+struct GeneratedVideoDrawer: View {
+    @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
+    let card: GeneratedMediaCard
+    let conversationID: String
+    let configuration: GatewayConfiguration
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                GeneratedVideoPlayer(card: card, conversationID: conversationID, configuration: configuration)
+                    .padding(20)
+            }
+            .navigationTitle(card.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("关闭", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly).accessibilityIdentifier("video-player-close")
+                }
+            }
+        }
+        .accessibilityIdentifier("video-player-drawer")
+        .presentationDetents([.fraction(0.84), .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(mobileTheme.canvas)
+    }
+}
+
+private struct GeneratedVideoPlayer: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let card: GeneratedMediaCard
     let conversationID: String
     let configuration: GatewayConfiguration
@@ -307,7 +348,7 @@ private struct GeneratedVideoInlinePlayer: View {
             if let player {
                 VideoPlayer(player: player)
                     .aspectRatio(card.item.ratio == "9:16" ? 1 : 16.0 / 9, contentMode: .fit)
-                    .clipShape(.rect(cornerRadius: 12))
+                    .clipShape(.rect(cornerRadius: mobileTheme.corner(12)))
                 if let localURL {
                     ShareLink(item: localURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
                         .font(.caption)
@@ -319,7 +360,7 @@ private struct GeneratedVideoInlinePlayer: View {
                 ProgressView("正在加载媒体").frame(maxWidth: .infinity, minHeight: 44)
             }
         }
-        .accessibilityIdentifier("generated-media-inline-\(card.id)")
+        .accessibilityIdentifier("generated-video-player-\(card.id)")
         .task(id: retry) { await load() }
         .onDisappear {
             player?.pause()

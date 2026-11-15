@@ -13,6 +13,7 @@ final class ConversationsState {
     private(set) var operatingConversationID: String?
     var searchText = ""
     var personalConversationID: String?
+    var cacheScope: String?
     private var activeSearch = ""
     private var generation = 0
     private var nextOffset = 0
@@ -31,12 +32,17 @@ final class ConversationsState {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         generation += 1
         let current = generation
+        let requestedAt = Date.now
         if query != activeSearch {
             conversations = []
+            childrenByConversationID = [:]
             nextOffset = 0
             hasMore = false
         }
         activeSearch = query
+        if query.isEmpty {
+            restoreCachedHistory()
+        }
         isLoading = true
         isLoadingMore = false
         errorMessage = nil
@@ -47,25 +53,41 @@ final class ConversationsState {
         }
 
         do {
-            conversations = []
-            childrenByConversationID = [:]
-            nextOffset = 0
+            var rows: [ConversationSummary] = []
+            var groups: [String: SidebarTaskGroup] = [:]
+            var offset = 0
+            var more = false
             repeat {
-                let page = try await gateway.fetchConversations(search: query, offset: nextOffset)
+                let page = try await gateway.fetchConversations(search: query, offset: offset)
                 guard current == generation, !Task.isCancelled else { return }
-                conversations.append(contentsOf: page.items)
-                childrenByConversationID.merge(page.childrenByConversationId ?? [:]) { _, new in new }
-                nextOffset += page.items.count
-                hasMore = page.hasMore && !page.items.isEmpty
-            } while hasMore && visibleConversations.isEmpty
+                if query.isEmpty, offset == 0, let cacheScope {
+                    MobileListCache.shared.write(page, to: .conversations, scope: cacheScope, requestedAt: requestedAt)
+                }
+                rows.append(contentsOf: page.items)
+                groups.merge(page.childrenByConversationId ?? [:]) { _, new in new }
+                offset += page.items.count
+                more = page.hasMore && !page.items.isEmpty
+            } while more && !rows.contains(where: { $0.messageCount > 0 && $0.id != personalConversationID })
+            conversations = rows
+            childrenByConversationID = groups
+            nextOffset = offset
+            hasMore = more
         } catch is CancellationError {
             return
         } catch {
             guard current == generation, !Task.isCancelled else { return }
-            conversations = []
-            nextOffset = 0
-            hasMore = false
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func restoreCachedHistory() {
+        if conversations.isEmpty, let cacheScope,
+           let cached: ConversationPage = MobileListCache.shared.read(.conversations, scope: cacheScope)
+        {
+            conversations = cached.items
+            childrenByConversationID = cached.childrenByConversationId ?? [:]
+            nextOffset = cached.items.count
+            hasMore = cached.hasMore && !cached.items.isEmpty
         }
     }
 
@@ -111,7 +133,7 @@ final class ConversationsState {
     func archive(_ conversation: ConversationSummary, using gateway: any GatewayServing) async {
         await perform(on: conversation.id) {
             try await gateway.mutateConversation(id: conversation.id, action: .archive)
-            conversations.removeAll { $0.id == conversation.id }
+            await removeCachedConversation(conversation.id)
         }
     }
 
@@ -126,8 +148,15 @@ final class ConversationsState {
     func delete(_ conversation: ConversationSummary, using gateway: any GatewayServing) async -> Bool {
         await perform(on: conversation.id) {
             try await gateway.deleteConversation(id: conversation.id)
-            conversations.removeAll { $0.id == conversation.id }
+            await removeCachedConversation(conversation.id)
         }
+    }
+
+    private func removeCachedConversation(_ id: String) async {
+        conversations.removeAll { $0.id == id }
+        guard let cacheScope else { return }
+        MobileListCache.shared.remove(.conversations, scope: cacheScope)
+        await RecentConversationsStore.shared.removeConversation(id, scope: cacheScope)
     }
 
     @discardableResult

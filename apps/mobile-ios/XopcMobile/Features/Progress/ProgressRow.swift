@@ -9,7 +9,7 @@ struct ProgressRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol).mobileTextStyle(.sectionTitle).foregroundStyle(.blue).frame(width: 28)
+            Image(systemName: symbol).mobileTextStyle(.sectionTitle).foregroundStyle(.tint).frame(width: 28)
             VStack(alignment: .leading, spacing: 5) {
                 Text(title)
                     .mobileTextStyle(.rowTitle)

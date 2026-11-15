@@ -279,6 +279,7 @@ data class ConnectionUiState(
   val executionError: Boolean = false,
   val savingMessageNoteId: String? = null,
   val messageNoteFeedback: MessageNoteFeedback? = null,
+  val recentConversations: List<ConversationSummary>? = null,
   val conversationsLoading: Boolean = false,
   val conversationsError: Boolean = false,
   val conversationResultsQuery: String = "",
@@ -427,6 +428,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   private val automationRepository = AutomationRepository(session)
   val personalOverviewAccess = ai.xopc.mobile.gateway.PersonalOverviewAccess(session, automationRepository)
   private val noteRepository = NoteRepository(session)
+  private var unfilteredNotes: NotesUiState? = null
   private val fileRepository = FileRepository(session)
   private val shareRepository = ShareRepository(session)
   private val personalRepository = PersonalRepository(session)
@@ -893,12 +895,14 @@ class GatewayViewModel internal constructor(application: Application, private va
     restoreNoteDraft(gatewayId)
     notesJob?.cancel()
     val revision = ++notesRevision
+    val unfiltered = search.isBlank() && status.isEmpty()
     mutableState.update { state ->
       val previous = state.notes.takeIf { it.gatewayId == gatewayId } ?: NotesUiState(gatewayId = gatewayId)
       val sameQuery = previous.search == search.trim() && previous.status == status
+      val cached = unfilteredNotes?.takeIf { unfiltered && it.gatewayId == gatewayId }
       state.copy(notes = previous.copy(search = search.trim(), status = status,
-        items = if (sameQuery) previous.items else emptyList(),
-        total = if (sameQuery) previous.total else 0, hasMore = if (sameQuery) previous.hasMore else false,
+        items = if (sameQuery) previous.items else cached?.items.orEmpty(),
+        total = if (sameQuery) previous.total else cached?.total ?: 0, hasMore = sameQuery && previous.hasMore,
         loading = true, listError = false, moreError = false))
     }
     notesJob = viewModelScope.launch {
@@ -907,6 +911,9 @@ class GatewayViewModel internal constructor(application: Application, private va
         if (revision == notesRevision && mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(notes = it.notes.copy(items = page.items, total = page.total,
             hasMore = page.hasMore, loading = false))
+        }
+        if (unfiltered && revision == notesRevision && mutableState.value.profile?.gatewayId == gatewayId) {
+          unfilteredNotes = mutableState.value.notes
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
@@ -2687,8 +2694,12 @@ class GatewayViewModel internal constructor(application: Application, private va
     val currentMusic = ai.xopc.mobile.playback.MusicPlayback.state.value?.track
     if (currentMusic != null && currentMusic.gatewayId != profile?.gatewayId) ai.xopc.mobile.playback.MusicPlayback.stop()
     gatewayProbeGeneration++
-    val profiles = withContext(Dispatchers.IO) { session.savedProfiles() }
+    val (profiles, recent) = withContext(Dispatchers.IO) {
+      session.savedProfiles() to profile?.let(conversations::cachedRecent)
+    }
+    unfilteredNotes = null
     mutableState.value = ConnectionUiState(profile = profile, gatewayProfiles = profiles,
+      recentConversations = recent, conversations = recent.orEmpty(), conversationsLoading = profile != null,
       progress = ProgressUiState(gatewayId = profile?.gatewayId), restoringHomeChat = profile != null)
     if (profile == null) return
     val selectedId = withContext(Dispatchers.IO) {
@@ -2898,7 +2909,8 @@ class GatewayViewModel internal constructor(application: Application, private va
   }
 
   fun loadConversations(search: String = listSearch) {
-    if (mutableState.value.profile == null) return
+    val profile = mutableState.value.profile ?: return
+    val requestedAt = System.currentTimeMillis()
     listSearch = search.trim()
     val query = listSearch
     remoteConversationOffset = 0
@@ -2910,10 +2922,13 @@ class GatewayViewModel internal constructor(application: Application, private va
         val result = runInterruptible(Dispatchers.IO) { conversations.list(search = query) }
         if (revision == listRevision) {
           remoteConversationOffset = result.remoteCount
+          val recent = result.items.filterNot { it.isLocalDraft }.take(20)
           mutableState.update { it.copy(conversations = result.items, conversationTaskGroups = result.taskGroups,
+            recentConversations = if (query.isEmpty()) recent else it.recentConversations,
             conversationResultsQuery = query,
             conversationsLoading = false,
             conversationsHasMore = result.hasMore) }
+          if (query.isEmpty()) withContext(Dispatchers.IO) { conversations.cacheRecent(profile, recent, requestedAt) }
         }
       } catch (error: CancellationException) {
         throw error
@@ -2923,6 +2938,14 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
+  private fun persistRecentConversations() {
+    val current = mutableState.value
+    val profile = current.profile ?: return
+    val rows = current.recentConversations ?: return
+    val changedAt = System.currentTimeMillis()
+    viewModelScope.launch(Dispatchers.IO) { conversations.cacheRecent(profile, rows, changedAt) }
+  }
+
   fun updateConversationSearch(text: String) {
     if (text == mutableState.value.conversationSearch) return
     searchJob?.cancel()
@@ -2930,6 +2953,9 @@ class GatewayViewModel internal constructor(application: Application, private va
     remoteConversationOffset = 0
     listRevision++
     mutableState.update { it.copy(conversationSearch = text, conversationsLoading = true,
+      conversations = if (listSearch.isEmpty()) it.recentConversations ?: it.conversations else it.conversations,
+      conversationResultsQuery = if (listSearch.isEmpty() && it.recentConversations != null) "" else it.conversationResultsQuery,
+      conversationTaskGroups = if (listSearch.isEmpty() && it.conversationResultsQuery.isNotEmpty()) emptyMap() else it.conversationTaskGroups,
       conversationsLoadingMore = false, conversationsHasMore = false,
       conversationsMoreError = false, conversationsError = false) }
     searchJob = viewModelScope.launch {
@@ -3493,6 +3519,24 @@ class GatewayViewModel internal constructor(application: Application, private va
         }
       }
     }
+  }
+
+  suspend fun actOnConnectionWait(snapshot: ConnectionWaitSnapshot, action: String, needKey: String?, accountId: String?): String? {
+    val start = mutableState.value
+    val profile = checkNotNull(start.profile)
+    val id = checkNotNull(start.selectedConversationId)
+    check(start.connectionWait.snapshot == snapshot) { "CONNECTION_STATE_CHANGED" }
+    val result = runInterruptible(Dispatchers.IO) {
+      session.withActiveGateway(profile.gatewayId) {
+        check(session.currentProfile()?.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+        connectionWaitRepository.act(id, snapshot, action, needKey, accountId)
+      }
+    }
+    val current = mutableState.value
+    if (current.profile?.gatewayId != profile.gatewayId || current.profile.deviceId != profile.deviceId ||
+      current.selectedConversationId != id) return null
+    mutableState.update { it.copy(connectionWait = ConnectionWaitUiState(profile.gatewayId, id, result.snapshot)) }
+    return result.authorizationUrl
   }
 
   fun loadAgents() {
@@ -4067,6 +4111,20 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
+  suspend fun loadCapabilities(category: String, locale: String): ai.xopc.mobile.gateway.CapabilityPage {
+    return runInterruptible(Dispatchers.IO) {
+      ai.xopc.mobile.gateway.CapabilityRepository(session).load(category, locale)
+    }
+  }
+
+  fun createAgentConversation(agentId: String) {
+    createConversationFor(agentId, false)
+  }
+
+  fun startCapabilityConversation(prompt: String) {
+    createConversationFor(mutableState.value.defaultAgentId, false, initialPrompt = prompt)
+  }
+
   fun createConversation() {
     createConversationFor(mutableState.value.defaultAgentId, false)
   }
@@ -4165,9 +4223,12 @@ class GatewayViewModel internal constructor(application: Application, private va
       try {
         runInterruptible(Dispatchers.IO) { conversations.rename(id, name) }
         mutableState.update { it.copy(renamingConversation = false, renameDraftId = null,
-          renameDraftText = "", conversations = it.conversations.map { item ->
+          renameDraftText = "", recentConversations = it.recentConversations?.map { row ->
+            if (row.id == id) row.copy(title = name) else row
+          }, conversations = it.conversations.map { item ->
             if (item.id == id) item.copy(title = name) else item
           }) }
+        persistRecentConversations()
         loadConversations()
       } catch (error: CancellationException) {
         throw error
@@ -4211,9 +4272,12 @@ class GatewayViewModel internal constructor(application: Application, private va
       try {
         runInterruptible(Dispatchers.IO) { conversations.setArchived(id, archived) }
         mutableState.update { it.copy(archivingConversationId = null,
-          conversations = it.conversations.map { row ->
+          recentConversations = it.recentConversations?.map { row ->
+            if (row.id == id) row.copy(status = if (archived) "archived" else "active") else row
+          }, conversations = it.conversations.map { row ->
             if (row.id == id) row.copy(status = if (archived) "archived" else "active") else row
           }) }
+        persistRecentConversations()
         loadConversations()
       } catch (error: CancellationException) {
         throw error
@@ -4267,6 +4331,7 @@ class GatewayViewModel internal constructor(application: Application, private va
             openPersonalAgent(remember = false)
           }
           mutableState.update { state -> state.copy(
+            recentConversations = state.recentConversations?.filterNot { it.id in completed && action in setOf("delete", "archive") },
             conversations = state.conversations.filterNot { it.id in completed && action == "delete" }
               .map { row -> if (row.id !in completed) row else row.copy(status = when (action) {
                 "pin" -> "pinned"
@@ -4275,6 +4340,7 @@ class GatewayViewModel internal constructor(application: Application, private va
               }) },
             batchConversationBusy = false, batchConversationFailedIds = failed,
             batchConversationRevision = state.batchConversationRevision + 1) }
+          if (action == "delete" || action == "archive") persistRecentConversations()
           // Keep failed rows from later pages visible until the user retries or changes the list.
           if (failed.isEmpty()) loadConversations()
         }
@@ -4326,7 +4392,9 @@ class GatewayViewModel internal constructor(application: Application, private va
           openPersonalAgent(remember = false)
         }
         mutableState.update { it.copy(pendingDeleteId = null, deleteCommitting = false,
+          recentConversations = it.recentConversations?.filterNot { row -> row.id == id },
           conversations = it.conversations.filterNot { row -> row.id == id }) }
+        persistRecentConversations()
         loadConversations()
       } catch (error: CancellationException) {
         throw error
@@ -4349,18 +4417,24 @@ class GatewayViewModel internal constructor(application: Application, private va
   }
 
   private fun createConversationFor(agentId: String, discardCurrentDraft: Boolean,
-    projectId: String? = null, executionMode: String? = null) {
-    if (mutableState.value.profile == null || mutableState.value.creatingConversation) return
+    projectId: String? = null, executionMode: String? = null, initialPrompt: String? = null) {
+    val profile = mutableState.value.profile ?: return
+    if (mutableState.value.creatingConversation) return
     val previousId = mutableState.value.selectedConversationId
     mutableState.update { it.copy(creatingConversation = true, chatError = false) }
     viewModelScope.launch {
       try {
         draftWriteJob?.join()
         val draft = runInterruptible(Dispatchers.IO) {
+          val active = session.currentProfile()
+          check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
           val created = conversations.createDraft(agentId, projectId, executionMode)
+          if (initialPrompt != null) conversations.saveComposerDraft(created.conversationId, initialPrompt)
           if (discardCurrentDraft && previousId != null) conversations.saveComposerDraft(previousId, "")
           created
         }
+        val active = mutableState.value.profile
+        if (active?.gatewayId != profile.gatewayId || active.deviceId != profile.deviceId) return@launch
         mutableState.update { current -> current.copy(creatingConversation = false,
           progress = if (projectId != null && current.progress.projectId == projectId)
             current.progress.copy(projectSessions = listOf(ProgressProjectSession(
@@ -4368,6 +4442,7 @@ class GatewayViewModel internal constructor(application: Application, private va
               current.progress.projectSessions.filterNot { it.id == draft.conversationId })
           else current.progress) }
         selectConversation(draft.conversationId)
+        if (initialPrompt != null) mutableState.update { it.copy(chatNavigationId = draft.conversationId) }
         loadConversations()
       } catch (error: CancellationException) {
         throw error

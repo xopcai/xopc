@@ -18,17 +18,15 @@ export function generatedMediaCards(kind: XopcGeneratedMediaKind, response: Xopc
 
 export function generatedMediaByReply(cards: XopcGeneratedMediaCard[], rows: XopcChatRow[]): Map<string, XopcGeneratedMediaCard[]> {
   const anchors = new Map<string, string>();
-  let latestReply = '';
   for (const row of rows) {
     if (row.role !== 'assistant') continue;
-    latestReply = row.id;
     for (const id of row.generatedMediaIds ?? []) {
       if (!anchors.has(id)) anchors.set(id, row.id);
     }
   }
   const groups = new Map<string, XopcGeneratedMediaCard[]>();
   for (const card of cards) {
-    const id = anchors.get(card.item.id) ?? latestReply;
+    const id = anchors.get(card.item.id) ?? '';
     const group = groups.get(id) ?? [];
     group.push(card);
     groups.set(id, group);

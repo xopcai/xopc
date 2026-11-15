@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct PhoneWorkspaceView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let model: PhoneWorkspaceModel
     let onReturn: () -> Void
     @State private var textOpen = false
@@ -91,7 +92,7 @@ struct PhoneWorkspaceView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle").font(.title2).frame(width: 44, height: 44)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: Circle())
+                        .background(mobileTheme.panel, in: Circle())
                 }.accessibilityLabel("更多手机操作").accessibilityIdentifier("phone-more").disabled(model.busy)
             }.buttonStyle(.plain)
             GeometryReader { proxy in
@@ -109,7 +110,7 @@ struct PhoneWorkspaceView: View {
                             }
                             Text(placeholder).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
+                            .background(mobileTheme.panel)
                     }
                     if ownControl, !model.busy {
                         PhoneTouchSurface { phase, point in
@@ -123,7 +124,7 @@ struct PhoneWorkspaceView: View {
                         }
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground)).clipShape(.rect(cornerRadius: 16))
+                    .background(mobileTheme.panel).clipShape(.rect(cornerRadius: 16))
             }
             if model.fallback {
                 Text("截图模式").font(.caption).foregroundStyle(.secondary)
@@ -154,7 +155,7 @@ struct PhoneWorkspaceView: View {
             } else if model.summary?.access == "view" {
                 Text("当前设备仅可查看").font(.footnote).foregroundStyle(.secondary)
             }
-        }.padding(16).background(Color(uiColor: .systemGroupedBackground))
+        }.padding(16).background(mobileTheme.canvas)
             .sheet(isPresented: $textOpen, onDismiss: { draft = "" }) {
                 NavigationStack {
                     VStack(alignment: .leading, spacing: 20) {

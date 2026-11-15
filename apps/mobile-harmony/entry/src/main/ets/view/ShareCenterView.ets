@@ -93,7 +93,7 @@ export struct XopcShareCenterView {
                     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                     Button('•••').width(44).height(44).padding(0).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
                       .onClick((): void => { this.menu(item); })
-                  }.width('100%').padding(14).borderRadius(16).backgroundColor(this.colors.panel)
+                  }.width('100%').padding(14).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
                     .onClick((): void => { this.open(item); })
                 }
               }, (item: XopcShareItem): string => item.id + ':' + item.expiresAt + ':' + item.revoked)

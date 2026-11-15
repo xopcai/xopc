@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcSessionsViewModel } from '../viewmodel/sessionsViewModel';
 import { XopcSessionItem, XopcSessionGroup, XopcSidebarTaskChild, XopcSidebarTaskGroup } from '../model/chat';
 import { groupChatSessions, sessionAge } from '../common/sessionGroups';
-import { XopcErrorState, XopcListSkeleton } from './MobileComponents';
+import { XopcErrorState, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField } from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
 import { appSettings } from '../service/settings';
 import { XopcShareResult } from '../model/share';
@@ -83,7 +83,7 @@ struct XopcSessionManagerRow {
         Text(xopcTaskStatus(this.entry.task)).fontSize(12).fontColor(this.colors.tertiary)
       }.width('100%').constraintSize({ minHeight: 52 })
         .padding({ left: 56, right: 16, top: 8, bottom: 8 })
-        .backgroundColor(this.colors.panel).borderRadius(12).margin({ bottom: 6 })
+        .backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(12)).margin({ bottom: 6 })
         .id('sessions-task-' + this.entry.task.taskId)
         .enabled(!this.locked)
         .onClick((): void => {
@@ -105,8 +105,10 @@ struct XopcSessionManagerRow {
         }
         Column({ space: 4 }) {
           Text(this.entry.session.displayName || this.entry.session.name || this.entry.session.title || $r('app.string.untitled'))
-            .fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis }).opacity(this.entry.session.status === 'archived' ? 0.6 : 1)
+            .fontSize(16).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.light && (this.selected || this.current) ? this.colors.accent
+              : this.entry.session.status === 'archived' ? this.colors.secondary : this.colors.foreground)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           if (this.entry.session.status === 'pinned' || this.entry.session.status === 'archived') {
             Text(this.entry.session.status === 'pinned' ? $r('app.string.sessions_pinned') : $r('app.string.sessions_archived'))
               .fontSize(12).fontColor(this.colors.secondary)
@@ -115,7 +117,7 @@ struct XopcSessionManagerRow {
         Text(this.time()).fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
       }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 16, right: 16, top: 12, bottom: 12 })
         .backgroundColor(this.selected || this.current ? this.colors.active : this.colors.panel)
-        .borderRadius(16).margin({ bottom: 8 })
+        .border(this.colors.panelStroke).borderRadius(this.colors.corner(16)).margin({ bottom: 8 })
         .id('sessions-row-' + this.entry.session.key).accessibilitySelected(this.selected || this.current).enabled(!this.locked)
         .onClick((): void => { if (this.entry.session) this.onOpen(this.entry.session); })
         .gesture(LongPressGesture({ duration: 300, repeat: false }).onAction((): void => {
@@ -131,6 +133,7 @@ struct XopcSessionManagerRow {
 @ComponentV2
 export struct XopcSessionsView {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Param startSearching: boolean = false;
   @Param currentId: string = '';
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Event onExit: () => void = (): void => {};
@@ -139,7 +142,7 @@ export struct XopcSessionsView {
   @Event onNew: (id: string) => void = (_id: string): void => {};
   @Event onDelete: (id: string) => void = (_id: string): void => {};
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel();
-  @Local searchOpen: boolean = true;
+  @Local searchOpen: boolean = false;
   @Local expandedTaskParents: string[] = [];
   @Local collapsedTaskParents: string[] = [];
   @Local renameOpen: boolean = false;
@@ -154,6 +157,7 @@ export struct XopcSessionsView {
   private scroller: Scroller = new Scroller();
   private opening: boolean = false;
 
+  aboutToAppear(): void { this.searchOpen = this.startSearching; }
   aboutToDisappear(): void { this.sessions.dispose(); }
   private activate(): void {
     this.opening = false;
@@ -214,11 +218,18 @@ export struct XopcSessionsView {
     this.getUIContext().getFocusController().clearFocus();
     this.onNew(id);
   }
+  private closeSearch(): void {
+    this.getUIContext().getFocusController().clearFocus();
+    this.searchOpen = false;
+    this.sessions.setSearch('');
+  }
+
   private back(): boolean {
     if (this.menuOpen) { this.menuOpen = false; return true; }
     if (this.sessions.busy) return true;
     if (this.renameOpen) { this.renameOpen = false; return true; }
     if (this.sessions.selecting) { this.sessions.cancelSelection(); return true; }
+    if (this.searchOpen) { this.closeSearch(); return true; }
     return false;
   }
   private renameItem(item: XopcSessionItem): void {
@@ -289,7 +300,7 @@ export struct XopcSessionsView {
                 .fontColor(action === 'delete' ? this.colors.danger : this.colors.foreground)
                 .width('100%').textAlign(TextAlign.Start)
             }.id('session-menu-' + action).width('100%').constraintSize({ minHeight: 52 })
-              .padding({ left: 16, right: 16, top: 14, bottom: 14 }).borderRadius(12)
+              .padding({ left: 16, right: 16, top: 14, bottom: 14 }).borderRadius(this.colors.corner(12))
               .backgroundColor(this.colors.grouped).enabled(!this.sessions.busy)
               .onClick((): void => { this.chooseMenuAction(action); })
           }, (action: string): string => action)
@@ -358,7 +369,7 @@ export struct XopcSessionsView {
       }.id('sessions-batch-delete').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
         .accessibilityText($r('app.string.delete')).onClick((): void => { this.confirmDelete(); })
     }.id('sessions-batch-bar').width('92%').padding(6).backgroundColor(this.colors.panel)
-      .borderRadius(28).margin({ top: 6, bottom: 8 })
+      .borderRadius(this.colors.corner(28)).margin({ top: 6, bottom: 8 })
       .enabled(!this.sessions.busy && this.sessions.selected.length > 0)
   }
   @Builder
@@ -367,17 +378,17 @@ export struct XopcSessionsView {
         Row({ space: 8 }) {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground])
-          }.id('sessions-back').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          }.id('sessions-back').width(44).height(44).padding(0)
+            .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
             .accessibilityText($r('app.string.back')).onClick((): void => { if (!this.back()) this.onExit(); })
           Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length)
             : $r('app.string.history'))
             .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
           if (!this.sessions.selecting) {
-            if (!this.searchOpen) {
-              Button() { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.foreground]) }
-                .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.search'))
-                .onClick((): void => { this.searchOpen = true; })
-            }
+            XopcPageSearchButton({ searchId: 'sessions-open-search', open: this.searchOpen,
+              label: $r('app.string.sessions_search'), onToggle: (): void => {
+                if (this.searchOpen) this.closeSearch(); else this.searchOpen = true;
+              } })
             Button() {
               SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.foreground])
             }.id('sessions-new').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
@@ -386,14 +397,13 @@ export struct XopcSessionsView {
           }
         }.width('100%').padding({ left: 12, right: 12, top: 12, bottom: 12 })
         if (this.searchOpen && !this.sessions.selecting) {
-          Row({ space: 4 }) {
-            TextInput({ text: this.sessions.search, placeholder: $r('app.string.sessions_search') }).id('sessions-search')
-              .layoutWeight(1).height(44).enterKeyType(EnterKeyType.Search).enabled(!this.sessions.busy)
-              .onChange((text: string): void => { this.scroller.scrollTo({ xOffset: 0, yOffset: 0 }); this.sessions.setSearch(text); })
-              .onSubmit((): void => { this.sessions.load(); })
-            Button('×').id('sessions-search-close').width(44).height(44).fontSize(24).backgroundColor(Color.Transparent)
-              .fontColor(this.colors.secondary).accessibilityText($r('app.string.close')).enabled(!this.sessions.busy)
-              .onClick((): void => { this.searchOpen = false; this.sessions.setSearch(''); })
+          Column() {
+            XopcPageSearchField({ searchId: 'sessions-search', text: this.sessions.search,
+              placeholder: $r('app.string.sessions_search'),
+              onChange: (text: string): void => {
+                this.scroller.scrollTo({ xOffset: 0, yOffset: 0 }); this.sessions.setSearch(text);
+              },
+              onSubmit: (): void => { void this.sessions.load(); } })
           }.padding({ left: 20, right: 20, bottom: 8 })
         }
         if ((this.sessions.error || this.sessions.actionError) && this.sessions.items.length) {

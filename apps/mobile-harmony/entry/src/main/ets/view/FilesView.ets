@@ -101,7 +101,7 @@ export struct XopcFilesView {
             SymbolGlyph($r('sys.symbol.plus')).fontSize(17).fontColor([this.colors.accent])
             Text($r('app.string.upload')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
           }
-        }.height(40).padding({ left: 13, right: 13 }).borderRadius(12).backgroundColor(this.colors.accentSoft)
+        }.height(40).padding({ left: 13, right: 13 }).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.accentSoft)
           .enabled(!this.model.busy).onClick((): void => {
             const context = this.getUIContext().getHostContext(); if (context) this.model.upload(context);
           })
@@ -123,13 +123,14 @@ export struct XopcFilesView {
     Column({ space: 0 }) {
       Row({ space: 8 }) {
         TextInput({ text: this.search, placeholder: $r('app.string.search') }).layoutWeight(1).height(44)
-          .backgroundColor(this.colors.input).borderRadius(14)
+          .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input)
+          .border(this.colors.controlStroke).borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .onChange((query: string): void => { this.search = query; }).onSubmit((): void => { this.model.load(this.search); })
         Button() {
           if (this.model.busy) { XopcBrandLoading({ compact: true }) }
           else { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary]) }
         }
-          .width(44).height(44).padding(0).backgroundColor(this.colors.input).borderRadius(14).enabled(!this.model.busy)
+          .width(44).height(44).padding(0).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).enabled(!this.model.busy)
           .accessibilityText($r('app.string.refresh')).onClick((): void => { this.model.load(this.search); })
       }.width('100%').padding({ left: 20, right: 20, top: 6, bottom: 16 })
 

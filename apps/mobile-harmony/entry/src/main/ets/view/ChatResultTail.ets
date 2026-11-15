@@ -104,6 +104,7 @@ export struct XopcChatResultTail {
                 embedded: true, compactAvailable: true, resultCapsule: true, onNavigate: this.onNavigate })
             } else if (item.item.availability === 'available' && markdownLink(item.item.shareUrl || '')) {
               XopcChatResultCapsule({ title: item.item.title, symbol: $r('sys.symbol.doc'),
+                subtitle: $r('app.string.chat_artifact_available'), successful: true,
                 entryId: 'chat-artifact-' + item.item.artifactId,
                 onOpen: (): void => { this.openLink(item.item.shareUrl || ''); } })
             } else {
@@ -113,6 +114,7 @@ export struct XopcChatResultTail {
           }).key((artifact: XopcArtifact): string => artifact.artifactId)
           Repeat<XopcProductDelivery>(this.visibleDeliveries).each((item: RepeatItem<XopcProductDelivery>) => {
             XopcChatResultCapsule({ title: item.item.primary?.title || '', subtitle: this.productState(item.item),
+              successful: item.item.operation === 'completed',
               canOpen: this.canOpenProduct(item.item.primary), entryId: 'chat-product-' + item.item.primary?.id,
               onOpen: (): void => { this.openProduct(item.item.primary); } })
           }).key((delivery: XopcProductDelivery): string => delivery.operation + ':' + delivery.primary?.kind + ':' + delivery.primary?.id)

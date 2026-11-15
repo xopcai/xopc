@@ -32,7 +32,7 @@ describe('workspace list loading layout', () => {
   it('renders file spaces as navigable rows instead of emphasized pill buttons', () => {
     expect(files).not.toContain('Button(space.title)');
     expect(files).toContain("XopcHubRow({ heading: space.title, symbol: $r('sys.symbol.folder')");
-    expect(files).toContain('.backgroundColor(this.colors.input).borderRadius(14)');
+    expect(files).toContain('.backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))');
   });
 
   it('keeps note content primary and moves secondary actions into a sheet', () => {

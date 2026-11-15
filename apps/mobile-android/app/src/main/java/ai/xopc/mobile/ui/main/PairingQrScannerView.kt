@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.PairingQrScanner
 import android.graphics.Bitmap
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -108,7 +108,7 @@ internal fun PairingQrScannerDialog(onDetected: (String) -> Unit, onClose: () ->
       Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
         Box(modifier = Modifier.size(260.dp).align(Alignment.Center)
-          .border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp)))
+          .border(3.dp, MaterialTheme.colorScheme.primary, themedCorners(24)))
         Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
           .background(Color.Black.copy(alpha = 0.62f)).padding(horizontal = 20.dp, vertical = 18.dp),
           verticalArrangement = Arrangement.spacedBy(4.dp)) {

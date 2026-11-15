@@ -95,7 +95,7 @@ export struct XopcChatOptions {
         }
       }.width('100%').padding(10)
     }.id('chat-agent-option-' + agent.id).width('100%').constraintSize({ minHeight: 60 }).padding(0)
-      .borderRadius(14).backgroundColor(this.colors.chat.card)
+      .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.chat.card)
       .onClick((): void => { if (agent.id === this.model.agentId) this.onClose(); else this.onAgent(agent.id); })
   }
 
@@ -163,7 +163,7 @@ export struct XopcChatOptions {
                 Button({ type: ButtonType.Normal }) {
                   Row({ space: 10 }) {
                     if (this.queueImage(item)) {
-                      Image(this.queueImage(item)).width(44).height(44).borderRadius(9).objectFit(ImageFit.Cover)
+                      Image(this.queueImage(item)).width(44).height(44).borderRadius(this.colors.corner(9)).objectFit(ImageFit.Cover)
                         .sourceSize({ width: 88, height: 88 })
                     } else if (item.attachments?.length) {
                       SymbolGlyph($r('sys.symbol.paperclip')).fontSize(20).fontColor([this.colors.secondary])
@@ -190,7 +190,7 @@ export struct XopcChatOptions {
                   .accessibilityText($r('app.string.delete'))
                   .onClick((): void => { this.model.cancelQueued(item); })
               }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 8, right: 8, top: 8, bottom: 8 })
-                .borderRadius(12).backgroundColor(this.colors.grouped)
+                .borderRadius(this.colors.corner(12)).backgroundColor(this.colors.grouped)
             }
           }, (item: XopcQueuedInput): string => item.id)
             .onMove((from: number, to: number): void => { this.model.moveQueued(from, to); })

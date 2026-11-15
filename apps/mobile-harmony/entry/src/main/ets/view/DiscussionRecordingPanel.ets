@@ -83,7 +83,7 @@ export struct XopcDiscussionRecordingPanelView {
   @Builder
   iconAction(label: Resource, symbol: Resource, id: string, enabled: boolean, action: () => void, primary: boolean = false) {
     Button({ type: ButtonType.Normal }) { SymbolGlyph(symbol).fontSize(18).fontColor([primary ? this.colors.panel : this.colors.foreground]) }
-      .id(id).width(44).height(44).padding(0).borderRadius(12).enabled(enabled)
+      .id(id).width(44).height(44).padding(0).borderRadius(this.colors.corner(12)).enabled(enabled)
       .backgroundColor(primary ? this.colors.accent : this.colors.input).accessibilityText(label).onClick(action)
   }
   @Builder
@@ -107,7 +107,7 @@ export struct XopcDiscussionRecordingPanelView {
           },(index: number): string => index.toString())
         }
       }
-        .id('capture-float-move').width(44).height(44).padding(0).borderRadius(12).backgroundColor(Color.Transparent)
+        .id('capture-float-move').width(44).height(44).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(Color.Transparent)
         .accessibilityText($r('app.string.capture_panel_move')).onClick((): void => { this.panel.togglePositions(); })
         .gesture(PanGesture({ fingers: 1,direction: PanDirection.All,distance: 6 })
           .onActionStart((_event: GestureEvent): void => { this.panel.dragStart(); })
@@ -184,10 +184,10 @@ export struct XopcDiscussionRecordingPanelView {
           Text($r('app.string.capture_panel_notes')).fontSize(12).fontColor(this.colors.secondary).width('100%')
           Text(this.analysisLabel()).fontSize(13).fontColor(this.colors.foreground).width('100%')
           if (this.capture.shutdownIncomplete) Text($r('app.string.capture_p0_stop_incomplete')).fontSize(12).fontColor(this.colors.danger)
-        }.width('100%').alignItems(HorizontalAlign.Start).padding(12).borderRadius(12).backgroundColor(this.colors.input)
+        }.width('100%').alignItems(HorizontalAlign.Start).padding(12).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
       }
       Button($r('app.string.capture_panel_transcript')).id('capture-float-transcript').width('100%').height(40).fontSize(12)
-        .backgroundColor(this.colors.input).fontColor(this.colors.secondary).borderRadius(12)
+        .backgroundColor(this.colors.input).fontColor(this.colors.secondary).borderRadius(this.colors.corner(12))
         .onClick((): void => { this.panel.transcriptOpen = !this.panel.transcriptOpen; })
       if (this.panel.transcriptOpen) Text(this.capture.visibleTranscript || $r('app.string.capture_panel_text_pending')).fontSize(14).lineHeight(22).fontColor(this.colors.foreground).width('100%')
       if (this.capture.captureStatus === 'recording' && this.capture.transcriptPending && !this.capture.realtimeActive) Text($r('app.string.capture_p0_delayed')).fontSize(12).fontColor(this.colors.secondary).width('100%')
@@ -210,7 +210,7 @@ export struct XopcDiscussionRecordingPanelView {
         SymbolGlyph(symbol).fontSize(16).fontColor([primary ? this.colors.panel : this.colors.foreground])
         Text(label).fontSize(13).maxLines(1).fontColor(primary ? this.colors.panel : this.colors.foreground)
       }.justifyContent(FlexAlign.Center)
-    }.id(id).layoutWeight(1).height(44).padding({ left: 6,right: 6 }).borderRadius(12).enabled(enabled)
+    }.id(id).layoutWeight(1).height(44).padding({ left: 6,right: 6 }).borderRadius(this.colors.corner(12)).enabled(enabled)
       .backgroundColor(primary ? this.colors.accent : this.colors.input).accessibilityText(label).onClick(action)
   }
   build() {
@@ -262,7 +262,7 @@ export struct XopcDiscussionRecordingPanelView {
       }
       }
     }.id('discussion-recording-float').width(this.panel.cardWidth).height(this.panel.cardHeight)
-      .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.panel).borderRadius(20)
+      .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(20))
       .shadow(ShadowStyle.OUTER_DEFAULT_SM).clip(true).position({ x: this.panel.panelX,y: this.panel.panelY }).zIndex(50)
   }
 }

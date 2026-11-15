@@ -262,6 +262,7 @@ enum AssistantAction: String, CaseIterable, Identifiable {
 }
 
 struct AssistantActionPanel: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let canReferenceFiles: Bool
     let onSelect: (AssistantAction) -> Void
 
@@ -289,7 +290,7 @@ struct AssistantActionPanel: View {
             }
         }
         .padding(8)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+        .background(mobileTheme.panel, in: .rect(cornerRadius: 18))
         .padding(.bottom, 8)
         .accessibilityIdentifier("assistant-action-panel")
     }

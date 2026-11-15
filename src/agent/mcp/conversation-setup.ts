@@ -13,6 +13,7 @@ import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { getActiveConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import { createLogger } from '../../utils/logger.js';
+import { checkUrlSafety } from '../tools/url-safety.js';
 import { McpConnectionDrafts, McpDraftError, mcpConfigRevision } from './connection-drafts.js';
 import { classifyMcpConnectionError } from './connection-errors.js';
 import { McpDiscovery, createMcpResearch, type McpResearch } from './discovery.js';
@@ -43,6 +44,7 @@ type Goal = { id: string; conversationId: string; transcriptId: string; agentId:
   diagnosis?: Pick<McpConnectionProbe, 'auth' | 'recovery' | 'observation'>; attempts?: number; nextRetryAt?: number; requestCounts?: Record<string, number>;
   committedRevision?: string; reloadRequired?: boolean; resumed?: boolean; errorCode?: string };
 export type McpSetupContext = { conversationId: string; agentId: string; canConfigure: boolean; canRequestWeixinSetup?: boolean; showSetupCard?: boolean;
+  canOpenMobileForm?: boolean;
   signal?: AbortSignal; authorizeResearch?: (tool: 'web_search' | 'web_fetch', args: Record<string, unknown>) => Promise<boolean> };
 type Save = (next: Config, expected?: Config) => Promise<{ saved: boolean; persisted?: boolean; conflict?: boolean }>;
 
@@ -188,6 +190,21 @@ export class McpConversationSetup {
     }
     if (command === 'inspect') { z.object({}).strict().parse(input); return this.inspect(); }
     if (command === 'get') { const args = setupSchema.parse(input); return this.view(this.get(args.setupId, context.conversationId), showSetupCard); }
+    if (command === 'start' && !context.canConfigure && localOwner && context.canOpenMobileForm) {
+      const args = targetSchema.parse(input);
+      if (!args.url || args.planId || args.execution || args.transport === 'stdio' || args.transport === 'sse' || args.secretFields?.length ||
+        args.expectedRevision || args.authentication === 'bearer' || args.authentication === 'header') {
+        throw new McpDraftError(400, 'Mobile setup needs one public Streamable HTTP address. Do not request credentials in chat.');
+      }
+      const url = new URL(args.url);
+      if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !checkUrlSafety(url.href).safe ||
+        ['__proto__', 'constructor', 'prototype'].includes(args.serverId.toLowerCase())) {
+        throw new McpDraftError(400, 'Use a public HTTPS MCP address without credentials or query parameters.');
+      }
+      if (dryRun) return { dryRun: true, serverId: args.serverId };
+      const interactionPath = 'xopc://capabilities/mcp?' + new URLSearchParams({ id: args.serverId, url: url.href });
+      return { interactionPath, state: 'mobile_form_required', instruction: `Reply with a tappable Markdown link to exactly ${interactionPath}. The user will review the address, test and authorize in the native App before anything is saved. Stop here and do not request credentials or claim the connection is installed.` };
+    }
     if (!context.canConfigure && !channel) throw new McpDraftError(409, 'An active owner App or local CLI turn is required for MCP configuration.');
     if (command === 'repair') {
       const args = setupSchema.extend({ planId: z.string().uuid(), expectedPlanVersion: z.number().int().positive() }).strict().parse(input);

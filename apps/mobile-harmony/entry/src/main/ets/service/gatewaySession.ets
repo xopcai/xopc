@@ -367,7 +367,11 @@ export class XopcGatewaySession {
     if (this.pairingTask) { try { await this.pairingTask; } catch (_) {} }
     if (this.refreshTask) { try { await this.refreshTask; } catch (_) { /* In-flight auth is superseded. */ } }
     this.tokens = undefined; this.profile = undefined; this.verifiedUntil.clear();
-    for (const profile of this.profiles.list()) { await chatHistoryCache.remove(profile.gatewayId); await this.profiles.remove(profile.gatewayId); }
+    for (const profile of this.profiles.list()) {
+      await chatHistoryCache.remove(profile.gatewayId);
+      await chatSessionCache.remove(profile.gatewayId);
+      await this.profiles.remove(profile.gatewayId);
+    }
     await this.store.remove('profile'); await this.store.remove('refresh'); await this.store.remove('refresh-attempt');
     await this.store.remove('pairing'); await this.crypto.clearKey();
   }

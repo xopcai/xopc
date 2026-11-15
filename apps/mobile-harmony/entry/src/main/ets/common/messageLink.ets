@@ -23,6 +23,12 @@ export function internalMessageLink(raw: string): XopcMessageLink | undefined {
       if (!path || /[\u0000-\u001f\u007f]/.test(path) || path.replace(/\\/g, '/').split('/').includes('..')) return undefined;
       return { kind: 'file', path, page: '', itemId: '' };
     }
+    if (base === 'xopc://capabilities/mcp') {
+      const id = query['id'] || '';
+      const url = query['url'] || '';
+      if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id) || url.length > 2048 || !/^https:\/\/[^\s/@?#[\]\\]+(?:\/[^\s?#\\]*)?$/.test(url)) return undefined;
+      return { kind: 'route', page: 'capability-mcp-setup', itemId: id, path: url };
+    }
     if (base === 'xopc://open' || base === 'xopc://open/') {
       const kind = query['kind'];
       const page = Object.keys(PRODUCT_PAGES).includes(kind) ? PRODUCT_PAGES[kind] : '';

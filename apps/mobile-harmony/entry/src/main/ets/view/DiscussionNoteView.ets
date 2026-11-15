@@ -1,3 +1,4 @@
+import { XopcSegmentedTabs } from './SegmentedTabs';
 import { userErrorMessage } from '../common/userError';
 import { RecordingOutcomeCard } from './RecordingOutcomeCard';
 import { XopcReviewEntry } from '../model/discussionCapture';
@@ -70,7 +71,7 @@ export struct XopcDiscussionNoteView {
       }.width('100%')
       Text(segment.displayText ?? segment.rawText ?? $r('app.string.discussion_transcript_pending'))
         .fontSize(15).lineHeight(23).fontColor(this.colors.foreground).width('100%')
-    }.width('100%').padding(12).borderRadius(12).backgroundColor(this.colors.input)
+    }.width('100%').padding(12).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
       .alignItems(HorizontalAlign.Start)
   }
 
@@ -101,7 +102,7 @@ export struct XopcDiscussionNoteView {
             }, (range: XopcPlaybackRange): string => range.startedAtMs.toString())
           }, (segment: XopcEvidenceSegment): string => segment.sequence.toString())
           Button($r('app.string.close')).onClick((): void => { this.model.evidence = undefined; })
-        }.width('100%').padding(16).borderRadius(12).backgroundColor(this.colors.input).alignItems(HorizontalAlign.Start)
+        }.width('100%').padding(16).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input).alignItems(HorizontalAlign.Start)
       }
     }.width('100%').height('100%')
   }
@@ -118,12 +119,6 @@ export struct XopcDiscussionNoteView {
     }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
   }
   @Builder
-  contentTab(tabKey: string,label: Resource) {
-    Button(label).layoutWeight(1).height(44).fontSize(14).fontColor(this.model.tab === tabKey ? this.colors.foreground : this.colors.secondary)
-      .backgroundColor(this.model.tab === tabKey ? this.colors.panel : Color.Transparent).borderRadius(10)
-      .onClick((): void => { this.model.tab = tabKey; if (tabKey === 'marks') void this.model.refreshAnnotations(); })
-  }
-  @Builder
   reviewRow(entry: XopcReviewEntry) {
     Column({ space: 7 }) {
       Button(entry.title || (entry.startedAtMs !== undefined ? xopcFormatCaptureTime(entry.startedAtMs) : entry.kind))
@@ -137,7 +132,7 @@ export struct XopcDiscussionNoteView {
         Button($r('app.string.discussion_play_context')).onClick((): void => { void this.model.play(range); })
       },(range: XopcPlaybackRange): string => range.startedAtMs.toString())
       Button($r('app.string.discussion_locate_transcript')).onClick((): void => { this.model.openReviewEntry(entry); })
-    }.width('100%').padding(12).borderRadius(12).backgroundColor(this.colors.input).alignItems(HorizontalAlign.Start)
+    }.width('100%').padding(12).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -199,11 +194,12 @@ export struct XopcDiscussionNoteView {
             onRetry: (mode: string): void => { void this.model.retryOutcome(mode); } })
         }
         if (this.model.resumePositionMs > 0 && !this.model.detail.discussion.audioDeletedAt) Button($r('app.string.discussion_resume_position',xopcFormatCaptureTime(this.model.resumePositionMs))).onClick((): void => { void this.model.resumePlayback(); })
-        Row({ space: 4 }) {
-          this.contentTab('summary',$r('app.string.note_ui_overview'))
-          this.contentTab('transcript',$r('app.string.note_ui_transcript'))
-          this.contentTab('marks',$r('app.string.note_ui_marks'))
-        }.width('100%').padding(4).borderRadius(14).backgroundColor(this.colors.input)
+        XopcSegmentedTabs({ options: [
+          { key: 'summary', label: $r('app.string.note_ui_overview'), testId: 'discussion-tab-summary' },
+          { key: 'transcript', label: $r('app.string.note_ui_transcript'), testId: 'discussion-tab-transcript' },
+          { key: 'marks', label: $r('app.string.note_ui_marks'), testId: 'discussion-tab-marks' }
+        ], selectedKey: this.model.tab,
+          onSelect: (key: string): void => { this.model.tab = key; if (key === 'marks') void this.model.refreshAnnotations(); } })
         if (this.searchOpen || this.model.reviewQuery.trim()) {
         TextInput({ text: this.model.reviewQuery,placeholder: $r('app.string.discussion_search_note') }).maxLength(200)
           .onChange((text: string): void => { this.model.setReviewQuery(text); })
@@ -242,7 +238,7 @@ export struct XopcDiscussionNoteView {
                   }, (item: XopcDiscussionActionItem): string => item.id)
               }.width('100%').alignItems(HorizontalAlign.Start)
             }
-          }.width('100%').padding(16).borderRadius(16).backgroundColor(this.colors.input)
+          }.width('100%').padding(16).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.input)
             .alignItems(HorizontalAlign.Start)
         }
         if (!this.model.reviewQuery.trim() && this.model.tab === 'summary' && !this.model.detail.organization?.organization && this.model.detail.transcript.text) {
@@ -301,7 +297,7 @@ export struct XopcDiscussionNoteView {
                 Button($r('app.string.discussion_source')).onClick((): void => { void this.model.locateAnnotation(annotation.id); })
                 Button($r('app.string.discussion_mark_edit')).onClick((): void => { this.editingAnnotation = annotation; this.annotationText = annotation.text; this.annotationKind = annotation.kind; })
               }
-            }.width('100%').padding(12).borderRadius(12).backgroundColor(this.colors.input).alignItems(HorizontalAlign.Start)
+            }.width('100%').padding(12).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input).alignItems(HorizontalAlign.Start)
           }, (annotation: XopcDiscussionAnnotation): string => annotation.id)
           Text($r('app.string.discussion_mark_unavailable')).fontSize(12).fontColor(this.colors.secondary)
           if (this.model.annotationError) {

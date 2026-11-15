@@ -2,13 +2,13 @@ import SwiftUI
 
 // swiftlint:disable:next type_body_length
 struct ProjectDetailView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let projectID: String
     let onOpenConversation: (String, String, String) -> Void
     var onProjectUpdated: (ProjectRecord) -> Void = { _ in }
 
     @Environment(\.locale) private var locale
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var project: ProjectRecord?
     @State private var sessions: [ConversationSummary] = []
     @State private var deliveries: [HomeDelivery] = []
@@ -43,7 +43,7 @@ struct ProjectDetailView: View {
                                         .font(.subheadline.weight(.medium))
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 6)
-                                        .background(Color.blue.opacity(0.1), in: .capsule)
+                                        .background(mobileTheme.action.opacity(0.10), in: .capsule)
                                     Spacer()
                                     if let health = project.health, health != "unknown" {
                                         Text(health).mobileTextStyle(.caption).foregroundStyle(.secondary)
@@ -136,25 +136,12 @@ struct ProjectDetailView: View {
         } message: { Text(error ?? "未知错误") }
     }
 
-    @ViewBuilder
     private var projectSectionPicker: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            Picker("项目分区", selection: $selection) {
-                ForEach(ProjectSection.allCases) { section in
-                    Text(section.title).tag(section)
-                }
-            }
-            .pickerStyle(.menu)
+        SegmentedTabs(options: ProjectSection.allCases.map { section in
+            SegmentOption(id: section, title: section.title, accessibilityID: "project-tab-\(section.rawValue)")
+        }, selected: selection, label: "项目分区", minimumSegmentWidth: 72) { selection = $0 }
+            .accessibilityIdentifier("project-tabs")
             .listRowInsets(EdgeInsets())
-        } else {
-            Picker("项目分区", selection: $selection) {
-                ForEach(ProjectSection.allCases) { section in
-                    Text(section.title).tag(section)
-                }
-            }
-            .pickerStyle(.segmented)
-            .listRowInsets(EdgeInsets())
-        }
     }
 
     private func projectSessions(_ project: ProjectRecord) -> some View {
@@ -185,7 +172,7 @@ struct ProjectDetailView: View {
                     Button { projectChat = ConversationSelection(summary: session) } label: {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: "bubble.left")
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(.tint)
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(session.displayName)

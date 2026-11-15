@@ -62,15 +62,13 @@ struct ReferencePickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: searchPrompt)
             .safeAreaInset(edge: .top) {
-                Picker("引用类型", selection: $kind) {
-                    ForEach(availableKinds, id: \.self) { item in
-                        Text(item.title).tag(item)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(.bar)
+                SegmentedTabs(options: availableKinds.map { item in
+                    SegmentOption(id: item, title: item.title, accessibilityID: "reference-tab-\(item.rawValue)")
+                }, selected: kind, label: "引用类型") { kind = $0 }
+                    .accessibilityIdentifier("reference-tabs")
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(.bar)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -131,7 +129,7 @@ private struct ReferenceRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: item.kind.systemImage)
-                .foregroundStyle(.blue)
+                .foregroundStyle(.tint)
                 .frame(width: 24)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {

@@ -23,7 +23,7 @@ export struct XopcDiscussionReviewPlayer {
         }.width('100%')
         if (this.playback.loading) Text($r('app.string.discussion_clip_loading')).fontSize(12).fontColor(this.colors.secondary)
         if (this.playback.error || this.playback.player.error) Text($r('app.string.discussion_audio_unavailable')).fontSize(12).fontColor(this.colors.danger)
-      }.width('100%').padding(12).backgroundColor(this.colors.panel).borderRadius(14)
+      }.width('100%').padding(12).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
     }
   }
 }

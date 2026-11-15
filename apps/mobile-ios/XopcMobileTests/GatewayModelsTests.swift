@@ -457,6 +457,22 @@ extension GatewayModelsTests {
         #expect(object["content"] as? String == "Updated")
     }
 
+    @Test func recentConversationSnapshotSurvivesRestartAndRespectsAccountAndRemoval() async {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let snapshot = RecentConversationsStore(baseDirectory: directory)
+        let row = ConversationSummary(key: "cached", agentId: "main", name: "Cached", status: "active",
+                                      updatedAt: "2026-11-01T12:00:00Z", messageCount: 2, projectId: nil, transcriptId: nil)
+        let started = Date.now
+        await snapshot.write([row], scope: "account-a", requestedAt: started)
+        let reopened = RecentConversationsStore(baseDirectory: directory)
+        #expect(await reopened.read(scope: "account-a") == [row])
+        #expect(await reopened.read(scope: "account-b") == nil)
+        await reopened.remove(scope: "account-a")
+        await reopened.write([row], scope: "account-a", requestedAt: started)
+        #expect(await reopened.read(scope: "account-a") == nil)
+    }
+
     @Test func conversationsSearchAndPaginateOnServer() async {
         let state = ConversationsState()
         await state.load(using: GatewayStub())

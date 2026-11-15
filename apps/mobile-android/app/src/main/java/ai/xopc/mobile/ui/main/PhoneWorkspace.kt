@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.*
 import android.content.SharedPreferences
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -296,7 +296,7 @@ internal fun PhoneWorkspaceContent(ui: PhoneUiState, onReturn: () -> Unit, onCom
         }
       }
     }
-    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainer), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clip(themedCorners(16)).background(MaterialTheme.colorScheme.surfaceContainer), contentAlignment = Alignment.Center) {
       val imageWidth = if (ui.fallback) ui.frame?.bitmap?.width ?: 1 else ui.width
       val imageHeight = if (ui.fallback) ui.frame?.bitmap?.height ?: 2 else ui.height
       val ratio = imageWidth.toFloat() / imageHeight
@@ -324,8 +324,8 @@ internal fun PhoneWorkspaceContent(ui: PhoneUiState, onReturn: () -> Unit, onCom
       if (!ui.playing && !(ui.fallback && ui.frame != null)) Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
         if (ui.summary?.available != false && ui.summary?.access != "none" && !ui.error && ui.live?.restore != true) {
-          Spacer(Modifier.fillMaxWidth(.7f).height(28.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest))
-          Spacer(Modifier.fillMaxWidth(.9f).height(180.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest))
+          Spacer(Modifier.fillMaxWidth(.7f).height(28.dp).clip(themedCorners(8)).background(MaterialTheme.colorScheme.surfaceContainerHighest))
+          Spacer(Modifier.fillMaxWidth(.9f).height(180.dp).clip(themedCorners(16)).background(MaterialTheme.colorScheme.surfaceContainerHighest))
         }
         Text(stringResource(when { ui.summary?.available == false -> R.string.phone_unavailable
           ui.summary?.access == "none" -> R.string.phone_permission_required

@@ -1,3 +1,4 @@
+import { XopcSegmentedTabs } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
 import { XopcUnderstandingItem, XopcUnderstandingProfile, XopcUnderstandingRule } from '../model/userUnderstanding';
@@ -208,7 +209,7 @@ export struct XopcAboutYouView {
         Search({ value: this.model.query, placeholder: $r('app.string.about_you_search_placeholder') })
           .id('about-you-search').layoutWeight(1).height(44).padding({ left: 4, right: 4 })
           .fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-          .backgroundColor(this.colors.input).borderRadius(14)
+          .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
           .onChange((query: string): void => { this.model.search(query); })
           .onSubmit((query: string): void => { this.model.search(query); })
         Button() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([this.colors.secondary]) }
@@ -249,7 +250,7 @@ export struct XopcAboutYouView {
         if (this.model.summary?.profile.role) {
           Text(this.model.summary?.profile.role ?? '').fontSize(13).fontColor(this.colors.secondary).width('100%')
         }
-      }.width('100%').padding(18).borderRadius(18).backgroundColor(this.colors.panel).margin({ top: 18 })
+      }.width('100%').padding(18).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel).margin({ top: 18 })
 
       XopcSectionLabel({ heading: $r('app.string.about_you_recent') })
       if ((this.model.summary?.recent.length ?? 0) > 0) {
@@ -259,7 +260,7 @@ export struct XopcAboutYouView {
       } else {
         Text($r('app.string.about_you_empty_all_help')).fontSize(15).lineHeight(23)
           .fontColor(this.colors.secondary).width('100%').padding(16)
-          .backgroundColor(this.colors.panel).borderRadius(16)
+          .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
       }
       Button($r('app.string.about_you_view_all')).width('100%').height(48)
         .fontSize(15).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
@@ -273,7 +274,7 @@ export struct XopcAboutYouView {
             Text(this.model.summary?.primaryFocus?.desiredOutcome ?? '').fontSize(14).lineHeight(21)
               .fontColor(this.colors.secondary).width('100%')
           }
-        }.width('100%').padding(18).borderRadius(18).backgroundColor(this.colors.panel).margin({ top: 12 })
+        }.width('100%').padding(18).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel).margin({ top: 12 })
       }
       if ((this.model.summary?.rules.length ?? 0) > 0) {
         XopcSectionLabel({ heading: $r('app.string.about_you_rules') })
@@ -284,7 +285,7 @@ export struct XopcAboutYouView {
               Text(rule.statement).fontSize(15).lineHeight(21).fontColor(this.colors.foreground).layoutWeight(1)
             }.width('100%').padding({ top: 10, bottom: 10 })
           }, (rule: XopcUnderstandingRule): string => rule.id)
-        }.width('100%').padding({ left: 18, right: 18 }).borderRadius(18).backgroundColor(this.colors.panel)
+        }.width('100%').padding({ left: 18, right: 18 }).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
       }
 
       Column({ space: 8 }) {
@@ -295,17 +296,9 @@ export struct XopcAboutYouView {
         Text($r('app.string.about_you_work_memory_count', this.model.summary?.counts.workMemory ?? 0))
           .fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
         Text($r('app.string.about_you_work_memory_help')).fontSize(13).lineHeight(19).fontColor(this.colors.secondary).width('100%')
-      }.width('100%').padding(18).borderRadius(18).backgroundColor(this.colors.panel).margin({ top: 20 })
+      }.width('100%').padding(18).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel).margin({ top: 20 })
         .onClick((): void => { this.onNavigate({ page: 'notes', itemId: '' }); })
     }.width('100%').padding({ left: 20, right: 20, bottom: 32 }).alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  private filterButton(value: string, label: ResourceStr) {
-    Button(label).fontSize(13).fontColor(this.model.filter === value ? this.colors.accent : this.colors.secondary)
-      .height(44).padding({ left: 14, right: 14 }).borderRadius(18)
-      .backgroundColor(this.model.filter === value ? this.colors.accentSoft : this.colors.panel)
-      .onClick((): void => { this.model.load(value); })
   }
 
   @Builder
@@ -324,21 +317,21 @@ export struct XopcAboutYouView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.tertiary])
       }.width('100%').padding(16)
-    }.width('100%').padding(0).borderRadius(16).backgroundColor(this.colors.panel).margin({ bottom: 8 })
+    }.width('100%').padding(0).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel).margin({ bottom: 8 })
       .onClick((): void => { this.openItem(item); })
   }
 
   @Builder
   private understandingFilters() {
-    Scroll() {
-      Row({ space: 8 }) {
-        this.filterButton('all', $r('app.string.about_you_all'))
-        this.filterButton('explicit', $r('app.string.about_you_explicit'))
-        this.filterButton('learned', $r('app.string.about_you_learned'))
-        this.filterButton('review', $r('app.string.about_you_review'))
-      }
-    }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
-      .padding({ left: 20, right: 20 })
+    Column() {
+      XopcSegmentedTabs({ options: [
+        { key: 'all', label: $r('app.string.about_you_all') },
+        { key: 'explicit', label: $r('app.string.about_you_explicit') },
+        { key: 'learned', label: $r('app.string.about_you_learned') },
+        { key: 'review', label: $r('app.string.about_you_review') }
+      ], selectedKey: this.model.filter,
+        onSelect: (key: string): void => { void this.model.load(key); } })
+    }.width('100%').padding({ left: 20, right: 20 })
   }
 
   @Builder
@@ -352,7 +345,7 @@ export struct XopcAboutYouView {
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.accent])
         }.width('100%').height('100%').padding({ left: 14, right: 12 })
       }.id('about-you-chat-modify').width('100%').height(48).padding(0)
-        .borderRadius(24).backgroundColor(this.colors.accentSoft)
+        .borderRadius(this.colors.corner(24)).backgroundColor(this.colors.accentSoft)
         .onClick((): void => { this.openConversation(); })
     }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 })
       .backgroundColor(this.colors.surface)
@@ -374,7 +367,7 @@ export struct XopcAboutYouView {
             Text($r('app.string.about_you_empty_action_hint')).fontSize(12).lineHeight(18)
               .fontColor(this.colors.accent).width('100%')
           }
-        }.width('100%').padding(18).borderRadius(16).backgroundColor(this.colors.panel)
+        }.width('100%').padding(18).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
       } else {
         ForEach(this.model.items, (item: XopcUnderstandingItem) => { this.understandingRow(item) },
           (item: XopcUnderstandingItem): string => item.id)
@@ -399,14 +392,14 @@ export struct XopcAboutYouView {
               Text($r('app.string.about_you_edit_help')).fontSize(13).lineHeight(19)
                 .fontColor(this.colors.secondary).width('100%')
               TextArea({ text: this.statement }).fontSize(17).lineHeight(25).fontColor(this.colors.foreground)
-                .height(220).padding(14).borderRadius(14).backgroundColor(this.colors.input)
+                .height(220).padding(14).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
                 .caretColor(this.colors.accent).barState(BarState.Auto)
                 .onChange((value: string): void => { this.statement = value; })
             } else {
               Text(item.statement).fontSize(19).lineHeight(28).fontWeight(FontWeight.Medium)
                 .fontColor(this.colors.foreground).width('100%')
             }
-          }.width('100%').padding(20).borderRadius(18).backgroundColor(this.colors.panel)
+          }.width('100%').padding(20).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
 
           Column({ space: 16 }) {
             Text(this.sourceLabel(item)).fontSize(14).fontColor(this.colors.secondary).width('100%')
@@ -418,17 +411,17 @@ export struct XopcAboutYouView {
               this.detailRow($r('app.string.about_you_source'), this.sourceText(item))
               this.detailRow($r('app.string.about_you_scope'), this.text(this.scopeLabel(item.scope.type)))
             }
-          }.width('100%').padding(20).borderRadius(18).backgroundColor(this.colors.panel)
+          }.width('100%').padding(20).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
         }.width('100%').constraintSize({ minHeight: '100%' })
           .padding({ left: 20, right: 20, top: 4, bottom: 16 }).alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
       if (this.editingStatement) {
         Row({ space: 10 }) {
-          Button($r('app.string.cancel')).layoutWeight(1).height(48).borderRadius(24)
+          Button($r('app.string.cancel')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24))
             .backgroundColor(this.colors.input).fontColor(this.colors.foreground)
             .onClick((): void => { this.statement = item.statement; this.editingStatement = false; })
-          Button($r('app.string.save')).layoutWeight(1).height(48).borderRadius(24)
-            .backgroundColor(this.colors.accent).fontColor(Color.White)
+          Button($r('app.string.save')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24))
+            .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
             .enabled(!this.model.saving && !!this.statement.trim()).onClick((): void => { this.saveStatement(); })
         }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 20 })
       } else {
@@ -438,13 +431,13 @@ export struct XopcAboutYouView {
               SymbolGlyph($r('sys.symbol.ellipsis_bubble')).fontSize(18).fontColor([this.colors.accent])
               Text($r('app.string.about_you_chat_modify')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
             }.width('100%').height('100%').justifyContent(FlexAlign.Center)
-          }.id('about-you-detail-chat').width('100%').height(48).padding(0).borderRadius(24)
+          }.id('about-you-detail-chat').width('100%').height(48).padding(0).borderRadius(this.colors.corner(24))
             .backgroundColor(this.colors.accentSoft).onClick((): void => { this.openConversation(item); })
           Row({ space: 10 }) {
-            Button($r('app.string.edit')).layoutWeight(1).height(48).borderRadius(24)
+            Button($r('app.string.edit')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24))
               .backgroundColor(this.colors.foreground).fontColor(this.colors.surface)
               .onClick((): void => { this.editingStatement = true; })
-            Button($r('app.string.delete')).layoutWeight(1).height(48).borderRadius(24)
+            Button($r('app.string.delete')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24))
               .backgroundColor(this.colors.panel).fontColor(this.colors.danger)
               .enabled(!this.model.saving).onClick((): void => { this.confirmDelete(); })
           }.width('100%')
@@ -485,19 +478,19 @@ export struct XopcAboutYouView {
           Column({ space: 7 }) {
             this.profileFieldLabel($r('app.string.about_you_call_name'))
             TextInput({ text: this.callName, placeholder: $r('app.string.about_you_call_name_placeholder') })
-              .height(48).backgroundColor(this.colors.input).borderRadius(14)
+              .height(48).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
               .onChange((input: string): void => { this.callName = input; })
           }.width('100%')
           Column({ space: 7 }) {
             this.profileFieldLabel($r('app.string.about_you_role'), $r('app.string.about_you_role_help'))
             TextInput({ text: this.role, placeholder: $r('app.string.about_you_role_placeholder') })
-              .height(48).backgroundColor(this.colors.input).borderRadius(14)
+              .height(48).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
               .onChange((input: string): void => { this.role = input; })
           }.width('100%')
           Column({ space: 7 }) {
             this.profileFieldLabel($r('app.string.about_you_pronouns'))
             Select(this.pronounOptions()).selected(this.pronounIndex()).value(this.pronounLabel())
-              .width('100%').height(48).backgroundColor(this.colors.input).borderRadius(14)
+              .width('100%').height(48).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
               .fontColor(this.colors.foreground).selectedOptionBgColor(this.colors.accentSoft)
               .selectedOptionFontColor(this.colors.foreground).optionBgColor(this.colors.panel)
               .optionFontColor(this.colors.foreground)
@@ -508,7 +501,7 @@ export struct XopcAboutYouView {
               })
             if (this.customPronouns) {
               TextInput({ text: this.pronouns, placeholder: $r('app.string.about_you_pronouns_custom_placeholder') })
-                .height(48).backgroundColor(this.colors.input).borderRadius(14)
+                .height(48).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
                 .onChange((input: string): void => { this.pronouns = input; })
             }
           }.width('100%')
@@ -516,7 +509,7 @@ export struct XopcAboutYouView {
             this.profileFieldLabel($r('app.string.about_you_timezone'), $r('app.string.about_you_timezone_help'))
             Select(this.timezoneOptions()).selected(this.timezoneIndex())
               .value(this.timezone || 'Asia/Shanghai').width('100%').height(48)
-              .backgroundColor(this.colors.input).borderRadius(14).fontColor(this.colors.foreground)
+              .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground)
               .selectedOptionBgColor(this.colors.accentSoft).selectedOptionFontColor(this.colors.foreground)
               .optionBgColor(this.colors.panel).optionFontColor(this.colors.foreground)
               .onSelect((index: number, _selected?: string): void => {
@@ -526,7 +519,7 @@ export struct XopcAboutYouView {
           Column({ space: 7 }) {
             this.profileFieldLabel($r('app.string.about_you_locale'), $r('app.string.about_you_locale_help'))
             Select(this.localeOptions()).selected(this.locale === 'zh' ? 0 : 1).value(this.localeLabel())
-              .width('100%').height(48).backgroundColor(this.colors.input).borderRadius(14)
+              .width('100%').height(48).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
               .fontColor(this.colors.foreground).selectedOptionBgColor(this.colors.accentSoft)
               .selectedOptionFontColor(this.colors.foreground).optionBgColor(this.colors.panel)
               .optionFontColor(this.colors.foreground)
@@ -537,7 +530,7 @@ export struct XopcAboutYouView {
       Row({ space: 10 }) {
         Button($r('app.string.cancel')).layoutWeight(1).height(48).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
           .onClick((): void => { this.editProfileOpen = false; })
-        Button($r('app.string.save')).layoutWeight(1).height(48).backgroundColor(this.colors.accent).fontColor(Color.White)
+        Button($r('app.string.save')).layoutWeight(1).height(48).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
           .enabled(!this.model.saving).onClick((): void => { this.saveProfile(); })
       }.width('100%')
     }.width('100%').height('100%').padding({ left: 20, right: 20, top: 12, bottom: 24 }).backgroundColor(this.colors.panel)
@@ -550,16 +543,14 @@ export struct XopcAboutYouView {
       else {
         Column() {
           this.mainHeader()
-          Row() {
-            Button($r('app.string.about_you_overview')).layoutWeight(1).height(44).fontSize(14)
-              .fontColor(this.section === 0 ? this.colors.foreground : this.colors.secondary)
-              .backgroundColor(this.section === 0 ? this.colors.panel : Color.Transparent)
-              .onClick((): void => { this.closeSearch(); this.section = 0; })
-            Button($r('app.string.about_you_understanding')).layoutWeight(1).height(44).fontSize(14)
-              .fontColor(this.section === 1 ? this.colors.foreground : this.colors.secondary)
-              .backgroundColor(this.section === 1 ? this.colors.panel : Color.Transparent)
-              .onClick((): void => { this.section = 1; if (!this.model.items.length) this.model.load('all'); })
-          }.width('calc(100% - 40vp)').padding(3).borderRadius(20).backgroundColor(this.colors.grouped).margin({ bottom: 14 })
+          Column() {
+            XopcSegmentedTabs({ options: [
+              { key: 'overview', label: $r('app.string.about_you_overview') },
+              { key: 'understanding', label: $r('app.string.about_you_understanding') }
+            ], selectedKey: this.section === 0 ? 'overview' : 'understanding',
+              onSelect: (key: string): void => { if (key === 'overview') { this.closeSearch(); this.section = 0; }
+                else { this.section = 1; if (!this.model.items.length) void this.model.load('all'); } } })
+          }.width('100%').padding({ left: 20, right: 20, bottom: 14 })
           if (this.model.error) { Text(userErrorMessage(this.model.error, 'collection')).fontSize(12)
             .fontColor(this.colors.secondary).padding({ left: 20, right: 20, bottom: 8 }) }
           if (this.section === 1) {

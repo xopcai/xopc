@@ -1,5 +1,6 @@
 package ai.xopc.mobile.gateway
 
+import android.util.LruCache
 import java.io.File
 import java.net.URLEncoder
 
@@ -34,17 +35,45 @@ internal data class GeneratedMediaItem(
   val active get() = state in listOf("queued", "submitted", "submitting", "running", "saving")
 }
 
+internal data class GeneratedMediaScope(
+  val gatewayId: String,
+  val deviceId: String,
+  val conversationId: String,
+  val transcriptId: String,
+)
+
 class GeneratedMediaAccess internal constructor(private val gateway: GatewaySession) {
-  internal suspend fun list(conversationId: String, kind: GeneratedMediaKind): List<GeneratedMediaItem> =
+  private data class Snapshot(val updatedAt: Long, val items: List<GeneratedMediaItem>)
+  private val snapshots = LruCache<GeneratedMediaScope, Snapshot>(8)
+
+  internal fun snapshot(scope: GeneratedMediaScope): List<GeneratedMediaItem> =
+    snapshots.get(scope)?.takeIf { android.os.SystemClock.elapsedRealtime() - it.updatedAt < 30 * 60 * 1000 }
+      ?.items.orEmpty().map { if (it.canConfirm) it.copy(canConfirm = false) else it }
+
+  internal fun cache(scope: GeneratedMediaScope, items: List<GeneratedMediaItem>) {
+    snapshots.put(scope, Snapshot(android.os.SystemClock.elapsedRealtime(), items))
+  }
+
+  internal suspend fun list(scope: GeneratedMediaScope, kind: GeneratedMediaKind): List<GeneratedMediaItem> =
     runInterruptible(Dispatchers.IO) {
-      parseGeneratedMedia(JSONObject(gateway.request(path(kind, conversationId))), kind)
+      val response = JSONObject(request(scope, path(kind, scope.conversationId)))
+      check(response.string("transcriptId")?.let { it == scope.transcriptId } != false)
+      parseGeneratedMedia(response, kind)
     }
 
-  internal suspend fun confirm(conversationId: String, item: GeneratedMediaItem): GeneratedMediaItem =
+  internal suspend fun confirm(scope: GeneratedMediaScope, item: GeneratedMediaItem): GeneratedMediaItem =
     runInterruptible(Dispatchers.IO) {
       val body = JSONObject().put("id", item.id).put("revision", requireNotNull(item.draftRevision))
-      val response = gateway.request(path(item.kind, conversationId) + "/confirm-draft", "POST", body.toString())
-      parseItem(JSONObject(response), item.kind)
+      val response = JSONObject(request(scope, path(item.kind, scope.conversationId) + "/confirm-draft", "POST", body.toString()))
+      check(response.string("transcriptId")?.let { it == scope.transcriptId } != false)
+      parseItem(response, item.kind)
+    }
+
+  private fun request(scope: GeneratedMediaScope, path: String, method: String = "GET", body: String = "") =
+    synchronized(gateway) {
+      val profile = gateway.currentProfile()
+      check(profile?.gatewayId == scope.gatewayId && profile.deviceId == scope.deviceId)
+      gateway.request(path, method, body)
     }
 
   internal suspend fun download(conversationId: String, item: GeneratedMediaItem, destination: File) {
@@ -101,5 +130,5 @@ internal fun generatedMediaByReply(items: List<GeneratedMediaItem>, rows: List<C
   val anchors = buildMap {
     replies.forEach { reply -> reply.generatedMediaIds.forEach { id -> putIfAbsent(id, reply.renderId) } }
   }
-  return items.groupBy { anchors[it.id] ?: replies.lastOrNull()?.renderId.orEmpty() }
+  return items.groupBy { anchors[it.id].orEmpty() }
 }

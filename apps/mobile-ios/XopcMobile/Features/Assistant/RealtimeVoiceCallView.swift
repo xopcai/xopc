@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RealtimeVoiceCallView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let call: RealtimeVoiceCall
 
     @Environment(\.locale) private var locale
@@ -13,20 +14,20 @@ struct RealtimeVoiceCallView: View {
                 Button("缩小通话", systemImage: "chevron.down") { call.minimize() }
                     .labelStyle(.iconOnly)
                     .frame(width: 44, height: 44)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: .circle)
+                    .background(mobileTheme.panel, in: .circle)
                     .accessibilityIdentifier("voice-call-minimize")
                 Spacer()
                 Text(call.mode.title)
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: .capsule)
+                    .background(mobileTheme.panel, in: .capsule)
             }
 
             Spacer(minLength: 24)
             Image(systemName: "waveform")
                 .font(.system(size: 62, weight: .light))
-                .foregroundStyle(.blue)
+                .foregroundStyle(.tint)
                 .frame(width: 172, height: 172)
                 .background(Color.blue.opacity(0.08), in: .circle)
                 .accessibilityHidden(true)
@@ -128,7 +129,7 @@ struct RealtimeVoiceCallView: View {
         .padding(.top, 18)
         .padding(.bottom, 30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(mobileTheme.canvas)
     }
 
     private var status: String {
@@ -214,7 +215,7 @@ struct RealtimeVoiceCallView: View {
                     .font(.title3)
                     .frame(width: 56, height: 56)
                     .background(
-                        destructive ? Color.red : active ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground),
+                        destructive ? Color.red : active ? Color.accentColor : mobileTheme.panel,
                         in: .circle
                     )
                     .foregroundStyle(destructive ? Color.white : active ? (colorScheme == .dark ? Color.black : Color.white) : Color.primary)
@@ -254,7 +255,7 @@ struct RealtimeVoiceCallView: View {
             }
         }
         .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+        .background(mobileTheme.panel, in: .rect(cornerRadius: 18))
     }
 }
 
@@ -267,7 +268,7 @@ struct RealtimeVoiceMiniBar: View {
         HStack(spacing: 12) {
             Button { call.expand() } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "waveform").foregroundStyle(.blue)
+                    Image(systemName: "waveform").foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(call.name.isEmpty ? AppLocalization.string("语音通话", locale: locale) : call.name)
                             .font(.subheadline.weight(.medium))

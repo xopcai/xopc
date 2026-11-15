@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -42,12 +40,12 @@ import java.util.UUID
 
 @Composable
 internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
-  onRefresh: () -> Unit, onOpen: (String) -> Unit, onSchedule: (String) -> Unit = {}) {
-  var search by rememberSaveable(gatewayId) { mutableStateOf("") }
-  var query by rememberSaveable(gatewayId) { mutableStateOf("") }
+  onRefresh: () -> Unit, onOpen: (String) -> Unit, searchOpen: Boolean,
+  onSchedule: (String) -> Unit = {}) {
+  var search by rememberSaveable(gatewayId, searchOpen) { mutableStateOf("") }
   var filter by rememberSaveable(gatewayId) { mutableStateOf("all") }
   val shown = state.items.filter { item ->
-    item.name.contains(query, ignoreCase = true) && when (filter) {
+    item.name.contains(search.trim(), ignoreCase = true) && when (filter) {
       "enabled" -> item.enabled
       "paused" -> !item.enabled
       "attention" -> item.lastRunStatus in setOf("failed", "timed_out")
@@ -55,25 +53,20 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
     }
   }
   Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutlinedTextField(search, { search = it }, modifier = Modifier.weight(1f).testTag("automation-search"),
+    if (searchOpen) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      OutlinedTextField(search, { search = it }, modifier = Modifier.weight(1f).then(searchInputFocus()).testTag("automation-search"),
         singleLine = true, placeholder = { Text(stringResource(R.string.progress_search)) })
-      TextButton(onClick = { query = search.trim(); onRefresh() }, enabled = !state.listLoading,
+      TextButton(onClick = onRefresh, enabled = !state.listLoading,
         modifier = Modifier.testTag("automation-refresh")) { Text(stringResource(R.string.progress_refresh)) }
     }
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      FilterChip(filter == "all", { filter = "all" }, label = { Text(stringResource(R.string.progress_filter_all)) },
-        modifier = Modifier.testTag("automation-filter-all"))
-      FilterChip(filter == "enabled", { filter = "enabled" },
-        label = { Text(stringResource(R.string.automation_enabled)) },
-        modifier = Modifier.testTag("automation-filter-enabled"))
-      FilterChip(filter == "paused", { filter = "paused" },
-        label = { Text(stringResource(R.string.automation_paused)) },
-        modifier = Modifier.testTag("automation-filter-paused"))
-      FilterChip(filter == "attention", { filter = "attention" },
-        label = { Text(stringResource(R.string.automation_attention)) },
-        modifier = Modifier.testTag("automation-filter-attention"))
-    }
+    SegmentedTabs(
+      listOf(
+        SegmentOption("all", stringResource(R.string.progress_filter_all), "automation-filter-all"),
+        SegmentOption("enabled", stringResource(R.string.automation_enabled), "automation-filter-enabled"),
+        SegmentOption("paused", stringResource(R.string.automation_paused), "automation-filter-paused"),
+        SegmentOption("attention", stringResource(R.string.automation_attention), "automation-filter-attention"),
+      ), filter, { filter = it },
+    )
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
       if (state.listLoading && state.items.isEmpty()) item {
         BrandLoadingPanel(modifier = Modifier.testTag("automation-list-loading"))
@@ -83,7 +76,7 @@ internal fun AutomationListContent(state: AutomationUiState, gatewayId: String?,
         Text(stringResource(R.string.progress_load_failed))
       } }
       if (state.listLoaded && !state.listLoading && !state.listError && shown.isEmpty()) item {
-        if (state.items.isEmpty() && filter == "all" && search.isBlank() && query.isEmpty())
+        if (state.items.isEmpty() && filter == "all" && search.isBlank())
           AutomationIdeas(showIntro = true, onSelect = onSchedule)
         else Text(stringResource(R.string.progress_no_matches))
       }
@@ -162,7 +155,6 @@ internal fun AutomationDetailContent(state: AutomationUiState,
       item {
         Card(modifier = Modifier.fillMaxWidth()) {
           Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(item.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
             Text(stringResource(if (item.enabled) R.string.automation_enabled else R.string.automation_paused),
               color = MaterialTheme.colorScheme.primary)
             if (item.description.isNotBlank()) Text(item.description)

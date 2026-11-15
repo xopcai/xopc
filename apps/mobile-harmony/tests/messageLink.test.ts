@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { internalMessageLink } from '../entry/src/main/ets/common/messageLink';
+
+it('routes public MCP addresses into an editable native form', () => {
+  const prefix = 'xopc://capabilities/mcp?id=notion&url=';
+  expect(internalMessageLink(prefix + encodeURIComponent('https://sample.example/mcp'))).toEqual({
+    kind: 'route', page: 'capability-mcp-setup', itemId: 'notion', path: 'https://sample.example/mcp',
+  });
+  for (const url of ['http://sample.example/mcp', 'https://user@sample.example/mcp', 'https://sample.example/mcp?token=secret']) {
+    expect(internalMessageLink(prefix + encodeURIComponent(url))).toBeUndefined();
+  }
+});
 import { markdownSpans } from '../entry/src/main/ets/common/markdown';
 
 describe('message link routing', () => {

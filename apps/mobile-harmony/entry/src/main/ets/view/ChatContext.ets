@@ -1,3 +1,4 @@
+import { XopcSegmentedTabs } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatContextViewModel } from '../viewmodel/chatContextViewModel';
 import { XopcContextRef, XopcContextSource, XopcHostDirectory, XopcReferenceItem } from '../model/chat';
@@ -49,11 +50,12 @@ export struct XopcChatContext {
           .fontColor(this.colors.secondary).accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
       }.width('100%')
       if (this.mode === 'references') {
-        Row({ space: 8 }) {
-          Button($r('app.string.notes')).layoutWeight(1).onClick((): void => { this.selectKind('note'); })
-          Button($r('app.string.tasks')).layoutWeight(1).onClick((): void => { this.selectKind('task'); })
-          Button($r('app.string.files')).layoutWeight(1).onClick((): void => { this.selectKind('file'); })
-        }
+        XopcSegmentedTabs({ options: [
+          { key: 'note', label: $r('app.string.notes'), testId: 'assistant-reference-tab-note' },
+          { key: 'task', label: $r('app.string.tasks'), testId: 'assistant-reference-tab-task' },
+          { key: 'file', label: $r('app.string.files'), testId: 'assistant-reference-tab-file' }
+        ], selectedKey: this.kind,
+          onSelect: (key: string): void => { this.selectKind(key); } })
         TextInput({ text: this.search, placeholder: $r('app.string.search') }).onChange((value: string): void => {
           this.search = value; clearTimeout(this.searchTimer);
           this.searchTimer = setTimeout((): void => { this.model.searchReferences(this.kind, value, this.path); }, 250);

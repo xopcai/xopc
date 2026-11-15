@@ -1,4 +1,5 @@
 import { gatewaySession } from '../service/gatewaySession';
+import { activeListScope, XopcListSnapshots } from '../service/listSnapshots';
 import { XopcDeviceCrypto } from '../service/deviceCrypto';
 import {
   XopcSection, XopcWorkspaceItem, XopcWorkspacePage, XopcTaskList, XopcProjectList,
@@ -16,10 +17,17 @@ interface XopcWorkspaceCreated {
 interface XopcAutomationConfiguration { conversationId: string; }
 interface XopcAutomationConfigurationScope { projectId?: string; personalLocale?: string; }
 
+const workspaceLists: XopcListSnapshots<XopcWorkspacePage> = new XopcListSnapshots<XopcWorkspacePage>();
+
 export class XopcWorkspaceRepository {
+  cachedList(section: XopcSection): XopcWorkspacePage | undefined {
+    return workspaceLists.read(activeListScope(), section);
+  }
   uuid(): string { return new XopcDeviceCrypto().uuid(); }
   async list(section: XopcSection, search: string, _offset: number = 0): Promise<XopcWorkspacePage> {
     const query = encodeURIComponent(search.trim());
+    const scope = !query && _offset === 0 ? activeListScope() : '';
+    const requestedAt = Date.now();
     let items: XopcWorkspaceItem[] = [];
     let hasMore: boolean = false;
     if (section === 'tasks') {
@@ -35,7 +43,9 @@ export class XopcWorkspaceRepository {
       if (!Array.isArray(result.automations)) throw new Error('INVALID_AUTOMATION_LIST');
       items = result.automations.map(automationItem).filter((item): boolean => item.title.toLowerCase().includes(search.toLowerCase()));
     }
-    return { items, hasMore };
+    const page: XopcWorkspacePage = { items, hasMore };
+    if (scope && scope === activeListScope()) workspaceLists.write(scope, section, page, requestedAt);
+    return page;
   }
 
   async detail(section: XopcSection, id: string): Promise<XopcWorkspaceItem> {

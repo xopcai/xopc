@@ -55,7 +55,7 @@ export struct XopcChatConnectionWait {
           Text($r('app.string.connection_wait_intro')).fontSize(14).fontColor(this.colors.secondary).width('100%')
           if (this.model.snapshot?.wait) {
             Text(this.model.snapshot.wait.summary).fontSize(16).fontColor(this.colors.foreground).width('100%')
-              .padding(14).borderRadius(14).backgroundColor(this.colors.grouped)
+              .padding(14).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.grouped)
             if (this.model.snapshot.wait.timeRange) {
               Text(this.model.snapshot.wait.timeRange.expression + ' · ' + this.model.snapshot.wait.timeRange.timezone)
                 .fontSize(13).fontColor(this.colors.secondary).width('100%')
@@ -88,7 +88,7 @@ export struct XopcChatConnectionWait {
                       .onClick((): void => { void this.model.act('select_account', need.key, account.id); })
                   }, (account: XopcConnectionAccount): string => account.id)
                 }
-              }.width('100%').alignItems(HorizontalAlign.Start).padding(14).borderRadius(14).backgroundColor(this.colors.grouped)
+              }.width('100%').alignItems(HorizontalAlign.Start).padding(14).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.grouped)
             }, (need: XopcConnectionNeed): string => need.key)
             if (this.model.snapshot.wait.phase === 'review_scope') {
               Button($r('app.string.connection_wait_confirm')).height(48).width('100%').enabled(!this.model.busy)
@@ -127,7 +127,7 @@ export struct XopcChatConnectionWait {
               .fontSize(13).backgroundColor(this.colors.accent)
               .onClick((): void => { this.primary(this.model.snapshot!.wait!.needs[0]); })
           }
-        }.width('100%').padding(12).borderRadius(14).backgroundColor(this.colors.grouped)
+        }.width('100%').padding(12).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.grouped)
         if (this.model.error) { Text(this.model.error).fontSize(12).fontColor(this.colors.danger).width('100%') }
       }
     }.width('calc(100% - 24vp)').margin({ bottom: this.model.snapshot?.wait ? 8 : 0 })

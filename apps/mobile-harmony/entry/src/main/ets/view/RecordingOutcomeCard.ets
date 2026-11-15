@@ -49,6 +49,6 @@ export struct RecordingOutcomeCard {
       }
       if (projectRecordingOutcome(this.input).retry !== 'none') Button(this.retryLabel()).id('recording-outcome-retry').height(44).fontSize(13).fontColor(this.colors.accent).backgroundColor(this.colors.input).enabled(!this.busy)
         .onClick((): void => { this.onRetry(projectRecordingOutcome(this.input).retry); })
-    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.noteContext ? 0 : 12).borderRadius(12).backgroundColor(this.noteContext ? Color.Transparent : this.colors.input)
+    }.width('100%').alignItems(HorizontalAlign.Start).padding(this.noteContext ? 0 : 12).borderRadius(this.colors.corner(12)).backgroundColor(this.noteContext ? Color.Transparent : this.colors.input)
   }
 }

@@ -58,7 +58,8 @@ export struct XopcClarificationWizard {
   build() {
     Scroll() {
       Column({ space: 8 }) {
-        Text($r('app.string.clarify_title')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+        Text($r('app.string.clarify_title')).fontSize(15).fontWeight(FontWeight.Medium)
+          .fontColor(this.colors.light && !this.expired() ? this.colors.attentionForeground : this.colors.foreground).width('100%')
         Text((this.index() + 1) + '/' + this.questions().length + ' · ' + (this.current()?.header ?? '')).fontSize(12).fontColor(this.colors.secondary).width('100%')
         Text(this.current()?.question ?? '').fontSize(14).fontColor(this.colors.foreground).width('100%')
         ForEach(this.current()?.choices ?? [], (choice: XopcClarificationChoice) => {
@@ -68,7 +69,10 @@ export struct XopcClarificationWizard {
               if (choice.id === this.current()?.recommendedChoiceId) { Text($r('app.string.clarify_recommended')).fontSize(12).fontColor(this.colors.accent).width('100%') }
               if (choice.description) { Text(choice.description).fontSize(12).fontColor(this.colors.secondary).width('100%') }
             }.padding(8).width('100%')
-          }.width('100%').constraintSize({ minHeight: 44 }).backgroundColor(this.colors.grouped).enabled(!this.locked())
+          }.width('100%').constraintSize({ minHeight: 44 })
+            .backgroundColor(this.colors.light
+              ? (this.answer()?.choiceId === choice.id ? this.colors.accentSoft : this.colors.panel) : this.colors.grouped)
+            .enabled(!this.locked())
             .onClick((): void => { this.update(choice.id, this.answer()?.text ?? ''); })
         }, (choice: XopcClarificationChoice): string => choice.id)
         if (this.answer()?.choiceId) {
@@ -97,6 +101,9 @@ export struct XopcClarificationWizard {
         if (this.submitting) { Text($r('app.string.clarify_submitting')).fontSize(12).fontColor(this.colors.secondary) }
         if (this.errorMessage) { Text(this.errorMessage).fontSize(12).fontColor(this.colors.danger).width('100%') }
       }.padding(12).width('100%')
-    }.constraintSize({ maxHeight: 420 }).width('100%').borderRadius(16).backgroundColor(this.colors.grouped)
+    }.constraintSize({ maxHeight: 420 }).width('100%')
+      .backgroundColor(this.colors.light && !this.expired() ? this.colors.attentionFill : this.colors.grouped)
+      .border(this.colors.light && !this.expired() ? this.colors.attentionStroke : this.colors.panelStroke)
+      .borderRadius(this.colors.corner(16))
   }
 }

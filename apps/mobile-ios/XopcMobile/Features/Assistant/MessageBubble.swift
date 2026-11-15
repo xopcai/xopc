@@ -5,32 +5,11 @@ import SwiftUI
 
 enum ChatAppearance {
     static let messageWidthRatio: CGFloat = 0.84
-
-    static func bubble(_ scheme: ColorScheme, user: Bool) -> Color {
-        if scheme == .dark {
-            return user ? Color(red: 37 / 255, green: 47 / 255, blue: 64 / 255)
-                : Color(red: 52 / 255, green: 63 / 255, blue: 80 / 255)
-        }
-        return user ? Color(red: 228 / 255, green: 231 / 255, blue: 236 / 255) : .white
-    }
-
-    static func card(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 34 / 255, green: 39 / 255, blue: 48 / 255)
-            : Color(red: 226 / 255, green: 232 / 255, blue: 241 / 255)
-    }
-
-    static func composer(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? card(scheme) : Color(red: 210 / 255, green: 218 / 255, blue: 231 / 255)
-    }
-
-    static func action(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 168 / 255, green: 188 / 255, blue: 1)
-            : Color(red: 36 / 255, green: 83 / 255, blue: 214 / 255)
-    }
 }
 
 // swiftlint:disable:next type_body_length
 struct MessageBubble: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let message: TimelineMessage
     let configuration: GatewayConfiguration
     let conversationID: String?
@@ -86,8 +65,8 @@ struct MessageBubble: View {
             .padding(.horizontal, isUserAudioBubble ? 4 : 14)
             .padding(.vertical, isUserAudioBubble ? 0 : 10)
             .frame(width: bubbleWidth, alignment: .leading)
-            .background(ChatAppearance.bubble(colorScheme, user: message.role == "user"))
-            .clipShape(.rect(cornerRadius: 18))
+            .background((message.role == "user" ? mobileTheme.bubble : mobileTheme.panel))
+            .clipShape(.rect(cornerRadius: mobileTheme.corner(18)))
             .environment(\.chatTextSelectionEnabled, false)
         }
         // Keep accessibility bounds on the bubble before expanding its alignment frame.
@@ -258,7 +237,7 @@ struct MessageBubble: View {
                 .accessibilityHint("打开完整消息")
                 Button("查看更多") { isDetailPresented = true }
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(ChatAppearance.action(colorScheme))
+                    .foregroundStyle(mobileTheme.action)
                     .frame(minHeight: 44)
             } else if message.role == "assistant" {
                 ConfirmedAnswerView(message: message, configuration: configuration, conversationID: conversationID,
@@ -305,7 +284,7 @@ struct MessageBubble: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 10)
                         .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-                        .background(.background, in: .rect(cornerRadius: 10))
+                        .background(.background, in: .rect(cornerRadius: mobileTheme.corner(10)))
                         .accessibilityLabel(referenceAccessibilityLabel(reference))
                 }
             }
@@ -342,7 +321,7 @@ private extension MessageBubble {
                                 }
                             }
                             .aspectRatio(1, contentMode: .fit)
-                            .clipShape(.rect(cornerRadius: 10))
+                            .clipShape(.rect(cornerRadius: mobileTheme.corner(10)))
                         }
                     }
                     .accessibilityIdentifier("chat-image-grid")
@@ -413,6 +392,7 @@ private struct MessageContextMenu<Items: View>: ViewModifier {
 }
 
 struct ChatAudioAttachmentView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let attachment: HistoryAttachment
     let configuration: GatewayConfiguration
     let conversationID: String
@@ -455,7 +435,7 @@ struct ChatAudioAttachmentView: View {
             }
         }
         .padding(.horizontal, 10)
-        .background(Color.secondary.opacity(compact ? 0 : 0.08), in: .rect(cornerRadius: 12))
+        .background(Color.secondary.opacity(compact ? 0 : 0.08), in: .rect(cornerRadius: mobileTheme.corner(12)))
         .onDisappear { playback.stop() }
     }
 }

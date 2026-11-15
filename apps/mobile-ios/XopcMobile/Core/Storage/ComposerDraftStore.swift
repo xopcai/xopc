@@ -25,8 +25,11 @@ struct SavedComposerDraft: Codable, Equatable {
 struct ComposerDraftStore {
     var baseDirectory: URL?
     static func accountScope(_ configuration: GatewayConfiguration) -> String {
-        SHA256.hash(data: Data((configuration.localIdentity ?? (configuration.baseURL.absoluteString + "\n" + configuration.token)).utf8))
-            .map { String(format: "%02x", $0) }.joined()
+        accountScope(identity: configuration.localIdentity ?? (configuration.baseURL.absoluteString + "\n" + configuration.token))
+    }
+
+    static func accountScope(identity: String) -> String {
+        SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     static func scope(_ configuration: GatewayConfiguration, conversationID: String?) -> String {

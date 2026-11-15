@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct AutomationsView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
 
     @State private var items: [AutomationRecord] = []
     @State private var filter = "all"
     @State private var searchText = ""
+    @State private var searchOpen = false
     @State private var setupPrompt: String?
     @State private var isLoading = false
     @State private var error: String?
@@ -14,39 +16,15 @@ struct AutomationsView: View {
 
     var body: some View {
         List {
-            HStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    TextField("搜索", text: $searchText)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .focused($isSearchFocused)
-                        .accessibilityIdentifier("automation-search")
-                    if !searchText.isEmpty {
-                        Button("清除搜索", systemImage: "xmark.circle.fill") { searchText = "" }
-                            .labelStyle(.iconOnly)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .frame(minHeight: 48)
-                .background(Color(.secondarySystemGroupedBackground), in: .capsule)
-                Button {
-                    isSearchFocused = false
-                    Task { await load() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .frame(width: 48, height: 48)
-                        .contentShape(.circle)
-                }
-                .background(Color(.secondarySystemGroupedBackground), in: .circle)
-                .accessibilityLabel("刷新")
+            SegmentedTabs(options: [
+                SegmentOption(id: "all", title: "全部", count: searchedItems.count, accessibilityID: "automation-filter-all"),
+                SegmentOption(id: "enabled", title: "已启用", count: searchedItems.filter(\.enabled).count, accessibilityID: "automation-filter-enabled"),
+                SegmentOption(id: "paused", title: "已暂停", count: searchedItems.filter { !$0.enabled }.count, accessibilityID: "automation-filter-paused")
+            ], selected: filter, label: "筛选") {
+                isSearchFocused = false
+                filter = $0
             }
-            .listRowBackground(Color.clear)
-            HStack(spacing: 8) {
-                filterButton("全部", value: "all", count: searchedItems.count)
-                filterButton("已启用", value: "enabled", count: searchedItems.filter(\.enabled).count)
-                filterButton("已暂停", value: "paused", count: searchedItems.filter { !$0.enabled }.count)
-            }
+            .accessibilityIdentifier("automation-filter-tabs")
             .listRowBackground(Color.clear)
             if isLoading, items.isEmpty {
                 ProgressListSkeleton()
@@ -73,7 +51,7 @@ struct AutomationsView: View {
                     }
                     .accessibilityIdentifier("automation-\(automation.id)")
                     .listRowSeparator(.hidden)
-                    .listRowBackground(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemGroupedBackground)))
+                    .listRowBackground(RoundedRectangle(cornerRadius: mobileTheme.corner(16)).fill(Color(.secondarySystemGroupedBackground)))
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
             }
@@ -81,11 +59,26 @@ struct AutomationsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color(.systemGroupedBackground))
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if searchOpen {
+                PageSearchField("搜索", text: $searchText, focused: $isSearchFocused,
+                                accessibilityID: "automation-search")
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                    .background(mobileTheme.canvas)
+            }
+        }
         .refreshable { await load() }
         .task { await load() }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                PageSearchButton("搜索", isOpen: $searchOpen, query: $searchText,
+                                 accessibilityID: "automation-open-search")
+                Button("刷新", systemImage: "arrow.clockwise") {
+                    isSearchFocused = false
+                    Task { await load() }
+                }
                 Button("新建自动化", systemImage: "plus") { isSearchFocused = false; setupPrompt = "" }
                     .disabled(setupPrompt != nil)
                     .accessibilityIdentifier("automation-create-in-chat")
@@ -110,24 +103,6 @@ struct AutomationsView: View {
         }
     }
 
-    private func filterButton(_ title: LocalizedStringKey, value: String, count: Int) -> some View {
-        Button {
-            isSearchFocused = false
-            filter = value
-        } label: {
-            HStack(spacing: 5) {
-                Text(title).font(.subheadline.weight(.medium))
-                Text(count, format: .number).mobileTextStyle(.caption)
-            }
-            .frame(minHeight: 48)
-            .padding(.horizontal, 12)
-            .background(filter == value ? Color.blue.opacity(0.12) : Color(.secondarySystemGroupedBackground), in: .capsule)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(filter == value ? Color.blue : Color.secondary)
-        .accessibilityIdentifier("automation-filter-\(value)")
-    }
-
     private var errorBinding: Binding<Bool> {
         Binding(get: { error != nil }, set: {
             if !$0 {
@@ -137,14 +112,25 @@ struct AutomationsView: View {
     }
 
     @MainActor private func load() async {
+        let scope = ComposerDraftStore.accountScope(configuration)
+        let requestedAt = Date.now
+        if items.isEmpty {
+            items = MobileListCache.shared.read(.automations, scope: scope) ?? []
+        }
         isLoading = true
         defer { isLoading = false }
-        do { items = try await GatewayClient(configuration: configuration).fetchAutomations(); error = nil }
-        catch is CancellationError {} catch { self.error = error.localizedDescription }
+        do {
+            let loaded = try await GatewayClient(configuration: configuration).fetchAutomations()
+            try Task.checkCancellation()
+            items = loaded
+            MobileListCache.shared.write(loaded, to: .automations, scope: scope, requestedAt: requestedAt)
+            error = nil
+        } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
 }
 
 private struct AutomationListRow: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let automation: AutomationRecord
 
     var body: some View {
@@ -152,9 +138,9 @@ private struct AutomationListRow: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "clock")
                     .mobileTextStyle(.sectionTitle)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.tint)
                     .frame(width: 44, height: 44)
-                    .background(Color.blue.opacity(0.1), in: .circle)
+                    .background(mobileTheme.action.opacity(0.10), in: .circle)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(automation.name).mobileTextStyle(.rowTitle).lineLimit(2)
@@ -193,6 +179,7 @@ private struct AutomationListRow: View {
 }
 
 struct AutomationDetailView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let automationID: String
     let onOpenConversation: (String, String, String) -> Void
@@ -340,9 +327,9 @@ struct AutomationDetailView: View {
     private var automationIcon: some View {
         Image(systemName: "clock")
             .font(.title2)
-            .foregroundStyle(.blue)
+            .foregroundStyle(.tint)
             .frame(width: 48, height: 48)
-            .background(Color.blue.opacity(0.1), in: .circle)
+            .background(mobileTheme.action.opacity(0.10), in: .circle)
             .accessibilityHidden(true)
     }
 
@@ -479,7 +466,7 @@ private struct AutomationInstructionView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.blue)
+                .foregroundStyle(.tint)
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .accessibilityIdentifier("automation-definition-toggle")
             }

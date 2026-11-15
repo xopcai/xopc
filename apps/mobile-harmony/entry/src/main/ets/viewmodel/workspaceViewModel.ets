@@ -22,17 +22,24 @@ export class XopcWorkspaceViewModel {
   private section: XopcSection = 'tasks';
   private repository: XopcWorkspaceRepository = new XopcWorkspaceRepository();
   private generation: number = 0;
+  private listing: boolean = false;
   private mutationId: string = '';
   private mutationSignature: string = '';
 
   start(section: XopcSection, initialId: string = '', createOnAppear: boolean = false, projectId: string = ''): void {
     this.section = section;
     if (createOnAppear) this.create(projectId);
-    else if (initialId) this.open(initialId); else this.list('');
+    else if (initialId) this.open(initialId);
+    else {
+      const cached = this.repository.cachedList(section);
+      if (cached) this.items = cached.items;
+      void this.list('');
+    }
   }
   dispose(): void { this.generation++; }
   async list(search: string, more: boolean = false): Promise<void> {
     if (this.busy) return;
+    this.listing = true;
     const generation = ++this.generation; this.busy = true; this.error = '';
     try {
       const page = await this.repository.list(this.section, search, more ? this.items.length : 0);
@@ -41,10 +48,11 @@ export class XopcWorkspaceViewModel {
       this.hasMore = page.hasMore;
       this.loadedSearch = search.trim();
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
-    finally { if (generation === this.generation) this.busy = false; }
+    finally { if (generation === this.generation) { this.listing = false; this.busy = false; } }
   }
   async open(id: string): Promise<void> {
-    if (this.busy) return;
+    if (this.busy && !this.listing) return;
+    this.listing = false;
     const generation = ++this.generation; this.busy = true; this.error = ''; this.openingId = id;
     this.selected = undefined; this.editing = false; this.runs = [];
     try {

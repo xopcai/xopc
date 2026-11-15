@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ManagedFile
 import ai.xopc.mobile.gateway.ConversationArtifact
@@ -43,7 +44,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Card
 import androidx.compose.material3.Surface
@@ -152,7 +152,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       if (isUser) Alignment.End else Alignment.Start,
       verticalArrangement = Arrangement.spacedBy(2.dp)) {
     Column(modifier = Modifier.width(bubbleWidth)
-      .clip(RoundedCornerShape(18.dp))
+      .clip(themedCorners(18))
       .background(bubbleColor)
       .then(if (actionsEnabled) Modifier.combinedClickable(
         onClick = { if (showPreview) onViewMore() }, onLongClick = onMore,
@@ -438,7 +438,7 @@ private fun MessageResultCapsule(
     onClick = onClick,
     enabled = enabled,
     modifier = modifier.widthIn(max = 320.dp).fillMaxWidth().heightIn(min = 44.dp),
-    shape = RoundedCornerShape(18.dp),
+    shape = themedCorners(18),
     color = LocalChatColors.current.card,
   ) {
     Row(
@@ -464,14 +464,14 @@ private fun MessageResultCapsule(
 @Composable
 internal fun MessageMediaPreview(request: MessagePreviewRequest,
   load: suspend (String, ConversationMedia) -> ByteArray,
-  resolveFile: suspend (String, ConversationMedia) -> ManagedFile? = { _, _ -> null },
+  resolveFile: (suspend (String, ConversationMedia) -> ManagedFile?)? = null,
   saveVersion: suspend (ManagedFile, String) -> Unit = { _, _ -> }, onClose: () -> Unit) {
   if (mediaPreviewKind(request.media) == "image") {
     MessageImageGallery(request, load, onClose, resolveFile, saveVersion)
     return
   }
   val activeMedia = request.media
-  val file = rememberMessageFile(request.conversationId, activeMedia, resolveFile)
+  val file = if (resolveFile == null) null else rememberMessageFile(request.conversationId, activeMedia, resolveFile)
   val result by produceState<Result<ByteArray>?>(initialValue = null, request.conversationId, activeMedia) {
     value = null
     value = runCatching { load(request.conversationId, activeMedia) }
@@ -528,7 +528,7 @@ private fun rememberMessageFile(conversationId: String, media: ConversationMedia
 @Composable
 private fun MessageImageGallery(request: MessagePreviewRequest,
   load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit,
-  resolveFile: suspend (String, ConversationMedia) -> ManagedFile?,
+  resolveFile: (suspend (String, ConversationMedia) -> ManagedFile?)?,
   saveVersion: suspend (ManagedFile, String) -> Unit) {
   val gallery = request.imageGallery.takeIf { it.isNotEmpty() } ?: listOf(request.media)
   val pager = rememberPagerState(initialPage = gallery.indexOfFirst { it.id == request.media.id }.coerceAtLeast(0),
@@ -539,7 +539,8 @@ private fun MessageImageGallery(request: MessagePreviewRequest,
   LaunchedEffect(pager.currentPage) { zoomed = false }
   Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
     .testTag("message-media-preview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    val file = rememberMessageFile(request.conversationId, gallery[pager.currentPage], resolveFile)
+    val file = if (resolveFile == null) null
+      else rememberMessageFile(request.conversationId, gallery[pager.currentPage], resolveFile)
     if (file != null) versionState.SaveableStateProvider("${file.id}:${file.revision}") {
       FileVersionAction(file, saveVersion)
     }
@@ -673,7 +674,7 @@ private fun AudioMessagePreview(payload: ByteArray, media: ConversationMedia) {
   Column(modifier = Modifier.fillMaxWidth().testTag("message-media-preview-audio"),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp)
-      .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(16.dp))
+      .background(MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(16))
       .padding(16.dp), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(12.dp)) {
       Text("▂▄▆▃▅▇", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)

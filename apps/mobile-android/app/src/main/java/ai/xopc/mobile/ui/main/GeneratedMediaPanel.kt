@@ -5,15 +5,20 @@ import android.widget.VideoView
 import java.io.File
 import java.util.Locale
 
+import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GeneratedMediaAccess
 import ai.xopc.mobile.gateway.GeneratedMediaItem
 import ai.xopc.mobile.gateway.GeneratedMediaKind
+import ai.xopc.mobile.gateway.GeneratedMediaScope
 import ai.xopc.mobile.playback.MusicPlayback
 import ai.xopc.mobile.playback.MusicTrack
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ai.xopc.mobile.theme.CHAT_MESSAGE_WIDTH
 import ai.xopc.mobile.theme.LocalChatColors
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,13 +30,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,9 +51,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,11 +74,11 @@ internal fun GeneratedMediaCard(
   confirmationFailed: Boolean,
   onPlay: () -> Unit,
   onConfirm: () -> Unit,
-  player: (@Composable () -> Unit)? = null,
   musicTrack: MusicTrack? = null,
+  onOpen: (() -> Unit)? = null,
+  modifier: Modifier = Modifier,
 ) {
   val zh = LocalConfiguration.current.locales[0].language == "zh"
-  var details by remember(item.id) { mutableStateOf(false) }
   val kindLabel = if (item.kind == GeneratedMediaKind.Music) label(zh, "音乐", "Music") else label(zh, "视频", "Video")
   val status = when (item.state) {
     "queued", "submitted" -> label(zh, "排队中", "Queued")
@@ -74,28 +89,28 @@ internal fun GeneratedMediaCard(
     "completed" -> label(zh, "可播放", "Ready to play")
     else -> label(zh, "待确认", "Review required")
   }
-  val duration = item.duration?.let {
-    when {
-      it < 0 -> label(zh, "自动时长", "Auto duration")
-      item.kind == GeneratedMediaKind.Music -> mediaTime(it)
-      else -> label(zh, "$it 秒", "$it s")
-    }
+  val subtitle = if (item.kind == GeneratedMediaKind.Video) status else {
+    listOfNotNull(status, item.version?.let { label(zh, "第 $it 版", "Version $it") },
+      item.duration?.let(::mediaTime)).joinToString(" · ")
   }
-  val metadata = listOfNotNull(status, item.version?.let { label(zh, "第 $it 版", "Version $it") }, duration,
-    item.resolution, item.ratio?.takeUnless { it == "adaptive" }).joinToString(" · ")
-  Surface(modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth().testTag("generated-media-card-${item.id}"),
+  Surface(modifier = modifier.widthIn(max = 440.dp).fillMaxWidth().testTag("generated-media-card-${item.id}"),
     shape = MaterialTheme.shapes.large, color = LocalChatColors.current.card) {
     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
-          Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) {
-            Text(if (item.kind == GeneratedMediaKind.Music) "♫" else "▣", color = MaterialTheme.colorScheme.onSecondaryContainer,
-              style = MaterialTheme.typography.titleLarge)
+        Row(Modifier.weight(1f).then(if (onOpen == null) Modifier else Modifier
+          .clickable(onClick = onOpen).testTag("generated-${item.kind.path}-open-${item.id}")),
+          horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+          Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.secondaryContainer) {
+            Box(Modifier.size(42.dp), contentAlignment = Alignment.Center) {
+              Text(if (item.kind == GeneratedMediaKind.Music) "♫" else "▣", color = MaterialTheme.colorScheme.onSecondaryContainer,
+                style = MaterialTheme.typography.titleLarge)
+            }
           }
-        }
-        Column(Modifier.weight(1f)) {
-          Text(item.title ?: kindLabel, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-          Text(metadata, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Column {
+            Text(item.title ?: kindLabel, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = if (item.kind == GeneratedMediaKind.Video) 1 else 2, overflow = TextOverflow.Ellipsis)
+          }
         }
         if (musicTrack != null) {
           val playback by MusicPlayback.state.collectAsStateWithLifecycle()
@@ -103,13 +118,12 @@ internal fun GeneratedMediaCard(
             MusicToggle(it, tag = "generated-media-play-${item.id}")
           }
         } else if (item.state == "completed") {
-          val play = if (player == null) label(zh, "播放", "Play") else label(zh, "关闭播放", "Close player")
+          val play = label(zh, "播放", "Play")
           FilledTonalIconButton(onClick = onPlay,
             colors = IconButtonDefaults.filledTonalIconButtonColors(contentColor = LocalChatColors.current.action), modifier = Modifier.testTag("generated-media-play-${item.id}")
-            .semantics { contentDescription = play }) { Text(if (player == null) "▶" else "×") }
+            .semantics { contentDescription = play }) { Text("▶") }
         }
       }
-      player?.invoke()
       if (item.isDraft) {
         val credit = item.creditMicro
         val cost = item.costFen
@@ -129,12 +143,32 @@ internal fun GeneratedMediaCard(
       val error = if (confirmationFailed) label(zh, "提交未完成，请检查当前草稿后重试。",
         "Submission failed. Review the current draft and try again.") else item.error
       error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-      item.prompt?.let { prompt ->
-        TextButton(onClick = { details = !details }) {
-          Text(if (details) label(zh, "收起创作详情", "Hide details") else label(zh, "创作详情", "Details"))
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun GeneratedVideoSheet(
+  item: GeneratedMediaItem,
+  conversationId: String,
+  access: GeneratedMediaAccess,
+  onClose: () -> Unit,
+) {
+  val zh = LocalConfiguration.current.locales[0].language == "zh"
+  ModalBottomSheet(onDismissRequest = onClose,
+    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    modifier = Modifier.testTag("video-player-drawer")) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+      .padding(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(item.title.orEmpty().ifBlank { label(zh, "视频", "Video") }, Modifier.weight(1f),
+          style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        IconButton(onClick = onClose, modifier = Modifier.testTag("video-player-close")) {
+          Icon(painterResource(R.drawable.action_close), label(zh, "关闭", "Close"))
         }
-        if (details) Text(prompt, style = MaterialTheme.typography.bodyMedium)
       }
+      GeneratedVideoPlayer(item, conversationId, access)
     }
   }
 }
@@ -167,7 +201,7 @@ private fun GeneratedVideoPlayer(
     }
   }
 
-  Column(Modifier.fillMaxWidth().testTag("generated-media-inline-${item.id}"),
+  Column(Modifier.fillMaxWidth().testTag("generated-video-player-${item.id}"),
     verticalArrangement = Arrangement.spacedBy(6.dp)) {
     val local = file
     when {
@@ -199,54 +233,57 @@ private fun mediaTime(seconds: Int) = "${seconds / 60}:${(seconds % 60).toString
 @Composable
 internal fun GeneratedMediaRows(items: List<GeneratedMediaItem>, submitting: Boolean, failedDraftId: String?,
   onPlay: (GeneratedMediaItem) -> Unit, onConfirm: (GeneratedMediaItem) -> Unit,
-  playingVideoId: String? = null, conversationId: String? = null, access: GeneratedMediaAccess? = null,
-  activeMusic: MusicTrack? = null, onExpandMusic: () -> Unit = {},
-  onDownloadMusic: (MusicTrack) -> Unit = {}) {
-  Column(Modifier.fillMaxWidth(CHAT_MESSAGE_WIDTH).padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+  conversationId: String? = null, activeMusic: MusicTrack? = null,
+  onOpen: (GeneratedMediaItem) -> Unit = onPlay,
+  onMusicBounds: (Rect?) -> Unit = {}) {
+  Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.TopEnd) {
+  Column(Modifier.fillMaxWidth(CHAT_MESSAGE_WIDTH), horizontalAlignment = Alignment.End,
+    verticalArrangement = Arrangement.spacedBy(12.dp)) {
     for (item in items) {
       androidx.compose.runtime.key(item.kind, item.id) {
         val music = activeMusic?.takeIf { item.kind == GeneratedMediaKind.Music && it.id == item.id && it.conversationId == conversationId }
-        val player: (@Composable () -> Unit)? = when {
-          music != null -> { { MusicInlineControls(music, onExpandMusic) { onDownloadMusic(music) } } }
-          item.kind == GeneratedMediaKind.Video && playingVideoId == item.id && conversationId != null && access != null ->
-            { { GeneratedVideoPlayer(item, conversationId, access) } }
-          else -> null
+        val trackBounds = if (music == null) Modifier else {
+          DisposableEffect(music.key) { onDispose { onMusicBounds(null) } }
+          Modifier.onGloballyPositioned { onMusicBounds(it.boundsInWindow()) }
         }
-        GeneratedMediaCard(item, submitting, failedDraftId == item.id, { onPlay(item) }, { onConfirm(item) }, player, music)
+        GeneratedMediaCard(item, submitting, failedDraftId == item.id, { onPlay(item) }, { onConfirm(item) }, music,
+          onOpen = if (item.state == "completed") ({ onOpen(item) }) else null,
+          modifier = trackBounds)
       }
     }
   }
+  }
 }
 
-internal class GeneratedMediaChatState {
-  var items by mutableStateOf(emptyList<GeneratedMediaItem>())
+internal class GeneratedMediaChatState(initialItems: List<GeneratedMediaItem> = emptyList()) {
+  var items by mutableStateOf(initialItems)
     private set
   var submitting by mutableStateOf(false)
     private set
   var failedDraftId by mutableStateOf<String?>(null)
     private set
-  var playingVideoId by mutableStateOf<String?>(null)
+  var presentedVideo by mutableStateOf<GeneratedMediaItem?>(null)
   private var videoRevision = 0
 
-  suspend fun observe(access: GeneratedMediaAccess, conversationId: String, busy: Boolean) {
+  suspend fun observe(access: GeneratedMediaAccess, scope: GeneratedMediaScope, busy: Boolean) {
     while (true) {
       kotlinx.coroutines.coroutineScope {
         val revision = videoRevision
-        launch { refresh(access, conversationId, GeneratedMediaKind.Music, revision) }
-        launch { refresh(access, conversationId, GeneratedMediaKind.Video, revision) }
+        launch { refresh(access, scope, GeneratedMediaKind.Music, revision) }
+        launch { refresh(access, scope, GeneratedMediaKind.Video, revision) }
       }
       delay(if (busy || items.any { it.active }) 3_000L else 20_000L)
     }
   }
 
-  suspend fun confirm(access: GeneratedMediaAccess, conversationId: String, card: GeneratedMediaItem) {
+  suspend fun confirm(access: GeneratedMediaAccess, scope: GeneratedMediaScope, card: GeneratedMediaItem) {
     if (submitting || !card.isDraft || !card.canConfirm) return
     submitting = true
     failedDraftId = null
     val revision = ++videoRevision
     try {
-      val job = access.confirm(conversationId, card)
-      replace(GeneratedMediaKind.Video,
+      val job = access.confirm(scope, card)
+      replace(access, scope, GeneratedMediaKind.Video,
         items.filter { it.kind == GeneratedMediaKind.Video && !it.isDraft && it.id != job.id } + job)
     } catch (cancelled: CancellationException) {
       throw cancelled
@@ -255,13 +292,13 @@ internal class GeneratedMediaChatState {
     } finally {
       submitting = false
     }
-    refresh(access, conversationId, GeneratedMediaKind.Video, revision)
+    refresh(access, scope, GeneratedMediaKind.Video, revision)
   }
 
-  private suspend fun refresh(access: GeneratedMediaAccess, conversationId: String, kind: GeneratedMediaKind, revision: Int) {
+  private suspend fun refresh(access: GeneratedMediaAccess, scope: GeneratedMediaScope, kind: GeneratedMediaKind, revision: Int) {
     try {
-      val result = access.list(conversationId, kind)
-      if (kind != GeneratedMediaKind.Video || (!submitting && revision == videoRevision)) replace(kind, result)
+      val result = access.list(scope, kind)
+      if (kind != GeneratedMediaKind.Video || (!submitting && revision == videoRevision)) replace(access, scope, kind, result)
     } catch (cancelled: CancellationException) {
       throw cancelled
     } catch (_: Exception) {
@@ -269,8 +306,11 @@ internal class GeneratedMediaChatState {
     }
   }
 
-  private fun replace(kind: GeneratedMediaKind, replacements: List<GeneratedMediaItem>) {
-    items = (items.filterNot { it.kind == kind } + replacements)
+  private fun replace(access: GeneratedMediaAccess, scope: GeneratedMediaScope, kind: GeneratedMediaKind,
+    replacements: List<GeneratedMediaItem>) {
+    val incomingIds = replacements.mapTo(mutableSetOf()) { it.id }
+    items = (items.filter { it.kind != kind || !it.isDraft && it.id !in incomingIds } + replacements)
       .sortedWith(compareBy({ it.order }, { it.id }))
+    access.cache(scope, items)
   }
 }

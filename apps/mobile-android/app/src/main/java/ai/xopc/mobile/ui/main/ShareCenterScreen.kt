@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ShareItem
 import android.content.ClipData
@@ -29,7 +30,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -136,7 +136,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
         }
         items(visible, key = ShareItem::id) { item ->
           Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow,
-            RoundedCornerShape(16.dp)).clickable { previewId = item.id }
+            themedCorners(16)).clickable { previewId = item.id }
             .padding(14.dp).testTag("share-${item.id}"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -247,7 +247,7 @@ private fun SharePreviewSheet(item: ShareItem, onClose: () -> Unit) {
         "web" -> ShareWebPreview(item.url)
         else -> {
           Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow,
-            RoundedCornerShape(16.dp)).padding(16.dp),
+            themedCorners(16)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(item.url, color = MaterialTheme.colorScheme.primary,
               modifier = Modifier.testTag("share-preview-url"))

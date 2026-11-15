@@ -822,6 +822,8 @@ export class GatewayService {
       getAutomationService: () => this.automationService,
       getBrowserSetupService: () => this.browserSetup,
       getMcpSetupService: () => this.mcpSetup,
+      getCapabilityChannelState: () => ({ channelSnapshot: this.extensionLoader?.getManifestSnapshot(),
+        runningChannels: new Set(this.getRunningChannelIds()) }),
       getPhoneSetupService: () => this.phoneSetup,
       canConfigureEndpoint: endpointId => this.realtime.canConfigureEndpoint(endpointId),
       emitBrowserEvent: (type, payload) => this.emit(type, payload),

@@ -5,12 +5,21 @@ import {
   XopcNoteStatus, XopcNoteSyncResult
 } from '../model/note';
 import { gatewaySession } from '../service/gatewaySession';
+import { activeListScope, XopcListSnapshots } from '../service/listSnapshots';
 import { XopcHttpError } from '../service/transport';
+
+const noteLists: XopcListSnapshots<XopcNoteList> = new XopcListSnapshots<XopcNoteList>();
 
 /** Gateway-backed note operations. Local draft persistence intentionally lives in a separate service. */
 export class XopcNoteRepository {
+  cachedList(): XopcNoteList | undefined {
+    return noteLists.read(activeListScope(), 'notes');
+  }
+
   async list(search: string, status: XopcNoteStatus | '', offset: number = 0, projectId: string = ''): Promise<XopcNoteList> {
     const query = encodeURIComponent(search.trim());
+    const scope = !query && !status && !projectId && offset === 0 ? activeListScope() : '';
+    const requestedAt = Date.now();
     const path = '/api/notes?limit=30&offset=' + offset + '&sortBy=updatedAt&sortOrder=desc&search=' + query
       + (status ? '&status=' + encodeURIComponent(status) : '')
       + (projectId ? '&projectId=' + encodeURIComponent(projectId) : '');
@@ -19,6 +28,7 @@ export class XopcNoteRepository {
     result.items.forEach((item: XopcNoteIndexEntry): void => {
       if (!item.id || typeof item.updatedAt !== 'number') throw new Error('INVALID_NOTE_LIST');
     });
+    if (scope && scope === activeListScope()) noteLists.write(scope, 'notes', result, requestedAt);
     return result;
   }
 

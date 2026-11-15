@@ -1,3 +1,4 @@
+import { XopcSegmentedTabs } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { mobileRoute } from '../common/homeProtocol';
@@ -50,15 +51,6 @@ export struct XopcProjectSpaceView {
   }
 
   @Builder
-  tabChip(id: string, label: ResourceStr) {
-    Button(label, { type: ButtonType.Normal }).id('project-tab-' + id).fontSize(13)
-      .fontColor(this.tab === id ? this.colors.foreground : this.colors.secondary)
-      .height(44).padding({ left: 11, right: 11 }).borderRadius(22)
-      .backgroundColor(this.tab === id ? this.colors.input : Color.Transparent)
-      .accessibilitySelected(this.tab === id).onClick((): void => { this.tab = id; })
-  }
-
-  @Builder
   taskCard(item: XopcWorkspaceItem) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
@@ -70,7 +62,7 @@ export struct XopcProjectSpaceView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
-    }.width('100%').padding(0).borderRadius(15).backgroundColor(this.colors.panel)
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(15))
       .onClick((): void => { this.go('tasks', item.id); })
   }
 
@@ -88,7 +80,7 @@ export struct XopcProjectSpaceView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
-    }.width('100%').padding(0).borderRadius(15).backgroundColor(this.colors.panel)
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(15))
       .onClick((): void => { this.go('project-chat', item.key); })
   }
 
@@ -105,7 +97,7 @@ export struct XopcProjectSpaceView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
-    }.width('100%').padding(0).borderRadius(15).backgroundColor(this.colors.panel)
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(15))
       .onClick((): void => { this.go('notes', item.id); })
   }
 
@@ -122,7 +114,7 @@ export struct XopcProjectSpaceView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
-    }.width('100%').padding(0).borderRadius(15).backgroundColor(this.colors.panel)
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(15))
       .onClick((): void => { this.go('automations', item.id); })
   }
 
@@ -151,27 +143,23 @@ export struct XopcProjectSpaceView {
   build() {
     NavDestination() {
       Column() {
-        XopcPageHeader({ heading: this.tab === 'overview' ? $r('app.string.projects') : this.model.project?.name || $r('app.string.projects'),
+        XopcPageHeader({ heading: this.model.project?.name || $r('app.string.projects'),
           backVisible: true, onBack: this.onExit, actionLabel: $r('app.string.project_add_item'), actionIcon: $r('sys.symbol.plus'),
           onAction: (): void => { this.menuOpen = true; } })
-        if (this.tab === 'overview' && this.model.project) {
-          Column({ space: 8 }) {
-            Text(this.model.project.name).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-            if (this.model.project.brief || this.model.project.description) {
-              Text(this.model.project.brief || this.model.project.description || '').fontSize(14).lineHeight(21)
-                .fontColor(this.colors.secondary).width('100%')
-            }
-          }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 16, bottom: 10 })
+        if (this.tab === 'overview' && (this.model.project?.brief || this.model.project?.description)) {
+          Text(this.model.project?.brief || this.model.project?.description || '').fontSize(14).lineHeight(21)
+            .fontColor(this.colors.secondary).width('100%').padding({ left: 20, right: 20, bottom: 10 })
         }
-        Scroll() {
-          Row({ space: 3 }) {
-            this.tabChip('overview', $r('app.string.project_overview'))
-            this.tabChip('sessions', $r('app.string.conversations'))
-            this.tabChip('tasks', $r('app.string.tasks'))
-            this.tabChip('notes', $r('app.string.library_title'))
-            this.tabChip('automations', $r('app.string.automations'))
-          }.padding({ left: 18, right: 18 })
-        }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%').height(50)
+        Column() {
+          XopcSegmentedTabs({ options: [
+            { key: 'overview', label: $r('app.string.project_overview'), testId: 'project-tab-overview' },
+            { key: 'sessions', label: $r('app.string.conversations'), testId: 'project-tab-sessions' },
+            { key: 'tasks', label: $r('app.string.tasks'), testId: 'project-tab-tasks' },
+            { key: 'notes', label: $r('app.string.library_title'), testId: 'project-tab-notes' },
+            { key: 'automations', label: $r('app.string.automations'), testId: 'project-tab-automations' }
+          ], selectedKey: this.tab, segmentMin: 72,
+            onSelect: (key: string): void => { this.tab = key; } })
+        }.width('100%').padding({ left: 18, right: 18, bottom: 6 })
         if (this.model.error) {
           Row({ space: 8 }) {
             Text($r('app.string.project_load_error')).fontSize(13).fontColor(this.colors.danger).layoutWeight(1)
@@ -187,7 +175,7 @@ export struct XopcProjectSpaceView {
             ListItem() { XopcSectionLabel({ heading: $r('app.string.needs_you') }) }
             ForEach(this.projectAttention, (item: XopcHomeItem) => {
               ListItem() {
-                XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.exclamationmark_circle'),
+                XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.bell'), attention: true,
                   navigable: !!item.openAction, onOpen: (): void => {
                     const route = mobileRoute(item.openAction?.href ?? '');
                     if (route) this.onNavigate(route);

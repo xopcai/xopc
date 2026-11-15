@@ -93,7 +93,7 @@ struct SidebarTask: Decodable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct ConversationSummary: Decodable, Equatable, Identifiable, Sendable {
+struct ConversationSummary: Codable, Equatable, Identifiable, Sendable {
     let key: String
     let agentId: String
     let name: String?

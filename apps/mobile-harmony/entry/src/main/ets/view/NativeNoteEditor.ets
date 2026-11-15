@@ -258,7 +258,7 @@ export struct XopcNativeNoteEditor {
   tool(label: string, action: () => void) {
     Button(label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
       .height(38).constraintSize({ minWidth: 42 }).padding({ left: 10, right: 10 })
-      .borderRadius(12).backgroundColor(this.colors.input).onClick(action)
+      .borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input).onClick(action)
   }
 
   build() {

@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ProgressDelivery
 import ai.xopc.mobile.gateway.NoteDetail
@@ -42,7 +43,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -53,7 +53,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -176,7 +175,12 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), ::attach)
   val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::attach)
   val uriHandler = LocalUriHandler.current
-  var query by rememberSaveable(state.gatewayId) { mutableStateOf(state.search) }
+  var query by rememberSaveable(state.gatewayId) { mutableStateOf("") }
+  var searchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  fun toggleSearch() {
+    searchOpen = !searchOpen
+    if (!searchOpen) query = ""
+  }
   LaunchedEffect(query, state.gatewayId) {
     if (query.trim() != state.search) {
       delay(350)
@@ -285,6 +289,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     if (editorOpen) closeEditor() else closeNote()
   }
   BackHandler(enabled = fileBrowserOpen, onBack = closeFile)
+  BackHandler(enabled = searchOpen && !fileBrowserOpen && !editorOpen && selectedId == null, onBack = ::toggleSearch)
   LaunchedEffect(state.createdNoteId) {
     if (state.createdNoteId != null) {
       editorOpen = false
@@ -358,7 +363,11 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           modifier = Modifier.width(72.dp), maxLines = 1)
       } else {
         Text(stringResource(R.string.library_title), style = MaterialTheme.typography.headlineSmall,
-          fontWeight = FontWeight.SemiBold)
+          fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        PageSearchButton(searchOpen, R.string.library_search, "notes-open-search", ::toggleSearch)
+        IconButton(onClick = { fileBrowserOpen = true }, modifier = Modifier.testTag("notes-files")) {
+          ActionIcon(R.drawable.action_folder, size = 24.dp, contentDescription = stringResource(R.string.notes_files))
+        }
         IconButton(onClick = { creationSheetOpen = true },
           enabled = !state.draftLoading && !state.draftSaving,
           modifier = Modifier.testTag("notes-new")) {
@@ -399,7 +408,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       deliveries = deliveries, deliveriesLoading = deliveriesLoading, deliveryError = deliveryError,
       onRefreshDeliveries = onRefreshDeliveries, onOpenDelivery = onOpenDelivery,
       filesLoading = libraryFiles.loading, filesError = libraryFiles.error,
-      onRefreshFiles = { libraryFilesRevision.value++ })
+      onRefreshFiles = { libraryFilesRevision.value++ }, searchOpen = searchOpen)
     } else NotesDetailContent(state, selectedId!!, { onOpen(selectedId!!) }, Modifier.weight(1f),
       { editorOpen = true; onEditNote() }, { moreOpen = true }, {
         historyTimestamp = null
@@ -885,7 +894,7 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
       horizontalArrangement = Arrangement.spacedBy(4.dp)) {
       val blocked = state.draftSaving && state.draftConflict != null
       val tool = Modifier.height(42.dp)
-        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
+        .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(12))
       TextButton(onClick = { preview = !preview },
         modifier = tool.testTag("notes-preview-toggle")) {
         Text(stringResource(if (preview) R.string.notes_edit else R.string.notes_preview))
@@ -1018,7 +1027,8 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   deliveries: List<ProgressDelivery> = emptyList(),
   deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
   onRefreshDeliveries: () -> Unit = {}, onOpenDelivery: (ProgressDelivery) -> Unit = {},
-  filesLoading: Boolean = false, filesError: Boolean = false, onRefreshFiles: () -> Unit = {}) {
+  filesLoading: Boolean = false, filesError: Boolean = false, onRefreshFiles: () -> Unit = {},
+  searchOpen: Boolean = false) {
   var category by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
   val showNotes = category == "all" || category == "notes"
   val showFiles = category == "all" || category == "files"
@@ -1033,59 +1043,51 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
   val libraryListState = rememberLazyListState()
   var filtersOpen by rememberSaveable { mutableStateOf(false) }
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+    if (searchOpen) Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+      .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)),
       verticalAlignment = Alignment.CenterVertically) {
-      Row(modifier = Modifier.weight(1f).heightIn(min = 48.dp)
-        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)),
-        verticalAlignment = Alignment.CenterVertically) {
-        BasicTextField(search, { onSearchChange(it.take(4096)) },
-          modifier = Modifier.weight(1f).padding(start = 14.dp).testTag("notes-search"),
-          singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(
-            color = MaterialTheme.colorScheme.onSurface),
-          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-          keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-          decorationBox = { inner -> Box {
-            if (search.isEmpty()) Text(stringResource(R.string.library_search),
-              color = MaterialTheme.colorScheme.onSurfaceVariant)
-            inner()
-          } })
-        IconButton(onClick = onSubmit, enabled = !state.loading,
-          modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
-          Icon(painterResource(R.drawable.action_search), stringResource(R.string.library_search))
-        }
+      BasicTextField(search, { onSearchChange(it.take(4096)) },
+        modifier = Modifier.weight(1f).padding(start = 14.dp).then(searchInputFocus()).testTag("notes-search"),
+        singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(
+          color = MaterialTheme.colorScheme.onSurface),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+        decorationBox = { inner -> Box {
+          if (search.isEmpty()) Text(stringResource(R.string.library_search),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+          inner()
+        } })
+      IconButton(onClick = onSubmit, enabled = !state.loading,
+        modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
+        Icon(painterResource(R.drawable.action_search), stringResource(R.string.library_search))
       }
-      IconButton(onClick = { onOpenFiles?.invoke() }, enabled = onOpenFiles != null,
-        modifier = Modifier.size(48.dp)
-          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-          .testTag("notes-files")) {
-        Icon(painterResource(R.drawable.action_folder), stringResource(R.string.notes_files))
-      }
+    }
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalAlignment = Alignment.CenterVertically) {
+      SegmentedTabs(
+        listOf("all" to R.string.notes_all, "notes" to R.string.tab_notes,
+          "files" to R.string.notes_files, "deliveries" to R.string.library_results).map { (id, label) ->
+          SegmentOption(id, stringResource(label), "library-category-$id")
+        }, category, { id ->
+          category = id
+          if (id != "notes" && state.status.isNotEmpty()) onStatus("")
+        }, Modifier.weight(1f),
+      )
       IconButton(onClick = { filtersOpen = !filtersOpen }, enabled = showNotes,
         modifier = Modifier.size(48.dp)
-          .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
+          .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14))
           .testTag("notes-filter-menu")) {
         Icon(painterResource(R.drawable.action_filter), stringResource(R.string.notes_filter),
           tint = if (filtersOpen || state.status.isNotEmpty()) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurfaceVariant)
       }
     }
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      listOf("all" to R.string.notes_all, "notes" to R.string.tab_notes,
-        "files" to R.string.notes_files, "deliveries" to R.string.library_results).forEach { (id, label) ->
-        FilterChip(selected = category == id, onClick = {
-          category = id
-          if (id != "notes" && state.status.isNotEmpty()) onStatus("")
-        }, label = { Text(stringResource(label)) }, modifier = Modifier.testTag("library-category-$id"))
-      }
-    }
-    if (showNotes && filtersOpen) Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
-      horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    if (showNotes && filtersOpen) SegmentedTabs(
       listOf("" to R.string.notes_all, "inbox" to R.string.notes_inbox,
-        "processed" to R.string.notes_processed, "archived" to R.string.notes_archived).forEach { (status, label) ->
-        FilterChip(selected = state.status == status, onClick = { onStatus(status) },
-          label = { Text(stringResource(label)) }, modifier = Modifier.testTag("notes-filter-${status.ifEmpty { "all" }}"))
-      }
-    }
+        "processed" to R.string.notes_processed, "archived" to R.string.notes_archived).map { (status, label) ->
+        SegmentOption(status, stringResource(label), "notes-filter-${status.ifEmpty { "all" }}")
+      }, state.status, onStatus,
+    )
     LazyColumn(state = libraryListState, modifier = Modifier.weight(1f).testTag("notes-list"),
       verticalArrangement = Arrangement.spacedBy(10.dp),
       contentPadding = PaddingValues(bottom = 20.dp)) {
@@ -1305,7 +1307,7 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
       horizontalArrangement = Arrangement.spacedBy(8.dp),
       verticalAlignment = Alignment.CenterVertically) {
       Row(modifier = Modifier.weight(1f)
-        .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(30.dp))
+        .background(MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(30))
         .padding(4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
       NoteDetailAction("✎", stringResource(R.string.notes_edit), onEdit,
         note.remoteVersion != null && !state.metadataBusy && !state.deleteBusy,
@@ -1323,7 +1325,7 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
       NoteDetailAction("▣", stringResource(R.string.notes_continue_chat), onContinueChat,
         !chatBusy && !state.deleteBusy,
         Modifier.width(60.dp).background(MaterialTheme.colorScheme.surfaceContainerLow,
-          RoundedCornerShape(30.dp)).testTag("note-detail-chat"))
+          themedCorners(30)).testTag("note-detail-chat"))
     }
   }
 }
@@ -1354,7 +1356,7 @@ private fun NoteBody(note: NoteDetail, onOpenLink: (String) -> Unit,
       Text("#$tag", style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer,
-          RoundedCornerShape(16.dp)).padding(horizontal = 10.dp, vertical = 6.dp))
+          themedCorners(16)).padding(horizontal = 10.dp, vertical = 6.dp))
     }
   }
   if (note.attachments.isNotEmpty()) Row(modifier = Modifier.fillMaxWidth()
