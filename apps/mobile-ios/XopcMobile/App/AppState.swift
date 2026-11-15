@@ -3,6 +3,7 @@ import Observation
 
 @MainActor
 @Observable
+// swiftlint:disable:next type_body_length
 final class AppState {
     var homePath: [HomeDestination] = []
     private(set) var externalIntake: ExternalIntakeBatch?
@@ -266,7 +267,7 @@ final class AppState {
         if let prompt {
             do {
                 try ComposerDraftStore().save(SavedComposerDraft(text: prompt),
-                    scope: ComposerDraftStore.scope(gatewayConfiguration, conversationID: draft.id))
+                                              scope: ComposerDraftStore.scope(gatewayConfiguration, conversationID: draft.id))
             } catch {
                 connectionStorageError = error.localizedDescription
                 return

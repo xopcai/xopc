@@ -3,7 +3,9 @@ import SwiftUI
 enum MobileThemePreset: String, CaseIterable, Identifiable {
     case `default`, porcelain, dawn, emerald, clay
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var title: LocalizedStringResource {
         switch self {
@@ -65,14 +67,17 @@ struct MobileTheme {
         card = Self.color(values.card)
     }
 
-    func corner(_ base: CGFloat) -> CGFloat { (base * preset.cornerScale).rounded() }
+    func corner(_ base: CGFloat) -> CGFloat {
+        (base * preset.cornerScale).rounded()
+    }
 
     private static func color(_ rgb: UInt32) -> Color {
         Color(red: Double((rgb >> 16) & 255) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
     }
 
-    // The same semantic roles and preset colors as the HarmonyOS client.
+    /// The same semantic roles and preset colors as the HarmonyOS client.
     private static func colors(_ preset: MobileThemePreset, _ dark: Bool) ->
+        // swiftlint:disable:next large_tuple
         (canvas: UInt32, panel: UInt32, foreground: UInt32, secondary: UInt32, grouped: UInt32, input: UInt32,
          active: UInt32, danger: UInt32, action: UInt32, onAction: UInt32, bubble: UInt32, card: UInt32)
     {
@@ -111,15 +116,8 @@ struct MobileTheme {
     }
 }
 
-private struct MobileThemeKey: EnvironmentKey {
-    static let defaultValue = MobileTheme()
-}
-
 extension EnvironmentValues {
-    var mobileTheme: MobileTheme {
-        get { self[MobileThemeKey.self] }
-        set { self[MobileThemeKey.self] = newValue }
-    }
+    @Entry var mobileTheme: MobileTheme = .init()
 }
 
 extension View {

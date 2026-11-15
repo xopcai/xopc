@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AVFoundation
 import MediaPlayer
 import Observation
@@ -430,7 +431,11 @@ struct GeneratedMusicPlayer: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(track.title).font(.headline).lineLimit(2).accessibilityAddTraits(.isHeader)
                 Group {
-                    if track.source.isEmpty { Text("音乐") } else { Text(track.source) }
+                    if track.source.isEmpty {
+                        Text("音乐")
+                    } else {
+                        Text(track.source)
+                    }
                 }
                 .font(.footnote).foregroundStyle(mobileTheme.secondary).lineLimit(1)
             }
@@ -496,7 +501,9 @@ private struct GeneratedMusicTimeline: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let playback: GeneratedMusicPlayback
 
-    private var canSeek: Bool { playback.duration > 0 && playback.phase != .failed && playback.phase != .loading }
+    private var canSeek: Bool {
+        playback.duration > 0 && playback.phase != .failed && playback.phase != .loading
+    }
 
     var body: some View {
         VStack(spacing: 4) {

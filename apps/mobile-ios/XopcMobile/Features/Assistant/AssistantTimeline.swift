@@ -16,6 +16,7 @@ extension AssistantState {
         isSending || runID != nil
     }
 
+    // swiftlint:disable:next function_body_length
     nonisolated static func timeline(from messages: [WireMessage], previous: [TimelineMessage] = []) -> [TimelineMessage] {
         let retained = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         return messages.enumerated().compactMap { index, message in

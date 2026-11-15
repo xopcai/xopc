@@ -102,7 +102,9 @@ final class GeneratedMediaState {
         let transcriptID: String
         let account: String
 
-        var cacheKey: String { [account, id, transcriptID].joined(separator: ":") }
+        var cacheKey: String {
+            [account, id, transcriptID].joined(separator: ":")
+        }
 
         func accepts(_ transcriptID: String?) -> Bool {
             transcriptID == nil || transcriptID == self.transcriptID
@@ -114,7 +116,9 @@ final class GeneratedMediaState {
 
     func cards(in requestedScope: Scope?) -> [GeneratedMediaCard] {
         guard let requestedScope else { return [] }
-        if scope == requestedScope { return cards }
+        if scope == requestedScope {
+            return cards
+        }
         return MobileListCache.shared.read(.generatedMedia, scope: requestedScope.cacheKey) ?? []
     }
 
@@ -255,7 +259,9 @@ struct GeneratedMediaRow: View {
                 }
             }
             if card.isDraft {
-                if let summary = card.item.summary, !summary.isEmpty { Text(verbatim: summary).font(.subheadline).lineLimit(3) }
+                if let summary = card.item.summary, !summary.isEmpty {
+                    Text(verbatim: summary).font(.subheadline).lineLimit(3)
+                }
                 if let estimate = card.item.estimatedCreditMicro {
                     Text("预计 \(Double(estimate) / 1_000_000, format: .number.precision(.fractionLength(2))) 积分")
                         .font(.caption).foregroundStyle(.secondary)
@@ -301,7 +307,6 @@ struct GeneratedMediaRow: View {
         }
         .contentShape(.rect)
     }
-
 }
 
 struct GeneratedVideoDrawer: View {

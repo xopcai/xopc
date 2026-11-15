@@ -17,7 +17,6 @@ struct ChatSidebarView: View {
     let onNew: () -> Void
     let onRetry: () -> Void
 
-
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
