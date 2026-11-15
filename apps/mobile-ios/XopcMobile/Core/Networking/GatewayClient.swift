@@ -18,6 +18,7 @@ protocol GatewayServing: Sendable {
     ) async throws -> [ReferenceItem]
     func updateQueuedInput(conversationID: String, input: QueuedInput, content: String) async throws -> InputState
     func cancelQueuedInput(conversationID: String, input: QueuedInput) async throws -> InputState
+    // swiftlint:disable:next function_parameter_count
     func sendMessage(
         _ text: String,
         attachments: [MessageAttachment],
@@ -37,7 +38,8 @@ protocol GatewayServing: Sendable {
 
 extension GatewayServing {
     func sendMessage(_ text: String, attachments: [MessageAttachment], references: [ContextReference],
-                     delivery: MessageDelivery, to conversation: ConversationSelection) async throws -> SessionCommandResult {
+                     delivery: MessageDelivery, to conversation: ConversationSelection) async throws -> SessionCommandResult
+    {
         try await sendMessage(text, attachments: attachments, references: references, delivery: delivery,
                               to: conversation, clientMessageID: UUID().uuidString.lowercased())
     }

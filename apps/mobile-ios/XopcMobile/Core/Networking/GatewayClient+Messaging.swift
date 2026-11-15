@@ -1,6 +1,7 @@
 import Foundation
 
 extension GatewayClient {
+    // swiftlint:disable:next function_parameter_count
     func sendMessage(
         _ text: String,
         attachments: [MessageAttachment],
@@ -46,6 +47,7 @@ extension GatewayClient {
         return ["new", "reset", "restart", "clear", "archive"].contains(name)
     }
 
+    // swiftlint:disable:next function_parameter_count
     private func messageBody(
         _ text: String,
         attachments: [MessageAttachment],

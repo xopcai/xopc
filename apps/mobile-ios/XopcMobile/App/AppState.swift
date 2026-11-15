@@ -280,7 +280,8 @@ final class AppState {
     }
 
     func startLibraryConversation(configuration: GatewayConfiguration, agentID: String, attachment: MessageAttachment,
-                                  origin: LibraryOrigin?) async throws {
+                                  origin: LibraryOrigin?) async throws
+    {
         var draft = ConversationSelection.draft(agentId: agentID)
         if origin?.available == true, let projectID = origin?.projectId {
             let project = try await GatewayClient(configuration: configuration).fetchProject(id: projectID)

@@ -110,11 +110,11 @@ private struct SegmentTrack: Layout {
         return naturalWidths.map { $0 + extra }
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func sizeThatFits(proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
         CGSize(width: widths(subviews).reduce(0, +), height: height)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
         var offset: CGFloat = 0
         for (subview, width) in zip(subviews, widths(subviews)) {
             let center = offset + width / 2

@@ -3,8 +3,9 @@ import SwiftDraw
 import SwiftUI
 
 private final class CapabilityLogoRedirectPolicy: NSObject, URLSessionTaskDelegate {
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+    func urlSession(_: URLSession, task _: URLSessionTask, willPerformHTTPRedirection _: HTTPURLResponse,
+                    newRequest _: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void)
+    {
         completionHandler(nil)
     }
 }
@@ -21,13 +22,15 @@ private enum CapabilityLogoLoader {
     static func source(_ reference: String?, origin: URL) -> String? {
         guard let reference, !reference.isEmpty else { return nil }
         if reference.utf8.count <= 176_000,
-           reference.range(of: #"^data:image/(svg\+xml|png|webp);base64,"#, options: .regularExpression) != nil {
+           reference.range(of: #"^data:image/(svg\+xml|png|webp);base64,"#, options: .regularExpression) != nil
+        {
             return reference
         }
         if reference.range(of: #"^/(connector-icons|channel-icons)/[a-z0-9_%.-]+(/[a-z0-9_%.-]+)?$"#,
                            options: [.regularExpression, .caseInsensitive]) != nil,
-           !reference.contains(".."),
-           reference.range(of: #"%(2e|2f|5c)"#, options: [.regularExpression, .caseInsensitive]) == nil {
+            !reference.contains(".."),
+           reference.range(of: #"%(2e|2f|5c)"#, options: [.regularExpression, .caseInsensitive]) == nil
+        {
             return URL(string: reference, relativeTo: origin)?.absoluteURL.absoluteString
         }
         guard reference.utf8.count <= 2048, !reference.contains("\\"),
@@ -48,7 +51,8 @@ private enum CapabilityLogoLoader {
         }
         guard !Task.isCancelled else { return nil }
         if let text = String(data: data, encoding: .utf8),
-           text.range(of: #"<svg[\s>]"#, options: [.regularExpression, .caseInsensitive]) != nil {
+           text.range(of: #"<svg[\s>]"#, options: [.regularExpression, .caseInsensitive]) != nil
+        {
             guard text.range(of: #"<!\s*(DOCTYPE|ENTITY)\b"#, options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
             // SVG defaults a gradient stop's offset to zero. SwiftDraw requires an explicit value.
             let normalized = text.replacingOccurrences(of: #"(<stop\b)(?![^>]*\boffset\s*=)"#,
@@ -60,9 +64,9 @@ private enum CapabilityLogoLoader {
         }
         guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
               let thumbnail = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: 144
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: 144
               ] as CFDictionary) else { return nil }
         return UIImage(cgImage: thumbnail)
     }

@@ -177,6 +177,7 @@ struct GatewayStub: GatewayServing {
         InputState(activeRunId: nil)
     }
 
+    // swiftlint:disable:next function_parameter_count
     func sendMessage(
         _: String,
         attachments _: [MessageAttachment],

@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
@@ -133,11 +134,10 @@ struct CapabilitiesView: View {
 
     private func startSetupChat() {
         searchFocused = false
-        let key: String
-        switch category {
-        case .agents: key = "capability_agent_setup_prompt"
-        case .skills: key = "capability_skill_setup_prompt"
-        default: key = "capability_mcp_setup_prompt"
+        let key = switch category {
+        case .agents: "capability_agent_setup_prompt"
+        case .skills: "capability_skill_setup_prompt"
+        default: "capability_mcp_setup_prompt"
         }
         onSetupChat(AppLocalization.string(key, locale: locale),
                     category == .agents ? (locale.identifier.hasPrefix("zh") ? "zh-CN" : "en") : nil)
@@ -293,7 +293,9 @@ struct CapabilitiesView: View {
                                 itemID: category == .connections ? item.id : item.targetId ?? item.id, name: item.name,
                                 summary: item.description ?? "", onChanged: {
                                     revision += 1
-                                    if item.id == personal?.agentId { onPersonalChanged() }
+                                    if item.id == personal?.agentId {
+                                        onPersonalChanged()
+                                    }
                                 },
                                 onClose: { detail = nil },
                                 onStartChat: category == .agents && item.group != "disabled" ? {
@@ -302,6 +304,7 @@ struct CapabilitiesView: View {
                                 } : nil) { icon(item, extent: 44) }
     }
 
+    // swiftlint:disable:next identifier_name
     private func localized(_ zh: String, _ en: String) -> String {
         locale.identifier.hasPrefix("zh") ? zh : en
     }
@@ -350,7 +353,9 @@ private struct CapabilityPanelPayload: Decodable {
         let id: String
         let label: String
     }
+
     struct Field: Decodable, Identifiable {
+        // swiftlint:disable:next nesting
         struct Visibility: Decodable { let field: String; let value: String }
         let id: String
         let label: String
@@ -361,6 +366,7 @@ private struct CapabilityPanelPayload: Decodable {
         let options: [Choice]?
         let visibleWhen: Visibility?
     }
+
     struct Action: Decodable, Identifiable {
         let id: String
         let label: String
@@ -368,6 +374,7 @@ private struct CapabilityPanelPayload: Decodable {
         let inlineReview: Bool?
         let advanced: Bool?
     }
+
     struct Result: Decodable, Identifiable {
         let id: String
         let name: String
@@ -376,6 +383,7 @@ private struct CapabilityPanelPayload: Decodable {
         let iconUrl: String?
         let action: Action?
     }
+
     let fields: [Field]?
     let actions: [Action]?
     let message: String?
@@ -397,7 +405,9 @@ struct ConversationMcpAction: View {
     @State private var available = false
     @State private var panelConversationID: String?
     @State private var revision = 0
-    private var title: String { AppLocalization.string("capability_mcp_continue", locale: locale) }
+    private var title: String {
+        AppLocalization.string("capability_mcp_continue", locale: locale)
+    }
 
     var body: some View {
         Group {
@@ -422,13 +432,16 @@ struct ConversationMcpAction: View {
         }
         .onChange(of: conversationID) { available = false; panelConversationID = nil }
         .sheet(isPresented: Binding(get: { panelConversationID != nil }, set: {
-            if !$0 { panelConversationID = nil; revision += 1 }
+            if !$0 {
+                panelConversationID = nil; revision += 1
+            }
         })) {
             if let panelConversationID {
                 CapabilitySettingsPanel(configuration: configuration, category: "connections",
                                         itemID: "conversation:" + panelConversationID, name: title, summary: "",
                                         onChanged: {}, onClose: { self.panelConversationID = nil; revision += 1 },
-                                        onStartChat: nil) {
+                                        onStartChat: nil)
+                {
                     CapabilityLogo(reference: nil, origin: configuration.baseURL, label: "", symbol: "link", extent: 44)
                 }
             }
@@ -443,6 +456,7 @@ private struct CapabilityPanelCommand: Encodable {
     let revision: Int?
 }
 
+// swiftlint:disable:next type_body_length
 private struct CapabilitySettingsPanel<Icon: View>: View {
     let configuration: GatewayConfiguration
     let category: String
@@ -489,7 +503,8 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     private func panelHeaderButton(_ label: LocalizedStringKey, symbol: String, tint: Color, fill: Color,
-                                   action: @escaping () -> Void) -> some View {
+                                   action: @escaping () -> Void) -> some View
+    {
         Button(action: action) {
             Image(systemName: symbol).foregroundStyle(tint)
                 .frame(width: 44, height: 44).background(fill, in: .circle).contentShape(.circle)
@@ -510,13 +525,19 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                     } else if !summary.isEmpty {
                         Text(verbatim: summary).font(.subheadline).foregroundStyle(theme.secondary)
                     }
-                    if busy { ProgressView().frame(maxWidth: .infinity) }
+                    if busy {
+                        ProgressView().frame(maxWidth: .infinity)
+                    }
                     if let errorMessage {
                         Text(verbatim: errorMessage).font(.subheadline).foregroundStyle(theme.danger)
-                        if panel == nil { Button(t("重试", "Retry")) { Task { await load() } } }
-                        if let action = panel?.pollAction { Button(t("刷新状态", "Refresh status")) { Task { await load(action) } } }
+                        if panel == nil {
+                            Button(t("重试", "Retry")) { Task { await load() } }
+                        }
+                        if let action = panel?.pollAction {
+                            Button(t("刷新状态", "Refresh status")) { Task { await load(action) } }
+                        }
                     }
-                    if let qr = panel?.qrUrl, let image = qrImage(qr) {
+                    if let qrCodeURL = panel?.qrUrl, let image = qrImage(qrCodeURL) {
                         Image(uiImage: image)
                             .interpolation(.none).resizable().scaledToFit()
                             .frame(width: 180, height: 180).padding(12).background(.white, in: .rect(cornerRadius: 16))
@@ -542,7 +563,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                                            symbol: "checklist", extent: 40)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(verbatim: result.name).font(.subheadline.weight(.semibold))
-                                if let summary = result.summary { Text(verbatim: summary).font(.caption).lineLimit(2) }
+                                if let summary = result.summary {
+                                    Text(verbatim: summary).font(.caption).lineLimit(2)
+                                }
                                 Text(verbatim: result.source).font(.caption2)
                             }
                             .foregroundStyle(theme.foreground)
@@ -586,7 +609,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         .task { await load() }
         .task(id: panel?.pollAction) {
             guard let action = panel?.pollAction else { return }
-            for _ in 0..<75 {
+            for _ in 0 ..< 75 {
                 do { try await Task.sleep(for: .seconds(4)) } catch { return }
                 guard panel?.pollAction == action else { return }
                 await load(action, polling: true)
@@ -603,26 +626,45 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             return values[rule.field] == rule.value
         }
     }
-    private var mainFields: [CapabilityPanelPayload.Field] { visibleFields.filter { $0.advanced != true } }
-    private var extraFields: [CapabilityPanelPayload.Field] { visibleFields.filter { $0.advanced == true } }
-    private var mainActions: [CapabilityPanelPayload.Action] { (panel?.actions ?? []).filter { $0.advanced != true } }
-    private var extraActions: [CapabilityPanelPayload.Action] { (panel?.actions ?? []).filter { $0.advanced == true } }
+
+    private var mainFields: [CapabilityPanelPayload.Field] {
+        visibleFields.filter { $0.advanced != true }
+    }
+
+    private var extraFields: [CapabilityPanelPayload.Field] {
+        visibleFields.filter { $0.advanced == true }
+    }
+
+    private var mainActions: [CapabilityPanelPayload.Action] {
+        (panel?.actions ?? []).filter { $0.advanced != true }
+    }
+
+    private var extraActions: [CapabilityPanelPayload.Action] {
+        (panel?.actions ?? []).filter { $0.advanced == true }
+    }
+
     private var verifiedURL: URL? {
         guard let url = panel?.authorizationUrl, url.scheme == "https", url.host != nil, url.user == nil, url.password == nil else { return nil }
         return url
     }
 
     private func perform(_ action: CapabilityPanelPayload.Action) {
-        if action.confirmation != nil && action.inlineReview != true { confirmation = action; confirmationOpen = true }
-        else { Task { await load(action.id) } }
+        if action.confirmation != nil, action.inlineReview != true {
+            confirmation = action; confirmationOpen = true
+        } else {
+            Task { await load(action.id) }
+        }
     }
 
     @ViewBuilder private func actionButton(_ action: CapabilityPanelPayload.Action, prominent: Bool) -> some View {
         let button = Button { perform(action) } label: {
             Text(verbatim: action.label).frame(maxWidth: .infinity, minHeight: 36)
         }.accessibilityIdentifier("capability-panel-\(action.id)")
-        if prominent { button.buttonStyle(.borderedProminent).buttonBorderShape(.capsule) }
-        else { button.buttonStyle(.plain).foregroundStyle(theme.action).frame(minHeight: 44) }
+        if prominent {
+            button.buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+        } else {
+            button.buttonStyle(.plain).foregroundStyle(theme.action).frame(minHeight: 44)
+        }
     }
 
     @ViewBuilder private func input(_ field: CapabilityPanelPayload.Field) -> some View {
@@ -646,7 +688,11 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                     TextField(field.hint ?? field.label, text: value, axis: field.type == "multiline" ? .vertical : .horizontal)
                         .lineLimit(field.type == "multiline" ? 3 ... 6 : 1 ... 1)
                         .submitLabel(field.id == "query" ? .search : .done)
-                        .onSubmit { if field.id == "query" { Task { await load("search") } } }
+                        .onSubmit {
+                            if field.id == "query" {
+                                Task { await load("search") }
+                            }
+                        }
                 }
             }
             .textFieldStyle(.plain)
@@ -657,12 +703,16 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
 
     private func groupList(_ field: CapabilityPanelPayload.Field, selection: Binding<String>) -> some View {
         let groups = selection.wrappedValue.split(separator: "\n").map(String.init).reduce(into: [String]()) { result, item in
-            if !item.isEmpty && !result.contains(item) { result.append(item) }
+            if !item.isEmpty, !result.contains(item) {
+                result.append(item)
+            }
         }
         let addGroup = {
             let group = newGroup.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !group.isEmpty, group.count <= 160, group.rangeOfCharacter(from: CharacterSet(charactersIn: ",\r\n")) == nil else { return }
-            if !groups.contains(group) { selection.wrappedValue = (groups + [group]).joined(separator: "\n") }
+            if !groups.contains(group) {
+                selection.wrappedValue = (groups + [group]).joined(separator: "\n")
+            }
             newGroup = ""
         }
         return VStack(alignment: .leading, spacing: 8) {
@@ -677,7 +727,11 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             }
             HStack {
                 TextField(field.hint ?? field.label, text: $newGroup).submitLabel(.done).onSubmit(addGroup)
-                    .onChange(of: newGroup) { _, value in if value.count > 160 { newGroup = String(value.prefix(160)) } }
+                    .onChange(of: newGroup) { _, value in
+                        if value.count > 160 {
+                            newGroup = String(value.prefix(160))
+                        }
+                    }
                 Button(t("添加群聊", "Add group"), action: addGroup).disabled(newGroup.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
@@ -685,7 +739,10 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         .accessibilityIdentifier("capability-field-\(field.id)")
     }
 
-    private func t(_ zh: String, _ en: String) -> String { locale.identifier.hasPrefix("zh") ? zh : en }
+    // swiftlint:disable:next identifier_name
+    private func t(_ zh: String, _ en: String) -> String {
+        locale.identifier.hasPrefix("zh") ? zh : en
+    }
 
     private func qrImage(_ value: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
@@ -694,30 +751,41 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         return UIImage(ciImage: output.transformed(by: CGAffineTransform(scaleX: 8, y: 8)))
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func load(_ action: String? = nil, polling: Bool = false) async {
         guard !busy else { return }
         busy = !polling
-        if !polling { errorMessage = nil }
-        if action?.hasPrefix("authorize") == true || action?.hasPrefix("status:") == true || action?.hasPrefix("status-server:") == true {
-            if !polling { openWhenReady = true; openedURL = nil }
+        if !polling {
+            errorMessage = nil
+        }
+        if action?.hasPrefix("authorize") == true || action?.hasPrefix("status:") == true || action?.hasPrefix("status-server:") == true, !polling {
+            openWhenReady = true; openedURL = nil
         }
         let before = panel?.pollAction
         let previousValues = values
-        defer { if !polling { busy = false } }
+        defer {
+            if !polling {
+                busy = false
+            }
+        }
         do {
             let client = GatewayClient(configuration: configuration)
             let path = "/api/capabilities/mobile-actions/panel/\(category)"
             let body = try action.map { try client.encoder.encode(CapabilityPanelCommand(
-                action: $0, values: polling ? [:] : values, flow: panel?.flow, revision: panel?.revision)) }
+                action: $0, values: polling ? [:] : values, flow: panel?.flow, revision: panel?.revision
+            )) }
             let response: GatewayEnvelope<CapabilityPanelPayload> = try await client.request(
                 path: path, queryItems: [URLQueryItem(name: "id", value: itemID), URLQueryItem(name: "locale", value: locale.identifier)],
-                method: action == nil ? "GET" : "POST", body: body)
+                method: action == nil ? "GET" : "POST", body: body
+            )
             guard let result = response.payload, response.isSuccessful else { throw GatewayClientError.invalidResponse }
             try Task.checkCancellation()
-            if polling && (busy || panel?.pollAction != action) { return }
+            if polling && (busy || panel?.pollAction != action) {
+                return
+            }
             panel = result
             values = Dictionary((result.fields ?? []).map { ($0.id,
-                (polling ? previousValues[$0.id] : nil) ?? ($0.type == "secret" ? "" : $0.value ?? "")) },
+                                                             (polling ? previousValues[$0.id] : nil) ?? ($0.type == "secret" ? "" : $0.value ?? "")) },
                                 uniquingKeysWith: { first, _ in first })
             errorMessage = nil
             if openWhenReady, let url = verifiedURL, url != openedURL {
@@ -729,8 +797,11 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         } catch is CancellationError {
         } catch {
             if !polling {
-                if case let GatewayClientError.http(status, message?) = error, status == 400 || status == 409 { errorMessage = message }
-                else { errorMessage = t("暂时无法完成，请重试。", "Could not complete this action. Try again.") }
+                if case let GatewayClientError.http(status, message?) = error, status == 400 || status == 409 {
+                    errorMessage = message
+                } else {
+                    errorMessage = t("暂时无法完成，请重试。", "Could not complete this action. Try again.")
+                }
             }
         }
     }

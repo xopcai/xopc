@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AVKit
 import QuickLook
 import SwiftUI
@@ -105,9 +106,18 @@ struct SpaceLibraryView: View {
     @State private var undoFailed = false
 
     private let kinds = ["document", "spreadsheet", "presentation", "image", "audio", "video", "archive", "file"]
-    private var client: GatewayClient { GatewayClient(configuration: configuration) }
-    private var filters: [String] { [scope.rawValue, String(query.prefix(160)).trimmingCharacters(in: .whitespacesAndNewlines), kind] }
-    private func label(_ zh: String, _ en: String) -> String { locale.identifier.hasPrefix("zh") ? zh : en }
+    private var client: GatewayClient {
+        GatewayClient(configuration: configuration)
+    }
+
+    private var filters: [String] {
+        [scope.rawValue, String(query.prefix(160)).trimmingCharacters(in: .whitespacesAndNewlines), kind]
+    }
+
+    // swiftlint:disable:next identifier_name
+    private func label(_ zh: String, _ en: String) -> String {
+        locale.identifier.hasPrefix("zh") ? zh : en
+    }
 
     var body: some View {
         List {
@@ -175,7 +185,8 @@ struct SpaceLibraryView: View {
                             do {
                                 let _: LibraryMutationResult = try await client.request(
                                     path: "/api/spaces/items/\(undo.id)/restore", method: "POST",
-                                    body: client.encoder.encode(LibraryMutation(revision: undo.revision)))
+                                    body: client.encoder.encode(LibraryMutation(revision: undo.revision))
+                                )
                                 refresh += 1
                             } catch {
                                 self.undo = undo
@@ -215,7 +226,9 @@ struct SpaceLibraryView: View {
     }
 
     private var emptyMessage: String {
-        if !query.isEmpty { return label("没有匹配的资料", "No matching results") }
+        if !query.isEmpty {
+            return label("没有匹配的资料", "No matching results")
+        }
         switch scope {
         case .all: return label("暂无资料", "No results yet")
         case .favorites: return label("暂无收藏", "No favorites")
@@ -238,8 +251,12 @@ struct SpaceLibraryView: View {
             Image(systemName: symbol).frame(width: 36).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: item.title).lineLimit(1)
-                if !metadata.isEmpty { Text(verbatim: metadata).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-                if let hit = item.hit { Text(verbatim: hit.text).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                if !metadata.isEmpty {
+                    Text(verbatim: metadata).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if let hit = item.hit {
+                    Text(verbatim: hit.text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
             Spacer(minLength: 8)
             Text(Date(timeIntervalSince1970: item.updatedAt / 1000), format: .dateTime.month().day())
@@ -255,14 +272,20 @@ struct SpaceLibraryView: View {
     @MainActor private func load(_ filters: [String], after pageCursor: String? = nil, cache: String? = nil) async {
         loading = true
         var parameters = [URLQueryItem(name: "view", value: filters[0]), URLQueryItem(name: "q", value: filters[1])]
-        if !filters[2].isEmpty { parameters.append(URLQueryItem(name: "kind", value: filters[2])) }
-        if let pageCursor { parameters.append(URLQueryItem(name: "cursor", value: pageCursor)) }
+        if !filters[2].isEmpty {
+            parameters.append(URLQueryItem(name: "kind", value: filters[2]))
+        }
+        if let pageCursor {
+            parameters.append(URLQueryItem(name: "cursor", value: pageCursor))
+        }
         do {
             let page: LibraryPage = try await client.request(path: "/api/spaces/items", queryItems: parameters)
             guard !Task.isCancelled, filters == self.filters else { return }
             if pageCursor == nil {
                 items = page.items
-                if let cache { MobileListCache.shared.write(page, to: .spaceLibrary, scope: cache, requestedAt: .now) }
+                if let cache {
+                    MobileListCache.shared.write(page, to: .spaceLibrary, scope: cache, requestedAt: .now)
+                }
             } else {
                 let known = Set(items.map(\.id))
                 items.append(contentsOf: page.items.filter { !known.contains($0.id) })
@@ -301,22 +324,36 @@ private struct SpaceLibraryDetail: View {
     @State private var newTitle = ""
     @State private var purging = false
 
-    private var client: GatewayClient { GatewayClient(configuration: configuration) }
-    private var path: String { "/api/spaces/items/\(item.id)" }
-    private var version: LibraryVersion { item.versions?.first { $0.id == versionID } ?? item.currentVersion }
+    private var client: GatewayClient {
+        GatewayClient(configuration: configuration)
+    }
+
+    private var path: String {
+        "/api/spaces/items/\(item.id)"
+    }
+
+    private var version: LibraryVersion {
+        item.versions?.first { $0.id == versionID } ?? item.currentVersion
+    }
+
     private var source: LibraryOrigin? {
         item.origins?.first { $0.available && $0.versionId == version.id }
             ?? item.origins?.first { $0.available && $0.versionId == nil }
             ?? item.origin.flatMap { $0.available && ($0.versionId == nil || $0.versionId == version.id) ? $0 : nil }
     }
-    private func label(_ zh: String, _ en: String) -> String { locale.identifier.hasPrefix("zh") ? zh : en }
+
+    // swiftlint:disable:next identifier_name
+    private func label(_ zh: String, _ en: String) -> String {
+        locale.identifier.hasPrefix("zh") ? zh : en
+    }
 
     var body: some View {
         MobilePreview(title: item.title, onClose: { dismiss() }) {
             if item.trashedAt == nil {
                 Button(label("下载", "Download"), systemImage: "arrow.down.to.line") { download() }
                 Button(item.favorite ? label("取消收藏", "Remove favorite") : label("收藏", "Favorite"),
-                       systemImage: item.favorite ? "star.fill" : "star") {
+                       systemImage: item.favorite ? "star.fill" : "star")
+                {
                     mutate("patch", favorite: !item.favorite)
                 }
                 .accessibilityIdentifier("preview-favorite")
@@ -333,9 +370,9 @@ private struct SpaceLibraryDetail: View {
                             versionID = entry.id
                         } label: {
                             Label(entry.id == item.currentVersion.id ? label("最新版", "Latest") + " · v\(entry.ordinal)"
-                                  : "v\(entry.ordinal) · " + Date(timeIntervalSince1970: entry.createdAt / 1000)
-                                    .formatted(.dateTime.month().day()),
-                                  systemImage: entry.id == version.id ? "checkmark" : "clock")
+                                : "v\(entry.ordinal) · " + Date(timeIntervalSince1970: entry.createdAt / 1000)
+                                .formatted(.dateTime.month().day()),
+                                systemImage: entry.id == version.id ? "checkmark" : "clock")
                         }
                         .accessibilityIdentifier("preview-version-\(entry.ordinal)")
                     }
@@ -349,14 +386,18 @@ private struct SpaceLibraryDetail: View {
                 }
                 if item.trashedAt == nil {
                     HStack {
-                        if let source { Button(label("查看来源", "Open source")) { dismiss(); onOpenSource(source) } }
+                        if let source {
+                            Button(label("查看来源", "Open source")) { dismiss(); onOpenSource(source) }
+                        }
                         Spacer()
                         Button(label("在对话中使用", "Use in chat")) { useInChat() }
                             .disabled(version.sizeBytes > AttachmentPolicy.maximumChatBytes)
                     }
                     .font(.subheadline.weight(.medium)).frame(minHeight: 44)
                 }
-                if let error { Text(verbatim: error).font(.footnote).foregroundStyle(theme.secondary) }
+                if let error {
+                    Text(verbatim: error).font(.footnote).foregroundStyle(theme.secondary)
+                }
             }
             .disabled(busy).padding(.horizontal, 20)
         }
@@ -364,7 +405,9 @@ private struct SpaceLibraryDetail: View {
             TextField(label("资料名称", "Result name"), text: $newTitle)
             Button(label("保存", "Save")) {
                 let name = String(newTitle.trimmingCharacters(in: .whitespacesAndNewlines).prefix(240))
-                if !name.isEmpty { mutate("patch", title: name) }
+                if !name.isEmpty {
+                    mutate("patch", title: name)
+                }
             }
             Button(label("取消", "Cancel"), role: .cancel) {}
         }
@@ -373,7 +416,11 @@ private struct SpaceLibraryDetail: View {
             Button(label("取消", "Cancel"), role: .cancel) {}
         }
         .task {
-            defer { if !Task.isCancelled { detailLoaded = true } }
+            defer {
+                if !Task.isCancelled {
+                    detailLoaded = true
+                }
+            }
             do {
                 let detail: LibraryItem = try await client.request(path: path)
                 try Task.checkCancellation()
@@ -383,7 +430,9 @@ private struct SpaceLibraryDetail: View {
         }
         .task(id: version.id) { await loadPreview(version) }
         .sheet(item: $share, onDismiss: {
-            if let url = shareURL { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+            if let url = shareURL {
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
             shareURL = nil
         }) { FileShareSheet(url: $0.url) }
         .onDisappear { clearPreview() }
@@ -392,7 +441,7 @@ private struct SpaceLibraryDetail: View {
     @State private var shareURL: URL?
 
     @ViewBuilder private var content: some View {
-        if version.mimeType.hasPrefix("audio/") && !detailLoaded {
+        if version.mimeType.hasPrefix("audio/"), !detailLoaded {
             ProgressView()
         } else if version.mimeType.hasPrefix("audio/") {
             let selectedVersion = version
@@ -430,7 +479,7 @@ private struct SpaceLibraryDetail: View {
                 guard version.sizeBytes <= 2 * 1024 * 1024 else { previewFailed = true; return }
                 let bytes = try await client.requestData(path: version.contentPath(item.id))
                 try Task.checkCancellation()
-                text = String(decoding: bytes, as: UTF8.self)
+                text = String(bytes: bytes, encoding: .utf8)
                 return
             }
             let url = try await fetchFile(version)
@@ -440,12 +489,18 @@ private struct SpaceLibraryDetail: View {
             }
             preview = url
         } catch is CancellationError {
-        } catch { if !Task.isCancelled { previewFailed = true } }
+        } catch {
+            if !Task.isCancelled {
+                previewFailed = true
+            }
+        }
     }
 
     private func clearPreview() {
         text = nil
-        if let preview { try? FileManager.default.removeItem(at: preview.deletingLastPathComponent()) }
+        if let preview {
+            try? FileManager.default.removeItem(at: preview.deletingLastPathComponent())
+        }
         preview = nil
     }
 
@@ -469,8 +524,8 @@ private struct SpaceLibraryDetail: View {
             let bytes = try await client.requestData(path: version.contentPath(item.id))
             try AttachmentPolicy.validateChat(size: bytes.count, current: [])
             try await onUseInChat(MessageAttachment(id: UUID(), type: version.mimeType.hasPrefix("image/") ? "image" : "file",
-                                                   name: version.safeName, mimeType: version.mimeType, size: bytes.count,
-                                                   data: bytes.base64EncodedString()), source)
+                                                    name: version.safeName, mimeType: version.mimeType, size: bytes.count,
+                                                    data: bytes.base64EncodedString()), source)
             dismiss()
         }
     }
@@ -483,8 +538,11 @@ private struct SpaceLibraryDetail: View {
                 onChange()
             } else {
                 let _: LibraryMutationResult = try await client.request(
-                    path: action == "trash" ? path : path + "/" + action, method: action == "trash" ? "DELETE" : "POST", body: body)
-                if action == "trash" { onTrash(item.revision + 1) }
+                    path: action == "trash" ? path : path + "/" + action, method: action == "trash" ? "DELETE" : "POST", body: body
+                )
+                if action == "trash" {
+                    onTrash(item.revision + 1)
+                }
                 onChange()
                 dismiss()
             }
@@ -500,7 +558,9 @@ private struct SpaceLibraryDetail: View {
             do { try await operation() }
             catch {
                 self.error = label("操作未完成，请重试", "Could not complete the action. Try again.")
-                if let detail: LibraryItem = try? await client.request(path: path) { item = detail }
+                if let detail: LibraryItem = try? await client.request(path: path) {
+                    item = detail
+                }
             }
         }
     }
@@ -509,12 +569,16 @@ private struct SpaceLibraryDetail: View {
 struct SpaceQuickLook: UIViewControllerRepresentable {
     let url: URL
 
-    func makeCoordinator() -> Coordinator { Coordinator(url) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(url)
+    }
+
     func makeUIViewController(context: Context) -> QLPreviewController {
         let controller = QLPreviewController()
         controller.dataSource = context.coordinator
         return controller
     }
+
     func updateUIViewController(_ controller: QLPreviewController, context: Context) {
         if context.coordinator.url != url {
             context.coordinator.url = url
@@ -524,8 +588,16 @@ struct SpaceQuickLook: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, QLPreviewControllerDataSource {
         var url: URL
-        init(_ url: URL) { self.url = url }
-        func numberOfPreviewItems(in _: QLPreviewController) -> Int { 1 }
-        func previewController(_: QLPreviewController, previewItemAt _: Int) -> any QLPreviewItem { url as NSURL }
+        init(_ url: URL) {
+            self.url = url
+        }
+
+        func numberOfPreviewItems(in _: QLPreviewController) -> Int {
+            1
+        }
+
+        func previewController(_: QLPreviewController, previewItemAt _: Int) -> any QLPreviewItem {
+            url as NSURL
+        }
     }
 }
