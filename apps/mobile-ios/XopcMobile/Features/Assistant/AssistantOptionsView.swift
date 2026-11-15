@@ -240,6 +240,7 @@ private struct SessionSharePreview: Decodable {
         let role: String
         let markdown: String
     }
+
     struct Attachment: Decodable, Identifiable {
         let id: String
         let fileName: String
@@ -301,15 +302,28 @@ struct ConversationShareView: View {
     @State private var revoked = false
     @State private var confirmingRevoke = false
 
-    private var client: GatewayClient { GatewayClient(configuration: configuration) }
-    private var endpoint: String { "/api/sessions/\(conversationID)" }
+    private var client: GatewayClient {
+        GatewayClient(configuration: configuration)
+    }
+
+    private var endpoint: String {
+        "/api/sessions/\(conversationID)"
+    }
+
     private var attachments: [SessionSharePreview.Attachment] {
         preview?.attachmentCandidates.filter { selected.contains($0.id) } ?? []
     }
+
     private var title: LocalizedStringKey {
-        if previewShown { return "分享预览" }
-        if result != nil { return "分享链接" }
-        if revoked { return "分享已撤销" }
+        if previewShown {
+            return "分享预览"
+        }
+        if result != nil {
+            return "分享链接"
+        }
+        if revoked {
+            return "分享已撤销"
+        }
         return "分享会话"
     }
 
@@ -324,7 +338,9 @@ struct ConversationShareView: View {
                         }
                     }
                 }
-                if busy { ProgressView() }
+                if busy {
+                    ProgressView()
+                }
                 if let result {
                     resultRows(result)
                 } else if revoked {
@@ -334,15 +350,20 @@ struct ConversationShareView: View {
                         Task { await load() }
                     }
                 } else if let preview {
-                    if previewShown { previewRows(preview) }
-                    else { setupRows(preview) }
+                    if previewShown {
+                        previewRows(preview)
+                    } else {
+                        setupRows(preview)
+                    }
                 }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if previewShown { Button("返回") { previewShown = false } }
+                    if previewShown {
+                        Button("返回") { previewShown = false }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("关闭") { dismiss() }.disabled(busy)
@@ -378,13 +399,22 @@ struct ConversationShareView: View {
                     ForEach(preview.attachmentCandidates) { file in
                         Toggle(file.fileName, isOn: Binding(
                             get: { selected.contains(file.id) },
-                            set: { if $0 { selected.insert(file.id) } else { selected.remove(file.id) } }
+                            set: {
+                                if $0 {
+                                    selected.insert(file.id)
+                                } else {
+                                    selected.remove(file.id)
+                                }
+                            }
                         ))
                     }
                 } label: {
                     LabeledContent {
-                        if attachments.isEmpty { Text("不包含") }
-                        else { Text("\(attachments.count) 个") }
+                        if attachments.isEmpty {
+                            Text("不包含")
+                        } else {
+                            Text("\(attachments.count) 个")
+                        }
                     } label: { Text("附件") }
                 }.disabled(busy)
             }
@@ -478,7 +508,8 @@ struct ConversationShareView: View {
                                               expectedMetadataUpdatedAt: preview.metadataUpdatedAt, ttlMs: ttl,
                                               attachmentIds: attachments.map(\.id))
             let response: SessionShareEnvelope<SessionShareResult> = try await client.request(
-                path: endpoint + "/shares", method: "POST", body: client.encoder.encode(request))
+                path: endpoint + "/shares", method: "POST", body: client.encoder.encode(request)
+            )
             guard response.payload.usable else { throw GatewayClientError.invalidURL }
             result = response.payload
             copied = false

@@ -120,7 +120,11 @@ struct AutomationsView: View {
             isSearchFocused = false
             filter = id
         } label: {
-            if filter == id { Label(title, systemImage: "checkmark") } else { Text(title) }
+            if filter == id {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
         }
         .accessibilityIdentifier("automation-filter-\(id)")
         .accessibilityAddTraits(filter == id ? .isSelected : [])
@@ -143,7 +147,9 @@ struct AutomationsView: View {
         defer { workingID = nil }
         do {
             let updated = try await GatewayClient(configuration: configuration).setAutomation(automation, enabled: !automation.enabled)
-            if let index = items.firstIndex(where: { $0.id == updated.id }) { items[index] = updated }
+            if let index = items.firstIndex(where: { $0.id == updated.id }) {
+                items[index] = updated
+            }
             await load()
         } catch { self.error = error.localizedDescription }
     }
@@ -200,9 +206,17 @@ private extension AutomationRecord {
         management == nil && trigger.schedule?.kind == "cron" && action.kind == "agent"
     }
 
-    var canToggleFromMobile: Bool { management?.editable?.contains("enabled") ?? (management == nil) }
-    var canDeleteFromMobile: Bool { management?.deletable ?? (management == nil) }
-    var canRunFromMobile: Bool { management?.runnable != false }
+    var canToggleFromMobile: Bool {
+        management?.editable?.contains("enabled") ?? (management == nil)
+    }
+
+    var canDeleteFromMobile: Bool {
+        management?.deletable ?? (management == nil)
+    }
+
+    var canRunFromMobile: Bool {
+        management?.runnable != false
+    }
 }
 
 func automationScheduleText(_ automation: AutomationRecord, locale: Locale, expression: String? = nil) -> Text {
@@ -211,34 +225,46 @@ func automationScheduleText(_ automation: AutomationRecord, locale: Locale, expr
         return Text("仅执行一次 · \(date.formatted(.dateTime.month().day().hour().minute().locale(locale)))")
     }
     if let interval = schedule?.everyMs, interval > 0 {
-        if interval.isMultiple(of: 3_600_000) { return Text("每 \(interval / 3_600_000) 小时") }
-        if interval.isMultiple(of: 60_000) { return Text("每 \(interval / 60_000) 分钟") }
+        if interval.isMultiple(of: 3_600_000) {
+            return Text("每 \(interval / 3_600_000) 小时")
+        }
+        if interval.isMultiple(of: 60000) {
+            return Text("每 \(interval / 60000) 分钟")
+        }
     }
-    if automation.trigger.kind == "manual" { return Text("手动触发") }
+    if automation.trigger.kind == "manual" {
+        return Text("手动触发")
+    }
     let custom = Text("自定义计划")
     let fields = (expression ?? schedule?.cronExpression ?? "").split(whereSeparator: \.isWhitespace)
     guard fields.count == 5, fields[3] == "*" else { return custom }
     if fields.dropFirst().allSatisfy({ $0 == "*" }), fields[0].hasPrefix("*/"),
-       let interval = Int(fields[0].dropFirst(2)), (1...59).contains(interval), 60.isMultiple(of: interval) {
+       let interval = Int(fields[0].dropFirst(2)), (1 ... 59).contains(interval), 60.isMultiple(of: interval)
+    {
         return Text("每 \(interval) 分钟")
     }
     if fields[0] == "0", fields.suffix(3).allSatisfy({ $0 == "*" }), fields[1].hasPrefix("*/"),
-       let interval = Int(fields[1].dropFirst(2)), (1...23).contains(interval), 24.isMultiple(of: interval) {
+       let interval = Int(fields[1].dropFirst(2)), (1 ... 23).contains(interval), 24.isMultiple(of: interval)
+    {
         return Text("每 \(interval) 小时")
     }
     guard fields[0].allSatisfy(\.isNumber), fields[1].allSatisfy(\.isNumber),
-          let minute = Int(fields[0]), (0...59).contains(minute), let hour = Int(fields[1]), (0...23).contains(hour)
+          let minute = Int(fields[0]), (0 ... 59).contains(minute), let hour = Int(fields[1]), (0 ... 23).contains(hour)
     else { return custom }
     let time = String(format: "%02d:%02d", hour, minute)
-    if fields[2] == "*", fields[4] == "*" { return Text("每天 \(time)") }
-    if fields[2] == "*", fields[4] == "1-5" { return Text("工作日 \(time)") }
-    if fields[2] == "*", fields[4].count == 1, let weekday = Int(fields[4]), (0...7).contains(weekday) {
+    if fields[2] == "*", fields[4] == "*" {
+        return Text("每天 \(time)")
+    }
+    if fields[2] == "*", fields[4] == "1-5" {
+        return Text("工作日 \(time)")
+    }
+    if fields[2] == "*", fields[4].count == 1, let weekday = Int(fields[4]), (0 ... 7).contains(weekday) {
         let formatter = DateFormatter()
         formatter.locale = locale
         let day = formatter.shortWeekdaySymbols[weekday % 7]
         return Text("每\(day) \(time)")
     }
-    if fields[4] == "*", fields[2].allSatisfy(\.isNumber), let day = Int(fields[2]), (1...31).contains(day) {
+    if fields[4] == "*", fields[2].allSatisfy(\.isNumber), let day = Int(fields[2]), (1 ... 31).contains(day) {
         return Text("每月 \(day) 日 \(time)")
     }
     return custom
@@ -255,7 +281,8 @@ private struct AutomationListRow: View {
                 .mobileTextStyle(.caption).foregroundStyle(automation.enabled ? mobileTheme.action : Color.secondary)
             Text(automation.name).mobileTextStyle(.rowTitle).lineLimit(2)
             if let summary = automation.description ?? automation.action.instruction ?? automation.action.goal,
-               !summary.isEmpty {
+               !summary.isEmpty
+            {
                 Text(summary).mobileTextStyle(.secondary).foregroundStyle(.secondary).lineLimit(3)
             }
             HStack(spacing: 8) {
@@ -357,13 +384,21 @@ struct AutomationDetailView: View {
                             Group {
                                 if dynamicTypeSize.isAccessibilitySize {
                                     VStack(spacing: 12) {
-                                        if automation.canRunFromMobile { runButton }
-                                        if automation.canToggleFromMobile { enabledButton(automation) }
+                                        if automation.canRunFromMobile {
+                                            runButton
+                                        }
+                                        if automation.canToggleFromMobile {
+                                            enabledButton(automation)
+                                        }
                                     }
                                 } else {
                                     HStack(spacing: 12) {
-                                        if automation.canRunFromMobile { runButton }
-                                        if automation.canToggleFromMobile { enabledButton(automation) }
+                                        if automation.canRunFromMobile {
+                                            runButton
+                                        }
+                                        if automation.canToggleFromMobile {
+                                            enabledButton(automation)
+                                        }
                                     }
                                 }
                             }
@@ -533,8 +568,7 @@ struct AutomationDetailView: View {
         do {
             self.automation = try await GatewayClient(configuration: configuration).setAutomation(automation, enabled: enabled)
             onChanged()
-        }
-        catch { actionError = error.localizedDescription }
+        } catch { actionError = error.localizedDescription }
     }
 
     @MainActor private func delete(_ automation: AutomationRecord) async {

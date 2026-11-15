@@ -12,8 +12,11 @@ struct PersonalAgentSettingsRow: View {
 
     var body: some View {
         Button {
-            if personalAgent?.isReady == true { editing = true }
-            else { onOpenPersonalAgent() }
+            if personalAgent?.isReady == true {
+                editing = true
+            } else {
+                onOpenPersonalAgent()
+            }
         } label: {
             HStack(spacing: 12) {
                 PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 40, active: false)
@@ -24,7 +27,9 @@ struct PersonalAgentSettingsRow: View {
                             .mobileTextStyle(.caption).foregroundStyle(error == nil ? Color.secondary : .red)
                     } else {
                         Text("创建我的助手").foregroundStyle(.primary)
-                        if let error { Text(error).mobileTextStyle(.caption).foregroundStyle(.red) }
+                        if let error {
+                            Text(error).mobileTextStyle(.caption).foregroundStyle(.red)
+                        }
                     }
                 }
                 Spacer()
@@ -523,7 +528,9 @@ private func userMemoryScope(_ scope: String?) -> LocalizedStringKey {
 
 struct AboutView: View {
     @Environment(\.locale) private var locale
-    private var version: String? { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
+    private var version: String? {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+    }
 
     var body: some View {
         List {

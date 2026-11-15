@@ -2841,7 +2841,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         settings.tap()
         let entry = app.buttons["settings-models"]
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
-        if !entry.isHittable { app.swipeUp() }
+        if !entry.isHittable {
+            app.swipeUp()
+        }
         entry.tap()
         let active = app.buttons["model-setting-chat"]
         XCTAssertTrue(active.waitForExistence(timeout: 5))
@@ -2893,14 +2895,15 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertFalse(app.textFields["about-you-search"].exists)
         app.navigationBars.buttons.firstMatch.tap()
         let about = app.buttons["settings-about"]
-        if !about.isHittable { app.swipeUp() }
+        if !about.isHittable {
+            app.swipeUp()
+        }
         about.tap()
         XCTAssertTrue(app.staticTexts["settings-about-version"].waitForExistence(timeout: 5))
         for link in ["website", "support", "privacy", "terms"] {
             XCTAssertTrue(app.descendants(matching: .any)["settings-about-\(link)"].exists)
         }
         capture("settings-about-app")
-
     }
 
     func testAutomationFilterAndMenusStayOnTheirPages() {
