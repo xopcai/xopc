@@ -155,6 +155,7 @@ export struct XopcChatView {
     return this.personalAgent?.state === 'ready' && this.chat.selectedId === this.personalAgent.conversationId;
   }
   @Local floatingHeaderHeight: number = 0;
+  @Local connectionBannerHeight: number = 0;
   @Computed get showConnectionBanner(): boolean {
     return this.hasConnectionIssue() || this.chat.cachedHistory || !!this.chat.error;
   }
@@ -170,9 +171,12 @@ export struct XopcChatView {
   @Event onOpenPersonalAgent: () => void = (): void => {};
   @Event onLocalChatCreated: (id: string) => void = (_id: string): void => {};
   @Event onConversationUnavailable: (id: string) => void = (_id: string): void => {};
-  @Computed get overlayHeaderHeight(): number {
+  @Computed get chatHeaderHeight(): number {
     if (this.taskId) return 72 + this.chatTopInset;
-    return this.embedded || this.showConnectionBanner ? 0 : this.floatingHeaderHeight;
+    return this.embedded ? 0 : this.floatingHeaderHeight;
+  }
+  @Computed get overlayHeaderHeight(): number {
+    return this.showConnectionBanner ? 0 : this.chatHeaderHeight;
   }
   @Event onConversationChange: (id: string) => void = (_id: string): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
@@ -2181,7 +2185,8 @@ export struct XopcChatView {
           Button($r('app.string.refresh')).height(44).onClick((): void => { this.chat.retryHistory(); })
         }.padding({ left: 16, right: 16 })
       }
-      }.width('100%').padding({ top: this.taskId ? this.overlayHeaderHeight : this.embedded ? 0 : this.floatingHeaderHeight })
+      }.width('100%').padding({ top: this.chatHeaderHeight })
+        .onAreaChange((_previous: Area, current: Area): void => { this.connectionBannerHeight = Number(current.height); })
       }
       this.conversation()
       Column().width('100%').height(0)
@@ -2229,7 +2234,8 @@ export struct XopcChatView {
     }
     if (this.pinPlayingMusic) {
       Row() { XopcMusicMiniPlayer({ sticky: true, onOpen: (): void => { this.dismissComposer(); } }) }
-        .width('100%').justifyContent(FlexAlign.Center).margin({ top: this.overlayHeaderHeight + 4 })
+        .width('100%').justifyContent(FlexAlign.Center)
+        .margin({ top: Math.max(this.chatHeaderHeight, this.showConnectionBanner ? this.connectionBannerHeight : 0) + 4 })
         .hitTestBehavior(HitTestMode.Transparent)
     }
     if (this.sendFlightActive) {

@@ -1883,6 +1883,28 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
     }
 
+    func testChatHeaderControlsStayInPlaceWhileHistoryScrolls() {
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-personal"].tap()
+        let avatar = app.buttons["chat-header-personal"]
+        XCTAssertTrue(avatar.waitForExistence(timeout: 6))
+        let timeline = app.scrollViews.firstMatch
+        let olderMessage = app.descendants(matching: .any)["chat-message-user-history-1"].firstMatch
+        let avatarFrame = avatar.frame
+        let optionsFrame = app.buttons["assistant-options"].frame
+        for _ in 0 ..< 6 where !olderMessage.isHittable {
+            timeline.swipeDown(velocity: .slow)
+        }
+        XCTAssertTrue(olderMessage.isHittable)
+        XCTAssertEqual(avatar.frame, avatarFrame)
+        XCTAssertEqual(app.buttons["assistant-options"].frame, optionsFrame)
+        capture("ios-scroll-under-personal-header")
+        avatar.tap()
+        XCTAssertTrue(app.scrollViews["personal-overview-scroll"].waitForExistence(timeout: 6))
+        app.buttons["personal-overview-close"].tap()
+        XCTAssertTrue(avatar.waitForExistence(timeout: 6))
+    }
+
     func testPersonalOverviewScrollTasksAndScheduleDraft() {
         XCTAssertTrue(app.openHomeSidebar())
         app.buttons["chat-sidebar-personal"].tap()

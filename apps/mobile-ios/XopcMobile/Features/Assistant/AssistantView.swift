@@ -75,7 +75,8 @@ struct AssistantView<Dock: View>: View {
     @State private var bottomDockHeight: CGFloat = 0
     @State private var messageViewportHeight: CGFloat = 0
     @State private var chatTopInset: CGFloat = 0
-    @State private var floatingHeaderHeight: CGFloat = 0
+    @State private var personalHeaderHeight: CGFloat = 0
+    @State private var ordinaryHeaderHeight: CGFloat = 0
     @State private var replySpace = ChatReplySpace()
     @State private var replyRowHeights: [String: CGFloat] = [:]
     @State private var replyUserText: String?
@@ -112,6 +113,7 @@ struct AssistantView<Dock: View>: View {
                 .accessibilityHidden(!isActive)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
+                .modifier(ChatScrollEdgeEffect())
                 .ignoresSafeArea(.container, edges: .top)
             VStack(spacing: 0) {
                 if readAloud.state == .failed, let error = readAloud.errorMessage {
@@ -145,7 +147,10 @@ struct AssistantView<Dock: View>: View {
             if showsFloatingHeader {
                 VStack(spacing: 4) {
                     floatingHeader.padding(.horizontal, 12)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { floatingHeaderHeight = $0 }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                            if isPersonalConversation { personalHeaderHeight = height }
+                            else { ordinaryHeaderHeight = height }
+                        }
                     if pinsPlayingMusic {
                         GeneratedMusicDock(playback: music, sticky: true)
                     }
@@ -157,8 +162,9 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var chatHeaderClearance: CGFloat {
-        let headerHeight = showsFloatingHeader && floatingHeaderHeight > 0
-            ? floatingHeaderHeight + 14 : (isPersonalConversation ? 114 : 64)
+        let measuredHeight = isPersonalConversation ? personalHeaderHeight : ordinaryHeaderHeight
+        let headerHeight = showsFloatingHeader && measuredHeight > 0
+            ? measuredHeight + 14 : (isPersonalConversation ? 114 : 64)
         return chatTopInset + headerHeight
     }
 
@@ -1094,6 +1100,16 @@ struct AssistantView<Dock: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
+    }
+}
+
+private struct ChatScrollEdgeEffect: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            content
+        }
     }
 }
 

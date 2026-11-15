@@ -2845,7 +2845,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     else -> { { connection.selectedConversationId?.let(onRetryConversation) } }
   }
   val chatTopInset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
-  val headerClearance = chatTopInset + if (isPersonalChat) 110.dp else 72.dp
+  val scopedHeader = connection.automationConfigurationChat || projectChatTitle != null
+  val taskHeader = isTaskChat(connection)
+  var headerHeightPx by remember(scopedHeader, taskHeader, isPersonalChat) { mutableIntStateOf(0) }
+  val headerClearance = if (headerHeightPx > 0) with(LocalDensity.current) { headerHeightPx.toDp() }
+    else chatTopInset + if (isPersonalChat) 110.dp else 72.dp
   val topClearancePx = with(LocalDensity.current) { headerClearance.toPx() }
   val bottomClearancePx = with(LocalDensity.current) { bottomChromeHeight.toPx() }
   val showStickyMusic = musicPlaying && activeMusic?.conversationId == selectedMessageConversationId &&
@@ -3039,9 +3043,10 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(chatTopInset)
       .background(canvas)
       .testTag("chat-status-bar-background"))
-    if (connection.automationConfigurationChat || projectChatTitle != null) {
+    if (scopedHeader) {
       val headerFill = LocalChatColors.current.card
       Row(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+        .onSizeChanged { headerHeightPx = it.height }
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -3055,10 +3060,11 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             .padding(horizontal = 12.dp, vertical = 8.dp),
           style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
-    } else if (!isTaskChat(connection)) {
+    } else if (!taskHeader) {
       val personalAgent = connection.personal.agent?.takeIf { it.state == "ready" &&
         it.conversationId == connection.selectedConversationId }
       Column(Modifier.align(Alignment.TopCenter).fillMaxWidth()
+        .onSizeChanged { headerHeightPx = it.height }
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
         horizontalAlignment = Alignment.CenterHorizontally) {
