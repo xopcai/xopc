@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SPACE_WORKBOOK_SELECTION_MIME, stripMediaClaimCheck } from '@xopcai/gateway-contract';
 
 import * as personalRepository from '../../../personal-agent/repository.js';
 import { readMediaReference } from '../../../media/media-reference.js';
@@ -96,6 +97,21 @@ describe('attachment-pipeline', () => {
     expect(message.content).toBe('Hello');
     expect(message.media).toBeUndefined();
     assertTranscriptUserMessage(message);
+  });
+
+  it('provides a workbook selection to any conversation without putting its data in the user bubble', async () => {
+    vi.spyOn(personalRepository, 'isPersonalConversation').mockReturnValue(false);
+    const source = JSON.stringify({ sheet: 'Summary', range: 'A3:D5', values: [[2100]] });
+    const read = vi.spyOn(await import('../../../media/media-reference.js'), 'readMediaReference')
+      .mockResolvedValue({ buffer: Buffer.from(source), path: '/tmp/selection.txt' });
+    const ref = { id: 'selection', bucket: 'inbound' as const, type: 'document', mimeType: SPACE_WORKBOOK_SELECTION_MIME,
+      name: 'Selection.txt', size: source.length, uri: 'media://inbound/selection.txt', path: '/tmp/selection.txt' };
+    const message = await buildTranscriptUserMessage({ text: 'Check the totals',
+      prepared: [ref, { ...ref, mimeType: 'text/plain', uri: 'media://inbound/notes.txt' }], conversationId: 'ordinary-chat',
+      modelRef: 'openai/gpt-4o', config: undefined, agentManager });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(message.content).toContain(source);
+    expect(stripMediaClaimCheck(String(message.content))).toBe('Check the totals');
   });
 
   it('stores image metadata on media and omits inline image blocks for vision models', async () => {

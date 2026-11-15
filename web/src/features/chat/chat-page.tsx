@@ -1454,7 +1454,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 sending={stream.sending}
                 streaming={stream.streaming}
                 conversationId={session.conversationId}
-                attachmentHandoffReady={!embedded && !taskId && !personal && !readOnly &&
+                attachmentHandoffReady={(!embedded || personal) && !taskId && !readOnly &&
                   (Boolean(session.projectPreparation) || Boolean(session.conversationId && !isSessionTransitioning))}
                 unboundDraftKey={session.conversationId ? undefined : JSON.stringify([pathname, searchParams.get('projectId')])}
                 getDraftHandoffTarget={projectComposer.getDraftHandoffTarget}

@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+export const SPACE_WORKBOOK_MIME = 'application/vnd.xopc.univer-workbook+json';
+export const SPACE_WORKBOOK_SELECTION_MIME = 'text/vnd.xopc.workbook-selection+json';
+export const SPACE_WORKBOOK_SELECTION_MAX_BYTES = 12_000;
+
 export const SpacePatchSchema = z.object({
   revision: z.number().int().positive(),
   title: z.string().trim().min(1).max(240).optional(),

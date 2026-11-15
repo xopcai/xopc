@@ -1,7 +1,9 @@
 import type { Context, Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { SpacePatchSchema, SpaceSaveReplySchema, SpaceSaveVersionSchema } from '@xopcai/gateway-contract';
 
+import { createSpaceWorkbook, createSpaceWorkbookSchema, openSpaceBudgetWorkbook, saveSpaceWorkbook, saveSpaceWorkbookSchema, SPACE_WORKBOOK_MAX_BYTES } from '../../../space/budget-workbook.js';
 import { changeSpaceItem, findSpaceArtifact, findSpaceTaskDelivery, getSpaceItem, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply, saveSpaceVersion } from '../../../space/repository.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -39,6 +41,22 @@ export function registerSpaceRoutes(app: Hono, deps: AuthenticatedRouteDeps): vo
   app.get('/api/spaces/items/:id', c => {
     const item = getSpaceItem(c.req.param('id'));
     return item ? c.json(item) : c.json({ error: 'Item not found' }, 404);
+  });
+  app.post('/api/spaces/items/budget-demo', limited, c => {
+    const result = openSpaceBudgetWorkbook();
+    return result === 'trashed' ? c.json({ error: result }, 409) : c.json(result);
+  });
+  app.post('/api/spaces/items/workbooks', limited, bodyLimit({ maxSize: SPACE_WORKBOOK_MAX_BYTES }), async c => {
+    const input = createSpaceWorkbookSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ error: 'Invalid workbook snapshot' }, 400);
+    const result = createSpaceWorkbook(input.data);
+    return result === 'conflict' ? c.json({ error: result }, 409) : c.json(result, 201);
+  });
+  app.post('/api/spaces/items/:id/workbook', limited, bodyLimit({ maxSize: SPACE_WORKBOOK_MAX_BYTES }), async c => {
+    const input = saveSpaceWorkbookSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ error: 'Invalid workbook snapshot' }, 400);
+    const result = saveSpaceWorkbook(c.req.param('id'), input.data);
+    return typeof result !== 'string' ? c.json(result) : c.json({ error: result }, result === 'missing' ? 404 : 409);
   });
   app.patch('/api/spaces/items/:id', limited, async c => {
     const input = SpacePatchSchema.safeParse(await c.req.json().catch(() => null));

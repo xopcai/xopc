@@ -4,6 +4,7 @@
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
+import { stripMediaClaimCheck } from '@xopcai/gateway-contract';
 
 import { isCronConversationId, getConversationRouting } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
@@ -45,23 +46,6 @@ function firstUserText(messages: AgentMessage[]): string {
   return normalizeUserTextForTitle(raw);
 }
 
-function stripMediaClaimChecks(text: string): string {
-  if (!text.includes('[media attached:') && !text.includes('xopc-media-uri:')) {
-    return text;
-  }
-  return text
-    .replace(
-      /\s*\[media attached:[^\]]+\]\s*\r?\nxopc-media-uri:[^\r\n]+\r?\n\s*xopc-media-path:[^\r\n]+(?:\r?\n\s*Use the read_media tool[^\r\n]*)?/g,
-      '',
-    )
-    .replace(/\s*\[media attached:[^\]]+\]\s*/g, ' ')
-    .replace(/\s*xopc-media-uri:[^\r\n]+/g, '')
-    .replace(/\s*xopc-media-path:[^\r\n]+/g, '')
-    .replace(/\s*Use the read_media tool[^\r\n]*/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 function stripExpandedSkillBlockForTitle(text: string): string {
   const trimmed = text.trimStart();
   if (!/^##\s+Skill:\s*\S+/i.test(trimmed)) {
@@ -96,7 +80,7 @@ function stripSkillCommandForTitle(text: string): string {
 function normalizeUserTextForTitle(raw: string): string {
   return stripSkillCommandForTitle(
       stripExpandedSkillBlockForTitle(
-        stripMediaClaimChecks(
+        stripMediaClaimCheck(
         stripRuntimeContextFromUserMessage(raw),
       ),
     ),

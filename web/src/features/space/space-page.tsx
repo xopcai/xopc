@@ -1,11 +1,11 @@
 import * as Popover from '@radix-ui/react-popover';
-import { ArrowDownToLine, ArrowLeft, Archive, Ellipsis, FileText, Inbox, Music2, Presentation, Search, Sheet, Star, Trash2, X } from 'lucide-react';
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
+import { ArrowDownToLine, ArrowLeft, Archive, Ellipsis, FileText, Inbox, Music2, Plus, Presentation, Search, Sheet, Star, Trash2, Upload, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useNavigationType, useOutletContext, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
-import type { SpaceItem, SpaceList, SpaceOrigin } from '@xopcai/gateway-contract';
+import { SPACE_WORKBOOK_MIME, type SpaceItem, type SpaceList, type SpaceOrigin, type SpaceVersionLink } from '@xopcai/gateway-contract';
 
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,9 +18,12 @@ import { fetchJson } from '@/lib/fetch';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-import { getSpaceDetail, getSpaceList, spaceContent, spaceContentUrl, spaceItemPath, spacePath } from './space-api';
+import { createSpaceWorkbook, getSpaceDetail, getSpaceList, spaceContent, spaceContentUrl, spaceItemPath, spacePath } from './space-api';
 import { SpacePreview } from './space-preview';
 import { SpaceAudioButton, SpaceFileIcon, SpaceThumbnail } from './space-row-media';
+import { readWorkbookFile, supportedWorkbookFile } from './space-workbook-import';
+
+const SpaceWorkbook = lazy(() => import('./space-workbook'));
 
 const iconByKind = { document: FileText, pdf: FileText, spreadsheet: Sheet, presentation: Presentation, audio: Music2, archive: Archive };
 const iconButton = 'inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50';
@@ -221,11 +224,13 @@ export function SpacePage() {
   const [confirmPurge, setConfirmPurge] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [workbookSave, setWorkbookSave] = useState<{ itemId: string; seed: string; from: string; to: string }>();
   const [undo, setUndo] = useState<{ id: string; revision: number }>();
   const rows = useRef(new Map<string, HTMLButtonElement>());
   const previewHeading = useRef<HTMLHeadingElement>(null);
   const listSection = useRef<HTMLElement>(null);
   const listScroll = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const view = getSpaceView(params);
   const q = (params.get('q') ?? '').slice(0, 160);
   const query = useDeferredValue(q);
@@ -259,10 +264,16 @@ export function SpacePage() {
     if (index && previous?.nextCursor) queryParams.set('cursor', previous.nextCursor);
     return `${spacePath}?${queryParams}`;
   }, getSpaceList, { refreshInterval: 4_000 });
-  const detail = useSWR(selected ? spaceItemPath(selected) : null, getSpaceDetail, { refreshInterval: 4_000 });
+  const detail = useSWR(selected ? spaceItemPath(selected) : null, getSpaceDetail, {
+    refreshInterval: detail => detail?.currentVersion.mimeType === SPACE_WORKBOOK_MIME ? 0 : 4_000,
+    revalidateOnFocus: false,
+  });
   const items = list.data?.flatMap(page => page.items) ?? [];
   const item = detail.data;
   const version = item?.versions.find(entry => entry.id === selectedVersion) ?? item?.currentVersion;
+  const workbook = version?.mimeType === SPACE_WORKBOOK_MIME;
+  const workbookSeed = workbookSave && item?.id === workbookSave.itemId
+    && (version?.id === workbookSave.from || version?.id === workbookSave.to) ? workbookSave.seed : version?.id;
   const hit = version?.id === item?.currentVersion.id ? items.find(row => row.id === selected)?.hit : undefined;
   const origin = item?.origins.find(row => row.versionId === version?.id && row.available)
     ?? item?.origins.find(row => row.available) ?? item?.origin;
@@ -280,6 +291,7 @@ export function SpacePage() {
   }
 
   function select(id: string | null) {
+    setWorkbookSave(undefined);
     setEditing(false);
     setConfirmPurge(false);
     setActionError('');
@@ -301,6 +313,7 @@ export function SpacePage() {
     if (!selected) return;
     const escape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.target instanceof Element && event.target.closest('[data-space-workbook]')) return;
       if (editing || confirmPurge) {
         setEditing(false);
         setConfirmPurge(false);
@@ -359,11 +372,14 @@ export function SpacePage() {
   async function download() {
     if (!item || !version) return;
     await run(async () => {
-      const blob = await spaceContent(item.id, version.id);
+      const content = await spaceContent(item.id, version.id);
+      const fileName = workbook ? `${item.title.replace(/[\\/\x00-\x1f]/g, '_')}.xlsx` : version.fileName;
+      const blob = workbook ? new Blob([await import('./space-workbook-format').then(format =>
+        content.text().then(body => format.writeWorkbook(JSON.parse(body))))], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }) : content;
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = version.fileName;
+      anchor.download = fileName;
       anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1_000);
     });
@@ -378,6 +394,40 @@ export function SpacePage() {
       const search = new URLSearchParams({ attachmentHandoff: createComposerAttachmentHandoff(file) });
       if (origin?.projectId && origin.available) search.set('projectId', origin.projectId);
       navigate({ pathname: '/chat/new', search: `?${search}` }, { state: { forceNewChat: true } });
+    });
+  }
+
+  function openWorkbook(id: string) {
+    setWorkbookSave(undefined);
+    setEditing(false);
+    setQueryValues({ item: id, version: null, view: null, q: null, kind: null, projectId: null, taskId: null });
+    void list.mutate();
+  }
+
+  function newWorkbook() {
+    void run(async () => {
+      const title = zh ? '未命名工作簿' : 'Untitled workbook';
+      const { blankWorkbook } = await import('./space-workbook-format');
+      const { id } = await createSpaceWorkbook(crypto.randomUUID(), title, blankWorkbook(title, zh ? '工作表 1' : 'Sheet 1'));
+      openWorkbook(id);
+    });
+  }
+
+  function importWorkbookFile(fileName: string, load: () => Promise<Blob>, source?: SpaceVersionLink) {
+    void run(async () => {
+      try {
+        const snapshot = await readWorkbookFile(await load(), fileName);
+        const title = snapshot.name || (zh ? '导入的工作簿' : 'Imported workbook');
+        const { id } = await createSpaceWorkbook(crypto.randomUUID(), title, snapshot, source);
+        openWorkbook(id);
+      } catch (cause) {
+        const kind = cause instanceof Error ? cause.message : '';
+        setActionError(kind === 'limits' || (cause as { status?: number })?.status === 413
+          ? (zh ? '表格过大。可先拆分数据，再分别导入。' : 'This workbook is too large. Split the data into smaller files and try again.')
+          : kind === 'array-formula' || kind === 'linked-formula'
+            ? (zh ? '这份表格包含暂不支持转换的公式，可以继续预览原文件。' : 'This workbook contains formulas that cannot be converted. You can still preview the original.')
+            : (zh ? '无法导入表格，请检查文件后重试。' : 'Could not import this workbook. Check the file and try again.'));
+      }
     });
   }
 
@@ -405,6 +455,21 @@ export function SpacePage() {
       <div className="mx-auto flex w-full max-w-[74rem] min-h-0 flex-1 px-3 pt-3 sm:px-5 sm:pt-5 @min-[58rem]/space:px-6">
         <section ref={listSection} id={`space-list-${view}`} role="tabpanel" aria-labelledby={`space-tab-${view}`}
           className="@container/list flex min-w-0 flex-1 flex-col">
+          {view === 'all' && !scope && (!kind || kind === 'spreadsheet') ? <div className="mb-3 flex shrink-0 flex-wrap justify-end gap-2">
+            <input ref={fileInput} type="file" className="hidden" accept=".xlsx,.csv,.tsv" onChange={event => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = '';
+              if (file) importWorkbookFile(file.name, async () => file);
+            }} />
+            <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}
+              title={zh ? '导入 XLSX、CSV 或 TSV 的数据、公式与基础布局' : 'Import data, formulas and basic layout from XLSX, CSV or TSV'}
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-fg-muted hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50">
+              <Upload className="size-4" aria-hidden />{zh ? '导入表格' : 'Import workbook'}
+            </button>
+            <button type="button" disabled={busy} onClick={newWorkbook} className={cn(primaryButton, 'inline-flex min-h-10 items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent')}>
+              <Plus className="size-4" aria-hidden />{zh ? '新建表格' : 'New workbook'}
+            </button>
+          </div> : null}
           {scope ? <div className="mb-3 flex shrink-0 justify-end">
             <button type="button" onClick={() => setQueryValues({ [scope]: null })}
               className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-surface-inset px-2 py-1 text-sm text-fg-muted hover:bg-surface-hover">
@@ -428,7 +493,7 @@ export function SpacePage() {
                 {items.map((row, index) => {
                   const Icon = iconByKind[row.kind as keyof typeof iconByKind];
                   const version = row.currentVersion;
-                  const extension = /\.([a-z\d]{1,12})$/i.exec(version.fileName)?.[1]?.toUpperCase();
+                  const extension = version.mimeType === SPACE_WORKBOOK_MIME ? 'XLSX' : /\.([a-z\d]{1,12})$/i.exec(version.fileName)?.[1]?.toUpperCase();
                   const mediaSrc = spaceContentUrl(row.id, version.id);
                   const playable = row.kind === 'audio' && view !== 'trash';
                   const rowSource = row.origin ? sourceLabel(row) : null;
@@ -467,17 +532,20 @@ export function SpacePage() {
         </section>
       </div>
       {selected && previewHost ? createPortal(
-        <section id="space-file-preview" aria-label={zh ? '资料预览' : 'File preview'}
+        <section id="space-file-preview" aria-label={workbook ? (zh ? '工作簿编辑器' : 'Workbook editor') : (zh ? '资料预览' : 'File preview')}
           style={{ '--space-preview-width': `${previewWidth}%` } as CSSProperties}
-          className="file-preview-surface absolute inset-0 z-40 flex min-h-0 min-w-0 flex-col @min-[58rem]/space:relative @min-[58rem]/space:inset-auto @min-[58rem]/space:w-[var(--space-preview-width)] @min-[58rem]/space:shrink-0 @min-[58rem]/space:border-s @min-[58rem]/space:border-edge-subtle">
-          <SpacePreviewDivider zh={zh} width={previewWidth} onResize={setPreviewWidth} />
+          data-space-workbook-surface={workbook ? '' : undefined}
+          className={cn('file-preview-surface absolute inset-0 z-40 flex min-h-0 min-w-0 flex-col', !workbook && '@min-[58rem]/space:relative @min-[58rem]/space:inset-auto @min-[58rem]/space:w-[var(--space-preview-width)] @min-[58rem]/space:shrink-0 @min-[58rem]/space:border-s @min-[58rem]/space:border-edge-subtle')}>
+          {!workbook ? <SpacePreviewDivider zh={zh} width={previewWidth} onResize={setPreviewWidth} /> : null}
           <header className="flex min-h-14 shrink-0 items-center gap-1 border-b border-edge-subtle px-3 py-2">
-            <button type="button" className={cn(iconButton, '@min-[58rem]/space:hidden')} onClick={close} aria-label={zh ? '返回' : 'Back'}><ArrowLeft className="size-4" /></button>
+            <button type="button" className={cn(iconButton, !workbook && '@min-[58rem]/space:hidden')} onClick={close} aria-label={zh ? '返回资料库' : 'Back to library'}><ArrowLeft className="size-4" /></button>
             <h2 ref={previewHeading} tabIndex={-1} className="min-w-0 flex-1 py-2 text-sm leading-5 font-semibold wrap-anywhere text-fg">{item?.title ?? (zh ? '预览' : 'Preview')}</h2>
             {item && !item.trashedAt ? <>
               <button type="button" className={cn(iconButton, item.favorite && 'text-accent-fg')} aria-pressed={item.favorite}
                 aria-label={zh ? '收藏' : 'Favorite'} disabled={busy} onClick={() => void mutateItem('patch', item, { favorite: !item.favorite })}><Star className={cn('size-4', item.favorite && 'fill-current')} /></button>
-              <button type="button" className={iconButton} disabled={busy} aria-label={zh ? '下载' : 'Download'} onClick={() => void download()}><ArrowDownToLine className="size-4" /></button>
+              <button type="button" className={iconButton} disabled={busy}
+                aria-label={workbook ? (zh ? '下载此版本为 Excel' : 'Download this version as Excel') : (zh ? '下载' : 'Download')}
+                onClick={() => void download()}><ArrowDownToLine className="size-4" /></button>
               <Popover.Root>
                 <Popover.Trigger className={iconButton} aria-label={zh ? '更多操作' : 'More actions'}><Ellipsis className="size-4" /></Popover.Trigger>
                 <Popover.Portal><Popover.Content align="end" sideOffset={5} className="z-50 min-w-36 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
@@ -486,7 +554,7 @@ export function SpacePage() {
                 </Popover.Content></Popover.Portal>
               </Popover.Root>
             </> : null}
-            <button type="button" className={cn(iconButton, 'hidden @min-[58rem]/space:inline-flex')} onClick={close} aria-label={zh ? '关闭预览' : 'Close preview'}><X className="size-4" /></button>
+            {!workbook ? <button type="button" className={cn(iconButton, 'hidden @min-[58rem]/space:inline-flex')} onClick={close} aria-label={zh ? '关闭预览' : 'Close preview'}><X className="size-4" /></button> : null}
           </header>
           {editing && item ? <form className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2" onSubmit={rename}>
             <input name="title" defaultValue={item.title} required maxLength={240} autoFocus aria-label={zh ? '资料名称' : 'Result name'}
@@ -497,13 +565,27 @@ export function SpacePage() {
           {detail.isLoading ? <Skeleton className="m-3 min-h-0 flex-1 rounded-xl" /> : null}
           {detail.error ? <p className="px-3 py-5 text-sm text-fg-muted">{zh ? '资料暂不可用' : 'Result unavailable'}</p> : null}
           {item && version ? <>
-            <SpacePreview key={version.id} itemId={item.id} version={version} hit={hit} download={download} />
+            {workbook ? <Suspense fallback={<Skeleton className="m-3 min-h-0 flex-1 rounded-xl" />}>
+              <SpaceWorkbook key={workbookSeed} id={item.id} versionId={workbookSeed!} title={item.title} zh={zh}
+                editable={!item.trashedAt && version.id === item.currentVersion.id} inTrash={Boolean(item.trashedAt)}
+                sourceConversationId={origin?.available ? origin.conversationId : undefined} projectId={origin?.available ? origin.projectId : undefined}
+                onCopy={openWorkbook}
+                onSaved={savedVersionId => {
+                  setWorkbookSave({ itemId: item.id, seed: workbookSeed!, from: version.id, to: savedVersionId });
+                  if (selectedVersion) setQueryValues({ version: null });
+                  void detail.mutate();
+                  void list.mutate();
+                }} />
+            </Suspense> : <SpacePreview key={version.id} itemId={item.id} version={version} hit={hit} download={download} />}
             <div className="max-h-[45%] shrink-0 space-y-2 overflow-y-auto border-t border-edge-subtle px-3 py-2">
               {hit ? <p className="line-clamp-2 text-xs text-fg-muted"><MarkedText text={hit.text} query={query.trim()} /></p> : null}
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
                 <span>{origin ? sourceLabel(item) : null}</span>
                 {version.indexStatus === 'pending' ? <span>{zh ? '正在索引' : 'Indexing'}</span> : null}
-                {item.versions.length > 1 ? <Select value={version.id} onChange={event => setQueryValues({ version: event.target.value })}>
+                {item.versions.length > 1 ? <Select value={version.id} aria-label={zh ? '资料版本' : 'File version'} onChange={event => {
+                  setWorkbookSave(undefined);
+                  setQueryValues({ version: event.target.value });
+                }}>
                   {item.versions.map((entry, index) => <SelectOption key={entry.id} value={entry.id}>
                     {entry.id === item.currentVersion.id ? (zh ? '最新版' : 'Latest') : formatDate(entry.createdAt)} · v{item.versions.length - index}
                   </SelectOption>)}
@@ -517,7 +599,12 @@ export function SpacePage() {
                   </button>
                 </> : <>
                   {source ? <Link className="rounded-lg px-2 py-2 text-sm text-fg-muted hover:bg-surface-hover" to={source}>{zh ? '查看来源' : 'Open source'}</Link> : <span />}
-                  <button type="button" className={primaryButton} disabled={busy || version.sizeBytes > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES} title={version.sizeBytes > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES ? (zh ? '超过对话附件大小上限' : 'Exceeds the chat attachment size limit') : undefined} onClick={reuse}>{zh ? '在对话中使用' : 'Use in chat'}</button>
+                  {!workbook && supportedWorkbookFile(version.fileName) ? <button type="button" className={cn(menuButton, 'w-auto border border-edge')} disabled={busy}
+                    title={zh ? '导入数据、公式与基础布局，保留原文件' : 'Import data, formulas and basic layout as a separate workbook'}
+                    onClick={() => importWorkbookFile(version.fileName, () => spaceContent(item.id, version.id), { id: item.id, versionId: version.id })}>
+                    {zh ? '创建可编辑副本' : 'Make an editable copy'}
+                  </button> : null}
+                  {!workbook ? <button type="button" className={primaryButton} disabled={busy || version.sizeBytes > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES} title={version.sizeBytes > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES ? (zh ? '超过对话附件大小上限' : 'Exceeds the chat attachment size limit') : undefined} onClick={reuse}>{zh ? '在对话中使用' : 'Use in chat'}</button> : null}
                 </>}
               </footer>
               {confirmPurge ? <div role="alert" className="rounded-xl border border-edge bg-surface-panel p-3 text-sm">
