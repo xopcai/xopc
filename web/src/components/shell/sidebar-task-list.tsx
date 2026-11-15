@@ -1152,6 +1152,8 @@ function SidebarTaskListContent({
   const [view, setView] = useState<SessionView>(readSessionView);
   const [viewOrder, setViewOrder] = useState(readSessionViewOrder);
   const [showOlder, setShowOlder] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const recentLoadMoreRef = useRef<HTMLDivElement>(null);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
@@ -1679,7 +1681,35 @@ function SidebarTaskListContent({
     : undefined;
 
   const recentHasMore = recentPages?.at(-1)?.hasMore ?? false;
-  const loadingRecentMore = Boolean(recentPages && recentSize > recentPages.length && validatingRecent);
+  const pendingRecentPage = Boolean(recentPages && recentSize > recentPages.length);
+  const loadingRecentMore = pendingRecentPage && validatingRecent;
+  const hasOlderSessions = recentGroups.older.length > 0;
+  useEffect(() => {
+    if (view !== 'recent' || !showOlder || !recentHasMore || recentError || validatingRecent || pendingRecentPage) return;
+    const loadNextPage = () => void setRecentSize(recentSize + 1);
+    if (recentSize === 1 || !hasOlderSessions) {
+      loadNextPage();
+      return;
+    }
+    const root = scrollRef.current;
+    const sentinel = recentLoadMoreRef.current;
+    if (!root || !sentinel || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        loadNextPage();
+      }
+    }, { root, rootMargin: '0px 0px 100px' });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasOlderSessions, pendingRecentPage, recentError, recentHasMore, recentSize, setRecentSize, showOlder, validatingRecent, view]);
+
+  const recentLoadError = recentError ? (
+    <div role="alert" className="space-y-2 p-2 text-xs text-fg-muted">
+      <p>{sb.sessionFilters.error}</p>
+      <Button variant="secondary" onClick={() => void mutateRecent()}>{sb.sessionFilters.retry}</Button>
+    </div>
+  ) : null;
   const sessionRowProps = {
     onNavigate,
     mutate: refreshSidebar,
@@ -1777,6 +1807,7 @@ function SidebarTaskListContent({
     <TaskGroupsContext value={taskGroups}>
     <div className="flex min-h-0 flex-1 flex-col">
       <div
+        ref={scrollRef}
         className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-2"
         onScroll={onScroll}
       >
@@ -1815,18 +1846,13 @@ function SidebarTaskListContent({
         ) : view === 'recent' ? (
           <div className="flex flex-col gap-2 px-2">
             {!recentPages && !recentError ? <SidebarTaskListSkeleton /> : null}
-            {recentError ? (
-              <div role="alert" className="space-y-2 p-2 text-xs text-fg-muted">
-                <p>{sb.sessionFilters.error}</p>
-                <Button variant="secondary" onClick={() => void mutateRecent()}>{sb.sessionFilters.retry}</Button>
-              </div>
-            ) : null}
+            {!pendingRecentPage || !showOlder ? recentLoadError : null}
             {recentPages && !recentError && !recentItems.length && !pinnedSessions.length && !recentHasMore
               ? <p className="px-2 py-3 text-xs text-fg-muted">{sb.taskListEmpty}</p>
               : null}
             {renderRecentPeriod(sb.timelineToday, recentGroups.today)}
             {renderRecentPeriod(sb.timelineYesterday, recentGroups.yesterday)}
-            {recentGroups.older.length > 0 || recentHasMore ? (
+            {hasOlderSessions || recentHasMore ? (
               <div>
                 <button
                   type="button"
@@ -1840,15 +1866,8 @@ function SidebarTaskListContent({
                 {showOlder ? (
                   <>
                     {renderRecentRows(recentGroups.older)}
-                    {loadingRecentMore ? <SidebarSessionSkeletonRow /> : recentHasMore && !recentError ? (
-                      <button
-                        type="button"
-                        className="mx-2 rounded-lg px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                        onClick={() => void setRecentSize(recentSize + 1)}
-                      >
-                        {sb.sessionFilters.more}
-                      </button>
-                    ) : null}
+                    {loadingRecentMore ? <SidebarSessionSkeletonRow /> : pendingRecentPage ? recentLoadError : null}
+                    {recentHasMore ? <div ref={recentLoadMoreRef} className="h-px" aria-hidden /> : null}
                   </>
                 ) : null}
               </div>
