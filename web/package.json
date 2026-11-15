@@ -51,6 +51,8 @@
     "@tiptap/react": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
     "@tiptap/suggestion": "^3.30.5",
+    "@univerjs/preset-sheets-core": "1.5.0",
+    "@univerjs/presets": "1.5.0",
     "@xopcai/chart-spec": "workspace:*",
     "@xopcai/composer-core": "workspace:*",
     "@xopcai/endpoint-tools-client": "workspace:*",

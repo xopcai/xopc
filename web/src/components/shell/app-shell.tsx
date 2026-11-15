@@ -269,7 +269,7 @@ function AppShellContent() {
           <div className="app-main-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel text-fg">
             <div className={cn('flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden', routeKey === 'space' && '@container/space relative')}>
               <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', routeKey === 'personal' && '@container/personal-chat',
-                routeKey === 'space' && '@container/space-list @max-[58rem]/space:[&:has(+[data-space-preview-host]>*)]:invisible')} inert={personalDetailsOverlay} data-app-chat-shell={routeKey === 'chat' || routeKey === 'personal' ? '' : undefined}>
+                routeKey === 'space' && '@container/space-list [&:has(+[data-space-preview-host]>[data-space-workbook-surface])]:invisible @max-[58rem]/space:[&:has(+[data-space-preview-host]>*)]:invisible')} inert={personalDetailsOverlay} data-app-chat-shell={routeKey === 'chat' || routeKey === 'personal' ? '' : undefined}>
                 {!isSettingsRoute ? <PrimaryAppHeader /> : null}
                 <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   {(

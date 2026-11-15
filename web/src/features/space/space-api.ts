@@ -22,6 +22,18 @@ export function saveSpaceVersion(id: string, sourceVersionId: string, revision: 
   });
 }
 
+export function createSpaceWorkbook(requestId: string, title: string, snapshot: unknown, source?: SpaceVersionLink): Promise<SpaceVersionLink> {
+  return fetchJson(apiUrl(`${spacePath}/workbooks`), {
+    method: 'POST', body: JSON.stringify({ requestId, title, snapshot, source }),
+  });
+}
+
+export function saveSpaceWorkbook(id: string, baseVersionId: string, snapshot: unknown): Promise<SpaceVersionLink> {
+  return fetchJson(apiUrl(`${spaceItemPath(id)}/workbook`), {
+    method: 'POST', body: JSON.stringify({ baseVersionId, snapshot }),
+  });
+}
+
 export function spaceContentUrl(id: string, versionId: string): string {
   return apiUrl(`${spaceItemPath(id)}/versions/${encodeURIComponent(versionId)}/content`);
 }

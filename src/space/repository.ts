@@ -4,7 +4,7 @@ import { open } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import type { SQLInputValue } from 'node:sqlite';
 
-import type { SpaceArtifactLink, SpaceDetail, SpaceItem, SpaceList, SpaceOrigin, SpaceVersion, SpaceVersionLink } from '@xopcai/gateway-contract';
+import { SPACE_WORKBOOK_MIME, type SpaceArtifactLink, type SpaceDetail, type SpaceItem, type SpaceList, type SpaceOrigin, type SpaceVersion, type SpaceVersionLink } from '@xopcai/gateway-contract';
 
 import { parseByteRange } from '../media-shared/http/byte-range.js';
 import { MEDIA_ARTIFACT_MAX_BYTES, resolveMediaBufferPath } from '../media/store.js';
@@ -96,8 +96,8 @@ export function listSpaceItems(input: ListInput): SpaceList {
   if (input.versionTargetFor) {
     const source = versionSource(input.versionTargetFor);
     if (!source?.standalone || input.view === 'trash') return { items: [] };
-    filters.push("i.id != ? AND CASE i.kind WHEN 'pdf' THEN 'document' ELSE i.kind END = ?");
-    params.push(source.item_id, versionKind(String(source.kind)));
+    filters.push("i.id != ? AND CASE i.kind WHEN 'pdf' THEN 'document' ELSE i.kind END = ? AND v.mime_type != ?");
+    params.push(source.item_id, versionKind(String(source.kind)), SPACE_WORKBOOK_MIME);
   }
   if (input.view === 'favorites') filters.push('i.favorite = 1');
   if (input.kind === 'document') filters.push("i.kind IN ('document', 'pdf')");
@@ -162,14 +162,15 @@ export function findSpaceArtifact(mediaId: string): SpaceArtifactLink | null {
 export function saveSpaceVersion(id: string, sourceVersionId: string, revision: number): SpaceVersionLink | 'missing' | 'conflict' {
   return runSqliteWriteTransaction(db => {
     const source = versionSource(sourceVersionId);
-    const target = db.prepare(`SELECT i.kind, i.revision, v.created_at FROM space_items i
+    const target = db.prepare(`SELECT i.kind, i.revision, v.created_at, v.mime_type FROM space_items i
       JOIN space_versions v ON v.id = i.current_version_id WHERE i.id = ? AND i.trashed_at IS NULL`).get(id);
     if (!source || !target) return 'missing';
     if (source.item_id === id) {
       // A retry after a successful move must not promote an old version again.
       return source.standalone ? 'conflict' : { id, versionId: sourceVersionId };
     }
-    if (!source.standalone || target.revision !== revision || versionKind(String(source.kind)) !== versionKind(String(target.kind))) return 'conflict';
+    if (!source.standalone || target.revision !== revision || target.mime_type === SPACE_WORKBOOK_MIME
+      || versionKind(String(source.kind)) !== versionKind(String(target.kind))) return 'conflict';
     try {
       const stat = lstatSync(resolveMediaBufferPath(String(source.media_id), 'outbound'), { throwIfNoEntry: false });
       if (!stat?.isFile() || stat.size !== source.size_bytes) return 'missing';

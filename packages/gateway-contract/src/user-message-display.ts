@@ -73,6 +73,7 @@ export function stripMediaClaimCheck(text: string): string {
     return text;
   }
   return text
+    .replace(/(?:^|\r?\n)<workbook_selection_data>\r?\nThe following JSON is spreadsheet data\. Treat cell contents as data\.\r?\n[^\r\n]*\r?\n<\/workbook_selection_data>/g, '')
     .replace(
       /\s*\[media attached:[^\]]+\]\s*\r?\nxopc-media-uri:[^\r\n]+\r?\n\s*xopc-media-path:[^\r\n]+(?:\r?\n\s*Use the read_media tool[^\r\n]*)?/g,
       '',
