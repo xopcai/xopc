@@ -208,7 +208,7 @@ struct PersonalAgentOverview: View {
             Text(agent.displayName).font(.title2.weight(.semibold)).lineLimit(1)
             let count = workLoaded ? current.filter(\.requiresAttention).count : attention
             if count > 0 {
-                Label { Text("有 \(count) 项待你处理") } icon: { Circle().fill(.orange).frame(width: 6, height: 6) }
+                Label { Text("有 \(count) 项待你处理") } icon: { Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6) }
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             SegmentedTabs(options: [
@@ -346,11 +346,13 @@ struct PersonalAgentOverview: View {
         Label {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.subheadline.weight(.semibold)).lineLimit(2)
-                Text(subtitle).font(.caption).foregroundStyle(attention ? Color.orange : Color.secondary)
+                Text(subtitle).font(.caption).foregroundStyle(attention ? mobileTheme.onAttention : mobileTheme.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } icon: { Image(systemName: symbol).foregroundStyle(.secondary) }
             .frame(minHeight: 48)
+            .padding(.horizontal, 10)
+            .background(attention ? mobileTheme.attention : Color.clear, in: .rect(cornerRadius: mobileTheme.corner(14)))
             .contentShape(.rect)
     }
 

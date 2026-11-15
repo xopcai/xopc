@@ -62,7 +62,7 @@ export struct XopcProjectSpaceView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
-    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(15))
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(15))
       .onClick((): void => { this.go('tasks', item.id); })
   }
 
@@ -80,7 +80,7 @@ export struct XopcProjectSpaceView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
-    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(15))
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(15))
       .onClick((): void => { this.go('project-chat', item.key); })
   }
 
@@ -97,7 +97,7 @@ export struct XopcProjectSpaceView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
-    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(15))
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(15))
       .onClick((): void => { this.go('notes', item.id); })
   }
 
@@ -114,7 +114,7 @@ export struct XopcProjectSpaceView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
-    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(15))
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(15))
       .onClick((): void => { this.go('automations', item.id); })
   }
 

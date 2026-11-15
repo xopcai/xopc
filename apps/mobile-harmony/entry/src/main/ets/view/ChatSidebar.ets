@@ -73,9 +73,9 @@ export struct XopcChatSidebar {
         Text(label).fontSize(15).fontColor(this.colors.foreground).layoutWeight(1)
         if (count > 0) {
           Text(count > 99 ? '99+' : count.toString()).fontSize(12)
-            .fontColor(this.colors.light ? this.colors.attentionForeground : this.colors.accent)
+            .fontColor(this.colors.attentionForeground)
             .padding({ left: 8, right: 8 }).height(24).borderRadius(12)
-            .backgroundColor(this.colors.light ? this.colors.attentionFill : this.colors.accentSoft)
+            .backgroundColor(this.colors.attentionFill)
         }
       }.width('100%').constraintSize({ minHeight: 44 }).padding({ left: 10, right: 10 })
     }.id('chat-sidebar-' + page).width('100%').padding(0).backgroundColor(Color.Transparent)
@@ -103,8 +103,8 @@ export struct XopcChatSidebar {
             Text($r('app.string.sessions_search')).fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
           }.width('100%').height(44).padding({ left: 12, right: 12 })
         }.id('chat-sidebar-search').width('100%').padding(0)
-          .backgroundColor(this.colors.light ? this.colors.grouped : this.colors.input)
-          .border(this.colors.controlStroke).borderRadius(this.colors.corner(22))
+          .backgroundColor(this.colors.input)
+          .borderRadius(this.colors.corner(22))
           .onClick((): void => { this.go('sessions-search'); })
         Scroll() {
           Column({ space: 2 }) {

@@ -6,7 +6,7 @@ import ai.xopc.mobile.gateway.ClarificationAnswer
 import ai.xopc.mobile.gateway.ClarificationCommand
 import ai.xopc.mobile.gateway.ClarificationRequest
 import ai.xopc.mobile.gateway.clarificationRecordKey
-import androidx.compose.foundation.BorderStroke
+import ai.xopc.mobile.theme.LocalAttentionColors
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -76,7 +76,10 @@ internal fun ClarificationWizard(request: ClarificationRequest, submitting: Bool
       finally { preparing = false }
     }
   }
-  Surface(modifier, shape = MaterialTheme.shapes.large, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+  val attention = LocalAttentionColors.current
+  Surface(modifier, shape = MaterialTheme.shapes.large,
+    color = if (request.expired(now)) MaterialTheme.colorScheme.surfaceContainerLow else attention.fill,
+    contentColor = MaterialTheme.colorScheme.onSurface) {
     Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       Text(stringResource(R.string.clarify_title), style = MaterialTheme.typography.titleSmall)
       Text("${index + 1}/${request.questions.size} · ${question.header}")

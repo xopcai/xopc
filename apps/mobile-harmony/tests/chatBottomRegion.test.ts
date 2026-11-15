@@ -60,9 +60,7 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain("Column().id('chat-dock-corner-mask').width('100%').height(24).backgroundColor(this.colors.chat.canvas)");
     expect(chat).toContain(".id('chat-composer-shell').width('100%')");
     expect(chat).toContain('.backgroundColor(this.panelOpen ? Color.Transparent : this.colors.input)');
-    expect(chat).toContain('.border(this.panelOpen ? { width: 0 } : this.colors.controlStroke)');
     expect(chat).toContain(".width('calc(100% - 24vp)').backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent)");
-    expect(chat).toContain('.border(this.panelOpen ? this.colors.panelStroke : { width: 0 }).borderRadius(this.colors.corner(28))');
     expect(chat).toContain(".id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)");
     expect(chat).toContain(".id('chat-bottom-region').width('100%')");
     expect(chat).toContain(".id('chat-reply-clearance')");

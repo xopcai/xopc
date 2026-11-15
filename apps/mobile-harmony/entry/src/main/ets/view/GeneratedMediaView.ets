@@ -124,8 +124,8 @@ export struct XopcGeneratedMediaRow {
       }
     }.id('generated-media-card-' + this.card.item.id).width('100%').constraintSize({ maxWidth: 440 })
       .alignItems(HorizontalAlign.Start).padding(16)
-      .backgroundColor(this.colors.light && this.card.draft && this.card.canConfirm ? this.colors.attentionFill : this.colors.chat.card)
-      .border(this.card.draft && this.card.canConfirm ? this.colors.attentionStroke : this.colors.panelStroke).borderRadius(this.colors.corner(18))
+      .backgroundColor(this.card.draft && this.card.canConfirm ? this.colors.attentionFill : this.colors.chat.card)
+      .borderRadius(this.colors.corner(18))
       .onAreaChange((): void => { if (this.musicSelected) this.onMusicAreaChange(); })
   }
 }

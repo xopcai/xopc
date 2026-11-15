@@ -1,6 +1,7 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
+import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -224,9 +225,9 @@ private fun SidebarRow(@StringRes label: Int, @DrawableRes icon: Int, tag: Strin
     Text(stringResource(label), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
       color = MaterialTheme.colorScheme.onSurface)
     if (badge > 0) Text(if (badge > 99) "99+" else badge.toString(),
-      Modifier.background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+      Modifier.background(LocalAttentionColors.current.fill, CircleShape)
         .padding(horizontal = 8.dp, vertical = 4.dp).testTag("progress-attention-badge"),
-      color = MaterialTheme.colorScheme.onPrimaryContainer,
+      color = LocalAttentionColors.current.foreground,
       style = MaterialTheme.typography.labelMedium)
   }
 }

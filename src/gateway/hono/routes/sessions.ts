@@ -10,7 +10,7 @@ import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory, type ClientHistoryMessage } from '../../../session/client-history.js';
-import { readAgentReactions } from '../../../storage/sqlite/agent-reaction-repository.js';
+import { DEFAULT_AGENT_REACTION, readAgentReactions } from '../../../storage/sqlite/agent-reaction-repository.js';
 import { getPersonalAgentByConversation } from '../../../personal-agent/repository.js';
 import { SessionStatus, type SessionType } from '../../../session/types.js';
 import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-references.js';
@@ -510,17 +510,35 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     const actor = getPersonalAgentByConversation(key);
-    if (actor && result.session.transcriptId) {
+    const transcriptId = result.session.transcriptId;
+    if (actor && transcriptId) {
       const available = service.currentConfig?.experimental?.personalAgentMessageReactions === true;
       result.session.agentReactions = { available, enabled: available && actor.messageReactionsEnabled };
       if (result.session.agentReactions.enabled) {
         const messages = result.session.messages as unknown as ClientHistoryMessage[];
         const entries = messages.flatMap(row => row.role === 'user' && row.transcriptEntryId ? [row.transcriptEntryId] : []);
-        const reactions = new Map(readAgentReactions(key, result.session.transcriptId, entries, actor.displayName)
+        const reactions = new Map(readAgentReactions(key, transcriptId, entries, actor.displayName)
           .map(reaction => [reaction.entryId, reaction]));
+        const activeRunId = service.getActiveWebchatRunId(key);
         for (const row of messages) {
-          const reaction = row.role === 'user' && row.transcriptEntryId ? reactions.get(row.transcriptEntryId) : undefined;
-          if (reaction) row.agentReaction = reaction;
+          const entryId = row.transcriptEntryId;
+          if (row.role !== 'user' || !entryId) continue;
+          const saved = reactions.get(entryId);
+          if (saved) row.agentReaction = saved;
+          // Give in-flight personalization a chance to arrive before showing the default.
+          else if (!activeRunId || row.turnId !== activeRunId || row.metadata?.steered) {
+            row.agentReaction = {
+              conversationId: key,
+              transcriptId,
+              clientMessageId: row.metadata?.clientMessageId ?? entryId,
+              entryId,
+              actorAgentId: actor.agentId,
+              actorName: actor.displayName,
+              runId: row.turnId ?? entryId,
+              emoji: DEFAULT_AGENT_REACTION,
+              createdAtMs: row.timestamp ?? 0,
+            };
+          }
         }
       }
     }

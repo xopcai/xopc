@@ -69,8 +69,7 @@ export struct XopcChatMessageContent {
   }
 
   private previewFadeColor(alpha: string): string {
-    const background = this.row.role === 'user' ? this.colors.chat.bubble
-      : this.colors.chat.canvas;
+    const background = this.row.role === 'user' ? this.colors.chat.bubble : this.colors.assistantBubble;
     const color = this.getUIContext().getHostContext()?.resourceManager.getColorSync(background) ?? 0xFFFFFFFF;
     return '#' + alpha + (color >>> 0).toString(16).padStart(8, '0').slice(2);
   }

@@ -59,7 +59,7 @@ export struct XopcClarificationWizard {
     Scroll() {
       Column({ space: 8 }) {
         Text($r('app.string.clarify_title')).fontSize(15).fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.light && !this.expired() ? this.colors.attentionForeground : this.colors.foreground).width('100%')
+          .fontColor(this.expired() ? this.colors.foreground : this.colors.attentionForeground).width('100%')
         Text((this.index() + 1) + '/' + this.questions().length + ' · ' + (this.current()?.header ?? '')).fontSize(12).fontColor(this.colors.secondary).width('100%')
         Text(this.current()?.question ?? '').fontSize(14).fontColor(this.colors.foreground).width('100%')
         ForEach(this.current()?.choices ?? [], (choice: XopcClarificationChoice) => {
@@ -102,8 +102,7 @@ export struct XopcClarificationWizard {
         if (this.errorMessage) { Text(this.errorMessage).fontSize(12).fontColor(this.colors.danger).width('100%') }
       }.padding(12).width('100%')
     }.constraintSize({ maxHeight: 420 }).width('100%')
-      .backgroundColor(this.colors.light && !this.expired() ? this.colors.attentionFill : this.colors.grouped)
-      .border(this.colors.light && !this.expired() ? this.colors.attentionStroke : this.colors.panelStroke)
+      .backgroundColor(this.expired() ? this.colors.grouped : this.colors.attentionFill)
       .borderRadius(this.colors.corner(16))
   }
 }

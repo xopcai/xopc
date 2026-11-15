@@ -177,7 +177,7 @@ export struct XopcTaskChatHeader {
         Row({ space: 4 }) {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(18).fontColor([this.colors.foreground])
-          }.id('task-chat-close').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          }.id('task-chat-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
             .accessibilityText($r('app.string.back')).onClick((): void => { this.onClose(); })
           Row() {
             Button({ type: ButtonType.Normal }) {
@@ -194,13 +194,14 @@ export struct XopcTaskChatHeader {
                   }.width('100%')
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                 SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
-              }.width('100%')
-            }.id('task-chat-summary-toggle').constraintSize({ maxWidth: '85%' }).height(48).padding(0).backgroundColor(Color.Transparent)
+              }.width('100%').padding({ left: 12, right: 10 })
+            }.id('task-chat-summary-toggle').constraintSize({ maxWidth: '85%' }).height(48).padding(0)
+              .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(16))
               .onClick((): void => { this.onToggle(); })
           }.layoutWeight(1)
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.foreground])
-          }.id('task-chat-menu').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          }.id('task-chat-menu').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
             .accessibilityText($r('app.string.more')).bindMenu(this.taskMenu)
         }.id('task-chat-header').width('100%').height(64).padding({ left: 8, right: 8 })
         if (this.expanded) { this.overview() }

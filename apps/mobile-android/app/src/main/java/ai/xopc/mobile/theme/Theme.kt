@@ -19,7 +19,8 @@ fun XopcTheme(
   scheme: String = "default",
   content: @Composable () -> Unit,
 ) {
-  val palette = xopcPalette(scheme, darkTheme)
+  val preset = scheme.takeIf(AppearancePreference.schemes::contains) ?: "default"
+  val palette = xopcPalette(preset, darkTheme)
   val onAccent = if (palette.accent.luminance() > 0.179f) Color.Black else Color.White
   val colors = if (darkTheme) darkColorScheme(
     primary = palette.accent, onPrimary = onAccent,
@@ -50,7 +51,7 @@ fun XopcTheme(
     error = palette.danger, onError = if (palette.danger.luminance() > 0.179f) Color.Black else Color.White,
     onSurfaceVariant = palette.secondary, outline = palette.border,
   )
-  val factor = when (scheme) {
+  val factor = when (preset) {
     "emerald" -> 0.8f
     "clay" -> 1.2f
     "dawn" -> 1.25f
@@ -63,7 +64,11 @@ fun XopcTheme(
     large = RoundedCornerShape(20.dp * factor),
     extraLarge = RoundedCornerShape(28.dp * factor),
   )
-  CompositionLocalProvider(LocalCornerScale provides factor, LocalChatColors provides chatColors(scheme, darkTheme, palette.surface)) {
+  CompositionLocalProvider(
+    LocalCornerScale provides factor,
+    LocalChatColors provides chatColors(preset, darkTheme, palette),
+    LocalAttentionColors provides attentionColors(darkTheme),
+  ) {
     MaterialTheme(colorScheme = colors, typography = Typography, shapes = shapes, content = content)
   }
 }
@@ -72,8 +77,8 @@ fun XopcTheme(
 private val LocalCornerScale = staticCompositionLocalOf { 1f }
 
 @Composable
-internal fun themedCorners(radius: Int): RoundedCornerShape =
-  RoundedCornerShape(radius.dp * LocalCornerScale.current)
+internal fun themedCorners(radius: Int, scale: Float = 1f): RoundedCornerShape =
+  RoundedCornerShape(radius.dp * LocalCornerScale.current * scale)
 
 internal const val CHAT_MESSAGE_WIDTH = 0.84f
 
@@ -83,47 +88,45 @@ internal data class ChatColors(
   val card: Color,
   val action: Color,
   val onAction: Color,
+  val reaction: Color,
 )
 
-internal val LocalChatColors = staticCompositionLocalOf { chatColors("default", false, xopcPalette("default", false).surface) }
+internal val LocalChatColors = staticCompositionLocalOf { chatColors("default", false, xopcPalette("default", false)) }
 
-// The Chat surfaces mirror the HarmonyOS presets.
-private fun chatColors(scheme: String, dark: Boolean, pageBackground: Color): ChatColors {
-  return when (scheme) {
-    "porcelain" -> if (dark) {
-      ChatColors(Color(0xFF483B34), Color(0xFF372B24), Color(0xFF302822),
-        Color(0xFFE4AE98), pageBackground)
-    } else {
-      ChatColors(Color(0xFFFFFFFF), Color(0xFFE9E0D5), Color(0xFFE8DED3),
-        Color(0xFF844633), Color.White)
-    }
-    "dawn" -> if (dark) {
-      ChatColors(Color(0xFF37495F), Color(0xFF26394D), Color(0xFF253547),
-        Color(0xFFAFD5FB), pageBackground)
-    } else {
-      ChatColors(Color(0xFFFFFFFF), Color(0xFFDFE6EF), Color(0xFFE0E8F2),
-        Color(0xFF245781), Color.White)
-    }
-    "emerald" -> if (dark) {
-      ChatColors(Color(0xFF253D30), Color(0xFF172B21), Color(0xFF14221B),
-        Color(0xFF78DDB0), pageBackground)
-    } else {
-      ChatColors(Color(0xFFFFFFFF), Color(0xFFE0EBE4), Color(0xFFDFEBE3),
-        Color(0xFF087446), Color.White)
-    }
-    "clay" -> if (dark) {
-      ChatColors(Color(0xFF2B4342), Color(0xFF1B3030), Color(0xFF1A2B2A),
-        Color(0xFFFFB084), pageBackground)
-    } else {
-      ChatColors(Color(0xFFFFFFFF), Color(0xFFEBE5DB), Color(0xFFEAE1D3),
-        Color(0xFF705430), Color.White)
-    }
-    else -> if (dark) {
-      ChatColors(Color(0xFF343F50), Color(0xFF252F40), Color(0xFF222730),
-        Color(0xFFA8BCFF), pageBackground)
-    } else {
-      ChatColors(Color(0xFFFFFFFF), Color(0xFFE4E7EC), Color(0xFFE2E8F1),
-        Color(0xFF2453D6), Color.White)
-    }
+internal data class AttentionColors(val fill: Color, val foreground: Color)
+
+internal val LocalAttentionColors = staticCompositionLocalOf { attentionColors(false) }
+
+private fun attentionColors(dark: Boolean): AttentionColors = if (dark) {
+  AttentionColors(Color(0xFF352C22), Color(0xFFFFBC63))
+} else {
+  AttentionColors(Color(0xFFFFF2D2), Color(0xFF734600))
+}
+
+// Keep reply surfaces and chat actions in sync with HarmonyOS.
+private fun chatColors(scheme: String, dark: Boolean, palette: XopcPalette): ChatColors {
+  val assistant = if (dark) palette.input else palette.panel
+  val reaction = if (dark) palette.active else palette.panel
+  val onAction = if (dark) palette.surface else Color.White
+  return when (scheme to dark) {
+    "porcelain" to false -> ChatColors(assistant, Color(0xFFE9E0D5), Color(0xFFE8DED3),
+      Color(0xFF844633), onAction, reaction)
+    "porcelain" to true -> ChatColors(assistant, Color(0xFF4E392E), Color(0xFF302822),
+      Color(0xFFE4AE98), onAction, reaction)
+    "dawn" to false -> ChatColors(assistant, Color(0xFFDFE6EF), Color(0xFFE0E8F2),
+      Color(0xFF245781), onAction, reaction)
+    "dawn" to true -> ChatColors(assistant, Color(0xFF26394D), Color(0xFF253547),
+      Color(0xFFAFD5FB), onAction, reaction)
+    "emerald" to false -> ChatColors(assistant, Color(0xFFE0EBE4), Color(0xFFDFEBE3),
+      Color(0xFF087446), onAction, reaction)
+    "emerald" to true -> ChatColors(assistant, Color(0xFF223D2F), Color(0xFF14221B),
+      Color(0xFF78DDB0), onAction, reaction)
+    "clay" to false -> ChatColors(assistant, Color(0xFFEBE5DB), Color(0xFFEAE1D3),
+      Color(0xFF705430), onAction, reaction)
+    "clay" to true -> ChatColors(assistant, Color(0xFF284540), Color(0xFF1A2B2A),
+      Color(0xFFFFB084), onAction, reaction)
+    "default" to true -> ChatColors(assistant, Color(0xFF2D394D), Color(0xFF222730),
+      Color(0xFFA8BCFF), onAction, reaction)
+    else -> ChatColors(assistant, Color(0xFFC7D5E7), palette.panel, palette.accent, onAction, reaction)
   }
 }

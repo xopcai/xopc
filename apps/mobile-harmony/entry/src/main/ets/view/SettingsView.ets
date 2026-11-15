@@ -31,7 +31,7 @@ struct XopcPreferenceOption {
       }.width('100%').height(56).padding({ left: 16, right: 16 })
     }.id(this.optionId).width('100%').padding(0)
       .backgroundColor(this.selected ? this.colors.accentSoft : this.colors.panel)
-      .border(this.colors.panelStroke).borderRadius(this.colors.corner(14)).margin({ bottom: 8 })
+      .borderRadius(this.colors.corner(14)).margin({ bottom: 8 })
       .accessibilitySelected(this.selected)
       .onClick(this.onSelect)
   }
@@ -85,13 +85,15 @@ export struct XopcSettingsView {
 
   @Builder
   schemePreviewHalf(preview: XopcThemePreview) {
-    Column({ space: 4 }) {
-      Row({ space: 4 }) {
-        Row().width(7).height(7).borderRadius(4).backgroundColor(preview.accent)
-        Row().height(5).layoutWeight(1).borderRadius(3).backgroundColor(preview.foreground)
-      }.width('100%')
-      Row().height(5).width('72%').borderRadius(3).backgroundColor(preview.muted)
-    }.width('50%').height(44).padding(8).justifyContent(FlexAlign.Center).backgroundColor(preview.panel)
+    Column() {
+      Column({ space: 4 }) {
+        Row({ space: 4 }) {
+          Row().width(7).height(7).borderRadius(4).backgroundColor(preview.accent)
+          Row().height(5).layoutWeight(1).borderRadius(3).backgroundColor(preview.foreground)
+        }.width('100%')
+        Row().height(5).width('72%').borderRadius(3).backgroundColor(preview.muted)
+      }.width('100%').padding(5).borderRadius(this.colors.corner(5)).backgroundColor(preview.panel)
+    }.width('50%').height(44).padding(5).justifyContent(FlexAlign.Center).backgroundColor(preview.canvas)
   }
 
   @Builder
@@ -113,7 +115,7 @@ export struct XopcSettingsView {
       }.width('100%').alignItems(HorizontalAlign.Start)
     }.id(id).width('100%').height(84).padding(8)
       .backgroundColor(this.selectedScheme === scheme ? this.colors.accentSoft : this.colors.panel)
-      .border(this.colors.panelStroke).borderRadius(this.colors.corner(12)).accessibilitySelected(this.selectedScheme === scheme)
+      .borderRadius(this.colors.corner(12)).accessibilitySelected(this.selectedScheme === scheme)
       .onClick((): void => { this.choose(this.selectedLanguage, this.selectedTheme, scheme); })
   }
   @Builder

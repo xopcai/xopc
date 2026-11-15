@@ -52,7 +52,7 @@ export struct XopcPageHeader {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground])
         }.width(44).height(44).padding(0)
-          .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
+          .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
       }
       Row() {
@@ -66,7 +66,7 @@ export struct XopcPageHeader {
       if (this.actionLabel !== '') {
         Button() { SymbolGlyph(this.actionIcon).fontSize(22).fontColor([this.colors.foreground]) }
           .width(44).height(44)
-          .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
+          .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
           .accessibilityText(this.actionText()).onClick((): void => { this.onAction(); })
       }
     }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
@@ -87,7 +87,7 @@ export struct XopcPageSearchButton {
         .fontSize(21).fontColor([this.colors.foreground])
     }.id(this.open ? this.searchId + '-close' : this.searchId)
       .width(44).height(44).padding(0)
-      .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
+      .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
       .accessibilityText(this.open ? $r('app.string.close') : this.label).onClick((): void => { this.onToggle(); })
   }
 }
@@ -104,8 +104,8 @@ export struct XopcPageSearchField {
 
   build() {
     TextInput({ text: this.text, placeholder: this.placeholder }).id(this.searchId).width('100%').height(46)
-      .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input)
-      .border(this.colors.controlStroke).borderRadius(this.colors.corner(23)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
+      .backgroundColor(this.colors.input)
+      .borderRadius(this.colors.corner(23)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
       .enterKeyType(EnterKeyType.Search).defaultFocus(true)
       .onChange(this.onChange).onSubmit(this.onSubmit)
       .onAppear((): void => {
@@ -149,7 +149,6 @@ export struct XopcHubRow {
           top: this.compact ? 6 : 12, bottom: this.compact ? 6 : 12 })
     }.width('100%').padding(0)
       .backgroundColor(this.attention ? this.colors.attentionFill : this.colors.panel)
-      .border(this.attention ? this.colors.attentionStroke : this.colors.panelStroke)
       .borderRadius(this.colors.corner(this.compact ? 12 : 16))
       .margin({ bottom: 8 })
       .onClick((): void => { if (this.navigable) this.onOpen(); })

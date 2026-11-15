@@ -211,9 +211,13 @@ private struct AppearanceSettingsView: View {
         let preview = MobileTheme(preset: preset, dark: dark)
         let shape = RoundedRectangle(cornerRadius: preview.corner(6))
         return shape.fill(preview.canvas)
-            .overlay(shape.strokeBorder(preview.edge))
-            .overlay { Circle().fill(preview.action).frame(width: 8, height: 8) }
-            .frame(width: 24, height: 20)
+            .overlay {
+                RoundedRectangle(cornerRadius: preview.corner(4))
+                    .fill(preview.panel)
+                    .overlay { Circle().fill(preview.action).frame(width: 7, height: 7) }
+                    .padding(3)
+            }
+            .frame(width: 28, height: 20)
             .accessibilityHidden(true)
     }
 }

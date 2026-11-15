@@ -83,7 +83,7 @@ struct XopcSessionManagerRow {
         Text(xopcTaskStatus(this.entry.task)).fontSize(12).fontColor(this.colors.tertiary)
       }.width('100%').constraintSize({ minHeight: 52 })
         .padding({ left: 56, right: 16, top: 8, bottom: 8 })
-        .backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(12)).margin({ bottom: 6 })
+        .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(12)).margin({ bottom: 6 })
         .id('sessions-task-' + this.entry.task.taskId)
         .enabled(!this.locked)
         .onClick((): void => {
@@ -117,7 +117,7 @@ struct XopcSessionManagerRow {
         Text(this.time()).fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
       }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 16, right: 16, top: 12, bottom: 12 })
         .backgroundColor(this.selected || this.current ? this.colors.active : this.colors.panel)
-        .border(this.colors.panelStroke).borderRadius(this.colors.corner(16)).margin({ bottom: 8 })
+        .borderRadius(this.colors.corner(16)).margin({ bottom: 8 })
         .id('sessions-row-' + this.entry.session.key).accessibilitySelected(this.selected || this.current).enabled(!this.locked)
         .onClick((): void => { if (this.entry.session) this.onOpen(this.entry.session); })
         .gesture(LongPressGesture({ duration: 300, repeat: false }).onAction((): void => {
@@ -379,7 +379,7 @@ export struct XopcSessionsView {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground])
           }.id('sessions-back').width(44).height(44).padding(0)
-            .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
+            .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
             .accessibilityText($r('app.string.back')).onClick((): void => { if (!this.back()) this.onExit(); })
           Row() {
             Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length)

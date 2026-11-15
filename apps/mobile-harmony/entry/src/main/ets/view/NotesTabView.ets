@@ -189,7 +189,7 @@ export struct XopcNotesTabView {
           .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
       }.width('100%').height(133).alignItems(HorizontalAlign.Start).padding(10)
     }.id('library-tile-' + page + '-' + id).width('100%').padding(0).backgroundColor(this.colors.panel)
-      .border(this.colors.panelStroke).borderRadius(this.colors.corner(16))
+      .borderRadius(this.colors.corner(16))
       .onClick((): void => {
         if (page === 'notes') this.openNote(id);
         else if (page === 'files') this.onNavigate({ page, itemId: id });
@@ -328,7 +328,7 @@ export struct XopcNotesTabView {
                   SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
               }.width('100%').constraintSize({ minHeight: 96 }).padding(0)
-                .backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(16))
+                .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
                 .onClick((): void => { this.openNote(item.id); })
             }
           }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
@@ -365,7 +365,7 @@ export struct XopcNotesTabView {
                         .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   }.width('100%').padding(14)
-                }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(16))
+                }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
                   .onClick((): void => { this.onNavigate({ page: 'files', itemId: file.id }); })
               }
             }, (file: XopcFile): string => file.id)

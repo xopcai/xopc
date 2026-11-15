@@ -1,6 +1,7 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.theme.themedCorners
+import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressItem
@@ -263,18 +264,17 @@ private fun ProgressAttentionRow(item: ProgressItem, busy: Boolean, onOpen: () -
   var reviewExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
   val canOpen = item.openAction?.href?.let(::progressDestination) != null
   val hasActions = item.primaryAction != null || item.secondaryActions.isNotEmpty()
+  val attention = LocalAttentionColors.current
   Card(shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth(),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+    colors = CardDefaults.cardColors(containerColor = attention.fill, contentColor = MaterialTheme.colorScheme.onSurface)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       Column(Modifier.fillMaxWidth().testTag("progress-item-${item.id}").clickable(enabled = canOpen, onClick = onOpen),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item.statusLabel?.takeIf(String::isNotBlank)?.let { status ->
-          Row(Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh, themedCorners(10))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(6.dp).background(MaterialTheme.colorScheme.tertiary, RoundedCornerShape(50)))
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(6.dp).background(attention.foreground, CircleShape))
             Text(status, fontSize = 12.sp, fontWeight = FontWeight.Medium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant)
+              color = attention.foreground)
           }
         }
         Text(item.title, fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium,

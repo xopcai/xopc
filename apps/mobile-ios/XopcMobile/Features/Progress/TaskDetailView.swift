@@ -203,7 +203,11 @@ struct TaskConversationView: View {
     private var taskHeader: some View {
         HStack(spacing: 4) {
             if let returnLabel {
-                Button { dismiss() } label: { Image(systemName: "chevron.backward").frame(width: 44, height: 44).contentShape(.rect) }
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.backward").frame(width: 44, height: 44)
+                        .background(mobileTheme.card, in: Circle())
+                        .contentShape(.rect)
+                }
                     .accessibilityLabel(Text(returnLabel)).accessibilityIdentifier("task-chat-close")
             }
             Button { setExpanded(!overviewExpanded) } label: {
@@ -221,7 +225,9 @@ struct TaskConversationView: View {
                         }
                     }.frame(maxWidth: 156, alignment: .leading)
                     Image(systemName: overviewExpanded ? "chevron.up" : "chevron.down").font(.caption)
-                }.frame(minHeight: 48).contentShape(.rect)
+                }.padding(.horizontal, 12).frame(minHeight: 48)
+                    .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(16)))
+                    .contentShape(.rect)
             }.disabled(detail == nil).accessibilityIdentifier("task-chat-summary-toggle")
                 .accessibilityValue(overviewExpanded ? "展开" : "收起")
             Spacer(minLength: 12)
@@ -236,9 +242,13 @@ struct TaskConversationView: View {
                 Button("搜索消息") { searchRevision += 1 }
                 Button("会话选项") { optionsRevision += 1 }
                 Button("刷新") { Task { await refresh() } }
-            } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).contentShape(.rect) }
+            } label: {
+                Image(systemName: "ellipsis").frame(width: 44, height: 44)
+                    .background(mobileTheme.card, in: Circle())
+                    .contentShape(.rect)
+            }
                 .disabled(isWorking).accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
-        }.buttonStyle(.plain).padding(.horizontal, 8).frame(minHeight: 64)
+        }.buttonStyle(.plain).foregroundStyle(mobileTheme.foreground).padding(.horizontal, 8).frame(minHeight: 64)
     }
 
     private func overview(_ detail: TaskDetailEnvelope) -> some View {

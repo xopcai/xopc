@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
+import ai.xopc.mobile.theme.themedCorners
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,9 +26,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -58,26 +60,30 @@ internal fun <T> SegmentedTabs(
   val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
   val scheme = MaterialTheme.colorScheme
   val selection = options.indexOfFirst { it.value == selected }
+  val dark = scheme.background.luminance() < 0.5f
+  val shape = themedCorners(18, fontScale)
+  val selectedFill = if (dark) scheme.surfaceContainerHigh else scheme.surface
+  val selectedLabel = if (dark) scheme.onSurface else scheme.primary
   BoxWithConstraints(modifier.fillMaxWidth()) {
     val segmentWidth = maxOf(maxWidth / options.size, minimumSegmentWidth * fontScale)
     val thumb by animateDpAsState(segmentWidth * selection.coerceAtLeast(0),
       tween(250, easing = segmentEasing), label = "Segment position")
     Box(Modifier.horizontalScroll(rememberScrollState())) {
-      Box(Modifier.clip(CircleShape).background(scheme.surfaceContainer)) {
+      Box(Modifier.clip(shape).background(scheme.surfaceContainer)) {
         if (selection >= 0) {
           Box(Modifier.matchParentSize().offset { IntOffset(thumb.roundToPx(), 0) }) {
             Box(Modifier.align(Alignment.CenterStart).width(segmentWidth)
-              .heightIn(min = 48.dp * fontScale).background(scheme.surfaceContainerHighest, CircleShape)
+              .heightIn(min = 48.dp * fontScale).background(selectedFill, shape)
               .testTag("segmented-tab-indicator"))
           }
         }
         Row(Modifier.selectableGroup()) {
           options.forEach { option ->
             val active = selected == option.value
-            val tint by animateColorAsState(if (active) scheme.onSurface else scheme.onSurfaceVariant,
+            val tint by animateColorAsState(if (active) selectedLabel else scheme.onSurfaceVariant,
               tween(150), label = "Segment label color")
             Row(
-              Modifier.width(segmentWidth).heightIn(min = 48.dp * fontScale).clip(CircleShape)
+              Modifier.width(segmentWidth).heightIn(min = 48.dp * fontScale).clip(shape)
                 .testTag(option.tag).selectable(active, enabled = enabled, role = Role.Tab) { onSelect(option.value) }
                 .padding(horizontal = 8.dp),
               horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
@@ -85,6 +91,7 @@ internal fun <T> SegmentedTabs(
             ) {
               option.icon?.let { ActionIcon(it, color = tint, size = 16.dp) }
               Text(option.label, color = tint, style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                 modifier = Modifier.weight(1f, fill = false), textAlign = TextAlign.Center,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
               option.count?.let { Text(it.toString(), color = tint, style = MaterialTheme.typography.labelSmall) }

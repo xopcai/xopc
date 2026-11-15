@@ -75,6 +75,7 @@ struct AssistantView<Dock: View>: View {
     @State private var bottomDockHeight: CGFloat = 0
     @State private var messageViewportHeight: CGFloat = 0
     @State private var chatTopInset: CGFloat = 0
+    @State private var floatingHeaderHeight: CGFloat = 0
     @State private var replySpace = ChatReplySpace()
     @State private var replyRowHeights: [String: CGFloat] = [:]
     @State private var replyUserText: String?
@@ -144,23 +145,21 @@ struct AssistantView<Dock: View>: View {
             if showsFloatingHeader {
                 VStack(spacing: 4) {
                     floatingHeader.padding(.horizontal, 12)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { floatingHeaderHeight = $0 }
                     if pinsPlayingMusic {
                         GeneratedMusicDock(playback: music, sticky: true)
                     }
                 }
                     .padding(.top, 8)
                     .padding(.bottom, 6)
-                    .background {
-                        let canvas = mobileTheme.canvas
-                        LinearGradient(stops: [.init(color: canvas.opacity(0.94), location: 0),
-                                               .init(color: canvas.opacity(0.92), location: 0.82),
-                                               .init(color: .clear, location: 1)],
-                                       startPoint: .top, endPoint: .bottom)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
             }
         }
+    }
+
+    private var chatHeaderClearance: CGFloat {
+        let headerHeight = showsFloatingHeader && floatingHeaderHeight > 0
+            ? floatingHeaderHeight + 14 : (isPersonalConversation ? 114 : 64)
+        return chatTopInset + headerHeight
     }
 
     private var pinsPlayingMusic: Bool {
@@ -484,7 +483,7 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: max(0, viewport.size.height - 24))
                 }
-                .contentMargins(.top, chatTopInset + (isPersonalConversation ? 114 : 64), for: .scrollContent)
+                .contentMargins(.top, chatHeaderClearance, for: .scrollContent)
                 .contentMargins(.bottom, 24, for: .scrollContent)
             }
         } else {
@@ -518,7 +517,7 @@ struct AssistantView<Dock: View>: View {
             ScrollViewReader { scroller in
                 ScrollView {
                     // Exact row heights keep long replies anchored during keyboard resize.
-                    VStack(spacing: 14) {
+                    VStack(spacing: 20) {
                         if showsConversationTitleInTimeline, let conversation {
                             Text(verbatim: conversation.title)
                                 .mobileTextStyle(.rowTitle)
@@ -544,7 +543,6 @@ struct AssistantView<Dock: View>: View {
                                 onReuseUserText: { draft = $0 },
                                 maximumWidth: maximumMessageWidth,
                                 animateStreaming: followingBottom && !userScrollingMessages,
-                                reservesReactionSpace: isPersonalConversation,
                                 onReading: {
                                     followingBottom = false
                                     bottomScrollTask?.cancel(); bottomScrollTask = nil
@@ -598,7 +596,7 @@ struct AssistantView<Dock: View>: View {
                     .frame(maxWidth: .infinity)
                 }
                 .defaultScrollAnchor(.bottom)
-                .contentMargins(.top, chatTopInset + (isPersonalConversation ? 114 : 64), for: .scrollContent)
+                .contentMargins(.top, chatHeaderClearance, for: .scrollContent)
                 .contentMargins(.bottom, 24 + replySpace.remaining, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
                 .onDisappear {
@@ -715,7 +713,7 @@ struct AssistantView<Dock: View>: View {
                                       })
                                       .onGeometryChange(for: Bool.self) { proxy in
                                           let frame = proxy.frame(in: .named("chat-scroll"))
-                                          let header = chatTopInset + (isPersonalConversation ? 114 : 64)
+                                          let header = chatHeaderClearance
                                           return frame.maxY > header && frame.minY < viewportHeight
                                       } action: { visible in
                                           guard card.kind == .music else { return }
@@ -848,7 +846,7 @@ struct AssistantView<Dock: View>: View {
                     : LocalizedStringResource("正在朗读"))
                     .mobileTextStyle(.secondary).fontWeight(.semibold)
                 if let error = readAloud.errorMessage {
-                    Text(error).mobileTextStyle(.caption).foregroundStyle(.red).lineLimit(2)
+                    Text(error).mobileTextStyle(.caption).foregroundStyle(mobileTheme.danger).lineLimit(2)
                 } else {
                     Text("\(readAloud.chunkIndex + 1)/\(readAloud.chunkCount)")
                         .mobileTextStyle(.caption).foregroundStyle(.secondary)
@@ -1043,6 +1041,7 @@ struct AssistantView<Dock: View>: View {
                             PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 62,
                                                 active: isActive && !showingPersonalProfile && !showingMessageSearch,
                                                 working: state.isRunActive || state.isSending)
+                                .background(mobileTheme.card, in: Circle())
                                 .accessibilityHidden(true)
                         }
                         .frame(maxWidth: 120)
@@ -1056,16 +1055,19 @@ struct AssistantView<Dock: View>: View {
                                 Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
                                 Label {
                                     Text("有 \(pendingAttention) 项待你处理").lineLimit(1)
-                                } icon: { Circle().fill(.orange).frame(width: 6, height: 6) }
-                                    .font(.caption).foregroundStyle(.secondary)
+                                } icon: { Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6) }
+                                    .font(.caption).foregroundStyle(mobileTheme.onAttention)
                             }
                             .padding(.horizontal, 12).frame(minHeight: 44)
-                            .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(15)))
+                            .background(mobileTheme.attention, in: .rect(cornerRadius: mobileTheme.corner(15)))
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("chat-header-attention")
                     } else {
                         Text(verbatim: currentAgentName).font(.headline).lineLimit(1)
+                            .foregroundStyle(mobileTheme.foreground)
+                            .padding(.horizontal, 12).padding(.vertical, 4)
+                            .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(14)))
                     }
                 }
             }
@@ -1078,7 +1080,7 @@ struct AssistantView<Dock: View>: View {
         headerButton("查看手机", symbol: "iphone") { showingPhone = true }
             .overlay(alignment: .topTrailing) {
                 if phone.needsAttention {
-                    Circle().fill(.blue).frame(width: 6, height: 6).padding(6).allowsHitTesting(false)
+                    Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6).padding(6).allowsHitTesting(false)
                 }
             }
             .accessibilityIdentifier("chat-header-phone")
@@ -1087,6 +1089,7 @@ struct AssistantView<Dock: View>: View {
     private func headerButton(_ title: LocalizedStringKey, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.title3).frame(width: 44, height: 44)
+                .foregroundStyle(mobileTheme.foreground)
                 .background(mobileTheme.card, in: Circle())
         }
         .buttonStyle(.plain)
@@ -1096,6 +1099,7 @@ struct AssistantView<Dock: View>: View {
 
 // swiftlint:disable:next type_body_length
 struct PersonalAgentProfileView: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection
     let onSaved: (PersonalAgentRecord) -> Void
@@ -1169,7 +1173,7 @@ struct PersonalAgentProfileView: View {
                 if saving {
                     Text("正在保存…").foregroundStyle(.secondary)
                 } else if let error {
-                    Text(error).foregroundStyle(.red)
+                    Text(error).foregroundStyle(mobileTheme.danger)
                     Button("重试") { saveNow() }
                 }
             }
@@ -1290,7 +1294,7 @@ struct PersonalAgentProfileView: View {
             if modelOptions.isLoading {
                 Text("模型").redacted(reason: .placeholder)
             } else if let error = modelOptions.errorMessage {
-                Text(error).foregroundStyle(.red)
+                Text(error).foregroundStyle(mobileTheme.danger)
                 Button("重试") { Task { await loadModelSettings() } }
             } else {
                 Button {
@@ -1431,10 +1435,10 @@ private struct ErrorBanner: View {
     var body: some View {
         Label(message, systemImage: "exclamationmark.triangle.fill")
             .mobileTextStyle(.secondary)
-            .foregroundStyle(.red)
+            .foregroundStyle(mobileTheme.danger)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.red.opacity(0.08), in: .rect(cornerRadius: mobileTheme.corner(12)))
+            .background(mobileTheme.danger.opacity(0.08), in: .rect(cornerRadius: mobileTheme.corner(12)))
             .accessibilityLabel(AppLocalization.resolve("错误：\(message)", locale: locale))
     }
 }

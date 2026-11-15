@@ -1,6 +1,7 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.theme.themedCorners
+import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.AutomationSummary
 import ai.xopc.mobile.gateway.PersonalAgentRecord
@@ -236,7 +237,7 @@ private fun PersonalOverviewHeader(agent: PersonalAgentRecord, avatar: Bitmap?, 
       maxLines = 1, overflow = TextOverflow.Ellipsis)
     if (attention > 0 || running > 0) Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      Box(Modifier.size(6.dp).background(if (attention > 0) androidx.compose.ui.graphics.Color(0xFFFFB55C) else MaterialTheme.colorScheme.primary, CircleShape))
+      Box(Modifier.size(6.dp).background(if (attention > 0) LocalAttentionColors.current.foreground else MaterialTheme.colorScheme.primary, CircleShape))
       Text(if (attention > 0) stringResource(R.string.progress_attention_count, attention)
         else stringResource(R.string.personal_overview_running, running),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -290,15 +291,17 @@ private fun OverviewTaskRow(task: PersonalWork, onTask: (String) -> Unit) {
 @Composable
 private fun OverviewRow(title: String, description: String, icon: Int, tag: String, attention: Boolean = false, onClick: () -> Unit) {
   Surface(onClick, Modifier.fillMaxWidth().testTag(tag), shape = themedCorners(12),
-    color = androidx.compose.ui.graphics.Color.Transparent) {
+    color = if (attention) LocalAttentionColors.current.fill else androidx.compose.ui.graphics.Color.Transparent,
+    contentColor = MaterialTheme.colorScheme.onSurface) {
     Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 8.dp, vertical = 5.dp),
       verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
       Icon(painterResource(icon), null, Modifier.size(19.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
       Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          if (attention) Box(Modifier.size(6.dp).background(androidx.compose.ui.graphics.Color(0xFFFFB55C), CircleShape))
-          Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          if (attention) Box(Modifier.size(6.dp).background(LocalAttentionColors.current.foreground, CircleShape))
+          Text(description, style = MaterialTheme.typography.bodySmall,
+            color = if (attention) LocalAttentionColors.current.foreground else MaterialTheme.colorScheme.onSurfaceVariant)
         }
       }
       Icon(painterResource(R.drawable.action_chevron_right), null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)

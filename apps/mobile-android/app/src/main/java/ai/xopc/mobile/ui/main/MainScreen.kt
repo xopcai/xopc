@@ -3,6 +3,7 @@ package ai.xopc.mobile.ui.main
 import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.theme.CHAT_MESSAGE_WIDTH
 import ai.xopc.mobile.theme.LocalChatColors
+import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.gateway.ClarificationCommand
 
 import ai.xopc.mobile.gateway.ProgressTaskEdit
@@ -188,7 +189,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -2090,7 +2090,7 @@ private fun ConnectionUiState.matchesComposer(gatewayId: String?, conversationId
 private fun MainBottomSurface(tag: String, expanded: Boolean,
   content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag(tag)
-    .background(if (expanded) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent, themedCorners(28)),
+    .background(if (expanded) MaterialTheme.colorScheme.surface else Color.Transparent, themedCorners(28)),
     content = content)
 }
 
@@ -2267,11 +2267,8 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
     }
     val personalAgent = connection.personal.agent?.takeIf { it.conversationId == connection.selectedConversationId }
     Column(modifier = Modifier.fillMaxWidth()
-      .background(when {
-        actionsOpen -> Color.Transparent
-        MaterialTheme.colorScheme.background.luminance() < .35f -> MaterialTheme.colorScheme.surfaceContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHighest
-      }, themedCorners(28)).testTag("assistant-composer-shell")) {
+      .background(if (actionsOpen) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer,
+        themedCorners(28)).testTag("assistant-composer-shell")) {
       Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Bottom) {
         if (!expandedComposer) AssistantAddAction(connection, actionsOpen, toggleActions, voiceBusy || voiceHeld)
@@ -2942,7 +2939,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         state = messageListState, reverseLayout = true,
         contentPadding = ChatMessagePadding(bottomChromeInsets, headerClearance,
           replySpaceHeight + if (showConnectionWait) 104.dp else 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Top)) {
+        verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Top)) {
         if (connection.optimisticText.isNotBlank()) item(key = "send-flight") {
           AnimatedVisibility(visible = sendFlightVisible && connection.optimisticText.isNotBlank(),
             enter = slideInVertically(initialOffsetY = { it * 5 }) + fadeIn()) {
@@ -2990,7 +2987,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             previewEligible = message.id != latestMessageId && connection.messages.any { it.id == message.id },
             onViewMore = { messageDetailId = message.id },
             revealAnswer = connection.liveMessages.any { it.answerConfirmed && it.id in message.sourceIds },
-            reservesReactionSpace = isPersonalChat,
             loadMedia = { media -> onLoadMessageMedia(selectedMessageConversationId, media) })
             generatedCards[message.renderId]?.let { cards ->
               GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
@@ -3040,20 +3036,23 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         Modifier.align(Alignment.TopCenter).padding(top = headerClearance + 4.dp, start = 12.dp, end = 12.dp), sticky = true)
     }
     val canvas = MaterialTheme.colorScheme.background
-    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(headerClearance + 16.dp)
-      .background(Brush.verticalGradient(0f to canvas, 0.3f to canvas.copy(alpha = .94f),
-        .72f to canvas.copy(alpha = .84f), 1f to canvas.copy(alpha = 0f)))
+    Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(chatTopInset)
+      .background(canvas)
       .testTag("chat-status-bar-background"))
     if (connection.automationConfigurationChat || projectChatTitle != null) {
+      val headerFill = LocalChatColors.current.card
       Row(Modifier.align(Alignment.TopCenter).fillMaxWidth()
         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
         .padding(horizontal = 12.dp, vertical = 8.dp).testTag("chat-floating-header"),
-        verticalAlignment = Alignment.CenterVertically) {
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         IconButton(onClick = if (connection.automationConfigurationChat) onCloseAutomationConfiguration else onCloseProjectChat,
-          modifier = Modifier.testTag(if (connection.automationConfigurationChat) "automation-configuration-close" else "project-chat-close")) {
+          modifier = Modifier.background(headerFill, CircleShape)
+            .testTag(if (connection.automationConfigurationChat) "automation-configuration-close" else "project-chat-close")) {
           Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
         }
         Text(if (connection.automationConfigurationChat) stringResource(R.string.automation_setup_title) else projectChatTitle.orEmpty(),
+          modifier = Modifier.weight(1f, fill = false).background(headerFill, themedCorners(16))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
           style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
       }
     } else if (!isTaskChat(connection)) {
@@ -3069,7 +3068,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             Icon(painterResource(R.drawable.action_menu), stringResource(R.string.chat_open_drawer), Modifier.size(22.dp))
           }
           if (personalAgent != null) IconButton(onClick = onOpenPersonalOverview,
-            modifier = Modifier.align(Alignment.TopCenter).size(62.dp).semantics {
+            modifier = Modifier.align(Alignment.TopCenter).size(62.dp).background(LocalChatColors.current.card, CircleShape).semantics {
               contentDescription = personalOverviewLabel
             }.testTag("chat-personal-overview")) {
             PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, 62.dp,
@@ -3121,16 +3120,19 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         }
         if (personalAgent != null) {
           val attention = connection.progress.needsUser.size
+          val attentionColors = LocalAttentionColors.current
           Column(horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = if (attention > 0) Modifier.clip(themedCorners(14))
-              .background(LocalChatColors.current.card)
-              .clickable { onOpenMessageTarget(ConversationTarget("progress", "", "")) }
-              .padding(horizontal = 12.dp, vertical = 2.dp) else Modifier) {
+            modifier = Modifier.clip(themedCorners(14))
+              .background(if (attention > 0) attentionColors.fill else LocalChatColors.current.card)
+              .then(if (attention > 0) Modifier.clickable {
+                onOpenMessageTarget(ConversationTarget("progress", "", ""))
+              } else Modifier)
+              .padding(horizontal = 12.dp, vertical = 2.dp)) {
             Text(personalAgent.displayName, Modifier.testTag("chat-personal-name"),
               style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
               maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (attention > 0) Text(stringResource(R.string.progress_attention_count, attention),
-              style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              style = MaterialTheme.typography.labelSmall, color = attentionColors.foreground)
           }
         }
       }

@@ -21,14 +21,14 @@ struct XopcMusicCover {
 
   build() {
     Stack() {
-      Row().width('74%').aspectRatio(1).border(this.colors.controlStroke).borderRadius(999).opacity(0.45)
-      Row().width('56%').aspectRatio(1).border(this.colors.controlStroke).borderRadius(999).opacity(0.45)
+      Row().width('74%').aspectRatio(1).borderRadius(999).backgroundColor(this.colors.input).opacity(0.5)
+      Row().width('56%').aspectRatio(1).borderRadius(999).backgroundColor(this.colors.chat.bubble)
       Row().width('39%').aspectRatio(1).borderRadius(999).backgroundColor(this.colors.chat.canvas)
       Text('♫').fontSize(46).fontWeight(FontWeight.Medium).fontColor(this.colors.chat.action)
     }.width('80%').constraintSize({ maxWidth: 248 }).aspectRatio(1)
       .linearGradient({ direction: GradientDirection.RightBottom, colors: [
         [this.colors.accentSoft, 0], [this.colors.chat.card, 1]
-      ] }).border(this.colors.panelStroke).borderRadius(this.colors.corner(24)).clip(true)
+      ] }).borderRadius(this.colors.corner(24)).clip(true)
       .accessibilityLevel('no')
   }
 }
@@ -101,7 +101,7 @@ export struct XopcMusicMiniPlayer {
         Row().width(this.progress + '%').height(2).backgroundColor(this.colors.chat.action).accessibilityLevel('no')
       }
     }.id(this.sticky ? 'music-sticky-player' : 'music-mini-player').width('calc(100% - 24vp)').height(56)
-      .backgroundColor(this.colors.chat.card).border(this.colors.panelStroke).borderRadius(this.colors.corner(17)).clip(true)
+      .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(17)).clip(true)
   }
 }
 

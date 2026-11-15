@@ -230,7 +230,7 @@ struct AssistantComposer: View {
                         .font(.system(size: 16))
                         .frame(width: 40, height: 44)
                 }
-                .foregroundStyle(.red)
+                .foregroundStyle(mobileTheme.danger)
                 .accessibilityLabel("停止")
             }
 
@@ -264,7 +264,6 @@ struct AssistantComposer: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 1)
         .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(24)))
-        .overlay(RoundedRectangle(cornerRadius: mobileTheme.corner(24)).strokeBorder(Color.primary.opacity(0.12)))
     }
 
     private var attachmentStrip: some View {

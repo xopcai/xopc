@@ -205,7 +205,7 @@ export struct XopcCapabilitiesView {
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.tertiary])
       }.width('100%').constraintSize({ minHeight: 62 }).padding({ left: 12, right: 12 })
     }.width('100%').padding(0).backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
-      .border(this.colors.panelStroke).borderRadius(this.colors.corner(16)).id('capability-row-' + item.id)
+      .borderRadius(this.colors.corner(16)).id('capability-row-' + item.id)
       .onClick((): void => {
         this.getUIContext().getFocusController().clearFocus();
         this.setupMode = ''; this.detail = item; this.detailOpen = true;
@@ -270,7 +270,7 @@ export struct XopcCapabilitiesView {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(20).fontColor([this.colors.foreground])
         }.id('capability-back').width(44).height(44).padding(0)
-          .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input).border(this.colors.panelStroke)
+          .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input)
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onExit(); })
         Button({ type: ButtonType.Normal }) {
           Row({ space: 6 }) {
@@ -363,7 +363,7 @@ export struct XopcCapabilitiesView {
         }.id('capability-search-clear').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .accessibilityText($r('app.string.capability_clear')).onClick((): void => { this.query = ''; })
       }.width('100%').padding({ left: 16, right: 6 })
-        .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input).border(this.colors.controlStroke).borderRadius(this.colors.corner(24))
+        .backgroundColor(this.colors.input).borderRadius(this.colors.corner(24))
         .margin({ top: 8, bottom: 8 })
     }.width('100%').height('100%').padding({ left: 16, right: 16 }).backgroundColor(this.colors.surface)
       .bindSheet($$this.detailOpen, this.detailSheet, { height: this.setupMode ? '78%' : '60%', dragBar: true,

@@ -36,6 +36,10 @@ export struct XopcSegmentedTabs {
     return this.colors.light ? this.colors.accent : this.colors.foreground;
   }
 
+  @Computed get segmentRadius(): number {
+    return this.colors.corner(18) * this.fontScale;
+  }
+
   build() {
     Scroll() {
       if (this.viewportWidth > 0) {
@@ -43,7 +47,7 @@ export struct XopcSegmentedTabs {
           if (this.selectedIndex >= 0) {
             Blank().width(this.segmentWidth).height(44 * this.fontScale)
               .backgroundColor(this.colors.light ? this.colors.panel : this.colors.active)
-              .border(this.colors.panelStroke).borderRadius(22 * this.fontScale).translate({ x: this.segmentWidth * this.selectedIndex })
+              .borderRadius(this.segmentRadius).translate({ x: this.segmentWidth * this.selectedIndex })
               .animation({ duration: this.layout.reduceMotion ? 0 : 250, curve: segmentCurve })
               .hitTestBehavior(HitTestMode.None).accessibilityLevel('no')
           }
@@ -57,7 +61,7 @@ export struct XopcSegmentedTabs {
                     ]).animation({ duration: this.layout.reduceMotion ? 0 : 150, curve: Curve.EaseOut })
                   }
                   Text(option.label).fontSize(14)
-                    .fontWeight(this.colors.light && option.key === this.selectedKey ? FontWeight.Bold : FontWeight.Medium).maxLines(2)
+                    .fontWeight(option.key === this.selectedKey ? FontWeight.Bold : FontWeight.Medium).maxLines(2)
                     .textAlign(TextAlign.Center).textOverflow({ overflow: TextOverflow.Ellipsis })
                     .fontColor(option.key === this.selectedKey ? this.selectedForeground : this.colors.secondary)
                     .animation({ duration: this.layout.reduceMotion ? 0 : 150, curve: Curve.EaseOut })
@@ -68,12 +72,12 @@ export struct XopcSegmentedTabs {
                   }
                 }.padding({ left: 6, right: 6 }).justifyContent(FlexAlign.Center)
               }.id(option.testId ?? '').width(this.segmentWidth).height(44 * this.fontScale).padding(0)
-                .borderRadius(22 * this.fontScale).backgroundColor(Color.Transparent)
+                .borderRadius(this.segmentRadius).backgroundColor(Color.Transparent)
                 .accessibilitySelected(option.key === this.selectedKey).onClick((): void => { this.onSelect(option.key); })
             }, (option: XopcSegmentOption): string => option.key + ':' + (option.count ?? ''))
           }
         }.width(this.segmentWidth * this.options.length).height(44 * this.fontScale)
-          .borderRadius(22 * this.fontScale).backgroundColor(this.colors.input).clip(true)
+          .borderRadius(this.segmentRadius).backgroundColor(this.colors.input).clip(true)
       }
     }.width('100%').height(44 * this.fontScale).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       .onAreaChange((_before: Area, next: Area): void => {
