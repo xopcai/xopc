@@ -111,3 +111,20 @@ extension EnvironmentValues {
         set { self[MobileThemeKey.self] = newValue }
     }
 }
+
+extension View {
+    func mobilePageTitle(_ title: Text) -> some View {
+        navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    title.font(.headline).lineLimit(1).truncationMode(.tail)
+                        .accessibilityAddTraits(.isHeader)
+                }
+            }
+    }
+}

@@ -165,9 +165,14 @@ export async function patchPersonalProfile(
   appearance: PersonalAppearance,
   voicePreference?: { provider: string; model: string; voice: string } | null,
   voiceCallPreferences?: VoiceCallPreferencesPatch,
+  messageReactionsEnabled?: boolean,
 ): Promise<PersonalAgentRecord | null> {
-  const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, appearance, voicePreference, voiceCallPreferences);
+  const previous = getPersonalAgent(ownerId);
+  const updated = await updatePersonalProfileRecord(ownerId, revision, displayName, appearance, voicePreference, voiceCallPreferences, messageReactionsEnabled);
   if (!updated) return null;
+  if (messageReactionsEnabled !== undefined && previous?.displayName === updated.displayName && previous.appearance === updated.appearance
+    && JSON.stringify(previous.voicePreference) === JSON.stringify(updated.voicePreference)
+    && JSON.stringify(previous.voiceCallPreferences) === JSON.stringify(updated.voiceCallPreferences)) return updated;
   service.refreshAgentCatalog();
   service.agentService.evictSessionAgent(updated.conversationId);
   return updated;
@@ -180,6 +185,7 @@ export async function updatePersonalProfileRecord(
   appearance: PersonalAppearance,
   voicePreference?: { provider: string; model: string; voice: string } | null,
   voiceCallPreferences?: VoiceCallPreferencesPatch,
+  messageReactionsEnabled?: boolean,
 ): Promise<PersonalAgentRecord | null> {
   const repository = new AgentCatalogRepository();
   const current = repository.get(personalAgentId(ownerId));
@@ -191,6 +197,7 @@ export async function updatePersonalProfileRecord(
     emoji: appearanceEmoji(appearance),
     avatar: appearanceAvatar(appearance),
     ...(voicePreference !== undefined ? { voicePreference: voicePreference ?? undefined } : {}),
+    ...(messageReactionsEnabled !== undefined ? { messageReactionsEnabled } : {}),
     ...(voiceCallPreferences ? { voiceCallPreferences: {
       openingGreetingEnabled: callPreferences.openingGreetingEnabled,
       defaultMode: callPreferences.defaultMode,

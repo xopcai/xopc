@@ -21,6 +21,7 @@ export interface PersonalAgentRecord {
   appearance: PersonalAppearance;
   voicePreference: { provider: string; model: string; voice: string } | null;
   voiceCallPreferences: VoiceCallPreferences;
+  messageReactionsEnabled: boolean;
   revision: number;
   errorMessage: string | null;
 }
@@ -65,6 +66,7 @@ function toRecord(ownerId: string, agent: StoredAgent, session: PersonalSession 
     appearance: appearanceFrom(agent),
     voicePreference: agent.profile?.voicePreference ?? null,
     voiceCallPreferences: agent.profile?.voiceCallPreferences ?? { openingGreetingEnabled: true },
+    messageReactionsEnabled: agent.profile?.messageReactionsEnabled !== false,
     revision: agent.revision,
     errorMessage: agent.provisioningError ?? null,
   };

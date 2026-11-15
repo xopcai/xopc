@@ -25,6 +25,7 @@ export type AiUsageCategory =
 
 export type AiUsageContext = {
   operation: string;
+  metadataOnly?: boolean;
   trigger?: AiUsageTrigger;
   traceId?: string;
   parentEventId?: string;

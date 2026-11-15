@@ -1,6 +1,6 @@
 import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
-import { XopcChatRow, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload } from '../model/chat';
+import { XopcAgentReaction, XopcChatRow, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload } from '../model/chat';
 import { dedupeChatHistory, chatHistoryOverlap } from '../common/chatHistory';
 import { XopcEvent } from '../model/realtime';
 import { historyRows } from '../common/chatProtocol';
@@ -21,6 +21,7 @@ interface XopcPendingChatSend {
 }
 
 interface XopcChatHttpFailure { status?: number; }
+interface XopcReactionPreference { enabled: boolean; }
 
 @ObservedV2
 export class XopcChatViewModel {
@@ -39,6 +40,11 @@ export class XopcChatViewModel {
   @Trace connection: string = 'connecting';
   @Trace runId: string = '';
   @Trace runStartedAtMs: number = 0;
+  @Trace liveReaction?: XopcAgentReaction;
+  @Trace animatedReactionEntry: string = '';
+  @Trace reactionsAvailable?: boolean;
+  @Trace reactionsAllowed: boolean = true;
+  private firstAnswerRun: string = '';
   @Trace streaming: string = '';
   @Trace thinking: string = '';
   @Trace tool: string = '';
@@ -144,6 +150,8 @@ export class XopcChatViewModel {
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.selectedId = id; this.rows = []; this.runId = ''; this.runStartedAtMs = 0; this.streaming = ''; this.thinking = ''; this.tool = '';
+    this.liveReaction = undefined; this.animatedReactionEntry = ''; this.firstAnswerRun = '';
+    this.reactionsAvailable = undefined; this.reactionsAllowed = true;
     this.liveRow = undefined; this.liveActivityRow = undefined; this.historyMessages = []; this.rows = this.pendingRows();
     this.completedActivityRunId = ''; this.snapshotMode = false;
     this.executionInputIds.clear(); this.executionAssistantIds.clear();
@@ -181,6 +189,8 @@ export class XopcChatViewModel {
       this.historyMessages = page.session.messages;
       this.rows = rows.concat(this.pendingRows().filter((row: XopcChatRow): boolean => !rows.some((saved: XopcChatRow): boolean => saved.id === row.id)));
       this.title = page.session.name || ''; this.transcriptId = page.session.transcriptId;
+      this.reactionsAvailable = page.session.agentReactions?.available;
+      this.reactionsAllowed = page.session.agentReactions?.enabled ?? true;
       this.before = page.pagination.nextBeforeCursor || ''; this.hasOlder = page.pagination.hasMore && !!this.before;
       this.cachedHistory = true;
     } catch (_) { /* Cache is optional; network recovery remains authoritative. */ }
@@ -260,11 +270,14 @@ export class XopcChatViewModel {
         this.localDraft = result.localDraft === true;
         this.hasNetworkHistory = !this.localDraft;
         this.cachedHistory = false;
+        this.reactionsAvailable = result.session.agentReactions?.available;
+        this.reactionsAllowed = result.session.agentReactions?.enabled ?? true;
       }
       if (!older && this.hasNetworkHistory && !this.runId) this.repository.rememberHistory(this.selectedId, result).catch((_error: Error): void => {});
       const sameTranscript = !!this.transcriptId && this.transcriptId === result.session.transcriptId;
       if (!older && this.transcriptId && !sameTranscript) {
         this.executionInputIds.clear(); this.executionAssistantIds.clear();
+        this.liveReaction = undefined; this.animatedReactionEntry = '';
       }
       if (result.session.transcriptId) {
         this.outbox.forEach((input: XopcPendingChatSend, id: string): void => {
@@ -312,7 +325,11 @@ export class XopcChatViewModel {
           this.completedActivityRunId = '';
         }
       }
-      confirmed.forEach((row: XopcChatRow): void => { if (row.role === 'user') this.outbox.delete(row.id); });
+      confirmed.forEach((row: XopcChatRow): void => {
+        if (row.role !== 'user') return;
+        this.outbox.delete(row.id);
+        if (row.agentReaction) this.outbox.delete(row.agentReaction.clientMessageId);
+      });
       this.rows = this.mergePendingRows(confirmed);
       if (!older && this.snapshotMode && !this.completedActivityRunId && !this.runId) {
         this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = '';
@@ -501,6 +518,24 @@ export class XopcChatViewModel {
   private event(event: XopcEvent): void {
     if (event.topic === 'gateway' || event.topic === 'sessions') {
       const state = event.data as XopcStreamEvent;
+      if (event.event === 'session.agent-reaction' && state.conversationId === this.selectedId) {
+        const reaction = event.data as XopcAgentReaction;
+        if (!reaction.emoji || !reaction.entryId || !reaction.transcriptId || !reaction.clientMessageId
+          || (this.transcriptId && reaction.transcriptId !== this.transcriptId) || this.liveReaction?.entryId === reaction.entryId) return;
+        this.animatedReactionEntry = this.runId === reaction.runId && this.firstAnswerRun !== reaction.runId
+          && Date.now() - reaction.createdAtMs < 1500 ? reaction.entryId : '';
+        this.reactionsAvailable = true;
+        this.reactionsAllowed = true;
+        this.liveReaction = reaction;
+        return;
+      }
+      if (event.event === 'session.agent-reaction.preference' && state.conversationId === this.selectedId) {
+        const preference = event.data as XopcReactionPreference;
+        this.reactionsAllowed = preference.enabled;
+        this.liveReaction = undefined; this.animatedReactionEntry = '';
+        this.loadHistory(false);
+        return;
+      }
       if (event.event === 'session.task-result' && state.conversationId === this.selectedId) {
         this.loadHistory(false);
         return;
@@ -516,6 +551,7 @@ export class XopcChatViewModel {
     const data = event.data as XopcStreamEvent;
     if (data.conversationId !== this.selectedId || !data.payload) return;
     const payload = data.payload;
+    if (event.event === 'assistant_delta' && payload.delta?.trim()) this.firstAnswerRun = this.runId;
     if (event.event !== 'assistant_delta') this.flushStream();
     if (event.event === 'user_message') {
       if (this.liveRow?.text) this.recover();

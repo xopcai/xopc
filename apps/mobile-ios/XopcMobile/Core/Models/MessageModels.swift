@@ -1,5 +1,10 @@
 import Foundation
 
+struct AgentMessageReaction: Decodable, Equatable, Sendable {
+    let emoji: String
+    let actorName: String
+}
+
 struct WireMessage: Decodable, Sendable {
     var display: Bool?
     let id: String?
@@ -9,6 +14,7 @@ struct WireMessage: Decodable, Sendable {
     let content: MessageContent
     var deliveries: [HistoryProductDelivery]?
     var generatedMediaIds: [String]?
+    var agentReaction: AgentMessageReaction?
     let rawContent: MessageContent?
     let toolCalls: [HistoryToolCall]?
     let attachments: [HistoryAttachment]?
@@ -181,6 +187,7 @@ struct TimelineMessage: Equatable, Identifiable, Sendable {
     var unavailableOutputs: [String] = []
     var taskReceipts: [HistoryTaskReceipt] = []
     var generatedMediaIds: [String] = []
+    var agentReaction: AgentMessageReaction?
 }
 
 struct TimelineDetail: Equatable, Identifiable, Sendable {

@@ -95,6 +95,7 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
   Column(Modifier.fillMaxSize().padding(insets).testTag("about-you-screen")) {
     Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
+      PageBackButton("about-you-back", onBack)
       Text(stringResource(if (page == "detail") R.string.about_you_details else R.string.about_you_title),
         style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
         modifier = Modifier.weight(1f))

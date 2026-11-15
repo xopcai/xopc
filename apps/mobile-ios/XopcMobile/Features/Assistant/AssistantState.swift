@@ -452,6 +452,17 @@ extension AssistantState {
             guard loadedConversationID == conversation.id, !Task.isCancelled else { return }
             let projected = await projectHistory(history)
             guard loadedConversationID == conversation.id, !Task.isCancelled else { return }
+            if let transcript = history.session.transcriptId, transcript == loadedTranscriptID {
+                let savedUsers = Dictionary(projected.filter { $0.role == "user" }.map { ($0.id, $0) },
+                                            uniquingKeysWith: { _, latest in latest })
+                for index in messages.indices where messages[index].role == "user" {
+                    if let saved = savedUsers[messages[index].id] {
+                        messages[index].agentReaction = saved.agentReaction
+                    }
+                }
+                let visible = Set(messages.map(\.id))
+                messages.append(contentsOf: projected.filter { $0.role == "user" && $0.agentReaction != nil && !visible.contains($0.id) })
+            }
             let results = projected.filter { $0.turnId?.hasPrefix("task-result:") == true }
             let known = Set(messages.compactMap(\.turnId))
             messages.append(contentsOf: results.filter { !known.contains($0.turnId ?? "") })

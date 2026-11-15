@@ -6,7 +6,7 @@ import { HIGGS_REALTIME_REF, voiceCallPreferencesPatchSchema } from '@xopcai/rea
 import { writeAgentAvatarFromBase64 } from '../../agents-admin.js';
 import { getPersonalOwnerId } from '../../security/gateway-principal.js';
 import { markPersonalRead, personalUnreadSnapshot } from '../../../personal-agent/unread.js';
-import { getPersonalAgent } from '../../../personal-agent/repository.js';
+import { getPersonalAgent, type PersonalAgentRecord } from '../../../personal-agent/repository.js';
 import { isPersonalSchedule, personalScheduleInput } from '../../../personal-agent/schedules.js';
 import { AutomationScheduleSchema } from '../../../automations/domain/validation.js';
 import { getAutomation } from '../../../automations/storage/index.js';
@@ -40,6 +40,7 @@ const OnboardingSchema = z.object({
 }).strict();
 const ProfileSchema = z.object({
   voiceCallPreferences: voiceCallPreferencesPatchSchema.optional(),
+  messageReactionsEnabled: z.boolean().optional(),
   revision: z.number().int().positive(),
   displayName: z.string().trim().min(1).max(60),
   appearance: PersonalAppearanceSchema,
@@ -62,6 +63,8 @@ const PersonalSchedulePatchSchema = PersonalScheduleSchema.partial().extend({
 }).refine(value => Object.keys(value).length > 1);
 
 export function registerPersonalAgentRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  const profilePayload = (record: PersonalAgentRecord | null) => record && ({ ...record,
+    messageReactionsAvailable: deps.service.currentConfig?.experimental?.personalAgentMessageReactions === true });
   const owner = getPersonalOwnerId;
 
   registerProactivityRoutes(authenticated, deps, owner);
@@ -161,7 +164,7 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
     if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
     await refreshPersonalDelegationGuidance(deps.service, ownerId);
     ensurePersonalConversationVisibility(ownerId);
-    return c.json({ ok: true, payload: getPersonalAgent(ownerId) });
+    return c.json({ ok: true, payload: profilePayload(getPersonalAgent(ownerId)) });
   });
 
   authenticated.get('/api/personal-agent/unread', c => {
@@ -283,7 +286,7 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
         parsed.data.displayName && parsed.data.appearance
           ? { displayName: parsed.data.displayName, appearance: parsed.data.appearance, ...(selected ? { voicePreference: selected } : {}) }
           : undefined);
-      return c.json({ ok: true, payload: record });
+      return c.json({ ok: true, payload: profilePayload(record) });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
     }
@@ -294,22 +297,27 @@ export function registerPersonalAgentRoutes(authenticated: Hono, deps: Authentic
     if (!ownerId) return c.json({ ok: false, error: 'Owner access is required' }, 403);
     const parsed = ProfileSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid profile' }, 400);
-    const { revision, displayName, appearance, voicePreference, voiceCallPreferences } = parsed.data;
+    const { revision, displayName, appearance, voicePreference, voiceCallPreferences, messageReactionsEnabled } = parsed.data;
     const naturalModel = voiceCallPreferences?.naturalModel;
     if (naturalModel && naturalModel !== HIGGS_REALTIME_REF && naturalModel !== legacyNaturalModel(deps.service.currentConfig)
       && naturalModel !== getPersonalAgent(ownerId)?.voiceCallPreferences.naturalModel) {
       return c.json({ ok: false, error: 'Selected natural voice model is unavailable' }, 400);
     }
-    if (voicePreference) {
+    if (voicePreference && JSON.stringify(voicePreference) !== JSON.stringify(getPersonalAgent(ownerId)?.voicePreference)) {
       const { resolveStreamingTts } = await import('../../../voice/realtime/runtime.js');
       const route = resolveStreamingTts(deps.service.currentConfig);
       if (!route?.provider.plugin.listVoices || route.route.provider !== voicePreference.provider || route.route.model !== voicePreference.model) return c.json({ ok: false, error: 'Selected voice is unavailable' }, 400);
       const voices = await route.provider.plugin.listVoices({ cfg: deps.service.currentConfig, providerConfig: route.provider.providerConfig, mode: 'speech.stream' });
       if (!voices.some(voice => voice.id === voicePreference.voice)) return c.json({ ok: false, error: 'Selected voice is unavailable' }, 400);
     }
-    const updated = await patchPersonalProfile(deps.service, ownerId, revision, displayName, appearance, voicePreference, voiceCallPreferences);
+    const updated = await patchPersonalProfile(deps.service, ownerId, revision, displayName, appearance, voicePreference, voiceCallPreferences, messageReactionsEnabled);
+    if (updated && messageReactionsEnabled !== undefined) {
+      deps.service.realtime.broker.publish('sessions', 'session.agent-reaction.preference', {
+        conversationId: updated.conversationId, enabled: messageReactionsEnabled,
+      });
+    }
     return updated
-      ? c.json({ ok: true, payload: updated })
+      ? c.json({ ok: true, payload: profilePayload(updated) })
       : c.json({ ok: false, error: 'Profile changed or personal Agent is unavailable' }, 409);
   });
 }

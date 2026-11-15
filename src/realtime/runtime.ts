@@ -250,6 +250,8 @@ export class RealtimeRuntime {
         }), 'critical');
         const cancelReplay = writer.enqueueReplay((function* () {
           for (const message of handle.initial) {
+            // Reactions are recovered by the authenticated history snapshot without replaying their entrance.
+            if (message.kind === 'realtime.event' && message.payload.event === 'session.agent-reaction') continue;
             const output = item.view === 'compact' ? compactRunEvent(message) : message;
             if (output) yield output;
           }

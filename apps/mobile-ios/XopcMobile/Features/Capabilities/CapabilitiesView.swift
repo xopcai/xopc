@@ -92,8 +92,9 @@ struct CapabilitiesView: View {
         .background(mobileTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) { searchField }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .principal) { categoryMenu }
+            ToolbarItem(placement: .topBarLeading) { categoryMenu }
             ToolbarItem(placement: .primaryAction) {
                 Button("capability_retry", systemImage: "arrow.clockwise") { revision += 1 }
                     .labelStyle(.iconOnly).disabled(loading).accessibilityIdentifier("capability-refresh")

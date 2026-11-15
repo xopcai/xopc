@@ -29,6 +29,7 @@ import type { GatewayPrincipal } from '../security/gateway-principal.js';
 import { currentDeviceExecutionActor, deviceExecutionPrincipalId } from '../../endpoint-tools/execution-actor.js';
 import { runGatewayAgent, type RunGatewayAgentOptions } from './run-gateway-agent.js';
 import { NextTurnSuggestionService } from '../next-turn-suggestions/service.js';
+import { AgentReactionService } from '../agent-reactions/reaction.js';
 import { describeActiveExecution, type ActiveExecution, type ActiveExecutionKind } from './active-execution.js';
 import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import type { AgentSourceContext, TurnContextRef } from '../../agent/source-context/types.js';
@@ -56,6 +57,7 @@ import {
 const log = createLogger('Gateway:AgentRunner');
 
 export interface GatewayAgentRunnerOptions {
+  canReact?: (endpointId: string) => boolean;
   canResumeDeviceInteraction?: (conversationId: string, checkpoint: import('@xopcai/gateway-contract').DeviceInteractionCheckpoint) => boolean;
   afterConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput, status: string) => Promise<void>;
   validateConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput) => Promise<boolean>;
@@ -93,6 +95,7 @@ export class GatewayAgentRunner {
   private readonly externalClarificationResponses = new Map<string, () => boolean>();
   readonly inputs: SessionInputCoordinator;
   readonly nextTurnSuggestions: NextTurnSuggestionService;
+  private readonly reactions = new AgentReactionService();
   private readonly unsubscribeConnectionWait: () => void;
 
   constructor(opts: GatewayAgentRunnerOptions) {
@@ -310,6 +313,8 @@ export class GatewayAgentRunner {
           emit: this.opts.emit,
           publishRealtime: this.opts.publishRealtime,
           completeRealtimeTopic: this.opts.completeRealtimeTopic,
+          reactions: this.reactions,
+          canReact: this.opts.canReact,
         },
         message,
         channel,

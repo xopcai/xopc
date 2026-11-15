@@ -196,6 +196,33 @@ describe('RealtimeRuntime', () => {
     });
   });
 
+  it.each([true, false])('delivers live reactions only to sessions readers (%s) and recovers old reactions through history', async canRead => {
+    runtime = new RealtimeRuntime();
+    server = createServer();
+    server.on('upgrade', (request, connection, head) => runtime!.handleUpgrade(request, connection, head));
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing test address');
+    runtime.broker.publish('sessions', 'session.agent-reaction', { emoji: '👋' });
+    runtime.broker.publish('sessions', 'run.started', {});
+    const issued = runtime.tickets.issue('reaction-reader', 'web', { principalId: 'reader', scopes: canRead ? ['sessions.read'] : ['workspace.read'] });
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+    await waitForOpen(socket);
+    const messages = collectMessages(socket);
+    socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
+      kind: 'realtime.hello', sentAt: Date.now(), payload: { ticket: issued.ticket, clientId: 'reaction-reader', clientKind: 'web',
+        subscriptions: [{ topic: 'sessions', afterSeq: 0 }] } }));
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready' });
+    if (!canRead) {
+      await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.error', payload: { code: 'FORBIDDEN_TOPIC' } });
+      return;
+    }
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.subscribed' });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.event', payload: { event: 'run.started' } });
+    runtime.broker.publish('sessions', 'session.agent-reaction', { emoji: '🎉' });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.event', payload: { event: 'session.agent-reaction', data: { emoji: '🎉' } } });
+  });
+
   it('delivers a large desktop replay and concurrent live event over loopback without disconnecting', async () => {
     runtime = new RealtimeRuntime();
     server = createServer();

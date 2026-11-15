@@ -154,14 +154,15 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   }.groupBy { it.group }
 
   Column(Modifier.fillMaxSize().padding(insets).imePadding().padding(horizontal = 16.dp)) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-      IconButton(onClick = onExit, modifier = Modifier.align(Alignment.CenterStart)
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+      IconButton(onClick = onExit, modifier = Modifier
         .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape).testTag("capability-back")) {
         ActionIcon(R.drawable.action_chevron_left, contentDescription = stringResource(R.string.progress_back))
       }
-      Box {
+      Box(Modifier.weight(1f)) {
         TextButton(onClick = { keyboard?.hide(); menu = true }, modifier = Modifier.testTag("capability-category")) {
-          Text(stringResource(category.title), style = MaterialTheme.typography.titleLarge)
+          Text(stringResource(category.title), style = MaterialTheme.typography.titleLarge, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
           ActionIcon(R.drawable.action_chevron_down, modifier = Modifier.padding(start = 6.dp), size = 16.dp)
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -171,7 +172,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
           }
         }
       }
-      IconButton(onClick = { retry++ }, enabled = !loading, modifier = Modifier.align(Alignment.CenterEnd).testTag("capability-refresh")) {
+      IconButton(onClick = { retry++ }, enabled = !loading, modifier = Modifier.testTag("capability-refresh")) {
         Text("↻", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics {
           contentDescription = context.getString(R.string.capability_retry)
         })

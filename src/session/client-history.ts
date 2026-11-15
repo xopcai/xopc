@@ -15,6 +15,7 @@ import { isVoiceConversationMessage, VOICE_CHAT_MESSAGE_TYPE } from './voice-tra
 export interface ClientHistoryMessage {
   id?: string;
   transcriptEntryId?: string;
+  agentReaction?: import('@xopcai/gateway-contract').SessionAgentReaction;
   turnId?: string;
   /** A background Agent turn starts a new visible assistant bubble without a visible user row. */
   startsNewBubble?: boolean;
@@ -816,8 +817,10 @@ export function transcriptRowsToClientHistory(
           ...(displayIndex !== undefined ? { displayIndex } : {}) });
         continue;
       }
+      const transcriptEntryId = messageRow.role === 'user' ? storedTranscriptEntryId(row) : undefined;
       out.push({
         id,
+        ...(transcriptEntryId ? { transcriptEntryId } : {}),
         ...(messageRow.turnId ? { turnId: messageRow.turnId } : {}),
         role: messageRow.role,
         kind: 'message',

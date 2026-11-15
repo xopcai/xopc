@@ -51,6 +51,7 @@ export class XopcPersonalAgentSettingsViewModel {
     const appearanceChanged = patch.appearance !== original.appearance;
     const greeting = patch.voiceCallPreferences?.openingGreetingEnabled;
     const engine = patch.voiceCallPreferences?.enginePreference;
+    const reactions = patch.messageReactionsEnabled;
     const latestGreeting = latest.voiceCallPreferences?.openingGreetingEnabled ?? true;
     const latestEngine = latest.voiceCallPreferences?.enginePreference ?? 'auto';
     const voiceChanged = JSON.stringify(patch.voicePreference ?? null) !== JSON.stringify(original.voicePreference ?? null);
@@ -59,6 +60,7 @@ export class XopcPersonalAgentSettingsViewModel {
       (appearanceChanged && latest.appearance !== original.appearance && latest.appearance !== patch.appearance) ||
       (greeting !== undefined && latestGreeting !== (original.voiceCallPreferences?.openingGreetingEnabled ?? true) && latestGreeting !== greeting) ||
       (engine !== undefined && latestEngine !== (original.voiceCallPreferences?.enginePreference ?? 'auto') && latestEngine !== engine) ||
+      (reactions !== undefined && latest.messageReactionsEnabled !== original.messageReactionsEnabled && latest.messageReactionsEnabled !== reactions) ||
       (voiceChanged && JSON.stringify(latest.voicePreference ?? null) !== JSON.stringify(original.voicePreference ?? null) &&
         JSON.stringify(latest.voicePreference ?? null) !== JSON.stringify(patch.voicePreference ?? null))) {
       throw new Error('PERSONAL_PROFILE_CONFLICT');
@@ -66,11 +68,12 @@ export class XopcPersonalAgentSettingsViewModel {
     return { revision: latest.revision, displayName: nameChanged ? patch.displayName : latest.displayName,
       appearance: appearanceChanged ? patch.appearance : latest.appearance,
       voiceCallPreferences: patch.voiceCallPreferences,
+      messageReactionsEnabled: reactions,
       voicePreference: voiceChanged ? patch.voicePreference : latest.voicePreference };
   }
 
   async saveProfile(name: string, appearance: string,
-    voiceId: string, greetingEnabled?: boolean, callMode?: XopcPersonalCallMode): Promise<XopcPersonalAgentRecord | null> {
+    voiceId: string, greetingEnabled?: boolean, callMode?: XopcPersonalCallMode, messageReactionsEnabled?: boolean): Promise<XopcPersonalAgentRecord | null> {
     const record = this.record;
     if (this.saving || this.loading || !record?.revision || !name.trim() || name.trim().length > 60) return null;
     const generation = this.generation;
@@ -82,6 +85,7 @@ export class XopcPersonalAgentSettingsViewModel {
       callPreferences.enginePreference = callMode;
     }
     const patch: XopcPersonalProfilePatch = { revision: record.revision, displayName: name.trim(), appearance: appearance,
+      messageReactionsEnabled: messageReactionsEnabled !== record.messageReactionsEnabled ? messageReactionsEnabled : undefined,
       voiceCallPreferences: Object.keys(callPreferences).length ? callPreferences : undefined,
       voicePreference: voiceId === record.voicePreference?.voice || (!voiceId && record.voicePreference?.voice === 'default') ? record.voicePreference : this.voiceRoute ? (voiceId ? { provider: this.voiceRoute.provider,
         model: this.voiceRoute.model, voice: voiceId } : null) : record.voicePreference };

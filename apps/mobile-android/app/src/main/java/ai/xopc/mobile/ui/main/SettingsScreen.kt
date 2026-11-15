@@ -51,14 +51,16 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
   onColorSchemeChange: (String) -> Unit, onLanguageChange: (String) -> Unit = {}) {
   val context = LocalContext.current
   Column(Modifier.fillMaxSize().padding(insets).testTag("settings-screen")) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
+      PageBackButton("settings-back", onBack)
       Text(stringResource(when (section) {
         "appearance" -> R.string.settings_appearance
         "language" -> R.string.settings_language
         else -> R.string.settings_title
       }),
-        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
+        maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     AnimatedContent(targetState = section, modifier = Modifier.fillMaxSize(),
       transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(180)) },

@@ -1230,12 +1230,15 @@ export struct XopcWorkspaceView {
         }.width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .accessibilityText($r('app.string.back')).enabled(!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen))
           .onClick((): void => { this.goBack(); })
-        Text(this.model.editing && !this.model.selected?.id ? this.createLabel()
-          : this.section === 'tasks' && this.model.selected
-            ? this.model.editing ? $r('app.string.task_edit_title') : $r('app.string.task_detail_title')
-          : this.section === 'automations' && this.model.selected
-            ? this.model.editing ? $r('app.string.edit_automation') : $r('app.string.automation_detail_title')
-            : this.heading).layoutWeight(1).fontSize(22).lineHeight(30).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+        Row() {
+          Text(this.model.editing && !this.model.selected?.id ? this.createLabel()
+            : this.section === 'tasks' && this.model.selected
+              ? this.model.editing ? $r('app.string.task_edit_title') : $r('app.string.task_detail_title')
+            : this.section === 'automations' && this.model.selected
+              ? this.model.editing ? $r('app.string.edit_automation') : $r('app.string.automation_detail_title')
+              : this.heading).constraintSize({ maxWidth: '90%' }).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .fontSize(22).lineHeight(30).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+        }.layoutWeight(1)
         if (!this.model.selected && !this.model.openingId) {
           if (this.section !== 'tasks') {
             XopcPageSearchButton({ searchId: this.section + '-open-search', open: this.searchOpen,

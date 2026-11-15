@@ -1948,7 +1948,11 @@ final class MobileLayoutParityUITests: XCTestCase {
     func testAgentPickerShowsLocalizedBuiltInNames() {
         XCTAssertTrue(app.openHomeSidebar())
         app.buttons["chat-sidebar-new"].tap()
-        app.buttons["chat-header-agent"].tap()
+        let agentPicker = app.buttons["chat-header-agent"]
+        XCTAssertTrue(agentPicker.waitForExistence(timeout: 6))
+        XCTAssertLessThan(app.buttons["chat-header-sidebar"].frame.maxX, app.frame.midX)
+        XCTAssertGreaterThan(agentPicker.frame.midX, app.frame.midX)
+        agentPicker.tap()
         let coder = app.buttons["agent-picker-coder"]
         XCTAssertTrue(coder.waitForExistence(timeout: 6))
         XCTAssertTrue(coder.label.contains("编程") || coder.label.contains("代码"))
@@ -2048,6 +2052,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         let category = app.buttons["capability-category"]
         let plugin = app.buttons["capability-row-meeting-plugin"]
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
+        XCTAssertLessThan(category.frame.midX, app.frame.midX)
+        XCTAssertGreaterThan(app.buttons["capability-refresh"].frame.midX, app.frame.midX)
         let search = app.textFields["capability-search"]
         search.tap()
         search.typeText("Meeting")

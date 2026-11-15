@@ -51,6 +51,7 @@ internal class RealtimeClient(
   private val identity: DeviceIdentity = DeviceIdentity("xopc.gateway.endpoint.p256.v1"),
   private val http: OkHttpClient = OkHttpClient.Builder().followRedirects(false).build(),
 ) {
+  private val conversationHistoryEvents = setOf("session.task-result", "session.agent-reaction", "session.agent-reaction.preference")
   @Volatile private var claim: TurnClaim? = null
   private var watchedRunTopic: String? = null
   private var watchedRunSeq = 0L
@@ -220,7 +221,7 @@ internal class RealtimeClient(
           "realtime.event" -> {
             val payload = message.getJSONObject("payload")
             val topic = payload.getString("topic")
-            if (topic == "sessions" && payload.optString("event") == "session.task-result") {
+            if (topic == "sessions" && payload.optString("event") in conversationHistoryEvents) {
               val conversationId = payload.optJSONObject("data")?.optString("conversationId").orEmpty()
               if (conversationId.isNotBlank()) onTaskResult(conversationId)
             } else if (topic == "sessions" || topic == "gateway") onInvalidation(topic)

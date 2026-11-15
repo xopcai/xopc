@@ -55,8 +55,11 @@ export struct XopcPageHeader {
           .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent).border(this.colors.panelStroke)
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
       }
-      Text(this.heading).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)
-        .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      Row() {
+        Text(this.heading).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)
+          .fontColor(this.colors.foreground).constraintSize({ maxWidth: '90%' })
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.layoutWeight(1)
       if (this.searchId) {
         XopcPageSearchButton({ searchId: this.searchId, open: this.searchOpen, label: this.searchLabel, onToggle: this.onSearch })
       }

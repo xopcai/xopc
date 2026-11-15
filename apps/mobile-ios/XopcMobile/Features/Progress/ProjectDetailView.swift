@@ -87,8 +87,7 @@ struct ProjectDetailView: View {
                 ProgressView("正在读取项目…")
             }
         }
-        .navigationTitle("项目详情")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("项目详情"))
         .task { await load() }
         .sheet(item: $creationSheet, onDismiss: { Task { await load() } }) { sheet in
             switch sheet {

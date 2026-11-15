@@ -45,7 +45,12 @@ export interface XopcMessageMetadata { hiddenFromClient?: boolean; clientMessage
 export interface XopcHistoryToolCall { id?: string; name?: string; args?: Object; result?: Object; isError?: boolean; details?: Object; }
 export interface XopcOpenAiToolCall { id: string; function: XopcToolFunction; }
 export interface XopcToolFunction { name: string; arguments?: string; }
+export interface XopcAgentReaction {
+  conversationId: string; transcriptId: string; clientMessageId: string; entryId: string;
+  runId: string; emoji: string; actorName: string; createdAtMs: number;
+}
 export interface XopcMessage { display?: boolean; id?: string; messageId?: string; role: string; content: string | XopcContentBlock[];
+  transcriptEntryId?: string; agentReaction?: XopcAgentReaction;
   deliveries?: XopcProductDelivery[];
   generatedMediaIds?: string[];
   rawContent?: XopcContentBlock[]; media?: XopcHistoryMedia[]; attachments?: XopcHistoryMedia[]; metadata?: XopcMessageMetadata;
@@ -56,7 +61,10 @@ export interface XopcMessage { display?: boolean; id?: string; messageId?: strin
   ttsAudioUri?: string; tts_audio_uri?: string; audioUri?: string; audio_url?: string;
   mimeType?: string; mime_type?: string; name?: string;
 }
-export interface XopcSessionDetail { key: string; transcriptId?: string; name?: string; status?: string; agentId?: string; projectId?: string; messages: XopcMessage[]; }
+export interface XopcAgentReactionSettings { available: boolean; enabled: boolean; }
+export interface XopcSessionDetail { key: string; transcriptId?: string; name?: string; status?: string; agentId?: string; projectId?: string; messages: XopcMessage[];
+  agentReactions?: XopcAgentReactionSettings;
+}
 export interface XopcHistoryPagination { hasMore: boolean; nextBeforeCursor?: string; }
 export interface XopcHistory { session: XopcSessionDetail; pagination: XopcHistoryPagination; localDraft?: boolean; }
 export interface XopcCreatedSession { session: XopcSessionDetail; }
@@ -85,6 +93,7 @@ export interface XopcExecutionStep { id: string; kind: string; category?: string
 export interface XopcExecutionDetail { turnId: string; steps: XopcExecutionStep[]; }
 export interface XopcLiveActivityTool { id: string; kind: string; status: string; }
 export interface XopcChatRow { id: string; role: string; text: string; thinking?: string; tools?: string; media?: XopcHistoryMedia[]; refs?: XopcContextRef[];
+  transcriptEntryId?: string; agentReaction?: XopcAgentReaction;
   deliveries?: XopcProductDelivery[];
   generatedMediaIds?: string[];
   sendState?: string;

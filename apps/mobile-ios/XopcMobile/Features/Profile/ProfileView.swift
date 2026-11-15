@@ -136,8 +136,7 @@ struct ProfileView: View {
             }
         }
         .listSectionSpacing(16)
-        .navigationTitle(AppLocalization.string("我的", locale: locale))
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text(verbatim: AppLocalization.string("我的", locale: locale)))
         .refreshable { await load() }
         .task { await load() }
         .toolbar {
@@ -282,8 +281,7 @@ private struct UserUnderstandingView: View {
                 Text("内容暂时无法读取，请下拉重试").foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("关于你")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("关于你"))
         .searchable(text: $query, prompt: "搜索记忆")
         .task(id: "\(section):\(filter):\(query)") {
             guard section == 1 else { return }
@@ -594,6 +592,6 @@ struct AboutView: View {
             LabeledContent("客户端", value: "原生 iOS")
             LabeledContent("最低系统", value: "iOS 17")
         }
-        .navigationTitle("关于 xopc")
+        .mobilePageTitle(Text("关于 xopc"))
     }
 }

@@ -161,6 +161,7 @@ export const AgentProfileSchema = z.object({
     voice: z.string().trim().min(1).max(200),
   }).strict().optional(),
   voiceCallPreferences: voiceCallPreferencesSchema.optional(),
+  messageReactionsEnabled: z.boolean().optional(),
   instructions: z.string().trim().min(1).optional(),
 }).strict();
 

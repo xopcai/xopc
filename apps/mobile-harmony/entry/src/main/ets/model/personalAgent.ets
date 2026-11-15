@@ -3,6 +3,8 @@ export interface XopcPersonalVoiceCallPreferences { openingGreetingEnabled: bool
 export interface XopcPersonalVoiceCallPatch { openingGreetingEnabled?: boolean; enginePreference?: XopcPersonalCallMode; }
 
 export interface XopcPersonalAgentRecord {
+  messageReactionsEnabled?: boolean;
+  messageReactionsAvailable?: boolean;
   voiceCallPreferences?: XopcPersonalVoiceCallPreferences;
   agentId: string;
   conversationId: string;
@@ -33,6 +35,7 @@ export interface XopcPersonalVoiceRoute { tts?: XopcPersonalVoicePreference; }
 export interface XopcPersonalVoicesResponse { ok: boolean; payload: XopcPersonalVoices; error?: string; }
 export interface XopcPersonalVoices { voices: XopcPersonalVoiceOption[]; }
 export interface XopcPersonalProfilePatch {
+  messageReactionsEnabled?: boolean;
   voiceCallPreferences?: XopcPersonalVoiceCallPatch;
   revision: number; displayName: string; appearance: string;
   voicePreference?: XopcPersonalVoicePreference | null;

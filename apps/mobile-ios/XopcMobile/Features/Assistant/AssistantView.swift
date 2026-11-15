@@ -544,6 +544,7 @@ struct AssistantView<Dock: View>: View {
                                 onReuseUserText: { draft = $0 },
                                 maximumWidth: maximumMessageWidth,
                                 animateStreaming: followingBottom && !userScrollingMessages,
+                                reservesReactionSpace: isPersonalConversation,
                                 onReading: {
                                     followingBottom = false
                                     bottomScrollTask?.cancel(); bottomScrollTask = nil
@@ -1003,21 +1004,13 @@ struct AssistantView<Dock: View>: View {
                     headerButton("打开导航", symbol: "line.3.horizontal", action: onOpenSidebar)
                         .accessibilityIdentifier("chat-header-sidebar")
                 }
-                if !isPersonalConversation {
-                    Button { showingAgentPicker = true } label: {
-                        Text(verbatim: conversationNavigationTitle)
-                            .font(.subheadline.weight(.semibold)).lineLimit(1)
-                            .padding(.horizontal, 10)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("chat-header-agent")
-                }
                 if phone.summary?.available == true, isPersonalConversation {
                     phoneWorkspaceButton
                 }
-                if isPersonalConversation {
-                    Spacer(minLength: 0)
+                Spacer(minLength: 0)
+                if !isPersonalConversation {
+                    headerButton("切换 Agent", symbol: "person.crop.circle") { showingAgentPicker = true }
+                        .accessibilityIdentifier("chat-header-agent")
                 }
                 if phone.summary?.available == true, !isPersonalConversation {
                     phoneWorkspaceButton

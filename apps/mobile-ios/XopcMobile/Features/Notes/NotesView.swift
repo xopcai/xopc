@@ -105,8 +105,7 @@ struct NotesView: View {
             .refreshable { await refreshLibrary() }
         }
         .background(mobileTheme.canvas)
-        .navigationTitle("资料")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("资料"))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PageSearchButton("搜索资料", isOpen: $searchOpen, query: $search,

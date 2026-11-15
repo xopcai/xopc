@@ -91,6 +91,7 @@ async function completeWithResolvedCredentialsInner(
     withModelUsageOrigin('background', () => assertProviderUsage(model.provider, model.baseUrl));
   }
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
+  resolvedOptions.signal?.throwIfAborted();
   const usageCall = startAiUsageCall(model, usageContext, { context, options: { reasoning: options.reasoning, temperature: options.temperature, maxTokens: options.maxTokens } });
   try {
     if (model.baseUrl === EXTENSION_PROVIDER_BASE_URL) {

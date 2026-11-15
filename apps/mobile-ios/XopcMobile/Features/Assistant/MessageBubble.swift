@@ -20,6 +20,7 @@ struct MessageBubble: View {
     let onReuseUserText: (String) -> Void
     var maximumWidth: CGFloat?
     var animateStreaming = false
+    var reservesReactionSpace = false
     var onReading: () -> Void = {}
     @Environment(\.locale) private var locale
     @Environment(\.colorScheme) private var colorScheme
@@ -63,10 +64,24 @@ struct MessageBubble: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, isUserAudioBubble ? 4 : 14)
-            .padding(.vertical, isUserAudioBubble ? 0 : 10)
+            .padding(.top, isUserAudioBubble ? 0 : reservesReactionSpace && message.role == "user" ? 18 : 10)
+            .padding(.bottom, isUserAudioBubble ? 0 : 10)
             .frame(width: bubbleWidth, alignment: .leading)
             .background((message.role == "user" ? mobileTheme.bubble : mobileTheme.panel))
             .clipShape(.rect(cornerRadius: mobileTheme.corner(18)))
+            .overlay(alignment: .topLeading) {
+                if let reaction = message.agentReaction, !message.isPending {
+                    Text(verbatim: reaction.emoji)
+                        .font(.system(size: 15))
+                        .frame(width: 33, height: 25)
+                        .background(mobileTheme.panel, in: Capsule())
+                        .overlay { Capsule().strokeBorder(mobileTheme.edge, lineWidth: 1) }
+                        .offset(x: -4, y: -7)
+                        .allowsHitTesting(false)
+                        .accessibilityLabel(Text(verbatim: "\(reaction.actorName) \(reaction.emoji)"))
+                }
+            }
+            .padding(.top, reservesReactionSpace && message.role == "user" ? 8 : 0)
             .environment(\.chatTextSelectionEnabled, false)
         }
         // Keep accessibility bounds on the bubble before expanding its alignment frame.

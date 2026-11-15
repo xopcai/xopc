@@ -9,7 +9,9 @@ import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
-import { messagesToClientHistory } from '../../../session/client-history.js';
+import { messagesToClientHistory, type ClientHistoryMessage } from '../../../session/client-history.js';
+import { readAgentReactions } from '../../../storage/sqlite/agent-reaction-repository.js';
+import { getPersonalAgentByConversation } from '../../../personal-agent/repository.js';
 import { SessionStatus, type SessionType } from '../../../session/types.js';
 import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-references.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
@@ -505,6 +507,22 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
 
     if (!result) {
       return c.json({ error: 'Session not found' }, 404);
+    }
+
+    const actor = getPersonalAgentByConversation(key);
+    if (actor && result.session.transcriptId) {
+      const available = service.currentConfig?.experimental?.personalAgentMessageReactions === true;
+      result.session.agentReactions = { available, enabled: available && actor.messageReactionsEnabled };
+      if (result.session.agentReactions.enabled) {
+        const messages = result.session.messages as unknown as ClientHistoryMessage[];
+        const entries = messages.flatMap(row => row.role === 'user' && row.transcriptEntryId ? [row.transcriptEntryId] : []);
+        const reactions = new Map(readAgentReactions(key, result.session.transcriptId, entries, actor.displayName)
+          .map(reaction => [reaction.entryId, reaction]));
+        for (const row of messages) {
+          const reaction = row.role === 'user' && row.transcriptEntryId ? reactions.get(row.transcriptEntryId) : undefined;
+          if (reaction) row.agentReaction = reaction;
+        }
+      }
     }
 
     const revision = result.pagination.revision;

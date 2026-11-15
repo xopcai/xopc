@@ -272,15 +272,15 @@ export struct XopcCapabilitiesView {
         }.id('capability-back').width(44).height(44).padding(0)
           .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input).border(this.colors.panelStroke)
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onExit(); })
-        Row() {
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 6 }) {
-              Text(this.title(this.category)).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-              SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
-            }
-          }.id('capability-category').height(48).padding({ left: 10, right: 10 }).backgroundColor(Color.Transparent)
-            .bindMenu(this.categoryMenu)
-        }.layoutWeight(1).justifyContent(FlexAlign.Center)
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 6 }) {
+            Text(this.title(this.category)).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
+          }
+        }.id('capability-category').height(48).padding({ left: 10, right: 10 }).backgroundColor(Color.Transparent)
+          .constraintSize({ maxWidth: '60%' }).bindMenu(this.categoryMenu)
+        Blank().layoutWeight(1)
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(18).fontColor([this.colors.secondary])
         }.id('capability-refresh').width(44).height(44).padding(0).backgroundColor(Color.Transparent)

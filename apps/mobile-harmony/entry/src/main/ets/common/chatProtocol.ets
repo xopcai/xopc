@@ -44,6 +44,7 @@ export function historyRows(history: XopcHistory, page: string = 'latest'): Xopc
   history.session.messages.forEach((message, index: number): void => {
     if (message.display === false || message.metadata?.hiddenFromClient === true) return;
     if (!['user', 'user-with-attachments', 'assistant', 'tool', 'toolResult'].includes(message.role)) return;
+    const reaction = message.role === 'user' ? message.agentReaction : undefined;
     const clientId = message.metadata?.clientMessageId;
     const userIdentity = (message.role === 'user' || message.role === 'user-with-attachments')
       && typeof clientId === 'string' && !!clientId.trim();
@@ -108,7 +109,7 @@ export function historyRows(history: XopcHistory, page: string = 'latest'): Xopc
     if (text || thinking || tools || blocks.length || outcome || message.deliveries?.length || message.generatedMediaIds?.length || media.length || refs.length || message.role === 'tool' || message.role === 'toolResult') {
       const row: XopcChatRow = { id: rowId, role: message.role === 'user-with-attachments' ? 'user' : message.role,
         text: text.trim(), thinking: thinking.trim(), tools: tools.trim(), media, blocks, outcome, turnId: message.turnId, deliveries: message.deliveries,
-        generatedMediaIds: message.generatedMediaIds };
+        generatedMediaIds: message.generatedMediaIds, transcriptEntryId: message.transcriptEntryId, agentReaction: reaction };
       if (row.role === 'assistant') {
         blocks.forEach((block: XopcChatBlock): void => { if (block.kind === 'text' && !block.presentation) block.presentation = calls.length ? 'narration' : 'answer'; });
         refreshChatRow(row);

@@ -56,12 +56,14 @@ data class ConversationArtifact(val artifactId: String, val title: String, val k
   val capabilities: List<String>, val uri: String?, val workspaceRelativePath: String?, val shareUrl: String?)
 data class ConversationOutcome(val status: String, val summary: String?,
   val artifacts: List<ConversationArtifact>)
+data class AgentMessageReaction(val emoji: String, val actorName: String)
 data class ConversationMessage(val id: String, val role: String, val text: String, val turnId: String? = null,
   val hasNonTextContent: Boolean = false, val media: List<ConversationMedia> = emptyList(),
   val references: List<ConversationReference> = emptyList(),
   val targets: List<ConversationTarget> = emptyList(), val outcome: ConversationOutcome? = null,
   val sourceIds: Set<String> = setOf(id), val renderId: String = id, val answerConfirmed: Boolean = true,
-  val narrations: List<ConversationNarration> = emptyList(), val generatedMediaIds: List<String> = emptyList())
+  val narrations: List<ConversationNarration> = emptyList(), val generatedMediaIds: List<String> = emptyList(),
+  val agentReaction: AgentMessageReaction? = null)
 data class ConversationNarration(val id: String, val text: String)
 data class ConversationHistory(val conversationId: String, val transcriptId: String?, val messages: List<ConversationMessage>,
   val agentId: String? = null, val nextBeforeCursor: String? = null)
@@ -1237,7 +1239,12 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         if (text.isBlank() && !hasNonTextContent) null else
           ConversationMessage(item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }, role, text,
             item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome,
-            narrations = narrations, generatedMediaIds = generatedMediaIds)
+            narrations = narrations, generatedMediaIds = generatedMediaIds,
+            agentReaction = item.optJSONObject("agentReaction")?.takeIf { role == "user" &&
+              it.optString("entryId") == item.optString("transcriptEntryId") }?.let {
+              val emoji = it.optString("emoji")
+              if (emoji.isBlank()) null else AgentMessageReaction(emoji, it.optString("actorName"))
+            })
       }
       val grouped = mutableListOf<ConversationMessage>()
       parsed.forEach { message ->

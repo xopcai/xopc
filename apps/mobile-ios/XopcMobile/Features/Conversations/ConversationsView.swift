@@ -87,8 +87,7 @@ struct ConversationsView: View {
             }
         }
         .background(mobileTheme.canvas)
-        .navigationTitle("对话")
-        .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("对话"))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PageSearchButton("搜索对话", isOpen: $searchOpen, query: $state.searchText,

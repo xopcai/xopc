@@ -351,7 +351,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           ?: stringResource(R.string.progress_automations)
         "automation-run" -> state.automations.run?.automationName ?: stringResource(R.string.automation_run)
         else -> stringResource(R.string.tab_progress)
-      }, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+      }, modifier = Modifier.weight(1f).padding(end = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
         style = if (page == "overview") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Bold)
       if (page == "overview") IconButton(onClick = { page = "work"; openedFromAllWork = true },
