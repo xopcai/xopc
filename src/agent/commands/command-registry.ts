@@ -8,7 +8,7 @@ import { resolveGlobalSingleton } from '../../utils/global-singleton.js';
 import { redactSensitiveOutput } from '../../utils/logger.js';
 import { startCommandTransport, type CommandTransport } from './command-transport.js';
 import { sandboxCommand } from '../sandbox/native-command.js';
-import { getSessionInteractionPolicy } from '../session/interaction-policy.js';
+import { getSessionInteractionPolicy } from '../session/interaction-policy-state.js';
 import { isolatedCommand, removeCommandContainer, type CommandIsolation } from './command-isolation.js';
 import { readWorkspaceRevision } from '../coding/workspace-revision.js';
 
