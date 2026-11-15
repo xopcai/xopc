@@ -19,7 +19,7 @@ extension GatewayClient {
 
     func changeProjectStatus(_ project: ProjectRecord, archived: Bool) async throws -> ProjectRecord {
         try await writeProject(project, body: ProjectWrite(status: archived ? "archived" : "active",
-                                                          expectedVersion: project.version))
+                                                           expectedVersion: project.version))
     }
 
     func changeProjectPin(_ project: ProjectRecord, pinned: Bool) async throws -> ProjectRecord {
@@ -27,10 +27,11 @@ extension GatewayClient {
     }
 
     private func writeProject(_ project: ProjectRecord?, body: ProjectWrite, action: String? = nil,
-                              key: UUID? = nil) async throws -> ProjectRecord {
+                              key: UUID? = nil) async throws -> ProjectRecord
+    {
         let path = "/api/projects" + (project.map { "/\($0.id)" } ?? "") + (action.map { "/\($0)" } ?? "")
         let response: ProjectDetailEnvelope = try await request(path: path, method: project == nil || action != nil ? "POST" : "PATCH",
-                                                                 body: encoder.encode(body), idempotencyKey: project == nil ? key : nil)
+                                                                body: encoder.encode(body), idempotencyKey: project == nil ? key : nil)
         guard response.ok, project == nil || response.project.id == project?.id else { throw GatewayClientError.invalidResponse }
         return response.project
     }
@@ -62,7 +63,7 @@ struct ProjectManageView: View {
                 Section {
                     TextField("名称", text: $name).accessibilityIdentifier("project-edit-name")
                     TextField("描述", text: $description, axis: .vertical)
-                        .lineLimit(3...8)
+                        .lineLimit(3 ... 8)
                         .accessibilityIdentifier("project-edit-description")
                 }
                 if let project {
@@ -75,7 +76,9 @@ struct ProjectManageView: View {
                         }
                     }
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error {
+                    Text(error).foregroundStyle(.red)
+                }
             }
             .disabled(busy)
             .navigationTitle(project == nil ? "新建项目" : "项目设置")
@@ -105,7 +108,7 @@ struct ProjectManageView: View {
         Task {
             defer { busy = false }
             do {
-                onSaved(try await operation(GatewayClient(configuration: configuration)))
+                try await onSaved(operation(GatewayClient(configuration: configuration)))
                 dismiss()
             } catch { self.error = error.localizedDescription }
         }

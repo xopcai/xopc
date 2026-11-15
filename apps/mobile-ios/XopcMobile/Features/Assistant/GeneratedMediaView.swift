@@ -190,7 +190,6 @@ final class GeneratedMediaState {
         }
     }
 
-
     func cardsByReply(_ messages: [TimelineMessage]) -> [String: [GeneratedMediaCard]] {
         let replies = messages.filter { $0.role == "assistant" && $0.answerConfirmed }
         var anchors: [String: String] = [:]
@@ -251,7 +250,8 @@ struct GeneratedMediaRow: View {
                 GeneratedVideoInlinePlayer(card: card, conversationID: conversationID, configuration: configuration)
             }
             if card.kind == .music, GeneratedMusicPlayback.shared.track?.id == card.id,
-               GeneratedMusicPlayback.shared.track?.conversationID == conversationID {
+               GeneratedMusicPlayback.shared.track?.conversationID == conversationID
+            {
                 Button("打开播放器", systemImage: "music.note") { GeneratedMusicPlayback.shared.expanded = true }
                     .font(.caption)
                     .accessibilityIdentifier("music-inline-player")

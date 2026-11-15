@@ -283,7 +283,8 @@ private struct StreamingGatewayStub: GatewayServing {
     }
 
     func updateAgentConfiguration(conversationID _: String, model: String, thinkingLevel: String,
-                                  configVersion: Int?) async throws -> SessionAgentConfiguration {
+                                  configVersion: Int?) async throws -> SessionAgentConfiguration
+    {
         SessionAgentConfiguration(model: model, thinkingLevel: thinkingLevel, configVersion: (configVersion ?? 0) + 1)
     }
 

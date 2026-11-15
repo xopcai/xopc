@@ -38,7 +38,9 @@ final class AssistantOptionsState {
                 selectThinking(configuration.thinkingLevel)
             }
         } catch {
-            if !Task.isCancelled { errorMessage = error.localizedDescription }
+            if !Task.isCancelled {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

@@ -11,9 +11,11 @@ struct GeneratedMusicTrack: Equatable {
     let source: String
     let lyrics: String?
     let duration: Double?
-    var sourceAgentID: String? = nil
+    var sourceAgentID: String?
 
-    var key: String { "\(configurationScope)/\(conversationID)/\(id)" }
+    var key: String {
+        "\(configurationScope)/\(conversationID)/\(id)"
+    }
 }
 
 @MainActor @Observable
@@ -39,7 +41,9 @@ final class GeneratedMusicPlayback {
     private init() {}
 
     func play(_ track: GeneratedMusicTrack, downloading: @escaping () async throws -> URL) {
-        if self.track?.key == track.key { toggle(); return }
+        if self.track?.key == track.key {
+            toggle(); return
+        }
         clear()
         self.track = track
         downloader = downloading
@@ -52,7 +56,11 @@ final class GeneratedMusicPlayback {
         case .loading: playWhenReady.toggle()
         case .playing: pause()
         case .paused, .ended: resume()
-        case .failed: if player != nil { resume() } else { prepare() }
+        case .failed: if player != nil {
+                resume()
+            } else {
+                prepare()
+            }
         }
     }
 
@@ -61,7 +69,9 @@ final class GeneratedMusicPlayback {
         guard phase == .playing else { return }
         player?.pause()
         updates?.cancel()
-        if let player { position = player.currentTime }
+        if let player {
+            position = player.currentTime
+        }
         phase = .paused
         savePosition()
         publish()
@@ -76,7 +86,9 @@ final class GeneratedMusicPlayback {
         guard seconds.isFinite, let player else { return }
         position = min(max(0, seconds), duration)
         player.currentTime = position
-        if phase == .ended { phase = .paused }
+        if phase == .ended {
+            phase = .paused
+        }
         savePosition()
         publish()
     }
@@ -88,13 +100,18 @@ final class GeneratedMusicPlayback {
 
     func checkpoint() {
         guard let player else { return }
-        if phase == .playing { position = player.currentTime }
+        if phase == .playing {
+            position = player.currentTime
+        }
         savePosition()
     }
 
     func validateScope(_ configuration: GatewayConfiguration) {
         if let track, configuration.token.isEmpty ||
-            track.configurationScope != ComposerDraftStore.accountScope(configuration) { stop() }
+            track.configurationScope != ComposerDraftStore.accountScope(configuration)
+        {
+            stop()
+        }
     }
 
     private func prepare() {
@@ -118,7 +135,9 @@ final class GeneratedMusicPlayback {
                 position = saved < duration ? saved : 0
                 audio.currentTime = position
                 phase = .paused
-                if playWhenReady { resume() }
+                if playWhenReady {
+                    resume()
+                }
             } catch {
                 if !Task.isCancelled, self.track?.key == track.key {
                     releaseFile()
@@ -130,16 +149,22 @@ final class GeneratedMusicPlayback {
     }
 
     private func resume() {
-        if phase == .loading { playWhenReady = true; return }
+        if phase == .loading {
+            playWhenReady = true; return
+        }
         guard let player else {
-            if phase == .failed { prepare() }
+            if phase == .failed {
+                prepare()
+            }
             return
         }
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .default)
             try session.setActive(true)
-            if phase == .ended { player.currentTime = 0; position = 0 }
+            if phase == .ended {
+                player.currentTime = 0; position = 0
+            }
             guard player.play() else { throw GatewayClientError.invalidResponse }
             phase = .playing
             installMediaCommands()
@@ -148,15 +173,15 @@ final class GeneratedMusicPlayback {
             updates = Task { [weak self] in
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
-                    guard let self, self.phase == .playing, let audio = self.player else { return }
+                    guard let self, phase == .playing, let audio = self.player else { return }
                     if !audio.isPlaying {
-                        self.phase = .ended
-                        self.position = self.duration
-                        self.savePosition()
-                        self.publish()
+                        phase = .ended
+                        position = duration
+                        savePosition()
+                        publish()
                         return
                     }
-                    self.position = audio.currentTime
+                    position = audio.currentTime
                 }
             }
         } catch {
@@ -166,7 +191,9 @@ final class GeneratedMusicPlayback {
     }
 
     private func clear() {
-        if let player, phase != .ended { position = player.currentTime; savePosition() }
+        if let player, phase != .ended {
+            position = player.currentTime; savePosition()
+        }
         let wasPlaying = phase == .playing
         load?.cancel()
         updates?.cancel()
@@ -179,11 +206,15 @@ final class GeneratedMusicPlayback {
         position = 0
         phase = .paused
         removeMediaCommands()
-        if wasPlaying { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+        if wasPlaying {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     private func releaseFile() {
-        if let localURL { try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent()) }
+        if let localURL {
+            try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent())
+        }
         localURL = nil
     }
 
@@ -225,7 +256,9 @@ final class GeneratedMusicPlayback {
 
     private func removeMediaCommands() {
         guard !remoteTargets.isEmpty else { return }
-        for (command, token) in remoteTargets { command.removeTarget(token) }
+        for (command, token) in remoteTargets {
+            command.removeTarget(token)
+        }
         remoteTargets.removeAll()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
@@ -257,8 +290,8 @@ struct GeneratedMusicDock: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     } icon: { Image(systemName: "music.note") }
-                    .padding(.leading, 10)
-                    .frame(minHeight: 48)
+                        .padding(.leading, 10)
+                        .frame(minHeight: 48)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("music-open-player")

@@ -332,7 +332,9 @@ struct GatewayClient: GatewayServing, Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
-        if let idempotencyKey { request.setValue(idempotencyKey.uuidString, forHTTPHeaderField: "Idempotency-Key") }
+        if let idempotencyKey {
+            request.setValue(idempotencyKey.uuidString, forHTTPHeaderField: "Idempotency-Key")
+        }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

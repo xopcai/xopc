@@ -506,7 +506,9 @@ struct ProjectsView: View {
                             projectID: project.id,
                             onOpenConversation: onOpenConversation,
                             onProjectUpdated: { updated in
-                                if let index = items.firstIndex(where: { $0.id == updated.id }) { items[index] = updated }
+                                if let index = items.firstIndex(where: { $0.id == updated.id }) {
+                                    items[index] = updated
+                                }
                             }
                         )
                     } label: {
@@ -546,10 +548,12 @@ struct ProjectsView: View {
                 (searchText.isEmpty || project.name.localizedCaseInsensitiveContains(searchText)
                     || project.description?.localizedCaseInsensitiveContains(searchText) == true)
         }
-            .sorted { lhs, rhs in
-                if (lhs.pinnedAt != nil) != (rhs.pinnedAt != nil) { return lhs.pinnedAt != nil }
-                return lhs.updatedAt == rhs.updatedAt ? lhs.id < rhs.id : lhs.updatedAt > rhs.updatedAt
+        .sorted { lhs, rhs in
+            if (lhs.pinnedAt != nil) != (rhs.pinnedAt != nil) {
+                return lhs.pinnedAt != nil
             }
+            return lhs.updatedAt == rhs.updatedAt ? lhs.id < rhs.id : lhs.updatedAt > rhs.updatedAt
+        }
     }
 
     private var errorBinding: Binding<Bool> {

@@ -203,7 +203,9 @@ struct AssistantComposer: View {
                                    voiceMode = false
                                    Task { @MainActor in
                                        await Task.yield()
-                                       if focusAllowed, !voiceMode { isComposerFocused = true }
+                                       if focusAllowed, !voiceMode {
+                                           isComposerFocused = true
+                                       }
                                    }
                                },
                                onError: { attachmentError = $0.isEmpty ? nil : $0 })
