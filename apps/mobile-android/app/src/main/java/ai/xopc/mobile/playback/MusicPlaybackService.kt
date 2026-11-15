@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 internal data class MusicTrack(
   val gatewayId: String, val conversationId: String, val id: String, val title: String,
   val sourceTitle: String, val lyrics: String? = null, val durationMs: Int = 0,
+  val fileName: String? = null,
 ) {
   val key: String get() = "$gatewayId/$conversationId/$id"
 }

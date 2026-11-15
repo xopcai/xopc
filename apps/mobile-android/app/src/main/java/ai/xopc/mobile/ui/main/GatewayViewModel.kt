@@ -308,6 +308,7 @@ data class ConnectionUiState(
   val batchConversationRevision: Int = 0,
   val historyLoading: Boolean = false,
   val historyTranscriptId: String? = null,
+  val musicJobsRevision: Int = 0,
   val historyBefore: String? = null,
   val historyLoadingOlder: Boolean = false,
   val historyOlderError: Boolean = false,
@@ -316,7 +317,7 @@ data class ConnectionUiState(
   val sending: Boolean = false,
   val optimisticText: String = "",
   val chatSendSequence: Long = 0,
-  val chatSendPreviousUserId: String? = null,
+  val chatSendMessageId: String? = null,
   val chatSendQueued: Boolean = false,
   val optimisticPreviousUserId: String? = null,
   val sendError: Boolean = false,
@@ -409,6 +410,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   AndroidViewModel(application) {
   constructor(application: Application) : this(application, GatewaySession(application))
   val generatedMediaAccess = GeneratedMediaAccess(session)
+  val spaceLibraryAccess = ai.xopc.mobile.gateway.SpaceLibraryAccess(session)
   private var phoneRepositoryGateway: String? = null
   private var cachedPhoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null
   val phoneRepository: ai.xopc.mobile.gateway.PhoneRepository
@@ -2586,6 +2588,10 @@ class GatewayViewModel internal constructor(application: Application, private va
   private fun handleRunEvent(event: RunStreamEvent) {
     val current = mutableState.value
     if (event.runId != current.activeRunId || event.conversationId != current.selectedConversationId) return
+    if (event.type == "tool_end") {
+      mutableState.update { it.copy(musicJobsRevision = it.musicJobsRevision + 1) }
+      return
+    }
     if (event.type != "assistant_delta") flushStream()
     mutableState.update { it.copy(runProgress = it.runProgress.forRun(event.runId)) }
     when (event.type) {
@@ -3093,7 +3099,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       stoppingRun = false, stopError = false, runError = false, liveMessages = emptyList(), liveNarration = null,
       runProgress = AssistantRunProgress(),
       pendingInput = null, sendError = false, sendErrorDetail = null, sendRejected = false,
-      optimisticText = "", optimisticPreviousUserId = null,
+      optimisticText = "", optimisticPreviousUserId = null, chatSendMessageId = null,
       referencePicker = ReferencePickerUiState(),
       contextPanel = ContextPanelUiState()) }
     mutableState.update { it.copy(models = emptyList(), selectedModelId = "", thinkingLevel = "off",
@@ -3752,7 +3758,8 @@ class GatewayViewModel internal constructor(application: Application, private va
           }
           val latestUser = nextMessages.lastOrNull { it.role == "user" }
           val optimisticConfirmed = state.optimisticText.isNotBlank() && latestUser != null &&
-            latestUser.id != state.optimisticPreviousUserId && latestUser.text == state.optimisticText
+            (latestUser.renderId == state.chatSendMessageId || latestUser.renderId == latestUser.id &&
+              latestUser.id != state.optimisticPreviousUserId && latestUser.text == state.optimisticText)
           val retainedLive = state.liveMessages.filterNot { live -> nextMessages.any { live.id in it.sourceIds } }
           state.copy(messages = nextMessages, pendingInput = pending,
             runProgress = state.runProgress.restore(nextMessages),
@@ -4111,6 +4118,16 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
+  suspend fun loadCapabilityPanel(category: String, id: String, locale: String, command: JSONObject?): JSONObject {
+    val response = runInterruptible(Dispatchers.IO) {
+      ai.xopc.mobile.gateway.CapabilityRepository(session).panel(category, id, locale, command)
+    }
+    if (category == "agents" && command?.optString("action") == "save" && mutableState.value.personal.agent?.agentId == id) {
+      loadPersonalAgent()
+    }
+    return response
+  }
+
   suspend fun loadCapabilities(category: String, locale: String): ai.xopc.mobile.gateway.CapabilityPage {
     return runInterruptible(Dispatchers.IO) {
       ai.xopc.mobile.gateway.CapabilityRepository(session).load(category, locale)
@@ -4121,12 +4138,38 @@ class GatewayViewModel internal constructor(application: Application, private va
     createConversationFor(agentId, false)
   }
 
-  fun startCapabilityConversation(prompt: String) {
-    createConversationFor(mutableState.value.defaultAgentId, false, initialPrompt = prompt)
+  fun startCapabilityChat(prompt: String, agentSetupLanguage: String?) {
+    createConversationFor(mutableState.value.defaultAgentId, false, prompt = prompt, agentSetupLanguage = agentSetupLanguage)
   }
 
   fun createConversation() {
     createConversationFor(mutableState.value.defaultAgentId, false)
+  }
+
+  suspend fun useLibraryFile(id: String, version: ai.xopc.mobile.gateway.LibraryVersion,
+    origin: ai.xopc.mobile.gateway.LibraryOrigin?) {
+    val state = mutableState.value
+    val profile = checkNotNull(state.profile)
+    require(version.sizeBytes in 1..ai.xopc.mobile.gateway.ChatAttachmentStore.MAX_BYTES.toLong())
+    val bytes = spaceLibraryAccess.content(profile, id, version)
+    val conversation = runInterruptible(Dispatchers.IO) {
+      synchronized(session) {
+        val current = session.currentProfile()
+        check(current?.gatewayId == profile.gatewayId && current.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
+        val draft = conversations.createDraft(state.defaultAgentId.ifBlank { "main" }, origin?.projectId?.takeIf { origin.available })
+        try {
+          conversations.addComposerFileBytes(profile.gatewayId, draft.conversationId, version.safeName, version.mimeType, bytes)
+          draft.conversationId
+        } catch (error: Exception) {
+          conversations.discardDraft(draft.conversationId)
+          throw error
+        }
+      }
+    }
+    val current = mutableState.value.profile
+    if (current?.gatewayId != profile.gatewayId || current.deviceId != profile.deviceId) return
+    selectConversation(conversation)
+    mutableState.update { it.copy(chatNavigationId = conversation) }
   }
 
   suspend fun createProjectConversation(projectId: String): String {
@@ -4417,7 +4460,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   }
 
   private fun createConversationFor(agentId: String, discardCurrentDraft: Boolean,
-    projectId: String? = null, executionMode: String? = null, initialPrompt: String? = null) {
+    projectId: String? = null, executionMode: String? = null, prompt: String? = null, agentSetupLanguage: String? = null) {
     val profile = mutableState.value.profile ?: return
     if (mutableState.value.creatingConversation) return
     val previousId = mutableState.value.selectedConversationId
@@ -4428,8 +4471,8 @@ class GatewayViewModel internal constructor(application: Application, private va
         val draft = runInterruptible(Dispatchers.IO) {
           val active = session.currentProfile()
           check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
-          val created = conversations.createDraft(agentId, projectId, executionMode)
-          if (initialPrompt != null) conversations.saveComposerDraft(created.conversationId, initialPrompt)
+          val created = conversations.createDraft(agentId, projectId, executionMode, agentSetupLanguage)
+          if (prompt != null) conversations.saveComposerDraft(created.conversationId, prompt)
           if (discardCurrentDraft && previousId != null) conversations.saveComposerDraft(previousId, "")
           created
         }
@@ -4442,7 +4485,7 @@ class GatewayViewModel internal constructor(application: Application, private va
               current.progress.projectSessions.filterNot { it.id == draft.conversationId })
           else current.progress) }
         selectConversation(draft.conversationId)
-        if (initialPrompt != null) mutableState.update { it.copy(chatNavigationId = draft.conversationId) }
+        if (prompt != null) mutableState.update { it.copy(chatNavigationId = draft.conversationId) }
         loadConversations()
       } catch (error: CancellationException) {
         throw error
@@ -4478,12 +4521,14 @@ class GatewayViewModel internal constructor(application: Application, private va
       mutableState.value.taskScopeLoading ||
       (!modelPrepared && !mutableState.value.draftModelReady) ||
       mutableState.value.realtimeStatus != "connected") return false
+    val clientMessageId = mutableState.value.pendingInput?.clientMessageId ?: UUID.randomUUID().toString()
+    val optimisticText = content.ifBlank { (attachments.map { it.name } + refs.map { it.title }).joinToString("\n") }
     mutableState.update { it.copy(sending = true, sendError = false, sendErrorDetail = null,
       runProgress = if (it.activeRunId == null) AssistantRunProgress() else it.runProgress,
       chatSendSequence = it.chatSendSequence + 1,
-      chatSendPreviousUserId = it.messages.lastOrNull { message -> message.role == "user" }?.id,
+      chatSendMessageId = clientMessageId,
       chatSendQueued = it.activeRunId != null,
-      sendRejected = false, optimisticText = content,
+      sendRejected = false, optimisticText = optimisticText,
       optimisticPreviousUserId = it.messages.lastOrNull { message -> message.role == "user" }?.id) }
     viewModelScope.launch {
       try {
@@ -4491,8 +4536,8 @@ class GatewayViewModel internal constructor(application: Application, private va
         refWriteJob?.join()
         val taskId = mutableState.value.taskConversationTaskId
         val runId = runInterruptible(Dispatchers.IO) {
-          if (taskId != null) conversations.sendTask(taskId, id, content, realtime.turnClaim(), refs, attachments)
-          else conversations.send(id, content, realtime.turnClaim(), refs, attachments)
+          if (taskId != null) conversations.sendTask(taskId, id, content, realtime.turnClaim(), refs, attachments, clientMessageId)
+          else conversations.send(id, content, realtime.turnClaim(), refs, attachments, clientMessageId)
         }
         if (mutableState.value.selectedConversationId == id) {
           discardStream()
@@ -4520,7 +4565,6 @@ class GatewayViewModel internal constructor(application: Application, private va
           catch (_: Exception) { null }
         if (mutableState.value.selectedConversationId == id) mutableState.update {
           it.copy(sending = false, sendError = true, pendingInput = pending,
-            optimisticText = "", optimisticPreviousUserId = null,
             sendErrorDetail = (error as? GatewayHttpException)?.detail,
             sendRejected = error is GatewayHttpException && error.status in 400..499)
         }

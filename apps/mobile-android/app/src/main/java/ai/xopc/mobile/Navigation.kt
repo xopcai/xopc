@@ -46,8 +46,12 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             language = language, onLanguageChange = onLanguageChange,
             onConversationSearchChange = gateway::updateConversationSearch,
             onRefreshConversations = { gateway.loadConversations() },
-            onLoadCapabilities = { gateway.loadCapabilities(it, catalogLocale) }, onCreateAgentConversation = gateway::createAgentConversation,
-            onCapabilityConversation = gateway::startCapabilityConversation,
+            onLoadCapabilities = { gateway.loadCapabilities(it, catalogLocale) },
+            onCapabilitySetupChat = { prompt, agentSetup ->
+              gateway.startCapabilityChat(prompt, if (agentSetup) if (catalogLocale.startsWith("zh")) "zh-CN" else "en" else null)
+            },
+            onCapabilityPanel = { category, id, body -> gateway.loadCapabilityPanel(category, id, catalogLocale, body) },
+            onCreateAgentConversation = gateway::createAgentConversation,
             onLoadMoreConversations = gateway::loadMoreConversations,
             onLoadOlderHistory = gateway::loadOlderHistory,
             onSelectConversation = gateway::selectConversation, onCreateConversation = gateway::createConversation,
@@ -182,6 +186,8 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onLoadMessageMedia = gateway::readMessageMedia,
             onResolveMessageFile = gateway::resolveMessageFile, onSaveFileVersion = gateway::saveFileVersion,
             generatedMediaAccess = gateway.generatedMediaAccess,
+            spaceLibraryAccess = gateway.spaceLibraryAccess,
+            onUseLibraryFile = gateway::useLibraryFile,
             onSpeechChunk = gateway::speechChunk,
             onTranscribeAudio = gateway::transcribeAudio,
             onCreateVoiceCall = gateway::createVoiceCall,

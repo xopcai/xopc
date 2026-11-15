@@ -8,7 +8,8 @@ import {
 describe('lazy route bundles', () => {
   it('routes the mobile catalog through the capability bundle', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities/mobile-catalog')?.id).toBe('capabilities');
-    for (const route of ['skills', 'mcp', 'mcp/id', 'plugin/id', 'agent/id']) {
+    for (const route of ['skills', 'mcp', 'mcp/id', 'plugin/id', 'agent/id', 'panel/plugins', 'panel/skills',
+      'panel/connections', 'panel/agents', 'panel/channels']) {
       expect(findAuthenticatedLazyRouteBundle('/api/capabilities/mobile-actions/' + route)?.id).toBe('capabilities');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities-other/mobile-catalog')).toBeUndefined();

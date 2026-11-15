@@ -28,4 +28,14 @@ class RunStreamEventTest {
     assertEquals("conversation-1", event?.conversationId)
   }
 
+  @Test fun compactMusicToolSuccessCanRefreshBeforeTheRunEnds() {
+    val payload = JSONObject().put("toolName", "music_generation").put("status", "success")
+    val data = JSONObject().put("runId", "run-1").put("conversationId", "chat").put("payload", payload)
+    assertEquals("tool_end", RunStreamEvent.parse("run:run-1", "tool_end", data)?.type)
+    payload.put("status", "error")
+    assertNull(RunStreamEvent.parse("run:run-1", "tool_end", data))
+    payload.put("status", "success").put("toolName", "other_tool")
+    assertNull(RunStreamEvent.parse("run:run-1", "tool_end", data))
+  }
+
 }

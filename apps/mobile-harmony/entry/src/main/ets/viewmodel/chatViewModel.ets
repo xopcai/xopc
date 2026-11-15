@@ -53,6 +53,7 @@ export class XopcChatViewModel {
   @Trace localDraft: boolean = false;
   @Trace hasOlder: boolean = false;
   @Trace auxiliaryRevision: number = 0;
+  @Trace musicJobsRevision: number = 0;
   private repository: XopcChatRepository = new XopcChatRepository();
   private selection: number = 0;
   private historyRequest: number = 0;
@@ -551,6 +552,9 @@ export class XopcChatViewModel {
     const data = event.data as XopcStreamEvent;
     if (data.conversationId !== this.selectedId || !data.payload) return;
     const payload = data.payload;
+    if (event.event === 'tool_end' && payload.toolName === 'music_generation' && payload.status === 'success') {
+      this.musicJobsRevision++;
+    }
     if (event.event === 'assistant_delta' && payload.delta?.trim()) this.firstAnswerRun = this.runId;
     if (event.event !== 'assistant_delta') this.flushStream();
     if (event.event === 'user_message') {

@@ -33,12 +33,19 @@ internal class ChatReadingPosition {
   val listState = androidx.compose.foundation.lazy.LazyListState()
   val positionedAtLatest = mutableStateOf(false)
   val followBottom = mutableStateOf(true)
+  val transcriptId = mutableStateOf<String?>(null)
 }
 
 @Composable
-internal fun rememberChatReadingPosition(conversationId: String?): ChatReadingPosition {
-  val positions = remember { mutableMapOf<String, ChatReadingPosition>() }
-  return remember(conversationId) { positions.getOrPut(conversationId.orEmpty()) { ChatReadingPosition() } }
+internal fun rememberChatReadingPosition(gatewayId: String?, deviceId: String?, conversationId: String?): ChatReadingPosition {
+  val positions = remember(gatewayId, deviceId) { linkedMapOf<String, ChatReadingPosition>() }
+  return remember(gatewayId, deviceId, conversationId) {
+    val key = conversationId.orEmpty()
+    val position = positions.remove(key) ?: ChatReadingPosition()
+    positions[key] = position
+    if (positions.size > 50) positions.remove(positions.keys.first())
+    position
+  }
 }
 
 internal fun isTaskChat(connection: ConnectionUiState): Boolean = connection.taskConversationTaskId != null

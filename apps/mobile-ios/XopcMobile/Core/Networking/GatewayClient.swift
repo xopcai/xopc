@@ -23,7 +23,8 @@ protocol GatewayServing: Sendable {
         attachments: [MessageAttachment],
         references: [ContextReference],
         delivery: MessageDelivery,
-        to conversation: ConversationSelection
+        to conversation: ConversationSelection,
+        clientMessageID: String
     ) async throws -> SessionCommandResult
     func fetchActiveRun(conversationID: String) async throws -> ActiveRun
     func abort(runID: String) async throws
@@ -35,6 +36,12 @@ protocol GatewayServing: Sendable {
 }
 
 extension GatewayServing {
+    func sendMessage(_ text: String, attachments: [MessageAttachment], references: [ContextReference],
+                     delivery: MessageDelivery, to conversation: ConversationSelection) async throws -> SessionCommandResult {
+        try await sendMessage(text, attachments: attachments, references: references, delivery: delivery,
+                              to: conversation, clientMessageID: UUID().uuidString.lowercased())
+    }
+
     func streamTaskResults(conversationID _: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         AsyncThrowingStream { $0.finish() }
     }

@@ -3,13 +3,14 @@ import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { XopcMusicResume, XopcMusicTrack } from '../model/musicPlayback';
 import { XopcChatMediaPlayback, XopcChatMediaPlaybackOptions } from './chatMediaPlayback';
-import { downloadGeneratedMedia, removeGeneratedMediaFile } from './generatedMediaFile';
+import { downloadGatewayMediaFile, downloadGeneratedMedia, removeGeneratedMediaFile } from './generatedMediaFile';
 import { XopcMusicSystemSession } from './musicSystemSession';
 import { readMusicResume, writeMusicResume } from './musicResumeStore';
 
 @ObservedV2
 export class XopcGeneratedMusicPlayback {
   @Trace track?: XopcMusicTrack;
+  @Trace previewTrack?: XopcMusicTrack;
   @Trace loading: boolean = false;
   @Trace failed: boolean = false;
   @Trace expanded: boolean = false;
@@ -128,7 +129,7 @@ export class XopcGeneratedMusicPlayback {
     try {
       await this.cleanup;
       if (generation !== this.generation) return;
-      const length = await downloadGeneratedMedia('music', track.conversationId, track.id, path,
+      const length = await this.downloadTrack(track, path,
         (): boolean => generation === this.generation);
       if (generation !== this.generation) { await removeGeneratedMediaFile(path); return; }
       this.path = path;
@@ -206,7 +207,18 @@ export class XopcGeneratedMusicPlayback {
 
   requestOpen(): void { this.openPending = true; this.openRevision++; }
 
+  openPreview(track: XopcMusicTrack): void {
+    this.open();
+    this.previewTrack = track;
+  }
+
+  closePreview(): void {
+    this.expanded = false;
+    this.previewTrack = undefined;
+  }
+
   open(): void {
+    this.previewTrack = undefined;
     this.openPending = false;
     this.expanded = true;
   }
@@ -216,22 +228,31 @@ export class XopcGeneratedMusicPlayback {
   }
 
   showSource(): void {
-    this.expanded = false;
-    if (this.track) this.sourceRevision++;
+    this.closePreview();
+    if (this.track?.conversationId) this.sourceRevision++;
   }
 
-  async download(): Promise<void> {
+  private downloadTrack(track: XopcMusicTrack, destination: string, current: () => boolean): Promise<number> {
+    if (track.libraryItemId && track.libraryVersionId) {
+      const path = '/api/spaces/items/' + encodeURIComponent(track.libraryItemId) + '/versions/' +
+        encodeURIComponent(track.libraryVersionId) + '/content';
+      return downloadGatewayMediaFile(path, destination, current);
+    }
+    return downloadGeneratedMedia('music', track.conversationId, track.id, destination, current);
+  }
+
+  async download(track: XopcMusicTrack | undefined = this.track): Promise<void> {
     const context = this.context;
-    const track = this.track;
     if (!context || !track || this.downloading) return;
     const generation = this.generation;
     this.downloading = true;
     const path = context.cacheDir + '/xopc-music-export-' + Date.now() + '.mp3';
     try {
-      await downloadGeneratedMedia('music', track.conversationId, track.id, path, (): boolean => generation === this.generation);
+      await this.downloadTrack(track, path, (): boolean => generation === this.generation);
       if (generation !== this.generation) return;
       const name = track.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 100) || 'xopc';
-      const locations = await new picker.DocumentViewPicker(context).save({ newFileNames: [name + '.mp3'] });
+      const fileName = track.fileName?.replace(/[\\/:*?"<>|]/g, '_') || name + '.mp3';
+      const locations = await new picker.DocumentViewPicker(context).save({ newFileNames: [fileName] });
       if (locations.length && generation === this.generation) {
         const target = await fs.open(locations[0], fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
         try { await fs.copyFile(path, target.fd); } finally { await fs.close(target); }
@@ -260,7 +281,7 @@ export class XopcGeneratedMusicPlayback {
     this.position = 0;
     this.loading = false;
     this.failed = false;
-    this.expanded = false;
+    this.closePreview();
     if (this.context) {
       try { writeMusicResume(this.context.filesDir); }
       catch (_) { hilog.warn(0x0000, 'XopcMusic', 'Could not clear playback position'); }

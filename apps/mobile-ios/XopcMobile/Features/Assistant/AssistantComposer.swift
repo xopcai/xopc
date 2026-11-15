@@ -190,13 +190,18 @@ struct AssistantComposer: View {
         HStack(spacing: 8) {
             Button {
                 isComposerFocused = false
-                isActionPanelExpanded = false
-                voiceMode.toggle()
+                withAnimation(panelAnimation) {
+                    isActionPanelExpanded.toggle()
+                }
             } label: {
-                Image(systemName: voiceMode ? "keyboard" : "mic")
-                    .font(.system(size: 20)).frame(width: 44, height: 44)
+                Image(systemName: isActionPanelExpanded ? "xmark.circle" : "plus.circle")
+                    .font(.system(size: 24))
+                    .frame(width: 40, height: 44)
             }
-            .accessibilityLabel(voiceMode ? "键盘输入" : "语音输入")
+            .accessibilityLabel(AppLocalization.string(
+                isActionPanelExpanded ? "关闭添加面板" : "添加附件或引用",
+                locale: locale
+            ))
             if voiceMode {
                 HoldToSpeakBar(configuration: configuration, onStart: onVoiceStart, onAttachment: onVoiceAttachment,
                                onText: { text in
@@ -236,18 +241,13 @@ struct AssistantComposer: View {
 
             Button {
                 isComposerFocused = false
-                withAnimation(panelAnimation) {
-                    isActionPanelExpanded.toggle()
-                }
+                isActionPanelExpanded = false
+                voiceMode.toggle()
             } label: {
-                Image(systemName: isActionPanelExpanded ? "xmark.circle" : "plus.circle")
-                    .font(.system(size: 24))
-                    .frame(width: 40, height: 44)
+                Image(systemName: voiceMode ? "keyboard" : "mic")
+                    .font(.system(size: 20)).frame(width: 44, height: 44)
             }
-            .accessibilityLabel(AppLocalization.string(
-                isActionPanelExpanded ? "关闭添加面板" : "添加附件或引用",
-                locale: locale
-            ))
+            .accessibilityLabel(voiceMode ? "键盘输入" : "语音输入")
 
             if hasPayload {
                 Button(action: onSend) {

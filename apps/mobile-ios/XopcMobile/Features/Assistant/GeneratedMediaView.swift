@@ -123,6 +123,7 @@ final class GeneratedMediaState {
     }
 
     func observe(_ next: Scope?, client: GatewayClient, visible: Bool, busy: Bool) async {
+        guard !Task.isCancelled else { return }
         if next != scope {
             cards = cards(in: next)
             scope = next
@@ -133,23 +134,25 @@ final class GeneratedMediaState {
         }
         guard visible, let next else { return }
         while !Task.isCancelled {
-            await refresh(next, client: client)
+            let request = videoRequest
+            async let music: Void = refreshMusic(next, client: client)
+            async let video: Void = refreshVideo(next, client: client, request: request)
+            _ = await (music, video)
             try? await Task.sleep(for: .seconds(busy || cards.contains(where: \.active) ? 3 : 20))
         }
     }
 
-    private func refresh(_ scope: Scope, client: GatewayClient) async {
-        let request = videoRequest
-        async let music = fetch(.music, id: scope.id, client: client)
-        async let video = fetch(.video, id: scope.id, client: client)
-        let (musicResult, videoResult) = await (music, video)
-        guard !Task.isCancelled, self.scope == scope else { return }
-        if let musicResult, scope.accepts(musicResult.transcriptId) {
-            replace(.music, with: musicResult.jobs)
-        }
-        if let videoResult, scope.accepts(videoResult.transcriptId), request == videoRequest, !submitting {
-            applyVideo(videoResult)
-        }
+    private func refreshMusic(_ scope: Scope, client: GatewayClient) async {
+        guard let result = await fetch(.music, id: scope.id, client: client),
+              !Task.isCancelled, self.scope == scope, scope.accepts(result.transcriptId) else { return }
+        replace(.music, with: result.jobs)
+    }
+
+    private func refreshVideo(_ scope: Scope, client: GatewayClient, request: Int) async {
+        guard let result = await fetch(.video, id: scope.id, client: client),
+              !Task.isCancelled, self.scope == scope, scope.accepts(result.transcriptId),
+              request == videoRequest, !submitting else { return }
+        applyVideo(result)
     }
 
     private func fetch(_ kind: GeneratedMediaCard.Kind, id: String, client: GatewayClient) async -> GeneratedMediaResponse? {
@@ -310,68 +313,34 @@ struct GeneratedMediaRow: View {
 }
 
 struct GeneratedVideoDrawer: View {
-    @Environment(\.mobileTheme) private var mobileTheme
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     let card: GeneratedMediaCard
     let conversationID: String
     let configuration: GatewayConfiguration
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                GeneratedVideoPlayer(card: card, conversationID: conversationID, configuration: configuration)
-                    .padding(20)
-            }
-            .navigationTitle(card.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("关闭", systemImage: "xmark") { dismiss() }
-                        .labelStyle(.iconOnly).accessibilityIdentifier("video-player-close")
-                }
-            }
-        }
-        .accessibilityIdentifier("video-player-drawer")
-        .presentationDetents([.fraction(0.84), .large])
-        .presentationDragIndicator(.visible)
-        .presentationBackground(mobileTheme.canvas)
-    }
-}
-
-private struct GeneratedVideoPlayer: View {
-    @Environment(\.mobileTheme) private var mobileTheme
-    let card: GeneratedMediaCard
-    let conversationID: String
-    let configuration: GatewayConfiguration
-    @State private var player: AVPlayer?
     @State private var localURL: URL?
     @State private var error: String?
     @State private var retry = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let player {
-                VideoPlayer(player: player)
-                    .aspectRatio(card.item.ratio == "9:16" ? 1 : 16.0 / 9, contentMode: .fit)
-                    .clipShape(.rect(cornerRadius: mobileTheme.corner(12)))
-                if let localURL {
-                    ShareLink(item: localURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
-                        .font(.caption)
-                }
+        MobilePreview(title: card.title, closeID: "video-player-close", onClose: { dismiss() }) {
+            if let localURL {
+                ShareLink(item: localURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
+            }
+        } content: {
+            if let localURL {
+                PreviewVideo(url: localURL, autoplay: true)
+                    .accessibilityIdentifier("generated-video-player-\(card.id)")
             } else if let error {
                 Text(verbatim: error).foregroundStyle(.secondary)
                 Button("重试") { retry += 1 }
+                Spacer()
             } else {
-                ProgressView("正在加载媒体").frame(maxWidth: .infinity, minHeight: 44)
+                ProgressView("正在加载媒体").frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .accessibilityIdentifier("generated-video-player-\(card.id)")
+        .accessibilityIdentifier("video-player-drawer")
         .task(id: retry) { await load() }
         .onDisappear {
-            player?.pause()
-            player?.replaceCurrentItem(with: nil)
-            player = nil
             if let localURL {
                 try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent())
                 self.localURL = nil
@@ -386,14 +355,9 @@ private struct GeneratedVideoPlayer: View {
             guard !Task.isCancelled else { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()); return }
             localURL = url
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            let media = AVPlayer(url: url)
-            player = media
-            media.play()
         } catch is CancellationError {
         } catch {
-            if !Task.isCancelled {
-                self.error = error.localizedDescription
-            }
+            if !Task.isCancelled { self.error = error.localizedDescription }
         }
     }
 }

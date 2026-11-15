@@ -3,7 +3,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return {
-    download: vi.fn(), remove: vi.fn(), open: vi.fn(), stop: vi.fn(), play: vi.fn(), pause: vi.fn(), seek: vi.fn(),
+    download: vi.fn(), downloadLibrary: vi.fn(), remove: vi.fn(), open: vi.fn(),
+    stop: vi.fn(), play: vi.fn(), pause: vi.fn(), seek: vi.fn(),
     prepare: vi.fn(), release: vi.fn(), publishSystem: vi.fn(),
     readResume: vi.fn(), writeResume: vi.fn(),
   };
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('@kit.CoreFileKit', () => ({ fileIo: {}, picker: {} }));
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn() } }));
 vi.mock('../entry/src/main/ets/service/generatedMediaFile.ets', () => ({
-  downloadGeneratedMedia: mocks.download, removeGeneratedMediaFile: mocks.remove,
+  downloadGeneratedMedia: mocks.download, downloadGatewayMediaFile: mocks.downloadLibrary, removeGeneratedMediaFile: mocks.remove,
 }));
 vi.mock('../entry/src/main/ets/service/chatMediaPlayback.ets', () => ({
   XopcChatMediaPlayback: class {
@@ -57,6 +58,7 @@ function state(music: XopcGeneratedMusicPlayback, name: string) {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.download.mockResolvedValue(1024);
+  mocks.downloadLibrary.mockResolvedValue(1024);
   mocks.stop.mockResolvedValue(undefined);
   mocks.release.mockResolvedValue(undefined);
 });
@@ -80,6 +82,24 @@ it('uses the same native player and media session for in-app and system controls
   await vi.waitFor(() => expect(mocks.play).toHaveBeenCalledOnce());
   expect(mocks.download).toHaveBeenCalledTimes(1);
   expect(mocks.publishSystem).toHaveBeenCalledWith(track('song'), 'paused', 0, 120);
+});
+
+it('previews another song without interrupting playback and starts library audio explicitly', async () => {
+  const music = player();
+  await music.play('/cache', track('first'));
+  state(music, 'playing');
+  const library = { ...track('second'), libraryItemId: 'item', libraryVersionId: 'version' };
+  music.openPreview(library);
+  expect(music.songId).toBe('first');
+  expect(music.previewTrack).toEqual(library);
+  expect(mocks.downloadLibrary).not.toHaveBeenCalled();
+  music.closePreview();
+  expect(music.previewTrack).toBeUndefined();
+  expect(music.player.state).toBe('playing');
+  await music.play('/cache', library);
+  expect(mocks.downloadLibrary).toHaveBeenCalledWith('/api/spaces/items/item/versions/version/content',
+    expect.any(String), expect.any(Function));
+  expect(music.matches('chat', 'second')).toBe(true);
 });
 
 it('retries an interrupted song at its last position and ignores stale native callbacks', async () => {

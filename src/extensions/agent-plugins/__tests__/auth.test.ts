@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -72,4 +72,26 @@ it('removes versioned configuration references and secrets without touching anot
   const profiles = await new CredentialResolver({ stateDir: state }).listProfiles();
   expect(profiles.some(p => p.provider.startsWith(pluginCredentialProviderPrefix(first.id)))).toBe(false);
   expect(profiles.some(p => p.provider.startsWith(pluginCredentialProviderPrefix(second.id)))).toBe(true);
+});
+
+it('keeps a Bearer plugin authorization token as a secret reference until transport', async () => {
+  const source = temp(), state = temp(), store = new AgentPluginStore(state);
+  mkdirSync(join(source, '.claude-plugin'));
+  writeFileSync(join(source, '.claude-plugin/plugin.json'), JSON.stringify({
+    name: 'bearer-form', mcpServers: './.mcp.json', userConfig: { TOKEN: { type: 'string', sensitive: true, required: true } },
+  }));
+  const server = { type: 'streamable-http', url: 'https://example.com/mcp' };
+  writeFileSync(join(source, '.mcp.json'), JSON.stringify({ mcpServers: {
+    main: { ...server, headers: { authorization: 'Bearer ${user_config.TOKEN}' } },
+    other: { ...server, headers: { 'X-Other': 'Bearer ${user_config.TOKEN}' } },
+  } }));
+  const plugin = store.install(source, { reviewHash: store.inspect(source).reviewHash });
+  await savePluginUserConfig(store, plugin, { TOKEN: 'fixture-bearer-token' });
+  const servers = materializePluginServers(plugin, store, [], true);
+  const projected = servers[pluginServerId(plugin.id, 'main')];
+  expect(projected).toMatchObject({ headers: { authorization: { xopcSecretRef: { prefix: 'Bearer ' } } } });
+  expect(servers[pluginServerId(plugin.id, 'other')]).toBeUndefined();
+  expect(JSON.stringify(projected)).not.toContain('fixture-bearer-token');
+  expect(await resolveConnectorSecretReferences(projected, new CredentialResolver({ stateDir: state })))
+    .toMatchObject({ headers: { authorization: 'Bearer fixture-bearer-token' } });
 });

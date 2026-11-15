@@ -52,6 +52,8 @@ import ai.xopc.mobile.gateway.ConversationContextRef
 import ai.xopc.mobile.gateway.ChatAttachment
 import ai.xopc.mobile.gateway.ChatAttachmentStore
 import java.util.UUID
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicReference
 import ai.xopc.mobile.gateway.ShareItem
 import java.time.Instant
@@ -155,15 +157,58 @@ class MainScreenTest {
   @Test fun sendingTextIsVisibleBeforeAuthoritativeHistoryArrives() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val id = "11111111-2222-3333-4444-555555555555"
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = id))
     composeTestRule.setContent {
       XopcTheme {
-        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
-          connection = ConnectionUiState(profile = profile, selectedConversationId = id,
-            optimisticText = "Sending now", sending = true))
+        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
       }
     }
-    composeTestRule.onNodeWithTag("assistant-send-flight").assertIsDisplayed()
-    composeTestRule.onNodeWithText("Sending now").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(optimisticText = "Sending now", sending = true,
+        chatSendSequence = 1, chatSendMessageId = "first")
+    }
+    val question = composeTestRule.onNodeWithText("Sending now", useUnmergedTree = true).assertIsDisplayed()
+    val bubble = question.fetchSemanticsNode().boundsInRoot
+    val header = composeTestRule.onNodeWithTag("chat-header-sidebar").fetchSemanticsNode().boundsInRoot
+    val list = composeTestRule.onNodeWithTag("assistant-message-list").fetchSemanticsNode().boundsInRoot
+    assertTrue(bubble.top in header.bottom .. list.top + list.height * 0.36f)
+  }
+
+  @Test fun sendingFromHistoryFollowsTheEndThroughAcknowledgementAndStreaming() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val history = (0 until 30).map { ConversationMessage("old-$it", "assistant", "History $it") }
+    val state = mutableStateOf(ConnectionUiState(profile = profile,
+      selectedConversationId = "11111111-2222-3333-4444-555555555555", messages = history))
+    composeTestRule.setContent {
+      XopcTheme { MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value) }
+    }
+    val list = composeTestRule.onNodeWithTag("assistant-message-list")
+    composeTestRule.onNodeWithText("History 29").assertIsDisplayed()
+    list.performScrollToNode(hasText("History 5"))
+    list.performTouchInput { swipeDown() }
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(sending = true, optimisticText = "New question", chatSendMessageId = "local-new", chatSendSequence = 1)
+    }
+    val question = composeTestRule.onNodeWithText("New question", useUnmergedTree = true)
+    question.assertIsDisplayed()
+    val bubble = question.fetchSemanticsNode().boundsInRoot
+    val listBounds = list.fetchSemanticsNode().boundsInRoot
+    val composer = composeTestRule.onNodeWithTag("assistant-bottom-surface").fetchSemanticsNode().boundsInRoot
+    assertTrue("The new question should be in the bottom half", bubble.top > listBounds.center.y)
+    assertTrue("The input should leave space below the new question",
+      composer.top - bubble.bottom >= 12f * composeTestRule.density.density)
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(sending = false, optimisticText = "", activeRunId = "run",
+        messages = history + ConversationMessage("server-new", "user", "New question", renderId = "local-new"),
+        liveMessages = listOf(ConversationMessage("reply", "assistant", "Short answer", "run")))
+    }
+    composeTestRule.onNodeWithText("Short answer").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      state.value = state.value.copy(liveMessages = listOf(ConversationMessage("reply", "assistant",
+        (1..42).joinToString("\n\n") { "Reply paragraph $it" }, "run")))
+    }
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
+    composeTestRule.onNodeWithText("Reply paragraph 42").assertIsDisplayed()
   }
 
   @Test fun personalLoadingCentersLoopiInAvailableContent() {
@@ -222,9 +267,10 @@ class MainScreenTest {
     }
     val state = mutableStateOf(ConnectionUiState(profile = profile,
       selectedConversationId = id, historyLoading = true))
+    val tab = mutableStateOf(HomeTab.Assistant)
     composeTestRule.setContent {
       XopcTheme {
-        MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value)
+        MainContent(selectedTab = tab.value, onSelectTab = { tab.value = it }, connection = state.value)
       }
     }
     composeTestRule.runOnIdle { state.value = state.value.copy(historyLoading = false, messages = messages) }
@@ -233,12 +279,17 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
     composeTestRule.runOnIdle {
       state.value = state.value.copy(messages = messages +
         ConversationMessage("message-30", "assistant", "Reply 30"))
     }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
+    val top = composeTestRule.onNodeWithText("Reply 0").fetchSemanticsNode().boundsInRoot.top
+    composeTestRule.runOnIdle { tab.value = HomeTab.Me }
+    composeTestRule.waitForIdle()
+    composeTestRule.runOnIdle { tab.value = HomeTab.Assistant }
+    assertEquals(top, composeTestRule.onNodeWithText("Reply 0").fetchSemanticsNode().boundsInRoot.top, 2f)
   }
 
   @Test fun assistantFollowsNewMessagesAtBottomAndOffersJumpAfterReadingBack() {
@@ -264,7 +315,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-message-list").performScrollToNode(hasText("Reply 1"))
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput { swipeDown() }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput {
       swipeUp(startY = height * 0.55f, endY = height * 0.45f, durationMillis = 400)
     }
@@ -308,7 +359,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
     composeTestRule.runOnIdle { state.value = state.value.copy(liveMessages = listOf(ConversationMessage("live:run-1", "assistant", stream + "\n\nMore output", "run-1"))) }
     composeTestRule.onNodeWithText("Reply 0").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-jump-bottom").assertIsDisplayed()
     composeTestRule.onNodeWithTag("assistant-message-list").performTouchInput {
       swipeUp(startY = height * 0.55f, endY = height * 0.45f, durationMillis = 400)
     }
@@ -1310,25 +1361,25 @@ class MainScreenTest {
   @Test fun sidebarNavigationKeepsLibrarySearchStateAcrossDestinations() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     composeTestRule.setContent {
-      MainScreen(connection = ConnectionUiState(profile = profile, notes = NotesUiState(gatewayId = "gateway")))
+      MainScreen(connection = ConnectionUiState(profile = profile), spaceLibraryAccess =
+        ai.xopc.mobile.gateway.SpaceLibraryAccess(ai.xopc.mobile.gateway.GatewaySession(composeTestRule.activity)))
     }
     fun selectSidebar(tag: String) {
       composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
       composeTestRule.onNodeWithTag(tag).performClick()
     }
     selectSidebar("chat-sidebar-library")
-    composeTestRule.onNodeWithTag("notes-search").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("notes-open-search").performClick()
-    composeTestRule.onNodeWithTag("notes-search").assertIsFocused().performTextInput("persistent")
+    composeTestRule.onNodeWithTag("space-search").performClick().performTextInput("persistent")
     Espresso.closeSoftKeyboard()
     composeTestRule.onNodeWithTag("library-back").performClick()
     selectSidebar("chat-sidebar-profile")
     composeTestRule.onNodeWithTag("settings-screen").assertIsDisplayed()
     Espresso.pressBack()
     selectSidebar("chat-sidebar-library")
-    composeTestRule.onNodeWithTag("notes-search").assertTextContains("persistent")
-    composeTestRule.onNodeWithTag("notes-open-search-close").performClick()
-    composeTestRule.onNodeWithTag("notes-search").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("space-search").assertTextContains("persistent")
+    composeTestRule.onNodeWithTag("space-tab-favorites").performClick()
+    assertEquals("", composeTestRule.onNodeWithTag("space-search").fetchSemanticsNode()
+      .config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
   }
 
   @Test fun sidebarAcceptsAnInContentSwipeAndReleasesTheSystemEdge() {
@@ -2017,22 +2068,20 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-target-project-project-1").assertIsDisplayed()
   }
 
-  @Test fun writableLibraryFilesCanSaveNewVersions() {
-    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+  @Test fun writableWorkspaceFilesCanSaveNewVersions() {
     val file = ai.xopc.mobile.gateway.ManagedFile("file-1", "space", "brief.txt",
       "brief.txt", "file", "text/plain", 16, "revision-1", setOf("preview", "save_version"))
     val requests = mutableListOf<Pair<String, String>>()
     composeTestRule.setContent {
-      MainScreen(connection = ConnectionUiState(profile = profile, notes = NotesUiState(gatewayId = "gateway")),
+      NotesScreen(NotesUiState(gatewayId = "gateway"), androidx.compose.foundation.layout.PaddingValues(),
+        onSearch = { _, _ -> }, onLoadMore = {}, onOpen = {},
         onNoteFiles = { _, _, _ -> listOf(file) },
         onNoteFileContent = { "Version contents".toByteArray() },
-        onSaveFileVersion = { _, saved, id ->
+        onSaveFileVersion = { saved, id ->
           requests += saved.revision to id
           if (requests.size == 1) error("RETRY")
         })
     }
-    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
-    composeTestRule.onNodeWithTag("chat-sidebar-library").performClick()
     composeTestRule.onNodeWithTag("notes-files").performClick()
     composeTestRule.waitUntil(4_000) {
       composeTestRule.onAllNodesWithTag("notes-file-file-1").fetchSemanticsNodes().isNotEmpty()
@@ -2138,36 +2187,116 @@ class MainScreenTest {
 
   @Test fun capabilityCatalogDefaultsToPluginsAndSearchStaysInItsCategory() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
-    val drafts = mutableListOf<String>()
+    val svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#19aa71"/></svg>"""
+    val logo = "data:image/svg+xml;base64," + java.util.Base64.getEncoder().encodeToString(svg.toByteArray())
+    val theme = InstrumentationRegistry.getArguments().getString("capabilityTheme", "light")
+    var savedSkill: String? = null
+    val chatSetups = mutableListOf<Pair<String, Boolean>>()
+    fun form(id: String, label: String, action: String) = JSONObject()
+      .put("fields", JSONArray().put(JSONObject().put("id", id).put("type", "text").put("label", label)))
+      .put("actions", JSONArray().put(JSONObject().put("id", action).put("label", "Continue")))
+    fun captureCategory(category: String) {
+      if (android.os.Build.VERSION.SDK_INT < 29) return
+      val resolver = composeTestRule.activity.contentResolver
+      val screenshot = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "capability-$theme-$category.png")
+        put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/xopc-test")
+      }))
+      requireNotNull(resolver.openOutputStream(screenshot)).use {
+        composeTestRule.onNode(isRoot()).captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+      }
+    }
     composeTestRule.setContent {
-      MainScreen(connection = ConnectionUiState(profile = profile), onCapabilityConversation = { drafts += it }, onLoadCapabilities = { category ->
-        ai.xopc.mobile.gateway.CapabilityPage(
-          if (category == "plugins") listOf(
-            ai.xopc.mobile.gateway.CapabilityItem("meeting-plugin", "Meeting Plugin", group = "installed"),
-            ai.xopc.mobile.gateway.CapabilityItem("document-plugin", "Document Plugin", group = "available"),
-          ) else listOf(ai.xopc.mobile.gateway.CapabilityItem(category, "Meeting $category", group = "available")),
-        )
-      })
+      XopcTheme(darkTheme = theme == "dark") {
+        MainScreen(connection = ConnectionUiState(profile = profile),
+          onCapabilitySetupChat = { prompt, agentSetup -> chatSetups += prompt to agentSetup },
+          onCapabilityPanel = { category, id, input ->
+          when {
+            id == "marketplace:search" -> form("query", "Search skills", "search")
+            category == "connections" -> form("account", "Account", "authorize")
+            category == "agents" -> form("name", "Name", "save")
+            category == "channels" -> form("scope", "Scope", "pair")
+            category == "plugins" -> form("enabled", "Plugin", "start")
+            else -> {
+              if (input?.optString("action") == "save") savedSkill = input.getJSONObject("values").getString("enabled")
+              JSONObject().put("fields", JSONArray().put(JSONObject().put("id", "enabled").put("type", "toggle")
+                .put("label", "Enable skill").put("value", savedSkill ?: "true")))
+                .put("actions", JSONArray().put(JSONObject().put("id", "save").put("label", "Save settings")))
+            }
+          }
+        }, onLoadCapabilities = { category ->
+          val group = when (category) {
+            "skills" -> "installed"
+            "connections" -> "connected"
+            "agents" -> "expert"
+            "channels" -> "configured"
+            else -> "available"
+          }
+          ai.xopc.mobile.gateway.CapabilityPage(
+            if (category == "plugins") listOf(
+              ai.xopc.mobile.gateway.CapabilityItem("meeting-plugin", "Meeting Plugin", "Plan and prepare meetings.", "installed", iconUrl = logo),
+              ai.xopc.mobile.gateway.CapabilityItem("document-plugin", "Document Plugin", group = "available"),
+            ) else listOf(ai.xopc.mobile.gateway.CapabilityItem(category, "Meeting $category", group = group, iconUrl = logo)),
+          )
+        })
+      }
     }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-refresh").assertDoesNotExist()
+    composeTestRule.waitUntil(5000) {
+      composeTestRule.onAllNodesWithTag("capability-brand-loaded", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+    }
+    captureCategory("plugins")
+    composeTestRule.onNodeWithTag("capability-row-meeting-plugin").performClick()
+    composeTestRule.onNodeWithTag("capability-panel-start").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-panel-close").performClick()
+    composeTestRule.onNodeWithTag("capability-add-plugins").performClick()
     composeTestRule.onNodeWithTag("capability-search").performTextInput("Meeting")
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("capability-discover").performClick()
-    composeTestRule.runOnIdle { assert(drafts.last().contains("Meeting")) }
+    composeTestRule.onNodeWithTag("capability-discover").assertDoesNotExist()
     for (kind in listOf("skills", "connections", "agents", "channels")) {
-      composeTestRule.onNodeWithTag("capability-category").performClick()
-      composeTestRule.onNodeWithTag("capability-category-$kind").performClick()
+      composeTestRule.onNodeWithTag("capability-category-$kind").performScrollTo().performClick()
+      composeTestRule.onNodeWithTag("capability-title").assertTextEquals(composeTestRule.activity.getString(R.string.capability_title))
       composeTestRule.onNodeWithTag("capability-row-$kind").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertDoesNotExist()
+      if (kind == "skills") {
+        val setup = composeTestRule.onNodeWithTag("capability-add-$kind").assertIsDisplayed()
+        assertTrue(setup.fetchSemanticsNode().boundsInRoot.bottom <=
+          composeTestRule.onNodeWithTag("capability-category-$kind").fetchSemanticsNode().boundsInRoot.top)
+        setup.performClick()
+        composeTestRule.onNodeWithTag("capability-field-query").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("capability-panel-close").performClick()
+      }
+      if (kind != "channels") {
+        composeTestRule.onNodeWithTag("capability-chat-setup-$kind").performClick()
+      }
+      if (kind != "agents") {
+        composeTestRule.waitUntil(5000) {
+          composeTestRule.onAllNodesWithTag("capability-brand-loaded", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+      }
+      captureCategory(kind)
       composeTestRule.onNodeWithTag("capability-row-$kind").performClick()
-      composeTestRule.onNodeWithTag("capability-open-chat").performClick()
-      composeTestRule.runOnIdle { assert(drafts.last().contains("\"$kind\"")) }
+      if (kind == "skills") {
+        composeTestRule.onNodeWithTag("capability-field-enabled").performClick()
+        composeTestRule.onNodeWithTag("capability-panel-save").performClick()
+        composeTestRule.runOnIdle { assert(savedSkill == "false") }
+      }
+      composeTestRule.onNodeWithTag("capability-open-chat").assertDoesNotExist()
+      if (kind == "agents") composeTestRule.onNodeWithTag("capability-start-chat").assertExists()
+      if (kind == "channels") composeTestRule.onNodeWithTag("capability-panel-pair").assertIsDisplayed()
+      composeTestRule.onNodeWithTag("capability-panel-close").performClick()
     }
-    composeTestRule.onNodeWithTag("capability-category").performClick()
-    composeTestRule.onNodeWithTag("capability-category-plugins").performClick()
+    composeTestRule.onNodeWithTag("capability-category-plugins").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertIsDisplayed()
+    composeTestRule.runOnIdle {
+      assertTrue(chatSetups.map { it.second } == listOf(false, false, true))
+      assertTrue(chatSetups[1].first.contains("MCP"))
+      assertTrue(chatSetups.none { it.first.contains("mcp:setup") })
+    }
   }
 
   @Test fun sidebarKeepsCachedRecentsWhileSearchAndRefreshRun() {

@@ -4,6 +4,20 @@ import Testing
 
 @MainActor
 struct AssistantRecoveryTests {
+    @Test func aSuccessfulMusicToolInvalidatesJobsWithoutWaitingForTheRunToEnd() {
+        let state = AssistantState()
+        func applyTool(_ tool: String, status: String, sequence: Int) {
+            state.apply(.init(name: "tool_end", sequence: sequence, messageId: nil, delta: nil, offset: nil,
+                              status: status, errorMessage: nil, toolName: tool, stage: nil, presentation: nil), runID: "run")
+        }
+        applyTool("music_generation", status: "error", sequence: 1)
+        applyTool("video_draft", status: "success", sequence: 2)
+        #expect(state.musicJobsRevision == 0)
+        applyTool("music_generation", status: "success", sequence: 3)
+        #expect(state.musicJobsRevision == 1)
+        #expect(state.runProgress.terminalStatus == nil)
+    }
+
     @Test func aRemovedConversationIsReportedOnResume() async {
         let state = AssistantState()
         let conversation = ConversationSelection.existing(id: "history", title: "Conversation", agentId: "main")

@@ -27,7 +27,8 @@ export function createCapabilityCatalogTool(getSource: () => CapabilityCatalogSo
       const matches = page.items.filter(row => input.id
         ? row.id === input.id || row.targetId === input.id
         : [row.id, row.name, row.description ?? ''].some(value => value.toLowerCase().includes(query)));
-      const result = { items: matches.slice(0, 20), matches: matches.length, incomplete: page.incomplete === true };
+      const items = matches.slice(0, 20).map(({ iconUrl: _iconUrl, ...row }) => row);
+      const result = { items, matches: matches.length, incomplete: page.incomplete === true };
       return { content: [{ type: 'text', text: JSON.stringify(result) }], details: {} };
     },
   } as AgentTool<typeof schema, {}>;

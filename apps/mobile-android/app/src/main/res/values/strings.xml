@@ -971,6 +971,8 @@
     <string name="music_audio">Music</string>
     <string name="music_skip_back">Go back 15 seconds</string>
     <string name="music_skip_forward">Go forward 15 seconds</string>
+    <string name="preview_download">Download</string>
+    <string name="preview_download_failed">Could not download the file</string>
     <string name="music_download">Download audio</string>
     <string name="music_return_source">Return to source conversation</string>
     <string name="music_paused">Paused</string>
@@ -986,8 +988,6 @@
     <string name="project_add_item">Add to project</string>
     <string name="project_save_error">Could not save project changes</string>
     <string name="capability_disabled">Disabled</string>
-    <string name="capability_discover">Find with assistant</string>
-    <string name="capability_open_chat">Continue in Chat</string>
     <string name="capability_web_manage">Open administration</string>
     <string name="capability_web_open_failed">Could not open administration</string>
     <string name="capability_version_label">Version %1$s</string>
@@ -995,13 +995,6 @@
     <string name="capability_channel_weixin">A Weixin account needs to sign in.</string>
     <string name="capability_channel_feishu">A Feishu or Lark app needs authorization.</string>
     <string name="capability_channel_config">Required channel settings are missing.</string>
-    <string name="capability_find_prompt">Help me find %1$s in XOPC. Check what is available first, ask what I need if it is unclear, and recommend suitable options before making changes.</string>
-    <string name="capability_find_query_prompt">Find %1$s for this request: %2$s. Check what is available and recommend suitable options before making changes.</string>
-    <string name="capability_plugin_prompt">Check the installation and authorization status of the XOPC plugin with catalog ID %1$s. Explain what it can do and guide me through the owner review if setup is needed.</string>
-    <string name="capability_skill_prompt">Check the XOPC skill with catalog ID %1$s. Explain how to use it and what it needs. If I ask to change it, use the Skill tools and report the result.</string>
-    <string name="capability_connection_prompt">Check the XOPC connection with catalog ID %1$s. Verify its status and help me connect or troubleshoot. Use the authorized setup flow if one is available. Keep credentials out of chat.</string>
-    <string name="capability_agent_prompt">Review the XOPC assistant or expert with ID %1$s. Explain its role and available capabilities. Discuss any requested changes with me before applying them.</string>
-    <string name="capability_channel_prompt">Check the messaging channel with catalog ID %1$s. Tell me whether it can receive messages and what setup is still required. If sign-in, pairing, or credentials are needed, guide me to the owner administration page.</string>
     <string name="capability_title">Capabilities</string>
     <string name="capability_plugins">Plugins</string>
     <string name="capability_skills">Skills</string>
@@ -1024,4 +1017,14 @@
     <string name="capability_start_chat">Start Chat</string>
     <string name="capability_personal_description">Your personal assistant</string>
     <string name="capability_search">Search %1$s</string>
+    <string name="capability_create_agent">Create an assistant</string>
+    <string name="capability_create_skill">Create a skill</string>
+    <string name="capability_add_mcp">Add an MCP connection</string>
+    <string name="capability_search_plugins">Find and install plugins</string>
+    <string name="capability_skill_market">Skill Store</string>
+    <string name="capability_search_installed_skills">Search installed skills</string>
+    <string name="capability_agent_setup_prompt">Help me create an assistant or expert. Ask what it should do.</string>
+    <string name="capability_skill_setup_prompt">Help me create a reusable skill. Ask what it should do.</string>
+    <string name="capability_mcp_setup_prompt">Help me add an MCP connection. Ask which service to connect.</string>
+    <string name="capability_mcp_continue">Continue setup</string>
 </resources>

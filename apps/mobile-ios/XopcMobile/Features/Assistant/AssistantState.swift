@@ -17,6 +17,7 @@ final class AssistantState {
     private(set) var isLoadingHistory = false
     private(set) var isSending = false
     private(set) var runID: String?
+    private(set) var musicJobsRevision = 0
     private(set) var contextSummary: ConversationContextSummary?
     private(set) var isLoadingContext = false
     private(set) var contextError: String?
@@ -32,6 +33,14 @@ final class AssistantState {
     var isUpdatingQueue = false
     private var loadedConversationID: String?
     private var loadedTranscriptID: String?
+    private struct SendDraft: Equatable {
+        let conversationID: String
+        let content: String
+        let attachments: [MessageAttachment]
+        let references: [ContextReference]
+        let delivery: MessageDelivery
+    }
+    @ObservationIgnored private var failedSend: (id: String, draft: SendDraft)?
 
     func historyTranscriptID(for conversation: ConversationSelection?) -> String? {
         loadedConversationID == conversation?.id ? loadedTranscriptID ?? conversation?.transcriptId : conversation?.transcriptId
@@ -73,6 +82,7 @@ final class AssistantState {
         loadedTranscriptID = conversation?.transcriptId
         contextGeneration += 1
         messages = []
+        failedSend = nil
         streamBuffer.reset()
         streamGap = false
         executionActivity = []
@@ -180,12 +190,21 @@ final class AssistantState {
             runProgress = AssistantRunProgress()
         }
         activityLabel = AppLocalization.resolve("正在准备")
-        let optimisticID = "local-\(UUID().uuidString)"
+        let input = SendDraft(conversationID: conversation.id, content: content, attachments: attachments,
+                              references: references, delivery: delivery)
+        let retryID = failedSend.flatMap { $0.draft == input ? $0.id : nil }
+        let optimisticID = retryID ?? UUID().uuidString.lowercased()
+        failedSend = nil
         let optimisticText = content.isEmpty
             ? Self.payloadSummary(attachments: attachments, references: references)
             : content
-        onEnqueued?(optimisticID)
-        messages.append(.init(id: optimisticID, role: "user", text: optimisticText, isPending: true, turnId: nil))
+        if retryID != nil, let index = messages.firstIndex(where: { $0.scrollID == optimisticID }) {
+            messages[index].isPending = true
+        } else {
+            onEnqueued?(optimisticID)
+            messages.append(.init(id: optimisticID, role: "user", text: optimisticText, isPending: true,
+                                  turnId: nil, clientMessageID: optimisticID))
+        }
 
         defer { isSending = false }
         do {
@@ -194,7 +213,8 @@ final class AssistantState {
                 attachments: attachments,
                 references: references,
                 delivery: delivery,
-                to: conversation
+                to: conversation,
+                clientMessageID: optimisticID
             )
             let materialized = conversation.materialized(transcriptId: result.receipt.transcriptId)
             guard loadedConversationID == conversation.id else { return materialized }
@@ -210,6 +230,7 @@ final class AssistantState {
             return nil
         } catch {
             guard loadedConversationID == conversation.id else { return nil }
+            failedSend = (optimisticID, input)
             if let index = messages.firstIndex(where: { $0.id == optimisticID }) {
                 messages[index].isPending = false
             }
@@ -349,7 +370,7 @@ final class AssistantState {
                     saved[index].isPending = true
                 }
             }
-            let savedIDs = Set(saved.map(\.id))
+            let savedIDs = Set(saved.flatMap { [$0.id, $0.scrollID] })
             if let runID {
                 runProgress.begin(runID)
             }
@@ -373,6 +394,9 @@ final class AssistantState {
     }
 
     func apply(_ event: RunStreamEvent, runID: String) {
+        if event.name == "tool_end", event.toolName == "music_generation", event.status == "success" {
+            musicJobsRevision += 1
+        }
         runProgress.begin(runID)
         if event.name != "assistant_delta" {
             flushStream()

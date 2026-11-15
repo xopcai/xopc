@@ -22,6 +22,7 @@ import ai.xopc.mobile.theme.themedCorners
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +45,7 @@ internal data class SegmentOption<T>(
   val tag: String,
   val icon: Int? = null,
   val count: Int? = null,
+  val minimumWidth: Dp? = null,
 )
 
 private val segmentEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
@@ -57,7 +60,12 @@ internal fun <T> SegmentedTabs(
   enabled: Boolean = true,
 ) {
   if (options.isEmpty()) return
-  val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+  val density = LocalDensity.current
+  val fontScale = density.fontScale.coerceAtLeast(1f)
+  val textMeasurer = rememberTextMeasurer(cacheSize = options.size * 2)
+  val labelStyle = MaterialTheme.typography.labelLarge
+  val countStyle = MaterialTheme.typography.labelSmall
+  val scroll = rememberScrollState()
   val scheme = MaterialTheme.colorScheme
   val selection = options.indexOfFirst { it.value == selected }
   val dark = scheme.background.luminance() < 0.5f
@@ -65,36 +73,66 @@ internal fun <T> SegmentedTabs(
   val selectedFill = if (dark) scheme.surfaceContainerHigh else scheme.surface
   val selectedLabel = if (dark) scheme.onSurface else scheme.primary
   BoxWithConstraints(modifier.fillMaxWidth()) {
-    val segmentWidth = maxOf(maxWidth / options.size, minimumSegmentWidth * fontScale)
-    val thumb by animateDpAsState(segmentWidth * selection.coerceAtLeast(0),
+    val minimumWidths = options.map { option ->
+      val labelWidth = textMeasurer.measure(option.label, labelStyle.copy(fontWeight = FontWeight.Bold),
+        maxLines = 1, softWrap = false).size.width
+      val countWidth = option.count?.let {
+        textMeasurer.measure(it.toString(), countStyle, maxLines = 1, softWrap = false).size.width
+      }
+      val padding = if (option.minimumWidth != null) 6.dp else 8.dp
+      val contentWidth = with(density) { (labelWidth + (countWidth ?: 0)).toDp() } + padding * 2 +
+        (if (option.icon != null) 21.dp else 0.dp) + (if (countWidth != null) 5.dp else 0.dp)
+      maxOf((option.minimumWidth ?: minimumSegmentWidth) * fontScale, contentWidth)
+    }
+    val trackWidth = minimumWidths.fold(0.dp, Dp::plus)
+    val extra = (maxWidth - trackWidth).coerceAtLeast(0.dp) / options.size
+    val widths = minimumWidths.map { it + extra }
+    val selectedStart = widths.take(selection.coerceAtLeast(0)).fold(0.dp, Dp::plus)
+    val selectedWidth = widths[selection.coerceAtLeast(0)]
+    val thumb by animateDpAsState(selectedStart,
       tween(250, easing = segmentEasing), label = "Segment position")
-    Box(Modifier.horizontalScroll(rememberScrollState())) {
+    val thumbWidth by animateDpAsState(selectedWidth, tween(250, easing = segmentEasing),
+      label = "Segment width")
+    val viewport = maxWidth
+    LaunchedEffect(selected, selectedStart, selectedWidth, viewport) {
+      if (selection < 0) return@LaunchedEffect
+      val start = with(density) { selectedStart.roundToPx() }
+      val end = with(density) { (selectedStart + selectedWidth).roundToPx() }
+      val viewportWidth = with(density) { viewport.roundToPx() }
+      val target = when {
+        start < scroll.value || end - start > viewportWidth -> start
+        end > scroll.value + viewportWidth -> end - viewportWidth
+        else -> scroll.value
+      }
+      if (target != scroll.value) scroll.animateScrollTo(target)
+    }
+    Box(Modifier.horizontalScroll(scroll)) {
       Box(Modifier.clip(shape).background(scheme.surfaceContainer)) {
         if (selection >= 0) {
           Box(Modifier.matchParentSize().offset { IntOffset(thumb.roundToPx(), 0) }) {
-            Box(Modifier.align(Alignment.CenterStart).width(segmentWidth)
+            Box(Modifier.align(Alignment.CenterStart).width(thumbWidth)
               .heightIn(min = 48.dp * fontScale).background(selectedFill, shape)
               .testTag("segmented-tab-indicator"))
           }
         }
         Row(Modifier.selectableGroup()) {
-          options.forEach { option ->
+          options.forEachIndexed { index, option ->
             val active = selected == option.value
             val tint by animateColorAsState(if (active) selectedLabel else scheme.onSurfaceVariant,
               tween(150), label = "Segment label color")
             Row(
-              Modifier.width(segmentWidth).heightIn(min = 48.dp * fontScale).clip(shape)
+              Modifier.width(widths[index]).heightIn(min = 48.dp * fontScale).clip(shape)
                 .testTag(option.tag).selectable(active, enabled = enabled, role = Role.Tab) { onSelect(option.value) }
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = if (option.minimumWidth != null) 6.dp else 8.dp),
               horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
               verticalAlignment = Alignment.CenterVertically,
             ) {
               option.icon?.let { ActionIcon(it, color = tint, size = 16.dp) }
-              Text(option.label, color = tint, style = MaterialTheme.typography.labelLarge,
+              Text(option.label, color = tint, style = labelStyle,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                 modifier = Modifier.weight(1f, fill = false), textAlign = TextAlign.Center,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-              option.count?.let { Text(it.toString(), color = tint, style = MaterialTheme.typography.labelSmall) }
+                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+              option.count?.let { Text(it.toString(), color = tint, style = countStyle, maxLines = 1, softWrap = false) }
             }
           }
         }

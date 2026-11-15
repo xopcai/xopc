@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { isConnectorSecretReference } from '../../connectors/secret-store.js';
 import { readPluginUserConfig, expandUserConfig } from './user-config.js';
 import { AgentPluginStore, type InstalledAgentPlugin } from './store.js';
 import { containedPath, expandPluginVariables, pluginServerId, resolvePluginCwd, type PluginDiagnostic } from './validation.js';
@@ -18,7 +19,19 @@ export function materializePluginServers(plugin: InstalledAgentPlugin, store = n
   const data = store.dataDir(plugin.id);
   mkdirSync(data, { recursive: true, mode: 0o700 });
   const values = { ...Object.fromEntries(Object.entries(plugin.layout?.userConfig ?? {}).filter(([, field]) => field.default !== undefined).map(([key, field]) => [key, field.default])), ...readPluginUserConfig(store, plugin.id, plugin.receipt.revision) };
-  const expand = (value: string) => expandUserConfig(expandPluginVariables(value.replace(/\$\{PLUGIN_ACCOUNTS\}/g, join(data, 'accounts', plugin.receipt.revision)).replace(/\$\{PLUGIN_RESOURCES\}/g, join(data, 'resources', plugin.receipt.revision)), root, data), values);
+  const expand = (value: string, headerName?: string) => {
+    const template = expandPluginVariables(value.replace(/\$\{PLUGIN_ACCOUNTS\}/g, join(data, 'accounts', plugin.receipt.revision))
+      .replace(/\$\{PLUGIN_RESOURCES\}/g, join(data, 'resources', plugin.receipt.revision)), root, data);
+    const bearer = headerName?.toLowerCase() === 'authorization' && /^Bearer (\$\{user_config\.[A-Za-z_][A-Za-z0-9_]*\})$/.exec(template);
+    if (bearer) {
+      const token = expandUserConfig(bearer[1], values);
+      if (isConnectorSecretReference(token)) {
+        return { xopcSecretRef: { ...token.xopcSecretRef, prefix: `Bearer ${token.xopcSecretRef.prefix ?? ''}` } };
+      }
+      return `Bearer ${String(token)}`;
+    }
+    return expandUserConfig(template, values);
+  };
   const servers: Record<string, Record<string, unknown>> = Object.create(null);
   const access = setup ? undefined : resolvePluginCapabilityAccess(plugin, store);
   for (const [name, server] of Object.entries(plugin.servers)) {
@@ -26,7 +39,7 @@ export function materializePluginServers(plugin: InstalledAgentPlugin, store = n
       if (access && !access.server(name)) continue;
       const origin = { id: plugin.id, serverName: name, rootDir: root, dataDir: data, revision: plugin.receipt.revision };
       const raw = server.type !== 'stdio' ? {
-        ...server, ...(plugin.receipt.credentialScope === 'revision' ? { xopcOAuthCredentialId: pluginOAuthCredentialId(plugin.id, plugin.receipt.revision, name) } : {}), ...(server.headers ? { headers: Object.fromEntries(Object.entries(server.headers).map(([key, value]) => [key, expand(value)])) } : {}), xopcPlugin: origin,
+        ...server, ...(plugin.receipt.credentialScope === 'revision' ? { xopcOAuthCredentialId: pluginOAuthCredentialId(plugin.id, plugin.receipt.revision, name) } : {}), ...(server.headers ? { headers: Object.fromEntries(Object.entries(server.headers).map(([key, value]) => [key, expand(value, key)])) } : {}), xopcPlugin: origin,
       } : {
         type: 'stdio', xopcPlugin: origin,
         command: server.command.startsWith('./') ? containedPath(root, resolve(root, server.command)) : server.command.startsWith('${PLUGIN_RESOURCES}/') ? containedPath(data, join(data, 'resources', plugin.receipt.revision, server.command.slice('${PLUGIN_RESOURCES}/'.length))) : pluginNodeRuntime(server.command).command,

@@ -118,12 +118,13 @@ export class EndpointToolRuntime {
     connectionId: string,
     transport: EndpointTransport,
     executionAuthority?: EndpointDesktopExecutionAuthority,
+    mobileMcpSetupCard = false,
   ): EndpointRegistration {
     if (this.closed) throw new Error('Endpoint runtime is closed');
     this.authenticator.authenticate(hello);
     if (hello.execution && !executionAuthority) throw new Error('DESKTOP_EXECUTION_AUTHORITY_REQUIRED');
     const previous = this.registry.get(hello.endpointId);
-    const registration = this.registry.register(hello, connectionId, transport, Date.now(), executionAuthority);
+    const registration = this.registry.register(hello, connectionId, transport, Date.now(), executionAuthority, mobileMcpSetupCard);
     if (previous) {
       this.providers.disconnect(previous.endpointId, previous.connectionId);
       this.providerOperations.disconnect(previous.endpointId, previous.connectionId);

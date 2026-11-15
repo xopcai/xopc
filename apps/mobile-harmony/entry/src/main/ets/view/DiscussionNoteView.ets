@@ -8,6 +8,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { xopcFormatCaptureTime } from '../common/discussionAudio';
 import { XopcDiscussionActionItem, XopcDiscussionFact, XopcDiscussionTranscriptSegment } from '../model/discussionCapture';
 import { XopcDiscussionNoteViewModel, discussionStillProcessing } from '../viewmodel/discussionNoteViewModel';
+import { XopcPaginationFooter } from './MobileComponents';
 
 /** Readable recording status, summary and transcript for a voice note. */
 @ComponentV2
@@ -162,7 +163,10 @@ export struct XopcDiscussionNoteView {
             }
             ForEach(this.model.review.hits,(partial: XopcReviewEntry) => { this.reviewRow(partial) },(partial: XopcReviewEntry): string => partial.id)
           }
-          if (this.model.review.hasMore) Button($r('app.string.load_more')).enabled(!this.model.reviewLoading).onClick((): void => { void this.model.refreshReview(true); })
+          if (this.model.review.hasMore && !this.model.reviewError) {
+            XopcPaginationFooter({ loadingPage: this.model.reviewLoading,
+              onLoad: (): void => { void this.model.refreshReview(true); } })
+          }
         }
         if (this.model.reviewError) {
           Text(this.model.reviewError).fontSize(12).fontColor(this.colors.danger)
@@ -266,8 +270,7 @@ export struct XopcDiscussionNoteView {
                   (segment: XopcDiscussionTranscriptSegment) => { this.transcriptRow(segment) },
                   (segment: XopcDiscussionTranscriptSegment): string => segment.sequence.toString())
                 if (this.model.transcriptRows().length > this.visibleSegments) {
-                  Button($r('app.string.load_more')).fontSize(14).fontColor(this.colors.accent)
-                    .backgroundColor(Color.Transparent).onClick((): void => { this.visibleSegments += 20; })
+                  XopcPaginationFooter({ onLoad: (): void => { this.visibleSegments += 20; } })
                 }
               } else {
                 Text(this.model.detail.transcript.text).fontSize(15).lineHeight(24)

@@ -1,6 +1,35 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { XopcMusicTrack } from '../model/musicPlayback';
 import { generatedMediaTime } from '../common/generatedMedia';
 import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
+
+@ComponentV2
+export struct XopcPreviewHeader {
+  @Param title: string = '';
+  @Param closeId: string = 'preview-close';
+  @Param actions: MenuElement[] = [];
+  @Event onClose: () => void = (): void => {};
+  @Local colors: XopcThemeColors = appThemeColors;
+
+  build() {
+    Row({ space: 8 }) {
+      Button({ type: ButtonType.Circle }) {
+        SymbolGlyph($r('sys.symbol.xmark')).fontSize(20).fontColor([this.colors.foreground])
+      }.id(this.closeId).width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+        .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
+      Text(this.title).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+        .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).textAlign(TextAlign.Center)
+      if (this.actions.length) {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.foreground])
+        }.width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .accessibilityText($r('app.string.more')).bindMenu(this.actions)
+      } else {
+        Blank().width(44)
+      }
+    }.width('100%').padding({ left: 12, right: 12, top: 4, bottom: 4 })
+  }
+}
 
 @ComponentV2
 export struct XopcMusicArt {
@@ -26,9 +55,7 @@ struct XopcMusicCover {
       Row().width('39%').aspectRatio(1).borderRadius(999).backgroundColor(this.colors.chat.canvas)
       Text('♫').fontSize(46).fontWeight(FontWeight.Medium).fontColor(this.colors.chat.action)
     }.width('80%').constraintSize({ maxWidth: 248 }).aspectRatio(1)
-      .linearGradient({ direction: GradientDirection.RightBottom, colors: [
-        [this.colors.accentSoft, 0], [this.colors.chat.card, 1]
-      ] }).borderRadius(this.colors.corner(24)).clip(true)
+      .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(24)).clip(true)
       .accessibilityLevel('no')
   }
 }
@@ -110,14 +137,21 @@ export struct XopcMusicProgress {
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local colors: XopcThemeColors = appThemeColors;
   @Local scrub: number = -1;
+  @Require @Param track: XopcMusicTrack;
+  @Event onPlay: () => void = (): void => {};
+
+  @Computed get current(): boolean {
+    return this.music.matches(this.track.conversationId, this.track.id);
+  }
+
+  @Computed get playbackPosition(): number { return this.current ? this.music.position : 0; }
 
   @Computed get duration(): number {
-    const track = this.music.track;
-    return track ? this.music.durationFor(track.conversationId, track.id, track.durationMs) : 0;
+    return this.music.durationFor(this.track.conversationId, this.track.id, this.track.durationMs);
   }
 
   @Computed get canSeek(): boolean {
-    return this.duration > 0 && !this.music.loading && !this.music.failed &&
+    return this.current && this.duration > 0 && !this.music.loading && !this.music.failed &&
       ['playing', 'paused', 'prepared', 'completed'].includes(this.music.player.state);
   }
 
@@ -133,7 +167,7 @@ export struct XopcMusicProgress {
 
   build() {
     Column({ space: 4 }) {
-      Slider({ value: this.scrub < 0 ? this.music.position : this.scrub, min: 0, max: Math.max(1, this.duration), step: 1 })
+      Slider({ value: this.scrub < 0 ? this.playbackPosition : this.scrub, min: 0, max: Math.max(1, this.duration), step: 1 })
         .id('music-progress').width('100%').height(36).trackThickness(4).blockSize({ width: 16, height: 16 })
         .trackColor(this.colors.border).selectedColor(this.colors.chat.action).blockColor(this.colors.chat.action)
         .enabled(this.canSeek)
@@ -143,15 +177,104 @@ export struct XopcMusicProgress {
           if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) { this.music.seek(value); this.scrub = -1; }
         })
       Row() {
-        Text(generatedMediaTime(this.scrub < 0 ? this.music.position : this.scrub)).fontSize(12).fontColor(this.colors.secondary)
+        Text(generatedMediaTime(this.scrub < 0 ? this.playbackPosition : this.scrub)).fontSize(12).fontColor(this.colors.secondary)
         Text(this.duration > 0 ? generatedMediaTime(this.duration) : '–:–').fontSize(12).fontColor(this.colors.secondary)
       }.width('100%').justifyContent(FlexAlign.SpaceBetween)
       Row({ space: 32 }) {
         this.skipButton(-15)
-        XopcMusicPlayButton({ extent: 64, primary: true, buttonId: 'music-player-toggle' })
+        if (this.current) {
+          XopcMusicPlayButton({ extent: 64, primary: true, buttonId: 'music-player-toggle' })
+        } else {
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.play_fill')).fontSize(26).fontColor([this.colors.chat.onAction])
+          }.id('music-player-toggle').width(64).height(64).padding(0).backgroundColor(this.colors.chat.action)
+            .accessibilityText($r('app.string.chat_media_play')).onClick((): void => { this.onPlay(); })
+        }
         this.skipButton(15)
       }.width('100%').justifyContent(FlexAlign.Center).margin({ top: 8 })
     }.width('100%')
+  }
+}
+
+interface XopcTimedLyric { seconds: number; text: string; }
+
+function timedLyrics(lyrics: string): XopcTimedLyric[] {
+  const result: XopcTimedLyric[] = [];
+  for (const line of lyrics.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const match = /^\[(\d+):(\d{2})(?:[.](\d{1,3}))?](.*)$/.exec(line.trim());
+    if (!match || Number(match[2]) >= 60) return [];
+    const seconds = Number(match[1]) * 60 + Number(match[2]) + Number('0.' + (match[3] ?? '0'));
+    if (!Number.isFinite(seconds)) return [];
+    result.push({ seconds, text: match[4].trim() });
+  }
+  return result.sort((a: XopcTimedLyric, b: XopcTimedLyric): number => a.seconds - b.seconds);
+}
+
+@ComponentV2
+export struct XopcMusicPreviewContent {
+  @Require @Param track: XopcMusicTrack;
+  @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Local lyricsOpen: boolean = false;
+
+  @Monitor('track.id', 'track.conversationId')
+  resetLyrics(): void { this.lyricsOpen = false; }
+
+  @Computed get timed(): XopcTimedLyric[] { return timedLyrics(this.track.lyrics ?? ''); }
+
+  @Computed get current(): boolean { return this.music.matches(this.track.conversationId, this.track.id); }
+
+  @Computed get activeLine(): number {
+    if (!this.current) return -1;
+    let active = -1;
+    for (let index = 0; index < this.timed.length && this.timed[index].seconds <= this.music.position; index++) {
+      active = index;
+    }
+    return active;
+  }
+
+  build() {
+    Column({ space: 8 }) {
+      Scroll() {
+        if (this.lyricsOpen && this.timed.length) {
+          Column({ space: 12 }) {
+            ForEach(this.timed, (line: XopcTimedLyric, index: number): void => {
+              Button({ type: ButtonType.Normal }) {
+                Text(line.text).width('100%').textAlign(TextAlign.Start).fontSize(20)
+                  .fontColor(index === this.activeLine ? this.colors.chat.action : this.colors.foreground)
+              }.width('100%').constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
+                .enabled(this.current && ['playing', 'paused', 'prepared', 'completed'].includes(this.music.player.state))
+                .onClick((): void => { this.music.seek(line.seconds); })
+            }, (line: XopcTimedLyric, index: number): string => line.seconds.toString() + ':' + index.toString())
+          }.id('music-lyrics-text').width('100%').constraintSize({ maxWidth: 480 }).padding(16)
+        } else if (this.lyricsOpen && this.track.lyrics?.trim()) {
+          Text(this.track.lyrics).id('music-lyrics-text').width('100%').constraintSize({ maxWidth: 480 })
+            .padding({ left: 24, right: 24, top: 16, bottom: 16 })
+            .fontSize(20).fontWeight(FontWeight.Medium).lineHeight(36).fontColor(this.colors.foreground)
+            .textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)
+        } else {
+          Row() { XopcMusicCover() }.width('100%').justifyContent(FlexAlign.Center).padding({ top: 8, bottom: 8 })
+        }
+      }.id('music-player-content').width('100%').layoutWeight(1)
+        .align(this.lyricsOpen ? Alignment.Top : Alignment.Center).scrollBar(BarState.Off)
+      Column({ space: 4 }) {
+        if (this.music.matches(this.track.conversationId, this.track.id) && this.music.failed) {
+          Text($r('app.string.music_retry_hint')).fontSize(13).fontColor(this.colors.danger)
+        }
+        if (this.track.lyrics?.trim()) {
+          Button(this.lyricsOpen ? $r('app.string.music_lyrics_close') : $r('app.string.music_lyrics'))
+            .id('music-lyrics').height(44).padding({ left: 10, right: 10 })
+            .fontSize(13).backgroundColor(Color.Transparent).fontColor(this.colors.chat.action)
+            .onClick((): void => { this.lyricsOpen = !this.lyricsOpen; })
+        }
+        XopcMusicProgress({ track: this.track, onPlay: (): void => {
+          const context = this.getUIContext().getHostContext();
+          if (context) void this.music.play(context.cacheDir, this.track);
+        } })
+      }.id('music-player-controls').width('100%').constraintSize({ maxWidth: 480 })
+        .padding({ left: 24, right: 24, bottom: 12 })
+    }.width('100%').height('100%')
   }
 }
 
@@ -159,79 +282,38 @@ export struct XopcMusicProgress {
 export struct XopcMusicPlayerView {
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local colors: XopcThemeColors = appThemeColors;
-  @Local lyricsOpen: boolean = true;
   @Local downloadFailed: boolean = false;
+
+  @Computed get track(): XopcMusicTrack | undefined { return this.music.previewTrack ?? this.music.track; }
+
+  private actions(track: XopcMusicTrack): MenuElement[] {
+    const actions: MenuElement[] = [{ value: $r('app.string.music_download'), enabled: !this.music.downloading,
+      action: (): void => {
+        this.downloadFailed = false;
+        void this.music.download(track).catch((): void => { this.downloadFailed = true; });
+      } }];
+    if (this.music.matches(track.conversationId, track.id)) {
+      if (track.conversationId && !this.music.previewTrack) {
+        actions.push({ value: $r('app.string.music_source'), action: (): void => { this.music.showSource(); } });
+      }
+      actions.push({ value: $r('app.string.music_close'), action: (): void => { void this.music.stop(); } });
+    }
+    return actions;
+  }
 
   build() {
     Column() {
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(20).fontColor([this.colors.foreground])
-        }.id('music-minimize').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.music_minimize')).onClick((): void => { this.music.expanded = false; })
-        Text($r('app.string.music_now_playing')).fontSize(14).fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.secondary).textAlign(TextAlign.Center).layoutWeight(1)
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.xmark')).fontSize(19).fontColor([this.colors.foreground])
-        }.id('music-player-close').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.music_close')).onClick((): void => { void this.music.stop(); })
-      }.width('100%').constraintSize({ maxWidth: 480 }).padding({ left: 14, right: 14, bottom: 4 })
-      if (this.music.track) {
-        Row({ space: 12 }) {
-          XopcMusicArt({ extent: 52 })
-          Column({ space: 3 }) {
-            Text(this.music.track.title).fontSize(18).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-            Text(this.music.track.sourceTitle || (this.music.track.versionNumber
-              ? $r('app.string.music_version', this.music.track.versionNumber) : $r('app.string.music_audio')))
-              .fontSize(13).fontColor(this.colors.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.message')).fontSize(20).fontColor([this.colors.secondary])
-          }.id('music-open-source').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-            .accessibilityText($r('app.string.music_source')).onClick((): void => { this.music.showSource(); })
-        }.width('100%').constraintSize({ maxWidth: 480, minHeight: 60 })
-          .padding({ left: 24, right: 24, top: 4, bottom: 4 }).backgroundColor(Color.Transparent)
-        Scroll() {
-          if (this.lyricsOpen && this.music.track.lyrics?.trim()) {
-            Text(this.music.track.lyrics).id('music-lyrics-text').width('100%').constraintSize({ maxWidth: 480 })
-              .padding({ left: 24, right: 24, top: 20, bottom: 20 })
-              .fontSize(20).fontWeight(FontWeight.Medium).lineHeight(36).fontColor(this.colors.foreground)
-              .textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)
-          } else {
-            Row() { XopcMusicCover() }.width('100%').justifyContent(FlexAlign.Center).padding({ top: 16, bottom: 16 })
-          }
-        }.id('music-player-content').width('100%').layoutWeight(1)
-          .align(this.lyricsOpen && this.music.track.lyrics?.trim() ? Alignment.Top : Alignment.Center).scrollBar(BarState.Off)
-        Column() {
-          if (this.music.failed || this.downloadFailed) {
-            Text(this.music.failed ? $r('app.string.music_retry_hint') : $r('app.string.music_download_failed'))
-              .width('100%').fontSize(13).fontColor(this.colors.danger)
-          }
-          Row({ space: 8 }) {
-            Button(this.music.downloading ? $r('app.string.music_loading') : $r('app.string.music_download'))
-              .id('music-download').constraintSize({ minHeight: 44 }).padding({ left: 10, right: 10 })
-              .fontSize(13).backgroundColor(Color.Transparent).fontColor(this.colors.chat.action)
-              .enabled(!this.music.downloading).onClick((): void => {
-                this.downloadFailed = false;
-                void this.music.download().catch((): void => { this.downloadFailed = true; });
-              })
-            if (this.music.track.lyrics?.trim()) {
-              Button(this.lyricsOpen ? $r('app.string.music_lyrics_close') : $r('app.string.music_lyrics'))
-                .id('music-lyrics').constraintSize({ minHeight: 44 }).padding({ left: 10, right: 10 })
-                .fontSize(13).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
-                .onClick((): void => { this.lyricsOpen = !this.lyricsOpen; })
-            }
-          }.width('100%').justifyContent(FlexAlign.End)
-          XopcMusicProgress()
-        }.id('music-player-controls').width('100%').constraintSize({ maxWidth: 480 })
-          .padding({ left: 24, right: 24, bottom: 12 })
+      if (this.track) {
+        XopcPreviewHeader({ title: this.track.title, closeId: 'music-player-close', actions: this.actions(this.track),
+          onClose: (): void => { this.music.closePreview(); } })
+        if (this.downloadFailed) {
+          Text($r('app.string.music_download_failed')).fontSize(13).fontColor(this.colors.danger)
+        }
+        Column() { XopcMusicPreviewContent({ track: this.track }) }.width('100%').layoutWeight(1)
       } else {
-        Column({ space: 12 }) {
-          XopcMusicArt({ extent: 72 })
-          Text($r('app.string.music_empty')).fontSize(17).fontColor(this.colors.foreground)
-          Text($r('app.string.music_empty_hint')).fontSize(14).fontColor(this.colors.secondary)
-        }.layoutWeight(1).width('100%').justifyContent(FlexAlign.Center)
+        XopcPreviewHeader({ onClose: (): void => { this.music.closePreview(); } })
+        Text($r('app.string.music_empty')).fontSize(17).fontColor(this.colors.foreground)
+          .width('100%').layoutWeight(1).textAlign(TextAlign.Center)
       }
     }.id('music-player').width('100%').height('100%')
   }

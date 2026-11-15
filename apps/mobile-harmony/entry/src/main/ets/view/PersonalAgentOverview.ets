@@ -1,4 +1,4 @@
-import { XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { artifactMedia, chatProductCapability } from '../common/chatRichContent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcProductReference } from '../model/chat';
@@ -10,7 +10,7 @@ import { appSettings } from '../service/settings';
 import { generatedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcPersonalOverviewViewModel } from '../viewmodel/personalOverviewViewModel';
 import { XopcChatMediaView } from './ChatMediaView';
-import { XopcListSkeleton } from './MobileComponents';
+import { XopcListSkeleton, XopcPaginationFooter } from './MobileComponents';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcAutomationIdeas } from './AutomationIdeas';
 
@@ -184,7 +184,7 @@ export struct XopcPersonalAgentOverview {
     }.width('100%').constraintSize({ minHeight: 58 }).padding(0)
       .backgroundColor($$.attention ? this.colors.attentionFill : this.colors.light ? this.colors.panel : Color.Transparent)
       .borderRadius(this.colors.corner(14))
-      .onClick((): void => { $$.onOpen(); })
+      .onClick((): void => { $$.onOpen(); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   @Builder groupHeading(label: ResourceStr) {
@@ -255,9 +255,8 @@ export struct XopcPersonalAgentOverview {
         }.width('100%')
       }, (group: XopcPersonalWorkGroup): string => group.id)
       if (this.model.workError || this.model.moreWork) {
-        Button(this.model.workError ? $r('app.string.retry') : $r('app.string.load_more'))
-          .height(44).width('100%').backgroundColor(Color.Transparent).fontColor(this.colors.accent).enabled(!this.model.workLoading)
-          .onClick((): void => { void this.model.work(this.model.moreWork); })
+        XopcPaginationFooter({ loadingPage: this.model.workLoading, failedPage: !!this.model.workError,
+          onLoad: (): void => { void this.model.work(this.model.moreWork); } })
       }
     }.id('personal-overview-task-list').width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -288,17 +287,12 @@ export struct XopcPersonalAgentOverview {
         Text($r('app.string.personal_overview_no_deliveries')).fontSize(14).fontColor(this.colors.secondary)
           .textAlign(TextAlign.Center).width('100%').padding(20)
       }
-      if (this.model.deliveryLoaded && this.model.deliveryLoading) {
-        Row() { LoadingProgress().width(22).height(22).color(this.colors.secondary) }
-          .id('personal-overview-library-loading-more').height(44).width('100%').justifyContent(FlexAlign.Center)
-          .accessibilityText($r('app.string.loading'))
-      } else if (this.model.deliveryError || this.model.nextDeliveryOffset !== null) {
-        Button(this.model.deliveryError ? $r('app.string.retry') : $r('app.string.load_more'))
-          .height(44).width('100%').backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-          .onClick((): void => {
+      if (this.model.deliveryError || this.model.nextDeliveryOffset !== null) {
+        XopcPaginationFooter({ loadingPage: this.model.deliveryLoading, failedPage: !!this.model.deliveryError,
+          onLoad: (): void => {
             if (this.model.deliveryError) void this.model.retryDeliveries();
             else void this.model.loadDeliveries(true);
-          })
+          } })
       }
     }.id('personal-overview-library-list').width('100%').alignItems(HorizontalAlign.Start)
   }

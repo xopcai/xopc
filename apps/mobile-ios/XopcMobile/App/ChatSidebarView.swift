@@ -40,7 +40,7 @@ struct ChatSidebarView: View {
                         .accessibilityIdentifier("chat-sidebar-projects")
                     row("自动化", symbol: "clock") { onNavigate(.automations) }
                         .accessibilityIdentifier("chat-sidebar-automations")
-                    row("资料", symbol: "doc") { onNavigate(.library) }
+                    row("资料库", symbol: "doc") { onNavigate(.library) }
                         .accessibilityIdentifier("chat-sidebar-library")
                     row("capability_title", symbol: "puzzlepiece") { onNavigate(.capabilities) }
                         .accessibilityIdentifier("chat-sidebar-capabilities")

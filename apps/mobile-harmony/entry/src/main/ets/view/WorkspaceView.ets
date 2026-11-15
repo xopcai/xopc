@@ -1,4 +1,4 @@
-import { XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import {
   XopcSection, XopcWorkspaceItem, XopcAutomationRun, XopcMobileTaskDetail,
@@ -11,7 +11,7 @@ import { taskCriterionState, taskPhaseAction, taskReviewAction, taskSignoffResul
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField } from './MobileComponents';
+import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField, XopcPaginationFooter } from './MobileComponents';
 import { XopcMobileRoute } from '../model/home';
 import { userErrorMessage } from '../common/userError';
 import { XopcChatRepository } from '../repository/chatRepository';
@@ -595,7 +595,7 @@ export struct XopcWorkspaceView {
       .onClick((): void => {
         if (this.section === 'projects') this.onNavigate({ page: 'project-detail', itemId: item.id });
         else { this.model.open(item.id); }
-      })
+      }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   @Builder
@@ -626,12 +626,6 @@ export struct XopcWorkspaceView {
       ForEach(this.filteredItems(), (item: XopcWorkspaceItem) => {
         ListItem() { this.workspaceCard(item) }
       }, (item: XopcWorkspaceItem): string => item.id + ':' + item.version + ':' + item.title + ':' + item.status)
-      if (this.model.hasMore) {
-        ListItem() {
-          Button($r('app.string.load_more')).width('100%').height(44).backgroundColor(this.colors.input)
-            .fontColor(this.colors.foreground).onClick((): void => { this.model.list(this.model.loadedSearch, true); })
-        }
-      }
       if (!this.model.busy && this.section === 'automations' && !this.model.error && !this.model.items.length
         && this.filter === 'all' && !this.search.trim() && !this.model.loadedSearch) {
         ListItem() {
@@ -646,7 +640,7 @@ export struct XopcWorkspaceView {
             XopcAutomationIdeas({ projectScoped: !!this.projectId, onChoose: (prompt: string): void => { this.openCreate(prompt); } })
           }.width('100%')
         }
-      } else if (!this.model.busy && this.filteredItems().length === 0) {
+      } else if (!this.model.busy && !this.model.hasMore && this.filteredItems().length === 0) {
         ListItem() {
           Column({ space: 10 }) {
             SymbolGlyph($r('sys.symbol.list_bullet')).fontSize(30).fontColor([this.colors.tertiary])
@@ -654,6 +648,12 @@ export struct XopcWorkspaceView {
               ? $r('app.string.workspace_no_matches') : $r('app.string.empty_list'))
               .fontSize(14).fontColor(this.colors.secondary).textAlign(TextAlign.Center)
           }.width('100%').padding({ top: 32, bottom: 32 })
+        }
+      }
+      if (this.model.hasMore) {
+        ListItem() {
+          XopcPaginationFooter({ loadingPage: this.model.busy, failedPage: !!this.model.error,
+            onLoad: (): void => { void this.model.list(this.model.loadedSearch, true); } })
         }
       }
     }.layoutWeight(1).padding({ left: 20, right: 20, bottom: 20 }).width('100%').scrollBar(BarState.Off)

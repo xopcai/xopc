@@ -1,14 +1,34 @@
 # Synthetic, loopback-only Gateway fixture for MobileLayoutParityUITests.
 # Start this server before running that UI test class; no user credentials are required.
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import base64, json, time, wave, io, math, struct, sys
+public_assets = Path(__file__).resolve().parents[3] / 'web/public'
+capability_brands = {
+ '/channel-icons/telegram.svg': (public_assets / 'channel-icons/telegram.svg').read_bytes(),
+ '/connector-icons/gmail.svg': (public_assets / 'connector-icons/gmail.svg').read_bytes(),
+}
+capability_plugin_icon = 'data:image/svg+xml;base64,' + base64.b64encode(
+ (public_assets / 'channel-icons/feishu.svg').read_bytes()).decode()
 now = int(time.time()*1000)
 parent = '11111111-1111-4111-8111-111111111111'
 child = '22222222-2222-4222-8222-222222222222'
 personal = '33333333-3333-4333-8333-333333333333'
 schedule_chat = '44444444-4444-4444-8444-444444444444'
 music_job = {'id':'fixture-song','title':'模拟器背景音乐','lyrics':'用于校验歌词和跨页播放。','state':'completed','createdAt':1,'durationMs':30000}
+live_music_state = None
+space_id = '55555555-5555-4555-8555-555555555555'
+space_version = {'id':'66666666-6666-4666-8666-666666666666','ordinal':2,'fileName':'验收.txt',
+ 'mimeType':'text/plain','sizeBytes':20,'createdAt':now,'indexStatus':'ready'}
+space_origin = {'kind':'chat','versionId':space_version['id'],'conversationId':parent,'label':'移动端布局检查','available':True}
+older_space_version = dict(space_version,id='77777777-7777-4777-8777-777777777777',ordinal=1,createdAt=now-86400000)
+older_space_origin = dict(space_origin, versionId=older_space_version['id'])
+def space_seed():
+ return {'id':space_id,'title':'资料库验收','kind':'document','favorite':False,'trashedAt':None,
+  'updatedAt':now,'revision':1,'currentVersion':space_version,'origin':space_origin,
+  'versions':[space_version,older_space_version],'origins':[space_origin,older_space_origin]}
+space_item = space_seed()
 long_body = '# 移动端阅读\n\n' + '\n\n'.join(f'{i}. **工作记录**\n   - 窄屏列表应该保留足够的阅读宽度，换行不重复占用左侧缩进。\n   - 保持信息清晰。' for i in range(1, 20))
 messages = [{'id':f'history-{i}','role':'user','content':f'移动端回归检查记录 {i}'} for i in range(12)] + [
  {'id':'long-ai','turnId':'turn-1','role':'assistant','content':long_body},
@@ -40,33 +60,124 @@ version_attempts = set()
 music_bytes = base64.b64decode(
  '/+MYxAAAAANIAAAAAExBTUUzLjEwMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 ) * 417
+space_music_id = '88888888-8888-4888-8888-888888888888'
+space_music_version = dict(space_version, id='99999999-9999-4999-8999-999999999999', ordinal=1,
+ fileName='音乐验收.mp3', mimeType='audio/mpeg', sizeBytes=len(music_bytes))
+space_music_origin = dict(space_origin, versionId=space_music_version['id'], conversationId=personal, label='Ada')
+space_music_summary = dict(space_seed(), id=space_music_id, title=music_job['title'], kind='audio',
+ currentVersion=space_music_version, origin=space_music_origin, versions=[], origins=[])
+space_music_detail_version = dict(space_music_version, music={'id':music_job['id'], 'conversationId':personal,
+ 'lyrics':music_job['lyrics'], 'durationMs':music_job['durationMs']})
 w=io.BytesIO()
 with wave.open(w,'wb') as audio:
  audio.setparams((1,2,8000,0,'NONE','not compressed'))
  audio.writeframes(b''.join(struct.pack('<h',int(800*math.sin(2*math.pi*440*n/8000))) for n in range(24000)))
 def envelope(value): return {'ok':True,'payload':value}
+capability_skill_enabled = True
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
  def do_PUT(self): self.do_GET()
  def do_POST(self): self.do_GET()
  def do_PATCH(self): self.do_GET()
+ def do_DELETE(self): self.do_GET()
  def do_GET(self):
+  global live_music_state, space_item, capability_skill_enabled
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   keyboard_fixture = path.startswith('/keyboard/')
   music_fixture = path.startswith('/music/')
+  live_music_fixture = path.startswith('/music-live/')
   if keyboard_fixture: path = path.removeprefix('/keyboard')
   if music_fixture: path = path.removeprefix('/music')
+  if live_music_fixture: path = path.removeprefix('/music-live')
   length=int(self.headers.get('Content-Length','0')); body=self.rfile.read(length) if length else b''
   data=None; status=200
-  if path=='/api/agents': data=envelope({'defaultId':'main','agents':[{'id':'main','name':'Main','isDefault':True},{'id':'other','name':'Research'},{'id':'coder','name':'Coder','description':'Software development, debugging, refactoring, and tests.'}]})
+  if path=='/fixture/space-reset' and self.command=='POST':
+   space_item=space_seed(); data={'ok':True}
+  elif path=='/api/spaces/items' and self.command=='GET':
+   view=query.get('view',['all'])[0]; kind=query.get('kind',[''])[0]; q=query.get('q',[''])[0]
+   item=space_item
+   visible=item and (item['trashedAt'] is not None)==(view=='trash') and (view!='favorites' or item['favorite'])
+   matches=visible and (not kind or item['kind']==kind) and (not q or q in item['title'] or q=='正文')
+   data={'items':[dict(item,hit={'text':'正文中的搜索命中','locator':{'line':2}}) if q=='正文' else item] if matches else []}
+   if music_fixture and view=='all' and kind in ('','audio') and q in space_music_summary['title']:
+    data['items'].append(space_music_summary)
+  elif path=='/api/spaces/items/'+space_music_id and music_fixture:
+   data=dict(space_music_summary,currentVersion=space_music_detail_version,versions=[space_music_detail_version],origins=[space_music_origin])
+  elif path==f"/api/spaces/items/{space_music_id}/versions/{space_music_version['id']}/content" and music_fixture:
+   self.send_response(200);self.send_header('Content-Type','audio/mpeg');self.send_header('Content-Length',str(len(music_bytes)));self.end_headers();self.wfile.write(music_bytes);return
+  elif path.startswith('/api/spaces/items/'+space_id):
+   action=path.removeprefix('/api/spaces/items/'+space_id).strip('/')
+   if not space_item: status=404; data={'error':'Item not found'}
+   elif action.startswith('versions/') and action.endswith('/content') and self.command=='GET':
+    payload=b'Library version one' if older_space_version['id'] in action else b'Library version two'
+    self.send_response(200);self.send_header('Content-Type','text/plain');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
+   elif self.command=='GET' and not action: data=space_item
+   else:
+    mutation=json.loads(body)
+    if mutation.pop('revision',None)!=space_item['revision']: status=409; data={'error':'Conflict'}
+    elif self.command=='PATCH' and not action:
+     space_item=dict(space_item,**mutation); space_item['revision']+=1; data=space_item
+    elif self.command=='DELETE' and not action:
+     space_item=dict(space_item,trashedAt=now,revision=space_item['revision']+1); data={'ok':True}
+    elif action=='restore':
+     space_item=dict(space_item,trashedAt=None,revision=space_item['revision']+1); data={'ok':True}
+    elif action=='purge' and space_item['trashedAt']:
+     space_item=None; data={'ok':True}
+    else: status=400; data={'error':'Invalid operation'}
+  elif path=='/api/agents': data=envelope({'defaultId':'main','agents':[{'id':'main','name':'Main','isDefault':True},{'id':'other','name':'Research'},{'id':'coder','name':'Coder','description':'Software development, debugging, refactoring, and tests.'}]})
+  elif path=='/api/capabilities/mobile-actions/panel/skills' and query.get('id')==['marketplace:search']:
+   request=json.loads(body) if body else {}
+   action=request.get('action')
+   search=request.get('values',{}).get('query','')
+   data=envelope({
+    'fields':[{'id':'query','label':'技能名称或关键词','type':'text','value':search,'hint':'例如：会议纪要、PDF'}],
+    'actions':[{'id':'search','label':'搜索'}],
+    **({'message':'技能已安装，可在技能列表中使用。'} if action=='install:sample' else {}),
+    **({'results':[{'id':'sample','name':'Meeting Summary','source':'技能市场','summary':'整理会议纪要与待办',
+                    'iconUrl':capability_plugin_icon,
+                    'action':{'id':'install:sample','label':'安装','confirmation':'Meeting Summary'}}]} if action=='search' else {}),
+   })
+  elif path=='/api/capabilities/mobile-actions/panel/skills' and query.get('id')==['meeting-skill']:
+   if self.command=='POST':
+    capability_skill_enabled=json.loads(body)['values']['enabled']=='true'
+   data=envelope({'fields':[{'id':'enabled','label':'启用技能','type':'toggle',
+                            'value':str(capability_skill_enabled).lower()}],
+                  'actions':[{'id':'save','label':'保存配置'}]})
+  elif path=='/api/capabilities/mobile-actions/panel/plugins':
+   request=json.loads(body) if body else {}
+   if request.get('action')=='start':
+    data=envelope({'message':'正在完成设置…','pollAction':'refresh','revision':1})
+   elif request.get('action')=='refresh':
+    data=envelope({'message':'已启用','actions':[{'id':'disable','label':'停用插件','advanced':True}]})
+   else:
+    data=envelope({'actions':[{'id':'start','label':'启用插件'}]})
+  elif path=='/api/capabilities/mobile-actions/panel/connections':
+   if query.get('id')==['mcp:setup']:
+    data=envelope({'fields':[{'id':'url','label':'服务地址','type':'text','hint':'https://'}],
+                   'actions':[{'id':'prepare','label':'添加连接'}]})
+   else:
+    data=envelope({'message':'账号已连接','actions':[{'id':'authorize','label':'重新授权'}]})
+  elif path=='/api/capabilities/mobile-actions/panel/agents':
+   data=envelope({'fields':[{'id':'name','label':'名称','type':'text','value':'Coding Expert'}],
+                  'actions':[{'id':'save','label':'保存'}]})
+  elif path=='/api/capabilities/mobile-actions/panel/channels':
+   data=envelope({'message':'可在此管理消息通道。','actions':[{'id':'pair','label':'配对通道'}]})
+  elif path in capability_brands:
+   logo = capability_brands[path]
+   self.send_response(200)
+   self.send_header('Content-Type','image/svg+xml')
+   self.send_header('Content-Length',str(len(logo)))
+   self.end_headers()
+   self.wfile.write(logo)
+   return
   elif path=='/api/capabilities/mobile-catalog':
    catalog = {
-    'plugins': [{'id':'meeting-plugin','name':'Meeting Plugin','description':'Plan meetings','group':'installed'},
+    'plugins': [{'id':'meeting-plugin','name':'Meeting Plugin','description':'Plan meetings','group':'installed','iconUrl':capability_plugin_icon},
                 {'id':'document-plugin','name':'Document Plugin','group':'available'}],
     'skills': [{'id':'meeting-skill','name':'Meeting Skill','group':'installed'}],
-    'connections': [{'id':'drive-connection','name':'Drive Connection','group':'connected'}],
+    'connections': [{'id':'drive-connection','name':'Drive Connection','group':'connected','iconUrl':'/connector-icons/gmail.svg'}],
     'agents': [{'id':'coder','name':'Coding Expert','group':'expert'}],
-    'channels': [{'id':'mail-channel','name':'Mail Channel','group':'configured'}],
+    'channels': [{'id':'mail-channel','name':'Mail Channel','group':'configured','iconUrl':'/channel-icons/telegram.svg'}],
    }
    data=envelope({'items':catalog[query.get('category',['plugins'])[0]]})
   elif path=='/api/personal-agent': data=envelope(record)
@@ -116,7 +227,9 @@ class Handler(BaseHTTPRequestHandler):
    if data is None: data=envelope(current)
   elif path.endswith('/clarification'): data=envelope({'clarification':None})
   elif path.endswith('/input-state'): data=envelope({'activeRunId':None,'inputs':[]})
-  elif path.endswith('/run'): data=envelope({'active':child in path,'runId':'fixture-live' if child in path else None})
+  elif path.endswith('/run'):
+   active=child in path or (live_music_fixture and path == f'/api/sessions/{personal}/run')
+   data=envelope({'active':active,'runId':'fixture-live' if active else None})
   elif path.endswith('/execution-detail'): data={'detail':{'turnId':query.get('turnId',['turn-1'])[0],'steps':[]}}
   elif path=='/api/home':
    data={'needsUser':[{'id':'attention','kind':'task','title':'需要验收','summary':'执行已完成，等待确认。','statusLabel':'待验收','recommendation':'查看结果后验收。','openAction':{'type':'open','label':'查看任务','href':'/tasks'},'primaryAction':{'type':'task_review','label':'查看结果并验收','taskId':'task-header'}}], 'background':[{'id':'running','kind':'task','title':'进行中的工作','summary':'正在处理。'},{'id':'scheduled','kind':'scheduled','title':'明日计划','summary':'明天上午执行。'}],'backgroundCount':2,
@@ -131,6 +244,12 @@ class Handler(BaseHTTPRequestHandler):
    else: data={'conversationId':schedule_chat}
   elif path==f'/api/music-generation/sessions/{personal}/jobs' and music_fixture:
    data={'jobs':[music_job], 'configured':True, 'transcriptId':f'transcript-{personal}'}
+  elif path==f'/api/music-generation/sessions/{personal}/jobs' and live_music_fixture:
+   jobs=[dict(music_job,state=live_music_state)] if live_music_state else []
+   data={'jobs':jobs,'configured':True,'transcriptId':f'transcript-{personal}'}
+  elif path=='/fixture/music-state' and live_music_fixture and self.command=='POST':
+   live_music_state=json.loads(body).get('state')
+   data={'ok':True}
   elif path==f'/api/music-generation/sessions/{personal}/jobs/fixture-song/audio' and music_fixture:
    payload=music_bytes
    self.send_response(200);self.send_header('Content-Type','audio/mpeg');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return

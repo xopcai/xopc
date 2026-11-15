@@ -40,7 +40,7 @@ class MusicPlaybackJourneyTest {
       compose.onNodeWithTag("music-mini-player").assertExists()
       compose.onNodeWithTag("music-expand").performClick()
       compose.onNodeWithTag("music-full-player").assertExists()
-      compose.onNodeWithTag("music-minimize").performClick()
+      compose.onNodeWithTag("music-player-close").performClick()
       compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
       val power = InstrumentationRegistry.getInstrumentation().targetContext.getSystemService(android.os.PowerManager::class.java)
       shellCommand("input keyevent KEYCODE_SLEEP")

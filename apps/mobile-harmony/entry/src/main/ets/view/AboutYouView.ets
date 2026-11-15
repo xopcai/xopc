@@ -1,9 +1,9 @@
-import { XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
 import { XopcUnderstandingItem, XopcUnderstandingProfile, XopcUnderstandingRule } from '../model/userUnderstanding';
 import { XopcUserUnderstandingViewModel } from '../viewmodel/userUnderstandingViewModel';
-import { XopcBrandLoading, XopcListSkeleton, XopcSectionLabel } from './MobileComponents';
+import { XopcBrandLoading, XopcListSkeleton, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
 import { XopcLoopi } from './Loopi';
 
@@ -318,7 +318,7 @@ export struct XopcAboutYouView {
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.tertiary])
       }.width('100%').padding(16)
     }.width('100%').padding(0).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel).margin({ bottom: 8 })
-      .onClick((): void => { this.openItem(item); })
+      .onClick((): void => { this.openItem(item); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   @Builder
@@ -372,8 +372,8 @@ export struct XopcAboutYouView {
         ForEach(this.model.items, (item: XopcUnderstandingItem) => { this.understandingRow(item) },
           (item: XopcUnderstandingItem): string => item.id)
         if (this.model.nextCursor) {
-          Button($r('app.string.load_more')).fontColor(this.colors.accent).backgroundColor(Color.Transparent)
-            .onClick((): void => { this.model.loadMore(); })
+          XopcPaginationFooter({ loadingPage: this.model.loadingMore, failedPage: !!this.model.error,
+            onLoad: (): void => { void this.model.loadMore(); } })
         }
       }
     }.width('100%').padding({ left: 20, right: 20, top: 16, bottom: 32 }).alignItems(HorizontalAlign.Start)

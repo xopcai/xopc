@@ -17,6 +17,7 @@ import { personalAgentId } from '../../../personal-agent/repository.js';
 import { getGatewayPrincipal, getPersonalOwnerId } from '../../security/gateway-principal.js';
 import { withGatewayConfigWriteLock } from '../lib/config-write-lock.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { registerMobileCapabilityPanels } from './mobile-capability-panels.js';
 
 const prefix = '/api/capabilities/mobile-actions';
 const install = z.strictObject({
@@ -43,7 +44,8 @@ const agentProfile = z.strictObject({
 });
 
 /** The native surface accepts exact product operations from a paired owner device, never general Gateway administration. */
-export function registerMobileCapabilityActions(app: Hono, { service, strictRateLimitMiddleware }: AuthenticatedRouteDeps): void {
+export function registerMobileCapabilityActions(app: Hono, deps: AuthenticatedRouteDeps): void {
+  const { service, strictRateLimitMiddleware } = deps;
   const drafts = new McpConnectionDrafts({ readConfig: () => service.currentConfig,
     saveConfig: (next, expected) => service.saveConfig(next, expected) });
   const pluginStore = new AgentPluginStore();
@@ -60,8 +62,8 @@ export function registerMobileCapabilityActions(app: Hono, { service, strictRate
     }
   };
 
-  app.get(prefix + '/skills', strictRateLimitMiddleware, guard(async c => {
-    const query = z.string().trim().min(2).max(160).parse(c.req.query('q'));
+  const searchSkills = async (c: Context, input: string) => {
+    const query = z.string().trim().min(2).max(160).parse(input);
     const result = await searchSkillMarketplaces({ config: service.currentConfig, query, limit: 15 });
     const installed = new Set(service.marketplace.getSkillsApi().catalog.map(skill => skill.directoryId.toLowerCase()));
     const now = Date.now(), principal = getGatewayPrincipal(c).principalId;
@@ -75,25 +77,30 @@ export function registerMobileCapabilityActions(app: Hono, { service, strictRate
         selections.set(selection, { principal, provider: row.provider, name: row.install.reference, expiresAt: now + 10 * 60_000 });
       }
       return { id: row.install.reference, name: row.name, description: row.description, provider: row.provider,
-        author: row.author, security: row.security.status, installed: alreadyInstalled, selection };
+        author: row.author, security: row.security.status, installed: alreadyInstalled, selection, iconUrl: row.iconUrl };
     }),
     incomplete: result.sources.some(source => !source.ok) };
-  }));
-  app.post(prefix + '/skills', strictRateLimitMiddleware, guard(async c => {
-    const body = install.parse(await c.req.json());
-    const item = selections.get(body.selection);
+  };
+  const installSkill = async (c: Context, selection: string) => {
+    const item = selections.get(selection);
     if (!item || item.expiresAt <= Date.now() || item.principal !== getGatewayPrincipal(c).principalId) {
       throw new McpDraftError(409, 'Search again before installing this skill.');
     }
-    selections.delete(body.selection);
+    selections.delete(selection);
     try {
       const result = await service.marketplace.installSkill({ name: item.name, provider: item.provider, target: 'global', overwrite: false });
       return { installed: true, name: result.skillId };
     } catch (error) {
-      selections.set(body.selection, item);
+      selections.set(selection, item);
       throw error;
     }
+  };
+  app.get(prefix + '/skills', strictRateLimitMiddleware, guard(c => searchSkills(c, c.req.query('q') ?? '')));
+  app.post(prefix + '/skills', strictRateLimitMiddleware, guard(async c => {
+    const body = install.parse(await c.req.json());
+    return installSkill(c, body.selection);
   }));
+  registerMobileCapabilityPanels(app, deps, drafts, { search: searchSkills, install: installSkill });
 
   app.post(prefix + '/mcp', strictRateLimitMiddleware, guard(async c => {
     const input = httpMcp.parse(await c.req.json());

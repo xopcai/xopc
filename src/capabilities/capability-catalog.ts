@@ -24,6 +24,7 @@ export type MobileCapabilityRow = {
   description?: string;
   group: Group;
   avatar?: string;
+  iconUrl?: string;
   version?: string;
   targetId?: string;
   issue?: string;
@@ -36,10 +37,22 @@ export type CapabilityCatalogPage = {
 
 type Locale = 'en' | 'zh-CN';
 
+const channelIcons = new Map([
+  ['dingtalk', '/connector-icons/dingtalk-mark.svg'],
+  ['discord', '/connector-icons/discord.svg'],
+  ['feishu', '/channel-icons/feishu.svg'],
+  ['lark', '/channel-icons/lark.svg'],
+  ['slack', '/connector-icons/slack.svg'],
+  ['telegram', '/channel-icons/telegram.svg'],
+  ['wechat', '/channel-icons/wechat.svg'],
+  ['wecom', '/connector-icons/wecom.svg'],
+  ['weixin', '/channel-icons/weixin.svg'],
+]);
+
 export type CapabilityCatalogSource = {
   config: Config;
   extensions?: ReadonlyArray<{ id: string; manifest: { id: string; name: string; description?: string; version?: string } }>;
-  skills: ReadonlyArray<{ directoryId: string; name: string; description?: string; enabled?: boolean;
+  skills: ReadonlyArray<{ directoryId: string; name: string; description?: string; enabled?: boolean; plugin?: { id: string };
     localizations?: Partial<Record<Locale, { displayName?: string; description?: string }>> }>;
   channelSnapshot?: ExtensionMetadataSnapshot;
   runningChannels?: ReadonlySet<string>;
@@ -61,6 +74,7 @@ async function plugins(source: CapabilityCatalogSource, locale: Locale): Promise
     const labels = plugin.localizations?.[locale];
     installed.set(id, {
       id, name: labels?.displayName ?? plugin.name, description: labels?.description ?? plugin.description,
+      iconUrl: plugin.branding?.iconUrl,
       version: plugin.version,
       group: plugin.installationState === 'preparing' || plugin.authorizationStatus === 'required'
         || plugin.readiness === 'blocked' || plugin.readiness === 'setup_required' ? 'attention'
@@ -71,10 +85,15 @@ async function plugins(source: CapabilityCatalogSource, locale: Locale): Promise
 
   const { extensions } = await fetchRegistry();
   const available = extensions.flatMap((entry): MobileCapabilityRow[] => {
-    if (entry.packageType !== 'plugin' || installed.has(entry.id)) return [];
+    if (entry.packageType !== 'plugin') return [];
+    const local = installed.get(entry.id);
+    if (local) {
+      local.iconUrl ??= entry.branding?.iconUrl;
+      return [];
+    }
     const labels = entry.localizations?.[locale];
     return [{ id: entry.id, name: labels?.displayName ?? entry.name,
-      description: labels?.description ?? entry.description, version: entry.version, group: 'available' }];
+      description: labels?.description ?? entry.description, version: entry.version, group: 'available', iconUrl: entry.branding?.iconUrl }];
   });
   return { items: [...installed.values(), ...available] };
 }
@@ -93,26 +112,33 @@ async function connections(config: Config, locale: Locale): Promise<CapabilityCa
         ? 'attention' : 'configured';
     const priority = ['disabled', 'attention', 'configured', 'connected'];
     if (priority.indexOf(rows.get(id)?.group ?? '') >= priority.indexOf(group)) continue;
-    rows.set(id, { id, name: instance.displayName, description: definitions.get(id)?.description, group });
-
+    const definition = definitions.get(id);
+    rows.set(id, { id, name: instance.displayName, description: definition?.description, group, iconUrl: definition?.branding?.logoUrl });
   }
   for (const entry of definitions.values()) {
-    if (!rows.has(entry.id)) rows.set(entry.id, { id: entry.id, name: entry.displayName, description: entry.description, group: 'available' });
+    if (!rows.has(entry.id)) rows.set(entry.id, {
+      id: entry.id, name: entry.displayName, description: entry.description, group: 'available', iconUrl: entry.branding?.logoUrl,
+    });
   }
 
   for (const [targetId, server] of Object.entries(config.mcp?.servers ?? {})) {
     if (isManagedConnectorServer(server)) continue;
     const id = 'mcp:' + targetId;
-    rows.set(id, { id, targetId, name: targetId, group: server.enabled === false ? 'disabled' : 'configured' });
+    rows.set(id, { id, targetId, name: server.displayName ?? targetId, group: server.enabled === false ? 'disabled' : 'configured' });
   }
 
   try {
     const store = await listStoreConnectorCatalog(config, { sort: 'downloads' });
     for (const entry of store) {
-      if (rows.has(entry.name)) continue;
+      const local = rows.get(entry.name);
+      if (local) {
+        local.iconUrl ??= entry.branding?.iconUrl;
+        continue;
+      }
       const labels = entry.localizations?.[locale];
       rows.set(entry.name, {
-        id: entry.name, name: labels?.displayName ?? entry.name, description: labels?.description ?? entry.description, group: 'available',
+        id: entry.name, name: labels?.displayName ?? entry.name, description: labels?.description ?? entry.description,
+        group: 'available', iconUrl: entry.branding?.iconUrl,
       });
     }
   } catch {
@@ -126,12 +152,16 @@ export async function listCapabilities(source: CapabilityCatalogSource, category
   switch (category) {
     case 'plugins':
       return plugins(source, locale);
-    case 'skills':
+    case 'skills': {
+      const pluginIcons = new Map(source.skills.some(entry => entry.plugin)
+        ? listAgentPluginInventory().map(plugin => [plugin.pluginId, plugin.branding?.iconUrl]) : []);
       return { items: source.skills.map(entry => ({
         id: entry.directoryId, name: entry.localizations?.[locale]?.displayName ?? entry.name,
         description: entry.localizations?.[locale]?.description ?? entry.description,
         group: entry.enabled === false ? 'disabled' : 'installed',
+        iconUrl: entry.plugin ? pluginIcons.get(entry.plugin.id) : undefined,
       })) };
+    }
     case 'connections':
       return connections(source.config, locale);
     case 'agents': {
@@ -159,6 +189,7 @@ export async function listCapabilities(source: CapabilityCatalogSource, category
             ? status.ready ? (runningChannels ? 'attention' : 'configured') : 'attention'
             : status.ready ? 'disabled' : 'available',
           issue: code,
+          iconUrl: channelIcons.get(entry.id),
         };
       }) };
     }

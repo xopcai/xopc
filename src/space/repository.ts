@@ -61,8 +61,22 @@ export function getSpaceItem(id: string): SpaceDetail | null {
   const row = db.prepare(`${itemSelect} ${itemJoin} WHERE i.id = ?`).get(id) as ItemRow | undefined;
   if (!row) return null;
   const source = origins(id);
-  return { ...item(row, source[0]), origins: source,
-    versions: (db.prepare('SELECT * FROM space_versions WHERE item_id = ? ORDER BY created_at DESC, ordinal DESC').all(id) as VersionRow[]).map(version) };
+  const rows = db.prepare(`SELECT v.*, m.id AS music_id, m.conversation_id AS music_conversation_id,
+    m.lyrics AS music_lyrics, m.duration_ms AS music_duration_ms
+    FROM space_versions v LEFT JOIN music_generation_jobs m
+      ON v.mime_type LIKE 'audio/%' AND v.media_id GLOB 'music-*.mp3'
+      AND m.id = substr(v.media_id, 7, length(v.media_id) - 10)
+      AND m.state = 'completed'
+    WHERE v.item_id = ? ORDER BY v.created_at DESC, v.ordinal DESC`).all(id) as (VersionRow & {
+    music_id: string | null; music_conversation_id: string; music_lyrics: string | null; music_duration_ms: number | null;
+  })[];
+  const versions = rows.map((entry): SpaceVersion => ({
+    ...version(entry),
+    ...(entry.music_id ? { music: { id: entry.music_id, conversationId: entry.music_conversation_id,
+      lyrics: entry.music_lyrics, durationMs: entry.music_duration_ms } } : {}),
+  }));
+  return { ...item(row, source[0]), versions, origins: source,
+    currentVersion: versions.find(entry => entry.id === row.id) ?? version(row) };
 }
 
 type ListInput = { view: 'all' | 'favorites' | 'trash'; q?: string; kind?: string; projectId?: string; taskId?: string; cursor?: string; versionTargetFor?: string };

@@ -99,7 +99,7 @@ final class MobileListCache {
     static let shared = MobileListCache()
 
     enum ListKind: Hashable {
-        case conversations, projects, automations, notes, recentFiles, generatedMedia
+        case conversations, projects, automations, notes, recentFiles, generatedMedia, spaceLibrary
     }
 
     private struct Key: Hashable {

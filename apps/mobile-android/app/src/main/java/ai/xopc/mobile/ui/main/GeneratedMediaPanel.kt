@@ -18,8 +18,6 @@ import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,13 +28,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Surface
@@ -58,6 +53,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -150,7 +146,6 @@ internal fun GeneratedMediaCard(
   }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun GeneratedVideoSheet(
   item: GeneratedMediaItem,
@@ -159,20 +154,24 @@ internal fun GeneratedVideoSheet(
   onClose: () -> Unit,
 ) {
   val zh = LocalConfiguration.current.locales[0].language == "zh"
-  ModalBottomSheet(onDismissRequest = onClose,
-    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    modifier = Modifier.testTag("video-player-drawer")) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-      .padding(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(item.title.orEmpty().ifBlank { label(zh, "视频", "Video") }, Modifier.weight(1f),
-          style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        IconButton(onClick = onClose, modifier = Modifier.testTag("video-player-close")) {
-          Icon(painterResource(R.drawable.action_close), label(zh, "关闭", "Close"))
+  val context = LocalContext.current
+  val export = rememberPreviewExport("video/mp4")
+  val title = item.title.orEmpty().ifBlank { label(zh, "视频", "Video") }
+  MobilePreviewSheet(onClose, Modifier.testTag("video-player-drawer")) {
+    PreviewHeader(title, onClose, "video-player-close") { dismiss ->
+      DropdownMenuItem(text = { Text(stringResource(R.string.preview_download)) }, onClick = {
+        dismiss()
+        val safeName = title.filterNot { it == '/' || it == '\\' || it.isISOControl() }.take(100).ifBlank { "video" }
+        export("$safeName.mp4") { target ->
+          val file = File.createTempFile("video-export-", ".mp4", context.cacheDir)
+          try {
+            access.download(conversationId, item, file)
+            file.inputStream().use { it.copyTo(target) }
+          } finally { file.delete() }
         }
-      }
-      GeneratedVideoPlayer(item, conversationId, access)
+      })
     }
+    GeneratedVideoPlayer(item, conversationId, access)
   }
 }
 
@@ -213,19 +212,27 @@ private fun GeneratedVideoPlayer(
         TextButton(onClick = { retry++ }) { Text(label(zh, "重试", "Try again")) }
       }
       local == null -> CircularProgressIndicator(Modifier.size(32.dp).align(Alignment.CenterHorizontally))
-      else -> AndroidView(
-        factory = { ctx ->
-          VideoView(ctx).apply {
-            setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
-            setOnErrorListener { _, _, _ -> failed = true; true }
-            setOnPreparedListener { start() }
-            setVideoPath(local.absolutePath)
-          }
-        },
-        onRelease = { it.stopPlayback() },
-        modifier = Modifier.fillMaxWidth().aspectRatio(if (item.ratio == "9:16") 1f else 16f / 9f),
-      )
+      else -> PreviewVideo(local, Modifier.fillMaxWidth().aspectRatio(if (item.ratio == "9:16") 1f else 16f / 9f),
+        autoplay = true, onError = { failed = true })
     }
+  }
+}
+
+@Composable
+internal fun PreviewVideo(file: File, modifier: Modifier, autoplay: Boolean = false, onError: () -> Unit) {
+  androidx.compose.runtime.key(file) {
+    AndroidView(
+      factory = { context ->
+        VideoView(context).apply {
+          setMediaController(MediaController(context).also { it.setAnchorView(this) })
+          setOnErrorListener { _, _, _ -> onError(); true }
+          setOnPreparedListener { if (autoplay) start() else seekTo(1) }
+          setVideoPath(file.absolutePath)
+        }
+      },
+      onRelease = { it.stopPlayback() },
+      modifier = modifier,
+    )
   }
 }
 
@@ -239,8 +246,7 @@ internal fun GeneratedMediaRows(items: List<GeneratedMediaItem>, submitting: Boo
   conversationId: String? = null, activeMusic: MusicTrack? = null,
   onOpen: (GeneratedMediaItem) -> Unit = onPlay,
   onMusicBounds: (Rect?) -> Unit = {}) {
-  Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.TopEnd) {
-  Column(Modifier.fillMaxWidth(CHAT_MESSAGE_WIDTH), horizontalAlignment = Alignment.End,
+  Column(Modifier.fillMaxWidth().padding(top = 6.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     for (item in items) {
       androidx.compose.runtime.key(item.kind, item.id) {
@@ -249,12 +255,15 @@ internal fun GeneratedMediaRows(items: List<GeneratedMediaItem>, submitting: Boo
           DisposableEffect(music.key) { onDispose { onMusicBounds(null) } }
           Modifier.onGloballyPositioned { onMusicBounds(it.boundsInWindow()) }
         }
-        GeneratedMediaCard(item, submitting, failedDraftId == item.id, { onPlay(item) }, { onConfirm(item) }, music,
-          onOpen = if (item.state == "completed") ({ onOpen(item) }) else null,
-          modifier = trackBounds)
+        val alignment = if (item.kind == GeneratedMediaKind.Music) Alignment.Start else Alignment.End
+        Box(Modifier.fillMaxWidth(CHAT_MESSAGE_WIDTH).align(alignment),
+          contentAlignment = if (item.kind == GeneratedMediaKind.Music) Alignment.TopStart else Alignment.TopEnd) {
+          GeneratedMediaCard(item, submitting, failedDraftId == item.id, { onPlay(item) }, { onConfirm(item) }, music,
+            onOpen = if (item.state == "completed") ({ onOpen(item) }) else null,
+            modifier = trackBounds)
+        }
       }
     }
-  }
   }
 }
 

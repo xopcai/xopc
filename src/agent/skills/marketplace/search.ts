@@ -17,6 +17,7 @@ export interface SkillsMarketplaceSearchResult {
   source: SkillsMarketplaceSearchSource;
   name: string;
   description: string;
+  iconUrl?: string;
   author: string;
   downloads: number;
   stars: number;
@@ -182,6 +183,7 @@ function fromMarketplacePackage(
     source: provider,
     name: item.name,
     description: item.description,
+    ...(item.branding?.iconUrl ? { iconUrl: item.branding.iconUrl } : {}),
     author: item.author.username,
     downloads: boundedNumber(item.downloads),
     stars: boundedNumber(item.stars),

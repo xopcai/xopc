@@ -87,10 +87,16 @@
             "x-hidden": true
           }
         },
-        "required": [
-          "botToken",
-          "appToken"
-        ]
+        "if": {
+          "properties": { "enabled": { "const": false } },
+          "required": ["enabled"]
+        },
+        "else": {
+          "required": [
+            "botToken",
+            "appToken"
+          ]
+        }
       },
       "uiHints": {
         "botToken": {

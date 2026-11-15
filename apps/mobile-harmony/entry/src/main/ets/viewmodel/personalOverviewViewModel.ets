@@ -118,15 +118,16 @@ export class XopcPersonalOverviewViewModel {
   async loadDeliveries(more: boolean = false): Promise<void> {
     if (this.deliveryLoading || (more && this.nextDeliveryOffset === null)) return;
     const generation = this.generation;
+    const offset = more ? this.nextDeliveryOffset ?? 0 : 0;
     this.deliveryLoading = true;
     this.deliveryError = '';
     try {
-      const page = await this.repository.deliveries(more ? this.nextDeliveryOffset ?? 0 : 0);
+      const page = await this.repository.deliveries(offset);
       if (generation !== this.generation) return;
       const seen = new Set<string>(this.deliveries.map((item: XopcPersonalDelivery): string => item.id));
       this.deliveries = more
         ? this.deliveries.concat(page.items.filter((item: XopcPersonalDelivery): boolean => !seen.has(item.id))) : page.items;
-      this.nextDeliveryOffset = page.nextOffset;
+      this.nextDeliveryOffset = page.nextOffset !== null && page.nextOffset > offset ? page.nextOffset : null;
       this.deliveryLoaded = true;
     } catch (error) {
       if (generation === this.generation) {

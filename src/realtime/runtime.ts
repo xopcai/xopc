@@ -12,6 +12,7 @@ import {
   REALTIME_HEARTBEAT_TIMEOUT_MS,
   REALTIME_HELLO_TIMEOUT_MS,
   ENDPOINT_V3_CAPABILITY,
+  MOBILE_MCP_SETUP_CARD_CAPABILITY,
   REALTIME_MAX_CLIENT_FRAME_BYTES,
   REALTIME_PROTOCOL_VERSION,
   parseClientRealtimeMessage,
@@ -369,6 +370,9 @@ export class RealtimeRuntime {
               connectionId,
               transport,
               executionAuthority,
+              claim.clientKind === 'mobile' && Boolean(device && device.id === message.payload.endpoint.principalId)
+                && hasGatewayScope(claim.scopes, 'sessions.write')
+                && message.payload.capabilities.includes(MOBILE_MCP_SETUP_CARD_CAPABILITY),
             );
             endpointId = message.payload.endpoint.endpointId;
             this.setupAuthorities.delete(endpointId);

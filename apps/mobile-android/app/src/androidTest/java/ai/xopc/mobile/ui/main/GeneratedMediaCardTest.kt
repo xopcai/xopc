@@ -1,10 +1,15 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.gateway.GeneratedMediaKind
+import ai.xopc.mobile.gateway.GeneratedMediaItem
 import ai.xopc.mobile.gateway.parseGeneratedMedia
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -16,6 +21,26 @@ import org.junit.Test
 
 class GeneratedMediaCardTest {
   @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+  @Test fun aNewQueuedSongAppearsOnTheLeftOfTheExistingTimeline() {
+    val items = mutableStateOf<List<GeneratedMediaItem>>(emptyList())
+    compose.setContent {
+      MaterialTheme {
+        Column(Modifier.fillMaxWidth().testTag("timeline")) {
+          GeneratedMediaRows(items.value, false, null, {}, {})
+        }
+      }
+    }
+    val card = compose.onNodeWithTag("generated-media-card-song")
+    card.assertDoesNotExist()
+    compose.runOnIdle {
+      items.value = parseGeneratedMedia(JSONObject("""{"jobs":[{"id":"song","title":"新歌",
+        "state":"queued","createdAt":1}]}"""), GeneratedMediaKind.Music)
+    }
+    val timeline = compose.onNodeWithTag("timeline").fetchSemanticsNode().boundsInRoot
+    assertEquals(timeline.left, card.fetchSemanticsNode().boundsInRoot.left, 1f)
+    compose.onNodeWithText("新歌").assertExists()
+  }
 
   @Test fun completedVideoOpensFromTheCardAndDraftStillRequiresConfirmation() {
     val song = parseGeneratedMedia(JSONObject("""{"jobs":[{"id":"song","title":"风从山南来",

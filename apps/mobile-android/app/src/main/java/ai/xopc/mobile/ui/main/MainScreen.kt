@@ -1,5 +1,7 @@
 package ai.xopc.mobile.ui.main
 
+import org.json.JSONObject
+
 import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.theme.CHAT_MESSAGE_WIDTH
 import ai.xopc.mobile.theme.LocalChatColors
@@ -27,6 +29,7 @@ import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.ConversationTaskChild
 import ai.xopc.mobile.gateway.ConversationTaskGroup
 import ai.xopc.mobile.gateway.ConversationMedia
+import ai.xopc.mobile.gateway.ConversationMessage
 import ai.xopc.mobile.gateway.GeneratedMediaAccess
 import ai.xopc.mobile.gateway.GeneratedMediaItem
 import ai.xopc.mobile.gateway.GeneratedMediaKind
@@ -56,7 +59,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -349,8 +351,9 @@ fun MainScreen(
   onConversationSearchChange: (String) -> Unit = {},
   onRefreshConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
+  onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
+  onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
   onCreateAgentConversation: (String) -> Unit = {},
-  onCapabilityConversation: (String) -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onLoadOlderHistory: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
@@ -440,6 +443,9 @@ fun MainScreen(
   onReuseMessage: (String) -> Boolean = { false },
   onRegenerateMessage: (String) -> Boolean = { false },
   generatedMediaAccess: GeneratedMediaAccess? = null,
+  spaceLibraryAccess: ai.xopc.mobile.gateway.SpaceLibraryAccess? = null,
+  onUseLibraryFile: suspend (String, ai.xopc.mobile.gateway.LibraryVersion, ai.xopc.mobile.gateway.LibraryOrigin?) -> Unit =
+    { _, _, _ -> error("LIBRARY_UNAVAILABLE") },
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
@@ -661,9 +667,9 @@ fun MainScreen(
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
     onRefreshConversations = onRefreshConversations,
-    onLoadCapabilities = onLoadCapabilities,
+    onLoadCapabilities = onLoadCapabilities, onCapabilityPanel = onCapabilityPanel,
+    onCapabilitySetupChat = onCapabilitySetupChat,
     onCreateAgentConversation = onCreateAgentConversation,
-    onCapabilityConversation = onCapabilityConversation,
     onLoadMoreConversations = onLoadMoreConversations, onLoadOlderHistory = onLoadOlderHistory,
     onSelectConversation = onSelectConversation,
     onRestoreConversation = onRestoreConversation,
@@ -747,6 +753,7 @@ fun MainScreen(
     onLoadMessageMedia = onLoadMessageMedia,
     onResolveMessageFile = onResolveMessageFile, onSaveFileVersion = onSaveFileVersion,
     generatedMediaAccess = generatedMediaAccess,
+    spaceLibraryAccess = spaceLibraryAccess, onUseLibraryFile = onUseLibraryFile,
     onSpeechChunk = onSpeechChunk,
     onTranscribeAudio = onTranscribeAudio,
     onCreateVoiceCall = onCreateVoiceCall, onCancelVoiceCall = onCancelVoiceCall,
@@ -860,8 +867,9 @@ internal fun MainContent(
   onConversationSearchChange: (String) -> Unit = {},
   onRefreshConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
+  onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
+  onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
   onCreateAgentConversation: (String) -> Unit = {},
-  onCapabilityConversation: (String) -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onLoadOlderHistory: () -> Unit = {},
   onSelectConversation: (String) -> Unit = {},
@@ -947,6 +955,9 @@ internal fun MainContent(
   onReuseMessage: (String) -> Boolean = { false },
   onRegenerateMessage: (String) -> Boolean = { false },
   generatedMediaAccess: GeneratedMediaAccess? = null,
+  spaceLibraryAccess: ai.xopc.mobile.gateway.SpaceLibraryAccess? = null,
+  onUseLibraryFile: suspend (String, ai.xopc.mobile.gateway.LibraryVersion, ai.xopc.mobile.gateway.LibraryOrigin?) -> Unit =
+    { _, _, _ -> error("LIBRARY_UNAVAILABLE") },
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
@@ -1273,9 +1284,8 @@ internal fun MainContent(
     if (linkedDetailId == null && selectedTab == HomeTab.Projects && isPaired) onLoadProgressProjects()
     if (linkedDetailId == null && selectedTab == HomeTab.Automations && isPaired) onLoadAutomations()
   }
-  LaunchedEffect(selectedTab, gatewayId) {
-    if (selectedTab == HomeTab.Notes && isPaired) {
-      onRefreshProgressHome()
+  LaunchedEffect(selectedTab, gatewayId, linkedDetailId) {
+    if (selectedTab == HomeTab.Notes && isPaired && linkedDetailId != null) {
       onLoadNotes(connection.notes.search, connection.notes.status)
     }
   }
@@ -1513,6 +1523,8 @@ internal fun MainContent(
       if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
           if (showMusicMini) MusicMiniPlayer(activeMusic, openMusicPlayer,
             Modifier.padding(horizontal = 12.dp).padding(bottom = 4.dp))
+          if (conversationId != null) ConversationMcpAction(conversationId,
+            connection.sending || connection.activeRunId != null, onCapabilityPanel)
           MainBottomSurface("assistant-bottom-surface", assistantActionsOpen) {
             AssistantComposer(connection, assistantComposerValue, { value ->
               inputVoiceNotice.clear()
@@ -1561,6 +1573,8 @@ internal fun MainContent(
       }
     },
   ) { insets ->
+    val readingPosition = rememberChatReadingPosition(connection.profile?.gatewayId,
+      connection.profile?.deviceId, connection.selectedConversationId)
     val rootInsets = if (showBottomChrome) PaddingValues(
       start = insets.calculateLeftPadding(layoutDirection),
       top = if (selectedTab == HomeTab.Assistant) 0.dp else insets.calculateTopPadding(),
@@ -1589,7 +1603,7 @@ internal fun MainContent(
           onScanPairing,
           pairingScanning, pairingScanError, insets)
         else if (selectedTab == HomeTab.Assistant) PhoneConversationPager(phoneController, phonePage, { phonePage = it }) {
-          AssistantScreen(connection,
+          AssistantScreen(connection, readingPosition,
           rootInsets, insets, onRetryConversation,
           onCreateConversation, onLoadOlderHistory, onLoadReferences, onAddDraftRef,
           onNoteFileContent,
@@ -1764,13 +1778,27 @@ internal fun MainContent(
         onOpenAgent = { item ->
           if (item.personal) onOpenPersonalAgent() else onCreateAgentConversation(item.id)
           onSelectTab(HomeTab.Assistant)
-        }, onOpenDraft = onCapabilityConversation, onExit = exitDestination,
-        administrationOrigin = connection.profile?.let { profile -> profile.routes.firstOrNull { it.id == profile.activeRouteId }?.url })
+        }, onExit = exitDestination,
+        onPanel = onCapabilityPanel, onSetupChat = onCapabilitySetupChat)
       HomeTab.Notes -> if (!isPaired) PairingScreen(
         stringResource(R.string.library_title), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
-      else {
-        val libraryProgress = connection.progress.takeIf { it.gatewayId == gatewayId }
+      else if (linkedDetailId == null) {
+        val profile = connection.profile
+        if (spaceLibraryAccess != null) {
+          SpaceLibraryScreen(rootInsets, profile, spaceLibraryAccess, onExit = exitDestination,
+            onSource = { source ->
+              when {
+                source.kind == "task" && source.taskId != null -> libraryDelivery.value = "task:${source.taskId}"
+                source.kind == "automation" && source.automationRunId != null -> libraryDelivery.value = "automation:${source.automationRunId}"
+                else -> {
+                  onSelectConversation(source.conversationId)
+                  onSelectTab(HomeTab.Assistant)
+                }
+              }
+            }, onUse = onUseLibraryFile)
+        }
+      } else {
         NotesScreen(connection.notes.takeIf { it.gatewayId == gatewayId }
         ?: NotesUiState(gatewayId = gatewayId), rootInsets,
         onLoadNotes, onLoadMoreNotes, onOpenNote, onNewNote,
@@ -1789,18 +1817,13 @@ internal fun MainContent(
         onNoteFiles = onNoteFiles, onNoteFileText = onNoteFileText,
         onNoteFileContent = onNoteFileContent,
         onSaveFileVersion = { file, id -> onSaveFileVersion(gatewayId, file, id) },
-        initialNoteId = linkedDetailId?.takeUnless { it.startsWith("project-note-") },
-        initialProjectDraft = linkedDetailId?.startsWith("project-note-") == true,
+        initialNoteId = linkedDetailId.takeUnless { it.startsWith("project-note-") },
+        initialProjectDraft = linkedDetailId.startsWith("project-note-"),
         onExit = {
-          linkedDetailId?.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
+          linkedDetailId.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
             ?.takeIf { it == connection.progress.projectId }?.let(onOpenProgressProject)
-          if (linkedDetailId != null) tabStateHolder.removeState(tabStateKey)
+          tabStateHolder.removeState(tabStateKey)
           exitDestination()
-        },
-        deliveries = libraryProgress?.deliveries.orEmpty(), deliveriesLoading = libraryProgress?.homeLoading != false,
-        deliveryError = libraryProgress?.homeError == true, onRefreshDeliveries = onRefreshProgressHome,
-        onOpenDelivery = { delivery ->
-          libraryDelivery.value = "${delivery.kind}:${delivery.subjectId}"
         })
       }
       HomeTab.Me -> {
@@ -1915,7 +1938,7 @@ internal fun MainContent(
         onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
         onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel)
       overviewMedia?.let { request ->
-        ModalBottomSheet(onDismissRequest = { overviewMedia = null }) {
+        MobilePreviewSheet(onClose = { overviewMedia = null }) {
           MessageMediaPreview(request, onLoadMessageMedia) { overviewMedia = null }
         }
       }
@@ -2506,7 +2529,7 @@ private fun AssistantComposerButtons(connection: ConnectionUiState,
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues,
+private fun AssistantScreen(connection: ConnectionUiState, readingPosition: ChatReadingPosition, insets: PaddingValues,
   bottomChromeInsets: PaddingValues,
   onRetryConversation: (String) -> Unit, onCreateConversation: () -> Unit,
   onLoadOlderHistory: () -> Unit,
@@ -2619,13 +2642,12 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   var contextInitialKind by remember(connection.selectedConversationId) { mutableStateOf("note") }
   var optionsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
 
-  var sendFlightVisible by remember(connection.selectedConversationId) { mutableStateOf(false) }
-  LaunchedEffect(connection.optimisticText, connection.selectedConversationId) {
-    sendFlightVisible = connection.optimisticText.isNotBlank()
-  }
   val optionsLabel = stringResource(R.string.assistant_options)
-  val displayMessages = remember(connection.messages, connection.liveMessages) {
-    chatPresentationMessages(connection.messages, connection.liveMessages)
+  val optimisticUser = connection.chatSendMessageId?.takeIf { id ->
+    connection.optimisticText.isNotBlank() && !connection.chatSendQueued && connection.messages.none { it.renderId == id }
+  }?.let { ConversationMessage(it, "user", connection.optimisticText) }
+  val displayMessages = remember(connection.messages, connection.liveMessages, optimisticUser) {
+    chatPresentationMessages(connection.messages + listOfNotNull(optimisticUser), connection.liveMessages)
   }
   val isPersonalChat = connection.personal.agent?.let {
     it.state == "ready" && it.conversationId == connection.selectedConversationId
@@ -2647,7 +2669,7 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val mediaCoroutine = rememberCoroutineScope()
   val mediaLifecycle = LocalLifecycleOwner.current.lifecycle
   val mediaRunActive = connection.activeRunId != null || connection.sending
-  LaunchedEffect(generatedMedia, generatedMediaAccess, mediaRunActive, mediaLifecycle) {
+  LaunchedEffect(generatedMedia, generatedMediaAccess, mediaRunActive, mediaLifecycle, connection.musicJobsRevision) {
     val access = generatedMediaAccess ?: return@LaunchedEffect
     val scope = mediaScope ?: return@LaunchedEffect
     mediaLifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -2666,15 +2688,17 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   LaunchedEffect(musicPlaying) {
     if (musicPlaying) { generatedMedia.presentedVideo = null; reader.stop() }
   }
+  var previewMusic by remember(mediaScope) { mutableStateOf<MusicTrack?>(null) }
+  fun musicTrack(item: GeneratedMediaItem, scope: GeneratedMediaScope) = MusicTrack(scope.gatewayId,
+    scope.conversationId, item.id, item.title.orEmpty().ifBlank { context.getString(R.string.music_notification_channel) },
+    connection.personal.agent?.displayName?.takeIf { isPersonalChat }
+      ?: connection.conversations.firstOrNull { it.id == selectedMessageConversationId }?.title.orEmpty(),
+    item.lyrics, (item.duration ?: 0).coerceIn(0, Int.MAX_VALUE / 1000) * 1000)
   val playGeneratedMedia: (GeneratedMediaItem) -> Unit = { item ->
     reader.stop()
     if (item.kind == GeneratedMediaKind.Music && mediaScope != null) {
       generatedMedia.presentedVideo = null
-      playGeneratedMusic(context, generatedMediaAccess, MusicTrack(mediaScope.gatewayId,
-        mediaScope.conversationId, item.id, item.title.orEmpty().ifBlank { context.getString(R.string.music_notification_channel) },
-        connection.personal.agent?.displayName?.takeIf { isPersonalChat }
-          ?: connection.conversations.firstOrNull { it.id == selectedMessageConversationId }?.title.orEmpty(),
-        item.lyrics, (item.duration ?: 0).coerceIn(0, Int.MAX_VALUE / 1000) * 1000))
+      playGeneratedMusic(context, generatedMediaAccess, musicTrack(item, mediaScope))
     } else if (item.kind == GeneratedMediaKind.Video && mediaScope != null && generatedMediaAccess != null) {
       focusManager.clearFocus(force = true)
       keyboardController?.hide()
@@ -2686,8 +2710,9 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     if (item.kind == GeneratedMediaKind.Video) {
       playGeneratedMedia(item)
     } else {
-      if (activeMusic?.id != item.id || activeMusic.conversationId != selectedMessageConversationId) playGeneratedMedia(item)
-      onExpandMusic()
+      focusManager.clearFocus(force = true)
+      keyboardController?.hide()
+      previewMusic = mediaScope?.let { musicTrack(item, it) }
     }
   }
   var musicCardBounds by remember(activeMusic?.key, selectedMessageConversationId) { mutableStateOf<Rect?>(null) }
@@ -2728,106 +2753,114 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   val showConnectionWait = connection.connectionWait.gatewayId == connection.profile?.gatewayId &&
     connection.connectionWait.conversationId == connection.selectedConversationId &&
     connection.connectionWait.snapshot?.wait?.phase?.let { it != "ready" } == true
-  val readingPosition = rememberChatReadingPosition(connection.selectedConversationId)
   val messageListState = readingPosition.listState
-  val messageDragged by messageListState.interactionSource.collectIsDraggedAsState()
   var positionedAtLatest by readingPosition.positionedAtLatest
   var followBottom by readingPosition.followBottom
-  var showJumpBottom by remember(messageListState) { mutableStateOf(false) }
-  val messageScrollDirection = remember(messageListState) {
-    object : NestedScrollConnection {
-      override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-        if (source == NestedScrollSource.UserInput && consumed.y != 0f) {
-          showJumpBottom = consumed.y < 0f && messageListState.canScrollBackward
-        }
-        return Offset.Zero
-      }
-    }
-  }
-  var replySpace by remember(connection.selectedConversationId) { mutableStateOf(ChatReplySpace()) }
-  var messageViewportHeight by remember(connection.selectedConversationId) { mutableIntStateOf(0) }
-  var replyAnchorId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
-  var awaitingReplyAnchor by remember(connection.selectedConversationId) { mutableStateOf(false) }
-  LaunchedEffect(messageDragged) { if (messageDragged) { followBottom = false } }
-  var previousReplyUserId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
-  val replyRowHeights = remember(connection.selectedConversationId) {
-    androidx.compose.runtime.mutableStateMapOf<String, Int>()
-  }
+  var waitingForUserScrollEnd by remember(readingPosition) { mutableStateOf(false) }
+  var userScrolledTowardLatest by remember(readingPosition) { mutableStateOf(false) }
+  var olderAnchor by remember(readingPosition) { mutableStateOf<Pair<String, Int>?>(null) }
+  val messageDragged by messageListState.interactionSource.collectIsDraggedAsState()
   val density = LocalDensity.current
-  val bottomChromePx = with(density) { bottomChromeHeight.toPx() }
-  val replyGapPx = with(density) { 12.dp.toPx() }
-  val replySpaceHeight = replySpace.remaining.dp
-  var observedSendSequence by remember(connection.selectedConversationId) { mutableStateOf(connection.chatSendSequence) }
+  val bottomGap = if (showConnectionWait || connection.clarification != null) 104.dp else 12.dp
+  val bottomChromePx = with(density) { (bottomChromeHeight + bottomGap).roundToPx() }
+  val latestLabelGapPx = with(density) { 24.dp.roundToPx() }
+  val latestMarkerPx = with(density) { 1.dp.roundToPx() }
+  val showPersonalWaiting = isPersonalChat && (connection.sending || connection.activeRunId != null) && !connection.runError &&
+    connection.clarification == null && !connection.liveMessages.any { it.answerConfirmed && it.text.isNotBlank() }
+  val hasUnanchoredMedia = generatedCards.containsKey("")
+  val leadingRows = if (connection.historyBefore != null) 1 else 0
+  val latestRowIndex = leadingRows + displayMessages.size + (if (hasUnanchoredMedia) 1 else 0) +
+    (if (showStagedProgress || showPersonalWaiting) 1 else 0)
+  var lastTranscript by readingPosition.transcriptId
+  LaunchedEffect(connection.historyTranscriptId) {
+    val transcript = connection.historyTranscriptId ?: return@LaunchedEffect
+    if (lastTranscript != null && lastTranscript != transcript) {
+      positionedAtLatest = false
+      followBottom = true
+    }
+    lastTranscript = transcript
+  }
+  var observedSendSequence by remember(readingPosition) { mutableStateOf(connection.chatSendSequence) }
   LaunchedEffect(connection.chatSendSequence) {
-    if (connection.chatSendSequence != observedSendSequence && followBottom && !connection.chatSendQueued) {
-      replySpace = replySpace.begin((messageViewportHeight - bottomChromePx - replyGapPx) / density.density, true)
-      replyRowHeights.clear()
-      previousReplyUserId = connection.chatSendPreviousUserId
-      replyAnchorId = null
-      awaitingReplyAnchor = true
+    if (connection.chatSendSequence != observedSendSequence && !connection.chatSendQueued &&
+      connection.chatSendMessageId != null) {
+      olderAnchor = null
+      followBottom = true
     }
     observedSendSequence = connection.chatSendSequence
   }
-  LaunchedEffect(displayMessages.lastOrNull { it.role == "user" }?.id, awaitingReplyAnchor) {
-    val latestUser = displayMessages.lastOrNull { it.role == "user" }
-    if (awaitingReplyAnchor && latestUser != null && latestUser.id != previousReplyUserId) {
-      replyAnchorId = latestUser.id
-      awaitingReplyAnchor = false
-    }
+  fun latestIsVisible(gap: Int): Boolean {
+    val layout = messageListState.layoutInfo
+    val marker = layout.visibleItemsInfo.lastOrNull { it.key == "assistant-latest" } ?: return false
+    return marker.offset + marker.size <= layout.viewportEndOffset - bottomChromePx + gap
   }
-  LaunchedEffect(replyAnchorId, displayMessages, connection.liveText, connection.activeRunId, showStagedProgress,
-    replyRowHeights.toMap(), messageViewportHeight, bottomChromePx, followBottom) {
-    if (!connection.historyLoadingOlder) {
-      val anchor = displayMessages.indexOfFirst { it.id == replyAnchorId }
-      val replyRows = if (anchor >= 0) displayMessages.drop(anchor + 1) else emptyList()
-      val replyHeight = replyRows.sumOf { replyRowHeights[it.renderId] ?: 0 }.toFloat() +
-        replyRows.size * replyGapPx + if (showStagedProgress) (replyRowHeights["assistant-waiting"] ?: 0) else 0
-      replySpace = replySpace.consume(replyHeight / density.density,
-        (messageViewportHeight - bottomChromePx - replyGapPx) / density.density, followBottom)
-    }
+  val latestVisible by remember(messageListState, bottomChromePx, latestLabelGapPx) {
+    derivedStateOf { latestIsVisible(latestLabelGapPx) }
   }
-  var olderAnchor by remember(connection.selectedConversationId) { mutableStateOf<Pair<String, Int>?>(null) }
+  val showJumpBottom = positionedAtLatest && !followBottom && !latestVisible
   val jumpScope = rememberCoroutineScope()
   var jumpJob by remember(messageListState) { mutableStateOf<Job?>(null) }
   DisposableEffect(messageListState) {
     onDispose { jumpJob?.cancel() }
   }
-  fun scrollMessagesToBottom() {
-    if (jumpJob != null || messageDragged || olderAnchor != null || (positionedAtLatest && !followBottom)) return
-    if (messageListState.layoutInfo.totalItemsCount == 0) return
-    // Schedule the bottom anchor for the next measure instead of forcing a reentrant layout.
-    if (messageListState.firstVisibleItemIndex != 0 || messageListState.firstVisibleItemScrollOffset != 0) {
-      messageListState.requestScrollToItem(0)
+  val messageScrollDirection = remember(readingPosition) {
+    object : NestedScrollConnection {
+      override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        if (source == NestedScrollSource.UserInput && available.y != 0f) {
+          jumpJob?.cancel()
+          olderAnchor = null
+          followBottom = false
+          positionedAtLatest = true
+          waitingForUserScrollEnd = true
+          userScrolledTowardLatest = available.y < 0f
+        }
+        return Offset.Zero
+      }
+    }
+  }
+  LaunchedEffect(readingPosition, bottomChromePx) {
+    snapshotFlow { messageListState.isScrollInProgress || messageDragged }.collect { scrolling ->
+      if (!scrolling && waitingForUserScrollEnd) {
+        waitingForUserScrollEnd = false
+        if (userScrolledTowardLatest && latestIsVisible(latestLabelGapPx)) {
+          followBottom = true
+        }
+      }
+    }
+  }
+  LaunchedEffect(connection.historyLoadingOlder, displayMessages.firstOrNull()?.renderId) {
+    val saved = olderAnchor ?: return@LaunchedEffect
+    if (connection.historyLoadingOlder) return@LaunchedEffect
+    val index = displayMessages.indexOfFirst { it.renderId == saved.first }
+    if (index >= 0) messageListState.requestScrollToItem(leadingRows + index, -saved.second)
+    olderAnchor = null
+  }
+  fun scrollMessagesToBottom(force: Boolean = false) {
+    if (jumpJob != null || waitingForUserScrollEnd || olderAnchor != null ||
+      (positionedAtLatest && !followBottom && !force)) return
+    val layout = messageListState.layoutInfo
+    if (latestRowIndex >= layout.totalItemsCount) return
+    if (!latestIsVisible(1) || force) {
+      val bottomOffset = (layout.viewportEndOffset - bottomChromePx - latestMarkerPx).coerceAtLeast(0)
+      messageListState.requestScrollToItem(latestRowIndex, -bottomOffset)
     }
     positionedAtLatest = true
     followBottom = true
   }
-  LaunchedEffect(messageListState, connection.historyLoadingOlder) {
-    snapshotFlow { messageListState.isScrollInProgress to messageListState.canScrollBackward }
-      .collect { (scrolling, canScrollToLatest) ->
-        if (!canScrollToLatest) showJumpBottom = false
-        if (scrolling && jumpJob == null && positionedAtLatest &&
-          !connection.historyLoadingOlder && olderAnchor == null) followBottom = !canScrollToLatest
-      }
-  }
-  LaunchedEffect(connection.selectedConversationId, messageListState) {
+  LaunchedEffect(readingPosition, generatedMedia, latestRowIndex, bottomChromePx) {
     snapshotFlow {
       val latest = latestConnection
       val layout = messageListState.layoutInfo
-      listOf(latest.messages.lastOrNull()?.id, latest.liveText.length, latest.activeRunId,
-        latest.historyLoading, latest.historyLoadingOlder, latest.optimisticText,
+      listOf(latest.messages.lastOrNull(), latest.liveMessages.lastOrNull(), latest.activeRunId,
+        latest.historyLoading, latest.historyLoadingOlder, latest.optimisticText, generatedMedia.items.isNotEmpty(),
         layout.totalItemsCount, layout.viewportSize.height, layout.beforeContentPadding,
-        layout.afterContentPadding, layout.visibleItemsInfo.firstOrNull()?.size)
+        layout.visibleItemsInfo.lastOrNull { it.key == "assistant-latest" }?.offset, followBottom, waitingForUserScrollEnd)
     }.conflate().collect {
       val latest = latestConnection
       if (!latest.historyLoading && !latest.historyLoadingOlder &&
-        (latest.messages.isNotEmpty() || latest.liveMessages.isNotEmpty() || latest.optimisticText.isNotBlank()) &&
-        (!positionedAtLatest || followBottom)) scrollMessagesToBottom()
+        (latest.messages.isNotEmpty() || latest.liveMessages.isNotEmpty() || latest.optimisticText.isNotBlank() ||
+          generatedMedia.items.isNotEmpty())) scrollMessagesToBottom()
     }
-  }
-  LaunchedEffect(displayMessages.firstOrNull()?.id, connection.historyLoadingOlder) {
-    // Older rows append after the reversed timeline; stable keys preserve the reading anchor.
-    if (!connection.historyLoadingOlder) olderAnchor = null
   }
   val statusIssue = when {
     connection.chatError -> R.string.chat_load_error
@@ -2859,6 +2892,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         card.height <= 0 || card.bottom <= viewport.top + topClearancePx || card.top >= viewport.bottom - bottomClearancePx
       } ?: true
     } == true
+  var stickyMusicHeightPx by remember { mutableIntStateOf(0) }
+  val timelineHeaderClearance = headerClearance + if (showStickyMusic) with(density) { stickyMusicHeightPx.toDp() } + 4.dp else 0.dp
   Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(insets)
     .onGloballyPositioned { chatContentBounds = it.boundsInWindow() }
     .pointerInput(focusManager, keyboardController) {
@@ -2924,7 +2959,6 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         connection.historyBefore == null && connection.activeRunId == null &&
         connection.liveText.isBlank() && connection.optimisticText.isBlank() && !showStagedProgress) {
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()
-          .onSizeChanged { messageViewportHeight = it.height }
           .padding(top = headerClearance, bottom = bottomChromeHeight).testTag("assistant-welcome-viewport")) {
           if (connection.automationConfigurationChat) AutomationConfigurationWelcome()
           else AssistantWelcome(maxHeight, if (connection.contextLoading || isPersonalChat) null else
@@ -2938,51 +2972,32 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
           }
         }
       } else LazyColumn(modifier = Modifier.weight(1f).testTag("assistant-message-list")
-        .nestedScroll(messageScrollDirection)
-        .onSizeChanged { messageViewportHeight = it.height },
-        state = messageListState, reverseLayout = true,
-        contentPadding = ChatMessagePadding(bottomChromeInsets, headerClearance,
-          replySpaceHeight + if (showConnectionWait) 104.dp else 12.dp),
+        .nestedScroll(messageScrollDirection),
+        state = messageListState,
+        contentPadding = ChatMessagePadding(bottomChromeInsets, timelineHeaderClearance, bottomGap),
         verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Top)) {
-        if (connection.optimisticText.isNotBlank()) item(key = "send-flight") {
-          AnimatedVisibility(visible = sendFlightVisible && connection.optimisticText.isNotBlank(),
-            enter = slideInVertically(initialOffsetY = { it * 5 }) + fadeIn()) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-              Card(modifier = Modifier.fillMaxWidth(CHAT_MESSAGE_WIDTH).testTag("assistant-send-flight"),
-                colors = CardDefaults.cardColors(containerColor = LocalChatColors.current.user)) {
-                Text(connection.optimisticText, modifier = Modifier.padding(12.dp),
-                  style = MaterialTheme.typography.bodyMedium)
+        if (connection.historyBefore != null) item(key = "assistant-older") {
+          Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (connection.historyLoadingOlder) BrandLoadingIndicator(extent = 20.dp)
+            else TextButton(onClick = {
+              val visible = messageListState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
+                displayMessages.any { it.renderId == item.key }
               }
+              olderAnchor = (visible?.key as? String)?.let { it to visible.offset }
+              followBottom = false
+              onLoadOlderHistory()
+            }, modifier = Modifier.testTag("assistant-load-older")) {
+              Text(stringResource(if (connection.historyOlderError) R.string.assistant_older_retry
+                else R.string.assistant_older_messages))
             }
-          }
-        }
-        if (showStagedProgress) {
-          item(key = "assistant-waiting") {
-            Box(Modifier.onSizeChanged { replyRowHeights["assistant-waiting"] = it.height }) {
-              AssistantStagesView(progress = connection.runProgress, answerStarted = answerStarted,
-                connected = connection.realtimeStatus == "connected", paused = connection.clarification != null)
-            }
-          }
-        } else if (isPersonalChat && (connection.sending || connection.activeRunId != null) && !connection.runError &&
-          connection.clarification == null && !connection.liveMessages.any { it.answerConfirmed && it.text.isNotBlank() }) {
-          item(key = "assistant-waiting") {
-            AssistantWaitingBubble(runId = connection.activeRunId ?: "sending", narration = connection.liveNarration,
-              connected = connection.realtimeStatus == "connected")
-          }
-        }
-        generatedCards[""]?.let { cards ->
-          item(key = "generated-media-unanchored") {
-            GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
-              playGeneratedMedia, confirmGeneratedMedia, selectedMessageConversationId, activeMusic, openGeneratedMedia) { musicCardBounds = it }
           }
         }
         val latestMessageId = displayMessages.lastOrNull {
           it.role == "user" || it.role == "assistant"
         }?.id
-        items(displayMessages.asReversed(), key = { it.renderId }) { message ->
+        items(displayMessages, key = { it.renderId }) { message ->
           Column(Modifier.then(if (connection.liveMessages.any { it.id in message.sourceIds })
-            Modifier.testTag("assistant-live-output") else Modifier)
-            .onSizeChanged { replyRowHeights[message.renderId] = it.height }) {
+            Modifier.testTag("assistant-live-output") else Modifier)) {
           ChatMessageCard(message, onReading = { followBottom = false }, streaming = followBottom && !messageListState.isScrollInProgress && connection.activeRunId != null && connection.liveMessages.any { it.id in message.sourceIds }, actionsEnabled = connection.messages.any { it.id == message.id }, onMore = { messageActionsId = message.id },
             onOpenTarget = onOpenMessageTarget,
             onOpenPreview = { media, gallery ->
@@ -2998,23 +3013,24 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
             }
           }
         }
-        if (connection.historyBefore != null) item(key = "assistant-older") {
-          Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            if (connection.historyLoadingOlder) BrandLoadingIndicator(extent = 20.dp)
-            else TextButton(onClick = {
-              val visible = messageListState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
-                displayMessages.any { it.renderId == item.key }
-              }
-              followBottom = false
-              olderAnchor = (visible?.key as? String)?.let { it to -visible.offset }
-              onLoadOlderHistory()
-            }, modifier = Modifier.testTag("assistant-load-older")) {
-              Text(stringResource(if (connection.historyOlderError) R.string.assistant_older_retry
-                else R.string.assistant_older_messages))
-            }
+        generatedCards[""]?.let { cards ->
+          item(key = "generated-media-unanchored") {
+            GeneratedMediaRows(cards, generatedMedia.submitting || mediaRunActive, generatedMedia.failedDraftId,
+              playGeneratedMedia, confirmGeneratedMedia, selectedMessageConversationId, activeMusic, openGeneratedMedia) { musicCardBounds = it }
           }
         }
-
+        if (showStagedProgress) {
+          item(key = "assistant-waiting") {
+            AssistantStagesView(progress = connection.runProgress, answerStarted = answerStarted,
+              connected = connection.realtimeStatus == "connected", paused = connection.clarification != null)
+          }
+        } else if (showPersonalWaiting) {
+          item(key = "assistant-waiting") {
+            AssistantWaitingBubble(runId = connection.activeRunId ?: "sending", narration = connection.liveNarration,
+              connected = connection.realtimeStatus == "connected")
+          }
+        }
+        item(key = "assistant-latest") { Spacer(Modifier.height(1.dp)) }
       }
       connection.pendingInput?.let { pending ->
         Card(modifier = Modifier.fillMaxWidth().padding(bottom = bottomChromeHeight).testTag("assistant-pending")) {
@@ -3037,7 +3053,8 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
   }
     if (showStickyMusic && activeMusic != null) {
       MusicMiniPlayer(activeMusic, onExpandMusic,
-        Modifier.align(Alignment.TopCenter).padding(top = headerClearance + 4.dp, start = 12.dp, end = 12.dp), sticky = true)
+        Modifier.align(Alignment.TopCenter).padding(top = headerClearance + 4.dp, start = 12.dp, end = 12.dp)
+          .onSizeChanged { stickyMusicHeightPx = it.height }, sticky = true)
     }
     val canvas = MaterialTheme.colorScheme.background
     Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(chatTopInset)
@@ -3153,20 +3170,20 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
     .padding(start = 16.dp, end = 16.dp, bottom = bottomChromeHeight + 8.dp)) {
     ConnectionWaitCard(connection.connectionWait, onRefreshConnectionWait, onConnectionWaitAction)
   }
-  if (showJumpBottom && positionedAtLatest && !followBottom && messageListState.canScrollBackward) {
+  if (showJumpBottom) {
     val jumpLabel = stringResource(R.string.assistant_jump_bottom)
     IconButton(onClick = {
-      if (jumpJob == null && !messageDragged) {
-        showJumpBottom = false
-        olderAnchor = null
+      if (jumpJob == null && !waitingForUserScrollEnd) {
         val job = jumpScope.launch(start = CoroutineStart.LAZY) {
           try {
-            messageListState.animateScrollToItem(0)
+            val layout = messageListState.layoutInfo
+            val bottomOffset = (layout.viewportEndOffset - bottomChromePx - latestMarkerPx).coerceAtLeast(0)
+            messageListState.animateScrollToItem(latestRowIndex, -bottomOffset)
             followBottom = true
           } finally {
             jumpJob = null
           }
-          scrollMessagesToBottom()
+          scrollMessagesToBottom(force = true)
         }
         jumpJob = job
         job.start()
@@ -3603,8 +3620,16 @@ private fun AssistantScreen(connection: ConnectionUiState, insets: PaddingValues
         connection.activeRunId != null, onRetryExecution, openLink, Modifier.weight(1f))
     }
   }
+  val downloadPreviewMusic = rememberMusicDownload(generatedMediaAccess)
+  previewMusic?.let { track ->
+    MusicPlayerSheet(track, { previewMusic = null }, onSource = null,
+      onDownload = { downloadPreviewMusic(track) }, onPlay = {
+        reader.stop()
+        playGeneratedMusic(context, generatedMediaAccess, track)
+      })
+  }
   previewRequest?.let { request ->
-    ModalBottomSheet(onDismissRequest = { previewRequest = null }) {
+    MobilePreviewSheet(onClose = { previewRequest = null }) {
       MessageMediaPreview(request, onLoadMessageMedia, onResolveMessageFile, onSaveFileVersion) { previewRequest = null }
     }
   }

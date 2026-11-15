@@ -132,7 +132,7 @@ export class XopcChatRepository {
       || typeof item.updatedAt !== 'string' || typeof item.messageCount !== 'number')) throw new Error('INVALID_SESSION_LIST');
     return result;
   }
-  async create(projectId?: string | null, agentId?: string, executionMode?: string): Promise<string> {
+  async create(projectId?: string | null, agentId?: string, executionMode?: string, agentSetupLanguage?: string): Promise<string> {
     const scope = localSessionStore.scope();
     let effectiveAgentId = agentId || '';
     let effectiveExecutionMode = executionMode;
@@ -159,6 +159,10 @@ export class XopcChatRepository {
     const creation: XopcSessionCreation = { agentId: effectiveAgentId, projectId: projectId || null,
       execution: effectiveExecutionMode ? { mode: effectiveExecutionMode } : null, temporary: false,
       model: body.initialAgentConfig?.model || '', thinkingLevel: body.initialAgentConfig?.thinkingLevel || 'off' };
+    if (agentSetupLanguage) {
+      creation.agentSetup = true;
+      creation.agentSetupLanguage = agentSetupLanguage;
+    }
     await localSessionStore.save({ conversationId: id, creation, createdAt: new Date().toISOString() }, scope);
     return id;
   }

@@ -53,15 +53,20 @@ describe('TunnelService frpc lifecycle', () => {
   let previousStateDir: string | undefined;
   let stateDir: string;
 
+  const up = () => Response.json({ status: 'ok', ready: true });
+  const missing = () => new Response('<title>Not Found</title>', { status: 404 });
+
   beforeEach(() => {
     previousStateDir = process.env.XOPC_STATE_DIR;
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-tunnel-lifecycle-'));
     process.env.XOPC_STATE_DIR = stateDir;
     mocks.spawnFrpcProcess.mockReset();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => up());
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
     if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
     else process.env.XOPC_STATE_DIR = previousStateDir;
     rmSync(stateDir, { recursive: true, force: true });
@@ -138,6 +143,39 @@ describe('TunnelService frpc lifecycle', () => {
     handle.exit(1);
 
     expect(reconnect).toHaveBeenCalledOnce();
+    await service.stop();
+  });
+
+  it('waits for the public gateway and replaces an frpc handle that stays alive while the route is missing', async () => {
+    vi.useFakeTimers();
+    const first = createHandle(401);
+    const replacement = createHandle(402);
+    mocks.spawnFrpcProcess.mockReturnValueOnce(first).mockReturnValueOnce(replacement);
+    const publicFetch = vi.mocked(fetch);
+    publicFetch.mockResolvedValueOnce(missing());
+    const service = new TunnelService();
+    const internal = service as unknown as {
+      spawnAndWait(bin: string, path: string, broker: { heartbeat: () => Promise<void> }, state: PersistedTunnelState, interval: number): Promise<void>;
+    };
+    const broker = { heartbeat: vi.fn().mockResolvedValue(undefined) };
+    const started = internal.spawnAndWait('/tmp/frpc', '/tmp/current.toml', broker, persistedState, 30_000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(broker.heartbeat).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    await started;
+    expect(publicFetch).toHaveBeenCalledWith(new URL('/api/health', persistedState.publicUrl), expect.objectContaining({ redirect: 'error' }));
+
+    publicFetch.mockResolvedValueOnce(missing()).mockImplementationOnce(async () => up());
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(first.kill).not.toHaveBeenCalled();
+
+    publicFetch.mockResolvedValueOnce(missing()).mockResolvedValueOnce(missing()).mockResolvedValueOnce(missing());
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(service.getStatus().state).toBe('reconnecting');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(first.kill).toHaveBeenCalledOnce();
+    expect(mocks.spawnFrpcProcess).toHaveBeenLastCalledWith('/tmp/frpc', '/tmp/current.toml');
+    expect(service.getStatus()).toMatchObject({ state: 'connected', frpcPid: 402, lastError: null });
     await service.stop();
   });
 });

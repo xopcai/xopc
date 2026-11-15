@@ -74,6 +74,29 @@ describe('gateway scopes', () => {
     expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'gateway.admin')).toBe(false);
   });
 
+  it('allows mobile workspace access to the shared library without gateway admin access', () => {
+    expect(requiredGatewayScope('GET', '/api/spaces/items')).toBe('workspace.read');
+    expect(requiredGatewayScope('GET', '/api/spaces/items/item/versions/version/content')).toBe('workspace.read');
+    expect(requiredGatewayScope('PATCH', '/api/spaces/items/item')).toBe('workspace.write');
+    expect(requiredGatewayScope('DELETE', '/api/spaces/items/item')).toBe('workspace.write');
+    expect(requiredGatewayScope('POST', '/api/spaces/items/item/restore')).toBe('workspace.write');
+    expect(requiredGatewayScope('POST', '/api/spaces/items/item/purge')).toBe('workspace.write');
+    expect(requiredGatewayScope('GET', '/api/spaces/items-other')).toBe('gateway.admin');
+    expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'workspace.write')).toBe(true);
+    expect(hasGatewayScope(DEFAULT_BROWSER_EXTENSION_SCOPES, 'workspace.read')).toBe(false);
+  });
+
+  it('authorizes only native capability panel reads and commands for supported categories', () => {
+    const base = '/api/capabilities/mobile-actions/panel/';
+    for (const category of ['plugins', 'skills', 'connections', 'agents', 'channels']) {
+      expect(requiredGatewayScope('GET', base + category)).toBe('agents.read');
+      expect(requiredGatewayScope('POST', base + category)).toBe('sessions.write');
+    }
+    expect(requiredGatewayScope('DELETE', base + 'channels')).toBe('gateway.admin');
+    expect(requiredGatewayScope('POST', base + 'channel-admin')).toBe('gateway.admin');
+    expect(requiredGatewayScope('PATCH', '/api/config')).toBe('gateway.admin');
+  });
+
   it('allows phones to inspect and correct understanding without running refresh jobs', () => {
     expect(requiredGatewayScope('GET', '/api/user-model/mobile-summary')).toBe('workspace.read');
     expect(requiredGatewayScope('GET', '/api/user-model/assertions?view=mobile')).toBe('workspace.read');

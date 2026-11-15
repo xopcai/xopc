@@ -4,6 +4,7 @@ import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.GeneratedMediaAccess
 import ai.xopc.mobile.playback.MusicPhase
+import ai.xopc.mobile.playback.MusicRequest
 import ai.xopc.mobile.playback.MusicPlayback
 import ai.xopc.mobile.playback.MusicState
 import ai.xopc.mobile.playback.MusicTrack
@@ -23,7 +24,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.File
+import java.io.OutputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -82,82 +83,153 @@ internal fun MusicMiniPlayer(track: MusicTrack, onExpand: () -> Unit, modifier: 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MusicPlayerSheet(track: MusicTrack, onClose: () -> Unit, onSource: () -> Unit, onDownload: () -> Unit) {
-  val state by MusicPlayback.state.collectAsStateWithLifecycle()
-  val current = state?.takeIf { it.track.key == track.key } ?: return
-  var showLyrics by rememberSaveableLyrics(track.key)
-  val lyrics = track.lyrics?.takeIf { it.isNotBlank() }
-  val colors = MaterialTheme.colorScheme
+internal fun MobilePreviewSheet(onClose: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
   ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    modifier = Modifier.testTag("music-full-player"), shape = themedCorners(28), containerColor = colors.background) {
-    Column(Modifier.fillMaxWidth().fillMaxHeight(0.88f),
-      horizontalAlignment = Alignment.CenterHorizontally) {
-      Row(Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        IconButton(onClick = onClose, modifier = Modifier.testTag("music-minimize")) {
-          Icon(painterResource(R.drawable.action_chevron_down), stringResource(R.string.music_minimize))
+    modifier = modifier, shape = themedCorners(28), containerColor = MaterialTheme.colorScheme.background) {
+    Column(Modifier.fillMaxWidth().fillMaxHeight(0.88f), content = content)
+  }
+}
+
+@Composable
+internal fun rememberPreviewExport(mimeType: String): (String, suspend (OutputStream) -> Unit) -> Unit {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  var pending by remember { mutableStateOf<(suspend (OutputStream) -> Unit)?>(null) }
+  val picker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(mimeType)) { uri ->
+    val write = pending
+    pending = null
+    if (uri != null && write != null) scope.launch {
+      try {
+        withContext(Dispatchers.IO) {
+          requireNotNull(context.contentResolver.openOutputStream(uri, "wt")).use { write(it) }
         }
-        Text(stringResource(R.string.music_title), style = MaterialTheme.typography.titleSmall, color = colors.onSurfaceVariant)
-        IconButton(onClick = { MusicPlayback.stop(); onClose() }, modifier = Modifier.testTag("music-player-close")) {
-          Icon(painterResource(R.drawable.action_close), stringResource(R.string.music_stop))
-        }
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        Toast.makeText(context, R.string.preview_download_failed, Toast.LENGTH_SHORT).show()
       }
-      Row(Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        MusicArt(Modifier.size(52.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-          Text(track.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-          Text(track.sourceTitle.ifBlank { stringResource(R.string.music_audio) }, style = MaterialTheme.typography.bodySmall,
-            color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconButton(onClick = onSource, modifier = Modifier.size(44.dp).testTag("music-return-source")) {
-          Icon(painterResource(R.drawable.tab_conversations), stringResource(R.string.music_return_source),
-            Modifier.size(20.dp), tint = colors.onSurfaceVariant)
-        }
-      }
-      Box(Modifier.weight(1f).widthIn(max = 480.dp).fillMaxWidth().testTag("music-player-content")) {
-        if (showLyrics && lyrics != null) {
-          Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)) {
-            Text(lyrics, style = MaterialTheme.typography.titleLarge, lineHeight = 36.sp,
-              modifier = Modifier.testTag("music-lyrics-text"))
-          }
-        } else {
-          Box(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-            MusicCover(Modifier.sizeIn(maxWidth = 232.dp, maxHeight = 232.dp))
-          }
-        }
-      }
-      Column(Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
-        horizontalAlignment = Alignment.End) {
-        if (current.phase == MusicPhase.Failed) {
-          Text(stringResource(R.string.music_failed), Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall,
-            color = colors.error)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          TextButton(onClick = onDownload, modifier = Modifier.testTag("music-download")) {
-            Text(stringResource(R.string.music_download))
-          }
-          if (lyrics != null) {
-            TextButton(onClick = { showLyrics = !showLyrics }, modifier = Modifier.testTag("music-lyrics")) {
-              Text(stringResource(if (showLyrics) R.string.music_hide_lyrics else R.string.music_lyrics))
-            }
-          }
-        }
-        MusicTimeline(current)
-      }
+    }
+  }
+  return { name, write ->
+    if (pending == null) {
+      pending = write
+      picker.launch(name)
     }
   }
 }
 
 @Composable
-private fun rememberSaveableLyrics(key: String) = androidx.compose.runtime.saveable.rememberSaveable(key) { mutableStateOf(true) }
+internal fun PreviewHeader(title: String, onClose: () -> Unit, closeTag: String = "preview-close",
+  actions: (@Composable ColumnScope.(() -> Unit) -> Unit)? = null) {
+  var menu by remember { mutableStateOf(false) }
+  Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    IconButton(onClick = onClose, modifier = Modifier.testTag(closeTag)) {
+      Icon(painterResource(R.drawable.action_close), stringResource(R.string.assistant_close))
+    }
+    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+      maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    if (actions != null) {
+      Box {
+        IconButton(onClick = { menu = true }) {
+          Icon(painterResource(R.drawable.action_more_horizontal), stringResource(R.string.conversations_more_actions))
+        }
+        DropdownMenu(menu, { menu = false }) { actions { menu = false } }
+      }
+    } else {
+      Spacer(Modifier.width(48.dp))
+    }
+  }
+}
+
+@Composable
+internal fun MusicPlayerSheet(track: MusicTrack, onClose: () -> Unit, onSource: (() -> Unit)?,
+  onDownload: () -> Unit, onPlay: (() -> Unit)? = null) {
+  val state by MusicPlayback.state.collectAsStateWithLifecycle()
+  MobilePreviewSheet(onClose, Modifier.testTag("music-full-player")) {
+    PreviewHeader(track.title, onClose, "music-player-close") { dismiss ->
+      DropdownMenuItem(text = { Text(stringResource(R.string.music_download)) },
+        modifier = Modifier.testTag("music-download"), onClick = { dismiss(); onDownload() })
+      if (onSource != null) {
+        DropdownMenuItem(text = { Text(stringResource(R.string.music_return_source)) },
+          modifier = Modifier.testTag("music-return-source"), onClick = { dismiss(); onSource() })
+      }
+      if (state?.track?.key == track.key) {
+        DropdownMenuItem(text = { Text(stringResource(R.string.music_stop), color = MaterialTheme.colorScheme.error) },
+          onClick = { dismiss(); MusicPlayback.stop(); onClose() })
+      }
+    }
+    MusicPreviewContent(track, Modifier.weight(1f), onPlay)
+  }
+}
+
+private data class TimedLyric(val atMs: Int, val text: String)
+private val lyricTimestamp = Regex("""^\[(\d+):(\d{2})(?:[.](\d{1,3}))?](.*)$""")
+
+private fun timedLyrics(lyrics: String): List<TimedLyric> = lyrics.lines().map(String::trim)
+  .filter(String::isNotEmpty).map { line ->
+    val match = lyricTimestamp.matchEntire(line) ?: return emptyList()
+    val (minutes, seconds, fraction, text) = match.destructured
+    val elapsed = (minutes.toLongOrNull()?.takeIf { it <= Int.MAX_VALUE / 60_000L } ?: return emptyList()) * 60_000 +
+      (seconds.toInt().takeIf { it < 60 } ?: return emptyList()) * 1000 + fraction.padEnd(3, '0').toInt()
+    TimedLyric(elapsed.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), text.trim())
+  }.sortedBy(TimedLyric::atMs).toList()
+
+@Composable
+internal fun MusicPreviewContent(track: MusicTrack, modifier: Modifier = Modifier, onPlay: (() -> Unit)? = null) {
+  val state by MusicPlayback.state.collectAsStateWithLifecycle()
+  val playingTrack = state?.takeIf { it.track.key == track.key }
+  val current = playingTrack ?: MusicState(track, MusicPhase.Paused)
+  var showLyrics by androidx.compose.runtime.saveable.rememberSaveable(track.key) { mutableStateOf(false) }
+  val lyrics = track.lyrics?.takeIf { it.isNotBlank() }
+  val colors = MaterialTheme.colorScheme
+  Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Box(Modifier.weight(1f).widthIn(max = 480.dp).fillMaxWidth().testTag("music-player-content")) {
+      if (showLyrics && lyrics != null) {
+        val lines = remember(lyrics) { timedLyrics(lyrics) }
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp).testTag("music-lyrics-text"),
+          verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          if (lines.isEmpty()) {
+            androidx.compose.foundation.text.selection.SelectionContainer {
+              Text(lyrics, style = MaterialTheme.typography.titleLarge, lineHeight = 36.sp)
+            }
+          } else {
+            val active = if (playingTrack == null) -1 else lines.indexOfLast { it.atMs <= current.positionMs }
+            lines.forEachIndexed { index, line ->
+              Text(line.text, Modifier.fillMaxWidth().clickable(enabled = playingTrack != null &&
+                current.durationMs > 0 && current.phase != MusicPhase.Loading && current.phase != MusicPhase.Failed) {
+                MusicPlayback.seek(line.atMs)
+              }.padding(vertical = 8.dp), style = MaterialTheme.typography.titleLarge,
+                color = if (index == active) LocalChatColors.current.action else colors.onSurface)
+            }
+          }
+        }
+      } else {
+        Box(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+          MusicCover(Modifier.sizeIn(maxWidth = 232.dp, maxHeight = 232.dp))
+        }
+      }
+    }
+    Column(Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+      horizontalAlignment = Alignment.CenterHorizontally) {
+      if (current.phase == MusicPhase.Failed) {
+        Text(stringResource(R.string.music_failed), Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall, color = colors.error)
+      }
+      if (lyrics != null) {
+        TextButton(onClick = { showLyrics = !showLyrics }, modifier = Modifier.testTag("music-lyrics")) {
+          Text(stringResource(if (showLyrics) R.string.music_hide_lyrics else R.string.music_lyrics))
+        }
+      }
+      MusicTimeline(current, playingTrack != null, onPlay)
+    }
+  }
+}
 
 @Composable
 private fun MusicCover(modifier: Modifier) {
   val colors = MaterialTheme.colorScheme
   val shape = themedCorners(24)
   Box(modifier.aspectRatio(1f).clip(shape)
-    .background(Brush.linearGradient(listOf(colors.secondaryContainer, LocalChatColors.current.card))),
+    .background(LocalChatColors.current.card),
     contentAlignment = Alignment.Center) {
     Box(Modifier.fillMaxWidth(0.74f).aspectRatio(1f).background(colors.surfaceContainer.copy(alpha = 0.5f), CircleShape))
     Box(Modifier.fillMaxWidth(0.56f).aspectRatio(1f).background(LocalChatColors.current.user, CircleShape))
@@ -177,7 +249,7 @@ private fun MusicArt(modifier: Modifier) {
 }
 
 @Composable
-internal fun MusicToggle(state: MusicState, large: Boolean = false, tag: String = "music-toggle") {
+internal fun MusicToggle(state: MusicState, large: Boolean = false, tag: String = "music-toggle", action: (() -> Unit)? = null) {
   val context = LocalContext.current
   val playing = state.phase == MusicPhase.Playing
   val loading = state.phase == MusicPhase.Loading
@@ -187,7 +259,7 @@ internal fun MusicToggle(state: MusicState, large: Boolean = false, tag: String 
     MusicPhase.Failed -> R.string.music_retry
     else -> R.string.music_play
   })
-  FilledTonalIconButton(onClick = { MusicPlayback.toggle(context) }, enabled = !loading,
+  FilledTonalIconButton(onClick = action ?: { MusicPlayback.toggle(context) }, enabled = !loading,
     modifier = Modifier.size(if (large) 64.dp else 44.dp).testTag(tag),
     colors = if (large) IconButtonDefaults.filledTonalIconButtonColors(
       containerColor = LocalChatColors.current.action, contentColor = LocalChatColors.current.onAction,
@@ -203,10 +275,10 @@ internal fun MusicToggle(state: MusicState, large: Boolean = false, tag: String 
 }
 
 @Composable
-private fun MusicTimeline(state: MusicState) {
+private fun MusicTimeline(state: MusicState, current: Boolean, onPlay: (() -> Unit)?) {
   val duration = state.durationMs
   val label = stringResource(R.string.music_seek)
-  val canSeek = duration > 0 && state.phase != MusicPhase.Failed && state.phase != MusicPhase.Loading
+  val canSeek = current && duration > 0 && state.phase != MusicPhase.Failed && state.phase != MusicPhase.Loading
   val chat = LocalChatColors.current
   val colors = MaterialTheme.colorScheme
   var dragging by remember(state.track.key) { mutableStateOf<Float?>(null) }
@@ -225,7 +297,7 @@ private fun MusicTimeline(state: MusicState) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterHorizontally),
       verticalAlignment = Alignment.CenterVertically) {
       MusicSkipButton(backward = true, enabled = canSeek) { MusicPlayback.seek((state.positionMs - 15_000).coerceAtLeast(0)) }
-      MusicToggle(state, large = true)
+      if (current || onPlay != null) MusicToggle(state, large = true, action = onPlay.takeUnless { current })
       MusicSkipButton(backward = false, enabled = canSeek) { MusicPlayback.seek((state.positionMs + 15_000).coerceAtMost(duration)) }
     }
   }
@@ -258,31 +330,18 @@ private fun playbackTime(milliseconds: Int): String {
 @Composable
 internal fun rememberMusicDownload(access: GeneratedMediaAccess?): (MusicTrack) -> Unit {
   val context = LocalContext.current
-  val scope = rememberCoroutineScope()
-  var pending by remember { mutableStateOf<MusicTrack?>(null) }
-  val createDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("audio/mpeg")) { uri ->
-    val track = pending
-    pending = null
-    if (uri != null && track != null && access != null) scope.launch {
+  val export = rememberPreviewExport("audio/*")
+  return download@{ track ->
+    val request = MusicPlayback.request?.takeIf { it.track.key == track.key } ?: access?.let {
+      MusicRequest(track) { destination -> it.downloadMusic(track.gatewayId, track.conversationId, track.id, destination) }
+    } ?: return@download
+    val name = track.title.replace(Regex("[^\\p{L}\\p{N} ._-]"), "_").trim().take(70).ifBlank { "xopc" }
+    export(track.fileName ?: "$name.mp3") { target ->
+      val temporary = File.createTempFile("music-export-", ".audio", context.cacheDir)
       try {
-        val temporary = withContext(Dispatchers.IO) { File.createTempFile("music-export-", ".mp3", context.cacheDir) }
-        try {
-          access.downloadMusic(track.gatewayId, track.conversationId, track.id, temporary)
-          withContext(Dispatchers.IO) {
-            requireNotNull(context.contentResolver.openOutputStream(uri, "wt")).use { target ->
-              temporary.inputStream().use { it.copyTo(target) }
-            }
-          }
-        } finally { temporary.delete() }
-      } catch (e: CancellationException) { throw e }
-      catch (_: Exception) { Toast.makeText(context, R.string.music_download_failed, Toast.LENGTH_SHORT).show() }
-    }
-  }
-  return { track ->
-    if (access != null && pending == null) {
-      pending = track
-      val name = track.title.replace(Regex("[^\\p{L}\\p{N} ._-]"), "_").trim().take(70).ifBlank { "xopc" }
-      createDocument.launch("$name.mp3")
+        request.download(temporary)
+        temporary.inputStream().use { it.copyTo(target) }
+      } finally { temporary.delete() }
     }
   }
 }

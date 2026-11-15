@@ -16,8 +16,12 @@ export async function removeGeneratedMediaFile(path: string): Promise<void> {
 
 export async function downloadGeneratedMedia(kind: XopcGeneratedMediaKind, conversationId: string, id: string,
   destination: string, isCurrent: () => boolean): Promise<number> {
-  const revision = gatewaySession.connectionRevision();
   const path = generatedMediaPath(kind, conversationId) + '/' + encodeURIComponent(id) + (kind === 'music' ? '/audio' : '/video');
+  return downloadGatewayMediaFile(path, destination, isCurrent);
+}
+
+export async function downloadGatewayMediaFile(path: string, destination: string, isCurrent: () => boolean): Promise<number> {
+  const revision = gatewaySession.connectionRevision();
   const output = await fs.open(destination, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
   let offset = 0;
   let expected = 0;

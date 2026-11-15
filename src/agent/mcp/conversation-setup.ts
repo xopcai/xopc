@@ -180,17 +180,18 @@ export class McpConversationSetup {
     if (!activeSession || activeSession.agentId !== context.agentId) throw new McpDraftError(404, 'Owner conversation required.');
     const localOwner = connectorPrincipalForSession(context.conversationId).isLocalOwner;
     const showSetupCard = localOwner && context.showSetupCard === true;
+    const mobileReview = !context.canConfigure && showSetupCard && context.canOpenMobileForm === true;
     const channel = context.canRequestWeixinSetup ? weixinSetupScope(context.conversationId, this.options.readConfig()) : undefined;
     if (!localOwner && !channel) throw new McpDraftError(404, 'A paired, account-isolated Weixin direct conversation and a secure Gateway public URL are required. Shared/merged routing is not eligible.');
     if (channel && !['discover', 'propose', 'select', 'repair', 'start', 'get', 'cancel', 'advance'].includes(command)) throw new McpDraftError(409, 'Weixin configuration requires approval for a specific new connection on the secure page.');
     if (['discover', 'propose', 'select'].includes(command)) {
-      if (!context.canConfigure && !channel) throw new McpDraftError(409, 'An active owner turn is required.');
+      if (!context.canConfigure && !channel && !mobileReview) throw new McpDraftError(409, 'An active owner turn is required.');
       if (dryRun) return { dryRun: true, instruction: 'Discovery and candidate state were not changed.' };
       return this.discovery.command(command, input, { ...context, managementOrigin: channel?.origin });
     }
     if (command === 'inspect') { z.object({}).strict().parse(input); return this.inspect(); }
     if (command === 'get') { const args = setupSchema.parse(input); return this.view(this.get(args.setupId, context.conversationId), showSetupCard); }
-    if (command === 'start' && !context.canConfigure && localOwner && context.canOpenMobileForm) {
+    if (command === 'start' && !context.canConfigure && localOwner && context.canOpenMobileForm && !mobileReview) {
       const args = targetSchema.parse(input);
       if (!args.url || args.planId || args.execution || args.transport === 'stdio' || args.transport === 'sse' || args.secretFields?.length ||
         args.expectedRevision || args.authentication === 'bearer' || args.authentication === 'header') {
@@ -205,7 +206,9 @@ export class McpConversationSetup {
       const interactionPath = 'xopc://capabilities/mcp?' + new URLSearchParams({ id: args.serverId, url: url.href });
       return { interactionPath, state: 'mobile_form_required', instruction: `Reply with a tappable Markdown link to exactly ${interactionPath}. The user will review the address, test and authorize in the native App before anything is saved. Stop here and do not request credentials or claim the connection is installed.` };
     }
-    if (!context.canConfigure && !channel) throw new McpDraftError(409, 'An active owner App or local CLI turn is required for MCP configuration.');
+    if (!context.canConfigure && !channel && !(mobileReview && command === 'start')) {
+      throw new McpDraftError(409, 'An active owner App or local CLI turn is required for MCP configuration.');
+    }
     if (command === 'repair') {
       const args = setupSchema.extend({ planId: z.string().uuid(), expectedPlanVersion: z.number().int().positive() }).strict().parse(input);
       const goal = this.get(args.setupId, context.conversationId); this.current(goal);
@@ -234,6 +237,10 @@ export class McpConversationSetup {
       }
       if (stdio ? !args.execution || args.url : !args.url || args.execution) throw new McpDraftError(400, 'Provide one HTTP URL or stdio execution plan.');
       const url = new URL(stdio ? `stdio://localhost/${args.serverId}` : args.url!);
+      if (mobileReview && (stdio || url.protocol !== 'https:' || url.username || url.password || url.hash || !checkUrlSafety(url.href).safe)) {
+        throw new McpDraftError(400, 'Use a public HTTPS MCP address without credentials.');
+      }
+      if (mobileReview && args.expectedRevision !== undefined) throw new McpDraftError(409, 'Existing connection changes require owner management.');
       if (['__proto__', 'constructor', 'prototype'].includes(args.serverId.toLowerCase())) throw new McpDraftError(400, 'Use a non-reserved server name.');
       if (!stdio && (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
         || [...url.searchParams.keys()].some(key => /token|secret|password|api.?key|authorization/i.test(key)))) {
@@ -274,8 +281,8 @@ export class McpConversationSetup {
       const goal: Goal = { id: randomUUID(), conversationId: context.conversationId, transcriptId: session.transcriptId,
         agentId: context.agentId, serverId: args.serverId, displayName: args.displayName, url: url.href, purpose: args.purpose, authentication: args.authentication,
         transport: args.transport, execution: args.execution, secretFields: args.secretFields, helpUrl: args.helpUrl, objective: args.objective,
-        reviewRequired: stdio || Boolean(selected), publicOnly: Boolean(selected && !stdio), sources: selected?.sources, documentedTokenPortal: selected?.documentedTokenPortal,
-        expectedRevision: mcpConfigRevision(server), version: 1, phase: channel || stdio || selected ? 'approval_required' : 'planned', ...(channel ? { channel } : {}), expiresAt: Date.now() + 15 * 60_000 };
+        reviewRequired: stdio || Boolean(selected) || mobileReview, publicOnly: mobileReview || Boolean(selected && !stdio), sources: selected?.sources, documentedTokenPortal: selected?.documentedTokenPortal,
+        expectedRevision: mcpConfigRevision(server), version: 1, phase: channel || stdio || selected || mobileReview ? 'approval_required' : 'planned', ...(channel ? { channel } : {}), expiresAt: Date.now() + 15 * 60_000 };
       this.goals.set(goal.id, goal); this.notify(goal); return this.view(goal, showSetupCard);
     }
     if (command === 'remove' || command === 'set_enabled') {

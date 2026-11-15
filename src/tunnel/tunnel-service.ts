@@ -19,6 +19,25 @@ import type { PersistedTunnelState, TunnelRegistration, TunnelStatus } from './t
 import type { FrpcDownloadProgress, TunnelStartPhase, TunnelStartProgress } from './tunnel-types.js';
 
 const log = createLogger('Tunnel');
+const PUBLIC_PROBE_INTERVAL_MS = 10_000;
+const PUBLIC_PROBE_FAILURE_LIMIT = 3;
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+async function probePublicRoute(publicUrl: string): Promise<void> {
+  const url = new URL('/api/health', publicUrl);
+  if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Tunnel public route requires HTTPS');
+  const response = await fetch(url, {
+    redirect: 'error', cache: 'no-store', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok || !response.headers.get('content-type')?.startsWith('application/json')) {
+    await response.body?.cancel();
+    throw new Error(`Tunnel public route did not reach the Gateway (HTTP ${response.status})`);
+  }
+  const health = await response.json() as { status?: string; ready?: boolean } | null;
+  if (!(health?.status === 'ok' && health.ready === true) && !(health?.status === 'starting' && health.ready === false)) {
+    throw new Error('Tunnel public route did not return Gateway health');
+  }
+}
 
 export type TunnelServiceConfig = {
   brokerUrl: string;
@@ -47,12 +66,14 @@ export class TunnelService extends EventEmitter {
   private serviceConfig: TunnelServiceConfig | null = null;
   private frpcHandle: FrpcProcessHandle | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private publicProbeTimer: ReturnType<typeof setInterval> | null = null;
   private connectedSince: string | null = null;
   private lastHeartbeatAt: string | null = null;
   private lastError: string | null = null;
   private state: TunnelStatus['state'] = 'disconnected';
   private reconnectAttempt = 0;
   private reconnectTask: Promise<void> | null = null;
+  private lifecycle = 0;
   private stopping = false;
   private startContext: { gatewayPort: number; gatewayToken: string } | null = null;
   private frpcDownload: FrpcDownloadProgress | null = null;
@@ -123,6 +144,10 @@ export class TunnelService extends EventEmitter {
     if (options?.recoverActiveLease) await this.stop();
 
     this.stopping = false;
+    const lifecycle = ++this.lifecycle;
+    this.reconnectTask = null;
+    this.clearHeartbeat();
+    this.clearPublicProbe();
     this.startContext = { gatewayPort, gatewayToken };
     this.state = 'connecting';
     this.lastError = null;
@@ -135,6 +160,7 @@ export class TunnelService extends EventEmitter {
     try {
       frpcBin = await ensureFrpcBinary({
         onProgress: (progress) => {
+          if (lifecycle !== this.lifecycle) return;
           this.frpcDownload = progress;
           this.setStartPhase('preparing_frpc');
         },
@@ -142,6 +168,7 @@ export class TunnelService extends EventEmitter {
       this.frpcDownload = null;
       this.emit('tunnel:progress');
     } catch (err) {
+      if (lifecycle !== this.lifecycle) throw err;
       this.frpcDownload = null;
       this.clearStartProgress();
       this.state = 'error';
@@ -149,6 +176,7 @@ export class TunnelService extends EventEmitter {
       this.emit('tunnel:error', this.lastError);
       throw err;
     }
+    if (lifecycle !== this.lifecycle) throw new Error('Tunnel start superseded');
     publishFrpcPathForProcess(frpcBin);
     const persisted = loadTunnelState();
     const broker = new TunnelBrokerClient(resolveBrokerApiBase(cfg.brokerUrl));
@@ -158,6 +186,7 @@ export class TunnelService extends EventEmitter {
       this.setStartPhase('registering');
       registration = await this.resolveRegistration(broker, cfg, gatewayToken, persisted, options?.recoverActiveLease === true);
     } catch (err) {
+      if (lifecycle !== this.lifecycle) throw err;
       this.clearStartProgress();
       this.state = 'error';
       this.lastError = err instanceof Error ? err.message : String(err);
@@ -166,25 +195,28 @@ export class TunnelService extends EventEmitter {
     }
 
     const state = persistedFromRegistration(registration);
+    if (lifecycle !== this.lifecycle) throw new Error('Tunnel start superseded');
+    let configPath: string | undefined;
     try {
       saveTunnelState(state);
       this.setStartPhase('registering', { publicUrl: registration.publicUrl });
-      const configPath = writeFrpcConfig(registration, gatewayPort, '127.0.0.1');
+      configPath = writeFrpcConfig(registration, gatewayPort, '127.0.0.1');
       this.setStartPhase('starting_frpc', { publicUrl: registration.publicUrl });
       await this.spawnAndWait(frpcBin, configPath, broker, state, registration.heartbeatIntervalMs);
     } catch (err) {
+      if (lifecycle !== this.lifecycle) throw err;
       this.clearStartProgress();
       this.state = 'error';
       this.lastError = err instanceof Error ? err.message : String(err);
       this.emit('tunnel:error', this.lastError);
+      if (configPath && cfg.autoStart && persisted?.enabled && !options?.recoverActiveLease) {
+        void this.scheduleReconnect(frpcBin, configPath, broker, state, registration.heartbeatIntervalMs);
+      }
       throw err;
     }
 
-    this.clearStartProgress();
-    this.state = 'connected';
-    this.connectedSince = new Date().toISOString();
-    this.reconnectAttempt = 0;
-    this.emit('tunnel:connected');
+    if (lifecycle !== this.lifecycle) throw new Error('Tunnel start superseded');
+    this.markConnected();
 
     logTunnelAudit(
       'tunnel.start',
@@ -199,10 +231,23 @@ export class TunnelService extends EventEmitter {
     );
   }
 
+  private markConnected(): void {
+    this.clearStartProgress();
+    this.state = 'connected';
+    this.connectedSince = new Date().toISOString();
+    this.lastError = null;
+    this.reconnectAttempt = 0;
+    this.emit('tunnel:connected');
+  }
+
   async stop(opts?: { release?: boolean }): Promise<{ released: boolean }> {
     const release = opts?.release === true;
     this.stopping = true;
+    this.lifecycle++;
+    this.reconnectTask = null;
+    this.reconnectAttempt = 0;
     this.clearHeartbeat();
+    this.clearPublicProbe();
     if (this.frpcHandle) {
       await this.frpcHandle.kill();
       this.frpcHandle = null;
@@ -257,18 +302,16 @@ export class TunnelService extends EventEmitter {
     recoverActiveLease = false,
   ): Promise<TunnelRegistration> {
     if (!recoverActiveLease && canResumePersistedTunnel(persisted)) {
+      const resumed = registrationFromPersisted(persisted)!;
       try {
         await broker.heartbeat(persisted.tunnelId, persisted.tunnelToken);
-        const resumed = registrationFromPersisted(persisted);
-        if (resumed) {
-          log.info(
-            { tunnelId: persisted.tunnelId, subdomain: persisted.subdomain, phase: 'tunnel_resume' },
-            'Resumed tunnel from persisted credentials',
-          );
+        log.info({ tunnelId: persisted.tunnelId, subdomain: persisted.subdomain }, 'Resumed tunnel from persisted credentials');
+        return resumed;
+      } catch (err) {
+        if (!(err instanceof TunnelBrokerError) || ![401, 403, 410].includes(err.status)) {
+          log.warn({ err, tunnelId: persisted.tunnelId }, 'Broker temporarily unavailable; trying the saved tunnel credentials');
           return resumed;
         }
-      } catch (err) {
-        if (!(err instanceof TunnelBrokerError) || ![401, 403, 410].includes(err.status)) throw err;
         log.info(
           { err, tunnelId: persisted.tunnelId, phase: 'tunnel_resume' },
           'Persisted tunnel not resumable — registering again',
@@ -297,11 +340,14 @@ export class TunnelService extends EventEmitter {
     state: PersistedTunnelState,
     heartbeatIntervalMs: number,
   ): Promise<void> {
+    const lifecycle = this.lifecycle;
+    this.clearPublicProbe();
     if (this.frpcHandle) {
       const previousHandle = this.frpcHandle;
       this.frpcHandle = null;
       await previousHandle.kill();
     }
+    if (this.stopping || lifecycle !== this.lifecycle) throw new Error('Tunnel start superseded');
 
     const handle = spawnFrpcProcess(frpcBin, configPath);
     this.frpcHandle = handle;
@@ -310,22 +356,71 @@ export class TunnelService extends EventEmitter {
     handle.onExit((code, signal) => {
       // Replacing frpc intentionally kills the previous handle. Ignore that
       // stale exit instead of turning it into another reconnect attempt.
-      if (this.stopping || this.frpcHandle !== handle || !loggedIn) return;
+      if (this.stopping || lifecycle !== this.lifecycle || this.frpcHandle !== handle || !loggedIn) return;
       log.warn({ code, signal, pid: handle.pid }, 'frpc process exited');
       this.clearHeartbeat();
+      this.clearPublicProbe();
       this.frpcHandle = null;
       void this.scheduleReconnect(frpcBin, configPath, broker, state, heartbeatIntervalMs);
     });
 
     try {
       await handle.waitForLoginSuccess;
+      for (let attempt = 1; ; attempt++) {
+        if (this.stopping || this.frpcHandle !== handle) throw new Error('Tunnel start superseded');
+        try {
+          await probePublicRoute(state.publicUrl);
+          break;
+        } catch (error) {
+          if (attempt >= PUBLIC_PROBE_FAILURE_LIMIT) throw error;
+          await delay(1000);
+        }
+      }
+      if (this.stopping || this.frpcHandle !== handle) throw new Error('Tunnel start superseded');
       loggedIn = true;
       this.startHeartbeat(broker, state, heartbeatIntervalMs);
+      this.monitorPublicRoute(handle, frpcBin, configPath, broker, state, heartbeatIntervalMs);
     } catch (error) {
       if (this.frpcHandle === handle) this.frpcHandle = null;
       await handle.kill();
       throw error;
     }
+  }
+
+  private monitorPublicRoute(
+    handle: FrpcProcessHandle,
+    frpcBin: string,
+    configPath: string,
+    broker: TunnelBrokerClient,
+    state: PersistedTunnelState,
+    heartbeatIntervalMs: number,
+  ): void {
+    const lifecycle = this.lifecycle;
+    let failures = 0;
+    let pending = false;
+    this.publicProbeTimer = setInterval(async () => {
+      if (pending || lifecycle !== this.lifecycle || this.frpcHandle !== handle) return;
+      pending = true;
+      try {
+        await probePublicRoute(state.publicUrl);
+        failures = 0;
+      } catch (err) {
+        if (lifecycle !== this.lifecycle || this.frpcHandle !== handle || ++failures < PUBLIC_PROBE_FAILURE_LIMIT) return;
+        log.warn({ err, failures, tunnelId: state.tunnelId }, 'Public tunnel route is unavailable; reconnecting');
+        this.lastError = err instanceof Error ? err.message : String(err);
+        this.clearHeartbeat();
+        this.clearPublicProbe();
+        void this.scheduleReconnect(frpcBin, configPath, broker, state, heartbeatIntervalMs);
+      } finally {
+        pending = false;
+      }
+    }, PUBLIC_PROBE_INTERVAL_MS);
+    this.publicProbeTimer.unref();
+  }
+
+  private clearPublicProbe(): void {
+    if (this.publicProbeTimer) clearInterval(this.publicProbeTimer);
+    this.publicProbeTimer = null;
   }
 
   private async scheduleReconnect(
@@ -354,7 +449,8 @@ export class TunnelService extends EventEmitter {
     heartbeatIntervalMs: number,
   ): Promise<void> {
     const maxAttempts = 5;
-    while (!this.stopping) {
+    const lifecycle = this.lifecycle;
+    while (!this.stopping && lifecycle === this.lifecycle) {
       this.reconnectAttempt += 1;
       if (this.reconnectAttempt > maxAttempts) {
         this.state = 'error';
@@ -365,20 +461,20 @@ export class TunnelService extends EventEmitter {
       }
 
       this.state = 'reconnecting';
+      this.connectedSince = null;
       this.setStartPhase('reconnecting_frpc', { publicUrl: state.publicUrl ?? null });
       const delayMs = Math.min(16_000, 1000 * 2 ** (this.reconnectAttempt - 1));
       log.info({ attempt: this.reconnectAttempt, delayMs }, 'Scheduling frpc reconnect');
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      if (this.stopping) return;
+      await delay(delayMs);
+      if (this.stopping || lifecycle !== this.lifecycle) return;
 
       try {
         await this.spawnAndWait(frpcBin, configPath, broker, state, heartbeatIntervalMs);
-        this.clearStartProgress();
-        this.state = 'connected';
-        this.reconnectAttempt = 0;
-        this.emit('tunnel:connected');
+        if (this.stopping || lifecycle !== this.lifecycle) return;
+        this.markConnected();
         return;
       } catch (err) {
+        if (this.stopping || lifecycle !== this.lifecycle) return;
         this.lastError = err instanceof Error ? err.message : String(err);
       }
     }
@@ -416,6 +512,10 @@ export class TunnelService extends EventEmitter {
         const ctx = this.startContext;
         const cfg = this.serviceConfig;
         if (!ctx || !cfg) return;
+        this.clearPublicProbe();
+        this.state = 'reconnecting';
+        this.connectedSince = null;
+        this.setStartPhase('reconnecting_frpc', { publicUrl: state.publicUrl });
         try {
           if (!cfg.registrationSecret) {
             throw new TunnelRegistrationSecretError(cfg.brokerUrl);
@@ -435,11 +535,13 @@ export class TunnelService extends EventEmitter {
           const frpcBin = await ensureFrpcBinary();
           const configPath = writeFrpcConfig(registration, ctx.gatewayPort, '127.0.0.1');
           await this.spawnAndWait(frpcBin, configPath, broker, next, registration.heartbeatIntervalMs);
+          this.markConnected();
         } catch (reErr) {
           if (this.stopping || renewalGeneration !== this.heartbeatGeneration) return;
           if (reErr instanceof TunnelBrokerError && [401, 403].includes(reErr.status)) await this.stop();
           this.lastError = reErr instanceof Error ? reErr.message : String(reErr);
           this.state = 'error';
+          this.clearStartProgress();
           this.emit('tunnel:error', this.lastError);
         }
       } finally { pending = false; }

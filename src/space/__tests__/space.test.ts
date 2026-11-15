@@ -1,17 +1,17 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TaskResultDelivery, TurnOutcome } from '@xopcai/gateway-contract';
 
 import { deleteMediaUris } from '../../media/session-references.js';
-import { saveMediaBuffer } from '../../media/store.js';
+import { resolveMediaBufferPath, saveMediaBuffer } from '../../media/store.js';
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { closeXopcDatabase, openXopcDatabase, getSqliteDatabase } from '../../storage/sqlite/index.js';
 import { appendTranscriptEntry } from '../../storage/sqlite/transcript-repository.js';
-import { archiveSpaceTaskDelivery } from '../ingest.js';
+import { archiveSpaceGeneratedMedia, archiveSpaceTaskDelivery } from '../ingest.js';
 import { changeSpaceItem, findSpaceArtifact, findSpaceTaskDelivery, getSpaceItem, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply, saveSpaceVersion } from '../repository.js';
 import { SpaceWorker } from '../worker.js';
 
@@ -94,6 +94,32 @@ describe('Space', () => {
     expect(changeSpaceItem(item.id, item.revision, { trash: false })).toBe('conflict');
     expect(purgeSpaceItem(item.id, item.revision + 1)).toBe('ok');
     expect(await readSpaceContent(item.id, item.currentVersion.id)).toBeNull();
+  });
+
+  it('returns the playback identity and lyrics for each generated audio version', async () => {
+    const db = getSqliteDatabase();
+    const transcriptId = String(db.prepare('SELECT active_transcript_id FROM sessions WHERE conversation_id = ?')
+      .get(conversationId)?.active_transcript_id);
+    const workId = randomUUID();
+    const songs = [
+      { id: 'a'.repeat(64), lyrics: 'First version', durationMs: 1000 },
+      { id: 'b'.repeat(64), lyrics: 'Second version', durationMs: 2000 },
+    ];
+    for (const [index, song] of songs.entries()) {
+      const path = resolveMediaBufferPath(`music-${song.id}.mp3`, 'outbound');
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, 'fixture');
+      db.prepare(`INSERT INTO music_generation_jobs (id, conversation_id, transcript_id, work_id, version_number, model_ref,
+        request_hash, title, mode, prompt, lyrics, state, duration_ms, next_attempt_at, created_at)
+        VALUES (?, ?, ?, ?, ?, 'test', 'fixture', 'Song', 'song', '', ?, 'completed', ?, 0, ?)`)
+        .run(song.id, conversationId, transcriptId, workId, index + 1, song.lyrics, song.durationMs, index + 1);
+      archiveSpaceGeneratedMedia(db, 'music', song.id);
+    }
+    const [summary] = listSpaceItems({ view: 'all' }).items;
+    const detail = getSpaceItem(summary.id);
+    expect(summary.currentVersion.music).toBeUndefined();
+    expect(detail?.versions.map(entry => entry.music)).toEqual(songs.toReversed().map(song => ({ ...song, conversationId })));
+    expect(detail?.currentVersion.music?.id).toBe(songs[1].id);
   });
 
   it('retries failed PDF indexes with the worker loader and preserves the page locator', async () => {

@@ -72,17 +72,15 @@ struct AssistantView<Dock: View>: View {
     @State private var voiceMaterializationIDs: [String: String] = [:]
     @State private var isAtBottom = true
     @State private var pendingStart: PendingConversationStart?
-    @State private var bottomDockHeight: CGFloat = 0
-    @State private var messageViewportHeight: CGFloat = 0
+    @State private var timelineHeight: CGFloat = 0
     @State private var chatTopInset: CGFloat = 0
     @State private var personalHeaderHeight: CGFloat = 0
     @State private var ordinaryHeaderHeight: CGFloat = 0
-    @State private var replySpace = ChatReplySpace()
-    @State private var replyRowHeights: [String: CGFloat] = [:]
-    @State private var replyUserText: String?
-    @State private var activityHeight: CGFloat = 0
+    @State private var positionedTimeline = false
+    @State private var lastUserScrollTowardLatest = false
+    @State private var readingPositions: [String: ChatReadingAnchor] = [:]
+    @State private var stickyMusicHeight: CGFloat = 0
     @State private var followingBottom = true
-    @State private var showJumpBottom = false
     @State private var bottomJumpID: UUID?
     @State private var userScrollingMessages = false
     @State private var bottomScrollTask: Task<Void, Never>?
@@ -128,13 +126,14 @@ struct AssistantView<Dock: View>: View {
                     GeneratedMusicDock(playback: music)
                 }
                 if conversation != nil {
+                    if let conversation, !conversation.isDraft, isActive, !showingPhone {
+                        ConversationMcpAction(configuration: configuration, conversationID: conversation.id, activeRun: state.isRunActive)
+                    }
                     bottomDock(composer).padding(.bottom, 4)
                 }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bottomDockHeight = $0 }
         }
         .background(mobileTheme.canvas.ignoresSafeArea())
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { messageViewportHeight = $0 }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { chatTopInset = $0 }
         .overlay(alignment: .top) {
             mobileTheme.canvas
@@ -156,6 +155,7 @@ struct AssistantView<Dock: View>: View {
                         }
                     if pinsPlayingMusic {
                         GeneratedMusicDock(playback: music, sticky: true)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stickyMusicHeight = $0 }
                     }
                 }
                 .padding(.top, 8)
@@ -168,7 +168,7 @@ struct AssistantView<Dock: View>: View {
         let measuredHeight = isPersonalConversation ? personalHeaderHeight : ordinaryHeaderHeight
         let headerHeight = showsFloatingHeader && measuredHeight > 0
             ? measuredHeight + 14 : (isPersonalConversation ? 114 : 64)
-        return chatTopInset + headerHeight
+        return chatTopInset + headerHeight + (pinsPlayingMusic ? stickyMusicHeight + 4 : 0)
     }
 
     private var pinsPlayingMusic: Bool {
@@ -228,12 +228,9 @@ struct AssistantView<Dock: View>: View {
                 executionPresentation = nil
                 presentedGeneratedVideo = nil
                 isAtBottom = true
-                showJumpBottom = false
                 followingBottom = true
-                replySpace = ChatReplySpace()
-                replyRowHeights = [:]
-                replyUserText = nil
-                activityHeight = 0
+                positionedTimeline = false
+                userScrollingMessages = false
                 if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
                     state.select(agent)
                 }
@@ -309,7 +306,8 @@ struct AssistantView<Dock: View>: View {
         let scope = generatedMediaScope
         let key = GeneratedMediaObservationKey(configuration: configuration, conversationID: conversation?.id,
                                                transcriptID: scope?.transcriptID, busy: state.isRunActive,
-                                               visible: isActive && scenePhase == .active && !showingPhone)
+                                               visible: isActive && scenePhase == .active && !showingPhone,
+                                               musicJobsRevision: state.musicJobsRevision)
         return chatLifecycle
             .task(id: key) {
                 await generatedMedia.observe(scope, client: GatewayClient(configuration: key.configuration),
@@ -510,11 +508,12 @@ struct AssistantView<Dock: View>: View {
     }
 
     private func scheduleBottomScroll(_ scroller: ScrollViewProxy) {
-        guard followingBottom, !userScrollingMessages, bottomJumpID == nil, bottomScrollTask == nil else { return }
+        guard isActive, followingBottom, !userScrollingMessages,
+              bottomJumpID == nil, bottomScrollTask == nil else { return }
         bottomScrollTask = Task {
             do { try await Task.sleep(for: .milliseconds(16)) } catch { return }
             bottomScrollTask = nil
-            guard followingBottom, !userScrollingMessages, bottomJumpID == nil else { return }
+            guard isActive, followingBottom, !userScrollingMessages, bottomJumpID == nil else { return }
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { scroller.scrollTo("chat-bottom", anchor: .bottom) }
@@ -542,32 +541,41 @@ struct AssistantView<Dock: View>: View {
                         }
                         queueCard
                         personalConnectionCard
-                        ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }) { message in
-                            MessageBubble(
-                                message: message,
-                                configuration: configuration,
-                                conversationID: conversation?.isDraft == false ? conversation?.id : nil,
-                                assistantState: state,
-                                readAloud: readAloud,
-                                canReadAloud: realtimeVoiceCall.phase == .idle,
-                                previewEligible: message.id != state.messages.last?.id,
-                                onReuseUserText: { draft = $0 },
-                                maximumWidth: maximumMessageWidth,
-                                animateStreaming: followingBottom && !userScrollingMessages,
-                                onReading: {
-                                    followingBottom = false
-                                    bottomScrollTask?.cancel(); bottomScrollTask = nil
-                                }
-                            )
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                                recordReplyRowHeight(message.id, height: height)
-                                if message.id == state.messages.last?.id {
-                                    scheduleBottomScroll(scroller)
+                        ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }, id: \.scrollID) { message in
+                            VStack(spacing: 20) {
+                                MessageBubble(
+                                    message: message,
+                                    configuration: configuration,
+                                    conversationID: conversation?.isDraft == false ? conversation?.id : nil,
+                                    assistantState: state,
+                                    readAloud: readAloud,
+                                    canReadAloud: realtimeVoiceCall.phase == .idle,
+                                    previewEligible: message.id != state.messages.last?.id,
+                                    onReuseUserText: { draft = $0 },
+                                    maximumWidth: maximumMessageWidth,
+                                    animateStreaming: followingBottom && !userScrollingMessages,
+                                    onReading: {
+                                        followingBottom = false
+                                        bottomScrollTask?.cancel(); bottomScrollTask = nil
+                                    }
+                                )
+                                generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth,
+                                                   viewportHeight: viewport.size.height)
+                            }
+                            .id(message.scrollID)
+                            .onGeometryChange(for: CGRect?.self) { geometry in
+                                let frame = geometry.frame(in: .named("chat-scroll"))
+                                return frame.minY <= chatHeaderClearance + 20 && frame.maxY > chatHeaderClearance ? frame : nil
+                            } action: { frame in
+                                if let frame, userScrollingMessages, let scope = timelineReadingScope {
+                                    saveReadingAnchor(ChatReadingAnchor(id: message.scrollID,
+                                        offset: frame.minY - chatHeaderClearance, rowHeight: frame.height), scope: scope)
                                 }
                             }
-                            generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth, viewportHeight: viewport.size.height)
                         }
-                        generatedMediaRows(cards[""] ?? [], maximumWidth: maximumMessageWidth, viewportHeight: viewport.size.height)
+                        if let unanchored = cards[""] {
+                            generatedMediaRows(unanchored, maximumWidth: maximumMessageWidth, viewportHeight: viewport.size.height)
+                        }
                         clarificationCard
                         if showsStagedProgress {
                             AssistantStagesView(progress: state.runProgress,
@@ -575,107 +583,83 @@ struct AssistantView<Dock: View>: View {
                                                     $0.role == "assistant" && $0.turnId == state.runProgress.runID && $0.answerConfirmed && !$0.text.isEmpty
                                                 }, paused: state.clarification != nil)
                                 .id(state.runProgress.runID ?? "sending")
-                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                                    activityHeight = height
-                                    updateReplySpace()
-                                }
-                                .onDisappear { activityHeight = 0; updateReplySpace() }
                         } else if isPersonalConversation, state.isRunActive, state.errorMessage == nil, state.clarification == nil,
                                   !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
                         {
                             AssistantActivityView(narration: state.executionActivity.last(where: { $0.id.hasPrefix("narration:") })?.title)
                                 .id(state.runID ?? "sending")
-                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                                    activityHeight = height
-                                    updateReplySpace()
-                                }
                         }
                         Color.clear.frame(height: 1)
                             .id("chat-bottom")
                             .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.frame(in: .named("chat-timeline-content")).maxY
+                            } action: { _ in
+                                scheduleBottomScroll(scroller)
+                            }
+                            .onGeometryChange(for: CGFloat.self) { proxy in
                                 proxy.frame(in: .named("chat-scroll")).maxY
                             } action: { bottom in
-                                isAtBottom = bottom <= viewport.size.height - replySpace.remaining + 32
-                                if userScrollingMessages {
-                                    followingBottom = isAtBottom
-                                }
+                                isAtBottom = bottom <= viewport.size.height + 24
                             }
                     }
+                    .coordinateSpace(name: "chat-timeline-content")
                     .padding(.horizontal, 12)
                     .padding(.vertical, 16)
                     .frame(maxWidth: 720)
                     .frame(maxWidth: .infinity)
                 }
-                .defaultScrollAnchor(.bottom)
+                .defaultScrollAnchor(.top)
                 .contentMargins(.top, chatHeaderClearance, for: .scrollContent)
-                .contentMargins(.bottom, 24 + replySpace.remaining, for: .scrollContent)
+                .contentMargins(.bottom, 24, for: .scrollContent)
                 .coordinateSpace(name: "chat-scroll")
                 .onDisappear {
                     bottomJumpID = nil
                     bottomScrollTask?.cancel(); bottomScrollTask = nil
                 }
-                .onChange(of: conversation?.id) {
-                    bottomJumpID = nil
-                    bottomScrollTask?.cancel(); bottomScrollTask = nil
+                .onChange(of: state.isLoadingHistory, initial: true) {
+                    restoreTimeline(scroller)
                 }
                 .onChange(of: state.messages.last) {
-                    updateReplySpace()
-                    if followingBottom {
-                        scheduleBottomScroll(scroller)
-                    }
+                    restoreTimeline(scroller)
+                    scheduleBottomScroll(scroller)
                 }
-                .onChange(of: state.clarification?.id) {
-                    if state.clarification != nil, followingBottom {
-                        scheduleBottomScroll(scroller)
-                    }
-                }
-                .onChange(of: bottomDockHeight) {
-                    updateReplySpace()
-                }
-                .onChange(of: isAtBottom) {
-                    if isAtBottom {
-                        showJumpBottom = false
-                    }
-                }
-                .onChange(of: viewport.size.height) {
-                    updateReplySpace()
-                    if followingBottom, !userScrollingMessages, bottomJumpID == nil {
-                        scroller.scrollTo("chat-bottom", anchor: .bottom)
-                    }
+                .onChange(of: chatHeaderClearance) { scheduleBottomScroll(scroller) }
+                .onChange(of: followingBottom) { scheduleBottomScroll(scroller) }
+                .onChange(of: viewport.size.height, initial: true) {
+                    timelineHeight = viewport.size.height
+                    restoreTimeline(scroller)
+                    scheduleBottomScroll(scroller)
                 }
                 .modifier(ChatScrollInteraction(onStart: {
+                    if !userScrollingMessages { lastUserScrollTowardLatest = false }
                     bottomJumpID = nil
                     userScrollingMessages = true
                     followingBottom = false
                     bottomScrollTask?.cancel(); bottomScrollTask = nil
                 }, onEnd: {
                     guard userScrollingMessages else { return }
-                    followingBottom = isAtBottom
+                    followingBottom = lastUserScrollTowardLatest && isAtBottom
                     userScrollingMessages = false
-                    updateReplySpace()
+                    if followingBottom, let scope = timelineReadingScope { readingPositions.removeValue(forKey: scope) }
                 }, onDirectionChange: { towardLatest in
-                    guard userScrollingMessages else { return }
-                    showJumpBottom = towardLatest && !isAtBottom
+                    if userScrollingMessages { lastUserScrollTowardLatest = towardLatest }
                 }))
                 .overlay(alignment: .bottom) {
-                    if showJumpBottom, !isAtBottom {
+                    if positionedTimeline, !followingBottom, !isAtBottom {
                         Button {
                             guard bottomJumpID == nil else { return }
-                            showJumpBottom = false
                             bottomScrollTask?.cancel(); bottomScrollTask = nil
                             userScrollingMessages = false
                             followingBottom = true
-                            updateReplySpace()
+                            if let scope = timelineReadingScope { readingPositions.removeValue(forKey: scope) }
                             let jumpID = UUID()
                             bottomJumpID = jumpID
-                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.42)) {
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
                                 scroller.scrollTo("chat-bottom", anchor: .bottom)
                             } completion: {
                                 guard bottomJumpID == jumpID else { return }
                                 bottomJumpID = nil
-                                if !isAtBottom {
-                                    scheduleBottomScroll(scroller)
-                                }
+                                scheduleBottomScroll(scroller)
                             }
                         } label: {
                             Group {
@@ -703,7 +687,7 @@ struct AssistantView<Dock: View>: View {
     @ViewBuilder
     private func generatedMediaRows(_ cards: [GeneratedMediaCard], maximumWidth: CGFloat, viewportHeight: CGFloat) -> some View {
         if let id = conversation?.id, conversation?.isDraft == false, !cards.isEmpty {
-            VStack(alignment: .trailing, spacing: 12) {
+            VStack(spacing: 12) {
                 ForEach(cards) { card in
                     GeneratedMediaRow(card: card, canConfirm: generatedMedia.canConfirm && !state.isRunActive,
                                       submitting: generatedMedia.submitting, error: card.isDraft ? generatedMedia.error : nil,
@@ -714,14 +698,16 @@ struct AssistantView<Dock: View>: View {
                                           if card.kind == .video {
                                               playGeneratedMedia(card, conversationID: id)
                                           } else {
-                                              if music.track?.id != card.id || music.track?.conversationID != id {
-                                                  playGeneratedMedia(card, conversationID: id)
+                                              let track = musicTrack(card, conversationID: id)
+                                              music.openPreview(track) {
+                                                  try await GatewayClient(configuration: configuration)
+                                                      .downloadGeneratedMedia(card, conversationID: id)
                                               }
-                                              music.expanded = true
                                           }
                                       }, onConfirm: {
                                           Task { await generatedMedia.confirm(card, conversationID: id, client: GatewayClient(configuration: configuration)) }
                                       })
+                                      .frame(maxWidth: maximumWidth)
                                       .onGeometryChange(for: Bool.self) { proxy in
                                           let frame = proxy.frame(in: .named("chat-scroll"))
                                           let header = chatHeaderClearance
@@ -735,12 +721,19 @@ struct AssistantView<Dock: View>: View {
                                           }
                                       }
                                       .onDisappear { visibleMusicCardIDs.remove(card.id) }
+                                      .frame(maxWidth: .infinity, alignment: card.kind == .music ? .leading : .trailing)
                                       .id("generated-media-\(card.id)")
                 }
             }
-            .frame(maxWidth: maximumWidth, alignment: .trailing)
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
+    }
+
+    private func musicTrack(_ card: GeneratedMediaCard, conversationID: String) -> GeneratedMusicTrack {
+        GeneratedMusicTrack(configurationScope: ComposerDraftStore.accountScope(configuration),
+                            conversationID: conversationID, id: card.id, title: card.title,
+                            source: conversationNavigationTitle, lyrics: card.item.lyrics,
+                            duration: card.item.durationMs.map { Double($0) / 1000 },
+                            sourceAgentID: conversation?.agentId)
     }
 
     private func playGeneratedMedia(_ card: GeneratedMediaCard, conversationID: String) {
@@ -751,11 +744,7 @@ struct AssistantView<Dock: View>: View {
         followingBottom = false
         if card.kind == .music {
             presentedGeneratedVideo = nil
-            let track = GeneratedMusicTrack(configurationScope: ComposerDraftStore.accountScope(configuration),
-                                            conversationID: conversationID, id: card.id, title: card.title,
-                                            source: conversationNavigationTitle, lyrics: card.item.lyrics,
-                                            duration: card.item.durationMs.map { Double($0) / 1000 },
-                                            sourceAgentID: conversation?.agentId)
+            let track = musicTrack(card, conversationID: conversationID)
             music.play(track) {
                 try await GatewayClient(configuration: configuration).downloadGeneratedMedia(card, conversationID: conversationID)
             }
@@ -765,38 +754,46 @@ struct AssistantView<Dock: View>: View {
         }
     }
 
-    func reserveReplySpace(_ rowID: String) {
-        guard followingBottom else { return }
-        replyRowHeights = [:]
-        replyUserText = nil
-        activityHeight = 0
-        replySpace.begin(anchorID: rowID, availableHeight: messageViewportHeight - bottomDockHeight - 24,
-                         following: followingBottom)
+    private struct ChatReadingAnchor {
+        let id: String
+        let offset: CGFloat
+        let rowHeight: CGFloat
     }
 
-    private func recordReplyRowHeight(_ rowID: String, height: CGFloat) {
-        guard replySpace.anchorID != nil, replySpace.remaining > 0,
-              replyRowHeights[rowID] != height else { return }
-        replyRowHeights[rowID] = height
-        updateReplySpace()
+    private var timelineReadingScope: String? {
+        guard let id = conversation?.id else { return nil }
+        let transcript = state.historyTranscriptID(for: conversation) ?? ""
+        return "\(ComposerDraftStore.accountScope(configuration))|\(id)|\(transcript)"
     }
 
-    private func updateReplySpace() {
-        if replySpace.anchorID != nil,
-           !state.messages.contains(where: { $0.id == replySpace.anchorID }),
-           let replyUserText,
-           let confirmed = state.messages.last(where: { $0.role == "user" && $0.text == replyUserText })
-        {
-            replySpace.reanchor(confirmed.id)
+    private func saveReadingAnchor(_ anchor: ChatReadingAnchor, scope: String) {
+        if readingPositions[scope] == nil, readingPositions.count >= 50, let key = readingPositions.keys.first {
+            readingPositions.removeValue(forKey: key)
         }
-        guard let anchor = state.messages.firstIndex(where: { $0.id == replySpace.anchorID }) else { return }
-        replyUserText = state.messages[anchor].text
-        let replyRows = state.messages.dropFirst(anchor + 1)
-        let replyHeight = replyRows.reduce(CGFloat.zero) { height, row in
-            height + (replyRowHeights[row.id] ?? 0) + 14
-        } + (state.isRunActive || showsStagedProgress ? activityHeight + 14 : 0)
-        replySpace.consume(replyHeight: replyHeight, availableHeight: messageViewportHeight - bottomDockHeight - 24,
-                           following: followingBottom)
+        readingPositions[scope] = anchor
+    }
+
+    private func restoreTimeline(_ scroller: ScrollViewProxy) {
+        guard !positionedTimeline, !state.isLoadingHistory, let id = conversation?.id,
+              state.isCurrentConversation(id), !state.messages.isEmpty else { return }
+        positionedTimeline = true
+        let draftScope = "\(ComposerDraftStore.accountScope(configuration))|\(id)|"
+        if let scope = timelineReadingScope, let saved = readingPositions[scope] ?? readingPositions[draftScope],
+           state.messages.contains(where: { $0.scrollID == saved.id })
+        {
+            followingBottom = false
+            let travel = timelineHeight - chatHeaderClearance - 24 - saved.rowHeight
+            let alignment = abs(travel) > 1 ? saved.offset / travel : 0
+            scroller.scrollTo(saved.id, anchor: UnitPoint(x: 0.5, y: alignment))
+        } else {
+            scheduleBottomScroll(scroller)
+        }
+    }
+
+    func followLatestAfterSend() {
+        bottomJumpID = nil
+        followingBottom = true
+        if let scope = timelineReadingScope { readingPositions.removeValue(forKey: scope) }
     }
 
     private var conversationNavigationTitle: String {
@@ -1487,6 +1484,7 @@ private struct GeneratedMediaObservationKey: Equatable {
     let transcriptID: String?
     let busy: Bool
     let visible: Bool
+    let musicJobsRevision: Int
 }
 
 private extension AssistantView {

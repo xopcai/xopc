@@ -17,7 +17,7 @@ struct ChatScrollInteraction: ViewModifier {
                     onDirectionChange(current > previous)
                 }
             }.onScrollPhaseChange { previous, phase in
-                if phase == .tracking || phase == .interacting {
+                if phase == .interacting {
                     onStart()
                 }
                 if phase == .idle, previous != .animating {

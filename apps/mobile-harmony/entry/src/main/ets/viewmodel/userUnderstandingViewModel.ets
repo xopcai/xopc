@@ -51,6 +51,9 @@ export class XopcUserUnderstandingViewModel {
 
   search(query: string): void {
     this.query = query;
+    this.requestRevision++;
+    this.nextCursor = '';
+    this.loadingMore = false;
     clearTimeout(this.searchTimer);
     this.searchTimer = setTimeout((): void => { void this.load(this.filter); }, 300);
   }
@@ -60,15 +63,16 @@ export class XopcUserUnderstandingViewModel {
   private async loadPage(append: boolean): Promise<void> {
     const generation = this.generation;
     const requestRevision = ++this.requestRevision;
+    const cursor = append ? this.nextCursor : '';
     this.loadingMore = true;
     try {
       let path = '/api/user-model/assertions?view=mobile&limit=20&filter=' + encodeURIComponent(this.filter);
       if (this.query.trim()) path += '&q=' + encodeURIComponent(this.query.trim());
-      if (append && this.nextCursor) path += '&cursor=' + encodeURIComponent(this.nextCursor);
+      if (cursor) path += '&cursor=' + encodeURIComponent(cursor);
       const result = JSON.parse(await gatewaySession.request(path)) as XopcUnderstandingPage;
       if (generation !== this.generation || requestRevision !== this.requestRevision) return;
       this.items = append ? this.items.concat(result.items) : result.items;
-      this.nextCursor = result.nextCursor ?? '';
+      this.nextCursor = result.nextCursor !== cursor ? result.nextCursor ?? '' : '';
       this.error = '';
     } catch (error) {
       if (generation === this.generation && requestRevision === this.requestRevision) this.error = (error as Error).message;

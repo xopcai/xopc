@@ -36,7 +36,7 @@ extension GatewayClient {
                 agentId: conversation.agentId,
                 projectId: conversation.projectId,
                 execution: conversation.executionMode.map { ExecutionCommand(mode: $0, baseRef: nil) },
-                temporary: false, model: model, thinkingLevel: thinking
+                temporary: false, model: model, thinkingLevel: thinking, agentSetupLanguage: conversation.agentSetupLanguage
             )
         )
         let envelope: GatewayEnvelope<SessionCommandResult> = try await request(
