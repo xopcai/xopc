@@ -1,5 +1,7 @@
 import Foundation
 
+// swiftlint:disable file_length
+
 enum ConversationHistoryScope: Equatable, Hashable, Sendable {
     case recent, unassigned, project(String), expert(String)
 }
@@ -192,6 +194,7 @@ private extension String? {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct GatewayClient: GatewayServing, Sendable {
     let configuration: GatewayConfiguration
     let session: URLSession

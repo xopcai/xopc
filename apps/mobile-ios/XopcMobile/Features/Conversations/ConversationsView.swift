@@ -1,5 +1,7 @@
 import SwiftUI
 
+// swiftlint:disable file_length
+
 private enum ConversationHistoryMode: String, CaseIterable {
     case recent, projects, experts
 
@@ -12,6 +14,7 @@ private enum ConversationHistoryMode: String, CaseIterable {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct ConversationsView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
@@ -219,7 +222,7 @@ struct ConversationsView: View {
             let projectRows = projects.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
             let expertRows = experts.filter { query.isEmpty || $0.displayName.localizedCaseInsensitiveContains(query) }
             let showUnassigned = query.isEmpty || unassigned.localizedCaseInsensitiveContains(query)
-            if mode == .projects ? projectRows.isEmpty, !showUnassigned : expertRows.isEmpty {
+            if mode == .projects ? (projectRows.isEmpty && !showUnassigned) : expertRows.isEmpty {
                 if query.isEmpty {
                     ContentUnavailableView("暂无专家", systemImage: "person.2")
                 } else {
