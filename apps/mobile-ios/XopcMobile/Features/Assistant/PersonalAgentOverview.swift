@@ -17,7 +17,9 @@ struct PersonalOverviewWork: Decodable, Identifiable, Sendable {
     }
 
     var status: LocalizedStringKey {
-        if requiresAttention { return "需要你处理" }
+        if requiresAttention {
+            return "需要你处理"
+        }
         return switch presentation?.status ?? operationalState ?? phase {
         case "paused": "已暂停"
         case "completed", "done", "closed": "已完成"
@@ -49,10 +51,9 @@ struct PersonalOverviewDelivery: Decodable, Identifiable, Sendable {
         var attachment: HistoryAttachment? {
             guard availability == "available" else { return nil }
             let managed = uri.flatMap(ChatMessageLink.resolve)
-            let isFile: Bool
-            switch managed {
-            case .managedFile: isFile = true
-            default: isFile = false
+            let isFile = switch managed {
+            case .managedFile: true
+            default: false
             }
             guard workspaceRelativePath != nil || isFile || uri?.hasPrefix("media://") == true
                 || uri?.hasPrefix("xopc-file-version:") == true else { return nil }
@@ -93,7 +94,9 @@ extension GatewayClient {
             .init(name: "view", value: "deliverables"), .init(name: "limit", value: "15"),
             .init(name: "offset", value: String(offset))
         ])
-        if let next = page.nextOffset, next <= offset { throw GatewayClientError.invalidResponse }
+        if let next = page.nextOffset, next <= offset {
+            throw GatewayClientError.invalidResponse
+        }
         return page
     }
 
@@ -144,7 +147,11 @@ struct PersonalAgentOverview: View {
                         .onGeometryChange(for: CGFloat.self) {
                             min(1, max(0, -$0.frame(in: .named("personal-overview")).minY / 108))
                         } action: { collapse = $0 }
-                    if tab == .tasks { tasks } else { library }
+                    if tab == .tasks {
+                        tasks
+                    } else {
+                        library
+                    }
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 22)
@@ -152,13 +159,21 @@ struct PersonalAgentOverview: View {
             .coordinateSpace(name: "personal-overview")
             .accessibilityIdentifier("personal-overview-scroll")
             .refreshable {
-                if tab == .tasks { await refreshTasks() } else { await loadDeliveries(reset: true) }
+                if tab == .tasks {
+                    await refreshTasks()
+                } else {
+                    await loadDeliveries(reset: true)
+                }
             }
         }
         .background(ChatAppearance.canvas(colorScheme))
         .toolbar(.hidden, for: .navigationBar)
         .task { await refreshTasks() }
-        .task(id: tab) { if tab == .library, !deliveryLoaded { await loadDeliveries(reset: true) } }
+        .task(id: tab) {
+            if tab == .library, !deliveryLoaded {
+                await loadDeliveries(reset: true)
+            }
+        }
         .modifier(AutomationSetupPresentation(configuration: configuration, scope: .personal,
                                               prompt: $setupPrompt, onClosed: { Task { await loadSchedules() } }))
         .sheet(isPresented: $showingEdit) {
@@ -201,7 +216,9 @@ struct PersonalAgentOverview: View {
     }
 
     @ViewBuilder private var tasks: some View {
-        if !workLoaded && !workError { ProgressView().frame(maxWidth: .infinity, minHeight: 64) }
+        if !workLoaded, !workError {
+            ProgressView().frame(maxWidth: .infinity, minHeight: 64)
+        }
         if workError {
             Button("重试") { Task { await loadWork(reset: !workLoaded) } }
                 .accessibilityIdentifier("personal-overview-work-retry")
@@ -216,7 +233,9 @@ struct PersonalAgentOverview: View {
             heading("当前任务")
             ForEach(active) { taskRow($0) }
         }
-        if workLoaded, current.isEmpty && history.isEmpty { Text("暂无任务").foregroundStyle(.secondary) }
+        if workLoaded, current.isEmpty, history.isEmpty {
+            Text("暂无任务").foregroundStyle(.secondary)
+        }
         HStack {
             heading("定时任务")
             Spacer()
@@ -268,7 +287,9 @@ struct PersonalAgentOverview: View {
                 .buttonStyle(.plain)
             }
         }
-        if deliveryLoading { ProgressView().frame(maxWidth: .infinity, minHeight: 48) }
+        if deliveryLoading {
+            ProgressView().frame(maxWidth: .infinity, minHeight: 48)
+        }
         if deliveryError {
             Button("重试") { Task { await loadDeliveries(reset: !deliveryLoaded) } }
         } else if deliveryLoaded, deliveries.isEmpty {
@@ -296,8 +317,8 @@ struct PersonalAgentOverview: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } icon: { Image(systemName: symbol).foregroundStyle(.secondary) }
-        .frame(minHeight: 48)
-        .contentShape(.rect)
+            .frame(minHeight: 48)
+            .contentShape(.rect)
     }
 
     private func heading(_ title: LocalizedStringKey) -> some View {
@@ -306,12 +327,14 @@ struct PersonalAgentOverview: View {
     }
 
     private func openDelivery(_ item: PersonalOverviewDelivery, conversationID: String) {
-        if let reference = item.reference, openTarget(reference.kind, id: reference.id) { return }
+        if let reference = item.reference, openTarget(reference.kind, id: reference.id) {
+            return
+        }
         if let artifact = item.artifact, artifact.availability == "available",
            let uri = artifact.uri, uri == "/api/music-generation/sessions/\(conversationID)/jobs/\(artifact.artifactId)/audio",
            UUID(uuidString: conversationID) != nil,
            !artifact.artifactId.isEmpty, artifact.artifactId.utf8.allSatisfy({
-               (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95
+               (48 ... 57).contains($0) || (65 ... 90).contains($0) || (97 ... 122).contains($0) || $0 == 45 || $0 == 95
            })
         {
             let playback = GeneratedMusicPlayback.shared

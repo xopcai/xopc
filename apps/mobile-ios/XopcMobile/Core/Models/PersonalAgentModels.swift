@@ -25,7 +25,9 @@ struct PersonalVoiceCallPreferences: Codable, Equatable, Sendable {
 enum PersonalCallMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case auto, natural, assistant
 
-    var id: Self { self }
+    var id: Self {
+        self
+    }
 }
 
 private struct PersonalVoiceCallPatch: Encodable {

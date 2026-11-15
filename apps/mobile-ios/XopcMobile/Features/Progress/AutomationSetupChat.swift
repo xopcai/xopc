@@ -81,7 +81,11 @@ struct AutomationSetupPresentation: ViewModifier {
                                         heading: "用对话创建定时任务", automationSetup: true)
                 }
             }
-            .alert("无法打开定时任务对话", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            .alert("无法打开定时任务对话", isPresented: Binding(get: { error != nil }, set: {
+                if !$0 {
+                    error = nil
+                }
+            })) {
                 Button("关闭", role: .cancel) {}
             } message: { Text(error ?? "") }
     }
@@ -97,7 +101,8 @@ struct ScopedAssistantChat: View {
     @Environment(\.dismiss) private var dismiss
 
     init(configuration: GatewayConfiguration, selection: ConversationSelection, heading: LocalizedStringKey,
-         automationSetup: Bool = false, onMaterialized: @escaping (ConversationSelection) -> Void = { _ in }) {
+         automationSetup: Bool = false, onMaterialized: @escaping (ConversationSelection) -> Void = { _ in })
+    {
         self.configuration = configuration
         self.heading = heading
         self.automationSetup = automationSetup
@@ -112,7 +117,9 @@ struct ScopedAssistantChat: View {
                       onConversationUpdated: { updated in
                           let wasDraft = selection.isDraft
                           selection = updated
-                          if wasDraft, !updated.isDraft { onMaterialized(updated) }
+                          if wasDraft, !updated.isDraft {
+                              onMaterialized(updated)
+                          }
                       }, onPersonalAgentUpdated: { _ in },
                       onOpenSettings: {}, onInputFocusChanged: { _ in }, showsFloatingHeader: false,
                       automationSetup: automationSetup) { $0 }

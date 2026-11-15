@@ -118,7 +118,8 @@ struct AssistantView<Dock: View>: View {
                     readAloudBar
                 }
                 if isActive, !showingPhone, showsFloatingHeader,
-                   music.track?.conversationID != conversation?.id || !generatedMedia.cards.contains(where: { $0.id == music.track?.id }) {
+                   music.track?.conversationID != conversation?.id || !generatedMedia.cards.contains(where: { $0.id == music.track?.id })
+                {
                     GeneratedMusicDock(playback: music)
                 }
                 if conversation != nil {
@@ -686,9 +687,9 @@ struct AssistantView<Dock: View>: View {
                                           if card.kind == .music {
                                               playingGeneratedVideo = nil
                                               let track = GeneratedMusicTrack(configurationScope: ComposerDraftStore.accountScope(configuration),
-                                                  conversationID: id, id: card.id, title: card.title, source: conversationNavigationTitle,
-                                                  lyrics: card.item.lyrics, duration: card.item.durationMs.map { Double($0) / 1000 },
-                                                  sourceAgentID: conversation?.agentId)
+                                                                              conversationID: id, id: card.id, title: card.title, source: conversationNavigationTitle,
+                                                                              lyrics: card.item.lyrics, duration: card.item.durationMs.map { Double($0) / 1000 },
+                                                                              sourceAgentID: conversation?.agentId)
                                               music.play(track) {
                                                   try await GatewayClient(configuration: configuration).downloadGeneratedMedia(card, conversationID: id)
                                               }
@@ -971,7 +972,9 @@ struct AssistantView<Dock: View>: View {
                 if phone.summary?.available == true, isPersonalConversation {
                     phoneWorkspaceButton
                 }
-                if isPersonalConversation { Spacer(minLength: 0) }
+                if isPersonalConversation {
+                    Spacer(minLength: 0)
+                }
                 if phone.summary?.available == true, !isPersonalConversation {
                     phoneWorkspaceButton
                 }
@@ -985,9 +988,13 @@ struct AssistantView<Dock: View>: View {
                     .accessibilityIdentifier("chat-header-new")
                 } else {
                     headerButton(isPersonalConversation ? "配置助手" : "会话选项",
-                                 symbol: isPersonalConversation ? "slider.horizontal.3" : "ellipsis") {
-                        if isPersonalConversation { showingPersonalProfile = true }
-                        else { showingSessionActions = true }
+                                 symbol: isPersonalConversation ? "slider.horizontal.3" : "ellipsis")
+                    {
+                        if isPersonalConversation {
+                            showingPersonalProfile = true
+                        } else {
+                            showingSessionActions = true
+                        }
                     }
                     .accessibilityIdentifier("assistant-options")
                 }

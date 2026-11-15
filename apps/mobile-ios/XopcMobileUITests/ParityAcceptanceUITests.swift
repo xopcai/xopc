@@ -1891,7 +1891,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         scroll.swipeUp(velocity: .slow)
         XCTAssertLessThan(scroll.frame.minY, initialTop)
         let example = app.buttons.matching(identifier: "schedule-example").firstMatch
-        for _ in 0..<4 where !example.isHittable { scroll.swipeUp() }
+        for _ in 0 ..< 4 where !example.isHittable {
+            scroll.swipeUp()
+        }
         XCTAssertTrue(example.isHittable)
         example.tap()
         let title = app.navigationBars["用对话创建定时任务"]

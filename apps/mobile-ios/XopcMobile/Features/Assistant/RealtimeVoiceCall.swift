@@ -119,7 +119,9 @@ final class RealtimeVoiceCall {
     func setSpeaker(_ value: Bool) {
         guard phase == .connected, speaker != value else { return }
         speaker = value
-        if errorCode == "ROUTE_CHANGE_FAILED" { errorCode = nil }
+        if errorCode == "ROUTE_CHANGE_FAILED" {
+            errorCode = nil
+        }
         guard speakerTask == nil else { return }
         let current = generation
         speakerTask = Task {
@@ -288,11 +290,10 @@ final class RealtimeVoiceCall {
             }
         } catch {
             if generation == self.generation, phase != .idle, phase != .ending {
-                let reason: String
-                switch error as? RealtimeVoiceTransportError {
-                case .inputBackpressure: reason = "INPUT_DROPPED"
-                case .protocolMismatch: reason = "PROTOCOL_ERROR"
-                default: reason = error is RealtimeVoiceProtocolError ? "PROTOCOL_ERROR" : "NETWORK"
+                let reason: String = switch error as? RealtimeVoiceTransportError {
+                case .inputBackpressure: "INPUT_DROPPED"
+                case .protocolMismatch: "PROTOCOL_ERROR"
+                default: error is RealtimeVoiceProtocolError ? "PROTOCOL_ERROR" : "NETWORK"
                 }
                 await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
             }

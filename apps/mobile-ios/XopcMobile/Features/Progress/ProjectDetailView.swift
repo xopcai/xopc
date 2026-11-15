@@ -125,7 +125,9 @@ struct ProjectDetailView: View {
                                 onMaterialized: { _ in removeLocalChat(chat.id) })
         }
         .onChange(of: projectChat) { _, chat in
-            if chat == nil { Task { await load() } }
+            if chat == nil {
+                Task { await load() }
+            }
         }
         .alert("项目内容未完整载入", isPresented: errorBinding) {
             Button("重试") { Task { await load() } }
@@ -175,7 +177,7 @@ struct ProjectDetailView: View {
                         Button("删除", role: .destructive) { removeLocalChat(draft.id) }
                     }
             }
-            if sessions.isEmpty && localChats.isEmpty {
+            if sessions.isEmpty, localChats.isEmpty {
                 Text("暂无项目对话").foregroundStyle(.secondary)
             } else {
                 ForEach(visible(sessions)) { session in
@@ -255,7 +257,8 @@ struct ProjectDetailView: View {
     }
 
     private func sectionHeader(_ title: LocalizedStringKey, count: Int, create: ProjectCreationSheet? = nil,
-                               actionTitle: LocalizedStringKey? = nil, action: (() -> Void)? = nil) -> some View {
+                               actionTitle: LocalizedStringKey? = nil, action: (() -> Void)? = nil) -> some View
+    {
         HStack {
             Text(title)
             Spacer()

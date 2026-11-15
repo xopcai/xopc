@@ -3,19 +3,21 @@ import SwiftUI
 extension AgentSummary {
     private static let builtIns: [String: (names: [String], descriptions: [String], label: String)] = [
         "main": (["Main", "Smart Assistant"], ["General assistant", "General-purpose personal assistant.",
-            "Your personal intelligent assistant for answering questions, handling everyday tasks, and chatting with you anytime."], "assistant"),
+                                               "Your personal intelligent assistant for answering questions, handling everyday tasks, and chatting with you anytime."], "assistant"),
         "conductor": (["Conductor"], ["Talks with the user, delegates complex work to specialist Agents, and delivers verified results.",
-            "User-facing coordination Agent for task planning, delegation, progress, verification, and reporting to the user."], "conductor"),
+                                      "User-facing coordination Agent for task planning, delegation, progress, verification, and reporting to the user."], "conductor"),
         "task-router": (["Task Router"], ["Selects one suitable specialist for a delegated task."], "task_router"),
         "coder": (["Coder", "Coding Expert"], ["Software development, debugging, refactoring, and tests.",
-            "Software engineering agent for repository understanding, implementation, debugging, refactoring, tests, and review."], "coding"),
+                                               "Software engineering agent for repository understanding, implementation, debugging, refactoring, tests, and review."], "coding"),
         "writer": (["Writer", "Writing Assistant"], ["Drafting, editing, rewriting, and audience-aware content."], "writing"),
         "researcher": (["Researcher", "Research Assistant"], ["Deep research, source comparison, and fact synthesis."], "research"),
         "data-analyst": (["Data Analyst"], ["Data cleaning, analysis, visualization, and reproducible reports."], "data"),
         "creative": (["Creative", "Creative Assistant"], ["Visual direction, image prompts, design critique, and creative options."], "creative")
     ]
 
-    var builtInAvatar: String? { Self.builtIns[id] == nil ? nil : "agent-\(id)" }
+    var builtInAvatar: String? {
+        Self.builtIns[id] == nil ? nil : "agent-\(id)"
+    }
 
     func localizedName(_ locale: Locale) -> String {
         let value = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -27,7 +29,8 @@ extension AgentSummary {
     func localizedDescription(_ locale: Locale) -> String {
         let value = description?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if id.range(of: #"^personal-[a-f0-9]{12}$"#, options: .regularExpression) != nil,
-           value.isEmpty || value.caseInsensitiveCompare("A personal AI that adapts its responses to the user and coordinates work.") == .orderedSame {
+           value.isEmpty || value.caseInsensitiveCompare("A personal AI that adapts its responses to the user and coordinates work.") == .orderedSame
+        {
             return AppLocalization.string("agent_personal_description", locale: locale)
         }
         guard let entry = Self.builtIns[id], value.isEmpty || entry.descriptions.contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame })
@@ -74,10 +77,14 @@ struct AgentPicker: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(agent.localizedName(locale)).font(.headline)
                                 let description = agent.localizedDescription(locale)
-                                if !description.isEmpty { Text(description).font(.caption).foregroundStyle(.secondary) }
+                                if !description.isEmpty {
+                                    Text(description).font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
-                            if agent.id == currentID { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                            if agent.id == currentID {
+                                Image(systemName: "checkmark").foregroundStyle(.tint)
+                            }
                         }
                         .frame(minHeight: 52)
                     }

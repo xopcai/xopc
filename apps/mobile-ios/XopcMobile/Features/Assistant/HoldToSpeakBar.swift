@@ -33,26 +33,44 @@ struct HoldToSpeakBar: View {
                     .contentShape(.rect)
                     .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
                         .onChanged { drag in
-                            if !held { begin() }
+                            if !held {
+                                begin()
+                            }
                             destination = VoiceReleaseAction.resolve(drag.translation, current: destination)
                         }
                         .onEnded { drag in finish(VoiceReleaseAction.resolve(drag.translation, current: destination)) })
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityAction { if held { finish(.send) } else { begin() } }
+                    .accessibilityAction {
+                        if held {
+                            finish(.send)
+                        } else {
+                            begin()
+                        }
+                    }
                     .accessibilityIdentifier("chat-hold-to-speak")
             }
         }
-        .onChange(of: scenePhase) { if scenePhase != .active { reset() } }
+        .onChange(of: scenePhase) {
+            if scenePhase != .active {
+                reset()
+            }
+        }
         .onDisappear { reset() }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
             recorder.handleAudioInterruption(notification)
-            if recorder.hasRecoverableInterruption { finish(.cancel) }
+            if recorder.hasRecoverableInterruption {
+                finish(.cancel)
+            }
         }
     }
 
     private var hint: LocalizedStringKey {
-        if converting { return "正在转为文字…" }
-        if !held { return "按住说话" }
+        if converting {
+            return "正在转为文字…"
+        }
+        if !held {
+            return "按住说话"
+        }
         switch destination {
         case .send: return "松开发送"
         case .text: return "松开转文字"
@@ -67,7 +85,9 @@ struct HoldToSpeakBar: View {
         pending?.cancel()
         pending = Task {
             await recorder.start()
-            if held, let error = recorder.errorMessage { onError(error) }
+            if held, let error = recorder.errorMessage {
+                onError(error)
+            }
         }
     }
 
@@ -80,8 +100,9 @@ struct HoldToSpeakBar: View {
         let audio = recorder.finishRecording()
         recorder.cancel()
         guard let audio, audio.duration >= 0.35 else { return }
-        if action == .text { transcribe(audio) }
-        else {
+        if action == .text {
+            transcribe(audio)
+        } else {
             onAttachment(MessageAttachment(type: "audio", name: audio.fileName, mimeType: audio.mimeType,
                                            size: audio.data.count, data: audio.data.base64EncodedString()))
         }
@@ -118,10 +139,18 @@ enum VoiceReleaseAction {
     case send, cancel, text
 
     static func resolve(_ movement: CGSize, current: Self = .send) -> Self {
-        if current == .cancel, movement.height < -52, movement.width < -24 { return .cancel }
-        if current == .text, movement.height < -52, movement.width > 24 { return .text }
-        if movement.height < -72, movement.width < -40 { return .cancel }
-        if movement.height < -72, movement.width > 40 { return .text }
+        if current == .cancel, movement.height < -52, movement.width < -24 {
+            return .cancel
+        }
+        if current == .text, movement.height < -52, movement.width > 24 {
+            return .text
+        }
+        if movement.height < -72, movement.width < -40 {
+            return .cancel
+        }
+        if movement.height < -72, movement.width > 40 {
+            return .text
+        }
         return .send
     }
 }

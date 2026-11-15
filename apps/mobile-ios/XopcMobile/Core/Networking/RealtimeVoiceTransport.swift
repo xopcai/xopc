@@ -95,7 +95,9 @@ actor RealtimeVoiceTransport {
                 }
                 throw error
             }
-            if streamEpoch == epoch, muteRevision == revision, !closed { inputMuted = muted }
+            if streamEpoch == epoch, muteRevision == revision, !closed {
+                inputMuted = muted
+            }
         } else {
             try await socket.send(.string(text))
         }
@@ -104,7 +106,7 @@ actor RealtimeVoiceTransport {
     func sendAudio(_ bytes: Data) throws -> Int {
         guard ready, !closed, let session else { throw RealtimeVoiceTransportError.disconnected }
         guard !inputMuted else { return 0 }
-        guard pendingAudioBytes + remainder.count + bytes.count <= 9_600 else {
+        guard pendingAudioBytes + remainder.count + bytes.count <= 9600 else {
             throw RealtimeVoiceTransportError.inputBackpressure
         }
         let queuedAt = ProcessInfo.processInfo.systemUptime

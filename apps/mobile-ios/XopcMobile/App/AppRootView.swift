@@ -124,11 +124,16 @@ struct AppRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notification in
             if notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ==
-                AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue { music.pause() }
+                AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
+            {
+                music.pause()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
             guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt else { return }
-            if raw == AVAudioSession.InterruptionType.began.rawValue { music.pause() }
+            if raw == AVAudioSession.InterruptionType.began.rawValue {
+                music.pause()
+            }
             if raw == AVAudioSession.InterruptionType.ended.rawValue {
                 Task { await realtimeVoiceCall.resumeAfterInterruption() }
             }
