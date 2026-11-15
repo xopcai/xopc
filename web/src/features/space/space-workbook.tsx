@@ -89,8 +89,9 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
         const { univer, univerAPI } = createUniver({
           locale: zh ? LocaleType.ZH_CN : LocaleType.EN_US,
           locales: { [LocaleType.EN_US]: enUS, [LocaleType.ZH_CN]: zhCN },
+          // Univer's default focus handling starts cell edits when typing on the grid.
           presets: [UniverSheetsCorePreset({
-            container, toolbar: false, disableAutoFocus: true,
+            container, toolbar: false,
             footer: { statisticBar: false, menus: false, zoomSlider: false,
               addSheetButtonConfig: { defaultRowCount: 100, defaultColumnCount: 26 } },
           })],
