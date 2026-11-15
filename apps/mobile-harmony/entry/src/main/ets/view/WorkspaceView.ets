@@ -591,7 +591,7 @@ export struct XopcWorkspaceView {
           }.width('100%')
         }
       }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-    }.width('100%').padding(0).backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(18))
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18))
       .onClick((): void => {
         if (this.section === 'projects') this.onNavigate({ page: 'project-detail', itemId: item.id });
         else { this.model.open(item.id); }
@@ -711,7 +711,7 @@ export struct XopcWorkspaceView {
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
         }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-          .backgroundColor(this.colors.panel).border(this.colors.panelStroke).borderRadius(this.colors.corner(17))
+          .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(17))
       }
       ListItem() {
         Row({ space: 12 }) {
@@ -811,7 +811,7 @@ export struct XopcWorkspaceView {
               Text(attention.summary).fontSize(14).lineHeight(21).fontColor(this.colors.foreground).width('100%')
             }, (attention: XopcMobileTaskAttention, index: number): string => attention.kind + ':' + index.toString())
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-            .backgroundColor(this.colors.attentionFill).border(this.colors.attentionStroke).borderRadius(this.colors.corner(16))
+            .backgroundColor(this.colors.attentionFill).borderRadius(this.colors.corner(16))
         }
       }
       ListItem() {

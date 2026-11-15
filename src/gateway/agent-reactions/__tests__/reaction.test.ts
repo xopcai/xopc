@@ -14,7 +14,7 @@ import { SessionIndex } from '../../../session/manager.js';
 import { type RunGatewayAgentDeps, runGatewayAgent } from '../../service/run-gateway-agent.js';
 import { createHonoApp } from '../../hono/app.js';
 import type { GatewayService } from '../../service.js';
-import { activeReactionEntry, commitAgentReaction, readAgentReactions } from '../../../storage/sqlite/agent-reaction-repository.js';
+import { activeReactionEntry, commitAgentReaction, readAgentReactions, reactionCoolingDown } from '../../../storage/sqlite/agent-reaction-repository.js';
 import { appendTranscriptEntry, closeXopcDatabase, ensureSessionRecord, getCurrentTranscriptId, openXopcDatabase } from '../../../storage/sqlite/index.js';
 import { claimNextSessionInput, finishSessionInputRun, insertSessionInput } from '../../../storage/sqlite/session-input-repository.js';
 import { resetSessionRecord } from '../../../storage/sqlite/session-repository.js';
@@ -64,17 +64,21 @@ describe('Personal Agent message reaction', () => {
     expect(reactionText('Hi\n> quoted text\n```ts\nprivate code\n```\nhttps://example.com @xopc-ref:source `inline`')).toBe('Hi');
   });
 
-  it('only attaches to a started and committed user input, persists once, and honours the conversation cooldown', async () => {
+  it('attaches once to a committed user input and applies the cooldown only to personalized reactions', async () => {
     const first = input('终于上线了！');
     expect(activeReactionEntry(first.target)).toBeUndefined();
     first.start();
     expect(activeReactionEntry(first.target)).toBeUndefined();
-    first.append();
-    const entry = activeReactionEntry(first.target)!;
     const publish = vi.fn();
     const generator = vi.fn().mockResolvedValue('🎉');
-    await new AgentReactionService(generator).consider({ target: first.target, text: '终于上线了！', started: performance.now() - 460,
+    const waiting = new AgentReactionService(generator).consider({ target: first.target, text: '终于上线了！', started: performance.now(),
       signal: new AbortController().signal, eligible: () => true, publish });
+    await vi.waitFor(() => expect(generator).toHaveBeenCalledExactlyOnceWith([{ role: 'user', text: '终于上线了！' }],
+      'Ada', 'warm', expect.any(String), expect.any(AbortSignal)));
+    expect(publish).not.toHaveBeenCalled();
+    first.append();
+    const entry = activeReactionEntry(first.target)!;
+    await waiting;
     expect(publish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ clientMessageId: first.target.clientMessageId, entryId: entry.entryId, emoji: '🎉' }));
     expect(readAgentReactions(conversationId, transcriptId, [entry.entryId], 'Ada')).toEqual([publish.mock.calls[0]![0]]);
     expect(commitAgentReaction(first.target, entry.entryId, '🎈', 'Ada')).toBeNull();
@@ -83,7 +87,14 @@ describe('Personal Agent message reaction', () => {
     finishSessionInputRun(conversationId, first.target.runId, 'completed');
     const second = input('庆祝一下');
     second.start(); second.append();
-    expect(commitAgentReaction(second.target, activeReactionEntry(second.target)!.entryId, '🎉', 'Ada')).toBeNull();
+    const secondEntry = activeReactionEntry(second.target)!;
+    expect(commitAgentReaction(second.target, secondEntry.entryId, '🎉', 'Ada')).toBeNull();
+    const fallback = commitAgentReaction(second.target, secondEntry.entryId, '💬', 'Ada');
+    expect(fallback?.emoji).toBe('💬');
+    expect(commitAgentReaction(second.target, secondEntry.entryId, '💬', 'Ada')).toBeNull();
+    getSqliteDatabase().prepare('UPDATE session_agent_reactions SET created_at_ms = ? WHERE entry_id = ?')
+      .run(fallback!.createdAtMs - 21_000, entry.entryId);
+    expect(reactionCoolingDown(conversationId, fallback!.createdAtMs)).toBe(false);
     resetSessionRecord(conversationId, dir);
     expect(readAgentReactions(conversationId, transcriptId, [entry.entryId], 'Ada')).toEqual([]);
   });
@@ -109,13 +120,31 @@ describe('Personal Agent message reaction', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it.each([true, false])('synchronizes the matching message only when main text is slow (%s)', async slow => {
+  it('skips generation when the last clause would be truncated', async () => {
+    const text = `${'We shipped! '.repeat(100)} But the homepage is broken.`;
+    const turn = input(text);
+    turn.start(); turn.append();
+    const generate = vi.fn();
+    const publish = vi.fn();
+    await new AgentReactionService(generate).consider({ target: turn.target, text, started: performance.now(),
+      signal: new AbortController().signal, eligible: () => true, publish });
+    expect(generate).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it.each(['personalized', 'abstain', 'fast', 'timeout'] as const)('synchronizes a reaction through realtime and history (%s)', async scenario => {
+    const past = input('An older message');
+    past.start(); past.append();
+    finishSessionInputRun(conversationId, past.target.runId, 'completed');
     const turn = input('We shipped!');
     turn.start();
+    const slow = scenario !== 'fast';
+    const expectedEmoji = scenario === 'personalized' ? '🎉' : '💬';
     const auth = { mode: 'token' as const, token: 'reaction-test-token' };
     const config = ConfigSchema.parse({ gateway: { auth }, experimental: { personalAgentMessageReactions: true } });
     const sessions = new SessionIndex({ config });
     const gateway = createHonoApp({ service: { currentConfig: config, getResolvedAuth: () => auth, isGatewayReady: () => true,
+      getActiveWebchatRunId: () => turn.target.runId,
       sessions: { getMessagePage: sessions.getSessionMessagePage.bind(sessions) } } as unknown as GatewayService });
     const server = serve({ fetch: gateway.fetch, hostname: '127.0.0.1', port: 0 });
     try {
@@ -127,7 +156,9 @@ describe('Personal Agent message reaction', () => {
       expect((await fetch(path)).status).toBe(401);
       let release!: () => void;
       const finish = new Promise<void>(done => { release = done; });
-      const generate = vi.fn().mockResolvedValue('🎉');
+      let decide!: (emoji: string | null) => void;
+      const generate = vi.fn(() => new Promise<string | null>(done => { decide = done; }));
+      const publishRealtime = vi.fn();
       const deps = {
         config, reactions: new AgentReactionService(generate), canReact: () => true,
         agentService: { resolveUserTimezoneForSession: () => 'UTC', beginInboundTurn: () => {}, endInboundTurn: () => {},
@@ -138,7 +169,7 @@ describe('Personal Agent message reaction', () => {
           } }, getLastAssistantPlainText: () => '', takeTaskReviewStreamHint: () => undefined,
           outboundCoordinator: { emitSessionTurnComplete: async () => {} } },
         runAbortControllers: new Map(), activeWebchatRunBySession: new Map(), activeExecutionBySession: new Map(),
-        sessionIndex: sessions, emit: () => {}, publishRealtime: vi.fn(), completeRealtimeTopic: () => {},
+        sessionIndex: sessions, emit: () => {}, publishRealtime, completeRealtimeTopic: () => {},
       } as unknown as RunGatewayAgentDeps;
       const run = (async () => {
         const events = [];
@@ -148,26 +179,35 @@ describe('Personal Agent message reaction', () => {
         return events;
       })();
       try {
-        if (!slow) {
+        let beforeEtag: string | null = null;
+        if (slow) {
+          await vi.waitFor(() => expect(activeReactionEntry(turn.target)).toBeDefined());
+          const before = await fetch(path, { headers });
+          beforeEtag = before.headers.get('etag');
+          const messages = (await before.json()).session.messages;
+          expect(messages.find((row: { turnId: string }) => row.turnId === past.target.runId)?.agentReaction?.emoji).toBe('💬');
+          expect(messages.find((row: { turnId: string }) => row.turnId === turn.target.runId)).not.toHaveProperty('agentReaction');
+          await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+          if (scenario !== 'timeout') decide(scenario === 'abstain' ? null : '🎉');
+        } else {
           expect(await run).toContain('assistant_delta');
           expect(generate).not.toHaveBeenCalled();
-          const reply = await fetch(path, { headers });
-          expect((await reply.json()).session.messages[0]).not.toHaveProperty('agentReaction');
-          return;
+          const events = publishRealtime.mock.calls.map(([, event]) => event);
+          expect(events).toContain('session.agent-reaction');
+          expect(events.indexOf('session.agent-reaction')).toBeGreaterThan(events.indexOf('assistant_delta'));
         }
-        await vi.waitFor(() => expect(activeReactionEntry(turn.target)).toBeDefined());
-        const before = await fetch(path, { headers });
-        expect((await before.json()).session.messages[0]).not.toHaveProperty('agentReaction');
-        await vi.waitFor(() => expect(deps.publishRealtime).toHaveBeenCalledWith('sessions', 'session.agent-reaction',
-          expect.objectContaining({ conversationId, transcriptId, clientMessageId: turn.target.clientMessageId, emoji: '🎉' })), { timeout: 1500 });
-        const full = await fetch(path, { headers: { ...headers, 'If-None-Match': before.headers.get('etag')! } });
+        await vi.waitFor(() => expect(publishRealtime).toHaveBeenCalledWith('sessions', 'session.agent-reaction',
+          expect.objectContaining({ conversationId, transcriptId, clientMessageId: turn.target.clientMessageId, emoji: expectedEmoji })),
+        { timeout: AGENT_REACTION_DEADLINE_MS + 800 });
+        const full = await fetch(path, { headers: { ...headers, ...(beforeEtag ? { 'If-None-Match': beforeEtag } : {}) } });
         const compact = await fetch(path + '?view=compact', { headers });
         expect(full.status).toBe(200);
-        const fullMessage = (await full.json()).session.messages[0];
-        const compactMessage = (await compact.json()).session.messages[0];
-        expect(fullMessage.agentReaction).toMatchObject({ emoji: '🎉', entryId: fullMessage.transcriptEntryId });
+        const isCurrentUser = (row: { role: string; turnId: string }) => row.role === 'user' && row.turnId === turn.target.runId;
+        const fullMessage = (await full.json()).session.messages.find(isCurrentUser);
+        const compactMessage = (await compact.json()).session.messages.find(isCurrentUser);
+        expect(fullMessage.agentReaction).toMatchObject({ emoji: expectedEmoji, entryId: fullMessage.transcriptEntryId });
         expect(compactMessage.agentReaction).toEqual(fullMessage.agentReaction);
-      } finally { release(); await run; }
+      } finally { decide?.(null); release(); await run; }
     } finally {
       server.closeAllConnections();
       await new Promise<void>(done => server.close(() => done()));

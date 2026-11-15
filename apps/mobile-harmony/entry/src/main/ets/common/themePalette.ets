@@ -63,14 +63,12 @@ export class XopcThemeColors {
   @Trace active: Resource;
   @Trace chat: XopcChatThemeColors;
 
-  get panelStroke(): BorderOptions {
-    return { width: this.light ? 1 : 0, color: this.border };
+  get assistantBubble(): Resource {
+    return this.light ? this.panel : this.input;
   }
 
-  get controlStroke(): BorderOptions {
-    return { width: 1, color: this.light
-      ? this.scheme === 'default' ? $r('app.color.theme_control_light') : this.tertiary
-      : this.border };
+  get reactionFill(): Resource {
+    return this.light ? this.panel : this.active;
   }
 
   // Follow the WebUI's tighter Emerald and softer Clay and Dawn shapes.
@@ -84,23 +82,17 @@ export class XopcThemeColors {
   }
 
   get onAccent(): Resource {
-    if (this.scheme === 'emerald' || (!this.light && this.scheme === 'default')) {
-      return $r('app.color.theme_on_accent_ink');
-    }
-    if (!this.light && this.scheme !== 'default') return this.surface;
-    return $r('app.color.theme_default_panel_light');
+    if (this.light) return $r('app.color.theme_default_panel_light');
+    if (this.scheme === 'default' || this.scheme === 'emerald') return $r('app.color.theme_on_accent_ink');
+    return this.surface;
   }
 
   get attentionFill(): Resource {
-    return this.light ? $r('app.color.theme_attention_fill_light') : this.panel;
+    return this.light ? $r('app.color.theme_attention_fill_light') : $r('app.color.theme_attention_fill_dark');
   }
 
   get attentionForeground(): Resource {
     return this.light ? $r('app.color.theme_attention_foreground_light') : $r('app.color.theme_attention_foreground_dark');
-  }
-
-  get attentionStroke(): BorderOptions {
-    return { width: this.light ? 1 : 0, color: $r('app.color.theme_attention_border_light') };
   }
 
   get success(): Resource {

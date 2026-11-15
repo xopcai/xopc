@@ -46,7 +46,7 @@ export struct XopcClarificationCard {
       Column({ space: 8 }) {
         Text(this.prompt.kind === 'approval' ? $r('app.string.clarify_approval_title') : $r('app.string.clarify_title'))
           .fontSize(15).fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.light && !this.expired() ? this.colors.attentionForeground : this.colors.foreground).width('100%')
+          .fontColor(this.expired() ? this.colors.foreground : this.colors.attentionForeground).width('100%')
         Text(this.prompt.question).fontSize(14).fontColor(this.colors.foreground).width('100%')
         if (this.prompt.expiresAt !== undefined) {
           Text(this.prompt.expiresAt <= this.now ? $r('app.string.clarify_expired') : $r('app.string.clarify_remaining', Math.max(0, Math.ceil((this.prompt.expiresAt - this.now) / 1000))))
@@ -104,8 +104,7 @@ export struct XopcClarificationCard {
         if (this.errorMessage) { Text(this.errorMessage).fontSize(12).fontColor(this.colors.danger).width('100%') }
       }.padding(12).width('100%')
     }.constraintSize({ maxHeight: 400 }).width('100%')
-      .backgroundColor(this.colors.light && !this.expired() ? this.colors.attentionFill : this.colors.grouped)
-      .border(this.colors.light && !this.expired() ? this.colors.attentionStroke : this.colors.panelStroke)
+      .backgroundColor(this.expired() ? this.colors.grouped : this.colors.attentionFill)
       .borderRadius(this.colors.corner(16))
   }
 }

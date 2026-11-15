@@ -31,7 +31,7 @@ export struct XopcChatResultCapsule {
         }
       }.width('100%').constraintSize({ minHeight: 44 }).padding({ left: 12, right: 12, top: 8, bottom: 8 })
     }.id(this.entryId).width('100%').constraintSize({ maxWidth: 320, minHeight: 44 }).padding(0)
-      .backgroundColor(this.colors.chat.card).border(this.colors.panelStroke).borderRadius(this.colors.corner(18)).enabled(this.canOpen)
+      .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(18)).enabled(this.canOpen)
       .accessibilityText(this.title).onClick((): void => { this.onOpen(); })
   }
 }

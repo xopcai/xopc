@@ -481,9 +481,8 @@ private struct GeneratedMusicCover: View {
             ZStack {
                 shape.fill(LinearGradient(colors: [mobileTheme.action.opacity(0.13), mobileTheme.card],
                                           startPoint: .topLeading, endPoint: .bottomTrailing))
-                shape.strokeBorder(mobileTheme.edge)
-                Circle().strokeBorder(mobileTheme.edge).frame(width: width * 0.74)
-                Circle().strokeBorder(mobileTheme.edge).frame(width: width * 0.56)
+                Circle().fill(mobileTheme.input.opacity(0.5)).frame(width: width * 0.74)
+                Circle().fill(mobileTheme.bubble).frame(width: width * 0.56)
                 Circle().fill(mobileTheme.canvas).frame(width: width * 0.39)
                 Image(systemName: "music.note").font(.system(size: width * 0.2, weight: .semibold))
                     .foregroundStyle(mobileTheme.action)

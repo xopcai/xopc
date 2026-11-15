@@ -13,7 +13,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -158,10 +157,10 @@ private fun MusicCover(modifier: Modifier) {
   val colors = MaterialTheme.colorScheme
   val shape = themedCorners(24)
   Box(modifier.aspectRatio(1f).clip(shape)
-    .background(Brush.linearGradient(listOf(colors.secondaryContainer, LocalChatColors.current.card)))
-    .border(1.dp, colors.outlineVariant, shape), contentAlignment = Alignment.Center) {
-    Box(Modifier.fillMaxWidth(0.74f).aspectRatio(1f).border(1.dp, colors.outlineVariant, CircleShape))
-    Box(Modifier.fillMaxWidth(0.56f).aspectRatio(1f).border(1.dp, colors.outlineVariant, CircleShape))
+    .background(Brush.linearGradient(listOf(colors.secondaryContainer, LocalChatColors.current.card))),
+    contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxWidth(0.74f).aspectRatio(1f).background(colors.surfaceContainer.copy(alpha = 0.5f), CircleShape))
+    Box(Modifier.fillMaxWidth(0.56f).aspectRatio(1f).background(LocalChatColors.current.user, CircleShape))
     Box(Modifier.fillMaxWidth(0.39f).aspectRatio(1f).background(colors.background, CircleShape))
     Text("♫", style = MaterialTheme.typography.displayMedium, color = LocalChatColors.current.action,
       modifier = Modifier.clearAndSetSemantics { })

@@ -3,17 +3,21 @@ package ai.xopc.mobile.ui.main
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ProgressTask
 import ai.xopc.mobile.gateway.ProgressTaskEdit
+import ai.xopc.mobile.theme.LocalChatColors
+import ai.xopc.mobile.theme.themedCorners
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -130,6 +134,7 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
   LaunchedEffect(imeVisible) { if (imeVisible) expanded = false }
   BackHandler(expanded) { expanded = false }
   val focus = LocalFocusManager.current
+  val headerFill = LocalChatColors.current.card
   BoxWithConstraints(modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))) {
     val panelHeight = (maxHeight * 0.5f).coerceAtMost((maxHeight - bottomClearance - 64.dp).coerceAtLeast(0.dp))
     if (expanded) Box(Modifier.fillMaxSize().padding(top = 64.dp, bottom = bottomClearance)
@@ -138,7 +143,7 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
     Column(Modifier.fillMaxWidth()) {
       Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp).testTag("task-chat-header"),
         verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onClose, modifier = Modifier.testTag("task-chat-close")) {
+        IconButton(onClick = onClose, modifier = Modifier.background(headerFill, CircleShape).testTag("task-chat-close")) {
           Icon(painterResource(R.drawable.action_close), stringResource(when (returnTab) {
             HomeTab.Assistant -> R.string.task_chat_return_conversation
             HomeTab.Progress, HomeTab.Projects, HomeTab.Automations, HomeTab.Notes -> R.string.task_chat_return_task
@@ -146,8 +151,9 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
           }))
         }
         Box(Modifier.weight(1f)) {
-          Row(Modifier.fillMaxWidth(0.85f).clickable { focus.clearFocus(); expanded = !expanded }
-            .padding(horizontal = 8.dp).testTag("task-chat-summary-toggle"), verticalAlignment = Alignment.CenterVertically) {
+          Row(Modifier.fillMaxWidth(0.85f).heightIn(min = 48.dp).clip(themedCorners(16)).background(headerFill)
+            .clickable { focus.clearFocus(); expanded = !expanded }
+            .padding(horizontal = 12.dp).testTag("task-chat-summary-toggle"), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
               Text(task?.title ?: title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
               Text(task?.let { current ->
@@ -164,7 +170,8 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
           }
         }
         Box {
-          IconButton(onClick = { menuOpen = true }, modifier = Modifier.semantics { contentDescription = moreLabel }.testTag("task-chat-menu")) {
+          IconButton(onClick = { menuOpen = true }, modifier = Modifier.background(headerFill, CircleShape)
+            .semantics { contentDescription = moreLabel }.testTag("task-chat-menu")) {
             Text("⋯", style = MaterialTheme.typography.titleLarge)
           }
           DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {

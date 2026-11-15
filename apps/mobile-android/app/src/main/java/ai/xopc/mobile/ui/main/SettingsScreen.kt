@@ -168,16 +168,18 @@ private fun schemeLabel(scheme: String): Int = when (scheme) {
 @Composable
 private fun SchemePreview(scheme: String, dark: Boolean, modifier: Modifier = Modifier) {
   val palette = xopcPalette(scheme, dark)
-  Column(modifier.background(palette.panel).padding(8.dp),
-    verticalArrangement = Arrangement.spacedBy(5.dp)) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-      Box(Modifier.height(7.dp).weight(0.15f)
-        .background(palette.accent, RoundedCornerShape(4.dp)))
-      Box(Modifier.height(7.dp).weight(0.85f)
-        .background(palette.foreground, RoundedCornerShape(4.dp)))
+  Box(modifier.background(palette.surface).padding(4.dp)) {
+    Column(Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(5.dp)).padding(4.dp),
+      verticalArrangement = Arrangement.spacedBy(5.dp)) {
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.height(7.dp).weight(0.15f)
+          .background(palette.accent, RoundedCornerShape(4.dp)))
+        Box(Modifier.height(7.dp).weight(0.85f)
+          .background(palette.foreground, RoundedCornerShape(4.dp)))
+      }
+      Box(Modifier.fillMaxWidth(0.72f).height(5.dp)
+        .background(palette.input, RoundedCornerShape(3.dp)))
     }
-    Box(Modifier.fillMaxWidth(0.72f).height(5.dp)
-      .background(palette.secondary, RoundedCornerShape(3.dp)))
   }
 }
 

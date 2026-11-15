@@ -58,7 +58,7 @@ describe('Harmony color schemes', () => {
       surface: '#E9EDF3', panel: '#FFFFFF', input: '#D8E0EB', foreground: '#142033',
       secondary: '#46566C', tertiary: '#52627A', accent: '#0054C6', active: '#E5F0FF', border: '#CBD4E1',
     })) expect(palette.get(`theme_default_${token}_light`)).toBe(value);
-    expect(palette.get('chat_default_bubble_light')).toBe('#D5E6FF');
+    expect(palette.get('chat_default_bubble_light')).toBe('#C7D5E7');
     expect(palette.get('theme_attention_fill_light')).toBe('#FFF2D2');
   });
 
@@ -83,22 +83,35 @@ describe('Harmony color schemes', () => {
             expect(action).toBe(appThemeColors.accent);
           }
           expect(new Set([canvas, card, bubble].map(color)).size).toBe(3);
-          for (const surface of [canvas, card, bubble]) {
+          for (const surface of [canvas, card, bubble, appThemeColors.assistantBubble]) {
             for (const foreground of [appThemeColors.foreground, secondary, action]) {
               expect(contrast(color(surface), color(foreground)), `${scheme} ${mode} ${surface} ${foreground}`)
                 .toBeGreaterThanOrEqual(4.5);
             }
           }
           expect(contrast(color(action), color(onAction))).toBeGreaterThanOrEqual(4.5);
-          expect(contrast(color(appThemeColors.accent), color(appThemeColors.onAccent))).toBeGreaterThanOrEqual(4.5);
-          if (!dark) {
-            const control = color(appThemeColors.controlStroke.color);
-            expect(contrast(control, color(canvas))).toBeGreaterThanOrEqual(3);
-            expect(contrast(control, color(appThemeColors.panel))).toBeGreaterThanOrEqual(3);
-            expect(contrast(control, color(appThemeColors.input))).toBeGreaterThanOrEqual(3);
-            expect(contrast(color(appThemeColors.tertiary), color(appThemeColors.input))).toBeGreaterThanOrEqual(4.5);
-            expect(contrast(color(appThemeColors.attentionForeground), color(appThemeColors.attentionFill)))
+          expect(contrast(color(appThemeColors.accent), color(appThemeColors.onAccent)), `${scheme} ${mode} primary action`)
+            .toBeGreaterThanOrEqual(4.5);
+          expect(contrast(color(appThemeColors.accent), color(appThemeColors.accentSoft)), `${scheme} ${mode} secondary action`)
+            .toBeGreaterThanOrEqual(4.5);
+          // These surfaces signal conversational roles and reactions without a stroke.
+          expect(contrast(color(appThemeColors.assistantBubble), color(bubble)), `${scheme} ${mode} message roles`)
+            .toBeGreaterThanOrEqual(1.15);
+          expect(contrast(color(appThemeColors.reactionFill), color(bubble)), `${scheme} ${mode} reaction on user bubble`)
+            .toBeGreaterThanOrEqual(1.15);
+          expect(contrast(color(appThemeColors.attentionForeground), color(appThemeColors.attentionFill)))
+            .toBeGreaterThanOrEqual(4.5);
+          for (const surface of [canvas, card, bubble, appThemeColors.panel, appThemeColors.input, appThemeColors.accentSoft, appThemeColors.attentionFill]) {
+            expect(contrast(color(appThemeColors.danger), color(surface)), `${scheme} ${mode} error on ${surface}`)
               .toBeGreaterThanOrEqual(4.5);
+          }
+          const input = color(appThemeColors.input);
+          const panel = color(appThemeColors.panel);
+          expect(contrast(input, color(canvas)), `${scheme} ${mode} input/canvas`).toBeGreaterThanOrEqual(1.12);
+          expect(contrast(input, panel), `${scheme} ${mode} input/panel`).toBeGreaterThanOrEqual(1.12);
+          expect(contrast(panel, color(canvas)), `${scheme} ${mode} panel/canvas`).toBeGreaterThanOrEqual(1.08);
+          expect(contrast(color(appThemeColors.tertiary), input), `${scheme} ${mode} placeholder`).toBeGreaterThanOrEqual(4.5);
+          if (!dark) {
             expect(contrast(color(appThemeColors.success), color(card))).toBeGreaterThanOrEqual(4.5);
           }
         }

@@ -31,7 +31,6 @@ struct ChatSidebarView: View {
             .padding(.leading, 10)
             row("搜索对话", symbol: "magnifyingglass") { onNavigate(.conversationSearch) }
                 .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(20)))
-                .overlay(RoundedRectangle(cornerRadius: mobileTheme.corner(20)).strokeBorder(mobileTheme.edge))
                 .accessibilityIdentifier("chat-sidebar-search")
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
@@ -151,8 +150,8 @@ struct ChatSidebarView: View {
                     Text(badge > 99 ? "99+" : String(badge))
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .foregroundStyle(mobileTheme.action)
-                        .background(mobileTheme.action.opacity(0.15), in: Capsule())
+                        .foregroundStyle(mobileTheme.onAttention)
+                        .background(mobileTheme.attention, in: Capsule())
                 }
             }
             .frame(minHeight: 46)

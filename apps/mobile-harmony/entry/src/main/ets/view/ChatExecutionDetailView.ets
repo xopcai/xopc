@@ -151,12 +151,13 @@ export struct XopcChatExecutionDetailView {
           }, (step: XopcExecutionStep): string => step.id)
         }.width('100%').padding({ left: 46, top: 4, bottom: 4 })
       }
-    }.width('100%').padding({ top: 12, bottom: 12 })
+    }.width('100%').padding({ left: 12, right: 12, top: 12, bottom: 12 })
+      .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.grouped)
   }
 
   build() {
     Scroll() {
-      Column({ space: 0 }) {
+      Column({ space: 8 }) {
         if (this.groups.length) {
           Row({ space: 8 }) {
             if (this.row.live) {
@@ -189,9 +190,9 @@ export struct XopcChatExecutionDetailView {
             this.toolGroup(group)
           } else if (group.kind === 'progress' && group.steps[0].text) {
             Text(group.steps[0].text || '').fontSize(14).lineHeight(22).fontColor(this.colors.secondary)
-              .width('100%').padding({ top: 10, bottom: 14 }).copyOption(CopyOptions.InApp)
+              .width('100%').padding({ left: 12, right: 12, top: 10, bottom: 14 }).copyOption(CopyOptions.InApp)
+              .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.grouped)
           }
-          Column().width('100%').height(1).backgroundColor(this.colors.border)
         }, (group: XopcExecutionGroup): string => group.id)
         if (this.row.live && !this.groups.some((group: XopcExecutionGroup): boolean =>
           group.kind === 'tool' && group.status === 'running')) {

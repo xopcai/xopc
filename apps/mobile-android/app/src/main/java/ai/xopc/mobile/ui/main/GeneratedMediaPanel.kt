@@ -14,6 +14,7 @@ import ai.xopc.mobile.playback.MusicPlayback
 import ai.xopc.mobile.playback.MusicTrack
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ai.xopc.mobile.theme.CHAT_MESSAGE_WIDTH
+import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
 
 import androidx.compose.foundation.clickable
@@ -94,7 +95,9 @@ internal fun GeneratedMediaCard(
       item.duration?.let(::mediaTime)).joinToString(" · ")
   }
   Surface(modifier = modifier.widthIn(max = 440.dp).fillMaxWidth().testTag("generated-media-card-${item.id}"),
-    shape = MaterialTheme.shapes.large, color = LocalChatColors.current.card) {
+    shape = MaterialTheme.shapes.large,
+    color = if (item.isDraft && item.canConfirm) LocalAttentionColors.current.fill else LocalChatColors.current.card,
+    contentColor = MaterialTheme.colorScheme.onSurface) {
     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).then(if (onOpen == null) Modifier else Modifier

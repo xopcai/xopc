@@ -182,8 +182,8 @@ export struct XopcPersonalAgentOverview {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
     }.width('100%').constraintSize({ minHeight: 58 }).padding(0)
-      .backgroundColor(this.colors.light ? ($$.attention ? this.colors.attentionFill : this.colors.panel) : Color.Transparent)
-      .border($$.attention ? this.colors.attentionStroke : this.colors.panelStroke).borderRadius(this.colors.corner(14))
+      .backgroundColor($$.attention ? this.colors.attentionFill : this.colors.light ? this.colors.panel : Color.Transparent)
+      .borderRadius(this.colors.corner(14))
       .onClick((): void => { $$.onOpen(); })
   }
 

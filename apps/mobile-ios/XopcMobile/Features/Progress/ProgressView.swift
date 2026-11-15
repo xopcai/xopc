@@ -187,11 +187,9 @@ struct ProgressHubView: View {
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
-                    Circle().fill(.orange).frame(width: 6, height: 6).accessibilityHidden(true)
-                    Text("待处理").mobileTextStyle(.caption).foregroundStyle(.secondary)
+                    Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6).accessibilityHidden(true)
+                    Text("待处理").mobileTextStyle(.caption).foregroundStyle(mobileTheme.onAttention)
                 }
-                .padding(.horizontal, 8).padding(.vertical, 4)
-                .background(.primary.opacity(0.06), in: .capsule)
                 Text(item.title).mobileTextStyle(.rowTitle).fontWeight(.semibold).lineLimit(3)
                 Text(item.summary).mobileTextStyle(.footnote).foregroundStyle(.secondary).lineLimit(2)
                 if let recommendation = item.recommendation, !recommendation.isEmpty {
@@ -205,7 +203,7 @@ struct ProgressHubView: View {
                 }
                 ForEach(item.secondaryActions ?? []) { action in actionControl(action) }
             }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(16)))
+                .background(mobileTheme.attention, in: .rect(cornerRadius: mobileTheme.corner(16)))
                 .accessibilityIdentifier("progress-item-\(item.id)")
         }
     }

@@ -26,7 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -111,7 +111,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   previewEligible: Boolean = false, onViewMore: () -> Unit = onMore,
   revealAnswer: Boolean = false,
   loadMedia: (suspend (ConversationMedia) -> ByteArray)? = null, streaming: Boolean = false,
-  onReading: () -> Unit = {}, reservesReactionSpace: Boolean = false) {
+  onReading: () -> Unit = {}) {
   val pauseFollowing by rememberUpdatedState(onReading)
   val isUser = message.role == "user"
   val chat = LocalChatColors.current
@@ -154,9 +154,9 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment =
       if (isUser) Alignment.End else Alignment.Start,
       verticalArrangement = Arrangement.spacedBy(2.dp)) {
-    Box(Modifier.width(bubbleWidth).padding(top = if (isUser && reservesReactionSpace) 8.dp else 0.dp)) {
+    Box(Modifier.width(bubbleWidth)) {
     Column(modifier = Modifier.width(bubbleWidth)
-      .clip(themedCorners(18))
+      .clip(themedCorners(if (isUser) 18 else 20))
       .background(bubbleColor)
       .then(if (actionsEnabled) Modifier.combinedClickable(
         onClick = { if (showPreview) onViewMore() }, onLongClick = onMore,
@@ -164,8 +164,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
         .then(if (isUser) Modifier.testTag("message-more-${message.id}") else Modifier)
         else Modifier)
       .padding(start = if (voiceOnly) 4.dp else 14.dp, end = if (voiceOnly) 4.dp else 14.dp,
-        top = if (voiceOnly) 0.dp else if (isUser && reservesReactionSpace) 18.dp else 10.dp,
-        bottom = if (voiceOnly) 0.dp else 10.dp)
+        top = if (voiceOnly) 0.dp else if (isUser) 10.dp else 12.dp,
+        bottom = if (voiceOnly) 0.dp else if (isUser) 10.dp else 12.dp)
       .then(if (isUser) Modifier else Modifier.testTag("message-assistant-card-${message.id}")),
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (!isUser) MessageReferences(message.references, onOpenTarget)
@@ -213,13 +213,15 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
     }
 
     message.agentReaction?.takeIf { isUser }?.let { reaction ->
-      val shape = themedCorners(14)
-      Box(Modifier.align(Alignment.TopStart).offset(x = (-4).dp, y = (-7).dp).size(33.dp, 25.dp)
-        .background(chat.card, shape).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
-        contentAlignment = Alignment.Center) {
-        Text(reaction.emoji, fontSize = 15.sp, modifier = Modifier.clearAndSetSemantics {
-          contentDescription = "${reaction.actorName} ${reaction.emoji}"
-        })
+      Box(Modifier.align(Alignment.TopStart).offset(x = (-16).dp, y = (-16).dp).size(30.dp, 31.dp)) {
+        Box(Modifier.offset(x = 4.dp).size(26.dp).background(chat.reaction, CircleShape),
+          contentAlignment = Alignment.Center) {
+          Text(reaction.emoji, fontSize = 15.sp, modifier = Modifier.clearAndSetSemantics {
+            contentDescription = "${reaction.actorName} ${reaction.emoji}"
+          })
+        }
+        Box(Modifier.offset(x = 3.dp, y = 23.dp).size(5.dp).background(chat.reaction, CircleShape))
+        Box(Modifier.offset(y = 28.dp).size(3.dp).background(chat.reaction, CircleShape))
       }
     }
     }

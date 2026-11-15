@@ -19,6 +19,10 @@ describe('chat message layout parity', () => {
     expect(userLayout).toContain(".alignItems(HorizontalAlign.End)");
     expect(userLayout).toContain('.backgroundColor(this.colors.chat.bubble)');
     expect(userLayout).toContain('.borderRadius(this.colors.corner(18))');
+    expect(userLayout).toContain('top: 10, bottom: 10');
+    expect(userLayout).toContain(".id('chat-agent-reaction-' + item.item.id)");
+    expect(userLayout).toContain('.width(26).height(26)');
+    expect(userLayout).toContain('.position({ x: -16, y: -16 }).hitTestBehavior(HitTestMode.None)');
     expect(chat).toContain("if (this.userVoiceOnly(row)) return '132vp'");
     expect(chat).toContain('if (this.userVoiceMessage(row)) return chatTextBubbleWidth(row.text, 180)');
     expect(chat).toContain('if (payloadCount > 1) return chatTextBubbleWidth(row.text, 264)');
@@ -28,17 +32,22 @@ describe('chat message layout parity', () => {
     expect(chat).toContain("this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }");
   });
 
-  it('uses the conversation canvas for full-width assistant replies', () => {
+  it('uses leading-edge assistant bubbles over the conversation backdrop', () => {
     const start = chat.indexOf("} else if (item.item.role === 'assistant') {");
     const end = chat.indexOf("} else {", start);
     const assistantLayout = chat.slice(start, end);
 
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id)");
-    expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width('100%')");
+    expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width('92%')");
     expect(assistantLayout).toContain('.constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)');
     expect(chat).toContain(".width(CHAT_MESSAGE_MAX_WIDTH).alignItems(HorizontalAlign.End).padding({ top: 6 })");
-    expect(assistantLayout).not.toContain('.backgroundColor(this.colors.chat.assistant)');
-    expect(content).toContain(": this.colors.chat.canvas;");
+    expect(assistantLayout).toContain('.backgroundColor(this.colors.assistantBubble).borderRadius(this.colors.corner(20))');
+    expect(content).toContain(": this.colors.assistantBubble;");
+    const workspace = chat.slice(chat.indexOf('  chatWorkspace()'), chat.indexOf('  executionDetailSheet()'));
+    expect(workspace).toContain(".width('100%').height('100%').backgroundColor(this.colors.chat.canvas)");
+    expect(workspace).not.toContain('.linearGradient(');
+    expect(workspace).toContain(".id('chat-status-bar-background').width('100%').height(this.chatTopInset)");
+    expect(workspace).not.toContain('.height(this.floatingHeaderHeight).backgroundColor');
     expect(chat).toContain('Repeat<XopcChatRow>(this.presentationRows)');
     expect(chat).not.toContain(".id('chat-assistant-live-card')");
     expect(chat).not.toContain(".id('chat-assistant-running-card')");

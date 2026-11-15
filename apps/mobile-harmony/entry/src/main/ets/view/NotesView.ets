@@ -203,8 +203,8 @@ export struct XopcNotesView {
     Column({ space: 12 }) {
       Row({ space: 8 }) {
         TextInput({ text: this.model.search, placeholder: $r('app.string.search_notes') })
-          .layoutWeight(1).height(44).backgroundColor(this.colors.light ? this.colors.panel : this.colors.input)
-          .border(this.colors.controlStroke).borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
+          .layoutWeight(1).height(44).backgroundColor(this.colors.input)
+          .borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .onChange((value: string): void => { this.model.search = value; })
           .onSubmit((): void => { void this.model.list(); })
         Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary]) }
@@ -256,7 +256,7 @@ export struct XopcNotesView {
                   }
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
               }.width('100%').constraintSize({ minHeight: 96 }).padding(0).backgroundColor(this.colors.panel)
-                .border(this.colors.panelStroke).borderRadius(this.colors.corner(16))
+                .borderRadius(this.colors.corner(16))
                 .onClick((): void => { if (this.model.selecting) this.model.toggleSelection(item.id); else void this.model.open(item.id); })
                 .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => { this.model.toggleSelection(item.id); }))
             }

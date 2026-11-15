@@ -123,8 +123,8 @@ export struct XopcFilesView {
     Column({ space: 0 }) {
       Row({ space: 8 }) {
         TextInput({ text: this.search, placeholder: $r('app.string.search') }).layoutWeight(1).height(44)
-          .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input)
-          .border(this.colors.controlStroke).borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
+          .backgroundColor(this.colors.input)
+          .borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .onChange((query: string): void => { this.search = query; }).onSubmit((): void => { this.model.load(this.search); })
         Button() {
           if (this.model.busy) { XopcBrandLoading({ compact: true }) }

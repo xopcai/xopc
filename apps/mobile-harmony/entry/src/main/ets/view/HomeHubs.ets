@@ -100,7 +100,7 @@ export struct XopcProgressView {
         }.width('100%')
       }
     }.width('100%').padding(16).backgroundColor(this.colors.panel)
-      .border(this.colors.panelStroke).borderRadius(this.colors.corner(16))
+      .borderRadius(this.colors.corner(16))
       .margin({ bottom: 8 }).alignItems(HorizontalAlign.Start)
   }
   @Builder

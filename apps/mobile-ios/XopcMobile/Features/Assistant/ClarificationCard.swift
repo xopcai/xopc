@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ClarificationCard: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let clarification: ClarificationRequest
     let isSubmitting: Bool
     let errorMessage: String?
@@ -109,7 +110,7 @@ struct ClarificationCard: View {
                             }
                         }
                     Text("\(trimmed.utf16.count)/8000").font(.caption)
-                        .foregroundStyle(trimmed.utf16.count > 8000 ? Color.red : Color.secondary)
+                        .foregroundStyle(trimmed.utf16.count > 8000 ? mobileTheme.danger : mobileTheme.secondary)
                     HStack {
                         Button("由助手决定") { onRespond("agent_decide", nil) }
                         Button("取消任务", role: .destructive) { onRespond("cancel", nil) }
@@ -123,11 +124,12 @@ struct ClarificationCard: View {
                     ProgressView().accessibilityLabel("正在提交")
                 }
                 if let errorMessage, !errorMessage.isEmpty {
-                    Text(errorMessage).font(.caption).foregroundStyle(.red)
+                    Text(errorMessage).font(.caption).foregroundStyle(mobileTheme.danger)
                 }
             }
             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.background, in: .rect(cornerRadius: 16))
+            .background(remaining == 0 ? mobileTheme.grouped : mobileTheme.attention,
+                        in: .rect(cornerRadius: mobileTheme.corner(16)))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(.secondary.opacity(0.2)))
             .accessibilityElement(children: .contain)
         }
@@ -141,6 +143,7 @@ private struct ClarificationWizardDraft: Codable, Equatable {
 }
 
 private struct ClarificationWizard: View {
+    @Environment(\.mobileTheme) private var mobileTheme
     let clarification: ClarificationRequest
     let isSubmitting: Bool
     let errorMessage: String?
@@ -229,7 +232,7 @@ private struct ClarificationWizard: View {
                             .lineLimit(2 ... 5).textFieldStyle(.roundedBorder).disabled(locked)
                         Text("\((answer?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).utf16.count)/2000").font(.caption).foregroundStyle(.secondary)
                         if !complete, draft.answers.count == questions.count, draft.answers.allSatisfy(\.valid) {
-                            Text("回答内容过长，请精简后再提交").font(.caption).foregroundStyle(.red)
+                            Text("回答内容过长，请精简后再提交").font(.caption).foregroundStyle(mobileTheme.danger)
                         }
                         HStack {
                             Button("上一题") { draft.index -= 1 }.disabled(draft.index == 0 || isSubmitting)
@@ -254,11 +257,12 @@ private struct ClarificationWizard: View {
                         ProgressView().accessibilityLabel("正在提交")
                     }
                     if let message = errorMessage ?? storageError {
-                        Text(message).font(.caption).foregroundStyle(.red)
+                        Text(message).font(.caption).foregroundStyle(mobileTheme.danger)
                     }
                 }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
             }.frame(maxHeight: 420)
-                .background(.background, in: .rect(cornerRadius: 16))
+                .background(clarification.isExpired ? mobileTheme.grouped : mobileTheme.attention,
+                            in: .rect(cornerRadius: mobileTheme.corner(16)))
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(.secondary.opacity(0.2)))
         }
         .onAppear {

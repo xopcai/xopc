@@ -15,14 +15,10 @@ function arkUiSources(directory: string): string[] {
 }
 
 describe('color-based visual hierarchy', () => {
-  it('separates application regions by fill and uses semantic strokes for cards and controls', () => {
+  it('separates application surfaces without decorative borders or dividers', () => {
     for (const file of arkUiSources(sourceRoot.pathname)) {
       const source = readFileSync(file, 'utf8');
-      for (const stroke of source.matchAll(/\.border\(([^\n]*)\)/g)) {
-        expect(stroke[1], file).toMatch(/this\.colors\.(panel|control|attention)Stroke/);
-      }
-      const radiusBeforeStroke = /\.borderRadius\((?:[^()\n]|\([^()\n]*\))*\)[^\n]*(?:\n[ \t]+\.[^\n]*)*\.border\(/;
-      expect(source, file).not.toMatch(radiusBeforeStroke);
+      expect(source, file).not.toMatch(/\.(?:border|outline)\s*\(/);
       expect(source, file).not.toMatch(/\bDivider\s*\(/);
       expect(source, file).not.toMatch(/\.divider\s*\(/);
     }
@@ -33,7 +29,7 @@ describe('color-based visual hierarchy', () => {
     const settings = readFileSync(new URL('../entry/src/main/ets/view/SettingsView.ets', import.meta.url), 'utf8');
 
     expect(components).toContain('.backgroundColor(this.attention ? this.colors.attentionFill : this.colors.panel)');
-    expect(components).toContain('.border(this.colors.controlStroke).borderRadius(this.colors.corner(23)).fontColor(this.colors.foreground)');
+    expect(components).toContain('.backgroundColor(this.colors.input)\n      .borderRadius(this.colors.corner(23)).fontColor(this.colors.foreground)');
     expect(settings).toContain('selected ? this.colors.accentSoft : this.colors.panel');
     expect(settings).toContain('this.selectedScheme === scheme ? this.colors.accentSoft : this.colors.panel');
   });

@@ -3,7 +3,7 @@ package ai.xopc.mobile.ui.main
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ClarificationCommand
 import ai.xopc.mobile.gateway.ClarificationRequest
-import androidx.compose.foundation.BorderStroke
+import ai.xopc.mobile.theme.LocalAttentionColors
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,7 +32,10 @@ internal fun ClarificationCard(request: ClarificationRequest, submitting: Boolea
   val disabled = submitting || request.expired(now)
   val compose = request.interactionMode == "compose" || editing
   val text = draft.trim()
-  Surface(modifier, shape = MaterialTheme.shapes.large, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+  val attention = LocalAttentionColors.current
+  Surface(modifier, shape = MaterialTheme.shapes.large,
+    color = if (request.expired(now)) MaterialTheme.colorScheme.surfaceContainerLow else attention.fill,
+    contentColor = MaterialTheme.colorScheme.onSurface) {
     Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       Text(stringResource(if (request.kind == "approval") R.string.clarify_approval_title else R.string.clarify_title), style = MaterialTheme.typography.titleSmall)
       Text(request.question)

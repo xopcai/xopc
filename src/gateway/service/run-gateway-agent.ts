@@ -31,6 +31,7 @@ import type {
   AgentStreamRunStatus,
   TaskRunReceipt,
   SessionAudioReadyEvent,
+  SessionAgentReaction,
 } from '@xopcai/gateway-contract';
 
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
@@ -95,6 +96,8 @@ export async function *runGatewayAgent(
   const inputReceivedAtMs = runOptions?.inputReceivedAtMs ?? runStartedAtMs;
   let firstTextSeen = false;
   let reactionWindow: AbortController | undefined;
+  let reactionPending = false;
+  let publishReactionFallback: (() => void) | undefined;
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
       ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
@@ -204,11 +207,11 @@ export async function *runGatewayAgent(
   };
   const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
     for (const event of events) {
-      if (event.type === 'clarify_request' || event.type === 'review' || event.type === 'error' || event.type === 'run_end') {
-        reactionWindow?.abort();
-      }
-      if (!firstTextSeen && event.type === 'assistant_delta' && event.payload.delta.trim()) {
-        reactionWindow?.abort();
+      const firstText = !firstTextSeen && event.type === 'assistant_delta' && Boolean(event.payload.delta.trim());
+      const reactionClosed = firstText || event.type === 'clarify_request' || event.type === 'review'
+        || event.type === 'error' || event.type === 'run_end';
+      if (reactionClosed) reactionWindow?.abort();
+      if (firstText) {
         firstTextSeen = true;
         const latencyMs = performance.now() - runStartedMonotonic;
         const queueMs = Math.max(0, runStartedAtMs - inputReceivedAtMs);
@@ -221,6 +224,7 @@ export async function *runGatewayAgent(
       if (channel === 'webchat') {
         publishRealtime(runTopic, event.type, event);
       }
+      if (reactionClosed || (event.type === 'user_message' && !reactionPending)) publishReactionFallback?.();
       yield event;
     }
   };
@@ -262,14 +266,27 @@ export async function *runGatewayAgent(
         registeredActiveWebchatRun = true;
         publishRealtime('sessions', 'run.started', { conversationId, runId, ...runOptions?.inputIdentity });
         const identity = runOptions?.inputIdentity;
-        if (personalTurn && deps.reactions && webchatTranscriptId && !runOptions?.presentation && !runOptions?.taskRunId
-          && identity && origin.type === 'endpoint' && deps.canReact?.(origin.endpointId)) {
-          reactionWindow = new AbortController();
+        const reactions = deps.reactions;
+        if (personalTurn && reactions && webchatTranscriptId && !runOptions?.presentation && !runOptions?.taskRunId
+          && identity && origin.type === 'endpoint' && deps.config.experimental?.personalAgentMessageReactions) {
+          const target = { ...identity, conversationId, runId, transcriptId: webchatTranscriptId,
+            actorAgentId: webchatMetadata!.agentId };
+          const publish = (reaction: SessionAgentReaction): void => {
+            publishReactionFallback = undefined;
+            publishRealtime('sessions', 'session.agent-reaction', reaction);
+          };
+          publishReactionFallback = () => reactions.publishFallback(target, publish);
           const endpointId = origin.endpointId;
-          void deps.reactions.consider({ target: { ...identity, conversationId, runId, transcriptId: webchatTranscriptId,
-            actorAgentId: webchatMetadata!.agentId }, text: message, started: runStartedMonotonic,
-          signal: AbortSignal.any([mergedSignal, reactionWindow.signal]), eligible: () => deps.canReact?.(endpointId) === true,
-          publish: reaction => publishRealtime('sessions', 'session.agent-reaction', reaction) }).catch(() => {});
+          if (deps.canReact?.(endpointId)) {
+            reactionWindow = new AbortController();
+            reactionPending = true;
+            void reactions.consider({ target, text: message, started: runStartedMonotonic,
+              signal: AbortSignal.any([mergedSignal, reactionWindow.signal]),
+              eligible: () => deps.canReact?.(endpointId) === true, publish }).catch(() => {}).finally(() => {
+              reactionPending = false;
+              publishReactionFallback?.();
+            });
+          }
         }
       }
       let streamError: string | undefined;
@@ -361,6 +378,7 @@ export async function *runGatewayAgent(
         return { status: 'error', summary: streamError };
       } finally {
         reactionWindow?.abort();
+        publishReactionFallback?.();
         if (mergedSignal.aborted) {
           terminalStatus = 'cancelled';
           taskRunStatus = 'cancelled';

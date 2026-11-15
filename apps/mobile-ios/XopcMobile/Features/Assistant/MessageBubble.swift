@@ -20,7 +20,6 @@ struct MessageBubble: View {
     let onReuseUserText: (String) -> Void
     var maximumWidth: CGFloat?
     var animateStreaming = false
-    var reservesReactionSpace = false
     var onReading: () -> Void = {}
     @Environment(\.locale) private var locale
     @Environment(\.colorScheme) private var colorScheme
@@ -64,24 +63,30 @@ struct MessageBubble: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, isUserAudioBubble ? 4 : 14)
-            .padding(.top, isUserAudioBubble ? 0 : reservesReactionSpace && message.role == "user" ? 18 : 10)
-            .padding(.bottom, isUserAudioBubble ? 0 : 10)
+            .padding(.vertical, isUserAudioBubble ? 0 : message.role == "user" ? 10 : 12)
             .frame(width: bubbleWidth, alignment: .leading)
-            .background((message.role == "user" ? mobileTheme.bubble : mobileTheme.panel))
-            .clipShape(.rect(cornerRadius: mobileTheme.corner(18)))
+            .foregroundStyle(mobileTheme.foreground)
+            .background(message.role == "user" ? mobileTheme.bubble : mobileTheme.assistantBubble)
+            .clipShape(.rect(cornerRadius: mobileTheme.corner(message.role == "user" ? 18 : 20)))
             .overlay(alignment: .topLeading) {
                 if let reaction = message.agentReaction, !message.isPending {
-                    Text(verbatim: reaction.emoji)
-                        .font(.system(size: 15))
-                        .frame(width: 33, height: 25)
-                        .background(mobileTheme.panel, in: Capsule())
-                        .overlay { Capsule().strokeBorder(mobileTheme.edge, lineWidth: 1) }
-                        .offset(x: -4, y: -7)
-                        .allowsHitTesting(false)
-                        .accessibilityLabel(Text(verbatim: "\(reaction.actorName) \(reaction.emoji)"))
+                    ZStack(alignment: .topLeading) {
+                        Text(verbatim: reaction.emoji)
+                            .font(.system(size: 15))
+                            .frame(width: 26, height: 26)
+                            .background(mobileTheme.reaction, in: Circle())
+                            .offset(x: 4)
+                            .accessibilityLabel(Text(verbatim: "\(reaction.actorName) \(reaction.emoji)"))
+                        Circle().fill(mobileTheme.reaction).frame(width: 5, height: 5)
+                            .offset(x: 3, y: 23).accessibilityHidden(true)
+                        Circle().fill(mobileTheme.reaction).frame(width: 3, height: 3)
+                            .offset(y: 28).accessibilityHidden(true)
+                    }
+                    .frame(width: 30, height: 31, alignment: .topLeading)
+                    .offset(x: -16, y: -16)
+                    .allowsHitTesting(false)
                 }
             }
-            .padding(.top, reservesReactionSpace && message.role == "user" ? 8 : 0)
             .environment(\.chatTextSelectionEnabled, false)
         }
         // Keep accessibility bounds on the bubble before expanding its alignment frame.

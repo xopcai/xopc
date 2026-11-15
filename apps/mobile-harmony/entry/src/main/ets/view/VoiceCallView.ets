@@ -104,7 +104,7 @@ export struct XopcVoiceCallView {
           Button($r('app.string.voice_call_approve')).layoutWeight(1).height(38).backgroundColor(this.colors.accent)
             .onClick((): void => { this.call.respondApproval(true); })
         }.width('100%')
-      }.width('100%').padding(14).backgroundColor(this.colors.attentionFill).border(this.colors.attentionStroke).borderRadius(this.colors.corner(18))
+      }.width('100%').padding(14).backgroundColor(this.colors.attentionFill).borderRadius(this.colors.corner(18))
     }
   }
 

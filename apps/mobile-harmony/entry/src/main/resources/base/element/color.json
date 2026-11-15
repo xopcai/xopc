@@ -114,11 +114,11 @@
     },
     {
       "name": "theme_default_accent_dark",
-      "value": "#3A6BFF"
+      "value": "#80A1FF"
     },
     {
       "name": "theme_default_danger_dark",
-      "value": "#FF5D5D"
+      "value": "#FF8383"
     },
     {
       "name": "theme_default_grouped_dark",
@@ -138,7 +138,7 @@
     },
     {
       "name": "theme_default_active_dark",
-      "value": "#2E3440"
+      "value": "#43516B"
     },
     {
       "name": "theme_porcelain_surface_light",
@@ -162,11 +162,11 @@
     },
     {
       "name": "theme_porcelain_accent_light",
-      "value": "#985D4D"
+      "value": "#874F40"
     },
     {
       "name": "theme_porcelain_danger_light",
-      "value": "#A34444"
+      "value": "#9C3B3B"
     },
     {
       "name": "theme_porcelain_grouped_light",
@@ -174,7 +174,7 @@
     },
     {
       "name": "theme_porcelain_input_light",
-      "value": "#EFE5DC"
+      "value": "#EBDFD4"
     },
     {
       "name": "theme_porcelain_border_light",
@@ -234,7 +234,7 @@
     },
     {
       "name": "theme_porcelain_active_dark",
-      "value": "#493A32"
+      "value": "#5E4B40"
     },
     {
       "name": "theme_dawn_surface_light",
@@ -262,7 +262,7 @@
     },
     {
       "name": "theme_dawn_danger_light",
-      "value": "#D63E43"
+      "value": "#B32B3A"
     },
     {
       "name": "theme_dawn_grouped_light",
@@ -270,7 +270,7 @@
     },
     {
       "name": "theme_dawn_input_light",
-      "value": "#E7EBF4"
+      "value": "#DBE4EF"
     },
     {
       "name": "theme_dawn_border_light",
@@ -302,7 +302,7 @@
     },
     {
       "name": "theme_dawn_tertiary_dark",
-      "value": "#9EA9B5"
+      "value": "#B4BFCC"
     },
     {
       "name": "theme_dawn_accent_dark",
@@ -310,7 +310,7 @@
     },
     {
       "name": "theme_dawn_danger_dark",
-      "value": "#FF8589"
+      "value": "#FF9599"
     },
     {
       "name": "theme_dawn_grouped_dark",
@@ -318,7 +318,7 @@
     },
     {
       "name": "theme_dawn_input_dark",
-      "value": "#415264"
+      "value": "#344557"
     },
     {
       "name": "theme_dawn_border_dark",
@@ -334,7 +334,7 @@
     },
     {
       "name": "theme_emerald_surface_light",
-      "value": "#F0FDF4"
+      "value": "#E8F5ED"
     },
     {
       "name": "theme_emerald_panel_light",
@@ -354,11 +354,11 @@
     },
     {
       "name": "theme_emerald_accent_light",
-      "value": "#059669"
+      "value": "#087446"
     },
     {
       "name": "theme_emerald_danger_light",
-      "value": "#DC2626"
+      "value": "#B91C1C"
     },
     {
       "name": "theme_emerald_grouped_light",
@@ -366,7 +366,7 @@
     },
     {
       "name": "theme_emerald_input_light",
-      "value": "#DCFCE7"
+      "value": "#CFE9D8"
     },
     {
       "name": "theme_emerald_border_light",
@@ -386,7 +386,7 @@
     },
     {
       "name": "theme_emerald_panel_dark",
-      "value": "#0A0A0A"
+      "value": "#131916"
     },
     {
       "name": "theme_emerald_foreground_dark",
@@ -406,15 +406,15 @@
     },
     {
       "name": "theme_emerald_danger_dark",
-      "value": "#F87171"
+      "value": "#FF8080"
     },
     {
       "name": "theme_emerald_grouped_dark",
-      "value": "#050B07"
+      "value": "#080D0A"
     },
     {
       "name": "theme_emerald_input_dark",
-      "value": "#111111"
+      "value": "#202A24"
     },
     {
       "name": "theme_emerald_border_dark",
@@ -430,7 +430,7 @@
     },
     {
       "name": "theme_clay_surface_light",
-      "value": "#FFFAF0"
+      "value": "#F5EDE1"
     },
     {
       "name": "theme_clay_panel_light",
@@ -442,7 +442,7 @@
     },
     {
       "name": "theme_clay_secondary_light",
-      "value": "#6A6A6A"
+      "value": "#565044"
     },
     {
       "name": "theme_clay_tertiary_light",
@@ -454,7 +454,7 @@
     },
     {
       "name": "theme_clay_danger_light",
-      "value": "#EF4444"
+      "value": "#B42332"
     },
     {
       "name": "theme_clay_grouped_light",
@@ -462,7 +462,7 @@
     },
     {
       "name": "theme_clay_input_light",
-      "value": "#FAF5E8"
+      "value": "#E7DCCC"
     },
     {
       "name": "theme_clay_border_light",
@@ -494,7 +494,7 @@
     },
     {
       "name": "theme_clay_tertiary_dark",
-      "value": "#6A8A80"
+      "value": "#ACB9B6"
     },
     {
       "name": "theme_clay_accent_dark",
@@ -502,7 +502,7 @@
     },
     {
       "name": "theme_clay_danger_dark",
-      "value": "#F87171"
+      "value": "#FF9292"
     },
     {
       "name": "theme_clay_grouped_dark",
@@ -522,23 +522,22 @@
     },
     {
       "name": "theme_clay_active_dark",
-      "value": "#2D4545"
+      "value": "#376058"
     },
-    { "name": "theme_control_light", "value": "#6B7A90" },
     { "name": "theme_attention_fill_light", "value": "#FFF2D2" },
     { "name": "theme_attention_foreground_light", "value": "#734600" },
-    { "name": "theme_attention_border_light", "value": "#B4710A" },
+    { "name": "theme_attention_fill_dark", "value": "#352C22" },
     { "name": "theme_attention_foreground_dark", "value": "#FFBC63" },
     { "name": "theme_success_light", "value": "#176141" },
-    { "name": "chat_default_bubble_light", "value": "#D5E6FF" },
+    { "name": "chat_default_bubble_light", "value": "#C7D5E7" },
     { "name": "chat_default_card_dark", "value": "#222730" },
-    { "name": "chat_default_bubble_dark", "value": "#252F40" },
+    { "name": "chat_default_bubble_dark", "value": "#2D394D" },
     { "name": "chat_default_action_dark", "value": "#A8BCFF" },
     { "name": "chat_porcelain_card_light", "value": "#E8DED3" },
     { "name": "chat_porcelain_bubble_light", "value": "#E9E0D5" },
     { "name": "chat_porcelain_action_light", "value": "#844633" },
     { "name": "chat_porcelain_card_dark", "value": "#302822" },
-    { "name": "chat_porcelain_bubble_dark", "value": "#372B24" },
+    { "name": "chat_porcelain_bubble_dark", "value": "#4E392E" },
     { "name": "chat_porcelain_action_dark", "value": "#E4AE98" },
     { "name": "chat_dawn_card_light", "value": "#E0E8F2" },
     { "name": "chat_dawn_bubble_light", "value": "#DFE6EF" },
@@ -550,13 +549,13 @@
     { "name": "chat_emerald_bubble_light", "value": "#E0EBE4" },
     { "name": "chat_emerald_action_light", "value": "#087446" },
     { "name": "chat_emerald_card_dark", "value": "#14221B" },
-    { "name": "chat_emerald_bubble_dark", "value": "#172B21" },
+    { "name": "chat_emerald_bubble_dark", "value": "#223D2F" },
     { "name": "chat_emerald_action_dark", "value": "#78DDB0" },
     { "name": "chat_clay_card_light", "value": "#EAE1D3" },
     { "name": "chat_clay_bubble_light", "value": "#EBE5DB" },
     { "name": "chat_clay_action_light", "value": "#705430" },
     { "name": "chat_clay_card_dark", "value": "#1A2B2A" },
-    { "name": "chat_clay_bubble_dark", "value": "#1B3030" },
+    { "name": "chat_clay_bubble_dark", "value": "#284540" },
     { "name": "chat_clay_action_dark", "value": "#FFB084" },
     { "name": "chat_clay_secondary_light", "value": "#5F584C" },
     { "name": "theme_on_accent_ink", "value": "#000000" }

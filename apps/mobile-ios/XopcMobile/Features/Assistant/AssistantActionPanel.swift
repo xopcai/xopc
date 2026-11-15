@@ -290,7 +290,7 @@ struct AssistantActionPanel: View {
             }
         }
         .padding(8)
-        .background(mobileTheme.panel, in: .rect(cornerRadius: 18))
+        .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(18)))
         .padding(.bottom, 8)
         .accessibilityIdentifier("assistant-action-panel")
     }
@@ -300,10 +300,11 @@ struct AssistantActionPanel: View {
             Image(systemName: image)
                 .font(.system(size: 24, weight: .regular))
                 .frame(width: 48, height: 48)
-                .background(Color(uiColor: .systemGray5), in: .rect(cornerRadius: 14))
+                .foregroundStyle(mobileTheme.foreground)
+                .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(14)))
             title
                 .mobileTextStyle(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(mobileTheme.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
         }

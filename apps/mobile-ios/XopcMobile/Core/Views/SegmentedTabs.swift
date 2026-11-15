@@ -16,6 +16,7 @@ struct SegmentedTabs<Value: Hashable>: View {
     var minimumSegmentWidth: CGFloat = 64
     let onSelect: (Value) -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.layoutDirection) private var direction
     @ScaledMetric(relativeTo: .subheadline) private var height = 46
@@ -44,16 +45,16 @@ struct SegmentedTabs<Value: Hashable>: View {
         }
         .background(alignment: .leading) {
             if let selection {
-                RoundedRectangle(cornerRadius: mobileTheme.corner(20))
-                    .fill(mobileTheme.panel)
+                RoundedRectangle(cornerRadius: mobileTheme.corner(18) * scale)
+                    .fill(colorScheme == .dark ? mobileTheme.active : mobileTheme.panel)
                     .frame(width: width, height: height)
                     .offset(x: CGFloat(selection) * width * (direction == .rightToLeft ? -1 : 1))
                     .animation(reduceMotion ? nil : .timingCurve(0.32, 0.72, 0, 1, duration: 0.25), value: selection)
                     .accessibilityHidden(true)
             }
         }
-        .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(20)))
-        .clipShape(.rect(cornerRadius: mobileTheme.corner(20)))
+        .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(18) * scale))
+        .clipShape(.rect(cornerRadius: mobileTheme.corner(18) * scale))
     }
 
     private func button(for option: SegmentOption<Value>, width: CGFloat) -> some View {
@@ -70,8 +71,8 @@ struct SegmentedTabs<Value: Hashable>: View {
                     Text(count, format: .number).font(.caption).monospacedDigit()
                 }
             }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(active ? Color.primary : Color.secondary)
+            .font(.subheadline.weight(active ? .bold : .medium))
+            .foregroundStyle(active ? (colorScheme == .dark ? mobileTheme.foreground : mobileTheme.action) : mobileTheme.secondary)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: active)
             .padding(.horizontal, 6)
             .frame(width: width, height: height)

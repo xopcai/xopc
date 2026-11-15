@@ -130,7 +130,7 @@ struct PhoneWorkspaceView: View {
                 Text("截图模式").font(.caption).foregroundStyle(.secondary)
             }
             if model.failed, model.live != nil {
-                Text("操作尚未确认，请检查手机状态后再试。").font(.footnote).foregroundStyle(.red)
+                Text("操作尚未确认，请检查手机状态后再试。").font(.footnote).foregroundStyle(mobileTheme.danger)
             }
             if ownControl {
                 HStack {
@@ -142,8 +142,8 @@ struct PhoneWorkspaceView: View {
             if model.canControl {
                 Button { command(primaryOperation) } label: {
                     Text(primaryTitle).font(.headline).frame(maxWidth: .infinity).frame(height: 52)
-                        .foregroundStyle(Color.white)
-                        .background(Color.accentColor, in: Capsule())
+                        .foregroundStyle(mobileTheme.onAction)
+                        .background(mobileTheme.action, in: Capsule())
                 }.buttonStyle(.plain).accessibilityIdentifier("phone-control")
                     .disabled(model.busy || !(ownControl || model.live?.report.reconnectRequired == true || model.playing || freshFrame))
                     .opacity(model.busy ? 0.5 : 1)
@@ -161,7 +161,7 @@ struct PhoneWorkspaceView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         TextField("输入到手机的文字", text: $draft).textFieldStyle(.roundedBorder).accessibilityIdentifier("phone-text-input")
                         if model.failed {
-                            Text("操作尚未确认，请检查手机状态后再试。").font(.footnote).foregroundStyle(.red)
+                            Text("操作尚未确认，请检查手机状态后再试。").font(.footnote).foregroundStyle(mobileTheme.danger)
                         }
                         Button("发送") {
                             let text = draft

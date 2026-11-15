@@ -272,12 +272,13 @@ struct GeneratedMediaRow: View {
                 }
             }
             if let error = error ?? card.item.error {
-                Text(verbatim: error).font(.caption).foregroundStyle(.secondary)
+                Text(verbatim: error).font(.caption).foregroundStyle(mobileTheme.danger)
             }
         }
         .padding(12)
         .frame(maxWidth: 420, alignment: .leading)
-        .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(18)))
+        .background(card.isDraft && canConfirm ? mobileTheme.attention : mobileTheme.card,
+                    in: .rect(cornerRadius: mobileTheme.corner(18)))
         .tint(mobileTheme.action)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
