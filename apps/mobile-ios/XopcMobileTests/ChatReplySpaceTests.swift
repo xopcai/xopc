@@ -47,6 +47,7 @@ struct ChatReplySpaceTests {
 
 @MainActor
 final class ChatKeyboardLayoutTests: XCTestCase {
+    // swiftlint:disable:next function_body_length
     func testKeyboardDoesNotReverseTailFollowing() async throws {
         let configuration = GatewayConfiguration(baseURL: URL(string: "http://127.0.0.1:18791/keyboard")!, token: "synthetic-keyboard-fixture")
         do { _ = try await GatewayClient(configuration: configuration).fetchAgents() }
@@ -77,6 +78,9 @@ final class ChatKeyboardLayoutTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(2000))
         let initialEndGap = timeline.contentSize.height + timeline.adjustedContentInset.bottom - timeline.bounds.maxY
         let recorder = KeyboardFrameRecorder(scroll: timeline)
+        let keyboardProbe = KeyboardVisibilityProbe()
+        keyboardProbe.start()
+        defer { keyboardProbe.stop() }
         recorder.start()
         XCTAssertTrue(input.becomeFirstResponder())
         try await Task.sleep(for: .milliseconds(1200))
@@ -90,6 +94,9 @@ final class ChatKeyboardLayoutTests: XCTestCase {
         let closing = recorder.frames
         let trace = XCTAttachment(string: "opening=\(opening)\nclosing=\(closing)")
         trace.name = "Native keyboard scroll frames"; trace.lifetime = .keepAlways; add(trace)
+        if !keyboardProbe.didShow {
+            throw XCTSkip("The simulator did not present a software keyboard")
+        }
         XCTAssertLessThanOrEqual(initialEndGap, 24)
         XCTAssertEqual(opening.last?.endGap ?? 999, initialEndGap, accuracy: 4)
         XCTAssertGreaterThan(opening.count, 5)
@@ -121,6 +128,24 @@ final class ChatKeyboardLayoutTests: XCTestCase {
             result = max(result, increasing ? furthest - frame.offset : frame.offset - furthest)
         }
         return result
+    }
+}
+
+@MainActor
+private final class KeyboardVisibilityProbe: NSObject {
+    private(set) var didShow = false
+
+    func start() {
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow),
+                                               name: UIResponder.keyboardWillShowNotification, object: nil)
+    }
+
+    func stop() {
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+    }
+
+    @objc private func keyboardWillShow() {
+        didShow = true
     }
 }
 
