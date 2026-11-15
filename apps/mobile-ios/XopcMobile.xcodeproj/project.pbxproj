@@ -33,6 +33,7 @@
 		1D14B2FCC0505AF21D6D5270 /* PhoneVideo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EED720B0D2C95B60168C224D /* PhoneVideo.swift */; };
 		1DBAA23BDF065B11F12B33C8 /* NoteAttachmentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAE37390D9DE228209D0D9C2 /* NoteAttachmentsSection.swift */; };
 		1E933A6E8068947AF05AC34C /* MessageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F870C2254E2430F6C2D9D077 /* MessageModels.swift */; };
+		20B0DB05FE66445A6A5AA384 /* MobileTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A0859877F2B6C0A490A719F /* MobileTheme.swift */; };
 		2173016DCD4D634A7750BB32 /* ParityAcceptanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07951C88BA92367C46247DD4 /* ParityAcceptanceUITests.swift */; };
 		21AEBE74506B6151051F3386 /* MarkdownImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A989628A0B383E59C7ED1E /* MarkdownImageView.swift */; };
 		22746CB1D5B3B9671EACDF05 /* LiveExecutionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D0A6A8ABC0CC160CB69A4E /* LiveExecutionUITests.swift */; };
@@ -71,7 +72,6 @@
 		583C391F9A424C0309F8DB45 /* VoiceNoteSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27C3D981C742DEDAF82F956D /* VoiceNoteSubmission.swift */; };
 		5A4EF5B7B5331BCDB79D1CD5 /* VoiceRecoveryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B77774BD21464B10E3A9EC2D /* VoiceRecoveryUITests.swift */; };
 		5ADCB17E807189E03339DA23 /* SegmentedTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15AF753A6D55B6A03C1C03CE /* SegmentedTabs.swift */; };
-		6ADCBA7F2A260002006E6501 /* MobileTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BADB27A2A260002006E6501 /* MobileTheme.swift */; };
 		5BD2D42F0885AB43C8CED30F /* VoiceRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A8060E53D1EE77C1007EB3 /* VoiceRecorder.swift */; };
 		5C03D1F5634810BE2BA63B97 /* ProjectTaskMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA672E8236C1ED26A94B8172 /* ProjectTaskMutation.swift */; };
 		5D920CCBB7A84AD1D36DE686 /* ProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 626D1ED3CB8A067D90888730 /* ProgressView.swift */; };
@@ -246,7 +246,6 @@
 		14DE1EFFCF18D007025A0626 /* CapabilitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilitiesView.swift; sourceTree = "<group>"; };
 		1541A14BEE8F77ADC95225E8 /* MessageLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageLink.swift; sourceTree = "<group>"; };
 		15AF753A6D55B6A03C1C03CE /* SegmentedTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentedTabs.swift; sourceTree = "<group>"; };
-		1BADB27A2A260002006E6501 /* MobileTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTheme.swift; sourceTree = "<group>"; };
 		1611527C3882520B53DBDA16 /* PhoneWorkspaceModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneWorkspaceModel.swift; sourceTree = "<group>"; };
 		1650F4B7C500FFE2E495E72B /* XopcShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = XopcShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		18359BD966C6EB92C033C1D4 /* MessageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailView.swift; sourceTree = "<group>"; };
@@ -321,6 +320,7 @@
 		74B5BF8D4118453BB4A02656 /* TaskEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorView.swift; sourceTree = "<group>"; };
 		7636CD1ED5D767EF95BA7686 /* GatewayClient+ComposerPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+ComposerPalette.swift"; sourceTree = "<group>"; };
 		794BD953FB93FEDE80CB2A00 /* MarkdownBlocksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownBlocksTests.swift; sourceTree = "<group>"; };
+		7A0859877F2B6C0A490A719F /* MobileTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTheme.swift; sourceTree = "<group>"; };
 		7A268D1282EB841BE5D3ABED /* DeviceEndpointHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceEndpointHost.swift; sourceTree = "<group>"; };
 		7E3CBB52452A6FB90FFCE605 /* ExternalIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalIntakeTests.swift; sourceTree = "<group>"; };
 		7F2CD24074A4CECF834AE1E5 /* RealtimeVoiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeVoiceProtocol.swift; sourceTree = "<group>"; };
@@ -687,8 +687,8 @@
 		AA5AE797A74F501DDF859A65 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				7A0859877F2B6C0A490A719F /* MobileTheme.swift */,
 				15AF753A6D55B6A03C1C03CE /* SegmentedTabs.swift */,
-				1BADB27A2A260002006E6501 /* MobileTheme.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1011,6 +1011,7 @@
 				BA87F3CAB4C3CC2F3C8B7631 /* MessageLink.swift in Sources */,
 				1E933A6E8068947AF05AC34C /* MessageModels.swift in Sources */,
 				AFCE8BBA2E3F11AE93B4C251 /* MobileListCache.swift in Sources */,
+				20B0DB05FE66445A6A5AA384 /* MobileTheme.swift in Sources */,
 				DA875680CA67E6FAF3CBC499 /* MobileTypography.swift in Sources */,
 				1DBAA23BDF065B11F12B33C8 /* NoteAttachmentsSection.swift in Sources */,
 				4973633F8EEDFAB618DFAF2D /* NoteAudioPlayerView.swift in Sources */,
@@ -1047,7 +1048,6 @@
 				4B3E964A3F57C79C6706660F /* ReferencePickerView.swift in Sources */,
 				9632E26771E6198B75859F32 /* SaveFileVersionControl.swift in Sources */,
 				5ADCB17E807189E03339DA23 /* SegmentedTabs.swift in Sources */,
-				6ADCBA7F2A260002006E6501 /* MobileTheme.swift in Sources */,
 				4D5C1569A81D02F4CDB087C4 /* StreamingMarkdownText.swift in Sources */,
 				99DB6CB0AE86D341228B6BA3 /* TaskAcceptanceStatus.swift in Sources */,
 				AEE638D3156A5A8F43AB689B /* TaskDetailView.swift in Sources */,
