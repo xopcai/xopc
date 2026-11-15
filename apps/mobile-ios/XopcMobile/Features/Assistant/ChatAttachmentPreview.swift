@@ -140,6 +140,7 @@ struct ChatAttachmentPreview: View {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     @MainActor private func open() async {
         guard !isLoading else { return }
         versionFile = nil

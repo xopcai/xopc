@@ -1,7 +1,6 @@
 // swiftlint:disable file_length
 import SwiftUI
 
-// swiftlint:disable:next type_body_length
 struct ProgressHubView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void

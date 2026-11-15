@@ -13,6 +13,7 @@ enum RealtimeVoiceIncoming: Sendable {
     case latency(Int)
 }
 
+// swiftlint:disable:next type_body_length
 actor RealtimeVoiceTransport {
     private var socket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?

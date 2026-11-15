@@ -285,7 +285,7 @@ struct HistoryAttachment: Decodable, Equatable, Identifiable, Sendable {
     let duration: Double?
     let workspaceRelativePath: String?
     let extractedText: String?
-    var fileId: String? = nil
+    var fileId: String?
 
     enum CodingKeys: String, CodingKey {
         case mediaID = "id"

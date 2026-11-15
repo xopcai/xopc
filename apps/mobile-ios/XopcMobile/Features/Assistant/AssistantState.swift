@@ -82,6 +82,7 @@ final class AssistantState {
         queueError = nil
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func loadConversation(_ conversation: ConversationSelection?, using gateway: any GatewayServing) async {
         isForeground = true
         unavailableConversationID = nil

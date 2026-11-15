@@ -15,6 +15,7 @@ enum ChatImageSource: Equatable, Sendable {
         return components.string ?? ""
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     static func resolve(_ raw: String, conversationID: String?) -> ChatImageSource? {
         if case let .workspaceFile(path)? = ChatMessageLink.resolve(raw) {
             guard let conversationID, !conversationID.isEmpty else { return nil }

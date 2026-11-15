@@ -1,6 +1,7 @@
 import SwiftUI
 
 extension AgentSummary {
+    // swiftlint:disable:next large_tuple
     private static let builtIns: [String: (names: [String], descriptions: [String], label: String)] = [
         "main": (["Main", "Smart Assistant"], ["General assistant", "General-purpose personal assistant.",
                                                "Your personal intelligent assistant for answering questions, handling everyday tasks, and chatting with you anytime."], "assistant"),
