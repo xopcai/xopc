@@ -108,7 +108,7 @@ actor DeviceEndpointHost {
         let socket = client.session.webSocketTask(with: request)
         self.socket = socket; socket.resume()
         do {
-            try await send("realtime.hello", ["ticket": ticket.ticket, "clientId": endpointId, "clientKind": "mobile", "subscriptions": [], "endpoint": endpoint, "capabilities": ["endpoint.tools.v3"]])
+            try await send("realtime.hello", ["ticket": ticket.ticket, "clientId": endpointId, "clientKind": "mobile", "subscriptions": [], "endpoint": endpoint, "capabilities": ["endpoint.tools.v3", "mobile.mcp-setup-card.v1"]])
             let timeout = Task {
                 try? await Task.sleep(for: .seconds(10))
                 if !Task.isCancelled {

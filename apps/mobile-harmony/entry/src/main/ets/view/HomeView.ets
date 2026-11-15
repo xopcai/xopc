@@ -13,6 +13,10 @@ import { XopcWorkspaceView } from './WorkspaceView';
 import { XopcProjectSpaceView } from './ProjectSpaceView';
 import { XopcNotesView } from './NotesView';
 import { XopcNotesTabView } from './NotesTabView';
+import { XopcSpaceLibraryView, XopcLibraryOrigin } from './SpaceLibraryView';
+import { XopcChatAttachment } from '../model/chat';
+import { XopcChatDrafts } from '../service/chatDrafts';
+import { gatewaySession } from '../service/gatewaySession';
 import { XopcFilesView } from './FilesView';
 import { XopcSettingsView } from './SettingsView';
 import { XopcProgressView } from './HomeHubs';
@@ -64,6 +68,7 @@ export struct XopcHomeView {
   @Local initialChatError: string = '';
   @Local detailVisible: boolean = false;
   @Local detailRoute: string = '';
+  private libraryBackHandler?: () => boolean;
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local layout: XopcLayoutState = layoutState;
   @Local attention: XopcProgressViewModel = new XopcProgressViewModel();
@@ -389,26 +394,37 @@ export struct XopcHomeView {
     }
   }
 
-  private async openOrdinaryChat(agentId: string = '', prompt: string = ''): Promise<void> {
+  private async openOrdinaryChat(agentId: string = '', prompt: string = '', agentSetup: boolean = false): Promise<void> {
     if (this.ordinaryOpening) return;
     this.ordinaryOpening = true;
     const revision = this.navigationRevision;
     try {
-      const resolvedAgent = prompt && !agentId ? (await this.chatRepository.agents()).defaultId : agentId;
+      const resolved = prompt && !agentId ? (await this.chatRepository.agents()).defaultId : agentId;
       if (this.disposed || revision !== this.navigationRevision) return;
-      const id = await this.chatRepository.create(undefined, resolvedAgent || undefined);
+      const language = appSettings.effectiveLanguage().startsWith('zh') ? 'zh-CN' : 'en';
+      const id = await this.chatRepository.create(undefined, resolved || undefined, undefined, agentSetup ? language : undefined);
       if (!this.disposed && revision === this.navigationRevision) {
-        if (prompt) {
-          chatDraftIntake.stage(id, prompt, []);
-          this.rememberConversation(id);
-          this.switchToChat(id, '', true);
-        } else this.openConversationFromList(id);
+        if (prompt) chatDraftIntake.stage(id, prompt, []);
+        this.openConversationFromList(id);
       }
     } catch (error) {
       if (!this.disposed && revision === this.navigationRevision) {
         this.getUIContext().getPromptAction().showToast({ message: userErrorMessage((error as Error).message, 'save') });
       }
     } finally { this.ordinaryOpening = false; }
+  }
+
+  private async useLibraryFile(file: XopcChatAttachment, source?: XopcLibraryOrigin): Promise<void> {
+    const revision = gatewaySession.connectionRevision();
+    const navigation = this.navigationRevision;
+    const profile = gatewaySession.currentProfile();
+    if (!profile) throw new Error('NOT_PAIRED');
+    const id = await this.chatRepository.create(source?.available ? source.projectId : undefined);
+    gatewaySession.assertConnection(revision);
+    if (this.disposed || navigation !== this.navigationRevision) return;
+    await new XopcChatDrafts().save(JSON.stringify([profile.gatewayId, profile.deviceId, id]), { text: '', refs: [], files: [file] });
+    gatewaySession.assertConnection(revision);
+    if (!this.disposed && navigation === this.navigationRevision) this.openConversationFromList(id);
   }
 
   private rememberConversation(id: string): void {
@@ -461,12 +477,24 @@ export struct XopcHomeView {
     } else if (page === 'capabilities') {
       NavDestination() {
         XopcCapabilitiesView({ personal: this.personalAgent.record, onExit: (): void => { this.pathStack.pop(); },
-          onOpenDraft: (prompt: string): void => { void this.openOrdinaryChat('', prompt); },
+          onPersonalChanged: (): void => { void this.personalAgent.refresh(); },
+          onSetupChat: (prompt: string, agentSetup: boolean): void => { void this.openOrdinaryChat('', prompt, agentSetup); },
           onOpenAgent: (id: string, personal: boolean): void => {
             if (personal) void this.openPersonalChat(); else void this.openOrdinaryChat(id);
           } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'library') {
+      NavDestination() {
+        XopcSpaceLibraryView({ initialId: (param as XopcMobileRoute).itemId,
+          onExit: (): void => { this.pathStack.pop(); },
+          onBackHandler: (handler?: () => boolean): void => { this.libraryBackHandler = handler; },
+          onOpenSource: (source: XopcLibraryOrigin): void => {
+            if (source.kind === 'task' && source.taskId) this.navigate({ page: 'tasks', itemId: source.taskId });
+            else if (source.kind === 'automation' && source.automationRunId) this.navigate({ page: 'automation-run', itemId: source.automationRunId });
+            else this.openConversationFromList(source.conversationId);
+          }, onUseInChat: (file: XopcChatAttachment, source?: XopcLibraryOrigin): Promise<void> => this.useLibraryFile(file, source) })
+      }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => this.libraryBackHandler?.() ?? false)
+    } else if (page === 'note-recovery') {
       NavDestination() {
         XopcNotesTabView({ activePage: true, onExit: (): void => { this.pathStack.pop(); }, deliveries: this.attention.deliveries,
           deliveriesLoading: this.attention.loading, deliveryError: this.attention.homeError,
@@ -670,7 +698,7 @@ export struct XopcHomeView {
         XopcDiscussionRecordingPanelView({ panel: this.recordingPanel,viewportWidth: this.recordingViewportWidth,viewportHeight: this.recordingViewportHeight,
           onSaved: (_id: string): void => {},
           onOpenNote: (id: string): void => { this.recordingPanel.setCompact(true); this.navigate({ page: 'notes',itemId: id }); },
-          onRecovery: (): void => { this.pathStack.clear(); this.navigate({ page: 'library', itemId: '' }); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
+          onRecovery: (): void => { this.pathStack.clear(); this.navigate({ page: 'note-recovery', itemId: '' }); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
       }
       XopcShareIntakeDialog({ currentConversationId: this.activeChatId, onExplore: async (value: XopcIncomingShare, targetId: string): Promise<boolean> => await this.exploreShare(value, targetId),
         onSaved: (noteId: string): void => { this.navigate({ page: 'notes', itemId: noteId }); } })

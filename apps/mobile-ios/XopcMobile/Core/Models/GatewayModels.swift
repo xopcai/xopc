@@ -125,6 +125,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
     let thinkingLevel: String?
     let projectId: String?
     let executionMode: String?
+    let agentSetupLanguage: String?
 
     private init(
         id: String,
@@ -135,7 +136,8 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         model: String?,
         thinkingLevel: String?,
         projectId: String?,
-        executionMode: String?
+        executionMode: String?,
+        agentSetupLanguage: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -146,6 +148,7 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         self.thinkingLevel = thinkingLevel
         self.projectId = projectId
         self.executionMode = executionMode
+        self.agentSetupLanguage = agentSetupLanguage
     }
 
     init(summary: ConversationSummary) {
@@ -158,9 +161,10 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
         thinkingLevel = nil
         projectId = summary.projectId
         executionMode = nil
+        agentSetupLanguage = nil
     }
 
-    static func draft(agentId: String, id: String = UUID().uuidString.lowercased()) -> ConversationSelection {
+    static func draft(agentId: String, id: String = UUID().uuidString.lowercased(), agentSetupLanguage: String? = nil) -> ConversationSelection {
         ConversationSelection(
             id: id,
             title: "新对话",
@@ -170,7 +174,8 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
             model: nil,
             thinkingLevel: nil,
             projectId: nil,
-            executionMode: nil
+            executionMode: nil,
+            agentSetupLanguage: agentSetupLanguage
         )
     }
 
@@ -236,7 +241,8 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
             model: model,
             thinkingLevel: thinkingLevel,
             projectId: projectId,
-            executionMode: executionMode
+            executionMode: executionMode,
+            agentSetupLanguage: agentSetupLanguage
         )
     }
 }

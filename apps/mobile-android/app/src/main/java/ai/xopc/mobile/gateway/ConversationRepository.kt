@@ -93,6 +93,7 @@ data class LocalConversationDraft(
   val createdAt: String,
   val projectId: String? = null,
   val executionMode: String? = null,
+  val agentSetupLanguage: String? = null,
 )
 
 private const val RECENT_CACHE_AGE = 72 * 60 * 60 * 1000L
@@ -174,6 +175,11 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
     return (attachmentStore ?: throw IllegalStateException("NO_ATTACHMENT_STORE"))
       .addWorkspaceFile(gatewayId, conversationId, file)
+  }
+
+  fun addComposerFileBytes(gatewayId: String, conversationId: String, name: String, mimeType: String, bytes: ByteArray) {
+    require(gateway.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
+    checkNotNull(attachmentStore).addBytes(gatewayId, conversationId, name, mimeType, bytes)
   }
 
   fun removeComposerAttachment(gatewayId: String, conversationId: String, attachmentId: String) {
@@ -268,7 +274,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
 
   @Synchronized
   fun createDraft(agentId: String = "main", projectId: String? = null,
-    executionMode: String? = null): LocalConversationDraft {
+    executionMode: String? = null, agentSetupLanguage: String? = null): LocalConversationDraft {
     val gatewayId = gateway.currentProfile()?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
     require(agentId.isNotBlank()) { "INVALID_AGENT_ID" }
     require(projectId == null || projectId.matches(Regex("[A-Za-z0-9_-]{1,128}"))) { "INVALID_PROJECT_ID" }
@@ -277,7 +283,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val resolvedMode = if (projectId != null && executionMode == null)
       defaultProjectExecutionMode(projectId) else executionMode
     val draft = LocalConversationDraft(UUID.randomUUID().toString(), agentId, "", "off", Instant.now().toString(),
-      projectId, resolvedMode)
+      projectId, resolvedMode, agentSetupLanguage)
     persistLocalDraft(gatewayId, draft)
     return draft
   }
@@ -298,7 +304,8 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     return LocalConversationDraft(conversationId, json.getString("agentId"), json.getString("model"),
       json.getString("thinkingLevel"), json.getString("createdAt"),
       if (json.isNull("projectId")) null else json.optString("projectId").takeIf(String::isNotBlank),
-      if (json.isNull("executionMode")) null else json.optString("executionMode").takeIf(String::isNotBlank))
+      if (json.isNull("executionMode")) null else json.optString("executionMode").takeIf(String::isNotBlank),
+      json.optString("agentSetupLanguage").takeIf { it in setOf("zh-CN", "en") })
   }
 
   fun projectDrafts(projectId: String): List<LocalConversationDraft> {
@@ -314,10 +321,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val existing = draft(conversationId) ?: return
     val gatewayId = gateway.currentProfile()?.gatewayId ?: throw IllegalStateException("NOT_PAIRED")
     val ready = if (existing.model.isBlank()) prepareDraftModel(conversationId) else existing
-    val creation = JSONObject().put("agentId", ready.agentId).put("projectId", ready.projectId ?: JSONObject.NULL)
-      .put("execution", ready.executionMode?.let { JSONObject().put("mode", it) } ?: JSONObject.NULL)
-      .put("temporary", false).put("model", ready.model)
-      .put("thinkingLevel", ready.thinkingLevel)
+    val creation = creationJson(ready)
     val body = JSONObject().put("commandId", conversationId).put("purpose", purpose)
       .put("creation", creation)
     val raw = gateway.request("/api/sessions/$conversationId/materialize", "POST", body.toString())
@@ -385,6 +389,13 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     .put("thinkingLevel", draft.thinkingLevel).put("createdAt", draft.createdAt)
     .put("projectId", draft.projectId ?: JSONObject.NULL)
     .put("executionMode", draft.executionMode ?: JSONObject.NULL)
+    .putOpt("agentSetupLanguage", draft.agentSetupLanguage)
+
+  private fun creationJson(draft: LocalConversationDraft) = JSONObject()
+    .put("agentId", draft.agentId).put("projectId", draft.projectId ?: JSONObject.NULL)
+    .put("execution", draft.executionMode?.let { JSONObject().put("mode", it) } ?: JSONObject.NULL)
+    .put("temporary", false).put("model", draft.model).put("thinkingLevel", draft.thinkingLevel)
+    .apply { draft.agentSetupLanguage?.let { put("agentSetup", true).put("agentSetupLanguage", it) } }
 
   private fun defaultProjectExecutionMode(projectId: String): String? {
     val result = JSONObject(gateway.request("/api/projects/${encode(projectId)}"))
@@ -710,7 +721,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
   /** Replays the same command identity after an uncertain transport result. */
   fun send(conversationId: String, content: String, claim: TurnClaim,
     refs: List<ConversationContextRef> = emptyList(),
-    attachments: List<ChatAttachment> = emptyList()): String {
+    attachments: List<ChatAttachment> = emptyList(), clientMessageId: String = UUID.randomUUID().toString()): String {
     require(conversationId.matches(Regex("[0-9a-fA-F-]{36}"))) { "INVALID_CONVERSATION_ID" }
     require(content.isNotBlank() || refs.isNotEmpty() || attachments.isNotEmpty()) { "EMPTY_INPUT" }
     val contextRefs = contextRefsJson(refs, includeTitle = false)
@@ -733,18 +744,15 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         }
       } else existing
       require(local.model.isNotBlank()) { "MODEL_UNAVAILABLE" }
-      JSONObject().put("kind", "start").put("clientMessageId", UUID.randomUUID().toString())
+      JSONObject().put("kind", "start").put("clientMessageId", clientMessageId)
         .put("localAttachments", localAttachments)
-        .put("creation", JSONObject().put("agentId", local.agentId).put("projectId", local.projectId ?: JSONObject.NULL)
-          .put("execution", local.executionMode?.let { JSONObject().put("mode", it) } ?: JSONObject.NULL)
-          .put("temporary", false).put("model", local.model)
-          .put("thinkingLevel", local.thinkingLevel))
+        .put("creation", creationJson(local))
         .put("input", JSONObject().put("content", content)
           .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) })
     } ?: run {
       val transcriptId = history(conversationId).transcriptId ?: throw IllegalStateException("SESSION_IDENTITY_UNAVAILABLE")
       val configVersion = parseConfigVersion(gateway.request("/api/sessions/$conversationId/agent-config"))
-      JSONObject().put("kind", "append").put("clientMessageId", UUID.randomUUID().toString())
+      JSONObject().put("kind", "append").put("clientMessageId", clientMessageId)
         .put("localAttachments", localAttachments)
         .put("expectedTranscriptId", transcriptId).put("configVersion", configVersion)
         .put("delivery", "next").put("input", JSONObject().put("content", content)
@@ -812,7 +820,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
   /** Task input uses the active Task conversation and replays one durable client message ID on retry. */
   fun sendTask(taskId: String, conversationId: String, content: String, claim: TurnClaim,
     refs: List<ConversationContextRef> = emptyList(),
-    attachments: List<ChatAttachment> = emptyList()): String {
+    attachments: List<ChatAttachment> = emptyList(), clientMessageId: String = UUID.randomUUID().toString()): String {
     require(taskId.matches(Regex("[A-Za-z0-9_-]{1,128}")) &&
       runCatching { UUID.fromString(conversationId) }.isSuccess &&
       (content.isNotBlank() || refs.isNotEmpty() || attachments.isNotEmpty())) { "INVALID_TASK_INPUT" }
@@ -831,7 +839,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
       val transcriptId = history(conversationId).transcriptId ?: throw IllegalStateException("SESSION_IDENTITY_UNAVAILABLE")
       val configVersion = parseModelConfig(gateway.request("/api/sessions/$conversationId/agent-config")).second
       JSONObject().put("kind", "task").put("taskId", taskId).put("localAttachments", localAttachments)
-        .put("clientMessageId", UUID.randomUUID().toString())
+        .put("clientMessageId", clientMessageId)
         .put("expectedTranscriptId", transcriptId).put("configVersion", configVersion)
         .put("delivery", "next").put("input", JSONObject().put("content", content)
           .apply { if (refs.isNotEmpty()) put("contextRefs", contextRefs) })
@@ -1237,8 +1245,9 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
             block.optString("text").replace(Regex("\\s+"), " ").trim().take(160)) }?.takeIf { it.text.isNotBlank() }
         }
         if (text.isBlank() && !hasNonTextContent) null else
-          ConversationMessage(item.optString("id").ifBlank { item.optString("messageId").ifBlank { "$index" } }, role, text,
+          ConversationMessage(messageId, role, text,
             item.optString("turnId").takeIf(String::isNotBlank), hasNonTextContent, media, references, targets, outcome,
+            renderId = metadata?.optString("clientMessageId")?.takeIf { role == "user" && it.isNotBlank() } ?: messageId,
             narrations = narrations, generatedMediaIds = generatedMediaIds,
             agentReaction = item.optJSONObject("agentReaction")?.takeIf { role == "user" &&
               it.optString("entryId") == item.optString("transcriptEntryId") }?.let {

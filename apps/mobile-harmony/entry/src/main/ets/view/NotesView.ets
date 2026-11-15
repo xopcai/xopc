@@ -1,4 +1,4 @@
-import { XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { common } from '@kit.AbilityKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcNote, XopcNoteAttachment, XopcNoteHistoryEntry, XopcNoteIndexEntry, XopcNoteStatus } from '../model/note';
@@ -7,7 +7,7 @@ import { XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcBrandLoading, XopcEmptyHint, XopcHubRow, XopcListSkeleton } from './MobileComponents';
+import { XopcBrandLoading, XopcEmptyHint, XopcHubRow, XopcListSkeleton, XopcPaginationFooter } from './MobileComponents';
 import { XopcNativeNoteEditor } from './NativeNoteEditor';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcVoiceCapture } from '../service/voiceCapture';
@@ -206,10 +206,10 @@ export struct XopcNotesView {
           .layoutWeight(1).height(44).backgroundColor(this.colors.input)
           .borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .onChange((value: string): void => { this.model.search = value; })
-          .onSubmit((): void => { void this.model.list(); })
+          .onSubmit((): void => { void this.model.list(false, true); })
         Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary]) }
           .width(44).height(44).padding(0).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
-          .accessibilityText($r('app.string.refresh')).onClick((): void => { void this.model.list(); })
+          .accessibilityText($r('app.string.refresh')).onClick((): void => { void this.model.list(false, true); })
       }.width('100%')
       XopcSegmentedTabs({ options: [
         { key: '', label: $r('app.string.note_all') },
@@ -257,13 +257,17 @@ export struct XopcNotesView {
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
               }.width('100%').constraintSize({ minHeight: 96 }).padding(0).backgroundColor(this.colors.panel)
                 .borderRadius(this.colors.corner(16))
-                .onClick((): void => { if (this.model.selecting) this.model.toggleSelection(item.id); else void this.model.open(item.id); })
+                .onClick((): void => {
+                  if (this.model.selecting) this.model.toggleSelection(item.id); else void this.model.open(item.id);
+                }, SEGMENTED_PAGE_TAP_SLOP_VP)
                 .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => { this.model.toggleSelection(item.id); }))
             }
           }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
           if (this.model.hasMore) {
-            ListItem() { Button($r('app.string.load_more')).width('100%').height(44).enabled(!this.model.loadingMore)
-              .onClick((): void => { void this.model.list(true); }) }
+            ListItem() {
+              XopcPaginationFooter({ loadingPage: this.model.loadingMore, failedPage: !!this.model.error,
+                onLoad: (): void => { void this.model.list(true); } })
+            }
           }
         }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
       }

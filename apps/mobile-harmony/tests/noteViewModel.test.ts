@@ -73,6 +73,27 @@ describe('native notes list', () => {
     expect(mocks.list).toHaveBeenCalledTimes(3);
   });
 
+  it('paginates by remote rows even when local drafts and overlapping pages are visible', async () => {
+    mocks.pending.mockResolvedValueOnce([{
+      noteId: 'local:draft', title: 'Draft', markdown: 'Unsynced note', updatedAt: 10,
+    }]);
+    mocks.list.mockResolvedValueOnce({ ...page(['first']), hasMore: true });
+    const vm = new XopcNoteViewModel();
+    await vm.start({} as never);
+
+    vm.search = 'not yet submitted';
+    mocks.list.mockResolvedValueOnce({ ...page(['first', 'second']), hasMore: true });
+    await Promise.all([vm.list(true), vm.list(true)]);
+    expect(mocks.list).toHaveBeenCalledTimes(2);
+    expect(mocks.list).toHaveBeenLastCalledWith('', '', 1, '');
+
+    mocks.list.mockResolvedValueOnce(page(['third']));
+    await vm.list(true);
+    expect(mocks.list).toHaveBeenLastCalledWith('', '', 3, '');
+    expect(vm.items.map((item) => item.id)).toEqual(['local:draft', 'first', 'second', 'third']);
+    expect(vm.hasMore).toBe(false);
+  });
+
   it('restores the unfiltered list when search closes before the search response', async () => {
     const vm = new XopcNoteViewModel();
     await vm.start({} as never);

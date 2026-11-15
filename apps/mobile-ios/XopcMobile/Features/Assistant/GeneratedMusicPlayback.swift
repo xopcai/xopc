@@ -30,11 +30,20 @@ final class GeneratedMusicPlayback {
     private(set) var duration: Double = 0
     private(set) var position: Double = 0
     private(set) var localURL: URL?
-    var expanded = false
+    private(set) var previewTrack: GeneratedMusicTrack?
+    var expanded = false {
+        didSet {
+            if !expanded {
+                previewTrack = nil
+                previewDownloader = nil
+            }
+        }
+    }
 
     @ObservationIgnored private var player: AVAudioPlayer?
     @ObservationIgnored private var load: Task<Void, Never>?
     @ObservationIgnored private var updates: Task<Void, Never>?
+    @ObservationIgnored private var previewDownloader: (() async throws -> URL)?
     @ObservationIgnored private var downloader: (() async throws -> URL)?
     @ObservationIgnored private var playWhenReady = true
     @ObservationIgnored private var remoteTargets: [(MPRemoteCommand, Any)] = []
@@ -50,6 +59,22 @@ final class GeneratedMusicPlayback {
         downloader = downloading
         duration = track.duration ?? 0
         prepare()
+    }
+
+    func openPreview(_ track: GeneratedMusicTrack, downloading: @escaping () async throws -> URL) {
+        previewTrack = track
+        previewDownloader = downloading
+        expanded = true
+    }
+
+    func playPreview() {
+        guard let previewTrack, let previewDownloader else { return }
+        play(previewTrack, downloading: previewDownloader)
+    }
+
+    func downloadPreview() async throws -> URL {
+        guard let download = previewDownloader ?? downloader else { throw GatewayClientError.invalidResponse }
+        return try await download()
     }
 
     func toggle() {
@@ -108,6 +133,11 @@ final class GeneratedMusicPlayback {
     }
 
     func validateScope(_ configuration: GatewayConfiguration) {
+        if let previewTrack, configuration.token.isEmpty ||
+            previewTrack.configurationScope != ComposerDraftStore.accountScope(configuration)
+        {
+            expanded = false
+        }
         if let track, configuration.token.isEmpty ||
             track.configurationScope != ComposerDraftStore.accountScope(configuration)
         {
@@ -358,121 +388,147 @@ struct GeneratedMusicPlayButton: View {
 }
 
 struct GeneratedMusicPlayer: View {
-    @Environment(\.mobileTheme) private var mobileTheme
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.mobileTheme) private var theme
     let playback: GeneratedMusicPlayback
     let onSource: (GeneratedMusicTrack) -> Void
-    @State private var showLyrics = true
+    @State private var share: FileShareItem?
+    @State private var downloadError = false
+    @State private var downloading = false
 
     var body: some View {
-        if let track = playback.track {
+        if let track = playback.previewTrack ?? playback.track {
+            let current = playback.track?.key == track.key
+            MobilePreview(title: track.title, closeID: "music-player-close", onClose: { playback.expanded = false }) {
+                if current, let url = playback.localURL {
+                    ShareLink(item: url) { Label("导出音频", systemImage: "square.and.arrow.up") }
+                } else {
+                    Button("导出音频", systemImage: "square.and.arrow.up") { download(track.key) }
+                        .disabled(downloading)
+                }
+                if !track.conversationID.isEmpty {
+                    Button("返回来源对话", systemImage: "bubble.left") { onSource(track) }
+                        .accessibilityIdentifier("music-return-source")
+                }
+                if current {
+                    Button("停止播放", systemImage: "stop", role: .destructive, action: playback.stop)
+                }
+            } content: {
+                MusicPreviewContent(playback: playback, track: track, onPlay: playback.playPreview)
+                if downloadError {
+                    Text("无法导出音频，请重试").font(.footnote).foregroundStyle(theme.secondary)
+                }
+            }
+            .sheet(item: $share) { item in
+                FileShareSheet(url: item.url).onDisappear {
+                    try? FileManager.default.removeItem(at: item.url.deletingLastPathComponent())
+                }
+            }
+        }
+    }
+
+    private func download(_ key: String) {
+        downloading = true
+        downloadError = false
+        Task {
+            defer { downloading = false }
+            do {
+                let url = try await playback.downloadPreview()
+                if playback.expanded, (playback.previewTrack ?? playback.track)?.key == key {
+                    share = FileShareItem(url: url)
+                } else {
+                    try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+                }
+            } catch {
+                downloadError = true
+            }
+        }
+    }
+}
+
+private struct TimedLyric {
+    let seconds: Double
+    let text: String
+
+    static func parse(_ lyrics: String) -> [Self] {
+        var lines: [Self] = []
+        for line in lyrics.split(whereSeparator: \.isNewline) {
+            let value = line.trimmingCharacters(in: .whitespaces)
+            if value.isEmpty { continue }
+            guard value.first == "[", let end = value.firstIndex(of: "]") else { return [] }
+            let parts = value[value.index(after: value.startIndex) ..< end].split(separator: ":")
+            guard parts.count == 2, let minutes = Int(parts[0]), minutes >= 0,
+                  let seconds = Double(parts[1]), seconds >= 0, seconds < 60 else { return [] }
+            let text = value[value.index(after: end)...].trimmingCharacters(in: .whitespaces)
+            lines.append(Self(seconds: Double(minutes) * 60 + seconds, text: text))
+        }
+        return lines.sorted { $0.seconds < $1.seconds }
+    }
+}
+
+struct MusicPreviewContent: View {
+    @Environment(\.mobileTheme) private var theme
+    let playback: GeneratedMusicPlayback
+    let track: GeneratedMusicTrack
+    var onPlay: (() -> Void)?
+    @State private var showLyrics = false
+
+    private var isCurrent: Bool { playback.track?.key == track.key }
+
+    var body: some View {
+        let lyrics = track.lyrics?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        VStack(spacing: 8) {
+            Group {
+                if showLyrics && !lyrics.isEmpty {
+                    ScrollView {
+                        lyricContent(lyrics)
+                            .frame(maxWidth: 480, alignment: .leading).padding(24)
+                    }
+                } else {
+                    ViewThatFits(in: .vertical) {
+                        GeneratedMusicCover().frame(width: 232, height: 232)
+                        GeneratedMusicCover().frame(width: 128, height: 128)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("music-player-content")
+
             VStack(spacing: 4) {
-                header
-                trackHeader(track)
-                Group {
-                    if showLyrics, let lyrics = track.lyrics, hasLyrics(track) {
-                        ScrollView {
-                            Text(lyrics).font(.title3.weight(.semibold)).lineSpacing(10)
-                                .textSelection(.enabled).accessibilityIdentifier("music-lyrics-text")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 24).padding(.vertical, 20)
-                                .frame(maxWidth: 480).frame(maxWidth: .infinity)
-                        }
-                        .accessibilityIdentifier("music-player-content")
-                    } else {
-                        ViewThatFits(in: .vertical) {
-                            GeneratedMusicCover().frame(width: 232, height: 232)
-                            GeneratedMusicCover().frame(width: 128, height: 128)
-                            Spacer(minLength: 0)
-                        }
-                    }
+                if isCurrent && playback.phase == .failed {
+                    Text("无法播放音乐").font(.footnote).foregroundStyle(theme.secondary)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id(track.key)
-                VStack(alignment: .trailing, spacing: 4) {
-                    if playback.phase == .failed {
-                        Text("无法播放音乐").font(.footnote).foregroundStyle(mobileTheme.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    trackActions(track)
-                    GeneratedMusicTimeline(playback: playback)
+                if !lyrics.isEmpty {
+                    Button(showLyrics ? "收起歌词" : "歌词", systemImage: "quote.bubble") { showLyrics.toggle() }
+                        .font(.footnote.weight(.medium)).frame(minHeight: 44)
+                        .accessibilityIdentifier("music-lyrics")
                 }
-                .padding(.horizontal, 24).padding(.bottom, 12)
-                .frame(maxWidth: 480)
+                GeneratedMusicTimeline(playback: playback, track: track, onPlay: onPlay)
             }
-            .padding(.top, 14)
-            .foregroundStyle(mobileTheme.foreground)
-            .onChange(of: track.key) { showLyrics = true }
-            .presentationDetents([.fraction(0.88), .large])
-            .presentationDragIndicator(.visible)
-            .presentationCornerRadius(mobileTheme.corner(28))
-            .presentationBackground(mobileTheme.canvas)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 24).padding(.bottom, 12)
+            .frame(maxWidth: 480)
         }
+        .onChange(of: track.key) { showLyrics = false }
     }
 
-    private var header: some View {
-        HStack(spacing: 0) {
-            Button("收起播放器", systemImage: "chevron.down") { playback.expanded = false }
-                .labelStyle(.iconOnly).frame(width: 44, height: 44)
-                .accessibilityIdentifier("music-minimize")
-            Text("正在播放").font(.subheadline.weight(.medium)).foregroundStyle(mobileTheme.secondary)
-                .frame(maxWidth: .infinity)
-            Button("停止播放", systemImage: "xmark", action: playback.stop)
-                .labelStyle(.iconOnly).frame(width: 44, height: 44)
-                .accessibilityIdentifier("music-player-close")
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 12).frame(maxWidth: 480)
-    }
-
-    private func trackHeader(_ track: GeneratedMusicTrack) -> some View {
-        HStack(spacing: 12) {
-            GeneratedMusicCover().frame(width: 52, height: 52)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(track.title).font(.headline).lineLimit(2).accessibilityAddTraits(.isHeader)
-                Group {
-                    if track.source.isEmpty {
-                        Text("音乐")
-                    } else {
-                        Text(track.source)
-                    }
+    @ViewBuilder private func lyricContent(_ lyrics: String) -> some View {
+        let lines = TimedLyric.parse(lyrics)
+        if lines.isEmpty {
+            Text(verbatim: lyrics).font(.title3.weight(.semibold)).lineSpacing(10)
+                .textSelection(.enabled).accessibilityIdentifier("music-lyrics-text")
+        } else {
+            let active = isCurrent ? lines.lastIndex { $0.seconds <= playback.position } : nil
+            VStack(alignment: .leading, spacing: 16) {
+                ForEach(lines.indices, id: \.self) { index in
+                    Button(lines[index].text) { playback.seek(lines[index].seconds) }
+                        .buttonStyle(.plain).disabled(!isCurrent || playback.localURL == nil)
+                        .foregroundStyle(active == index ? theme.action : theme.foreground)
                 }
-                .font(.footnote).foregroundStyle(mobileTheme.secondary).lineLimit(1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Button("返回来源对话", systemImage: "bubble.left") { onSource(track) }
-                .labelStyle(.iconOnly).frame(width: 44, height: 44)
-                .foregroundStyle(mobileTheme.secondary)
-                .buttonStyle(.plain).accessibilityIdentifier("music-return-source")
+            .font(.title3.weight(.semibold))
+            .accessibilityIdentifier("music-lyrics-text")
         }
-        .padding(.horizontal, 24).padding(.vertical, 4).frame(maxWidth: 480)
-    }
-
-    private func hasLyrics(_ track: GeneratedMusicTrack) -> Bool {
-        track.lyrics?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-    }
-
-    private func trackActions(_ track: GeneratedMusicTrack) -> some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(spacing: 8))
-        return layout {
-            if let url = playback.localURL {
-                ShareLink(item: url) { actionLabel("导出音频", icon: "square.and.arrow.up") }
-            }
-            if hasLyrics(track) {
-                Button { showLyrics.toggle() } label: {
-                    actionLabel(showLyrics ? "收起歌词" : "歌词", icon: "quote.bubble")
-                }
-                .accessibilityIdentifier("music-lyrics")
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func actionLabel(_ title: LocalizedStringKey, icon: String) -> some View {
-        Label(title, systemImage: icon).font(.footnote.weight(.medium)).foregroundStyle(mobileTheme.action)
-            .padding(.horizontal, 8).frame(minHeight: 44)
     }
 }
 
@@ -484,8 +540,7 @@ private struct GeneratedMusicCover: View {
             let width = geometry.size.width
             let shape = RoundedRectangle(cornerRadius: mobileTheme.corner(width < 80 ? 12 : 24))
             ZStack {
-                shape.fill(LinearGradient(colors: [mobileTheme.action.opacity(0.13), mobileTheme.card],
-                                          startPoint: .topLeading, endPoint: .bottomTrailing))
+                shape.fill(mobileTheme.card)
                 Circle().fill(mobileTheme.input.opacity(0.5)).frame(width: width * 0.74)
                 Circle().fill(mobileTheme.bubble).frame(width: width * 0.56)
                 Circle().fill(mobileTheme.canvas).frame(width: width * 0.39)
@@ -501,25 +556,40 @@ private struct GeneratedMusicTimeline: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let playback: GeneratedMusicPlayback
 
+    let track: GeneratedMusicTrack
+    var onPlay: (() -> Void)?
+
+    private var current: Bool { playback.track?.key == track.key }
+    private var position: Double { current ? playback.position : 0 }
+    private var duration: Double { current ? playback.duration : track.duration ?? 0 }
+
     private var canSeek: Bool {
-        playback.duration > 0 && playback.phase != .failed && playback.phase != .loading
+        current && duration > 0 && playback.phase != .failed && playback.phase != .loading
     }
 
     var body: some View {
         VStack(spacing: 4) {
-            Slider(value: Binding(get: { playback.position }, set: { playback.seek($0) }),
-                   in: 0 ... max(1, playback.duration))
+            Slider(value: Binding(get: { position }, set: { playback.seek($0) }),
+                   in: 0 ... max(1, duration))
                 .tint(mobileTheme.action).disabled(!canSeek)
                 .accessibilityLabel("播放进度").accessibilityIdentifier("music-progress")
             HStack {
-                Text(time(playback.position)).accessibilityIdentifier("music-elapsed")
+                Text(time(position)).accessibilityIdentifier("music-elapsed")
                 Spacer()
-                Text(playback.duration > 0 ? time(playback.duration) : "–:–")
+                Text(duration > 0 ? time(duration) : "–:–")
             }
             .font(.caption.monospacedDigit()).foregroundStyle(mobileTheme.secondary)
             HStack(spacing: 32) {
                 skipButton(-15)
-                GeneratedMusicPlayButton(playback: playback, prominent: true)
+                if current {
+                    GeneratedMusicPlayButton(playback: playback, prominent: true)
+                } else if let onPlay {
+                    Button("播放", systemImage: "play.fill", action: onPlay)
+                        .labelStyle(.iconOnly).font(.system(size: 24, weight: .semibold))
+                        .frame(width: 64, height: 64)
+                        .foregroundStyle(mobileTheme.onAction).background(mobileTheme.action, in: .circle)
+                        .accessibilityIdentifier("music-play-toggle")
+                }
                 skipButton(15)
             }
             .padding(.top, 8)

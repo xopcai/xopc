@@ -7,6 +7,7 @@ export interface XopcCapabilityItem {
   group: string;
   description?: string;
   avatar?: string;
+  iconUrl?: string;
   targetId?: string;
   version?: string;
   issue?: string;
@@ -20,6 +21,17 @@ export interface XopcCapabilityPage {
 interface CapabilityEnvelope {
   ok: boolean;
   payload?: XopcCapabilityPage;
+}
+
+interface ConversationMcpEnvelope { ok: boolean; payload?: ConversationMcpAvailability; }
+interface ConversationMcpAvailability { available?: boolean; }
+
+export async function hasConversationMcpSetup(conversationId: string): Promise<boolean> {
+  const revision = gatewaySession.connectionRevision();
+  const url = '/api/capabilities/mobile-actions/panel/connections?id=' + encodeURIComponent('conversation:' + conversationId);
+  const response = JSON.parse(await gatewaySession.request(url)) as ConversationMcpEnvelope;
+  gatewaySession.assertConnection(revision);
+  return response.ok && response.payload?.available === true;
 }
 
 export async function loadCapabilities(category: string): Promise<XopcCapabilityPage> {

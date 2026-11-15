@@ -50,6 +50,9 @@ export class XopcNoteViewModel {
   private projectId: string = '';
   private draftsReady?: Promise<void>;
   private listInFlight: boolean = false;
+  private listOffset: number = 0;
+  private listedSearch: string = '';
+  private listedStatus: XopcNoteStatus | '' = '';
 
   async start(context: common.Context, initialId: string = '', initialStatus: XopcNoteStatus | '' = '', projectId: string = ''): Promise<void> {
     this.projectId = projectId;
@@ -84,21 +87,28 @@ export class XopcNoteViewModel {
 
   async list(more: boolean = false, replace: boolean = false): Promise<void> {
     if ((this.loading || this.loadingMore) && !(replace && this.listInFlight)) return;
+    if (more && !this.hasMore) return;
     this.listInFlight = true;
     const generation = ++this.generation;
     this.loadingMore = more; this.loading = !more;
     this.error = '';
     try {
-      const remoteRequest = this.repository.list(this.search, this.status, more ? this.items.length : 0, this.projectId);
+      const offset = more ? this.listOffset : 0;
+      const search = more ? this.listedSearch : this.search;
+      const status = more ? this.listedStatus : this.status;
+      const remoteRequest = this.repository.list(search, status, offset, this.projectId);
       if (this.draftsReady) await Promise.all([this.draftsReady, remoteRequest]);
       const result = await remoteRequest;
       if (generation !== this.generation) return;
       const remoteItems = more ? this.items.concat(result.items.filter((item: XopcNoteIndexEntry): boolean =>
         !this.items.some((current: XopcNoteIndexEntry): boolean => current.id === item.id))) : result.items;
-      const items = more ? remoteItems : await this.mergePendingDrafts(remoteItems);
+      const items = more ? remoteItems : await this.mergePendingDrafts(remoteItems, search, status);
       if (generation !== this.generation) return;
       this.items = items;
-      this.hasMore = result.hasMore ?? false;
+      this.listOffset = offset + result.items.length;
+      this.listedSearch = search;
+      this.listedStatus = status;
+      this.hasMore = !!result.hasMore && result.items.length > 0;
     } catch (error) {
       if (generation === this.generation) {
         this.error = (error as Error).message;
@@ -499,13 +509,13 @@ export class XopcNoteViewModel {
     this.items = [entry].concat(this.items.filter((item: XopcNoteIndexEntry): boolean => item.id !== note.id));
   }
 
-  private async mergePendingDrafts(remoteItems: XopcNoteIndexEntry[]): Promise<XopcNoteIndexEntry[]> {
+  private async mergePendingDrafts(remoteItems: XopcNoteIndexEntry[], search: string, status: XopcNoteStatus | ''): Promise<XopcNoteIndexEntry[]> {
     const pending = await this.drafts.pending();
     const localEntries = pending.filter((draft: XopcNoteDraft): boolean => draft.noteId.startsWith(LOCAL_NOTE_PREFIX))
       .filter((draft: XopcNoteDraft): boolean => !this.projectId || draft.projectId === this.projectId)
-      .filter((draft: XopcNoteDraft): boolean => !this.search.trim()
-        || (draft.title + '\n' + draft.markdown).toLowerCase().includes(this.search.trim().toLowerCase()))
-      .filter((_draft: XopcNoteDraft): boolean => !this.status || this.status === 'inbox')
+      .filter((draft: XopcNoteDraft): boolean => !search.trim()
+        || (draft.title + '\n' + draft.markdown).toLowerCase().includes(search.trim().toLowerCase()))
+      .filter((_draft: XopcNoteDraft): boolean => !status || status === 'inbox')
       .map((draft: XopcNoteDraft): XopcNoteIndexEntry => ({
         id: draft.noteId,
         title: deriveNoteTitle(draft.title, draft.markdown),

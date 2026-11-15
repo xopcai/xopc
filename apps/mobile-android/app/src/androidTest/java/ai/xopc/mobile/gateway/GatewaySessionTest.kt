@@ -34,6 +34,31 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GatewaySessionTest {
+  @Test fun pairedLibraryUsesSpaceVersionsAndRevisionCheckedMutations() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val store = AndroidSecureStore(context, "space_library_test_v1", "xopc.gateway.credentials.space.library.test.v1")
+    val fake = FakeGateway()
+    val session = GatewaySession(context, fake, DeviceIdentity("xopc.gateway.device.space.library.test.v1"), store)
+    clear(store)
+    try {
+      session.pair(invitation()) {}
+      val profile = checkNotNull(session.currentProfile())
+      val library = SpaceLibraryAccess(session)
+      val page = library.page(profile, "all", "Meeting notes", "document")
+      assertEquals("/api/spaces/items?view=all&q=Meeting%20notes&kind=document", fake.lastLibraryPath)
+      val file = page.items.single()
+      val detail = library.detail(profile, file.id)
+      assertEquals(listOf("v2", "v1"), detail.versions.map { it.id })
+      assertEquals("old version", library.content(profile, file.id, detail.versions.last()).decodeToString())
+      val favorite = checkNotNull(library.mutate(profile, file.id, detail.revision, "patch", favorite = true))
+      assertEquals(true, favorite.favorite)
+      library.mutate(profile, file.id, favorite.revision, "trash")
+      assertEquals(true, library.page(profile, "trash", "", "").items.single().trashed)
+      library.mutate(profile, file.id, favorite.revision + 1, "restore")
+      assertEquals(false, library.detail(profile, file.id).trashed)
+    } finally { clear(store) }
+  }
+
   @Test fun chatDefaultsToPersonalRestoresUserSelectionAndKeepsDraftWhenSwitchingImmediately() = runBlocking {
     val app = ApplicationProvider.getApplicationContext<Application>()
     val store = AndroidSecureStore(app, "home_chat_credentials_test_v1", "xopc.gateway.credentials.home.chat.test.v1")
@@ -945,6 +970,20 @@ class GatewaySessionTest {
     var lastModelPatch: JSONObject? = null
     var lastDirectoryPatch: JSONObject? = null
     var lastFileVersionRequest: JSONObject? = null
+    var lastLibraryPath = ""
+    private var libraryRevision = 1
+    private var libraryFavorite = false
+    private var libraryTrashed = false
+
+    private fun spaceItem(): JSONObject {
+      val current = JSONObject("""{"id":"v2","ordinal":2,"fileName":"brief.txt","mimeType":"text/plain",
+        "sizeBytes":12,"createdAt":2,"indexStatus":"ready"}""")
+      val old = JSONObject(current.toString()).put("id", "v1").put("ordinal", 1)
+      return JSONObject().put("id", "result-1").put("title", "Meeting notes").put("kind", "document")
+        .put("favorite", libraryFavorite).put("updatedAt", 2).put("revision", libraryRevision)
+        .put("trashedAt", if (libraryTrashed) 3 else JSONObject.NULL).put("currentVersion", current)
+        .put("versions", org.json.JSONArray().put(current).put(old))
+    }
     var lastRename: String? = null
     val pinActions = mutableListOf<String>()
     val archiveActions = mutableListOf<String>()
@@ -1003,6 +1042,29 @@ class GatewaySessionTest {
       assertEquals(fakeOrigin, origin)
       val input = if (body.isEmpty()) JSONObject() else JSONObject(body)
       return when {
+        path.startsWith("/api/spaces/items?") -> {
+          lastLibraryPath = path
+          val items = org.json.JSONArray()
+          if (libraryTrashed == path.contains("view=trash")) items.put(spaceItem())
+          JSONObject().put("items", items).toString()
+        }
+        path == "/api/spaces/items/result-1/versions/v1/content" -> "old version"
+        path == "/api/spaces/items/result-1" && method == "GET" -> spaceItem().toString()
+        path == "/api/spaces/items/result-1" && method == "PATCH" -> {
+          assertEquals(libraryRevision++, input.getInt("revision"))
+          libraryFavorite = input.getBoolean("favorite")
+          spaceItem().toString()
+        }
+        path == "/api/spaces/items/result-1" && method == "DELETE" -> {
+          assertEquals(libraryRevision++, input.getInt("revision"))
+          libraryTrashed = true
+          """{"ok":true}"""
+        }
+        path == "/api/spaces/items/result-1/restore" && method == "POST" -> {
+          assertEquals(libraryRevision++, input.getInt("revision"))
+          libraryTrashed = false
+          """{"ok":true}"""
+        }
         path == "/api/personal-agent" && method == "GET" ->
           """{"ok":true,"payload":{"state":"ready","agentId":"personal","displayName":"Ada",
             "conversationId":"bbbbbbbb-cccc-dddd-eeee-ffffffffffff"}}"""

@@ -559,14 +559,14 @@ export class AgentToolsFactory {
       canShowMcpSetupCard: () => {
         const origin = this.deps.getCurrentContext()?.origin;
         if (origin?.type !== 'endpoint') return false;
-        const kind = this.deps.endpointTools?.registry.get(origin.endpointId)?.kind;
-        return kind === 'web' || kind === 'desktop';
+        const endpoint = this.deps.endpointTools?.registry.get(origin.endpointId);
+        return endpoint?.kind === 'web' || endpoint?.kind === 'desktop' || endpoint?.mobileMcpSetupCard === true;
       },
       canOpenMobileMcpForm: () => {
         const origin = this.deps.getCurrentContext()?.origin;
         if (origin?.type !== 'endpoint') return false;
         const endpoint = this.deps.endpointTools?.registry.get(origin.endpointId);
-        return endpoint?.kind === 'mobile' && endpoint.platform === 'harmonyos';
+        return endpoint?.kind === 'mobile' && (endpoint.mobileMcpSetupCard === true || endpoint.platform === 'harmonyos');
       },
       canConfigureFromConversation: () => {
         const origin = this.deps.getCurrentContext()?.origin;

@@ -80,9 +80,15 @@
             "x-hidden": true
           }
         },
-        "required": [
-          "botToken"
-        ]
+        "if": {
+          "properties": { "enabled": { "const": false } },
+          "required": ["enabled"]
+        },
+        "else": {
+          "required": [
+            "botToken"
+          ]
+        }
       },
       "uiHints": {
         "botToken": {

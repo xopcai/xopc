@@ -189,6 +189,24 @@ it('prepares a public mobile form without probing or granting the device configu
   await expect(service.command('remove', { serverId: 'sample' }, mobile)).rejects.toThrow('active owner');
 });
 
+it('lets a card-capable mobile turn prepare an MCP connection for explicit owner approval', async () => {
+  const mobile = { ...context, canConfigure: false, canOpenMobileForm: true, showSetupCard: true };
+  const input = { serverId: 'sample', url: 'https://sample.example/mcp', purpose: 'Connect' };
+  await expect(service.command('start', { ...input, url: 'https://127.0.0.1/mcp' }, mobile)).rejects.toThrow('public HTTPS');
+  await expect(service.command('start', { ...input, expectedRevision: 'old' }, mobile)).rejects.toThrow('owner management');
+  const prepared = await service.command('start', input, mobile) as { setupId: string; version: number };
+  expect(prepared).toMatchObject({ phase: 'approval_required', interaction: 'chat_card', planApproval: { endpoint: input.url } });
+  expect(prepared).not.toHaveProperty('interactionPath');
+  expect(service.currentForConversation(context.conversationId).setup?.setupId).toBe(prepared.setupId);
+  await expect(service.command('advance', { setupId: prepared.setupId, expectedVersion: prepared.version }, mobile)).rejects.toThrow('active owner');
+  await expect(service.interact(prepared.setupId, 'approve', undefined, prepared.version, '')).rejects.toThrow('cannot be approved');
+  expect(native.probeMcpConnection).not.toHaveBeenCalled();
+  expect(config.mcp?.servers?.sample).toBeUndefined();
+  native.probeMcpConnection.mockResolvedValueOnce({ state: 'connected' });
+  await expect(service.interact(prepared.setupId, 'approve', undefined, prepared.version, 'paired-owner')).resolves.toMatchObject({ phase: 'ready' });
+  expect(config.mcp?.servers?.sample).toMatchObject({ url: input.url });
+});
+
 it('commits the tested server, preserves unrelated config and resumes once', async () => {
   const goal = await start();
   const ready = await service.command('advance', { setupId: goal.setupId, expectedVersion: goal.version }, context) as any;

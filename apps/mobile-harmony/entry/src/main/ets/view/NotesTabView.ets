@@ -1,4 +1,4 @@
-import { XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { XopcLocalRecording } from '../service/discussionRecordingStore';
@@ -10,7 +10,7 @@ import { XopcNoteIndexEntry } from '../model/note';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
 import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcFile } from '../model/files';
-import { XopcEmptyHint, XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcPageSearchField } from './MobileComponents';
+import { XopcEmptyHint, XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcPageSearchField, XopcPaginationFooter } from './MobileComponents';
 import { XopcNotesView } from './NotesView';
 import { userErrorMessage } from '../common/userError';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
@@ -329,12 +329,14 @@ export struct XopcNotesTabView {
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
               }.width('100%').constraintSize({ minHeight: 96 }).padding(0)
                 .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
-                .onClick((): void => { this.openNote(item.id); })
+                .onClick((): void => { this.openNote(item.id); }, SEGMENTED_PAGE_TAP_SLOP_VP)
             }
           }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
-          if (this.model.hasMore) {
-            ListItem() { Button($r('app.string.load_more')).width('100%').height(44).enabled(!this.model.loadingMore)
-              .onClick((): void => { void this.model.list(true); }) }
+          if (this.model.hasMore && (this.category === 'notes' || !!this.submittedQuery)) {
+            ListItem() {
+              XopcPaginationFooter({ loadingPage: this.model.loading || this.model.loadingMore, failedPage: !!this.model.error,
+                onLoad: (): void => { void this.model.list(true); } })
+            }
           }
           }
           if (this.showsFiles && (this.visibleFiles.length || this.files.busy || this.files.error || this.category === 'files')) {
@@ -366,7 +368,7 @@ export struct XopcNotesTabView {
                     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   }.width('100%').padding(14)
                 }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
-                  .onClick((): void => { this.onNavigate({ page: 'files', itemId: file.id }); })
+                  .onClick((): void => { this.onNavigate({ page: 'files', itemId: file.id }); }, SEGMENTED_PAGE_TAP_SLOP_VP)
               }
             }, (file: XopcFile): string => file.id)
           }

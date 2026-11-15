@@ -215,7 +215,7 @@ struct XopcIndex {
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet(this.music.expanded, this.musicPlayerSheet, { height: '88%', dragBar: true,
         showClose: false, backgroundColor: this.colors.chat.canvas,
-        onDisappear: (): void => { this.music.expanded = false; } })
+        onDisappear: (): void => { this.music.closePreview(); } })
     XopcVoiceCallView({ call: this.call, viewportWidth: this.viewportWidth, viewportHeight: this.viewportHeight })
     }.width('100%').height('100%')
       .onAreaChange((_previous: Area, current: Area): void => {

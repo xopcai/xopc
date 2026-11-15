@@ -4,6 +4,31 @@ import { XopcUserErrorContext } from '../common/userErrorClassifier';
 import { XopcLoopi } from './Loopi';
 
 @ComponentV2
+export struct XopcPaginationFooter {
+  @Param loadingPage: boolean = false;
+  @Param failedPage: boolean = false;
+  @Event onLoad: () => void = (): void => {};
+  @Local colors: XopcThemeColors = appThemeColors;
+
+  build() {
+    Row() {
+      if (this.loadingPage) {
+        LoadingProgress().width(22).height(22).color(this.colors.secondary)
+          .accessibilityText($r('app.string.loading'))
+      } else if (this.failedPage) {
+        Button($r('app.string.retry')).height(44).backgroundColor(Color.Transparent)
+          .fontColor(this.colors.accent).onClick(this.onLoad)
+      } else {
+        Blank().width('100%').height(32).accessibilityLevel('no')
+          .onVisibleAreaChange([0.25], (visible: boolean, ratio: number): void => {
+            if (visible && ratio >= 0.25 && !this.loadingPage && !this.failedPage) this.onLoad();
+          })
+      }
+    }.width('100%').height(this.loadingPage || this.failedPage ? 44 : 32).justifyContent(FlexAlign.Center)
+  }
+}
+
+@ComponentV2
 export struct XopcBrandLoading {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param compact: boolean = false;

@@ -18,7 +18,7 @@ export class XopcGeneratedMediaViewModel {
   private connectionRevision: number = 0;
   private generation: number = 0;
   private videoRevision: number = 0;
-  private timer: number = -1;
+  private pollTimers: Map<XopcGeneratedMediaKind, number> = new Map<XopcGeneratedMediaKind, number>();
 
   observe(id: string, scope: string, transcriptId: string, visible: boolean, busy: boolean): void {
     this.stop();
@@ -32,13 +32,15 @@ export class XopcGeneratedMediaViewModel {
     this.observing = visible && !!id && !!scope && !!transcriptId;
     if (this.observing) {
       this.connectionRevision = gatewaySession.connectionRevision();
-      void this.poll(id, busy, this.generation);
+      void this.poll('music', id, busy, this.generation);
+      void this.poll('video', id, busy, this.generation);
     }
   }
 
   stop(): void {
     this.observing = false; this.generation++;
-    clearTimeout(this.timer);
+    this.pollTimers.forEach((timer: number): void => { clearTimeout(timer); });
+    this.pollTimers.clear();
   }
 
   private async load(kind: XopcGeneratedMediaKind, id: string, generation: number, videoRevision: number): Promise<void> {
@@ -56,13 +58,12 @@ export class XopcGeneratedMediaViewModel {
     }
   }
 
-  private async poll(id: string, busy: boolean, generation: number): Promise<void> {
-    const revision = this.videoRevision;
-    await Promise.all([this.load('music', id, generation, revision), this.load('video', id, generation, revision)]);
+  private async poll(kind: XopcGeneratedMediaKind, id: string, busy: boolean, generation: number): Promise<void> {
+    await this.load(kind, id, generation, this.videoRevision);
     if (generation !== this.generation) return;
     const active = this.cards.some((card: XopcGeneratedMediaCard): boolean =>
-      ['queued', 'submitting', 'submitted', 'running', 'saving'].includes(card.item.state ?? ''));
-    this.timer = setTimeout((): void => { void this.poll(id, busy, generation); }, busy || active ? 3000 : 20000);
+      card.kind === kind && ['queued', 'submitting', 'submitted', 'running', 'saving'].includes(card.item.state ?? ''));
+    this.pollTimers.set(kind, setTimeout((): void => { void this.poll(kind, id, busy, generation); }, busy || active ? 3000 : 20000));
   }
 
   private replace(kind: XopcGeneratedMediaKind, cards: XopcGeneratedMediaCard[]): void {

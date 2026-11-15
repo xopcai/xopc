@@ -32,8 +32,10 @@ data class RunStreamEvent(val runId: String, val conversationId: String, val typ
       val runId = topic.removePrefix("run:")
       if (!topic.startsWith("run:") || data.optString("runId") != runId) return null
       val conversationId = data.optString("conversationId").takeIf(String::isNotBlank) ?: return null
-      if (event !in setOf("assistant_delta", "assistant_message_end", "clarify_request", "run_end", "error")) return null
+      if (event !in setOf("assistant_delta", "assistant_message_end", "clarify_request", "run_end", "error", "tool_end")) return null
       val payload = data.optJSONObject("payload") ?: return null
+      if (event == "tool_end" &&
+        (payload.optString("toolName") != "music_generation" || payload.optString("status") != "success")) return null
       return RunStreamEvent(runId, conversationId, event,
         (payload.opt("messageId") as? String)?.takeIf(String::isNotBlank),
         (payload.opt("delta") as? String)?.takeIf(String::isNotEmpty),
@@ -133,7 +135,7 @@ internal class RealtimeClient(
       override fun onOpen(webSocket: WebSocket, response: Response) {
         val hello = JSONObject().put("ticket", ticketPayload.getString("ticket"))
           .put("clientId", clientId).put("clientKind", "mobile")
-          .put("capabilities", JSONArray().put("endpoint.tools.v3"))
+          .put("capabilities", JSONArray().put("endpoint.tools.v3").put("mobile.mcp-setup-card.v1"))
           .put("subscriptions", JSONArray().put(JSONObject().put("topic", "gateway"))
             .put(JSONObject().put("topic", "sessions"))).put("endpoint", endpoint)
         webSocket.send(frame("realtime.hello", hello))

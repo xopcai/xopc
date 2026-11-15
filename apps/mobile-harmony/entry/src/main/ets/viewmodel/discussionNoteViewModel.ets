@@ -123,7 +123,8 @@ export class XopcDiscussionNoteViewModel {
     this.searchTimer = setTimeout((): void => { void this.refreshReview(); },250);
   }
   async refreshReview(more: boolean = false): Promise<void> {
-    const id = this.detail?.discussion.id; if (!id || (more && !this.review)) return;
+    const id = this.detail?.discussion.id;
+    if (!id || (more && (this.reviewLoading || !this.review?.hasMore))) return;
     const generation = this.generation; const request = ++this.reviewRequest; const connection = gatewaySession.connectionRevision();
     const previous = this.review; const query = this.reviewQuery;
     this.reviewLoading = true;
@@ -131,7 +132,10 @@ export class XopcDiscussionNoteViewModel {
       const result = await this.repository.review(id,query,more ? previous?.hits.length ?? 0 : 0,more ? previous?.version ?? '' : '');
       gatewaySession.assertConnection(connection);
       if (generation !== this.generation || request !== this.reviewRequest || query !== this.reviewQuery) return;
-      if (more && previous) result.hits = previous.hits.concat(result.hits);
+      if (more && previous) {
+        result.hasMore = result.hasMore && result.hits.length > 0;
+        result.hits = previous.hits.concat(result.hits);
+      }
       this.review = result; this.reviewError = '';
     } catch (caught) { if (generation === this.generation && request === this.reviewRequest) this.reviewError = (caught as Error).message; }
     finally { if (generation === this.generation && request === this.reviewRequest) this.reviewLoading = false; }

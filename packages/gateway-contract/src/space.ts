@@ -45,6 +45,12 @@ export type SpaceVersion = {
   sizeBytes: number;
   createdAt: number;
   indexStatus: 'pending' | 'ready' | 'unsupported' | 'failed';
+  music?: {
+    id: string;
+    conversationId: string;
+    lyrics: string | null;
+    durationMs: number | null;
+  };
 };
 
 export type SpaceItem = {

@@ -38,15 +38,14 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain("Text('↓').fontSize(20).fontColor(this.colors.secondary)");
     expect(jump).toContain('.height(36).width(36)');
     expect(jump).toContain('.responseRegion({ x: -4, y: -4, width: 44, height: 44 })');
-    expect(jump).toContain('this.resetMessagePosition(); this.updateReplySpace(); this.onMessageChange();');
+    expect(jump).toContain('this.resetMessagePosition(); this.saveReadingPosition(); this.onMessageChange();');
   });
 
-  it('gates the jump button on downward scrolling away from the latest message', () => {
+  it('shows the jump button when the reader leaves the latest messages', () => {
     expect(chat).toContain('@Local showJumpBottom: boolean = false;');
-    expect(chat).toContain('if (this.atBottom) { this.showJumpBottom = false; this.updateReplySpace(); }');
-    expect(chat).toContain('else if (offset !== 0) this.showJumpBottom = offset > 0;');
+    expect(chat).toContain('this.showJumpBottom = !this.atBottom && !this.isLatestVisible();');
     expect(chat).toContain('if (!this.atBottom && this.showJumpBottom)');
-    expect(chat).toContain('this.resetMessagePosition(); this.updateReplySpace(); this.onMessageChange();');
+    expect(chat).toContain('this.resetMessagePosition(); this.saveReadingPosition(); this.onMessageChange();');
   });
 
   it('replaces the jump arrow with the shared animated mascot while AI is responding', () => {
@@ -63,8 +62,8 @@ describe('chat bottom region composition', () => {
     expect(chat).toContain(".width('calc(100% - 24vp)').backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent)");
     expect(chat).toContain(".id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)");
     expect(chat).toContain(".id('chat-bottom-region').width('100%')");
-    expect(chat).toContain(".id('chat-reply-clearance')");
-    expect(chat).toContain('.height(this.bottomRegionHeight + this.replySpaceHeight)');
+    expect(chat).toContain(".id('chat-bottom-clearance')");
+    expect(chat).toContain('.height(this.bottomRegionHeight + 12)');
     expect(chat).toContain('this.bottomRegionHeight = Number(current.height);');
     expect(chat).toContain("}.id('chat-content-viewport').width('100%').height('100%')");
     expect(chat).toContain('.margin({ bottom: this.bottomRegionHeight + 8 })');

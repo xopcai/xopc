@@ -316,7 +316,23 @@ struct AppRootView: View {
         case .automations:
             AutomationsView(configuration: configuration, onOpenConversation: appState.openConversation).navigationTitle("自动化")
         case .library:
-            NotesView(configuration: configuration, onOpenConversation: appState.openConversation)
+            SpaceLibraryView(configuration: configuration, onOpenSource: { source in
+                if source.kind == "task", let taskID = source.taskId {
+                    appState.homePath.append(.libraryTask(taskID))
+                } else if source.kind == "automation", let runID = source.automationRunId {
+                    appState.homePath.append(.libraryAutomationRun(runID))
+                } else {
+                    appState.openConversation(id: source.conversationId, title: source.label ?? "", agentId: defaultAgentID)
+                }
+            }, onUseInChat: { attachment, origin in
+                try await appState.startLibraryConversation(configuration: configuration, agentID: defaultAgentID,
+                                                            attachment: attachment, origin: origin)
+            })
+        case let .libraryTask(taskID):
+            TaskDetailView(configuration: configuration, taskID: taskID)
+        case let .libraryAutomationRun(runID):
+            AutomationRunDetailView(configuration: configuration, runID: runID,
+                                    initialRun: nil, onOpenConversation: appState.openConversation)
         case .capabilities:
             CapabilitiesView(configuration: configuration, personal: personalAgent.record(using: configuration),
                              onOpenAgent: { id, personal in
@@ -325,7 +341,12 @@ struct AppRootView: View {
                                  } else {
                                      appState.startConversation(agentId: id)
                                  }
-                             }, onOpenDraft: { prompt in appState.startConversation(agentId: defaultAgentID, prompt: prompt) })
+                             },
+                             onSetupChat: { prompt, language in
+                                 appState.startCapabilityChat(agentId: defaultAgentID, prompt: prompt,
+                                     agentSetupLanguage: language)
+                             },
+                             onPersonalChanged: { Task { await personalAgent.refresh(using: configuration) } })
         case .personalOverview:
             if let agent = personalAgent.record(using: configuration) {
                 PersonalAgentOverview(configuration: configuration, agent: agent, attention: pendingAttention,

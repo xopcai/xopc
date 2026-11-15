@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -52,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -495,16 +497,17 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
     value = null
     value = runCatching { load(request.conversationId, activeMedia) }
   }
+  val export = rememberPreviewExport(activeMedia.mimeType.ifBlank { "application/octet-stream" })
+  val payload = result?.getOrNull()
+  PreviewHeader(activeMedia.name, onClose, "message-media-preview-close") { dismiss ->
+    DropdownMenuItem(text = { Text(stringResource(R.string.preview_download)) }, enabled = payload != null, onClick = {
+      dismiss()
+      if (payload != null) export(activeMedia.name) { it.write(payload) }
+    })
+  }
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
     .testTag("message-media-preview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    if (mediaPreviewKind(activeMedia) != "image") {
-      Text(activeMedia.name, style = MaterialTheme.typography.titleLarge, maxLines = 2,
-        overflow = TextOverflow.Ellipsis)
-      Text(mediaDetail(activeMedia.mimeType, activeMedia.size),
-        color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
     FileVersionAction(file, saveVersion)
-    val payload = result?.getOrNull()
     if (result == null) {
       BrandLoadingPanel(modifier = Modifier.testTag("message-media-preview-loading"))
     } else if (payload == null) {
@@ -513,6 +516,8 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
     } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) == PreviewFileKind.SVG) {
       FilePreviewContent(activeMedia.name, activeMedia.mimeType, payload,
         modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
+    } else if (activeMedia.mimeType.startsWith("video/")) {
+      MessageVideoPreview(payload, activeMedia)
     } else if (mediaPreviewKind(activeMedia) == "audio") {
       AudioMessagePreview(payload, activeMedia)
     } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) != PreviewFileKind.BINARY) {
@@ -521,11 +526,7 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
     } else {
       BinaryMessagePreview(payload, activeMedia)
     }
-    Spacer(Modifier.height(4.dp))
-    OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-      .testTag("message-media-preview-close")) {
-      Text(stringResource(R.string.assistant_close))
-    }
+
   }
 }
 
@@ -556,6 +557,14 @@ private fun MessageImageGallery(request: MessagePreviewRequest,
   var zoomed by remember(request) { mutableStateOf(false) }
   val versionState = rememberSaveableStateHolder()
   LaunchedEffect(pager.currentPage) { zoomed = false }
+  val selectedImage = gallery[pager.currentPage]
+  val export = rememberPreviewExport(selectedImage.mimeType.ifBlank { "image/*" })
+  PreviewHeader(selectedImage.name, onClose, "message-media-preview-close") { dismiss ->
+    DropdownMenuItem(text = { Text(stringResource(R.string.preview_download)) }, onClick = {
+      dismiss()
+      export(selectedImage.name) { it.write(load(request.conversationId, selectedImage)) }
+    })
+  }
   Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
     .testTag("message-media-preview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     val file = if (resolveFile == null) null
@@ -592,21 +601,20 @@ private fun MessageImageGallery(request: MessagePreviewRequest,
         Text(stringResource(R.string.message_next_image))
       }
     }
-    OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-      .testTag("message-media-preview-close")) { Text(stringResource(R.string.assistant_close)) }
+
   }
 }
 
 @Composable
-private fun ZoomableMessageImage(bitmap: android.graphics.Bitmap, label: String, identity: String,
-  active: Boolean, onZoomChanged: (Boolean) -> Unit) {
+internal fun ZoomableMessageImage(bitmap: android.graphics.Bitmap, label: String, identity: String,
+  active: Boolean, modifier: Modifier = Modifier.fillMaxWidth().height(420.dp), onZoomChanged: (Boolean) -> Unit) {
   var zoom by remember(identity) { mutableStateOf(1f) }
   var offset by remember(identity) { mutableStateOf(Offset.Zero) }
   val zoomChanged by rememberUpdatedState(onZoomChanged)
   LaunchedEffect(active) { zoom = 1f; offset = Offset.Zero }
-  Box(Modifier.fillMaxWidth().height(420.dp).clipToBounds()) {
+  Box(modifier.clipToBounds()) {
     androidx.compose.foundation.Image(bitmap.asImageBitmap(), label,
-      modifier = Modifier.fillMaxWidth().height(420.dp)
+      modifier = Modifier.fillMaxSize()
         .graphicsLayer { scaleX = zoom; scaleY = zoom; translationX = offset.x; translationY = offset.y }
         .testTag(if (active) "message-media-preview-image" else "message-media-preview-cached-$identity"), contentScale = ContentScale.Fit)
     Box(Modifier.matchParentSize().pointerInput(identity, bitmap, active) {
@@ -632,6 +640,32 @@ private fun ZoomableMessageImage(bitmap: android.graphics.Bitmap, label: String,
       }
     })
   }
+}
+
+@Composable
+private fun MessageVideoPreview(bytes: ByteArray, media: ConversationMedia) {
+  val context = LocalContext.current
+  var path by remember(media) { mutableStateOf<File?>(null) }
+  var failed by remember(media) { mutableStateOf(false) }
+  LaunchedEffect(media, bytes) {
+    var temporary: File? = null
+    try {
+      temporary = File.createTempFile("video-preview-", mediaExtension(media.name), context.cacheDir)
+      withContext(Dispatchers.IO) { temporary.writeBytes(bytes) }
+      path = temporary
+      kotlinx.coroutines.awaitCancellation()
+    } catch (error: kotlinx.coroutines.CancellationException) {
+      throw error
+    } catch (_: Exception) {
+      failed = true
+    } finally {
+      temporary?.delete()
+    }
+  }
+  val video = path
+  if (failed) Text(stringResource(R.string.message_preview_unavailable))
+  else if (video != null) PreviewVideo(video, Modifier.fillMaxWidth().height(360.dp), onError = { failed = true })
+  else BrandLoadingPanel()
 }
 
 @Composable

@@ -5,6 +5,7 @@ export interface XopcSessionExecution { mode: string; baseRef?: string; }
 export interface XopcSessionCreation {
   agentId: string; projectId: string | null; execution: XopcSessionExecution | null;
   temporary: boolean; model: string; thinkingLevel: string;
+  agentSetup?: boolean; agentSetupLanguage?: string;
 }
 export interface XopcInputAttachment { type: string; name: string; mimeType: string; size: number; data: string; workspaceRelativePath?: string; uri?: string; durationSeconds?: number; }
 export interface XopcEndpointContext { version: number; capturedAt: number; timezone: string; locale: string; }

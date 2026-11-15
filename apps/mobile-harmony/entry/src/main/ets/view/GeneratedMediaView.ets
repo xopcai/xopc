@@ -1,10 +1,11 @@
-import { fileUri } from '@kit.CoreFileKit';
+import { XopcPreviewVideo } from './ChatMediaView';
+import { fileIo as fs, fileUri, picker } from '@kit.CoreFileKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { generatedMediaTime } from '../common/generatedMedia';
 import { XopcGeneratedMediaCard } from '../model/generatedMedia';
 import { downloadGeneratedMedia, removeGeneratedMediaFile } from '../service/generatedMediaFile';
 import { XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
-import { XopcMusicPlayButton } from './MusicPlaybackView';
+import { XopcMusicPlayButton, XopcPreviewHeader } from './MusicPlaybackView';
 
 function mediaTitle(card: XopcGeneratedMediaCard, zh: boolean): string {
   return card.item.title || card.item.summary || (card.kind === 'music' ? (zh ? '音乐' : 'Music')
@@ -170,18 +171,28 @@ export struct XopcGeneratedVideoDrawer {
     }
   }
 
+  private async saveVideo(): Promise<void> {
+    const source = this.path;
+    const context = this.getUIContext().getHostContext();
+    if (!source || !context) return;
+    try {
+      const name = mediaTitle(this.card, this.zh).replace(/[\\/:*?"<>|]/g, '_').slice(0, 100) || 'video';
+      const paths = await new picker.DocumentViewPicker(context).save({ newFileNames: [name + '.mp4'] });
+      if (!paths.length || !this.mounted || this.path !== source) return;
+      const target = await fs.open(paths[0], fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      try { await fs.copyFile(source, target.fd); } finally { await fs.close(target); }
+    } catch (_) {
+      if (this.mounted) {
+        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_media_failed') });
+      }
+    }
+  }
+
   build() {
     Column() {
-      Row({ space: 12 }) {
-        Column({ space: 4 }) {
-          Text(mediaTitle(this.card, this.zh)).fontSize(20).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.foreground).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.xmark')).fontSize(20).fontColor([this.colors.foreground])
-        }.id('video-player-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-          .accessibilityText($r('app.string.chat_close')).onClick((): void => { this.onClose(); })
-      }.width('100%').padding({ bottom: 14 })
+      XopcPreviewHeader({ title: mediaTitle(this.card, this.zh), closeId: 'video-player-close', onClose: this.onClose,
+        actions: [{ value: $r('app.string.download'), enabled: !!this.path && !this.failed,
+          action: (): void => { void this.saveVideo(); } }] })
       Stack() {
         if (this.failed) {
           Column({ space: 8 }) {
@@ -204,11 +215,9 @@ export struct XopcGeneratedVideoDrawer {
 
   @Builder
   videoSurface() {
-    Video({ src: fileUri.getUriFromPath(this.path), controller: this.video })
-      .id('generated-video-player-' + this.card.item.id).width('100%')
-      .aspectRatio(this.card.item.ratio === '16:9' ? 16 / 9 : this.card.item.ratio === '9:16' ? 9 / 16 : 1)
-      .constraintSize({ maxHeight: '100%' })
-      .autoPlay(true).controls(true).objectFit(ImageFit.Contain).borderRadius(this.colors.corner(12))
-      .onError((): void => { this.failed = true; })
+    XopcPreviewVideo({ source: fileUri.getUriFromPath(this.path), controller: this.video,
+      videoId: 'generated-video-player-' + this.card.item.id, autoplay: true,
+      ratio: this.card.item.ratio === '16:9' ? 16 / 9 : this.card.item.ratio === '9:16' ? 9 / 16 : 1,
+      onError: (): void => { this.failed = true; } })
   }
 }

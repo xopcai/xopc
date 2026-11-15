@@ -1,6 +1,90 @@
+import AVKit
 import QuickLook
 import SwiftUI
 import WebKit
+
+struct MobilePreview<Actions: View, Content: View>: View {
+    @Environment(\.mobileTheme) private var theme
+    let title: String
+    var closeID = "preview-close"
+    let onClose: () -> Void
+    @ViewBuilder var actions: () -> Actions
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button("关闭", systemImage: "xmark", action: onClose)
+                    .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                    .accessibilityIdentifier(closeID)
+                Text(verbatim: title).font(.headline).lineLimit(1)
+                    .frame(maxWidth: .infinity).accessibilityAddTraits(.isHeader)
+                Menu(content: actions) {
+                    Image(systemName: "ellipsis").frame(width: 44, height: 44)
+                        .accessibilityLabel("更多操作")
+                }
+                .accessibilityIdentifier("preview-actions")
+            }
+            .buttonStyle(.plain).padding(.horizontal, 12).padding(.top, 8)
+            content()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .foregroundStyle(theme.foreground).background(theme.canvas)
+        .presentationDetents([.fraction(0.88), .large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(theme.corner(28))
+        .presentationBackground(theme.canvas)
+    }
+}
+
+struct PreviewText: View {
+    let text: String
+    let html: Bool
+    let markdown: Bool
+    let configuration: GatewayConfiguration
+    let conversationID: String?
+
+    var body: some View {
+        if html {
+            SafeHTMLAttachmentView(html: text).frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                if markdown {
+                    MarkdownBodyView(parts: MarkdownBlock.parse(text).map(MarkdownPart.init),
+                                     configuration: configuration, conversationID: conversationID)
+                } else {
+                    Text(verbatim: text).textSelection(.enabled)
+                }
+            }
+            .contentMargins(20, for: .scrollContent)
+        }
+    }
+}
+
+struct PreviewVideo: View {
+    @Environment(\.mobileTheme) private var theme
+    let url: URL
+    var autoplay = false
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        Group {
+            if let player {
+                VideoPlayer(player: player)
+                    .clipShape(.rect(cornerRadius: theme.corner(16)))
+            } else {
+                ProgressView()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(16)
+        .task(id: url) {
+            let media = AVPlayer(url: url)
+            player = media
+            if autoplay { media.play() }
+        }
+        .onDisappear { player?.pause(); player = nil }
+    }
+}
 
 struct ChatAttachmentPreview: View {
     let attachment: HistoryAttachment
@@ -13,7 +97,7 @@ struct ChatAttachmentPreview: View {
     @State private var temporaryDirectory: URL?
     @State private var isLoading = false
     @State private var error: String?
-    @State private var showsExtractedText = false
+    @State private var showsPreview = false
     @State private var previewText: String?
     @State private var managedFile: FileResource?
     @State private var versionFile: FileResource?
@@ -72,7 +156,6 @@ struct ChatAttachmentPreview: View {
                 Button("创建分享链接", systemImage: "square.and.arrow.up") { Task { await createShare() } }
             }
         }
-        .quickLookPreview($previewURL)
         .sheet(item: $managedFile) { file in
             NavigationStack {
                 FilePreviewView(configuration: configuration, file: file)
@@ -95,39 +178,31 @@ struct ChatAttachmentPreview: View {
                 .toolbar { Button("关闭") { share = nil } }
             }
         }
-        .sheet(isPresented: $showsExtractedText) {
-            NavigationStack {
-                ScrollView {
-                    if isHTML {
-                        SafeHTMLAttachmentView(html: previewText ?? "")
-                            .frame(minHeight: 600)
-                    } else if isMarkdown {
-                        MarkdownBodyView(
-                            parts: MarkdownBlock.parse(previewText ?? "").map(MarkdownPart.init),
-                            configuration: configuration,
-                            conversationID: conversationID
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
+        .sheet(isPresented: $showsPreview, onDismiss: {
+            removeTemporaryFile()
+            previewURL = nil
+            previewText = nil
+        }) {
+            MobilePreview(title: attachment.name ?? String(localized: "附件"), onClose: { showsPreview = false }) {
+                if let previewURL {
+                    ShareLink(item: previewURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
+                } else if let previewText {
+                    ShareLink(item: previewText) { Label("分享文本", systemImage: "square.and.arrow.up") }
+                }
+            } content: {
+                if let previewURL {
+                    if attachment.mimeType?.hasPrefix("video/") == true {
+                        PreviewVideo(url: previewURL)
                     } else {
-                        Text(previewText ?? attachment.extractedText ?? "")
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
+                        SpaceQuickLook(url: previewURL)
                     }
+                } else {
+                    PreviewText(text: previewText ?? "", html: isHTML, markdown: isMarkdown,
+                                configuration: configuration, conversationID: conversationID)
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if let versionFile {
-                        SaveFileVersionControl(configuration: configuration, file: versionFile, revision: versionFile.revision)
-                    }
+                if let versionFile {
+                    SaveFileVersionControl(configuration: configuration, file: versionFile, revision: versionFile.revision)
                 }
-                .navigationTitle(attachment.name ?? "附件")
-                .toolbar { Button("关闭") { showsExtractedText = false } }
-            }
-        }
-        .onChange(of: previewURL) { _, value in
-            if value == nil {
-                removeTemporaryFile()
             }
         }
         .alert("无法预览附件", isPresented: Binding(
@@ -152,7 +227,7 @@ struct ChatAttachmentPreview: View {
            attachment.extractedText?.isEmpty == false
         {
             previewText = attachment.extractedText
-            showsExtractedText = true
+            showsPreview = true
             return
         }
         isLoading = true
@@ -173,7 +248,7 @@ struct ChatAttachmentPreview: View {
                 }
                 previewText = isHTML ? text : String(text.prefix(100_000))
                 versionFile = resource
-                showsExtractedText = true
+                showsPreview = true
                 return
             }
             removeTemporaryFile()
@@ -191,11 +266,12 @@ struct ChatAttachmentPreview: View {
             }
             temporaryDirectory = directory
             previewURL = fileURL
+            showsPreview = true
         } catch is CancellationError {
         } catch {
             if let extracted = attachment.extractedText, !extracted.isEmpty {
                 previewText = extracted
-                showsExtractedText = true
+                showsPreview = true
             } else {
                 self.error = error.localizedDescription
             }
@@ -394,7 +470,7 @@ private final class ChatAttachmentRedirectBlocker: NSObject, URLSessionTaskDeleg
     }
 }
 
-private struct SafeHTMLAttachmentView: UIViewRepresentable {
+struct SafeHTMLAttachmentView: UIViewRepresentable {
     let html: String
 
     func makeCoordinator() -> Coordinator {

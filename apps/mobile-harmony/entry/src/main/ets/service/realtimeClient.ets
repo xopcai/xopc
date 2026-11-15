@@ -176,7 +176,7 @@ export class XopcRealtimeClient {
       const socket = webSocket.createWebSocket(); this.socket = socket;
       socket.on('open', (_error: BusinessError, _value: Object): void => {
         if (generation !== this.generation) return;
-        const hello: XopcHello = { ticket: response.payload.ticket, clientId, clientKind: 'mobile', subscriptions: this.cursors.snapshot(), endpoint, capabilities: ['endpoint.tools.v3'] };
+        const hello: XopcHello = { ticket: response.payload.ticket, clientId, clientKind: 'mobile', subscriptions: this.cursors.snapshot(), endpoint, capabilities: ['endpoint.tools.v3', 'mobile.mcp-setup-card.v1'] };
         this.send('realtime.hello', hello);
       });
       socket.on('message', (_error: BusinessError, value: string | ArrayBuffer): void => {

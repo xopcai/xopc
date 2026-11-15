@@ -60,6 +60,7 @@ struct WireMessageMetadata: Decodable, Sendable {
     var hiddenFromClient: Bool?
     let sourceContexts: [SourceContextMetadata]?
     var turnOutcome: HistoryTurnOutcome?
+    var clientMessageId: String?
 }
 
 struct HistoryTurnOutcome: Decodable, Sendable {
@@ -188,6 +189,9 @@ struct TimelineMessage: Equatable, Identifiable, Sendable {
     var taskReceipts: [HistoryTaskReceipt] = []
     var generatedMediaIds: [String] = []
     var agentReaction: AgentMessageReaction?
+    var clientMessageID: String?
+
+    var scrollID: String { clientMessageID ?? id }
 }
 
 struct TimelineDetail: Equatable, Identifiable, Sendable {

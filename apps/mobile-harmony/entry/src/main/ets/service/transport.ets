@@ -31,7 +31,12 @@ export class XopcTransport {
     try {
       const response = await signedHttpRequest(connection, secureOrigin(origin) + path, options);
       if (response.responseCode < 200 || response.responseCode >= 300) {
-        throw new XopcHttpError(response.responseCode, typeof response.result === 'string' ? response.result : '');
+        const errorBody: string = typeof response.result === 'string' ? response.result : '';
+        // The tunnel ingress returns an HTML 404 when its route is temporarily missing.
+        if (response.responseCode === 404 && /^\s*(?:<!doctype\s+html\b|<html\b)/i.test(errorBody)) {
+          throw new XopcHttpError(502);
+        }
+        throw new XopcHttpError(response.responseCode, errorBody);
       }
       if (typeof response.result !== 'string') throw new Error('INVALID_HTTP_RESPONSE');
       return response.result;

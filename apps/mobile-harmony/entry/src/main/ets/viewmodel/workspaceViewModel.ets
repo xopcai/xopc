@@ -23,6 +23,7 @@ export class XopcWorkspaceViewModel {
   private repository: XopcWorkspaceRepository = new XopcWorkspaceRepository();
   private generation: number = 0;
   private listing: boolean = false;
+  private listOffset: number = 0;
   private mutationId: string = '';
   private mutationSignature: string = '';
 
@@ -38,14 +39,17 @@ export class XopcWorkspaceViewModel {
   }
   dispose(): void { this.generation++; }
   async list(search: string, more: boolean = false): Promise<void> {
-    if (this.busy) return;
+    if (this.busy && (!this.listing || more)) return;
+    if (more && (!this.hasMore || search.trim() !== this.loadedSearch)) return;
     this.listing = true;
     const generation = ++this.generation; this.busy = true; this.error = '';
     try {
-      const page = await this.repository.list(this.section, search, more ? this.items.length : 0);
+      const offset = more ? this.listOffset : 0;
+      const page = await this.repository.list(this.section, search, offset);
       if (generation !== this.generation) return;
       this.items = more ? this.items.concat(page.items.filter((item): boolean => !this.items.some((old): boolean => old.id === item.id))) : page.items;
-      this.hasMore = page.hasMore;
+      this.listOffset = offset + page.items.length;
+      this.hasMore = page.hasMore && page.items.length > 0;
       this.loadedSearch = search.trim();
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) { this.listing = false; this.busy = false; } }

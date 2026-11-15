@@ -24,6 +24,24 @@ const page = (id: string, text: string, before = '') => ({
   pagination: { hasMore: !!before, nextBeforeCursor: before },
 });
 describe('chat history isolation', () => {
+  it('invalidates music jobs as soon as the current run finishes the generation tool', () => {
+    const chat = new XopcChatViewModel();
+    chat.selectedId = 'one'; chat.runId = 'run'; chat.loading = true; chat.activate(); chat.loading = false;
+    const finishTool = (conversationId: string, toolName: string, status: string): void => {
+      realtimeClient.onEvent({ topic: 'run:run', seq: 1, event: 'tool_end',
+        data: { conversationId, runId: 'run', payload: { toolCallId: 'tool', toolName, status } } });
+    };
+    try {
+      finishTool('other', 'music_generation', 'success');
+      finishTool('one', 'music_generation', 'error');
+      finishTool('one', 'video_draft', 'success');
+      expect(chat.musicJobsRevision).toBe(0);
+      finishTool('one', 'music_generation', 'success');
+      expect(chat.musicJobsRevision).toBe(1);
+      expect(chat.runId).toBe('run');
+    } finally { chat.dispose(); }
+  });
+
   it('commits continuous deltas on a fixed deadline and flushes before terminal history reconciliation', async () => {
     vi.useFakeTimers();
     const chat = new XopcChatViewModel();

@@ -259,27 +259,37 @@ final class AppState {
     }
 
     func startConversation(agentId: String) {
-        startConversation(agentId: agentId, prompt: nil)
+        selectHomeConversation(.draft(agentId: agentId))
     }
 
-    func startConversation(agentId: String, prompt: String?) {
-        let draft = ConversationSelection.draft(agentId: agentId)
-        if let prompt {
-            do {
-                try ComposerDraftStore().save(SavedComposerDraft(text: prompt),
-                                              scope: ComposerDraftStore.scope(gatewayConfiguration, conversationID: draft.id))
-            } catch {
-                connectionStorageError = error.localizedDescription
-                return
-            }
+    func startCapabilityChat(agentId: String, prompt: String, agentSetupLanguage: String?) {
+        let draft = ConversationSelection.draft(agentId: agentId, agentSetupLanguage: agentSetupLanguage)
+        do {
+            try ComposerDraftStore().save(SavedComposerDraft(text: prompt),
+                                          scope: ComposerDraftStore.scope(gatewayConfiguration, conversationID: draft.id))
+            selectHomeConversation(draft)
+        } catch {
+            connectionStorageError = error.localizedDescription
         }
-        selectHomeConversation(draft)
     }
 
     func startScopedConversation(project: ProjectRecord?, executionMode: String?, agentId: String) {
         selectHomeConversation(project.map {
             .projectDraft(project: $0, executionMode: executionMode, agentId: agentId)
         } ?? .draft(agentId: agentId))
+    }
+
+    func startLibraryConversation(configuration: GatewayConfiguration, agentID: String, attachment: MessageAttachment,
+                                  origin: LibraryOrigin?) async throws {
+        var draft = ConversationSelection.draft(agentId: agentID)
+        if origin?.available == true, let projectID = origin?.projectId {
+            let project = try await GatewayClient(configuration: configuration).fetchProject(id: projectID)
+            draft = .projectDraft(project: project)
+        }
+        guard configuration == gatewayConfiguration else { throw CancellationError() }
+        try ComposerDraftStore().save(SavedComposerDraft(attachments: [attachment]),
+                                      scope: ComposerDraftStore.scope(configuration, conversationID: draft.id))
+        selectHomeConversation(draft)
     }
 
     func updateConversation(_ conversation: ConversationSelection) {
@@ -305,4 +315,5 @@ private extension AppState {
 
 enum HomeDestination: Hashable {
     case conversations, conversationSearch, progress, projects, automations, library, capabilities, profile, settings, personalOverview
+    case libraryTask(String), libraryAutomationRun(String)
 }

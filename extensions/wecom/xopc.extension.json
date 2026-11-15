@@ -76,10 +76,16 @@
             }
           }
         },
-        "required": [
-          "botId",
-          "secret"
-        ]
+        "if": {
+          "properties": { "enabled": { "const": false } },
+          "required": ["enabled"]
+        },
+        "else": {
+          "required": [
+            "botId",
+            "secret"
+          ]
+        }
       },
       "uiHints": {
         "secret": {

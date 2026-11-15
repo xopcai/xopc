@@ -17,12 +17,13 @@ describe('optimistic composer handoff', () => {
       chat: { selectedId: 'one', send: vi.fn((_text, _files, _delivery, _refs, enqueued) => {
         enqueued(); return new Promise(resolve => { finish = resolve; });
       }) },
-      palette: { close: vi.fn() }, reserveReplySpace: vi.fn(), enqueueSendFlight: vi.fn(), saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
+      palette: { close: vi.fn() }, followAfterSend: vi.fn(), saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
       options: { loading: false, saving: false, modelId: 'provider/model', refreshQueue: vi.fn() },
     });
     const sending = view.send();
     expect(view.draft).toBe(''); expect(view.attachments).toEqual([]); expect(view.refs).toEqual([]);
     expect(view.saveDraft).toHaveBeenCalledOnce();
+    expect(view.followAfterSend).toHaveBeenCalledExactlyOnceWith('next');
     view.draft = 'next draft'; finish(false); await sending;
     expect(view.draft).toBe('next draft');
   });

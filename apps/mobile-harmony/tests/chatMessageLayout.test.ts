@@ -40,7 +40,7 @@ describe('chat message layout parity', () => {
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id)");
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width('92%')");
     expect(assistantLayout).toContain('.constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)');
-    expect(chat).toContain(".width(CHAT_MESSAGE_MAX_WIDTH).alignItems(HorizontalAlign.End).padding({ top: 6 })");
+    expect(chat).toContain(".justifyContent(entry.item.kind === 'music' ? FlexAlign.Start : FlexAlign.End)");
     expect(assistantLayout).toContain('.backgroundColor(this.colors.assistantBubble).borderRadius(this.colors.corner(20))');
     expect(content).toContain(": this.colors.assistantBubble;");
     const workspace = chat.slice(chat.indexOf('  chatWorkspace()'), chat.indexOf('  executionDetailSheet()'));

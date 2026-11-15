@@ -45,6 +45,56 @@ describe('generated media in chat', () => {
     expect(generatedMediaCards('video', { ...response, modelRef: 'changed' }).at(-1)?.canConfirm).toBe(false);
   });
 
+  it('shows a newly queued song before history has a reply anchor and updates the same card', async () => {
+    const model = new XopcGeneratedMediaViewModel();
+    const jobsPath = '/api/music-generation/sessions/live/jobs';
+    let jobs: typeof song[] = [];
+    request.mockImplementation(async (path: string) =>
+      JSON.stringify({ transcriptId: 'active', jobs: path === jobsPath ? jobs : [] }));
+    const observe = (): void => model.observe('live', 'live:active', 'active', true, true);
+    try {
+      observe();
+      expect(model.cards).toEqual([]);
+      jobs = [{ ...song, state: 'queued' }];
+      observe();
+      await vi.waitFor(() => expect(generatedMediaByReply(model.cards, []).get('')).toMatchObject([
+        { item: { id: song.id, state: 'queued' } },
+      ]));
+      jobs = [song];
+      observe();
+      await vi.waitFor(() => expect(model.cards.map(card => card.item)).toEqual([song]));
+    } finally { model.stop(); }
+  });
+
+  it('updates the original song card on the next poll even while video is still loading', async () => {
+    vi.useFakeTimers();
+    const model = new XopcGeneratedMediaViewModel();
+    const reply = chatPresentationRows(historyRows({ session: { key: 'poll', messages: [
+      { id: 'song-reply', role: 'assistant', content: 'Creating the song', generatedMediaIds: [song.id] },
+    ] }, pagination: { hasMore: false } }), undefined, '');
+    let music: typeof song & { durationMs?: number } = { ...song, state: 'queued' };
+    let resolveVideo!: (result: string) => void;
+    const pendingVideo = new Promise<string>(resolve => { resolveVideo = resolve; });
+    request.mockImplementation((path: string) => path.includes('/video-generation/') ? pendingVideo
+      : Promise.resolve(JSON.stringify({ transcriptId: 'active', jobs: [music] })));
+    try {
+      model.observe('poll', 'poll:active', 'active', true, false);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(generatedMediaByReply(model.cards, reply).get('song-reply')?.map(card => card.item))
+        .toEqual([music]);
+
+      music = { ...song, durationMs: 154000 };
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(generatedMediaByReply(model.cards, reply).get('song-reply')?.map(card => card.item))
+        .toEqual([music]);
+    } finally {
+      model.stop();
+      resolveVideo(JSON.stringify({ transcriptId: 'active', jobs: [] }));
+      await pendingVideo;
+      vi.useRealTimers();
+    }
+  });
+
   it('retains video when music is unavailable and confirms the reviewed draft revision', async () => {
     const job = { id: draft.id, transcriptId: 'active', state: 'queued', createdAt: 3 };
     let confirmed = false;

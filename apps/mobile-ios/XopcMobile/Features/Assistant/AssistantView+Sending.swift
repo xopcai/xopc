@@ -37,7 +37,7 @@ extension AssistantView {
                 to: conversation,
                 using: gateway,
                 onMaterialized: onConversationUpdated,
-                onEnqueued: reserveReplySpace
+                onEnqueued: { _ in followLatestAfterSend() }
             )
             if materialized == nil {
                 restoreDraft(text, attachments: selectedAttachments, references: selectedReferences, scope: scope, voice: voice)

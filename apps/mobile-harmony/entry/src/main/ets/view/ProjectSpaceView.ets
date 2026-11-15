@@ -1,4 +1,4 @@
-import { XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { mobileRoute } from '../common/homeProtocol';
@@ -6,7 +6,7 @@ import { XopcNoteIndexEntry } from '../model/note';
 import { XopcWorkspaceItem } from '../model/workspace';
 import { XopcSessionItem } from '../model/chat';
 import { XopcProjectSpaceViewModel } from '../viewmodel/projectSpaceViewModel';
-import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcSectionLabel } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
 import { XopcAutomationIdeas } from './AutomationIdeas';
 
 @ComponentV2
@@ -63,7 +63,7 @@ export struct XopcProjectSpaceView {
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
     }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(15))
-      .onClick((): void => { this.go('tasks', item.id); })
+      .onClick((): void => { this.go('tasks', item.id); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   @Builder
@@ -81,7 +81,7 @@ export struct XopcProjectSpaceView {
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
     }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(15))
-      .onClick((): void => { this.go('project-chat', item.key); })
+      .onClick((): void => { this.go('project-chat', item.key); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   @Builder
@@ -98,7 +98,7 @@ export struct XopcProjectSpaceView {
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
     }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(15))
-      .onClick((): void => { this.go('notes', item.id); })
+      .onClick((): void => { this.go('notes', item.id); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   @Builder
@@ -115,7 +115,7 @@ export struct XopcProjectSpaceView {
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
       }.width('100%').padding(15)
     }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(15))
-      .onClick((): void => { this.go('automations', item.id); })
+      .onClick((): void => { this.go('automations', item.id); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   private chooseAction(page: string): void {
@@ -223,9 +223,8 @@ export struct XopcProjectSpaceView {
             }, (item: XopcWorkspaceItem): string => item.id)
             if (this.tab === 'tasks' && this.model.tasks.length < this.model.tasksTotal) {
               ListItem() {
-                Button($r('app.string.project_load_more')).width('100%').height(44)
-                  .fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft)
-                  .enabled(!this.model.loadingTasksMore).onClick((): void => { void this.model.moreTasks(this.projectId); })
+                XopcPaginationFooter({ loadingPage: this.model.loadingTasksMore, failedPage: this.model.tasksError,
+                  onLoad: (): void => { void this.model.moreTasks(this.projectId); } })
               }
             }
           }
@@ -242,9 +241,8 @@ export struct XopcProjectSpaceView {
             }, (item: XopcNoteIndexEntry): string => item.id)
             if (this.tab === 'notes' && this.model.notes.length < this.model.notesTotal) {
               ListItem() {
-                Button($r('app.string.project_load_more')).width('100%').height(44)
-                  .fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft)
-                  .enabled(!this.model.loadingNotesMore).onClick((): void => { void this.model.moreNotes(this.projectId); })
+                XopcPaginationFooter({ loadingPage: this.model.loadingNotesMore, failedPage: this.model.notesError,
+                  onLoad: (): void => { void this.model.moreNotes(this.projectId); } })
               }
             }
           }

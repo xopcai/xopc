@@ -1,3 +1,4 @@
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { agentDisplayDescription, agentDisplayName } from '../common/agentPresentation';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatAgent } from '../model/chat';
@@ -5,10 +6,8 @@ import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { loadCapabilities, XopcCapabilityItem, XopcCapabilityPage } from '../repository/capabilitiesRepository';
 import { XopcListSkeleton } from './MobileComponents';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
-import { XopcCapabilitySetupView } from './CapabilitySetupView';
-import { common } from '@kit.AbilityKit';
-import { gatewaySession } from '../service/gatewaySession';
-import { XopcRoute } from '../model/gateway';
+import { XopcCapabilityPanelView } from './CapabilityPanelView';
+import { XopcCapabilityLogo } from './CapabilityLogo';
 
 const categories: string[] = ['plugins', 'skills', 'connections', 'agents', 'channels'];
 const groups: string[] = ['attention', 'assistant', 'expert', 'connected', 'installed', 'configured', 'disabled', 'available'];
@@ -18,7 +17,8 @@ export struct XopcCapabilitiesView {
   @Param personal: XopcPersonalAgentRecord | null = null;
   @Event onExit: () => void = (): void => {};
   @Event onOpenAgent: (id: string, personal: boolean) => void = (_id: string, _personal: boolean): void => {};
-  @Event onOpenDraft: (prompt: string) => void = (_prompt: string): void => {};
+  @Event onPersonalChanged: () => void = (): void => {};
+  @Event onSetupChat: (prompt: string, agentSetup: boolean) => void = (_prompt: string, _agentSetup: boolean): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local category: string = 'plugins';
   @Local query: string = '';
@@ -27,7 +27,6 @@ export struct XopcCapabilitiesView {
   @Local catalog?: XopcCapabilityPage;
   @Local detail?: XopcCapabilityItem;
   @Local detailOpen: boolean = false;
-  @Local setupMode: string = '';
   private pages: Map<string, XopcCapabilityPage> = new Map<string, XopcCapabilityPage>();
   private scroller: Scroller = new Scroller();
   private generation: number = 0;
@@ -83,64 +82,23 @@ export struct XopcCapabilitiesView {
     return this.getUIContext().getHostContext()?.resourceManager.getStringSync(value.id) ?? '';
   }
 
-  private discover(): void {
-    const manager = this.getUIContext().getHostContext()?.resourceManager;
-    const title = this.getLabel(this.title(this.category));
-    const query = this.query.trim();
-    const prompt = query
-      ? manager?.getStringSync($r('app.string.capability_find_query_prompt').id, title, JSON.stringify(query))
-      : manager?.getStringSync($r('app.string.capability_find_prompt').id, title);
-    if (!prompt) return;
+  private openSkillMarket(): void {
     this.getUIContext().getFocusController().clearFocus();
-    this.onOpenDraft(prompt);
+    this.detail = { id: 'marketplace:search', name: this.getLabel($r('app.string.cap_native_skill')), group: 'available' };
+    this.detailOpen = true;
   }
 
-  private promptTemplate(): Resource {
-    if (this.category === 'skills') return $r('app.string.capability_skill_prompt');
-    if (this.category === 'connections') return $r('app.string.capability_connection_prompt');
-    if (this.category === 'agents') return $r('app.string.capability_agent_prompt');
-    if (this.category === 'channels') return $r('app.string.capability_channel_prompt');
-    return $r('app.string.capability_plugin_prompt');
+  private setupLabel(): Resource {
+    if (this.category === 'agents') return $r('app.string.capability_create_agent');
+    if (this.category === 'skills') return $r('app.string.capability_create_skill');
+    return $r('app.string.cap_native_mcp');
   }
 
-  private askAbout(item: XopcCapabilityItem): void {
-    const prompt = this.getUIContext().getHostContext()?.resourceManager
-      .getStringSync(this.promptTemplate().id, JSON.stringify(item.id));
-    if (prompt) { this.detailOpen = false; this.onOpenDraft(prompt); }
-  }
-
-  private channelIssue(code: string): Resource {
-    if (code === 'telegram.missing_credential') return $r('app.string.capability_channel_telegram');
-    if (code === 'weixin.missing_account') return $r('app.string.capability_channel_weixin');
-    if (code === 'feishu.missing_credentials') return $r('app.string.capability_channel_feishu');
-    return $r('app.string.capability_channel_config');
-  }
-
-  private administrationURL(item: XopcCapabilityItem): string {
-    if (this.category !== 'channels') return '';
-    const profile = gatewaySession.currentProfile();
-    const origin = profile?.routes.find((route: XopcRoute): boolean => route.id === profile.activeRouteId)?.url ?? '';
-    if (!origin.startsWith('https://')) return '';
-    const base = origin.split(/[?#]/)[0].replace(/\/$/, '');
-    const id = encodeURIComponent(item.targetId ?? item.id);
-    return base + '/#/capabilities/channels/' + id;
-  }
-
-  private async openAdministration(item: XopcCapabilityItem): Promise<void> {
-    const url = this.administrationURL(item);
-    if (!url) return;
-    try {
-      await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(url, { appLinkingOnly: false });
-    } catch (_) {
-      this.getUIContext().getPromptAction().showToast({ message: $r('app.string.capability_web_open_failed') });
-    }
-  }
-
-  private symbol(): Resource {
-    if (this.category === 'skills') return $r('sys.symbol.checkmark_circle');
-    if (this.category === 'connections') return $r('sys.symbol.link');
-    if (this.category === 'channels') return $r('sys.symbol.ellipsis_bubble');
-    return $r('sys.symbol.square_grid_2x2');
+  private startSetupChat(): void {
+    this.getUIContext().getFocusController().clearFocus();
+    const prompt = this.category === 'agents' ? $r('app.string.capability_agent_setup_prompt')
+      : this.category === 'skills' ? $r('app.string.capability_skill_setup_prompt') : $r('app.string.capability_mcp_setup_prompt');
+    this.onSetupChat(this.getLabel(prompt), this.category === 'agents');
   }
 
   @Computed get matches(): XopcCapabilityItem[] {
@@ -150,7 +108,7 @@ export struct XopcCapabilitiesView {
       rows = rows.map((item: XopcCapabilityItem): XopcCapabilityItem => {
         const agent: XopcChatAgent = { id: item.id, name: item.name, description: item.description, avatar: item.avatar };
         return { id: item.id, name: this.getLabel(agentDisplayName(agent)),
-          description: this.getLabel(agentDisplayDescription(agent)), group: item.group, avatar: item.avatar };
+          description: this.getLabel(agentDisplayDescription(agent)), group: item.group, avatar: item.avatar, iconUrl: item.iconUrl };
       });
     }
     if (this.category === 'agents' && personal?.state === 'ready') {
@@ -167,165 +125,112 @@ export struct XopcCapabilitiesView {
     return this.matches.filter((item: XopcCapabilityItem): boolean => item.group === group);
   }
 
-  @Builder
-  categoryMenu() {
-    Menu() {
-      ForEach(categories, (key: string) => {
-        MenuItem({ content: this.title(key) }).id('capability-category-' + key).selected(this.category === key)
-          .onClick((): void => { this.select(key); })
-      }, (key: string): string => key)
-    }
+  private categoryOptions(): XopcSegmentOption[] {
+    return categories.map((key: string): XopcSegmentOption => ({
+      key, label: this.title(key), testId: 'capability-category-' + key,
+      minimumWidth: key === 'agents' ? 86 : key === 'channels' ? 74 : 56
+    }));
   }
 
   @Builder
   icon(item: XopcCapabilityItem) {
     if (this.category === 'agents') {
-      XopcPersonalAgentAvatar({ agentId: item.id, extent: 44, compact: true, activePage: false,
+      XopcPersonalAgentAvatar({ agentId: item.id, extent: 48, compact: true, activePage: false,
         appearance: this.personal?.agentId === item.id ? this.personal?.appearance ?? 'loopi' : 'configured',
         revision: this.personal?.agentId === item.id ? this.personal?.revision ?? 0 : 0,
         avatarReference: item.avatar ?? '', fallbackLabel: item.name })
     } else {
-      Column() {
-        SymbolGlyph(this.symbol()).fontSize(22).fontColor([this.colors.accent])
-      }.width(44).height(44).justifyContent(FlexAlign.Center).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.accentSoft)
+      XopcCapabilityLogo({ category: this.category, iconUrl: item.iconUrl ?? '', label: item.name })
     }
   }
 
   @Builder
   itemRow(item: XopcCapabilityItem) {
     Button({ type: ButtonType.Normal }) {
-      Row({ space: 12 }) {
+      Row({ space: 14 }) {
         this.icon(item)
         Column({ space: 4 }) {
-          Text(item.name).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          Text(item.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          if (item.description) Text(item.description).fontSize(13).fontColor(this.colors.secondary)
+          if (item.description) Text(item.description).fontSize(13).lineHeight(18).fontColor(this.colors.secondary)
             .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.tertiary])
-      }.width('100%').constraintSize({ minHeight: 62 }).padding({ left: 12, right: 12 })
-    }.width('100%').padding(0).backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
-      .borderRadius(this.colors.corner(16)).id('capability-row-' + item.id)
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
+      }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
+    }.width('100%').padding(0).backgroundColor(this.colors.panel)
+      .borderRadius(this.colors.corner(18)).id('capability-row-' + item.id)
       .onClick((): void => {
         this.getUIContext().getFocusController().clearFocus();
-        this.setupMode = ''; this.detail = item; this.detailOpen = true;
-      })
+        this.detail = item; this.detailOpen = true;
+      }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   @Builder
   detailSheet() {
-    if (this.setupMode) {
-      XopcCapabilitySetupView({ mode: this.setupMode, itemId: this.detail?.targetId ?? this.detail?.id ?? '',
-        itemName: this.detail?.name ?? '', initialQuery: this.query, onChanged: (): void => { void this.load(); } })
-    } else if (this.detail) {
-      Scroll() {
-        Column({ space: 14 }) {
-          this.icon(this.detail)
-          Text(this.detail.name).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-          Text(this.groupTitle(this.detail.group)).fontSize(14).fontColor(this.colors.secondary)
-          if (this.detail.description) Text(this.detail.description).fontSize(16).fontColor(this.colors.foreground)
-          if (this.detail.version) Text($r('app.string.capability_version_label', this.detail.version))
-            .fontSize(14).fontColor(this.colors.secondary)
-          if (this.detail.issue) Text(this.channelIssue(this.detail.issue))
-            .fontSize(14).fontColor(this.colors.secondary).width('100%')
-            .padding(12).backgroundColor(this.colors.grouped).borderRadius(this.colors.corner(12))
-          if (this.category === 'agents' && this.detail.group !== 'disabled') {
-            Button($r('app.string.capability_start_chat')).height(48).width('100%').id('capability-start-chat')
-              .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
-              .onClick((): void => {
-                const id = this.detail?.id ?? '';
-                this.detailOpen = false;
-                if (id) this.onOpenAgent(id, id === this.personal?.agentId);
-              })
-          }
-          if (this.detail.id !== this.personal?.agentId) {
-            Button($r('app.string.capability_open_chat')).height(48).width('100%').id('capability-open-chat')
-              .backgroundColor(this.category === 'agents' && this.detail.group !== 'disabled' ? this.colors.grouped : this.colors.accent)
-              .fontColor(this.category === 'agents' && this.detail.group !== 'disabled' ? this.colors.foreground : this.colors.onAccent)
-              .onClick((): void => { if (this.detail) this.askAbout(this.detail); })
-          }
-          if (this.category === 'plugins' && this.detail.group !== 'available') {
-            Button($r('app.string.cap_native_plugin')).height(48).width('100%').id('cap-native-open-plugin')
-              .backgroundColor(this.colors.grouped).fontColor(this.colors.foreground)
-              .onClick((): void => { this.setupMode = 'plugin'; })
-          }
-          if (this.category === 'agents' && this.detail.id !== this.personal?.agentId && this.detail.group !== 'disabled') {
-            Button($r('app.string.cap_native_edit_agent')).height(48).width('100%').id('cap-native-open-agent')
-              .backgroundColor(this.colors.grouped).fontColor(this.colors.foreground)
-              .onClick((): void => { this.setupMode = 'agent'; })
-          }
-          if (this.administrationURL(this.detail)) {
-            Button($r('app.string.capability_web_manage')).height(44).width('100%').id('capability-web-manage')
-              .backgroundColor(this.colors.grouped).fontColor(this.colors.foreground)
-              .onClick((): void => { if (this.detail) void this.openAdministration(this.detail); })
-          }
-        }.width('100%').padding(24).alignItems(HorizontalAlign.Start)
-      }.width('100%').scrollBar(BarState.Off)
+    if (this.detail) {
+      XopcCapabilityPanelView({ category: this.category, itemId: this.detail.targetId && this.category !== 'connections'
+        ? this.detail.targetId : this.detail.id, itemName: this.detail.name, description: this.detail.description ?? '',
+        iconUrl: this.detail.iconUrl ?? '', avatarReference: this.detail.avatar ?? '',
+        appearance: this.detail.id === this.personal?.agentId ? this.personal?.appearance ?? 'loopi' : 'configured',
+        avatarRevision: this.detail.id === this.personal?.agentId ? this.personal?.revision ?? 0 : 0,
+        canChat: this.category === 'agents' && this.detail.group !== 'disabled',
+        onClose: (): void => { this.detailOpen = false; },
+        onChanged: (): void => {
+          void this.load();
+          if (this.detail?.id && this.detail.id === this.personal?.agentId) this.onPersonalChanged();
+        },
+        onChat: (): void => {
+          const id = this.detail?.id ?? '';
+          this.detailOpen = false;
+          if (id) this.onOpenAgent(id, id === this.personal?.agentId);
+        } })
     }
+  }
+
+  @Builder
+  header() {
+    Row({ space: 8 }) {
+      Button({ type: ButtonType.Circle }) {
+        SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(20).fontColor([this.colors.foreground])
+      }.id('capability-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+        .accessibilityText($r('app.string.back')).onClick((): void => { this.onExit(); })
+      Text($r('app.string.capability_title')).id('capability-title').fontSize(24).fontWeight(FontWeight.Bold)
+        .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      if (this.category === 'skills') {
+        Button($r('app.string.cap_native_skill')).id('cap-native-open-skills').height(44).backgroundColor(this.colors.accentSoft)
+          .fontColor(this.colors.chat.action).onClick((): void => { this.openSkillMarket(); })
+      } else if (this.category === 'plugins') {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(21).fontColor([this.colors.chat.action])
+        }.id('cap-native-open-plugins').width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
+          .accessibilityText($r('app.string.capability_search_plugins'))
+          .onClick((): void => { this.getUIContext().getFocusController().requestFocus('capability-search'); })
+      }
+      if (this.category === 'skills' || this.category === 'agents' || this.category === 'connections') {
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.chat.action])
+        }.id('capability-chat-setup-' + this.category).width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
+          .accessibilityText(this.setupLabel()).onClick((): void => { this.startSetupChat(); })
+      }
+    }.width('100%').padding({ top: 8, bottom: 16 })
   }
 
   build() {
     Column() {
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(20).fontColor([this.colors.foreground])
-        }.id('capability-back').width(44).height(44).padding(0)
-          .backgroundColor(this.colors.light ? this.colors.panel : this.colors.input)
-          .accessibilityText($r('app.string.back')).onClick((): void => { this.onExit(); })
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 6 }) {
-            Text(this.title(this.category)).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-            SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
-          }
-        }.id('capability-category').height(48).padding({ left: 10, right: 10 }).backgroundColor(Color.Transparent)
-          .constraintSize({ maxWidth: '60%' }).bindMenu(this.categoryMenu)
-        Blank().layoutWeight(1)
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(18).fontColor([this.colors.secondary])
-        }.id('capability-refresh').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.capability_retry')).enabled(!this.loading)
-          .onClick((): void => { void this.load(); })
-      }.width('100%').padding({ top: 8, bottom: 8 })
-      List({ space: 6, scroller: this.scroller }) {
-        ListItem() {
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: 8 }) {
-              SymbolGlyph($r('sys.symbol.ellipsis_bubble')).fontSize(18).fontColor([this.colors.chat.action])
-              Text($r('app.string.capability_discover')).fontSize(15).fontWeight(FontWeight.Medium)
-                .fontColor(this.colors.chat.action)
-            }.justifyContent(FlexAlign.Center).width('100%')
-          }.id('capability-discover').width('100%').height(48).backgroundColor(this.colors.grouped)
-            .borderRadius(this.colors.corner(16)).onClick((): void => { this.discover(); })
-        }
-        if (this.category === 'skills' || this.category === 'connections') {
-          ListItem() {
-            Button(this.category === 'skills' ? $r('app.string.cap_native_skill') : $r('app.string.cap_native_mcp'))
-              .id('cap-native-open-' + this.category).width('100%').height(48).backgroundColor(this.colors.accentSoft)
-              .fontColor(this.colors.chat.action).borderRadius(this.colors.corner(16)).onClick((): void => {
-                this.getUIContext().getFocusController().clearFocus();
-                this.detail = undefined; this.setupMode = this.category === 'skills' ? 'skills' : 'mcp'; this.detailOpen = true;
-              })
-          }
-        }
-        if (this.category === 'agents') {
-          ListItem() {
-            Button($r('app.string.cap_native_create_agent')).id('cap-native-create-agent').width('100%').height(48)
-              .backgroundColor(this.colors.accentSoft).fontColor(this.colors.chat.action).borderRadius(this.colors.corner(16))
-              .onClick((): void => {
-                this.getUIContext().getFocusController().clearFocus();
-                this.onOpenDraft(this.getLabel($r('app.string.cap_native_create_agent_prompt')));
-              })
-          }
-        }
+      this.header()
+      XopcSegmentedTabs({ options: this.categoryOptions(), selectedKey: this.category,
+        onSelect: (key: string): void => { this.select(key); } })
+      List({ space: 10, scroller: this.scroller }) {
         if (this.loading && !this.catalog) { ListItem() { XopcListSkeleton() } }
         if (this.failed || this.catalog?.incomplete) {
           ListItem() {
             Row() {
               Text(this.failed ? $r('app.string.capability_load_failed') : $r('app.string.capability_partial'))
                 .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
-              Button($r('app.string.capability_retry')).height(44).onClick((): void => { void this.load(); })
-            }.width('100%')
+              Button($r('app.string.capability_retry')).height(44).backgroundColor(this.colors.accentSoft)
+                .fontColor(this.colors.chat.action).enabled(!this.loading).onClick((): void => { void this.load(); })
+            }.width('100%').padding({ left: 14, right: 12, top: 8, bottom: 8 })
+              .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
           }
         }
         if (!this.loading && !this.failed && !this.matches.length) {
@@ -334,7 +239,8 @@ export struct XopcCapabilitiesView {
               SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(24).fontColor([this.colors.secondary])
               Text(this.query.trim() ? $r('app.string.capability_no_matches') : $r('app.string.capability_empty'))
                 .fontSize(16).fontColor(this.colors.foreground)
-              if (this.query) Button($r('app.string.capability_clear')).height(44).onClick((): void => { this.query = ''; })
+              if (this.query) Button($r('app.string.capability_clear')).height(44).backgroundColor(this.colors.accentSoft)
+                .fontColor(this.colors.chat.action).onClick((): void => { this.query = ''; })
             }.id('capability-empty').width('100%').padding({ top: 56 })
           }
         }
@@ -342,17 +248,19 @@ export struct XopcCapabilitiesView {
           if (this.rows(group).length) {
             ListItem() {
               Text(this.groupTitle(group)).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
-                .padding({ left: 4, top: 10, bottom: 4 })
+                .padding({ left: 4, top: 14, bottom: 2 })
             }
             ForEach(this.rows(group), (item: XopcCapabilityItem) => {
               ListItem() { this.itemRow(item) }
-            }, (item: XopcCapabilityItem): string => item.id + ':' + item.name + ':' + (item.description ?? ''))
+            }, (item: XopcCapabilityItem): string => item.id + ':' + item.name + ':' + (item.description ?? '')
+              + ':' + (item.avatar ?? '') + ':' + (item.iconUrl ?? '').slice(-64))
           }
         }, (group: string): string => group)
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      }.width('100%').layoutWeight(1).scrollBar(BarState.Off).margin({ top: 4 })
       Row({ space: 8 }) {
         SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(19).fontColor([this.colors.secondary])
-        TextInput({ text: this.query, placeholder: $r('app.string.capability_search', this.getLabel(this.title(this.category))) })
+        TextInput({ text: this.query, placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
+          : $r('app.string.capability_search', this.getLabel(this.title(this.category))) })
           .id('capability-search').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
           .fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .maxLength(160).enterKeyType(EnterKeyType.Search)
@@ -364,9 +272,9 @@ export struct XopcCapabilitiesView {
           .accessibilityText($r('app.string.capability_clear')).onClick((): void => { this.query = ''; })
       }.width('100%').padding({ left: 16, right: 6 })
         .backgroundColor(this.colors.input).borderRadius(this.colors.corner(24))
-        .margin({ top: 8, bottom: 8 })
-    }.width('100%').height('100%').padding({ left: 16, right: 16 }).backgroundColor(this.colors.surface)
-      .bindSheet($$this.detailOpen, this.detailSheet, { height: this.setupMode ? '78%' : '60%', dragBar: true,
-        showClose: true, backgroundColor: this.colors.panel })
+        .margin({ top: 14, bottom: 10 })
+    }.width('100%').height('100%').padding({ left: 18, right: 18 }).backgroundColor(this.colors.surface)
+      .bindSheet($$this.detailOpen, this.detailSheet, { height: '78%', dragBar: true,
+        showClose: false, backgroundColor: this.colors.panel })
   }
 }

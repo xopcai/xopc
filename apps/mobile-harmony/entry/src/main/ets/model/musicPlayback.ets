@@ -6,6 +6,9 @@ export interface XopcMusicTrack {
   lyrics?: string;
   durationMs?: number;
   versionNumber?: number;
+  libraryItemId?: string;
+  libraryVersionId?: string;
+  fileName?: string;
 }
 
 export interface XopcMusicResume {

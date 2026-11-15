@@ -72,20 +72,26 @@ export class XopcProjectSpaceViewModel {
 
   async moreTasks(id: string): Promise<void> {
     if (this.loadingTasksMore || this.tasks.length >= this.tasksTotal) return;
-    const generation = this.generation; this.loadingTasksMore = true;
+    const generation = this.generation; this.loadingTasksMore = true; this.tasksError = false;
     try {
       const page = await this.repository.tasks(id, this.tasks.length);
-      if (generation === this.generation) { this.tasks = this.tasks.concat(page.items); this.tasksTotal = page.total; }
+      if (generation === this.generation) {
+        this.tasks = this.tasks.concat(page.items);
+        this.tasksTotal = page.items.length ? page.total : this.tasks.length;
+      }
     } catch (_) { if (generation === this.generation) this.tasksError = true; }
     finally { if (generation === this.generation) this.loadingTasksMore = false; }
   }
 
   async moreNotes(id: string): Promise<void> {
     if (this.loadingNotesMore || this.notes.length >= this.notesTotal) return;
-    const generation = this.generation; this.loadingNotesMore = true;
+    const generation = this.generation; this.loadingNotesMore = true; this.notesError = false;
     try {
       const page = await this.repository.notes(id, this.notes.length);
-      if (generation === this.generation) { this.notes = this.notes.concat(page.items); this.notesTotal = page.total; }
+      if (generation === this.generation) {
+        this.notes = this.notes.concat(page.items);
+        this.notesTotal = page.items.length ? page.total : this.notes.length;
+      }
     } catch (_) { if (generation === this.generation) this.notesError = true; }
     finally { if (generation === this.generation) this.loadingNotesMore = false; }
   }

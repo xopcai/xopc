@@ -7,6 +7,7 @@ struct SessionCreationCommand: Encodable {
     let temporary: Bool
     let model: String
     let thinkingLevel: String
+    var agentSetupLanguage: String?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -24,6 +25,10 @@ struct SessionCreationCommand: Encodable {
         try container.encode(temporary, forKey: .temporary)
         try container.encode(model, forKey: .model)
         try container.encode(thinkingLevel, forKey: .thinkingLevel)
+        if let agentSetupLanguage {
+            try container.encode(true, forKey: .agentSetup)
+            try container.encode(agentSetupLanguage, forKey: .agentSetupLanguage)
+        }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -33,6 +38,7 @@ struct SessionCreationCommand: Encodable {
         case temporary
         case model
         case thinkingLevel
+        case agentSetup, agentSetupLanguage
     }
 }
 

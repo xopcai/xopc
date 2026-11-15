@@ -34,6 +34,7 @@ describe('TunnelService lease recovery', () => {
     service.configure({ brokerUrl: 'https://frp.xopc.ai/api', registrationSecret: 'valid-key', autoStart: false,
       gatewayHost: '127.0.0.1', frpSubdomainHost: 'frp.xopc.ai' });
     vi.spyOn(TunnelBrokerClient.prototype, 'heartbeat').mockResolvedValue();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ status: 'ok', ready: true }));
   });
   afterEach(async () => {
     await service.stop();
@@ -68,9 +69,10 @@ describe('TunnelService lease recovery', () => {
     saveTunnelState(persistedFromRegistration(registration));
     vi.mocked(TunnelBrokerClient.prototype.heartbeat).mockRejectedValueOnce(new Error('Network unavailable'));
     const register = vi.spyOn(TunnelBrokerClient.prototype, 'register');
-    await expect(service.start(18790, 'gateway-token')).rejects.toThrow('Network unavailable');
+    await service.start(18790, 'gateway-token');
     expect(register).not.toHaveBeenCalled();
     expect(loadTunnelState()?.tunnelToken).toBe(registration.tunnelToken);
+    expect(service.getStatus().state).toBe('connected');
   });
 
   it('exits connecting state when saving newly issued credentials fails and allows explicit recovery', async () => {

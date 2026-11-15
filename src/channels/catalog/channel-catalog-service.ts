@@ -182,9 +182,13 @@ function collectRequiredSchemaIssues(
 ): ChannelSetupIssue[] {
   const schema = entry?.configSchema;
   if (!isRecord(schema)) return [];
-  const required = schema.required;
-  if (!Array.isArray(required)) return [];
-  return required
+  const requiredWhenEnabled = readConfigPath(schema, 'if.properties.enabled.const') === false
+    ? readConfigPath(schema, 'else.required') : undefined;
+  const required = new Set([
+    ...(Array.isArray(schema.required) ? schema.required : []),
+    ...(Array.isArray(requiredWhenEnabled) ? requiredWhenEnabled : []),
+  ]);
+  return [...required]
     .map(String)
     .filter((fieldPath) => fieldPath !== 'enabled')
     .filter((fieldPath) => isEmptyConfigValue(readConfigPath(raw, fieldPath)))

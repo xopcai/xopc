@@ -76,10 +76,16 @@
             }
           }
         },
-        "required": [
-          "clientId",
-          "clientSecret"
-        ]
+        "if": {
+          "properties": { "enabled": { "const": false } },
+          "required": ["enabled"]
+        },
+        "else": {
+          "required": [
+            "clientId",
+            "clientSecret"
+          ]
+        }
       },
       "uiHints": {
         "clientSecret": {

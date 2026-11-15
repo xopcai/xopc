@@ -6,14 +6,16 @@ extension GatewayClient {
         attachments: [MessageAttachment],
         references: [ContextReference],
         delivery: MessageDelivery,
-        to conversation: ConversationSelection
+        to conversation: ConversationSelection,
+        clientMessageID: String
     ) async throws -> SessionCommandResult {
         let body = try await messageBody(
             text,
             attachments: attachments,
             references: references,
             delivery: delivery,
-            conversation: conversation
+            conversation: conversation,
+            clientMessageID: clientMessageID
         )
 
         if !conversation.isDraft {
@@ -49,10 +51,10 @@ extension GatewayClient {
         attachments: [MessageAttachment],
         references: [ContextReference],
         delivery: MessageDelivery,
-        conversation: ConversationSelection
+        conversation: ConversationSelection,
+        clientMessageID: String
     ) async throws -> Data {
         _ = try await DeviceEndpointPool.shared.origin(for: self)
-        let clientMessageID = UUID().uuidString.lowercased()
         if conversation.isDraft {
             return try await startMessageBody(
                 text,
@@ -102,7 +104,8 @@ extension GatewayClient {
                 execution: conversation.executionMode.map { ExecutionCommand(mode: $0, baseRef: nil) },
                 temporary: false,
                 model: model,
-                thinkingLevel: thinking
+                thinkingLevel: thinking,
+                agentSetupLanguage: conversation.agentSetupLanguage
             ),
             input: inputCommand(text: text, attachments: attachments, references: references),
             origin: DeviceEndpointPool.shared.origin(for: self)

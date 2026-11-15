@@ -1883,6 +1883,64 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
     }
 
+    func testComposerPlacesAddOnTheLeftAndVoiceOnTheRight() {
+        let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        let add = app.buttons["添加附件或引用"]
+        let voice = app.buttons["语音输入"]
+        XCTAssertLessThan(add.frame.midX, composer.frame.minX)
+        XCTAssertGreaterThan(voice.frame.midX, composer.frame.maxX)
+        add.tap()
+        let panel = app.descendants(matching: .any)["assistant-action-panel"].firstMatch
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        app.buttons["关闭添加面板"].tap()
+        voice.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["chat-hold-to-speak"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["键盘输入"].tap()
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+    }
+
+    func testLibraryUsesWorkspaceResultsWithVersionsFavoritesAndTrash() async throws {
+        var reset = URLRequest(url: try XCTUnwrap(URL(string: fixtureBase + "/fixture/space-reset")))
+        reset.httpMethod = "POST"
+        let (_, response) = try await URLSession.shared.data(for: reset)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-library"].tap()
+        let item = app.buttons["space-item-55555555-5555-4555-8555-555555555555"]
+        XCTAssertTrue(item.waitForExistence(timeout: 6))
+        XCTAssertFalse(app.staticTexts["最近交付"].exists)
+        XCTAssertFalse(app.staticTexts["布局检查笔记"].exists)
+        item.tap()
+        XCTAssertTrue(app.staticTexts["Library version two"].waitForExistence(timeout: 5))
+        app.buttons["preview-actions"].tap()
+        app.buttons["preview-version-1"].tap()
+        XCTAssertTrue(app.staticTexts["Library version one"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["查看来源"].exists)
+        XCTAssertTrue(app.buttons["在对话中使用"].exists)
+        app.buttons["preview-actions"].tap()
+        app.buttons["preview-favorite"].tap()
+        app.buttons["preview-actions"].tap()
+        app.buttons["移到回收站"].tap()
+        XCTAssertTrue(app.buttons["撤销"].waitForExistence(timeout: 5))
+        XCTAssertTrue(item.waitForNonExistence(timeout: 5))
+        app.buttons["撤销"].tap()
+        XCTAssertTrue(item.waitForExistence(timeout: 5))
+        app.buttons["library-scope-favorites"].tap()
+        XCTAssertTrue(item.waitForExistence(timeout: 5))
+        app.buttons["library-scope-trash"].tap()
+        XCTAssertTrue(app.staticTexts["回收站为空"].waitForExistence(timeout: 5))
+        app.buttons["library-scope-all"].tap()
+        XCTAssertTrue(item.waitForExistence(timeout: 5))
+        item.tap()
+        app.buttons["在对话中使用"].tap()
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 5))
+        let attachment = app.buttons["assistant-file-preview"]
+        XCTAssertTrue(attachment.waitForExistence(timeout: 5))
+        XCTAssertEqual(attachment.label, "验收.txt")
+    }
+
     func testChatHeaderControlsStayInPlaceWhileHistoryScrolls() {
         XCTAssertTrue(app.openHomeSidebar())
         app.buttons["chat-sidebar-personal"].tap()
@@ -1903,6 +1961,26 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.scrollViews["personal-overview-scroll"].waitForExistence(timeout: 6))
         app.buttons["personal-overview-close"].tap()
         XCTAssertTrue(avatar.waitForExistence(timeout: 6))
+    }
+
+    func testFirstSentMessageAppearsBelowTheHeader() {
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-new"].tap()
+        let composer = app.textFields["assistant-chat-composer"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 6))
+        let text = "Anchor the first question"
+        composer.tap()
+        composer.typeText(text)
+        let send = app.buttons["assistant-chat-send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        send.tap()
+        let row = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "chat-message-user-")
+        ).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 6))
+        let header = app.buttons["chat-header-sidebar"]
+        XCTAssertGreaterThanOrEqual(row.frame.minY, header.frame.maxY - 2)
+        XCTAssertLessThan(row.frame.minY, app.frame.height * 0.35)
     }
 
     func testPersonalOverviewScrollTasksAndScheduleDraft() {
@@ -1982,6 +2060,38 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-agent"].waitForExistence(timeout: 6))
     }
 
+    func testMusicCardAppearsAndUpdatesWithoutReopeningTheConversation() async throws {
+        let base = fixtureBase + "/music-live"
+        let stateURL = try XCTUnwrap(URL(string: base + "/fixture/music-state"))
+        func setMusicState(_ state: String) async throws {
+            var request = URLRequest(url: stateURL)
+            request.httpMethod = "POST"
+            request.httpBody = try JSONEncoder().encode(["state": state])
+            let (_, response) = try await URLSession.shared.data(for: request)
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        }
+        try await setMusicState("")
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = base
+        app.launch()
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-personal"].tap()
+        XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 5))
+        let title = app.staticTexts["模拟器背景音乐"]
+        XCTAssertFalse(title.exists)
+
+        try await setMusicState("running")
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        XCTAssertTrue(title.isHittable)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "生成中")).firstMatch.exists)
+
+        try await setMusicState("completed")
+        let player = app.buttons["generated-music-open-fixture-song"]
+        XCTAssertTrue(player.waitForExistence(timeout: 10))
+        XCTAssertLessThan(player.frame.minX - app.frame.minX, 38)
+        XCTAssertTrue(app.buttons["chat-header-personal"].exists)
+    }
+
     // swiftlint:disable:next function_body_length
     func testGeneratedMusicContinuesAcrossConversationAndBackground() async throws {
         app.terminate()
@@ -1991,14 +2101,17 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.buttons["chat-sidebar-personal"].tap()
         let musicCard = app.buttons["generated-music-open-fixture-song"]
         XCTAssertTrue(musicCard.waitForExistence(timeout: 10))
+        XCTAssertLessThan(musicCard.frame.minX - app.frame.minX, 38)
         musicCard.tap()
         XCTAssertTrue(app.staticTexts["music-elapsed"].waitForExistence(timeout: 6))
         XCTAssertTrue(app.buttons["music-play-toggle"].waitForExistence(timeout: 6))
         let progress = app.sliders["music-progress"]
+        XCTAssertFalse(progress.isEnabled)
+        app.buttons["music-play-toggle"].tap()
         let seekReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: progress)
         await fulfillment(of: [seekReady], timeout: 6)
         progress.adjust(toNormalizedSliderPosition: 0)
-        app.buttons["music-minimize"].tap()
+        app.buttons["music-player-close"].tap()
         XCTAssertTrue(musicCard.waitForExistence(timeout: 6))
         app.swipeDown()
         let sticky = app.descendants(matching: .any)["music-sticky-player"].firstMatch
@@ -2028,6 +2141,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.buttons["music-skip-back"].tap()
         XCTAssertEqual(elapsed.label, "0:00")
         let lyrics = app.staticTexts["music-lyrics-text"]
+        XCTAssertFalse(lyrics.exists)
+        app.buttons["music-lyrics"].tap()
         XCTAssertTrue(lyrics.waitForExistence(timeout: 5))
         let controlY = app.buttons["music-play-toggle"].frame.midY
         app.buttons["music-lyrics"].tap()
@@ -2036,9 +2151,50 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.buttons["music-lyrics"].tap()
         XCTAssertTrue(lyrics.waitForExistence(timeout: 5))
         capture("ios-global-music-player")
+        app.buttons["preview-actions"].tap()
         app.buttons["music-return-source"].tap()
         XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 6))
         XCTAssertTrue(musicCard.waitForExistence(timeout: 6))
+    }
+
+    func testMusicUsesTheSameLyricsAndPlaybackPositionInChatAndLibrary() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/music"
+        app.launch()
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-personal"].tap()
+        let card = app.buttons["generated-music-open-fixture-song"]
+        XCTAssertTrue(card.waitForExistence(timeout: 8))
+        card.tap()
+        let play = app.buttons["music-play-toggle"]
+        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        app.buttons["music-lyrics"].tap()
+        let lyrics = app.staticTexts["music-lyrics-text"]
+        XCTAssertTrue(lyrics.waitForExistence(timeout: 3))
+        let originalLyrics = lyrics.label
+        play.tap()
+        let progress = app.sliders["music-progress"]
+        let seekReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: progress)
+        XCTAssertEqual(XCTWaiter.wait(for: [seekReady], timeout: 5), .completed)
+        play.tap()
+        app.buttons["music-skip-forward"].tap()
+        let elapsed = app.staticTexts["music-elapsed"].label
+        XCTAssertNotEqual(elapsed, "0:00")
+        app.buttons["music-player-close"].tap()
+
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-library"].tap()
+        let libraryMusic = app.buttons["space-item-88888888-8888-4888-8888-888888888888"]
+        XCTAssertTrue(libraryMusic.waitForExistence(timeout: 5))
+        libraryMusic.tap()
+        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        XCTAssertTrue(progress.isEnabled)
+        XCTAssertEqual(app.staticTexts["music-elapsed"].label, elapsed)
+        XCTAssertFalse(lyrics.exists)
+        app.buttons["music-lyrics"].tap()
+        XCTAssertTrue(lyrics.waitForExistence(timeout: 3))
+        XCTAssertEqual(lyrics.label, originalLyrics)
+        capture("ios-library-music-preview")
     }
 
     func testSidebarSwipeAndSecondaryDestinations() {
@@ -2072,32 +2228,136 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testCapabilityCatalogDefaultsToPluginsAndSearchStaysInItsCategory() {
         tab("capabilities")
-        let category = app.buttons["capability-category"]
+        let header = app.navigationBars["能力"]
         let plugin = app.buttons["capability-row-meeting-plugin"]
+        let close = app.buttons["capability-panel-close"]
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
-        XCTAssertLessThan(category.frame.midX, app.frame.midX)
-        XCTAssertGreaterThan(app.buttons["capability-refresh"].frame.midX, app.frame.midX)
+        XCTAssertTrue(header.exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "capability-refresh").count, 0)
+        XCTAssertGreaterThan(app.buttons["capability-add-plugins"].frame.midX, app.frame.midX)
+        capture("capability-plugins")
+        plugin.tap()
+        XCTAssertTrue(app.buttons["capability-panel-start"].waitForExistence(timeout: 5))
+        close.tap()
         let search = app.textFields["capability-search"]
         search.tap()
         search.typeText("Meeting")
         XCTAssertTrue(plugin.exists)
         XCTAssertFalse(app.buttons["capability-row-meeting-skill"].exists)
         XCTAssertFalse(app.buttons["capability-row-document-plugin"].exists)
-        for (title, id) in [
-            ("技能", "meeting-skill"), ("连接", "drive-connection"), ("助手与专家", "coder"), ("消息通道", "mail-channel")
+        for (category, id) in [
+            ("skills", "meeting-skill"), ("connections", "drive-connection"), ("agents", "coder"), ("channels", "mail-channel")
         ] {
-            category.tap()
-            app.buttons[title].tap()
-            XCTAssertTrue(app.buttons["capability-row-\(id)"].waitForExistence(timeout: 5))
+            let segment = app.buttons["capability-category-\(category)"]
+            if !segment.isHittable {
+                app.buttons["capability-category-agents"].swipeLeft()
+            }
+            segment.tap()
+            XCTAssertTrue(header.exists)
+            let row = app.buttons["capability-row-\(id)"]
+            XCTAssertTrue(row.waitForExistence(timeout: 5))
             XCTAssertFalse(plugin.exists)
             XCTAssertNotEqual(search.value as? String, "Meeting")
+            let add = app.buttons["capability-add-\(category)"]
+            if category == "skills" {
+                XCTAssertTrue(add.exists)
+                XCTAssertLessThan(add.frame.maxY, segment.frame.minY)
+                add.tap()
+                XCTAssertTrue(app.textFields["capability-field-query"].waitForExistence(timeout: 5))
+                close.tap()
+            }
+            XCTAssertEqual(app.buttons["capability-chat-setup-\(category)"].exists, category != "channels")
+            if category == "connections" {
+                let deadline = Date().addingTimeInterval(5)
+                var brandRendered = hasRedCapabilityLogo(in: row.frame)
+                while !brandRendered, Date() < deadline {
+                    Thread.sleep(forTimeInterval: 0.2)
+                    brandRendered = hasRedCapabilityLogo(in: row.frame)
+                }
+                XCTAssertTrue(brandRendered, "The gateway-provided Gmail SVG should render rather than its initials.")
+            }
+            capture("capability-\(category)")
+            row.tap()
+            XCTAssertTrue(close.waitForExistence(timeout: 5))
+            if category == "connections" { XCTAssertTrue(app.buttons["capability-panel-authorize"].waitForExistence(timeout: 5)) }
+            if category == "agents" { XCTAssertTrue(app.buttons["capability-start-chat"].exists) }
+            if category == "channels" { XCTAssertTrue(app.buttons["capability-panel-pair"].waitForExistence(timeout: 5)) }
+            XCTAssertFalse(app.buttons["capability-open-chat"].exists)
+            close.tap()
         }
-        app.buttons["capability-row-mail-channel"].tap()
-        app.buttons["capability-open-chat"].tap()
-        let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
-        XCTAssertTrue(composer.waitForExistence(timeout: 6))
-        XCTAssertTrue((composer.value as? String)?.contains("mail-channel") == true)
-        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "mail-channel")).firstMatch.exists)
+        app.buttons["capability-category-skills"].tap()
+        app.buttons["capability-row-meeting-skill"].tap()
+        let skill = app.switches["启用技能"]
+        XCTAssertTrue(skill.waitForExistence(timeout: 5))
+        let initial = skill.value as? String
+        skill.tap()
+        app.buttons["capability-panel-save"].tap()
+        close.tap()
+        app.buttons["capability-row-meeting-skill"].tap()
+        XCTAssertTrue(skill.waitForExistence(timeout: 5))
+        XCTAssertNotEqual(skill.value as? String, initial)
+        close.tap()
+        XCTAssertFalse(app.buttons["capability-discover"].exists)
+    }
+
+    func testCapabilityCreationOpensAnUnsentConversationDraft() {
+        for (category, expected) in [("agents", "创建一个助手或专家"), ("skills", "创建一个技能"), ("connections", "添加一个 MCP 连接")] {
+            tab("capabilities")
+            app.buttons["capability-category-\(category)"].tap()
+            app.buttons["capability-chat-setup-\(category)"].tap()
+            let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
+            XCTAssertTrue(composer.waitForExistence(timeout: 5))
+            XCTAssertTrue((composer.value as? String)?.contains(expected) == true)
+            XCTAssertFalse((composer.value as? String)?.contains("mcp:setup") == true)
+        }
+    }
+
+    private func hasRedCapabilityLogo(in row: CGRect) -> Bool {
+        guard let screen = app.screenshot().image.cgImage else { return false }
+        let scale = CGFloat(screen.width) / app.frame.width
+        let area = CGRect(x: row.minX + 20, y: row.midY - 16, width: 32, height: 32)
+        guard let logo = screen.cropping(to: area.applying(.init(scaleX: scale, y: scale)).integral) else { return false }
+        let side = 24
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        return pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: side, height: side,
+                                          bitsPerComponent: 8, bytesPerRow: side * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+            context.draw(logo, in: CGRect(x: 0, y: 0, width: side, height: side))
+            let bytes = buffer.bindMemory(to: UInt8.self)
+            return stride(from: 0, to: bytes.count, by: 4).filter { index in
+                bytes[index] > 180 && bytes[index + 1] < 140 && bytes[index + 2] < 140
+            }.count >= 10
+        }
+    }
+
+    func testCapabilityMarketplaceAndPluginShowOnlyTheNextStep() {
+        tab("capabilities")
+        let plugin = app.buttons["capability-row-meeting-plugin"]
+        XCTAssertTrue(plugin.waitForExistence(timeout: 5))
+        plugin.tap()
+        let enable = app.buttons["capability-panel-start"]
+        XCTAssertTrue(enable.waitForExistence(timeout: 5))
+        enable.tap()
+        XCTAssertTrue(app.staticTexts["已启用"].waitForExistence(timeout: 9))
+        let disable = app.buttons["capability-panel-disable"]
+        XCTAssertFalse(disable.exists)
+        app.buttons["更多选项"].tap()
+        XCTAssertTrue(disable.exists)
+        app.buttons["capability-panel-close"].tap()
+
+        app.buttons["capability-category-skills"].tap()
+        app.buttons["capability-add-skills"].tap()
+        let query = app.textFields["例如：会议纪要、PDF"]
+        XCTAssertTrue(query.waitForExistence(timeout: 5))
+        query.tap()
+        query.typeText("Meeting")
+        app.buttons["capability-panel-search"].tap()
+        XCTAssertTrue(app.staticTexts["Meeting Summary"].waitForExistence(timeout: 5))
+        app.buttons["capability-panel-install:sample"].tap()
+        app.alerts.buttons["确认"].tap()
+        XCTAssertTrue(app.staticTexts["技能已安装，可在技能列表中使用。"].waitForExistence(timeout: 5))
     }
 
     func testSecondarySearchOpensFromHeaderAndSidebarShortcut() {

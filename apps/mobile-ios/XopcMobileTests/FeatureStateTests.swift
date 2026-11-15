@@ -309,12 +309,13 @@ private struct StreamingGatewayStub: GatewayServing {
         attachments _: [MessageAttachment],
         references _: [ContextReference],
         delivery _: MessageDelivery,
-        to conversation: ConversationSelection
+        to conversation: ConversationSelection,
+        clientMessageID: String
     ) async throws -> SessionCommandResult {
         SessionCommandResult(
             receipt: InputReceipt(
                 conversationId: conversation.id,
-                clientMessageId: "client-message",
+                clientMessageId: clientMessageID,
                 transcriptId: "transcript"
             ),
             session: CommandSession(key: conversation.id, transcriptId: "transcript"),

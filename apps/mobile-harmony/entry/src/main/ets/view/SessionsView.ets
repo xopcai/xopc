@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcSessionsViewModel } from '../viewmodel/sessionsViewModel';
 import { XopcSessionItem, XopcSessionGroup, XopcSidebarTaskChild, XopcSidebarTaskGroup } from '../model/chat';
 import { groupChatSessions, sessionAge } from '../common/sessionGroups';
-import { XopcErrorState, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField } from './MobileComponents';
+import { XopcErrorState, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField, XopcPaginationFooter } from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
 import { appSettings } from '../service/settings';
 import { XopcShareResult } from '../model/share';
@@ -437,13 +437,14 @@ export struct XopcSessionsView {
               ListItem() { Text(this.sessions.search.trim() ? $r('app.string.sessions_no_results') : $r('app.string.no_conversations'))
                 .fontColor(this.colors.secondary).width('100%').padding(24) }
             }
-            if (this.sessions.loadingMore) { ListItem() { XopcListSkeleton() } }
-            if (this.sessions.hasMore && !this.sessions.loadingMore) {
-              ListItem() { Button($r('app.string.load_more')).width('100%').height(44).enabled(!this.sessions.busy)
-                .onClick((): void => { this.sessions.load(true); }) }
+            if (this.sessions.hasMore && this.sessions.items.length) {
+              ListItem() {
+                XopcPaginationFooter({ loadingPage: this.sessions.loading || this.sessions.loadingMore || this.sessions.busy,
+                  failedPage: !!this.sessions.error,
+                  onLoad: (): void => { void this.sessions.load(true); } })
+              }
             }
           }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20 }).cachedCount(5)
-            .onReachEnd((): void => { if (!this.sessions.error && !this.sessions.busy) this.sessions.load(true); })
         }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(false, true); })
         if (this.sessions.undoId) {
           Row() {

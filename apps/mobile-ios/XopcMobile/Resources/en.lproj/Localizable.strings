@@ -1063,6 +1063,10 @@
 "没有匹配的近期成果" = "No matching recent results";
 
 "没有匹配的资料" = "No matching library items";
+"library_scope_label" = "Library views";
+"library_scope_all" = "All files";
+"library_scope_favorites" = "Favorites";
+"library_scope_trash" = "Trash";
 "确认验收" = "Accept result";
 
 "对话模型" = "Chat Model";
@@ -1164,8 +1168,6 @@
 "chat_search_category_images" = "Images";
 
 "capability_disabled" = "Disabled";
-"capability_discover" = "Find with assistant";
-"capability_open_chat" = "Continue in Chat";
 "capability_web_manage" = "Open administration";
 "capability_web_open_failed" = "Could not open administration";
 "capability_version_label" = "Version %1$@";
@@ -1173,13 +1175,6 @@
 "capability_channel_weixin" = "A Weixin account needs to sign in.";
 "capability_channel_feishu" = "A Feishu or Lark app needs authorization.";
 "capability_channel_config" = "Required channel settings are missing.";
-"capability_find_prompt" = "Help me find %1$@ in XOPC. Check what is available first, ask what I need if it is unclear, and recommend suitable options before making changes.";
-"capability_find_query_prompt" = "Find %1$@ for this request: %2$@. Check what is available and recommend suitable options before making changes.";
-"capability_plugin_prompt" = "Check the installation and authorization status of the XOPC plugin with catalog ID %1$@. Explain what it can do and guide me through the owner review if setup is needed.";
-"capability_skill_prompt" = "Check the XOPC skill with catalog ID %1$@. Explain how to use it and what it needs. If I ask to change it, use the Skill tools and report the result.";
-"capability_connection_prompt" = "Check the XOPC connection with catalog ID %1$@. Verify its status and help me connect or troubleshoot. Use the authorized setup flow if one is available. Keep credentials out of chat.";
-"capability_agent_prompt" = "Review the XOPC assistant or expert with ID %1$@. Explain its role and available capabilities. Discuss any requested changes with me before applying them.";
-"capability_channel_prompt" = "Check the messaging channel with catalog ID %1$@. Tell me whether it can receive messages and what setup is still required. If sign-in, pairing, or credentials are needed, guide me to the owner administration page.";
 "capability_title" = "Capabilities";
 "capability_plugins" = "Plugins";
 "capability_skills" = "Skills";
@@ -1210,3 +1205,13 @@
 "color_scheme_dawn" = "Dawn";
 "color_scheme_emerald" = "Emerald";
 "color_scheme_clay" = "Clay";
+"capability_create_agent" = "Create an assistant";
+"capability_create_skill" = "Create a skill";
+"capability_add_mcp" = "Add an MCP connection";
+"capability_search_plugins" = "Find and install plugins";
+"capability_skill_market" = "Skill Store";
+"capability_search_installed_skills" = "Search installed skills";
+"capability_agent_setup_prompt" = "Help me create an assistant or expert. Ask what it should do.";
+"capability_skill_setup_prompt" = "Help me create a reusable skill. Ask what it should do.";
+"capability_mcp_setup_prompt" = "Help me add an MCP connection. Ask which service to connect.";
+"capability_mcp_continue" = "Continue setup";
