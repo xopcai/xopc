@@ -1,24 +1,11 @@
-import { z } from 'zod';
-
-import { isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
-import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { isEmbeddedRunActive } from '../embedded/runs.js';
 import { commandRegistry } from '../commands/command-registry.js';
 import { listChildRuns } from '../orchestration/child-run-monitor.js';
+import { sessionInteractionPolicies, sessionInteractionPolicySchema } from './interaction-policy-state.js';
+import type { SessionInteractionPolicy } from './interaction-policy-state.js';
 
-export const sessionInteractionPolicySchema = z.object({
-  mode: z.enum(['default', 'plan']),
-  access: z.enum(['configured', 'read-only']),
-  sandbox: z.enum(['workspace-write', 'unrestricted']).optional(),
-  network: z.boolean().optional(),
-}).strict();
-export type SessionInteractionPolicy = z.infer<typeof sessionInteractionPolicySchema>;
-
-const policies = () => new DurableState<SessionInteractionPolicy>('session-interaction-policy');
-
-export function getSessionInteractionPolicy(conversationId: string): SessionInteractionPolicy {
-  return (isXopcDatabaseOpen() && policies().get(conversationId)) || { mode: 'default', access: 'configured' };
-}
+export { getSessionInteractionPolicy, sessionInteractionPolicySchema } from './interaction-policy-state.js';
+export type { SessionInteractionPolicy } from './interaction-policy-state.js';
 
 export function setSessionInteractionPolicy(conversationId: string, value: SessionInteractionPolicy): SessionInteractionPolicy {
   const policy = sessionInteractionPolicySchema.parse(value);
@@ -27,7 +14,7 @@ export function setSessionInteractionPolicy(conversationId: string, value: Sessi
     || listChildRuns(conversationId).some(child => child.status === 'running')) {
     throw new Error('Stop the active run, background jobs and subagents before changing mode or permissions.');
   }
-  policies().set(conversationId, policy);
+  sessionInteractionPolicies().set(conversationId, policy);
   return policy;
 }
 
