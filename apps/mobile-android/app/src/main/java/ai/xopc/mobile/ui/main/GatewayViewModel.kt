@@ -46,6 +46,7 @@ import ai.xopc.mobile.gateway.ProgressDelivery
 import ai.xopc.mobile.gateway.ProgressItem
 import ai.xopc.mobile.gateway.ProgressHomeAction
 import ai.xopc.mobile.gateway.ProgressTask
+import ai.xopc.mobile.gateway.ConversationHistoryScope
 import ai.xopc.mobile.gateway.ProgressProject
 import ai.xopc.mobile.gateway.ProgressProjectSession
 import ai.xopc.mobile.gateway.AutomationRepository
@@ -286,6 +287,8 @@ data class ConnectionUiState(
   val conversationsLoadingMore: Boolean = false,
   val conversationsHasMore: Boolean = false,
   val conversationsMoreError: Boolean = false,
+  val conversationShareId: String? = null,
+  val conversationShareRevoked: Boolean = false,
   val conversationSharePreview: ConversationSharePreview? = null,
   val conversationShareBusy: Boolean = false,
   val conversationShareError: Boolean = false,
@@ -410,6 +413,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   AndroidViewModel(application) {
   constructor(application: Application) : this(application, GatewaySession(application))
   val generatedMediaAccess = GeneratedMediaAccess(session)
+  val modelSettingsAccess = ai.xopc.mobile.gateway.ModelSettingsAccess(session)
   val spaceLibraryAccess = ai.xopc.mobile.gateway.SpaceLibraryAccess(session)
   private var phoneRepositoryGateway: String? = null
   private var cachedPhoneRepository: ai.xopc.mobile.gateway.PhoneRepository? = null
@@ -444,6 +448,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   val state = mutableState.asStateFlow()
   private var listRevision = 0
   private var listSearch = ""
+  private var conversationHistoryScope: ConversationHistoryScope? = null
   private var searchJob: Job? = null
   private var remoteConversationOffset = 0
   private var historyRevision = 0
@@ -2022,10 +2027,10 @@ class GatewayViewModel internal constructor(application: Application, private va
   fun actOnAutomation(id: String, action: String) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: return
-    val item = current.progress.automations.detail?.takeIf {
-      it.id == id && current.progress.automations.selectedId == id
-    } ?: return
-    if (current.progress.automations.actionBusy) return
+    val automations = current.progress.automations
+    val item = (automations.detail?.takeIf { it.id == id && automations.selectedId == id }
+      ?: automations.items.firstOrNull { it.id == id }) ?: return
+    if (automations.actionBusy || automations.deleteBusy) return
     mutableState.update { it.copy(progress = it.progress.copy(automations = it.progress.automations.copy(
       actionBusy = true, actionError = false))) }
     viewModelScope.launch {
@@ -2042,11 +2047,11 @@ class GatewayViewModel internal constructor(application: Application, private va
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) { failed = true }
       finally {
-        if (mutableState.value.profile?.gatewayId == gatewayId &&
-          mutableState.value.progress.automations.selectedId == id) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) {
           mutableState.update { it.copy(progress = it.progress.copy(automations = it.progress.automations.copy(
             actionBusy = false, actionError = failed))) }
-          openAutomation(id)
+          if (mutableState.value.progress.automations.selectedId == id) openAutomation(id)
+          loadAutomations()
         }
       }
     }
@@ -2098,25 +2103,24 @@ class GatewayViewModel internal constructor(application: Application, private va
   fun deleteAutomation(id: String, key: String) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: return
-    val item = current.progress.automations.detail?.takeIf {
-      it.id == id && current.progress.automations.selectedId == id
-    } ?: return
-    if (current.progress.automations.deleteBusy) return
+    val automations = current.progress.automations
+    val item = (automations.detail?.takeIf { it.id == id && automations.selectedId == id }
+      ?: automations.items.firstOrNull { it.id == id }) ?: return
+    if (automations.deleteBusy || automations.actionBusy) return
     mutableState.update { it.copy(progress = it.progress.copy(automations =
       it.progress.automations.copy(deleteBusy = true, deleteError = false, deletedId = null))) }
     viewModelScope.launch {
       try {
         runInterruptible(Dispatchers.IO) { automationRepository.delete(item, key) }
-        if (mutableState.value.profile?.gatewayId == gatewayId &&
-          mutableState.value.progress.automations.selectedId == id) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) {
           mutableState.update { it.copy(progress = it.progress.copy(automations =
-            it.progress.automations.copy(deleteBusy = false, deletedId = id))) }
+            it.progress.automations.copy(deleteBusy = false, deletedId = id,
+              items = it.progress.automations.items.filterNot { entry -> entry.id == id }))) }
           loadAutomations()
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
-        if (mutableState.value.profile?.gatewayId == gatewayId &&
-          mutableState.value.progress.automations.selectedId == id) mutableState.update {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(progress = it.progress.copy(automations =
             it.progress.automations.copy(deleteBusy = false, deleteError = true)))
         }
@@ -2692,6 +2696,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     notesRevision++; noteDetailRevision++; personalRevision++; personalListRevision++; personalDetailRevision++
     sharesRevision++
     listSearch = ""
+    conversationHistoryScope = null
     remoteConversationOffset = 0
     mutableState.update { it.copy(realtimeStatus = "offline") }
   }
@@ -2914,27 +2919,40 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
+  fun setConversationHistoryScope(scope: ConversationHistoryScope?) {
+    if (conversationHistoryScope == scope) return
+    conversationHistoryScope = scope
+    searchJob?.cancel()
+    mutableState.update { it.copy(conversationSearch = "", conversationResultsQuery = "", conversations = emptyList(),
+      conversationTaskGroups = emptyMap(), conversationsHasMore = false) }
+    loadConversations("")
+  }
+
+  suspend fun fetchConversationHistoryExperts(): List<ConversationAgent> =
+    runInterruptible(Dispatchers.IO) { conversations.agents().agents }
+
   fun loadConversations(search: String = listSearch) {
     val profile = mutableState.value.profile ?: return
     val requestedAt = System.currentTimeMillis()
     listSearch = search.trim()
     val query = listSearch
+    val scope = conversationHistoryScope
     remoteConversationOffset = 0
     val revision = ++listRevision
     mutableState.update { it.copy(conversationsLoading = true, conversationsLoadingMore = false,
       conversationsHasMore = false, conversationsMoreError = false, conversationsError = false) }
     viewModelScope.launch {
       try {
-        val result = runInterruptible(Dispatchers.IO) { conversations.list(search = query) }
+        val result = runInterruptible(Dispatchers.IO) { conversations.list(search = query, scope = scope) }
         if (revision == listRevision) {
           remoteConversationOffset = result.remoteCount
           val recent = result.items.filterNot { it.isLocalDraft }.take(20)
           mutableState.update { it.copy(conversations = result.items, conversationTaskGroups = result.taskGroups,
-            recentConversations = if (query.isEmpty()) recent else it.recentConversations,
+            recentConversations = if (query.isEmpty() && scope == null) recent else it.recentConversations,
             conversationResultsQuery = query,
             conversationsLoading = false,
             conversationsHasMore = result.hasMore) }
-          if (query.isEmpty()) withContext(Dispatchers.IO) { conversations.cacheRecent(profile, recent, requestedAt) }
+          if (query.isEmpty() && scope == null) withContext(Dispatchers.IO) { conversations.cacheRecent(profile, recent, requestedAt) }
         }
       } catch (error: CancellationException) {
         throw error
@@ -2976,10 +2994,11 @@ class GatewayViewModel internal constructor(application: Application, private va
     val revision = listRevision
     val offset = remoteConversationOffset
     val search = listSearch
+    val scope = conversationHistoryScope
     mutableState.update { it.copy(conversationsLoadingMore = true, conversationsMoreError = false) }
     viewModelScope.launch {
       try {
-        val page = runInterruptible(Dispatchers.IO) { conversations.list(search, offset) }
+        val page = runInterruptible(Dispatchers.IO) { conversations.list(search, offset, scope = scope) }
         if (revision == listRevision) {
           remoteConversationOffset = offset + page.remoteCount
           mutableState.update { state ->
@@ -3009,14 +3028,19 @@ class GatewayViewModel internal constructor(application: Application, private va
   fun beginConversationShare(id: String) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: return
-    if (current.conversationShareBusy || current.conversations.none { it.id == id && !it.isLocalDraft }) return
+    if (current.conversationShareBusy || (id != current.selectedConversationId &&
+      current.conversations.none { it.id == id && !it.isLocalDraft })) return
     mutableState.update { it.copy(conversationShareBusy = true, conversationShareError = false,
+      conversationShareId = id, conversationShareRevoked = false,
       conversationSharePreview = null, conversationShareResult = null) }
     viewModelScope.launch {
       try {
-        val preview = runInterruptible(Dispatchers.IO) { conversations.sharePreview(id) }
+        val (result, preview) = runInterruptible(Dispatchers.IO) {
+          val active = conversations.activeShare(id)
+          active to if (active == null) conversations.sharePreview(id) else null
+        }
         if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
-          it.copy(conversationShareBusy = false, conversationSharePreview = preview)
+          it.copy(conversationShareBusy = false, conversationShareResult = result, conversationSharePreview = preview)
         }
       } catch (error: CancellationException) { throw error }
       catch (_: Exception) {
@@ -3027,16 +3051,15 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
-  fun confirmConversationShare() {
+  fun confirmConversationShare(ttlMs: Long, attachmentIds: List<String>) {
     val current = mutableState.value
     val gatewayId = current.profile?.gatewayId ?: return
     val preview = current.conversationSharePreview ?: return
     if (current.conversationShareBusy) return
-    mutableState.update { it.copy(conversationShareBusy = true, conversationShareError = false,
-      conversationSharePreview = null) }
+    mutableState.update { it.copy(conversationShareBusy = true, conversationShareError = false) }
     viewModelScope.launch {
       try {
-        val result = runInterruptible(Dispatchers.IO) { conversations.share(preview) }
+        val result = runInterruptible(Dispatchers.IO) { conversations.share(preview, ttlMs, attachmentIds) }
         if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
           it.copy(conversationShareBusy = false, conversationShareResult = result)
         }
@@ -3049,9 +3072,32 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
+  fun revokeConversationShare() {
+    val current = mutableState.value
+    val gatewayId = current.profile?.gatewayId ?: return
+    val share = current.conversationShareResult ?: return
+    if (current.conversationShareBusy) return
+    mutableState.update { it.copy(conversationShareBusy = true, conversationShareError = false) }
+    viewModelScope.launch {
+      try {
+        runInterruptible(Dispatchers.IO) { shareRepository.revoke(share.id) }
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(conversationShareBusy = false, conversationShareResult = null,
+            conversationSharePreview = null, conversationShareRevoked = true)
+        }
+      } catch (error: CancellationException) { throw error }
+      catch (_: Exception) {
+        if (mutableState.value.profile?.gatewayId == gatewayId) mutableState.update {
+          it.copy(conversationShareBusy = false, conversationShareError = true)
+        }
+      }
+    }
+  }
+
   fun dismissConversationShare() {
     if (!mutableState.value.conversationShareBusy) mutableState.update { it.copy(
-      conversationSharePreview = null, conversationShareError = false, conversationShareResult = null) }
+      conversationShareId = null, conversationShareRevoked = false, conversationSharePreview = null,
+      conversationShareError = false, conversationShareResult = null) }
   }
 
   fun selectTaskChildConversation(taskId: String, conversationId: String) {

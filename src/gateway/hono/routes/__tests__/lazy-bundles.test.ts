@@ -165,6 +165,8 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/phone/devices')?.id).not.toBe('runtime-tools');
   });
   it('maps provider setup preview and apply through the models bundle', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/mobile/model-settings')?.id).toBe('mobile-model-settings');
+    expect(findAuthenticatedLazyRouteBundle('/api/mobile/model-settings-other')?.id).not.toBe('mobile-model-settings');
     expect(findAuthenticatedLazyRouteBundle('/api/providers/meta')?.id).toBe('models');
     expect(findAuthenticatedLazyRouteBundle('/api/providers-other/meta')).toBeUndefined();
     for (const path of ['/api/models/setup/qwen-token-plan-cn', '/api/models/setup/xopc-cloud/preview', '/api/models/setup/xiaomi-token-plan-cn/apply']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('models');

@@ -39,6 +39,8 @@ export interface XopcShareResult {
   reachabilityHint?: string | null;
   expiresAt: string;
   maxViews?: number | null;
+  messageCount?: number;
+  attachmentCount?: number;
 }
 
 export interface XopcShareResultEnvelope { ok: boolean; payload: XopcShareResult; }
@@ -51,7 +53,10 @@ export interface XopcSessionSharePreview {
   snapshotAt: string;
   messageCount: number;
   attachmentCandidates: XopcSessionShareAttachment[];
+  messages: XopcSessionShareMessage[];
 }
+
+export interface XopcSessionShareMessage { id: string; role: string; markdown: string; }
 
 export interface XopcSessionShareAttachment {
   id: string;

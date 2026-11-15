@@ -365,6 +365,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'mobile-model-settings',
+    match: path => path === '/api/mobile/model-settings',
+    load: async () => {
+      const { registerMobileModelSettingsRoutes } = await import('./mobile-model-settings.js');
+      return { register: registerMobileModelSettingsRoutes };
+    },
+  },
+  {
     id: 'models',
     // Includes /api/models/setup/:providerId and its preview/apply actions.
     match: (path) =>

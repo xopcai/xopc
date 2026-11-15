@@ -8,6 +8,7 @@ const CHAT_ACTION_GRID_HEIGHT: number = 184;
 export struct XopcChatActionPanel {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param open: boolean = false;
+  @Param canSwitchAgent: boolean = false;
   @Param disabledIds: string[] = [];
   @Event onSelect: (id: string) => void = (_id: string): void => {};
 
@@ -39,6 +40,9 @@ export struct XopcChatActionPanel {
           this.actionTile('reference-note', $r('app.string.chat_reference_note'), $r('sys.symbol.doc'))
           this.actionTile('reference-task', $r('app.string.chat_reference_task'), $r('sys.symbol.checkmark_circle'))
           this.actionTile('reference-file', $r('app.string.chat_reference_file'), $r('sys.symbol.folder'))
+          if (this.canSwitchAgent) {
+            this.actionTile('switch-agent', $r('app.string.chat_switch_agent'), $r('sys.symbol.person'))
+          }
         }.width('100%')
       }.width('100%').height(CHAT_ACTION_GRID_HEIGHT).padding({ left: 6, right: 6, top: 2, bottom: 10 })
     }.id('chat-action-panel').width('100%').height(this.open ? CHAT_ACTION_GRID_HEIGHT : 0).clip(true)

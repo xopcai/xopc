@@ -56,6 +56,8 @@ struct AgentCatalog: Decodable, Equatable, Sendable {
 }
 
 struct AgentSummary: Decodable, Equatable, Identifiable, Sendable {
+    struct Override: Decodable, Equatable, Sendable { let purpose: String? }
+    var override: Override? = nil
     let id: String
     let name: String?
     let description: String?
@@ -94,6 +96,8 @@ struct SidebarTask: Decodable, Equatable, Identifiable, Sendable {
 }
 
 struct ConversationSummary: Codable, Equatable, Identifiable, Sendable {
+    struct CustomData: Codable, Equatable, Sendable { let agentSetup: Bool? }
+    var customData: CustomData? = nil
     let key: String
     let agentId: String
     let name: String?

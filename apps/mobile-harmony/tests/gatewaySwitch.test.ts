@@ -34,7 +34,9 @@ function response(origin: string, path: string, _method: string, raw: string) {
     tokens: { accessToken: `token-${id}`, accessTokenExpiresAt: Date.now() + 120000,
       refreshToken: body.nextRefreshToken, refreshTokenExpiresAt: Date.now() + 3600000 },
   }) });
-  return path === '/api/status' ? JSON.stringify({ status: 'healthy', version: '1.0' }) : JSON.stringify({ gateway: id });
+  return path === '/api/status'
+    ? JSON.stringify({ status: 'healthy', version: id === 'b' ? '2.3.4' : '1.0' })
+    : JSON.stringify({ gateway: id });
 }
 describe('multi Gateway session isolation', () => {
   beforeEach(() => {
@@ -69,6 +71,7 @@ describe('multi Gateway session isolation', () => {
     const result = await session.probeProfile('b');
     expect(result.gatewayId).toBe('b'); expect(result.status).toBe('healthy');
     expect(result.routeUrl).toBe('https://b.example.com');
+    expect(result.version).toBe('2.3.4');
     expect(session.currentProfile()?.gatewayId).toBe('a');
     expect(JSON.parse(mocks.records.get('gateway-catalog')!).activeGatewayId).toBe('a');
   });

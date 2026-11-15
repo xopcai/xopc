@@ -40,7 +40,7 @@ import { defineTaskContract } from '../task-contract-definition.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { SessionStore } from '../../session/store.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
-import type { GatewayService } from '../../gateway/service.js';
+import { GatewayService } from '../../gateway/service.js';
 import { getTaskNotificationPreference } from '../task-notification-preference.js';
 import { TaskCollaborationRepository } from '../task-collaboration-repository.js';
 
@@ -643,18 +643,22 @@ describe('background task allocation', () => {
     expect(new TaskCollaborationRepository().recent(task.id, undefined, 10).some(entry => entry.body === 'January through March')).toBe(true);
   });
 
-  it('serves allocation submission and assignment through a real authenticated lazy Gateway', async () => {
+  it.each([false, true])('serves allocation and opens the selected executor conversation (legacy session: %s)', async legacy => {
     const directory = mkdtempSync(join(tmpdir(), 'xopc-allocation-http-'));
     const store = new SessionStore(directory);
     const token = 'allocation-http-test-token';
-    const app = createHonoApp({ service: {
-      currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
+    const config = ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } });
+    const service = {
+      config,
+      currentConfig: config,
       getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token,
       isGatewayReady: () => true, getExtensionLoader: () => null,
       dispatchTaskEvents: vi.fn(), dispatchTaskRuns: vi.fn(),
       sessionIndexInstance: store,
       sessions: { getMessagePage: store.getMessagePage.bind(store), getSession: store.get.bind(store) },
-    } as unknown as GatewayService });
+      ensureTaskConversation: GatewayService.prototype.ensureTaskConversation,
+    } as unknown as GatewayService;
+    const app = createHonoApp({ service });
     const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
     try {
       if (!server.listening) await once(server, 'listening');
@@ -669,13 +673,43 @@ describe('background task allocation', () => {
       expect(response.status).toBe(202);
       const accepted = await response.json();
       expect(accepted).toMatchObject({ operationalState: 'allocating', allocation: { status: 'pending' } });
+      const taskId = accepted.task.id as string;
+      const conversationUrl = `${base}/api/tasks/${taskId}/conversation`;
+      const conversations = new TaskConversationRepository();
+      const early = await fetch(conversationUrl, { method: 'POST', headers });
+      expect(early.status).toBe(409);
+      expect(await early.json()).toMatchObject({ error: 'Task executor has not been assigned' });
+      expect(conversations.getActiveSession(taskId)).toBeUndefined();
+
+      const oldConversation = legacy ? createConversation({ agentId: 'main' }, directory).key : undefined;
+      if (oldConversation) {
+        conversations.activateExecutionSession({ taskId, conversationId: oldConversation, agentId: 'main' });
+      }
       await dispatcher().drain();
-      const detail = await (await fetch(`${base}/api/tasks/${accepted.task.id}`, { headers })).json();
+      const detail = await (await fetch(`${base}/api/tasks/${taskId}`, { headers })).json();
       expect(detail).toMatchObject({ allocation: { status: 'assigned', selectedAgentId: 'analyst' }, operationalState: 'queued' });
       const history = await (await fetch(`${base}/api/sessions/${conversationId}/history?view=compact`, { headers })).json();
       expect(JSON.stringify(history)).not.toContain('Sales expertise');
       expect(JSON.stringify(history)).not.toContain('Task submitted;');
       expect(detail.allocation.selectionReason).toBe('Sales expertise and verified tools');
+
+      const run = new TaskRunRepository().getActiveRoot(taskId)!;
+      const runAgent = vi.fn(async () => {});
+      await new TaskRunDispatcher({ workerId: 'http-allocation-test', maxConcurrency: 1, runAgent,
+        ensureSession: async (id, runId, agentId) =>
+          (await service.ensureTaskConversation(id, { runId, requestedAgentId: agentId })).conversationId,
+      }).drain();
+      const active = conversations.getActiveSession(taskId);
+      expect(active).toMatchObject({ agentId: 'analyst', runId: run.id });
+      expect(runAgent).toHaveBeenCalledExactlyOnceWith(run.id, active?.conversationId, expect.any(String));
+      if (oldConversation) {
+        expect(conversations.listSessions(taskId)).toContainEqual(expect.objectContaining({
+          conversationId: oldConversation, agentId: 'main', status: 'superseded',
+        }));
+      }
+      const opened = await fetch(conversationUrl, { method: 'POST', headers });
+      expect(opened.status).toBe(200);
+      expect(await opened.json()).toMatchObject({ agentId: 'analyst', conversationId: active?.conversationId, created: false });
     } finally {
       server.closeAllConnections();
       await new Promise<void>(resolve => server.close(() => resolve()));

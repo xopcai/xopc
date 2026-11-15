@@ -6,6 +6,8 @@ import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.theme.CHAT_MESSAGE_WIDTH
 import ai.xopc.mobile.theme.LocalChatColors
 import ai.xopc.mobile.theme.LocalAttentionColors
+import ai.xopc.mobile.gateway.ConversationAgent
+import ai.xopc.mobile.gateway.ConversationHistoryScope
 import ai.xopc.mobile.gateway.ClarificationCommand
 
 import ai.xopc.mobile.gateway.ProgressTaskEdit
@@ -349,6 +351,8 @@ fun MainScreen(
   onPair: (String) -> Unit = {},
   onCancelPairing: () -> Unit = {},
   onConversationSearchChange: (String) -> Unit = {},
+  onConversationScope: (ConversationHistoryScope?) -> Unit = {},
+  onFetchConversationExperts: suspend () -> List<ConversationAgent> = { emptyList() },
   onRefreshConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
@@ -373,8 +377,9 @@ fun MainScreen(
   onToggleArchive: (String) -> Unit = {},
   onBatchConversations: (List<String>, String) -> Unit = { _, _ -> },
   onBeginConversationShare: (String) -> Unit = {},
-  onConfirmConversationShare: () -> Unit = {},
+  onConfirmConversationShare: (Long, List<String>) -> Unit = { _, _ -> },
   onDismissConversationShare: () -> Unit = {},
+  onRevokeConversationShare: () -> Unit = {},
   onScheduleDelete: (String) -> Unit = {},
   onUndoDelete: () -> Unit = {},
   onDismissComposerErrors: (String?, String?) -> Unit = { _, _ -> },
@@ -443,6 +448,7 @@ fun MainScreen(
   onReuseMessage: (String) -> Boolean = { false },
   onRegenerateMessage: (String) -> Boolean = { false },
   generatedMediaAccess: GeneratedMediaAccess? = null,
+  modelSettingsAccess: ai.xopc.mobile.gateway.ModelSettingsAccess? = null,
   spaceLibraryAccess: ai.xopc.mobile.gateway.SpaceLibraryAccess? = null,
   onUseLibraryFile: suspend (String, ai.xopc.mobile.gateway.LibraryVersion, ai.xopc.mobile.gateway.LibraryOrigin?) -> Unit =
     { _, _, _ -> error("LIBRARY_UNAVAILABLE") },
@@ -666,6 +672,8 @@ fun MainScreen(
     onPair = onPair, onCancelPairing = onCancelPairing, onScanPairing = scanPairingCode,
     pairingScanning = pairingScannerOpen || pairingPermissionRequesting,
     pairingScanError = pairingScanError, onConversationSearchChange = onConversationSearchChange,
+    onConversationScope = onConversationScope,
+    onFetchConversationExperts = onFetchConversationExperts,
     onRefreshConversations = onRefreshConversations,
     onLoadCapabilities = onLoadCapabilities, onCapabilityPanel = onCapabilityPanel,
     onCapabilitySetupChat = onCapabilitySetupChat,
@@ -686,6 +694,7 @@ fun MainScreen(
     onBeginConversationShare = onBeginConversationShare,
     onConfirmConversationShare = onConfirmConversationShare,
     onDismissConversationShare = onDismissConversationShare,
+    onRevokeConversationShare = onRevokeConversationShare,
     onScheduleDelete = onScheduleDelete, onUndoDelete = onUndoDelete,
     onDismissComposerErrors = onDismissComposerErrors,
     onDraftChange = onDraftChange, onRemoveDraftRef = onRemoveDraftRef,
@@ -753,7 +762,7 @@ fun MainScreen(
     onLoadMessageMedia = onLoadMessageMedia,
     onResolveMessageFile = onResolveMessageFile, onSaveFileVersion = onSaveFileVersion,
     generatedMediaAccess = generatedMediaAccess,
-    spaceLibraryAccess = spaceLibraryAccess, onUseLibraryFile = onUseLibraryFile,
+    modelSettingsAccess = modelSettingsAccess, spaceLibraryAccess = spaceLibraryAccess, onUseLibraryFile = onUseLibraryFile,
     onSpeechChunk = onSpeechChunk,
     onTranscribeAudio = onTranscribeAudio,
     onCreateVoiceCall = onCreateVoiceCall, onCancelVoiceCall = onCancelVoiceCall,
@@ -865,6 +874,8 @@ internal fun MainContent(
   pairingScanning: Boolean = false,
   pairingScanError: Boolean = false,
   onConversationSearchChange: (String) -> Unit = {},
+  onConversationScope: (ConversationHistoryScope?) -> Unit = {},
+  onFetchConversationExperts: suspend () -> List<ConversationAgent> = { emptyList() },
   onRefreshConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
@@ -887,8 +898,9 @@ internal fun MainContent(
   onToggleArchive: (String) -> Unit = {},
   onBatchConversations: (List<String>, String) -> Unit = { _, _ -> },
   onBeginConversationShare: (String) -> Unit = {},
-  onConfirmConversationShare: () -> Unit = {},
+  onConfirmConversationShare: (Long, List<String>) -> Unit = { _, _ -> },
   onDismissConversationShare: () -> Unit = {},
+  onRevokeConversationShare: () -> Unit = {},
   onScheduleDelete: (String) -> Unit = {},
   onUndoDelete: () -> Unit = {},
   onDismissComposerErrors: (String?, String?) -> Unit = { _, _ -> },
@@ -955,6 +967,7 @@ internal fun MainContent(
   onReuseMessage: (String) -> Boolean = { false },
   onRegenerateMessage: (String) -> Boolean = { false },
   generatedMediaAccess: GeneratedMediaAccess? = null,
+  modelSettingsAccess: ai.xopc.mobile.gateway.ModelSettingsAccess? = null,
   spaceLibraryAccess: ai.xopc.mobile.gateway.SpaceLibraryAccess? = null,
   onUseLibraryFile: suspend (String, ai.xopc.mobile.gateway.LibraryVersion, ai.xopc.mobile.gateway.LibraryOrigin?) -> Unit =
     { _, _, _ -> error("LIBRARY_UNAVAILABLE") },
@@ -1144,7 +1157,7 @@ internal fun MainContent(
     activeVoiceConversationId = id
     voiceCall.start(id, mode)
   }
-  var personalPage by rememberSaveable(gatewayId) { mutableStateOf("home") }
+  var personalPage by rememberSaveable(gatewayId) { mutableStateOf("settings") }
   val taskNavigation = rememberTaskChatNavigation(connection)
   var personalOverviewOpen by rememberSaveable(gatewayId) { mutableStateOf(false) }
   var editingOverviewProfile by remember(gatewayId) { mutableStateOf(false) }
@@ -1162,6 +1175,7 @@ internal fun MainContent(
     if (gatewayId != null && currentMusic?.gatewayId?.let { it != gatewayId } == true) MusicPlayback.stop()
   }
   var automationReturnTab by rememberSaveable(gatewayId) { mutableStateOf(HomeTab.Assistant) }
+  var automationReturnProjectId by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
   var automationReturnConversation by rememberSaveable(gatewayId) { mutableStateOf<String?>(null) }
   var openingAutomation by remember(gatewayId) { mutableStateOf(false) }
   val activeTab by rememberUpdatedState(selectedTab)
@@ -1203,6 +1217,7 @@ internal fun MainContent(
         if (activeTab != sourceTab || activeGateway != gatewayId || activeConversation != sourceConversation ||
           projectId != null && activeProject != projectId) return@launch
         automationReturnTab = sourceTab
+        automationReturnProjectId = projectId
         automationReturnConversation = sourceConversation
         onShowAutomationConfiguration(id, prompt)
         onSelectTab(HomeTab.Assistant)
@@ -1218,11 +1233,8 @@ internal fun MainContent(
   fun closeAutomationConfiguration() {
     automationReturnConversation?.let(onRestoreConversation) ?: onOpenPersonalAgent()
     when (automationReturnTab) {
-      HomeTab.Automations -> onLoadAutomations()
-      HomeTab.Projects -> connection.progress.project?.id?.let(onOpenProgressProject)
-      HomeTab.Progress -> {
-        onLoadAutomations()
-        connection.progress.project?.id?.let(onOpenProgressProject)
+      HomeTab.Progress, HomeTab.Projects, HomeTab.Automations -> {
+        automationReturnProjectId?.let(onOpenProgressProject) ?: onLoadAutomations()
       }
       else -> Unit
     }
@@ -1239,14 +1251,13 @@ internal fun MainContent(
     linkedDetails = linkedDetails + LinkedDetail(selectedTab, destination, id)
     onSelectTab(destination)
   }
-  var settingsFromSidebar by rememberSaveable(gatewayId) { mutableStateOf(false) }
-  var personalReturnPage by rememberSaveable(gatewayId) { mutableStateOf("home") }
+  var personalReturnPage by rememberSaveable(gatewayId) { mutableStateOf("settings") }
   var personalStartSection by rememberSaveable(gatewayId) { mutableStateOf("overview") }
   var personalDetailId by rememberSaveable(gatewayId) { mutableStateOf("") }
   var previousGatewayId by remember { mutableStateOf(gatewayId) }
   LaunchedEffect(gatewayId) {
     if (previousGatewayId != null && gatewayId != null && previousGatewayId != gatewayId) {
-      personalPage = "home"
+      personalPage = "settings"
       onSelectTab(HomeTab.Assistant)
     }
     previousGatewayId = gatewayId
@@ -1256,16 +1267,16 @@ internal fun MainContent(
       personalPage = personalReturnPage
       onClosePersonalAssertion()
     } else if (personalPage == "settings-appearance" || personalPage == "settings-language" ||
-      personalPage == "settings-gateways" || personalPage == "settings-sharing") {
+      personalPage == "settings-gateways" || personalPage == "settings-sharing" ||
+      personalPage == "about" || personalPage == "goals" || personalPage == "settings-about" || personalPage == "settings-models") {
       if (personalPage == "settings-sharing") onCloseShares()
       personalPage = "settings"
     } else if (personalPage == "settings-add") {
       personalPage = "settings-gateways"
-    } else if (personalPage == "settings" && settingsFromSidebar) {
-      settingsFromSidebar = false
-      personalPage = "home"
+    } else {
+      personalPage = "settings"
       onSelectTab(HomeTab.Assistant)
-    } else personalPage = "home"
+    }
   }
   LaunchedEffect(connection.personal.assertionDeletedRevision) {
     if (personalPage == "detail" && connection.personal.assertionDeletedRevision > 0 &&
@@ -1314,6 +1325,7 @@ internal fun MainContent(
     if (personalPage == "settings-sharing" && isPaired) onLoadShares()
   }
   var assistantActionsOpen by remember(selectedTab, conversationId) { mutableStateOf(false) }
+  var agentPickerOpen by remember(gatewayId, selectedTab, conversationId) { mutableStateOf(false) }
   var assistantComposerValue by remember(conversationId) {
     mutableStateOf(TextFieldValue(connection.draftText, selection = TextRange(connection.draftText.length)))
   }
@@ -1504,7 +1516,7 @@ internal fun MainContent(
   BackHandler(enabled = showingProjectChat && !imeVisible, onBack = ::closeProjectChat)
   BackHandler(enabled = showOverview) { personalOverviewOpen = false }
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
-  BackHandler(enabled = selectedTab == HomeTab.Me && personalPage != "home") { leavePersonalPage() }
+  BackHandler(enabled = selectedTab == HomeTab.Me) { leavePersonalPage() }
   BoxWithConstraints(modifier.fillMaxSize()) {
   val sidebarWidth = (maxWidth * 0.84f).coerceAtMost(350.dp)
   val density = LocalDensity.current
@@ -1549,6 +1561,14 @@ internal fun MainContent(
               exit = shrinkVertically(animationSpec = tween(180), shrinkTowards = Alignment.Bottom) +
                 fadeOut(animationSpec = tween(180)), label = "assistant-actions") {
               AssistantActionPanel(
+                canSwitchAgent = !showingProjectChat && !connection.automationConfigurationChat &&
+                  !isTaskChat(connection) && connection.personal.agent?.let {
+                    it.state == "ready" && it.conversationId == conversationId
+                  } != true,
+                onOpenAgentPicker = {
+                  assistantActionsOpen = false
+                  agentPickerOpen = true
+                },
                 canRecord = !inputVoiceBusy && !inputVoiceMode && inputVoice.phase == "idle" && !connection.sending,
                 canReference = !connection.sending && connection.pendingInput == null,
                 canPick = !connection.sending && !connection.attachmentLoading &&
@@ -1579,7 +1599,7 @@ internal fun MainContent(
       start = insets.calculateLeftPadding(layoutDirection),
       top = if (selectedTab == HomeTab.Assistant) 0.dp else insets.calculateTopPadding(),
       end = insets.calculateRightPadding(layoutDirection)) else insets
-    if (!isPaired && personalPage == "home") {
+    if (!isPaired && selectedTab != HomeTab.Me) {
       PairingScreen(stringResource(R.string.pairing_title), connection, onPair, onCancelPairing,
         onScanPairing, pairingScanning, pairingScanError, insets,
         onSettings = {
@@ -1625,7 +1645,7 @@ internal fun MainContent(
               "automation" -> openLinkedDetail(HomeTab.Automations, target.id)
               "session" -> { onSelectConversation(target.id); onSelectTab(HomeTab.Assistant) }
               "user_assertion" -> {
-                personalReturnPage = "home"; personalDetailId = target.id; personalPage = "detail"
+                personalReturnPage = "settings"; personalDetailId = target.id; personalPage = "detail"
                 onOpenPersonalAssertion(target.id); onSelectTab(HomeTab.Me)
               }
               "settings" -> { personalPage = "settings"; onSelectTab(HomeTab.Me) }
@@ -1637,10 +1657,12 @@ internal fun MainContent(
           }, { assistantFocusRevision++ },
           assistantReferenceKind, { assistantReferenceKind = it },
           assistantReferenceQuery, { assistantReferenceQuery = it },
+          agentPickerOpen, { agentPickerOpen = it },
           { assistantActionsOpen = it }, onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
           onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, onLoadPersonalModel, onSavePersonalModel,
           phoneAvailable = phoneUi.summary?.available == true, phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.attention,
           onOpenPhone = { phonePage = true },
+          onShareConversation = onBeginConversationShare,
           messageSearchOpen = messageSearchOpen,
           onMessageSearchOpenChange = { messageSearchOpen = it },
           onOpenSidebar = openSidebar, onRetryHomeChat = onOpenPersonalAgent,
@@ -1652,11 +1674,11 @@ internal fun MainContent(
             overviewState.removeState("personal-overview-$gatewayId")
             personalOverviewOpen = true
           },
-          sidebarGesture = Modifier.openSidebarOnSwipe(
+          sidebarGesture = Modifier.horizontalSwipe(
             !sidebar.open && !assistantActionsOpen && !messageSearchOpen && !inputVoiceHeld &&
               !isTaskChat(connection) && !connection.automationConfigurationChat && !showingProjectChat &&
               !showOverview && !phonePage && sidebarWidthPx > 0,
-            leftBackEdge, rightBackEdge,
+            leftBackEdge, rightBackEdge, allowLeft = false,
             onDrag = {
               if (sidebar.dragFraction == null) closeKeyboard()
               sidebar.dragFraction = (it / sidebarWidthPx).coerceIn(0f, 1f)
@@ -1705,8 +1727,8 @@ internal fun MainContent(
           }
         }, onBeginRename, onRenameDraftChange, onSaveRename, onCancelRename,
           onTogglePin, onToggleArchive, onBatchConversations,
-          onBeginConversationShare, onConfirmConversationShare,
-          onDismissConversationShare, onScheduleDelete, onUndoDelete, exitDestination, startConversationSearch)
+          onBeginConversationShare, onScheduleDelete, onUndoDelete, exitDestination, startConversationSearch,
+          onConversationScope, onLoadProgressProjects, onFetchConversationExperts)
       }
       HomeTab.Progress, HomeTab.Projects, HomeTab.Automations -> if (!isPaired) PairingScreen(
         stringResource(R.string.tab_progress), connection, onPair, onCancelPairing, onScanPairing,
@@ -1831,31 +1853,16 @@ internal fun MainContent(
         val personal = if (profile == null) PersonalUiState(gatewayId = "")
           else connection.personal.takeIf { it.gatewayId == profile.gatewayId }
             ?: PersonalUiState(gatewayId = profile.gatewayId, loading = true)
-        if (personalPage == "home" && profile == null) UnpairedPersonalScreen(insets,
-          onOpenSettings = { personalPage = "settings" },
-          onConnect = { personalPage = "pairing" })
-        else if (personalPage == "home") PersonalScreen(personal, rootInsets,
-          connection.realtimeStatus == "connected", onLoadPersonal, onSavePersonalGoal,
-          onOpenAgent = onOpenPersonalAgent,
-          onLoadAgentVoices = onLoadPersonalVoiceChoices,
-          onUpdateAgentProfile = onUpdatePersonalAgentProfile,
-          onLoadProactivity = onLoadPersonalProactivity, onSaveProactivity = onSavePersonalProactivity,
-          onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel,
-          onOpenSettings = { personalPage = "settings" },
-          onOpenAbout = { personalStartSection = "overview"; personalPage = "about" },
-          onOpenUnderstanding = { personalStartSection = "understanding"; personalPage = "about" },
-          onOpenAssertion = { id ->
-            personalReturnPage = "home"
-            personalDetailId = id
-            personalPage = "detail"
-            onOpenPersonalAssertion(id)
-          }, onExit = exitDestination)
+        if (personalPage == "goals") PersonalGoalsScreen(personal, rootInsets, onLoadPersonal,
+          onSavePersonalGoal, ::leavePersonalPage)
+        else if (personalPage == "settings-models" && profile != null && modelSettingsAccess != null)
+          ModelSettingsScreen(profile, modelSettingsAccess, rootInsets, ::leavePersonalPage)
         else if (personalPage == "settings-gateways") GatewayProfilesScreen(connection, insets,
           onBack = ::leavePersonalPage, onAdd = { personalPage = "settings-add" },
-          onRefresh = onOpenGatewayProfiles, onProbe = onProbeGateway,
+          onProbe = onProbeGateway,
           onActivate = onActivateGateway, onRename = onRenameGateway,
           onRemove = onRemoveGateway)
-        else if (personalPage == "settings-add" || personalPage == "pairing") PairingScreen(
+        else if (personalPage == "settings-add") PairingScreen(
           stringResource(R.string.gateways_add), connection, onPair, onCancelPairing, onScanPairing,
           pairingScanning, pairingScanError, insets,
           onBack = ::leavePersonalPage)
@@ -1869,10 +1876,19 @@ internal fun MainContent(
           language = language, section = when (personalPage) {
             "settings-appearance" -> "appearance"
             "settings-language" -> "language"
+            "settings-about" -> "about"
             else -> "root"
           }, insets = insets,
           onBack = ::leavePersonalPage,
           onOpenGateways = { personalPage = "settings-gateways" },
+          onOpenModelSettings = modelSettingsAccess?.let { { personalPage = "settings-models" } },
+          onOpenAppAbout = { personalPage = "settings-about" },
+          onOpenAbout = { personalStartSection = "overview"; personalPage = "about" },
+          onOpenGoals = { personalPage = "goals" },
+          personalAgent = {
+            PersonalAgentSettings(personal, onOpenPersonalAgent, onLoadPersonalVoiceChoices,
+              onUpdatePersonalAgentProfile, onUploadPersonalAvatar, onLoadPersonalModel, onSavePersonalModel)
+          },
           onOpenSharing = { personalPage = "settings-sharing" },
           onOpenAppearance = { personalPage = "settings-appearance" },
           onOpenLanguage = { personalPage = "settings-language" },
@@ -1887,7 +1903,7 @@ internal fun MainContent(
             onOpenPersonalAssertion(id)
           }, onLoadList = onLoadPersonalAssertions,
           onRetryDetail = { if (personalDetailId.isNotBlank()) onOpenPersonalAssertion(personalDetailId) },
-          onOpenNotes = { personalPage = "home"; onSelectTab(HomeTab.Notes) },
+          onOpenNotes = { personalPage = "settings"; onSelectTab(HomeTab.Notes) },
           onSaveProfile = onSavePersonalProfile,
           onSaveStatement = onSavePersonalStatement,
           onDeleteAssertion = onDeletePersonalAssertion,
@@ -1948,7 +1964,7 @@ internal fun MainContent(
         sidebar.open = false
         linkedDetails = emptyList()
         returnToSidebar = destination == HomeTab.Conversations
-        if (destination == HomeTab.Me) { personalPage = "settings"; settingsFromSidebar = true }
+        if (destination == HomeTab.Me) personalPage = "settings"
         onSelectTab(destination)
       },
       onSearch = {
@@ -1971,6 +1987,8 @@ internal fun MainContent(
         onSelectConversation(id)
       })
   }
+  if (isPaired) ConversationShareSheet(connection, onBeginConversationShare,
+    onConfirmConversationShare, onRevokeConversationShare, onDismissConversationShare)
   if (musicPlayerOpen && activeMusic != null) MusicPlayerSheet(activeMusic, { musicPlayerOpen = false },
     onSource = {
       musicPlayerOpen = false
@@ -2294,7 +2312,9 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
         themedCorners(28)).testTag("assistant-composer-shell")) {
       Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Bottom) {
-        if (!expandedComposer) AssistantAddAction(connection, actionsOpen, toggleActions, voiceBusy || voiceHeld)
+        if (!expandedComposer) {
+          VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+        }
         if (showVoicePad) {
           VoiceInputPad(Modifier.weight(1f), voiceHeld, voiceBusy, voicePhase,
             voiceDestination, voiceSeconds, onVoiceStart, onVoiceMove, onVoiceFinish,
@@ -2316,16 +2336,16 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
             }
           })
         if (!expandedComposer) {
-          VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+          AssistantAddAction(connection, actionsOpen, toggleActions, voiceBusy || voiceHeld)
           AssistantComposerButtons(connection, onSendMessage, onStopRun, voiceBusy || voiceHeld)
         }
       }
       if (expandedComposer) {
         Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp),
           horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-          AssistantAddAction(connection, actionsOpen, toggleActions, voiceBusy || voiceHeld)
-          Spacer(Modifier.weight(1f))
           VoiceInputToggle(voiceMode, voiceBusy || voicePhase != "idle" || connection.sending, onVoiceToggle)
+          Spacer(Modifier.weight(1f))
+          AssistantAddAction(connection, actionsOpen, toggleActions, voiceBusy || voiceHeld)
           AssistantComposerButtons(connection, onSendMessage, onStopRun, voiceBusy || voiceHeld)
         }
       }
@@ -2437,8 +2457,9 @@ private fun VoiceInputToggle(active: Boolean, disabled: Boolean, onClick: () -> 
 
 @Composable
 private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOpenReference: (String) -> Unit,
-  canPick: Boolean, onPick: (String) -> Unit, onVoiceAction: () -> Unit) {
-  val actions = listOf(
+  canPick: Boolean, onPick: (String) -> Unit, onVoiceAction: () -> Unit,
+  canSwitchAgent: Boolean, onOpenAgentPicker: () -> Unit) {
+  val actions = listOfNotNull(
     Triple(R.string.assistant_action_photos, R.drawable.action_photo, "photos"),
     Triple(R.string.assistant_action_camera, R.drawable.action_camera, "camera"),
     Triple(R.string.assistant_action_local_files, R.drawable.action_folder, "local-files"),
@@ -2446,6 +2467,7 @@ private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOp
     Triple(R.string.assistant_action_reference_note, R.drawable.tab_notes, "reference-note"),
     Triple(R.string.assistant_action_reference_task, R.drawable.tab_progress, "reference-task"),
     Triple(R.string.assistant_action_reference_file, R.drawable.action_folder, "reference-file"),
+    Triple(R.string.assistant_action_switch_agent, R.drawable.tab_assistant, "switch-agent").takeIf { canSwitchAgent },
   )
   Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp).padding(top = 2.dp, bottom = 10.dp)
     .testTag("assistant-action-panel"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2454,12 +2476,14 @@ private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOp
         row.forEach { (label, icon, id) ->
           val enabled = when (id) {
             "voice" -> canRecord
+            "switch-agent" -> canSwitchAgent
             "reference-note", "reference-task" -> canReference
             else -> canPick
           }
           TextButton(onClick = {
             when {
               id == "voice" -> onVoiceAction()
+              id == "switch-agent" -> onOpenAgentPicker()
               id.startsWith("reference-") -> onOpenReference(id.removePrefix("reference-"))
               else -> onPick(id)
             }
@@ -2567,6 +2591,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   onFocusDraft: () -> Unit,
   referenceKind: String?, onReferenceKindChange: (String?) -> Unit,
   referenceQuery: String, onReferenceQueryChange: (String) -> Unit,
+  agentPickerOpen: Boolean, onAgentPickerOpenChange: (Boolean) -> Unit,
   onActionsOpenChange: (Boolean) -> Unit,
   onLoadAgentVoices: () -> Unit = {},
   onUpdateAgentProfile: (String, String, String?, Boolean, String) -> Unit = { _, _, _, _, _ -> },
@@ -2575,6 +2600,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   onUploadAvatar: suspend (ByteArray) -> Unit = {},
   onLoadPersonalModel: LoadPersonalModel? = null, onSavePersonalModel: SavePersonalModel? = null,
   phoneAvailable: Boolean = false, phoneNeedsUser: Boolean = false, onOpenPhone: () -> Unit = {},
+  onShareConversation: (String) -> Unit,
   messageSearchOpen: Boolean,
   onMessageSearchOpenChange: (Boolean) -> Unit,
   canStartVoiceCall: Boolean,
@@ -2633,8 +2659,13 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   var editingQueuedId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var editingQueuedContent by remember(connection.selectedConversationId) { mutableStateOf("") }
   var modelQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
-  var agentPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var agentQuery by remember(connection.selectedConversationId) { mutableStateOf("") }
+  LaunchedEffect(agentPickerOpen) {
+    if (agentPickerOpen) {
+      agentQuery = ""
+      onReloadAgents()
+    }
+  }
   var pendingAgentId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   var contextOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var sessionFilesOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
@@ -3098,15 +3129,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               active = !personalSettingsOpen && !messageSearchOpen)
           }
           Row(Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            if (personalAgent == null) IconButton(onClick = {
-              focusManager.clearFocus()
-              keyboardController?.hide()
-              agentQuery = ""
-              onReloadAgents()
-              agentPickerOpen = true
-            }, modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-agent")) {
-              Icon(painterResource(R.drawable.tab_assistant), stringResource(R.string.assistant_agent), Modifier.size(22.dp))
-            }
             if (phoneAvailable) IconButton(onClick = onOpenPhone,
               modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("chat-header-phone")) {
               Box {
@@ -3321,12 +3343,15 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
 
   val closeOptions: () -> Unit = {
     optionsOpen = false; contextOpen = false; modelPickerOpen = false
-    thinkingPickerOpen = false; agentPickerOpen = false
+    thinkingPickerOpen = false; onAgentPickerOpenChange(false)
     pendingModelChoice = null; pendingThinkingChoice = null
   }
   if (personalSettingsOpen) PersonalAgentProfileSheet(connection.personal, { personalSettingsOpen = false },
     onLoadAgentVoices, onUpdateAgentProfile, onUploadAvatar, onLoadPersonalModel, onSavePersonalModel,
-    modelBusy = connection.sending || connection.activeRunId != null || connection.pendingInput != null)
+    modelBusy = connection.sending || connection.activeRunId != null || connection.pendingInput != null,
+    onShare = connection.selectedConversationId?.takeIf {
+      connection.messages.any { message -> message.role == "user" || message.role == "assistant" }
+    }?.let { id -> { onShareConversation(id) } })
   if (messageSearchOpen) ChatMessageSearch(connection.messages, connection.historyBefore != null,
     connection.historyLoadingOlder, onLoadOlderHistory, onClose = { onMessageSearchOpenChange(false) },
     onSelect = { id -> onMessageSearchOpenChange(false); messageDetailId = id })
@@ -3440,6 +3465,14 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (connection.selectedConversationId != null) {
+          val shareId = connection.selectedConversationId
+          if (connection.messages.any { it.role == "user" || it.role == "assistant" }) {
+            ContextRow(stringResource(R.string.conversations_share), "", "assistant-share",
+              compact = true, flat = true) {
+              closeOptions()
+              onShareConversation(shareId)
+            }
+          }
           ContextRow(stringResource(R.string.chat_personal_search), "", "assistant-search",
             iconRes = R.drawable.action_search, compact = true, flat = true) {
             closeOptions(); onMessageSearchOpenChange(true)
@@ -3457,7 +3490,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               connection.agents.firstOrNull { it.id == connection.selectedAgentId }?.name
                 ?: connection.selectedAgentId, "assistant-agent", iconRes = R.drawable.tab_assistant,
               compact = true, flat = true, enabled = !connection.creatingConversation) {
-              optionsOpen = false; agentQuery = ""; agentPickerOpen = true; onReloadAgents()
+              optionsOpen = false; onAgentPickerOpenChange(true)
             }
           }
           ContextRow(stringResource(R.string.assistant_model),
@@ -3851,13 +3884,51 @@ private fun ConversationsScreen(
   onToggleArchive: (String) -> Unit,
   onBatchConversations: (List<String>, String) -> Unit,
   onBeginShare: (String) -> Unit,
-  onConfirmShare: () -> Unit,
-  onDismissShare: () -> Unit,
   onScheduleDelete: (String) -> Unit,
   onUndoDelete: () -> Unit,
   onExit: () -> Unit,
   startSearching: Boolean,
+  onScope: (ConversationHistoryScope?) -> Unit,
+  onLoadProjects: () -> Unit,
+  onFetchExperts: suspend () -> List<ConversationAgent>,
 ) {
+  var mode by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("recent") }
+  var groupId by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
+  var groupName by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
+  var groupQuery by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
+  var experts by remember(connection.profile?.gatewayId) { mutableStateOf(emptyList<ConversationAgent>()) }
+  var expertsLoading by remember { mutableStateOf(false) }
+  var expertsFailed by remember { mutableStateOf(false) }
+  var expertReload by remember { mutableIntStateOf(0) }
+  val browsingGroups = mode != "recent" && groupId.isEmpty()
+  val scope = when {
+    mode == "projects" && groupId == "unassigned" -> ConversationHistoryScope.Unassigned
+    mode == "projects" && groupId.isNotEmpty() -> ConversationHistoryScope.Project(groupId)
+    mode == "experts" && groupId.isNotEmpty() -> ConversationHistoryScope.Expert(groupId)
+    else -> ConversationHistoryScope.Recent
+  }
+  val currentScopeSetter by rememberUpdatedState(onScope)
+  DisposableEffect(connection.profile?.gatewayId) {
+    onDispose { currentScopeSetter(null) }
+  }
+  LaunchedEffect(connection.profile?.gatewayId, browsingGroups, scope) {
+    if (!browsingGroups) onScope(scope)
+  }
+  LaunchedEffect(mode, connection.profile?.gatewayId, expertReload) {
+    if (mode == "projects") onLoadProjects()
+    if (mode == "experts") {
+      expertsLoading = true
+      expertsFailed = false
+      try {
+        experts = onFetchExperts().filter {
+          it.id != "main" && it.id != "task-router" && it.purpose != "task_dispatcher" &&
+            !it.id.matches(Regex("personal-[a-f0-9]{12}", RegexOption.IGNORE_CASE))
+        }
+      } catch (error: kotlinx.coroutines.CancellationException) { throw error }
+      catch (_: Exception) { expertsFailed = true }
+      finally { expertsLoading = false }
+    }
+  }
   var menuConversationId by rememberSaveable { mutableStateOf<String?>(null) }
   var searchOpen by remember(startSearching) { mutableStateOf(startSearching) }
   var expandedTaskParents by rememberSaveable { mutableStateOf(emptyList<String>()) }
@@ -3873,15 +3944,15 @@ private fun ConversationsScreen(
   }
   val listState = rememberLazyListState()
   val currentLoadMore by rememberUpdatedState(onLoadMore)
-  LaunchedEffect(connection.profile?.gatewayId, connection.conversationSearch) {
+  LaunchedEffect(connection.profile?.gatewayId, scope, connection.conversationSearch) {
     listState.scrollToItem(0)
     expandedTaskParents = emptyList()
     collapsedTaskParents = emptyList()
   }
   LaunchedEffect(connection.profile?.gatewayId, connection.conversationSearch,
     connection.conversationsHasMore, connection.conversationsLoading,
-    connection.conversationsLoadingMore, connection.conversationsMoreError) {
-    if (!connection.conversationsHasMore || connection.conversationsLoading ||
+    connection.conversationsLoadingMore, connection.conversationsMoreError, browsingGroups) {
+    if (browsingGroups || !connection.conversationsHasMore || connection.conversationsLoading ||
       connection.conversationsLoadingMore || connection.conversationsMoreError) return@LaunchedEffect
     if (ConversationGroups.visibleHistory(connection.conversations).isEmpty()) {
       currentLoadMore()
@@ -3947,64 +4018,6 @@ private fun ConversationsScreen(
       }
     }
   }
-  if (connection.conversationShareBusy) AlertDialog(onDismissRequest = {},
-    title = { Text(stringResource(R.string.conversations_share)) },
-    text = { BrandLoadingPanel(modifier = Modifier.testTag("conversations-share-loading"), minHeight = 120.dp) },
-    confirmButton = {})
-  connection.conversationSharePreview?.let { preview -> AlertDialog(onDismissRequest = onDismissShare,
-    title = { Text(stringResource(R.string.conversations_share)) },
-    text = { Text(stringResource(R.string.conversations_share_confirm,
-      preview.messageCount, preview.attachmentCount)) },
-    confirmButton = { TextButton(onClick = onConfirmShare,
-      modifier = Modifier.testTag("conversations-share-confirm")) {
-      Text(stringResource(R.string.conversations_share))
-    } },
-    dismissButton = { TextButton(onClick = onDismissShare) {
-      Text(stringResource(R.string.conversations_cancel))
-    } }) }
-  if (connection.conversationShareError) AlertDialog(onDismissRequest = onDismissShare,
-    title = { Text(stringResource(R.string.conversations_share)) },
-    text = { Text(stringResource(R.string.conversations_share_error)) },
-    confirmButton = { TextButton(onClick = onDismissShare) {
-      Text(stringResource(R.string.assistant_close))
-    } })
-  val share = connection.conversationShareResult
-  if (share != null) {
-    val context = LocalContext.current
-    ModalBottomSheet(onDismissRequest = onDismissShare,
-      modifier = Modifier.testTag("conversations-share-sheet")) {
-      Column(modifier = Modifier.fillMaxWidth().padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(share.title, style = MaterialTheme.typography.titleLarge)
-        Text(share.url, color = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.testTag("conversations-share-url"))
-        Text(stringResource(when (share.reachability) {
-          "public" -> R.string.notes_share_public
-          "lan" -> R.string.notes_share_lan
-          else -> R.string.notes_share_local
-        }))
-        if (share.hint.isNotBlank()) Text(share.hint)
-        Text(stringResource(R.string.notes_share_expires, share.expiresAt))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          OutlinedButton(onClick = {
-            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-              .setPrimaryClip(ClipData.newPlainText(share.title, share.url))
-          }, modifier = Modifier.testTag("conversations-share-copy")) {
-            Text(stringResource(R.string.notes_share_copy))
-          }
-          Button(onClick = {
-            val send = Intent(Intent.ACTION_SEND).apply {
-              type = "text/plain"
-              putExtra(Intent.EXTRA_TEXT, "${share.title}\n${share.url}")
-            }
-            context.startActivity(Intent.createChooser(send, null))
-          }, modifier = Modifier.testTag("conversations-share-system")) {
-            Text(stringResource(R.string.notes_share_system))
-          }
-        }
-      }
-    }
-  }
   if (connection.renameDraftId != null) AlertDialog(
     onDismissRequest = onCancelRename,
     title = { Text(stringResource(R.string.conversations_rename)) },
@@ -4039,49 +4052,75 @@ private fun ConversationsScreen(
     } })
   fun closeSearch() {
     if (connection.conversationSearch.isNotEmpty()) onSearchChange("")
+    groupQuery = ""
     searchOpen = false
     focusManager.clearFocus(force = true)
     keyboardController?.hide()
   }
-  BackHandler(enabled = searchOpen && !selecting, onBack = ::closeSearch)
+  fun clearGroup() {
+    closeSearch()
+    groupId = ""
+    groupName = ""
+  }
+  BackHandler(enabled = !selecting && (searchOpen || groupId.isNotEmpty())) {
+    if (searchOpen) closeSearch() else clearGroup()
+  }
   val clearLabel = stringResource(R.string.conversations_clear)
   val newConversationLabel = stringResource(R.string.assistant_new_action)
-  val searchLabel = stringResource(R.string.conversations_search)
+  val searchLabel = stringResource(when {
+    browsingGroups && mode == "projects" -> R.string.conversations_search_projects
+    browsingGroups -> R.string.conversations_search_experts
+    else -> R.string.conversations_search
+  })
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically) {
-      if (!selecting) IconButton(onClick = onExit, modifier = Modifier.testTag("conversations-back")) {
-        Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically) {
+        if (!selecting) PageBackButton("conversations-back", { if (groupId.isNotEmpty()) clearGroup() else onExit() })
+        if (selecting) Text(stringResource(R.string.conversations_selected, selectedIds.size),
+          style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f),
+          maxLines = 1, overflow = TextOverflow.Ellipsis)
+        else Spacer(Modifier.weight(1f))
+        if (selecting) TextButton(onClick = { selecting = false; selectedIds = emptyList() },
+          enabled = !connection.batchConversationBusy,
+          modifier = Modifier.testTag("conversations-selection-cancel")) {
+          Text(stringResource(R.string.conversations_cancel))
+        }
+        if (!selecting && !searchOpen) IconButton(onClick = { searchOpen = true },
+          modifier = Modifier.size(48.dp).semantics { contentDescription = searchLabel }
+            .testTag("conversations-open-search")) {
+          Icon(painterResource(R.drawable.action_search), contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(24.dp).testTag("conversations-search-icon"))
+        }
+        if (!selecting && mode == "recent") IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
+          modifier = Modifier.size(48.dp).semantics {
+            contentDescription = newConversationLabel
+          }.testTag("chats-new")) {
+          Icon(painterResource(R.drawable.action_add), contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
+        }
       }
-      Text(if (selecting) stringResource(R.string.conversations_selected, selectedIds.size)
-        else stringResource(R.string.tab_conversations), style = MaterialTheme.typography.headlineMedium,
-        fontWeight = FontWeight.Bold, fontSize = 28.sp, modifier = Modifier.weight(1f).padding(end = 12.dp),
-        maxLines = 1, overflow = TextOverflow.Ellipsis)
-      if (selecting) TextButton(onClick = { selecting = false; selectedIds = emptyList() },
-        enabled = !connection.batchConversationBusy,
-        modifier = Modifier.testTag("conversations-selection-cancel")) {
-        Text(stringResource(R.string.conversations_cancel))
+      if (!selecting) PageTitleMenu(listOf(
+        SegmentOption("recent", stringResource(R.string.conversations_recent), "sessions-mode-recent"),
+        SegmentOption("projects", stringResource(R.string.progress_projects), "sessions-mode-projects"),
+        SegmentOption("experts", stringResource(R.string.conversations_experts), "sessions-mode-experts"),
+      ), mode, "sessions-mode-menu", Modifier.fillMaxWidth(0.45f)) { selected ->
+        if (mode != selected) {
+          clearGroup()
+          mode = selected
+        }
       }
-      if (!selecting && !searchOpen) IconButton(onClick = { searchOpen = true },
-        modifier = Modifier.size(48.dp).semantics { contentDescription = searchLabel }
-          .testTag("conversations-open-search")) {
-        Icon(painterResource(R.drawable.action_search), contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(24.dp).testTag("conversations-search-icon"))
-      }
-      if (!selecting) IconButton(onClick = onCreateConversation, enabled = !connection.creatingConversation,
-        modifier = Modifier.size(48.dp).semantics {
-          contentDescription = newConversationLabel
-        }.testTag("chats-new")) {
-        Icon(painterResource(R.drawable.action_add), contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(24.dp).testTag("conversations-new-icon"))
-      }
+    }
+    if (groupId.isNotEmpty()) TextButton(onClick = ::clearGroup, modifier = Modifier.testTag("sessions-clear-group")) {
+      Text("$groupName ×", maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     if (searchOpen && !selecting) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      BasicTextField(value = connection.conversationSearch, onValueChange = onSearchChange,
+      BasicTextField(value = if (browsingGroups) groupQuery else connection.conversationSearch,
+        onValueChange = { if (browsingGroups) groupQuery = it else onSearchChange(it) },
         modifier = Modifier.weight(1f).heightIn(min = 44.dp)
           .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(24))
           .padding(horizontal = 16.dp, vertical = 10.dp).then(searchInputFocus()).testTag("conversations-search"),
@@ -4089,8 +4128,8 @@ private fun ConversationsScreen(
         singleLine = true,
         decorationBox = { innerTextField ->
           Box {
-            if (connection.conversationSearch.isEmpty()) Text(
-              stringResource(R.string.conversations_search),
+            if ((if (browsingGroups) groupQuery else connection.conversationSearch).isEmpty()) Text(
+              searchLabel,
               style = MaterialTheme.typography.bodyLarge,
               color = MaterialTheme.colorScheme.onSurfaceVariant)
             innerTextField()
@@ -4102,6 +4141,35 @@ private fun ConversationsScreen(
         Text("×", style = MaterialTheme.typography.headlineMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant)
       }
+    }
+    if (browsingGroups) {
+      val projects = mode == "projects"
+      val loading = if (projects) connection.progress.projectsLoading else expertsLoading
+      val failed = if (projects) connection.progress.projectsError else expertsFailed
+      val groups = if (projects) {
+        listOf("unassigned" to stringResource(R.string.conversations_unassigned)) +
+          connection.progress.projects.filter { it.status != "archived" }.map { it.id to it.name }
+      } else experts.map { it.id to it.name }
+      val matches = groups.filter { (_, name) -> name.contains(groupQuery.trim(), ignoreCase = true) }
+      when {
+        loading -> BrandLoadingPanel()
+        failed -> TextButton(onClick = { if (projects) onLoadProjects() else expertReload++ }) {
+          Text(stringResource(R.string.progress_refresh))
+        }
+        matches.isEmpty() -> Text(stringResource(R.string.progress_no_matches))
+        else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          items(matches, key = { it.first }) { (id, name) ->
+            Card(onClick = { closeSearch(); groupId = id; groupName = name },
+              modifier = Modifier.fillMaxWidth().testTag("sessions-group-$id"), shape = themedCorners(16)) {
+              Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(name, modifier = Modifier.weight(1f))
+                ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
+              }
+            }
+          }
+        }
+      }
+      return@Column
     }
     if (connection.conversationsLoading && connection.conversations.isEmpty()) BrandLoadingPanel()
     if (connection.conversationsError) Row(verticalAlignment = Alignment.CenterVertically) {
@@ -4577,25 +4645,23 @@ private fun SessionFilesDetails(panel: ContextPanelUiState,
       TextButton(onClick = onClose) { Text("×") }
     }
     if (selected == null) {
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(query, onValueChange = { query = it.take(4096) },
-          modifier = Modifier.weight(1f).testTag("session-files-search"),
-          label = { Text(stringResource(R.string.assistant_reference_search)) },
-          singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-          keyboardActions = KeyboardActions(onSearch = { onLoadPanel("files", path, query) }))
-        TextButton(onClick = { onLoadPanel("files", path, query) },
-          modifier = Modifier.testTag("session-files-refresh")) {
-          Text(stringResource(R.string.assistant_context_retry))
-        }
-      }
+      OutlinedTextField(query, onValueChange = { query = it.take(4096) },
+        modifier = Modifier.fillMaxWidth().testTag("session-files-search"),
+        label = { Text(stringResource(R.string.assistant_reference_search)) },
+        singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onLoadPanel("files", path, query) }))
       Text(if (path.isBlank()) stringResource(R.string.assistant_session_files) else path,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (panel.loading) BrandLoadingPanel(modifier = Modifier.testTag("session-files-loading"))
-      if (panel.error) Text(stringResource(R.string.assistant_context_error),
-        color = MaterialTheme.colorScheme.error)
+      if (panel.error) {
+        Text(stringResource(R.string.assistant_context_error), color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = { onLoadPanel("files", path, query) }, enabled = !panel.loading,
+          modifier = Modifier.testTag("session-files-retry")) {
+          Text(stringResource(R.string.assistant_context_retry))
+        }
+      }
       LazyColumn(modifier = Modifier.weight(1f),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!panel.loading && !panel.error && panel.files.isEmpty()) item {

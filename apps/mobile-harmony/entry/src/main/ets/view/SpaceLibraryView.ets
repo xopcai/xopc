@@ -13,7 +13,7 @@ import { gatewaySession } from '../service/gatewaySession';
 import { activeListScope, XopcListSnapshots } from '../service/listSnapshots';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcListSkeleton, XopcPageHeader, XopcPaginationFooter } from './MobileComponents';
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 
 interface XopcLibraryVersion {
   id: string;
@@ -316,13 +316,16 @@ export struct XopcSpaceLibraryView {
 
   @Builder
   listHeader() {
-    XopcPageHeader({ heading: this.t('资料库', 'Library'), backVisible: true, onBack: (): void => { this.back(); } })
-    XopcSegmentedTabs({ selectedKey: this.scope,
-      options: [{ key: 'all', label: this.t('全部资料', 'All files') }, { key: 'favorites', label: this.t('收藏', 'Favorites') },
-        { key: 'trash', label: this.t('回收站', 'Trash') }],
-      onSelect: (scope: string): void => {
+    XopcPageHeader({ heading: this.scope === 'favorites' ? this.t('收藏', 'Favorites')
+      : this.scope === 'trash' ? this.t('回收站', 'Trash') : this.t('全部资料', 'All files'),
+      backVisible: true, onBack: (): void => { this.back(); }, selectedTitle: this.scope, titleMenuId: 'space-scope-menu',
+      titleOptions: [{ key: 'all', label: this.t('全部资料', 'All files'), id: 'space-tab-all' },
+        { key: 'favorites', label: this.t('收藏', 'Favorites'), id: 'space-tab-favorites' },
+        { key: 'trash', label: this.t('回收站', 'Trash'), id: 'space-tab-trash' }],
+      onSelectTitle: (scope: string): void => {
         if (this.scope === scope) return;
-        this.scope = scope; this.query = ''; this.kind = ''; this.undo = undefined; this.error = ''; this.setFilters();
+        this.scope = scope;
+        this.query = ''; this.kind = ''; this.undo = undefined; this.error = ''; this.setFilters();
       } })
     Row({ space: 8 }) {
       TextInput({ text: this.query, placeholder: this.t('搜索资料', 'Search files') }).id('space-search')
@@ -342,18 +345,22 @@ export struct XopcSpaceLibraryView {
   @Builder
   fileRow(item: XopcLibraryItem) {
     Row({ space: 10 }) {
-      SymbolGlyph(item.kind === 'audio' ? $r('sys.symbol.mic') : $r('sys.symbol.doc'))
-        .fontSize(22).fontColor([this.colors.secondary]).width(32)
+      Column() {
+        SymbolGlyph(item.kind === 'audio' ? $r('sys.symbol.mic')
+          : item.kind === 'image' ? $r('sys.symbol.picture')
+          : item.kind === 'video' ? $r('sys.symbol.play_fill') : $r('sys.symbol.doc'))
+          .fontSize(21).fontColor([this.colors.accent])
+      }.width(40).height(40).justifyContent(FlexAlign.Center)
+        .backgroundColor(this.colors.input).borderRadius(this.colors.corner(12))
       Column({ space: 3 }) {
         Text(item.title).fontSize(15).fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        if (this.metadata(item)) {
-          Text(this.metadata(item)).fontSize(12).fontColor(this.colors.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
+        Text([this.metadata(item), this.date(item.updatedAt)].filter((part: string): boolean => !!part).join(' · '))
+          .fontSize(12).fontColor(this.colors.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         if (item.hit?.text) {
           Text(item.hit.text).fontSize(12).fontColor(this.colors.secondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         }
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      Text(this.date(item.updatedAt)).fontSize(12).fontColor(this.colors.secondary)
+      SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary])
     }.id('space-item-' + item.id).width('100%').constraintSize({ minHeight: 56 }).padding(12)
       .borderRadius(this.colors.corner(12)).backgroundColor(this.colors.panel)
       .onClick((): void => { void this.open(item.id, item); }, SEGMENTED_PAGE_TAP_SLOP_VP)
@@ -458,7 +465,7 @@ export struct XopcSpaceLibraryView {
   build() {
     Column() {
       this.listHeader()
-      List({ space: 4 }) {
+      List({ space: 8 }) {
         if (this.loading && !this.items.length) {
           ListItem() { XopcListSkeleton() }
         } else if (this.listFailed) {
@@ -469,14 +476,6 @@ export struct XopcSpaceLibraryView {
               : this.scope === 'favorites' ? this.t('暂无收藏', 'No favorites')
                 : this.scope === 'trash' ? this.t('回收站为空', 'Trash is empty') : this.t('暂无资料', 'No results yet'))
               .width('100%').textAlign(TextAlign.Center).padding(24).fontColor(this.colors.secondary)
-          }
-        }
-        if (this.items.length) {
-          ListItem() {
-            Row() {
-              Text(this.t('名称', 'Name')).layoutWeight(1).fontColor(this.colors.secondary)
-              Text(this.t('更新日期', 'Updated')).fontColor(this.colors.secondary)
-            }.width('100%').padding(10)
           }
         }
         Repeat<XopcLibraryItem>(this.items).each((entry: RepeatItem<XopcLibraryItem>) => {

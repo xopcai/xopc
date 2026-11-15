@@ -140,21 +140,17 @@ struct SpaceLibraryView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("space-item-\(item.id)")
-                    .listRowBackground(theme.card)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
                 if let cursor {
                     Button(label("加载更多", "Load more")) { Task { await load(filters, after: cursor) } }
                         .disabled(loading)
                 }
-            } header: {
-                HStack {
-                    Text(label("名称", "Name"))
-                    Spacer()
-                    Text(label("更新日期", "Updated"))
-                }
-                .textCase(nil)
             }
         }
+        .listStyle(.plain)
         .sheet(item: $selectedItem) { item in
             SpaceLibraryDetail(configuration: configuration, item: item, searchHit: item.hit, onOpenSource: onOpenSource,
                                onUseInChat: onUseInChat, onChange: { refresh += 1 }, onTrash: {
@@ -164,15 +160,6 @@ struct SpaceLibraryView: View {
         }
         .scrollContentBackground(.hidden)
         .background(theme.canvas)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            SegmentedTabs(options: LibraryScope.allCases.map {
-                SegmentOption(id: $0, title: $0.title, accessibilityID: "library-scope-\($0.rawValue)")
-            }, selected: scope, label: "library_scope_label") { selection in
-                scope = selection
-            }
-            .padding(.horizontal, 16).padding(.bottom, 8)
-            .background(.bar)
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let undo {
                 HStack {
@@ -198,7 +185,11 @@ struct SpaceLibraryView: View {
                 .font(.footnote).padding().background(.bar)
             }
         }
-        .mobilePageTitle(Text(verbatim: label("资料库", "Library")))
+        .mobilePageTitle(Text(verbatim: label("资料库", "Library"))) {
+            MobilePageTitleMenu(options: LibraryScope.allCases.map {
+                SegmentOption(id: $0, title: $0.title, accessibilityID: "library-scope-\($0.rawValue)")
+            }, selected: scope, identifier: "space-scope-menu") { scope = $0 }
+        }
         .searchable(text: $query, prompt: Text(verbatim: label("搜索资料", "Search files")))
         .toolbar {
             Menu {
@@ -246,22 +237,27 @@ struct SpaceLibraryView: View {
         let symbol = ["image": "photo", "audio": "music.note", "video": "film", "spreadsheet": "tablecells",
                       "presentation": "rectangle.on.rectangle", "archive": "archivebox"][item.kind] ?? "doc"
         let ext = (item.currentVersion.fileName as NSString).pathExtension.uppercased()
-        let metadata = [ext, item.origin.map(originLabel) ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        let date = Date(timeIntervalSince1970: item.updatedAt / 1000).formatted(.dateTime.month().day())
+        let metadata = [ext, item.origin.map(originLabel) ?? "", date].filter { !$0.isEmpty }.joined(separator: " · ")
         return HStack(spacing: 12) {
-            Image(systemName: symbol).frame(width: 36).foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: item.title).lineLimit(1)
-                if !metadata.isEmpty {
-                    Text(verbatim: metadata).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
+            Image(systemName: symbol).frame(width: 40, height: 40).foregroundStyle(theme.action)
+                .background(theme.input, in: .rect(cornerRadius: theme.corner(12)))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: item.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                Text(verbatim: metadata).font(.caption).foregroundStyle(theme.secondary).lineLimit(1)
                 if let hit = item.hit {
-                    Text(verbatim: hit.text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(verbatim: hit.text).font(.caption).foregroundStyle(theme.secondary).lineLimit(1)
                 }
             }
-            Spacer(minLength: 8)
-            Text(Date(timeIntervalSince1970: item.updatedAt / 1000), format: .dateTime.month().day())
-                .font(.caption).foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                .foregroundStyle(theme.secondary).accessibilityHidden(true)
         }
+        .padding(12)
+        .frame(minHeight: 64)
+        .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
+        .contentShape(.rect)
     }
 
     private func originLabel(_ origin: LibraryOrigin) -> String {

@@ -36,7 +36,10 @@ export class XopcConnectionViewModel {
     this.setProbe({ gatewayId, phase: 'checking', error: '' });
     try {
       const result = await gatewaySession.probeProfile(gatewayId);
-      if (generation === this.probeGeneration) this.setProbe({ gatewayId, phase: result.status === 'healthy' ? 'online' : 'degraded', result, error: '' });
+      if (generation === this.probeGeneration) {
+        const phase = result.status === 'ok' || result.status === 'healthy' ? 'online' : 'degraded';
+        this.setProbe({ gatewayId, phase, result, error: '' });
+      }
     } catch (error) {
       if (generation === this.probeGeneration) this.setProbe({ gatewayId, phase: 'offline', error: (error as Error).message });
     }

@@ -1,10 +1,10 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { agentDisplayDescription, agentDisplayName } from '../common/agentPresentation';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatAgent } from '../model/chat';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { loadCapabilities, XopcCapabilityItem, XopcCapabilityPage } from '../repository/capabilitiesRepository';
-import { XopcListSkeleton } from './MobileComponents';
+import { XopcListSkeleton, XopcPageTitleMenu, XopcPageTitleOption } from './MobileComponents';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcCapabilityPanelView } from './CapabilityPanelView';
 import { XopcCapabilityLogo } from './CapabilityLogo';
@@ -56,6 +56,13 @@ export struct XopcCapabilitiesView {
     this.catalog = this.pages.get(category);
     this.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
     void this.load();
+  }
+
+  private swipeCategory(event: GestureEvent): void {
+    if (this.detailOpen || Math.abs(event.offsetX) < 40
+      || Math.abs(event.offsetX) < Math.abs(event.offsetY) * 1.25) return;
+    const next = categories[categories.indexOf(this.category) + (event.offsetX < 0 ? 1 : -1)];
+    if (next) this.select(next);
   }
 
   private title(category: string): Resource {
@@ -125,10 +132,9 @@ export struct XopcCapabilitiesView {
     return this.matches.filter((item: XopcCapabilityItem): boolean => item.group === group);
   }
 
-  private categoryOptions(): XopcSegmentOption[] {
-    return categories.map((key: string): XopcSegmentOption => ({
-      key, label: this.title(key), testId: 'capability-category-' + key,
-      minimumWidth: key === 'agents' ? 86 : key === 'channels' ? 74 : 56
+  private categoryOptions(): XopcPageTitleOption[] {
+    return categories.map((key: string): XopcPageTitleOption => ({
+      key, label: this.title(key), id: 'capability-category-' + key
     }));
   }
 
@@ -189,92 +195,110 @@ export struct XopcCapabilitiesView {
 
   @Builder
   header() {
-    Row({ space: 8 }) {
-      Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(20).fontColor([this.colors.foreground])
-      }.id('capability-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
-        .accessibilityText($r('app.string.back')).onClick((): void => { this.onExit(); })
-      Text($r('app.string.capability_title')).id('capability-title').fontSize(24).fontWeight(FontWeight.Bold)
-        .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      if (this.category === 'skills') {
-        Button($r('app.string.cap_native_skill')).id('cap-native-open-skills').height(44).backgroundColor(this.colors.accentSoft)
-          .fontColor(this.colors.chat.action).onClick((): void => { this.openSkillMarket(); })
-      } else if (this.category === 'plugins') {
+    Stack({ alignContent: Alignment.Center }) {
+      Row({ space: 8 }) {
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(21).fontColor([this.colors.chat.action])
-        }.id('cap-native-open-plugins').width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
-          .accessibilityText($r('app.string.capability_search_plugins'))
-          .onClick((): void => { this.getUIContext().getFocusController().requestFocus('capability-search'); })
-      }
-      if (this.category === 'skills' || this.category === 'agents' || this.category === 'connections') {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.chat.action])
-        }.id('capability-chat-setup-' + this.category).width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
-          .accessibilityText(this.setupLabel()).onClick((): void => { this.startSetupChat(); })
-      }
-    }.width('100%').padding({ top: 8, bottom: 16 })
+          SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(20).fontColor([this.colors.foreground])
+        }.id('capability-back').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          .accessibilityText($r('app.string.back')).onClick((): void => { this.onExit(); })
+        Blank().layoutWeight(1)
+        if (this.category === 'skills') {
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(21).fontColor([this.colors.chat.action])
+          }.id('cap-native-open-skills').width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
+            .accessibilityText($r('app.string.cap_native_skill')).onClick((): void => { this.openSkillMarket(); })
+        } else if (this.category === 'plugins') {
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(21).fontColor([this.colors.chat.action])
+          }.id('cap-native-open-plugins').width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
+            .accessibilityText($r('app.string.capability_search_plugins'))
+            .onClick((): void => { this.getUIContext().getFocusController().requestFocus('capability-search'); })
+        }
+        if (this.category === 'skills' || this.category === 'agents' || this.category === 'connections') {
+          Button({ type: ButtonType.Circle }) {
+            SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.chat.action])
+          }.id('capability-chat-setup-' + this.category).width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
+            .accessibilityText(this.setupLabel()).onClick((): void => { this.startSetupChat(); })
+        }
+      }.width('100%').height(44)
+      XopcPageTitleMenu({ heading: this.title(this.category), selected: this.category,
+        options: this.categoryOptions(), menuId: 'capability-title',
+        onSelect: (key: string): void => { this.select(key); } }).constraintSize({ maxWidth: '48%' })
+    }.width('100%').padding({ top: 8, bottom: 8 })
   }
 
   build() {
     Column() {
       this.header()
-      XopcSegmentedTabs({ options: this.categoryOptions(), selectedKey: this.category,
-        onSelect: (key: string): void => { this.select(key); } })
-      List({ space: 10, scroller: this.scroller }) {
-        if (this.loading && !this.catalog) { ListItem() { XopcListSkeleton() } }
-        if (this.failed || this.catalog?.incomplete) {
-          ListItem() {
-            Row() {
-              Text(this.failed ? $r('app.string.capability_load_failed') : $r('app.string.capability_partial'))
-                .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
-              Button($r('app.string.capability_retry')).height(44).backgroundColor(this.colors.accentSoft)
-                .fontColor(this.colors.chat.action).enabled(!this.loading).onClick((): void => { void this.load(); })
-            }.width('100%').padding({ left: 14, right: 12, top: 8, bottom: 8 })
-              .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
-          }
-        }
-        if (!this.loading && !this.failed && !this.matches.length) {
-          ListItem() {
-            Column({ space: 10 }) {
-              SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(24).fontColor([this.colors.secondary])
-              Text(this.query.trim() ? $r('app.string.capability_no_matches') : $r('app.string.capability_empty'))
-                .fontSize(16).fontColor(this.colors.foreground)
-              if (this.query) Button($r('app.string.capability_clear')).height(44).backgroundColor(this.colors.accentSoft)
-                .fontColor(this.colors.chat.action).onClick((): void => { this.query = ''; })
-            }.id('capability-empty').width('100%').padding({ top: 56 })
-          }
-        }
-        ForEach(groups, (group: string) => {
-          if (this.rows(group).length) {
-            ListItem() {
-              Text(this.groupTitle(group)).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
-                .padding({ left: 4, top: 14, bottom: 2 })
-            }
-            ForEach(this.rows(group), (item: XopcCapabilityItem) => {
-              ListItem() { this.itemRow(item) }
-            }, (item: XopcCapabilityItem): string => item.id + ':' + item.name + ':' + (item.description ?? '')
-              + ':' + (item.avatar ?? '') + ':' + (item.iconUrl ?? '').slice(-64))
-          }
-        }, (group: string): string => group)
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Off).margin({ top: 4 })
-      Row({ space: 8 }) {
-        SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(19).fontColor([this.colors.secondary])
-        TextInput({ text: this.query, placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
-          : $r('app.string.capability_search', this.getLabel(this.title(this.category))) })
-          .id('capability-search').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
-          .fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-          .maxLength(160).enterKeyType(EnterKeyType.Search)
-          .onChange((value: string): void => { this.query = value; this.scroller.scrollTo({ xOffset: 0, yOffset: 0 }); })
-          .onSubmit((): void => { this.getUIContext().getFocusController().clearFocus(); })
-        if (this.query) Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.xmark')).fontSize(17).fontColor([this.colors.secondary])
-        }.id('capability-search-clear').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.capability_clear')).onClick((): void => { this.query = ''; })
-      }.width('100%').padding({ left: 16, right: 6 })
-        .backgroundColor(this.colors.input).borderRadius(this.colors.corner(24))
-        .margin({ top: 14, bottom: 10 })
+      Column() {
+        this.catalogList()
+      }.width('100%').layoutWeight(1)
+        .priorityGesture(PanGesture({ direction: PanDirection.Horizontal, distance: 8 })
+          .onActionEnd((event: GestureEvent): void => { this.swipeCategory(event); }))
+      this.searchField()
     }.width('100%').height('100%').padding({ left: 18, right: 18 }).backgroundColor(this.colors.surface)
       .bindSheet($$this.detailOpen, this.detailSheet, { height: '78%', dragBar: true,
         showClose: false, backgroundColor: this.colors.panel })
+  }
+
+  @Builder
+  catalogList() {
+    List({ space: 10, scroller: this.scroller }) {
+      if (this.loading && !this.catalog) { ListItem() { XopcListSkeleton() } }
+      if (this.failed || this.catalog?.incomplete) {
+        ListItem() {
+          Row() {
+            Text(this.failed ? $r('app.string.capability_load_failed') : $r('app.string.capability_partial'))
+              .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
+            Button($r('app.string.capability_retry')).height(44).backgroundColor(this.colors.accentSoft)
+              .fontColor(this.colors.chat.action).enabled(!this.loading).onClick((): void => { void this.load(); })
+          }.width('100%').padding({ left: 14, right: 12, top: 8, bottom: 8 })
+            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
+        }
+      }
+      if (!this.loading && !this.failed && !this.matches.length) {
+        ListItem() {
+          Column({ space: 10 }) {
+            SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(24).fontColor([this.colors.secondary])
+            Text(this.query.trim() ? $r('app.string.capability_no_matches') : $r('app.string.capability_empty'))
+              .fontSize(16).fontColor(this.colors.foreground)
+            if (this.query) Button($r('app.string.capability_clear')).height(44).backgroundColor(this.colors.accentSoft)
+              .fontColor(this.colors.chat.action).onClick((): void => { this.query = ''; })
+          }.id('capability-empty').width('100%').padding({ top: 56 })
+        }
+      }
+      ForEach(groups, (group: string) => {
+        if (this.rows(group).length) {
+          ListItem() {
+            Text(this.groupTitle(group)).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
+              .padding({ left: 4, top: 14, bottom: 2 })
+          }
+          ForEach(this.rows(group), (item: XopcCapabilityItem) => {
+            ListItem() { this.itemRow(item) }
+          }, (item: XopcCapabilityItem): string => item.id + ':' + item.name + ':' + (item.description ?? '')
+            + ':' + (item.avatar ?? '') + ':' + (item.iconUrl ?? '').slice(-64))
+        }
+      }, (group: string): string => group)
+    }.width('100%').layoutWeight(1).scrollBar(BarState.Off).margin({ top: 4 })
+  }
+
+  @Builder
+  searchField() {
+    Row({ space: 8 }) {
+      SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(19).fontColor([this.colors.secondary])
+      TextInput({ text: this.query, placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
+        : $r('app.string.capability_search', this.getLabel(this.title(this.category))) })
+        .id('capability-search').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
+        .fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
+        .maxLength(160).enterKeyType(EnterKeyType.Search)
+        .onChange((value: string): void => { this.query = value; this.scroller.scrollTo({ xOffset: 0, yOffset: 0 }); })
+        .onSubmit((): void => { this.getUIContext().getFocusController().clearFocus(); })
+      if (this.query) Button({ type: ButtonType.Circle }) {
+        SymbolGlyph($r('sys.symbol.xmark')).fontSize(17).fontColor([this.colors.secondary])
+      }.id('capability-search-clear').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+        .accessibilityText($r('app.string.capability_clear')).onClick((): void => { this.query = ''; })
+    }.width('100%').padding({ left: 16, right: 6 })
+      .backgroundColor(this.colors.input).borderRadius(this.colors.corner(24))
+      .margin({ top: 14, bottom: 10 })
   }
 }

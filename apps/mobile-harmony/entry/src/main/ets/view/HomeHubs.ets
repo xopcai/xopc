@@ -1,9 +1,16 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
-import { XopcPageHeader, XopcHubRow, XopcListSkeleton, XopcEmptyHint } from './MobileComponents';
+import { XopcPageHeader, XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcPageTitleOption } from './MobileComponents';
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcHomeAction, XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { dispatchHomeAction } from '../common/homeProtocol';
+
+export const WORK_PAGE_OPTIONS: XopcPageTitleOption[] = [
+  { key: 'progress', label: $r('app.string.progress'), id: 'work-page-progress' },
+  { key: 'automations', label: $r('app.string.automations'), id: 'work-page-automations' },
+  { key: 'projects', label: $r('app.string.projects'), id: 'work-page-projects' },
+  { key: 'tasks', label: $r('app.string.tasks'), id: 'work-page-tasks' }
+];
 
 @ComponentV2
 export struct XopcProgressView {
@@ -19,6 +26,7 @@ export struct XopcProgressView {
     return this.model.background.filter((item: XopcHomeItem): boolean => item.kind === 'scheduled');
   }
   @Event onExit: () => void = (): void => {};
+  @Event onSelectWorkPage: (page: string) => void = (_page: string): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   aboutToAppear(): void { if (this.activePage) void this.model.refresh(); }
   private openPage(page: string, itemId: string = ''): void { this.onNavigate({ page, itemId }); }
@@ -110,7 +118,10 @@ export struct XopcProgressView {
       if (page) {
         Button(trailing, { type: ButtonType.Normal }).fontSize(13).fontColor(this.colors.accent)
           .height(44).padding({ left: 8, right: 8 }).backgroundColor(Color.Transparent)
-          .onClick((): void => { this.openPage(page); })
+          .onClick((): void => {
+            if (page === 'automations') this.onSelectWorkPage(page);
+            else this.openPage(page);
+          })
       } else if (trailing !== '') {
         Text(trailing).fontSize(13).fontColor(this.colors.secondary)
       }
@@ -119,8 +130,9 @@ export struct XopcProgressView {
 
   build() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.progress'), backVisible: true, onBack: (): void => { this.onExit(); }, actionLabel: $r('app.string.all_work'), actionIcon: $r('sys.symbol.square_grid_2x2'),
-        onAction: (): void => { this.openPage('all-work'); } })
+      XopcPageHeader({ heading: $r('app.string.progress'), titleOptions: WORK_PAGE_OPTIONS, selectedTitle: 'progress',
+        titleMenuId: 'work-page-menu', onSelectTitle: this.onSelectWorkPage,
+        backVisible: true, onBack: (): void => { this.onExit(); } })
       if (this.model.actionError) {
         Text(this.model.actionError === 'UNSUPPORTED_ROUTE' ? $r('app.string.unsupported_route')
           : this.model.actionError === 'TASK_RETRY_UNAVAILABLE' ? $r('app.string.progress_retry_unavailable')

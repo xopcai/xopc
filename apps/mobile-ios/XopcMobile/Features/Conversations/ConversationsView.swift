@@ -1,5 +1,17 @@
 import SwiftUI
 
+private enum ConversationHistoryMode: String, CaseIterable {
+    case recent, projects, experts
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .recent: "最近"
+        case .projects: "项目"
+        case .experts: "专家"
+        }
+    }
+}
+
 struct ConversationsView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
@@ -16,6 +28,15 @@ struct ConversationsView: View {
 
     @Environment(\.locale) private var locale
 
+    @State private var mode: ConversationHistoryMode = .recent
+    @State private var groupName: String?
+    @State private var projects: [ProjectRecord] = []
+    @State private var experts: [AgentSummary] = []
+    @State private var catalogLoading = false
+    @State private var catalogFailed = false
+
+    private var browsingGroups: Bool { mode != .recent && groupName == nil }
+
     @State private var state = ConversationsState()
     @State private var searchOpen = false
     @FocusState private var isSearchFocused: Bool
@@ -26,15 +47,25 @@ struct ConversationsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let groupName {
+                Button { clearGroup() } label: {
+                    Label(groupName, systemImage: "xmark.circle").lineLimit(1)
+                }
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20).padding(.bottom, 8)
+            }
             if searchOpen {
-                PageSearchField("搜索对话", text: $state.searchText, focused: $isSearchFocused,
+                PageSearchField(searchLabel, text: $state.searchText, focused: $isSearchFocused,
                                 accessibilityID: "conversations-search-field")
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
             }
 
             Group {
-                if state.isLoading, visibleConversations.isEmpty {
+                if browsingGroups {
+                    groupList
+                } else if state.isLoading, visibleConversations.isEmpty {
                     ConversationLoadingSkeleton()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let errorMessage = state.errorMessage, state.conversations.isEmpty {
@@ -47,7 +78,11 @@ struct ConversationsView: View {
                         Button("重试") { reload() }
                     }
                 } else if visibleConversations.isEmpty {
-                    ContentUnavailableView.search(text: state.searchText)
+                    if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        ContentUnavailableView("暂无对话", systemImage: "bubble.left.and.bubble.right")
+                    } else {
+                        ContentUnavailableView.search(text: state.searchText)
+                    }
                 } else {
                     List {
                         if state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -87,12 +122,20 @@ struct ConversationsView: View {
             }
         }
         .background(mobileTheme.canvas)
-        .mobilePageTitle(Text("对话"))
+        .mobilePageTitle(Text("对话")) {
+            MobilePageTitleMenu(options: ConversationHistoryMode.allCases.map {
+                SegmentOption(id: $0, title: $0.title, accessibilityID: "sessions-mode-\($0.rawValue)")
+            }, selected: mode, identifier: "sessions-mode-menu") { next in
+                guard next != mode else { return }
+                clearGroup()
+                mode = next
+            }
+        }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                PageSearchButton("搜索对话", isOpen: $searchOpen, query: $state.searchText,
+                PageSearchButton(searchLabel, isOpen: $searchOpen, query: $state.searchText,
                                  accessibilityID: "conversations-open-search")
-                Button("新建对话", systemImage: "plus", action: onStartNew)
+                if mode == .recent { Button("新建对话", systemImage: "plus", action: onStartNew) }
             }
         }
         .task {
@@ -100,7 +143,10 @@ struct ConversationsView: View {
                 searchOpen = true
             }
         }
-        .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText, personalConversationID: personalConversationID)) {
+        .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText,
+                                       personalConversationID: personalConversationID,
+                                       scope: state.scope, loadSessions: !browsingGroups)) {
+            guard !browsingGroups else { return }
             state.personalConversationID = personalConversationID
             state.cacheScope = ComposerDraftStore.accountScope(configuration)
             if !state.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -109,6 +155,7 @@ struct ConversationsView: View {
             guard !Task.isCancelled else { return }
             await state.load(using: GatewayClient(configuration: configuration))
         }
+        .task(id: mode) { if mode != .recent { await loadCatalog(mode) } }
         .alert("重命名对话", isPresented: renamePresented) {
             TextField("对话名称", text: $renameText)
             Button("取消", role: .cancel) { renameTarget = nil }
@@ -121,6 +168,100 @@ struct ConversationsView: View {
         } message: {
             Text("这会永久删除对话及其历史记录。")
         }
+    }
+
+    private var searchLabel: LocalizedStringKey {
+        if browsingGroups { return mode == .projects ? "搜索项目" : "搜索专家" }
+        return "搜索对话"
+    }
+
+    private func clearGroup() {
+        groupName = nil
+        state.scope = .recent
+        state.searchText = ""
+        searchOpen = false
+        isSearchFocused = false
+        expandedConversations = []
+    }
+
+    private func choose(_ scope: ConversationHistoryScope, name: String) {
+        state.searchText = ""
+        searchOpen = false
+        isSearchFocused = false
+        expandedConversations = []
+        state.scope = scope
+        groupName = name
+    }
+
+    @ViewBuilder private var groupList: some View {
+        if catalogLoading {
+            ConversationLoadingSkeleton().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if catalogFailed {
+            ContentUnavailableView {
+                Label("加载失败", systemImage: "exclamationmark.circle")
+            } actions: {
+                Button("重试") { Task { await loadCatalog(mode) } }
+            }
+        } else {
+            let query = state.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let unassigned = AppLocalization.string("未分配", locale: locale)
+            let projectRows = projects.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+            let expertRows = experts.filter { query.isEmpty || $0.displayName.localizedCaseInsensitiveContains(query) }
+            let showUnassigned = query.isEmpty || unassigned.localizedCaseInsensitiveContains(query)
+            if mode == .projects ? projectRows.isEmpty && !showUnassigned : expertRows.isEmpty {
+                if query.isEmpty {
+                    ContentUnavailableView("暂无专家", systemImage: "person.2")
+                } else {
+                    ContentUnavailableView.search(text: query)
+                }
+            } else {
+                List {
+                    if mode == .projects {
+                        if showUnassigned {
+                            Button { choose(.unassigned, name: unassigned) } label: {
+                                Label(unassigned, systemImage: "tray")
+                            }
+                        }
+                        ForEach(projectRows) { project in
+                            Button { choose(.project(project.id), name: project.name) } label: {
+                                Label(project.name, systemImage: "folder")
+                            }
+                        }
+                    } else {
+                        ForEach(expertRows) { expert in
+                            Button { choose(.expert(expert.id), name: expert.displayName) } label: {
+                                Label(expert.displayName, systemImage: "person")
+                            }
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+        }
+    }
+
+    private func loadCatalog(_ requestedMode: ConversationHistoryMode) async {
+        catalogLoading = true
+        catalogFailed = false
+        let client = GatewayClient(configuration: configuration)
+        do {
+            if requestedMode == .projects {
+                let page = try await client.fetchProjects()
+                guard !Task.isCancelled, mode == requestedMode else { return }
+                projects = page.items.filter { $0.status != "archived" }
+            } else {
+                let catalog = try await client.fetchAgents()
+                guard !Task.isCancelled, mode == requestedMode else { return }
+                experts = catalog.agents.filter {
+                    $0.id != "main" && $0.id != "task-router" && $0.override?.purpose != "task_dispatcher"
+                        && $0.id.range(of: "^personal-[a-f0-9]{12}$", options: [.regularExpression, .caseInsensitive]) == nil
+                }
+            }
+        } catch {
+            if !Task.isCancelled, mode == requestedMode { catalogFailed = true }
+        }
+        if mode == requestedMode { catalogLoading = false }
     }
 
     private func conversationButton(for conversation: ConversationSummary) -> some View {
@@ -272,6 +413,8 @@ private struct ConversationSearchKey: Hashable {
     let configuration: GatewayConfiguration
     let query: String
     let personalConversationID: String?
+    let scope: ConversationHistoryScope
+    let loadSessions: Bool
 }
 
 struct ConversationDateSection: Identifiable {

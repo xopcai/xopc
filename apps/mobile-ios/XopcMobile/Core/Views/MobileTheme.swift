@@ -129,10 +129,13 @@ extension View {
                 ToolbarItem(placement: .principal) {
                     Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
                 }
-                ToolbarItem(placement: .topBarLeading) {
-                    title.font(.headline).lineLimit(1).truncationMode(.tail)
-                        .accessibilityAddTraits(.isHeader)
-                }
             }
+    }
+
+    func mobilePageTitle<Content: View>(_ title: Text, @ViewBuilder switcher: () -> Content) -> some View {
+        navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar { ToolbarItem(placement: .principal, content: switcher) }
     }
 }

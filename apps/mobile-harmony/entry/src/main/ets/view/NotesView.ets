@@ -180,8 +180,7 @@ export struct XopcNotesView {
   @Builder
   header() {
     Row({ space: 8 }) {
-      Text(this.model.selected || this.model.draft || this.model.openingId ? $r('app.string.notes') : $r('app.string.library'))
-        .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
+      Blank().layoutWeight(1)
       if (this.model.draft) {
         Text(this.syncText()).fontSize(12).fontColor(this.model.draft.syncState === 'conflict' ? this.colors.danger : this.colors.secondary)
       }
@@ -207,9 +206,6 @@ export struct XopcNotesView {
           .borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .onChange((value: string): void => { this.model.search = value; })
           .onSubmit((): void => { void this.model.list(false, true); })
-        Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary]) }
-          .width(44).height(44).padding(0).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
-          .accessibilityText($r('app.string.refresh')).onClick((): void => { void this.model.list(false, true); })
       }.width('100%')
       XopcSegmentedTabs({ options: [
         { key: '', label: $r('app.string.note_all') },
@@ -602,6 +598,10 @@ export struct XopcNotesView {
         if (this.model.error) {
           Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
             .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+          if (!this.model.loading && !this.model.openingId && !this.model.editing && !this.model.selected
+            && !this.model.hasMore) {
+            Button($r('app.string.retry')).onClick((): void => { void this.model.list(false, true); })
+          }
         }
         if (this.model.openingId) {
           XopcBrandLoading()

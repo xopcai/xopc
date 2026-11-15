@@ -29,6 +29,30 @@ export function projectItem(project: XopcProject): XopcWorkspaceItem {
     version: 0, brief: project.brief, outcome: project.outcome, editable: true,
     actions: ['pin', 'unpin', project.status === 'archived' ? 'activate' : 'archive'] };
 }
+export interface XopcAutomationScheduleLabel {
+  cadence: string;
+  time?: string;
+  value?: number;
+}
+
+export function automationCronLabel(expression: string): XopcAutomationScheduleLabel {
+  const minuteInterval = /^\*\/([1-9]|[1-5]\d)\s+\*\s+\*\s+\*\s+\*$/.exec(expression.trim());
+  if (minuteInterval && 60 % Number(minuteInterval[1]) === 0) return { cadence: 'minutes', value: Number(minuteInterval[1]) };
+  const fields = expression.trim().split(/\s+/);
+  if (fields.length !== 5 || !/^([0-5]?\d)$/.test(fields[0]) || fields[3] !== '*') return { cadence: 'custom' };
+  if (fields[0] === '0' && /^\*\/([1-9]|1\d|2[0-3])$/.test(fields[1]) && fields[2] === '*' && fields[4] === '*') {
+    const interval = Number(fields[1].slice(2));
+    if (24 % interval === 0) return { cadence: 'hours', value: interval };
+  }
+  if (!/^([01]?\d|2[0-3])$/.test(fields[1])) return { cadence: 'custom' };
+  const time = fields[1].padStart(2, '0') + ':' + fields[0].padStart(2, '0');
+  if (fields[2] === '*' && fields[4] === '*') return { cadence: 'daily', time };
+  if (fields[2] === '*' && fields[4] === '1-5') return { cadence: 'workdays', time };
+  if (fields[2] === '*' && /^[0-7]$/.test(fields[4])) return { cadence: 'weekday', time, value: Number(fields[4]) % 7 };
+  if (/^([1-9]|[12]\d|3[01])$/.test(fields[2]) && fields[4] === '*') return { cadence: 'monthly', time, value: Number(fields[2]) };
+  return { cadence: 'custom' };
+}
+
 export function automationItem(automation: XopcAutomation): XopcWorkspaceItem {
   if (!automation?.id || !automation.trigger || !automation.action) throw new Error('INVALID_AUTOMATION');
   const actions: string[] = [];

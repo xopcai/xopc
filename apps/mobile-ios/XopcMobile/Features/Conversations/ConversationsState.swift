@@ -12,6 +12,8 @@ final class ConversationsState {
     private(set) var errorMessage: String?
     private(set) var operatingConversationID: String?
     var searchText = ""
+    var scope: ConversationHistoryScope = .recent
+    private var activeScope: ConversationHistoryScope = .recent
     var personalConversationID: String?
     var cacheScope: String?
     private var activeSearch = ""
@@ -20,12 +22,18 @@ final class ConversationsState {
 
     var visibleConversations: [ConversationSummary] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard query == activeSearch else { return [] }
-        let history = conversations.filter { $0.messageCount > 0 && $0.id != personalConversationID }
+        guard query == activeSearch, scope == activeScope else { return [] }
+        let history = conversations.filter(isVisible)
         guard !query.isEmpty else { return history }
         let titleMatches = history.filter { $0.displayName.localizedCaseInsensitiveContains(query) }
         let otherMatches = history.filter { !$0.displayName.localizedCaseInsensitiveContains(query) }
         return titleMatches + otherMatches
+    }
+
+    private func isVisible(_ row: ConversationSummary) -> Bool {
+        guard row.messageCount > 0, row.id != personalConversationID, row.status != "archived" else { return false }
+        if case .expert = activeScope { return row.customData?.agentSetup != true }
+        return true
     }
 
     func load(using gateway: any GatewayServing) async {
@@ -33,14 +41,16 @@ final class ConversationsState {
         generation += 1
         let current = generation
         let requestedAt = Date.now
-        if query != activeSearch {
+        if query != activeSearch || scope != activeScope {
             conversations = []
             childrenByConversationID = [:]
             nextOffset = 0
             hasMore = false
         }
         activeSearch = query
-        if query.isEmpty {
+        activeScope = scope
+        let requestedScope = scope
+        if query.isEmpty && requestedScope == .recent {
             restoreCachedHistory()
         }
         isLoading = true
@@ -58,16 +68,16 @@ final class ConversationsState {
             var offset = 0
             var more = false
             repeat {
-                let page = try await gateway.fetchConversations(search: query, offset: offset)
+                let page = try await gateway.fetchConversationHistory(search: query, offset: offset, scope: requestedScope)
                 guard current == generation, !Task.isCancelled else { return }
-                if query.isEmpty, offset == 0, let cacheScope {
+                if query.isEmpty, requestedScope == .recent, offset == 0, let cacheScope {
                     MobileListCache.shared.write(page, to: .conversations, scope: cacheScope, requestedAt: requestedAt)
                 }
                 rows.append(contentsOf: page.items)
                 groups.merge(page.childrenByConversationId ?? [:]) { _, new in new }
                 offset += page.items.count
                 more = page.hasMore && !page.items.isEmpty
-            } while more && !rows.contains(where: { $0.messageCount > 0 && $0.id != personalConversationID })
+            } while more && !rows.contains(where: isVisible)
             conversations = rows
             childrenByConversationID = groups
             nextOffset = offset
@@ -92,7 +102,7 @@ final class ConversationsState {
     }
 
     func loadMore(using gateway: any GatewayServing) async {
-        guard hasMore, !isLoading, !isLoadingMore,
+        guard hasMore, !isLoading, !isLoadingMore, scope == activeScope,
               activeSearch == searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         else { return }
         let current = generation
@@ -105,7 +115,7 @@ final class ConversationsState {
         do {
             let visibleCount = visibleConversations.count
             repeat {
-                let page = try await gateway.fetchConversations(search: activeSearch, offset: nextOffset)
+                let page = try await gateway.fetchConversationHistory(search: activeSearch, offset: nextOffset, scope: activeScope)
                 guard current == generation, !Task.isCancelled else { return }
                 let existing = Set(conversations.map(\.id))
                 conversations.append(contentsOf: page.items.filter { !existing.contains($0.id) })

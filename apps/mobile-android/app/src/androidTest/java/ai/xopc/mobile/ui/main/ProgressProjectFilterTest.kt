@@ -123,9 +123,11 @@ class ProgressProjectFilterTest {
     }
     composeTestRule.onNodeWithTag("progress-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
     composeTestRule.onNodeWithTag("progress-project-session-$sessionId").performClick()
     composeTestRule.runOnIdle { check(openedChat == sessionId) }
+    composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-project-session-$sessionId").assertDoesNotExist()
   }
@@ -143,6 +145,7 @@ class ProgressProjectFilterTest {
     }
     composeTestRule.onNodeWithTag("progress-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
     composeTestRule.onNodeWithTag("progress-project-new-chat").performClick()
     composeTestRule.runOnIdle { check(createdFor == "project-1") }

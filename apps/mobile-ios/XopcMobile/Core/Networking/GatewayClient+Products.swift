@@ -342,6 +342,14 @@ extension GatewayClient {
         return response.automation
     }
 
+    func deleteAutomation(_ automation: AutomationRecord) async throws {
+        let body = try encoder.encode(RevisionMutation(expectedRevision: Int(automation.updatedAtMs)))
+        let response: AutomationDeleteEnvelope = try await request(
+            path: "/api/automations/\(automation.id)", method: "DELETE", body: body
+        )
+        guard response.removed else { throw GatewayClientError.invalidResponse }
+    }
+
     func runAutomation(id: String) async throws -> String {
         let body = try encoder.encode(EmptyMutation())
         let response: AutomationRunEnvelope = try await request(path: "/api/automations/\(id)/run", method: "POST", body: body)
@@ -664,6 +672,10 @@ private struct FileContentMutation: Encodable {
 private struct DeleteEnvelope: Decodable {
     let deleted: Bool?
     let ok: Bool?
+}
+
+private struct AutomationDeleteEnvelope: Decodable {
+    let removed: Bool
 }
 
 private struct AutomationRunEnvelope: Decodable {

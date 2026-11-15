@@ -1,3 +1,4 @@
+import type { XopcSessionHistoryScope } from '../model/chat';
 import { chatSessionCache } from '../service/chatSessionCache';
 import { gatewaySession } from '../service/gatewaySession';
 import { realtimeClient } from '../service/realtimeClient';
@@ -122,10 +123,19 @@ export class XopcChatRepository {
     return request;
   }
 
-  async list(search: string = '', offset: number = 0, limit: number = 30, channel: string = 'webchat', roots: boolean = false): Promise<XopcSessionList> {
+  async historyList(search: string, offset: number, scope: XopcSessionHistoryScope): Promise<XopcSessionList> {
+    const filters = '&excludeArchived=true'
+      + (scope.expertId ? '&sources=workbench&purposes=chat&activity=manual&agentId=' + encodeURIComponent(scope.expertId)
+        : '&excludeAutomationRuns=true')
+      + (scope.projectId ? '&projectId=' + encodeURIComponent(scope.projectId) : '')
+      + (scope.unassigned ? '&unassigned=true' : '');
+    return this.list(search, offset, 20, '', !search || !!scope.expertId, filters);
+  }
+
+  async list(search: string = '', offset: number = 0, limit: number = 30, channel: string = 'webchat', roots: boolean = false, filters: string = ''): Promise<XopcSessionList> {
     const result = JSON.parse(await gatewaySession.request('/api/sessions?limit=' + limit + '&offset=' + offset
       + (channel ? '&channel=' + encodeURIComponent(channel) : '')
-      + (roots ? '&rootConversationsOnly=true' : '')
+      + (roots ? '&rootConversationsOnly=true' : '') + filters
       + '&sortBy=updatedAt&sortOrder=desc&search=' + encodeURIComponent(search.trim()))) as XopcSessionList;
     if (!Array.isArray(result.items) || typeof result.hasMore !== 'boolean') throw new Error('INVALID_SESSION_LIST');
     if (result.items.some((item: XopcSessionItem): boolean => !item || typeof item.key !== 'string' || !item.key

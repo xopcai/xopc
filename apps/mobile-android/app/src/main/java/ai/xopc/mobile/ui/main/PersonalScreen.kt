@@ -4,10 +4,8 @@ import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalGoal
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,9 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,7 +34,6 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
@@ -58,10 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,51 +64,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
-@Composable
-internal fun UnpairedPersonalScreen(insets: PaddingValues, onOpenSettings: () -> Unit,
-  onConnect: () -> Unit) {
-  val settingsLabel = stringResource(R.string.settings_title)
-  Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
-    .padding(horizontal = 20.dp).testTag("personal-unpaired")) {
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      Text(stringResource(R.string.tab_me), style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-      IconButton(onClick = onOpenSettings,
-        modifier = Modifier.semantics { contentDescription = settingsLabel }
-          .testTag("personal-settings")) {
-        Icon(painterResource(R.drawable.settings_gear), contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface)
-      }
-    }
-    ProfileCard(null, connected = false, onOpenAbout = onConnect)
-    Text(stringResource(R.string.pairing_hint), style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-      modifier = Modifier.padding(top = 24.dp, bottom = 16.dp))
-    Button(onClick = onConnect, modifier = Modifier.fillMaxWidth().testTag("personal-connect")) {
-      Text(stringResource(R.string.pairing_connect))
-    }
-  }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, connected: Boolean,
-  onRefresh: () -> Unit, onSaveGoal: (String?, String, String, String, Long?) -> Unit =
-    { _, _, _, _, _ -> }, onOpenAbout: () -> Unit = {},
-  onOpenUnderstanding: () -> Unit = {},
-  onOpenSettings: () -> Unit = {},
-  onOpenAssertion: (String) -> Unit = {},
-  onOpenAgent: () -> Unit = {},
-  onLoadAgentVoices: () -> Unit = {},
-  onUpdateAgentProfile: (String, String, String?, Boolean, String) -> Unit = { _, _, _, _, _ -> },
-  onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
-  onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
-  onUploadAvatar: suspend (ByteArray) -> Unit = {},
-  onLoadModel: LoadPersonalModel? = null, onSaveModel: SavePersonalModel? = null,
-  onExit: (() -> Unit)? = null) {
-  var agentEditorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
-  fun openAgentEditor() { if (state.agent != null) agentEditorOpen = true }
+internal fun PersonalGoalsScreen(state: PersonalUiState, insets: PaddingValues, onRefresh: () -> Unit,
+  onSaveGoal: (String?, String, String, String, Long?) -> Unit, onBack: () -> Unit = {}) {
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var editingId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var title by rememberSaveable(state.gatewayId) { mutableStateOf("") }
@@ -138,70 +89,25 @@ internal fun PersonalScreen(state: PersonalUiState, insets: PaddingValues, conne
   LaunchedEffect(state.savedGoalRevision, saveStartedRevision, editorOpen) {
     if (editorOpen && state.savedGoalRevision > saveStartedRevision) editorOpen = false
   }
-  val settingsLabel = stringResource(R.string.settings_title)
-  val loadingHeight = (LocalConfiguration.current.screenHeightDp.dp - 260.dp)
-    .coerceAtLeast(220.dp)
-  Column(Modifier.fillMaxSize().padding(insets).verticalScroll(rememberScrollState())
-    .padding(horizontal = 20.dp).testTag("personal-screen")) {
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
+  Column(Modifier.fillMaxSize().padding(insets).testTag("personal-goals-screen")) {
+    Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
-      if (onExit != null) IconButton(onClick = onExit, modifier = Modifier.testTag("personal-back")) {
-        Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
-      }
-      Text(stringResource(R.string.tab_me), style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-      IconButton(onClick = onOpenSettings,
-        modifier = Modifier.semantics { contentDescription = settingsLabel }.testTag("personal-settings")) {
-        Icon(painterResource(R.drawable.settings_gear), contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface)
+      PageBackButton("personal-goals-back", onBack)
+      Spacer(Modifier.weight(1f))
+      IconButton(onClick = { openEditor(null) }, enabled = state.summary != null,
+        modifier = Modifier.testTag("goal-add")) {
+        ActionIcon(R.drawable.action_add, contentDescription = stringResource(R.string.personal_goal_add))
       }
     }
-    ProfileCard(state.summary, connected, onOpenAbout)
-    Spacer(Modifier.height(16.dp))
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-      shape = themedCorners(22),
-      modifier = Modifier.fillMaxWidth().testTag("personal-agent-card")) {
-      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          PersonalAgentAvatar(state.agentAvatar, state.agent?.appearance ?: "loopi", 36.dp,
-            active = false)
-          Text(state.agent?.displayName ?: stringResource(R.string.personal_agent_title),
-            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        }
-        Text(stringResource(R.string.personal_agent_description),
-          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Button(onClick = onOpenAgent, enabled = !state.agentCreating && !state.agentLoading,
-          modifier = Modifier.fillMaxWidth().testTag("personal-agent-open")) {
-          Text(stringResource(if (state.agent?.state == "ready") R.string.personal_agent_open
-            else R.string.personal_agent_create))
-        }
-        if (state.agent?.state == "ready") TextButton(onClick = ::openAgentEditor,
-          modifier = Modifier.fillMaxWidth().testTag("personal-agent-configure")) {
-          Text(stringResource(R.string.personal_agent_configure))
-        }
-        if (state.agentCreating || state.agentLoading) BrandLoadingIndicator()
-        if (state.agentError) {
-          Text(stringResource(R.string.personal_agent_error), color = MaterialTheme.colorScheme.error)
-          TextButton(onClick = onOpenAgent) { Text(stringResource(R.string.personal_retry)) }
-        }
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+      if (state.loading && state.summary == null) BrandLoadingPanel()
+      state.summary?.let { PersonalGoals(it, ::openEditor) }
+      if (state.error) {
+        Text(stringResource(R.string.personal_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = onRefresh) { Text(stringResource(R.string.personal_retry)) }
       }
     }
-    if (state.loading && state.summary == null) {
-      BrandLoadingPanel(modifier = Modifier.testTag("personal-loading"), minHeight = loadingHeight)
-    } else {
-      state.summary?.let { summary -> PersonalSections(summary, ::openEditor,
-        onOpenUnderstanding, onOpenAssertion) }
-    }
-    if (state.error) {
-      Text(stringResource(R.string.personal_unavailable), color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 16.dp))
-      TextButton(onClick = onRefresh) { Text(stringResource(R.string.personal_retry)) }
-    }
-    Spacer(Modifier.height(24.dp))
   }
-  if (agentEditorOpen) PersonalAgentProfileSheet(state, { agentEditorOpen = false }, onLoadAgentVoices,
-    onUpdateAgentProfile, onUploadAvatar, onLoadModel, onSaveModel)
   if (editorOpen) {
     val currentSaving by rememberUpdatedState(state.savingGoal)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
@@ -323,44 +229,38 @@ private fun goalDateText(timestamp: Long): String = Instant.ofEpochMilli(timesta
   .atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE)
 
 @Composable
-private fun ProfileCard(summary: PersonalSummary?, connected: Boolean, onOpenAbout: () -> Unit) {
-  Card(onClick = onOpenAbout, modifier = Modifier.fillMaxWidth().testTag("personal-profile"),
-    shape = themedCorners(22), colors = CardDefaults.cardColors(
-      containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-    Row(Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      val name = summary?.name.orEmpty().ifBlank { stringResource(R.string.personal_default_name) }
-      Box(Modifier.size(64.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-        contentAlignment = Alignment.Center) {
-        Text(name.take(2).uppercase(), color = MaterialTheme.colorScheme.primary,
-          style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+internal fun PersonalAgentSettings(state: PersonalUiState, onOpenAgent: () -> Unit,
+  onLoadAgentVoices: () -> Unit, onUpdateAgentProfile: (String, String, String?, Boolean, String) -> Unit,
+  onUploadAvatar: suspend (ByteArray) -> Unit, onLoadModel: LoadPersonalModel?, onSaveModel: SavePersonalModel?) {
+  var agentEditorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  val ready = state.agent?.state == "ready"
+  Card(onClick = { if (ready) agentEditorOpen = true else onOpenAgent() },
+    enabled = !state.agentCreating && !state.agentLoading,
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    shape = themedCorners(16),
+    modifier = Modifier.fillMaxWidth().testTag(if (ready) "personal-agent-configure" else "personal-agent-open")) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 14.dp),
+      verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+      PersonalAgentAvatar(state.agentAvatar, state.agent?.appearance ?: "loopi", 40.dp, active = false)
+      Column(Modifier.weight(1f)) {
+        Text(state.agent?.displayName ?: stringResource(R.string.personal_agent_title),
+          style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(stringResource(when {
+          state.agentError -> R.string.personal_agent_error
+          ready -> R.string.personal_agent_configure
+          else -> R.string.personal_agent_create
+        }), style = MaterialTheme.typography.bodySmall, color = if (state.agentError)
+          MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
       }
-      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-          maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(summary?.role.orEmpty().ifBlank { stringResource(R.string.personal_profile_hint) },
-          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(stringResource(if (connected) R.string.personal_connected else R.string.personal_offline),
-          style = MaterialTheme.typography.labelSmall, color = if (connected)
-            MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-        summary?.let { Text(stringResource(R.string.personal_count, it.counts.total, it.counts.review),
-          style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-      }
+      ActionIcon(R.drawable.action_chevron_right, size = 16.dp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
   }
+  if (agentEditorOpen) PersonalAgentProfileSheet(state, { agentEditorOpen = false }, onLoadAgentVoices,
+    onUpdateAgentProfile, onUploadAvatar, onLoadModel, onSaveModel)
 }
 
 @Composable
-private fun PersonalSections(summary: PersonalSummary, onOpenGoal: (PersonalGoal?) -> Unit,
-  onOpenUnderstanding: () -> Unit, onOpenAssertion: (String) -> Unit) {
-  Row(Modifier.fillMaxWidth().padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-    Text(stringResource(R.string.personal_goals), style = MaterialTheme.typography.labelMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-    TextButton(onClick = { onOpenGoal(null) }, modifier = Modifier.testTag("goal-add")) {
-      Text(stringResource(R.string.personal_goal_add))
-    }
-  }
+private fun PersonalGoals(summary: PersonalSummary, onOpenGoal: (PersonalGoal?) -> Unit) {
   if (summary.goals.isNotEmpty()) summary.goals.forEach { goal ->
     PersonalCard(onClick = { onOpenGoal(goal) }, tag = "goal-${goal.id}") {
       Text(goal.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
@@ -382,49 +282,6 @@ private fun PersonalSections(summary: PersonalSummary, onOpenGoal: (PersonalGoal
     if (summary.focusOutcome.isNotBlank()) Text(summary.focusOutcome,
       style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
   }
-  Row(Modifier.fillMaxWidth().padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-    Text(stringResource(R.string.personal_understanding), style = MaterialTheme.typography.labelMedium,
-      color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-    TextButton(onClick = onOpenUnderstanding, modifier = Modifier.testTag("personal-view-all")) {
-      Text(stringResource(R.string.personal_view_all))
-    }
-  }
-  PersonalCard(onClick = onOpenUnderstanding) {
-    Text(stringResource(R.string.personal_understanding_help), style = MaterialTheme.typography.bodySmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-      CountCell(summary.counts.explicit, stringResource(R.string.personal_explicit))
-      CountCell(summary.counts.learned, stringResource(R.string.personal_learned))
-      CountCell(summary.counts.review, stringResource(R.string.personal_review))
-    }
-    Text(stringResource(R.string.personal_work_memory, summary.counts.workMemory),
-      style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-  }
-  if (summary.recent.isNotEmpty()) {
-    SectionHeading(stringResource(R.string.personal_recent))
-    summary.recent.forEach { item -> PersonalCard(onClick = { onOpenAssertion(item.id) },
-      tag = "personal-recent-${item.id}") {
-      Text(item.statement, style = MaterialTheme.typography.bodyMedium, maxLines = 2,
-        overflow = TextOverflow.Ellipsis)
-      Text(stringResource(if (item.authority == "user_explicit") R.string.personal_explicit
-        else R.string.personal_learned), style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant)
-    } }
-  }
-  if (summary.rules.isNotEmpty()) {
-    SectionHeading(stringResource(R.string.personal_rules))
-    summary.rules.forEach { rule -> PersonalCard {
-      Text(rule.statement, style = MaterialTheme.typography.bodyMedium, maxLines = 3,
-        overflow = TextOverflow.Ellipsis)
-    } }
-  }
-}
-
-@Composable
-private fun SectionHeading(title: String) {
-  Text(title, style = MaterialTheme.typography.labelMedium,
-    color = MaterialTheme.colorScheme.onSurfaceVariant,
-    modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
 }
 
 @Composable
@@ -436,14 +293,5 @@ private fun PersonalCard(onClick: (() -> Unit)? = null, tag: String? = null,
   Card(modifier, shape = themedCorners(16),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
-  }
-}
-
-@Composable
-private fun CountCell(count: Int, label: String) {
-  Column(horizontalAlignment = Alignment.CenterHorizontally) {
-    Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-    Text(label, style = MaterialTheme.typography.labelSmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant)
   }
 }

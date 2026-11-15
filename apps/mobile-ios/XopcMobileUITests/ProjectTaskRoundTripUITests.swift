@@ -33,7 +33,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
         project.tap()
-        app.buttons["project-tab-tasks"].tap()
+        app.selectPageOption("project-tab-tasks", from: "project-tabs")
         app.buttons["新建项目任务"].tap()
         let objective = app.textFields["描述需要完成的事项"]
         XCTAssertTrue(objective.waitForExistence(timeout: 5))
@@ -81,7 +81,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
         project.tap()
-        app.buttons["project-tab-notes"].tap()
+        app.selectPageOption("project-tab-notes", from: "project-tabs")
         app.buttons["新建项目笔记"].tap()
         XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["note-markdown-toolbar"].exists)
@@ -126,7 +126,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
         project.tap()
-        app.buttons["project-tab-automations"].tap()
+        app.selectPageOption("project-tab-automations", from: "project-tabs")
         app.buttons["新建项目自动化"].tap()
         XCTAssertTrue(app.navigationBars["新建自动化"].waitForExistence(timeout: 5))
         let nameField = app.textFields["名称"]
@@ -154,7 +154,7 @@ final class ProjectTaskRoundTripUITests: XCTestCase {
         let plan = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "0 0 1 1 *")).firstMatch
         XCTAssertTrue(plan.exists, app.debugDescription)
         verifyAutomationDefinitionExpansion()
-        app.buttons["编辑自动化"].tap()
+        app.selectPageOption("automation-menu-edit", from: "automation-detail-menu")
         XCTAssertTrue(app.navigationBars["编辑自动化"].waitForExistence(timeout: 5))
         let updatedInstruction = app.textFields["automation-instruction"]
         XCTAssertTrue(updatedInstruction.waitForExistence(timeout: 5))

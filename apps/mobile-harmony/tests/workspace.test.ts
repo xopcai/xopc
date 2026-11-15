@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { TaskCreateRequestSchema } from '../../../packages/gateway-contract/src/tasks';
-import { automationItem, newTask, projectItem, scheduledAutomationPatch, taskItem } from '../entry/src/main/ets/common/workspaceProtocol';
+import { automationItem, automationCronLabel, newTask, projectItem, scheduledAutomationPatch, taskItem } from '../entry/src/main/ets/common/workspaceProtocol';
 import { historyRows } from '../entry/src/main/ets/common/chatProtocol';
+
+describe('automation schedule labels', () => {
+  it('distinguishes daily, weekly, monthly, interval, and custom schedules', () => {
+    expect(automationCronLabel('0 9 * * *')).toEqual({ cadence: 'daily', time: '09:00' });
+    expect(automationCronLabel('0 9 * * 1')).toEqual({ cadence: 'weekday', time: '09:00', value: 1 });
+    expect(automationCronLabel('0 9 * * 1-5')).toEqual({ cadence: 'workdays', time: '09:00' });
+    expect(automationCronLabel('30 18 15 * *')).toEqual({ cadence: 'monthly', time: '18:30', value: 15 });
+    expect(automationCronLabel('*/30 * * * *')).toEqual({ cadence: 'minutes', value: 30 });
+    expect(automationCronLabel('0 */2 * * *')).toEqual({ cadence: 'hours', value: 2 });
+    for (const expression of ['0 9 * * 1,4', '0 24 * * *', '60 9 * * *', '*/7 * * * *', '0 */5 * * *']) {
+      expect(automationCronLabel(expression)).toEqual({ cadence: 'custom' });
+    }
+  });
+});
 
 describe('Harmony workspace contracts', () => {
   it('creates captured tasks with the authoritative contract and no implicit execution', () => {

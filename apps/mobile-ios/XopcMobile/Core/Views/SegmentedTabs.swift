@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SegmentOption<Value: Hashable>: Identifiable {
     let id: Value
@@ -7,6 +8,125 @@ struct SegmentOption<Value: Hashable>: Identifiable {
     var count: Int?
     let accessibilityID: String
     var minimumWidth: CGFloat?
+}
+
+struct MobilePageTitleMenu<Value: Hashable>: View {
+    @Environment(\.mobileTheme) private var theme
+    let options: [SegmentOption<Value>]
+    let selected: Value
+    let identifier: String
+    let onSelect: (Value) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(options) { option in
+                Button { onSelect(option.id) } label: {
+                    if option.id == selected {
+                        Label(option.title, systemImage: "checkmark")
+                    } else {
+                        Text(option.title)
+                    }
+                }
+                .accessibilityIdentifier(option.accessibilityID)
+                .accessibilityAddTraits(option.id == selected ? .isSelected : [])
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if let option = options.first(where: { $0.id == selected }) {
+                    Text(option.title).font(.headline).foregroundStyle(theme.foreground).lineLimit(1)
+                }
+                Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.secondary).accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+        }.accessibilityIdentifier(identifier)
+    }
+}
+
+struct HorizontalSwipeCapture: UIViewRepresentable {
+    var leftOnly = false
+    var reserveBackEdge = false
+    var onDrag: (CGFloat) -> Void = { _ in }
+    var onEnd: (CGFloat, CGFloat) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> SwipeRegion {
+        let region = SwipeRegion()
+        region.isUserInteractionEnabled = false
+        region.windowChanged = { [weak coordinator = context.coordinator, weak region] in
+            coordinator?.attach(to: region)
+        }
+        return region
+    }
+
+    func updateUIView(_ uiView: SwipeRegion, context: Context) {
+        context.coordinator.capture = self
+        context.coordinator.attach(to: uiView)
+    }
+
+    static func dismantleUIView(_ uiView: SwipeRegion, coordinator: Coordinator) {
+        uiView.windowChanged = nil
+        coordinator.attach(to: nil)
+    }
+
+    final class SwipeRegion: UIView {
+        var windowChanged: (() -> Void)?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            windowChanged?()
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var capture: HorizontalSwipeCapture
+        private weak var region: UIView?
+        private let pan = UIPanGestureRecognizer()
+
+        init(_ capture: HorizontalSwipeCapture) {
+            self.capture = capture
+            super.init()
+            pan.delegate = self
+            pan.maximumNumberOfTouches = 1
+            pan.cancelsTouchesInView = true
+            pan.addTarget(self, action: #selector(onPan))
+        }
+
+        func attach(to region: UIView?) {
+            self.region = region
+            guard pan.view !== region?.window else { return }
+            pan.view?.removeGestureRecognizer(pan)
+            region?.window?.addGestureRecognizer(pan)
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let region, let window = region.window, region.bounds.contains(touch.location(in: region)) else {
+                return false
+            }
+            return !capture.reserveBackEdge || touch.location(in: window).x >= 24
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            let offset = pan.translation(in: nil)
+            return abs(offset.x) > abs(offset.y) * 1.25 && (!capture.leftOnly || offset.x < 0)
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            other.view is UIScrollView
+        }
+
+        @objc private func onPan() {
+            let distance = pan.translation(in: nil).x
+            switch pan.state {
+            case .began, .changed: capture.onDrag(distance)
+            case .ended: capture.onEnd(distance, pan.velocity(in: nil).x)
+            case .cancelled, .failed: capture.onEnd(0, 0)
+            default: break
+            }
+        }
+    }
 }
 
 struct SegmentedTabs<Value: Hashable>: View {

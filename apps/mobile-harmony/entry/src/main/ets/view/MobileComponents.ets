@@ -53,9 +53,51 @@ export struct XopcBrandLoading {
 }
 
 @ComponentV2
+export struct XopcPageTitleMenu {
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Param heading: ResourceStr = '';
+  @Param selected: string = '';
+  @Param options: XopcPageTitleOption[] = [];
+  @Param menuId: string = '';
+  @Event onSelect: (key: string) => void = (_key: string): void => {};
+
+  @Builder
+  menu() {
+    Menu() {
+      ForEach(this.options, (option: XopcPageTitleOption) => {
+        MenuItem({ content: option.label }).id(option.id ?? '')
+          .selected(option.key === this.selected).selectIcon(true)
+          .onChange((): void => { this.onSelect(option.key); })
+      }, (option: XopcPageTitleOption): string => option.key)
+    }.width(208).borderRadius(this.colors.corner(22))
+  }
+
+  build() {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 6 }) {
+        Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(13).fontColor([this.colors.secondary])
+      }.constraintSize({ maxWidth: '100%' }).justifyContent(FlexAlign.Center)
+    }.id(this.menuId).height(44).padding({ left: 8, right: 8 }).backgroundColor(Color.Transparent)
+      .bindMenu(this.menu, { placement: Placement.Bottom })
+  }
+}
+
+export interface XopcPageTitleOption {
+  key: string;
+  label: ResourceStr;
+  id?: string;
+}
+
+@ComponentV2
 export struct XopcPageHeader {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param heading: ResourceStr = '';
+  @Param titleOptions: XopcPageTitleOption[] = [];
+  @Param selectedTitle: string = '';
+  @Param titleMenuId: string = '';
+  @Event onSelectTitle: (key: string) => void = (_key: string): void => {};
   @Param backVisible: boolean = false;
   @Event onBack: () => void = (): void => {};
   @Param searchId: string = '';
@@ -72,19 +114,16 @@ export struct XopcPageHeader {
   }
 
   build() {
-    Row({ space: 8 }) {
+    Stack({ alignContent: Alignment.Center }) {
+     Row({ space: 8 }) {
       if (this.backVisible) {
         Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground])
+          SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(21).fontColor([this.colors.foreground])
         }.width(44).height(44).padding(0)
-          .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
+          .backgroundColor(this.colors.panel)
           .accessibilityText($r('app.string.back')).onClick((): void => { this.onBack(); })
       }
-      Row() {
-        Text(this.heading).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)
-          .fontColor(this.colors.foreground).constraintSize({ maxWidth: '90%' })
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.layoutWeight(1)
+      Blank().layoutWeight(1)
       if (this.searchId) {
         XopcPageSearchButton({ searchId: this.searchId, open: this.searchOpen, label: this.searchLabel, onToggle: this.onSearch })
       }
@@ -94,7 +133,13 @@ export struct XopcPageHeader {
           .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
           .accessibilityText(this.actionText()).onClick((): void => { this.onAction(); })
       }
-    }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
+     }.width('100%').height(44)
+      if (this.titleOptions.length) {
+        XopcPageTitleMenu({ heading: this.heading, options: this.titleOptions,
+          selected: this.selectedTitle, menuId: this.titleMenuId, onSelect: this.onSelectTitle })
+          .constraintSize({ maxWidth: '57%' })
+      }
+    }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
   }
 }
 

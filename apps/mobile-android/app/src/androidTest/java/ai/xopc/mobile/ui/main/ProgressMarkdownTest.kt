@@ -33,8 +33,8 @@ class ProgressMarkdownTest {
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
       }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-1").performClick()
     composeTestRule.onNodeWithTag("progress-task-body").assertExists()
     composeTestRule.onNodeWithTag("markdown-heading").assertTextEquals("Summary")

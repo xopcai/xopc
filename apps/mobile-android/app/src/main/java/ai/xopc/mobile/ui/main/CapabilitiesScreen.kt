@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -73,6 +74,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -155,91 +157,103 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   val connections = category == CapabilityCategory.Connections
   val plugins = category == CapabilityCategory.Plugins
   val skillMarketTitle = stringResource(R.string.capability_skill_market)
+  val pageSwipeDistance = with(LocalDensity.current) { 40.dp.toPx() }
+  val selectCategory: (CapabilityCategory) -> Unit = {
+    if (it != category) {
+      focus.clearFocus()
+      keyboard?.hide()
+      category = it
+    }
+  }
 
   Column(Modifier.fillMaxSize().background(colors.background).padding(insets).imePadding().padding(horizontal = 18.dp)) {
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      IconButton(onClick = onExit, modifier = Modifier.size(44.dp)
-        .background(colors.surface, CircleShape).testTag("capability-back")) {
-        ActionIcon(R.drawable.action_chevron_left, contentDescription = stringResource(R.string.progress_back))
-      }
-      Text(stringResource(R.string.capability_title), Modifier.weight(1f).testTag("capability-title"),
-        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
-        maxLines = 1, overflow = TextOverflow.Ellipsis)
-      if (skills) {
-        TextButton(onClick = {
-          focus.clearFocus()
-          keyboard?.hide()
-          detail = CapabilityItem("marketplace:search", skillMarketTitle, group = "available")
-        }, modifier = Modifier.heightIn(min = 44.dp).testTag("capability-add-skills")) { Text(skillMarketTitle) }
-      } else if (plugins) {
-        IconButton(onClick = {
-          searchFocus.requestFocus()
-          keyboard?.show()
-        }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
-          .testTag("capability-add-plugins")) {
-          ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = stringResource(R.string.capability_search_plugins))
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PageBackButton("capability-back", onExit)
+        Spacer(Modifier.weight(1f))
+        if (skills) {
+          IconButton(onClick = {
+            focus.clearFocus()
+            keyboard?.hide()
+            detail = CapabilityItem("marketplace:search", skillMarketTitle, group = "available")
+          }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape).testTag("capability-add-skills")) {
+            ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = skillMarketTitle)
+          }
+        } else if (plugins) {
+          IconButton(onClick = {
+            searchFocus.requestFocus()
+            keyboard?.show()
+          }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
+            .testTag("capability-add-plugins")) {
+            ActionIcon(R.drawable.action_search, color = colors.primary, contentDescription = stringResource(R.string.capability_search_plugins))
+          }
+        }
+        if (skills || agents || connections) {
+          val label = stringResource(when {
+            agents -> R.string.capability_create_agent
+            skills -> R.string.capability_create_skill
+            else -> R.string.capability_add_mcp
+          })
+          val prompt = stringResource(when {
+            agents -> R.string.capability_agent_setup_prompt
+            skills -> R.string.capability_skill_setup_prompt
+            else -> R.string.capability_mcp_setup_prompt
+          })
+          IconButton(onClick = {
+            focus.clearFocus()
+            keyboard?.hide()
+            onSetupChat(prompt, agents)
+          }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
+            .testTag("capability-chat-setup-${category.key}")) {
+            ActionIcon(R.drawable.action_add, color = colors.primary, contentDescription = label)
+          }
         }
       }
-      if (skills || agents || connections) {
-        val label = stringResource(when {
-          agents -> R.string.capability_create_agent
-          skills -> R.string.capability_create_skill
-          else -> R.string.capability_add_mcp
-        })
-        val prompt = stringResource(when {
-          agents -> R.string.capability_agent_setup_prompt
-          skills -> R.string.capability_skill_setup_prompt
-          else -> R.string.capability_mcp_setup_prompt
-        })
-        IconButton(onClick = {
-          focus.clearFocus()
-          keyboard?.hide()
-          onSetupChat(prompt, agents)
-        }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
-          .testTag("capability-chat-setup-${category.key}")) {
-          ActionIcon(R.drawable.action_add, color = colors.primary, contentDescription = label)
-        }
-      }
+      PageTitleMenu(CapabilityCategory.entries.map {
+        SegmentOption(it, stringResource(it.title), "capability-category-${it.key}")
+      }, category, "capability-title", Modifier.fillMaxWidth(0.48f), selectCategory)
     }
-    SegmentedTabs(CapabilityCategory.entries.map {
-      SegmentOption(it, stringResource(it.title), "capability-category-${it.key}", minimumWidth = it.tabWidth.dp)
-    }, category, { focus.clearFocus(); keyboard?.hide(); category = it })
-    LazyColumn(state = list, modifier = Modifier.weight(1f), contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp)) {
-      if (loading && page == null) item { BrandLoadingPanel() }
-      if (failed || page?.incomplete == true) item {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Text(stringResource(if (failed) R.string.capability_load_failed else R.string.capability_partial), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-          TextButton(onClick = { retry++ }) { Text(stringResource(R.string.capability_retry)) }
+    Column(Modifier.weight(1f).fillMaxWidth().horizontalSwipe(enabled = detail == null, onRelease = { distance, _ ->
+      if (distance <= -pageSwipeDistance) CapabilityCategory.entries.getOrNull(category.ordinal + 1)?.let(selectCategory)
+      if (distance >= pageSwipeDistance) CapabilityCategory.entries.getOrNull(category.ordinal - 1)?.let(selectCategory)
+    })) {
+      LazyColumn(state = list, modifier = Modifier.weight(1f), contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (loading && page == null) item { BrandLoadingPanel() }
+        if (failed || page?.incomplete == true) item {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(if (failed) R.string.capability_load_failed else R.string.capability_partial), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = { retry++ }) { Text(stringResource(R.string.capability_retry)) }
+          }
         }
-      }
-      if (!loading && !failed && groups.isEmpty()) item {
-        Column(Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-          ActionIcon(R.drawable.action_search)
-          Text(stringResource(if (search.isEmpty()) R.string.capability_empty else R.string.capability_no_matches),
-            modifier = Modifier.padding(top = 8.dp).testTag("capability-empty"))
-          if (search.isNotEmpty()) TextButton(onClick = { query = "" }) { Text(stringResource(R.string.capability_clear)) }
+        if (!loading && !failed && groups.isEmpty()) item {
+          Column(Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            ActionIcon(R.drawable.action_search)
+            Text(stringResource(if (search.isEmpty()) R.string.capability_empty else R.string.capability_no_matches),
+              modifier = Modifier.padding(top = 8.dp).testTag("capability-empty"))
+            if (search.isNotEmpty()) TextButton(onClick = { query = "" }) { Text(stringResource(R.string.capability_clear)) }
+          }
         }
-      }
-      capabilityGroups.forEach { group ->
-        val rows = groups[group] ?: return@forEach
-        item("group-$group") {
-          Text(stringResource(capabilityGroup(group)), style = MaterialTheme.typography.labelLarge,
-            color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 2.dp, start = 4.dp))
-        }
-        items(rows, key = { it.id }) { row ->
-          Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(themedCorners(18)).background(colors.surface)
-            .clickable { focus.clearFocus(); keyboard?.hide(); detail = row }.testTag("capability-row-${row.id}")
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            CapabilityItemIcon(row, category, origin, personal, agentAvatars)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-              Text(row.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-              if (row.description.isNotBlank()) Text(row.description, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        capabilityGroups.forEach { group ->
+          val rows = groups[group] ?: return@forEach
+          item("group-$group") {
+            Text(stringResource(capabilityGroup(group)), style = MaterialTheme.typography.labelLarge,
+              color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 2.dp, start = 4.dp))
+          }
+          items(rows, key = { it.id }) { row ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(themedCorners(18)).background(colors.surface)
+              .clickable { focus.clearFocus(); keyboard?.hide(); detail = row }.testTag("capability-row-${row.id}")
+              .padding(horizontal = 14.dp, vertical = 12.dp),
+              verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+              CapabilityItemIcon(row, category, origin, personal, agentAvatars)
+              Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(row.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (row.description.isNotBlank()) Text(row.description, style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+              }
+              ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 14.dp)
             }
-            ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 14.dp)
           }
         }
       }

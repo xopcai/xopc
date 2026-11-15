@@ -200,7 +200,7 @@ struct XopcIndex {
         Column() { XopcSettingsView() }.layoutWeight(1).width('100%')
       }.height('100%').width('100%')
     } else if (this.connection.connected && !this.connection.adding) {
-      XopcHomeView({ onDisconnected: (): void => { this.connection.connected = false; this.invitation = ''; } })
+      XopcHomeView()
     } else {
       this.connectionHeader()
       Scroll() {

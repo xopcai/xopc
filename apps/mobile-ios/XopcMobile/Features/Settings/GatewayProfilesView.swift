@@ -79,7 +79,6 @@ struct GatewayProfilesView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("全部探测", systemImage: "arrow.clockwise") { Task { await probeAll() } }
                     Button("添加", systemImage: "plus") { editing = true }
                 }
             }
@@ -139,15 +138,24 @@ struct GatewayProfilesView: View {
         let started = ContinuousClock.now
         do {
             let configuration = try await onRefresh(profile.id)
-            _ = try await GatewayClient(configuration: configuration).fetchAgents()
+            let status: GatewayStatusResponse = try await GatewayClient(configuration: configuration).request(path: "/api/status")
+            guard !status.status.isEmpty else { throw GatewayClientError.invalidResponse }
+            let version = status.version?.trimmingCharacters(in: .whitespacesAndNewlines)
             let elapsed = started.duration(to: .now)
-            probeStates[profile.id] = .reachable(milliseconds: elapsed.milliseconds, checkedAt: .now)
+            probeStates[profile.id] = .reachable(
+                milliseconds: elapsed.milliseconds, checkedAt: .now, version: version?.isEmpty == false ? version : nil
+            )
             return true
         } catch {
             probeStates[profile.id] = .offline(error.localizedDescription, checkedAt: .now)
             return false
         }
     }
+}
+
+private struct GatewayStatusResponse: Decodable {
+    let status: String
+    let version: String?
 }
 
 private extension Duration {
@@ -158,14 +166,14 @@ private extension Duration {
 
 enum GatewayProbeState: Equatable {
     case checking
-    case online(milliseconds: Int, checkedAt: Date)
-    case warning(milliseconds: Int, checkedAt: Date)
+    case online(milliseconds: Int, checkedAt: Date, version: String? = nil)
+    case warning(milliseconds: Int, checkedAt: Date, version: String? = nil)
     case offline(String, checkedAt: Date)
 
-    static func reachable(milliseconds: Int, checkedAt: Date) -> GatewayProbeState {
+    static func reachable(milliseconds: Int, checkedAt: Date, version: String? = nil) -> GatewayProbeState {
         milliseconds >= 1500
-            ? .warning(milliseconds: milliseconds, checkedAt: checkedAt)
-            : .online(milliseconds: milliseconds, checkedAt: checkedAt)
+            ? .warning(milliseconds: milliseconds, checkedAt: checkedAt, version: version)
+            : .online(milliseconds: milliseconds, checkedAt: checkedAt, version: version)
     }
 
     var isOnline: Bool {
@@ -178,7 +186,14 @@ enum GatewayProbeState: Equatable {
     var checkedAt: Date? {
         switch self {
         case .checking: nil
-        case let .online(_, checkedAt), let .warning(_, checkedAt), let .offline(_, checkedAt): checkedAt
+        case let .online(_, checkedAt, _), let .warning(_, checkedAt, _), let .offline(_, checkedAt): checkedAt
+        }
+    }
+
+    var version: String? {
+        switch self {
+        case let .online(_, _, version), let .warning(_, _, version): version
+        case .checking, .offline: nil
         }
     }
 }
@@ -209,6 +224,11 @@ private struct GatewayProfileRow: View {
                         Text(profile.name).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
                         Text(profile.baseURL.host ?? profile.baseURL.absoluteString)
                             .mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text("服务端版本")
+                            Text(verbatim: probe?.version ?? "—")
+                        }
+                        .mobileTextStyle(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer(minLength: 6)
                     if isActive {
@@ -266,6 +286,7 @@ private struct GatewayProfileDetailView: View {
             Section("Gateway") {
                 LabeledContent("名称", value: profile.name)
                 LabeledContent("地址", value: profile.baseURL.absoluteString)
+                LabeledContent("服务端版本", value: probe?.version ?? "—")
                 LabeledContent("使用状态") {
                     Text(isActive
                         ? LocalizedStringResource("当前使用")
@@ -299,9 +320,9 @@ private struct ProbeLabel: View {
     var body: some View {
         switch state {
         case .none, .some(.checking): Label("探测中", systemImage: "circle.dotted").foregroundStyle(.secondary)
-        case let .some(.online(milliseconds, _)):
+        case let .some(.online(milliseconds, _, _)):
             Label("在线 · \(milliseconds) ms", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-        case let .some(.warning(milliseconds, _)):
+        case let .some(.warning(milliseconds, _, _)):
             Label("高延迟 · \(milliseconds) ms", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
         case let .some(.offline(message, _)):
             Label("离线", systemImage: "xmark.circle.fill").foregroundStyle(.red).accessibilityHint(message)

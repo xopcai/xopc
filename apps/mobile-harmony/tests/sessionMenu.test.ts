@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ts from 'typescript';
 
 const source = readFileSync(new URL('../entry/src/main/ets/view/SessionsView.ets', import.meta.url), 'utf8');
-const methods = source.slice(source.indexOf('  private chooseMenuAction('), source.indexOf('  private async shareSession('));
+const methods = source.slice(source.indexOf('  private chooseMenuAction('), source.indexOf('  private shareSession('));
 const compiled = ts.transpileModule(`class Handler { ${methods} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;

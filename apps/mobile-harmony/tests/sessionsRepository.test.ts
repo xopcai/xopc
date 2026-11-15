@@ -20,6 +20,19 @@ describe('session manager Gateway requests', () => {
     expect(paths[1].searchParams.has('channel')).toBe(false);
     expect(Object.fromEntries(paths[1].searchParams)).toEqual({ limit: '20', offset: '20', sortBy: 'updatedAt', sortOrder: 'desc', search: '中文 & ?' });
   });
+  it('combines scoped history filters and search on the Gateway', async () => {
+    const repo = new XopcChatRepository();
+    await repo.historyList('term', 20, { projectId: 'id/a?' });
+    await repo.historyList('', 0, { unassigned: true });
+    await repo.historyList('term', 0, { expertId: 'expert' });
+    const [project, inbox, expert] = mock.request.mock.calls.map(call =>
+      Object.fromEntries(new URL(call[0], 'https://gateway.invalid').searchParams));
+    expect(project).toMatchObject({ projectId: 'id/a?', search: 'term', offset: '20',
+      excludeArchived: 'true', excludeAutomationRuns: 'true' });
+    expect(inbox).toMatchObject({ unassigned: 'true', rootConversationsOnly: 'true' });
+    expect(expert).toMatchObject({ agentId: 'expert', sources: 'workbench', purposes: 'chat',
+      activity: 'manual', excludeArchived: 'true', rootConversationsOnly: 'true', search: 'term' });
+  });
   it('rejects malformed pages before the list accesses row properties', async () => {
     for (const payload of [{}, { items: [null], hasMore: false }, { items: [{ key: 'a' }], hasMore: true }]) {
       mock.request.mockResolvedValueOnce(JSON.stringify(payload));

@@ -315,6 +315,6 @@ private extension AppState {
 }
 
 enum HomeDestination: Hashable {
-    case conversations, conversationSearch, progress, projects, automations, library, capabilities, profile, settings, personalOverview
+    case conversations, conversationSearch, progress, projects, automations, library, capabilities, settings, personalOverview
     case libraryTask(String), libraryAutomationRun(String)
 }

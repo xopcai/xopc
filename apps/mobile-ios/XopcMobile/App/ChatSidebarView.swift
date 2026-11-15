@@ -68,7 +68,7 @@ struct ChatSidebarView: View {
                             Button("重试", action: onRetry).frame(minHeight: 44)
                         }.padding(.horizontal, 10)
                     }
-                    row("历史记录", symbol: "list.bullet") { onNavigate(.conversations) }
+                    row("查看更多", symbol: "list.bullet") { onNavigate(.conversations) }
                         .accessibilityIdentifier("chat-sidebar-history")
                 }
                 .padding(.vertical, 6)
@@ -97,32 +97,17 @@ struct ChatSidebarView: View {
     }
 
     private var personalRow: some View {
-        Button(action: onPersonal) {
-            HStack(spacing: 12) {
-                PersonalAgentAvatar(configuration: configuration, agent: personal, size: 42, active: false)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    if let personal, personal.isReady {
-                        Text(verbatim: personal.displayName).font(.headline).lineLimit(1)
-                        Text("个人助理").font(.caption).foregroundStyle(.secondary)
-                    } else {
-                        Text("个人助理").font(.headline)
-                    }
-                }
-                Spacer()
-                if openingPersonal {
-                    ProgressView()
-                } else {
-                    Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 62)
-            .background(personal?.conversationId == selectedID && personal != nil ? mobileTheme.card : .clear,
-                        in: .rect(cornerRadius: mobileTheme.corner(14)))
-            .contentShape(.rect)
+        let title = if let personal, !personal.displayName.isEmpty {
+            Text(verbatim: personal.displayName)
+        } else {
+            Text("个人助理")
         }
-        .buttonStyle(.plain)
+        return row(title, loading: openingPersonal, action: onPersonal) {
+            PersonalAgentAvatar(configuration: configuration, agent: personal, size: 24, active: false)
+                .accessibilityHidden(true)
+        }
+        .background(personal?.conversationId == selectedID && personal != nil ? mobileTheme.card : .clear,
+                    in: .rect(cornerRadius: mobileTheme.corner(12)))
         .disabled(openingPersonal)
         .accessibilityIdentifier("chat-sidebar-personal")
     }
@@ -140,12 +125,22 @@ struct ChatSidebarView: View {
     private func row(_ title: LocalizedStringKey, symbol: String, badge: Int = 0,
                      action: @escaping () -> Void) -> some View
     {
+        row(Text(title), badge: badge, action: action) {
+            Image(systemName: symbol).font(.title3).foregroundStyle(.secondary).frame(width: 24)
+        }
+    }
+
+    private func row<Icon: View>(_ title: Text, badge: Int = 0, loading: Bool = false,
+                                action: @escaping () -> Void, @ViewBuilder icon: () -> Icon) -> some View
+    {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: symbol).font(.title3).foregroundStyle(.secondary).frame(width: 24)
-                Text(title)
+                icon()
+                title.lineLimit(1)
                 Spacer()
-                if badge > 0 {
+                if loading {
+                    ProgressView()
+                } else if badge > 0 {
                     Text(badge > 99 ? "99+" : String(badge))
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 8).padding(.vertical, 4)

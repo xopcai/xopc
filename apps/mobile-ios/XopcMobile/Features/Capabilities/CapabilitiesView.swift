@@ -79,29 +79,37 @@ struct CapabilitiesView: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        ScrollViewReader { scroll in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    Color.clear.frame(height: 0).id("capability-top").accessibilityHidden(true)
-                    catalogContent
+        VStack(spacing: 0) {
+            ScrollViewReader { scroll in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        Color.clear.frame(height: 0).id("capability-top").accessibilityHidden(true)
+                        catalogContent
+                    }
+                    .padding(.horizontal, 18)
                 }
-                .padding(.horizontal, 18)
+                .onChange(of: query) { _, _ in scroll.scrollTo("capability-top") }
+                .onChange(of: category) { _, _ in scroll.scrollTo("capability-top") }
+                .scrollDismissesKeyboard(.interactively)
             }
-            .onChange(of: query) { _, _ in scroll.scrollTo("capability-top") }
-            .onChange(of: category) { _, _ in scroll.scrollTo("capability-top") }
-            .scrollDismissesKeyboard(.interactively)
         }
-        .safeAreaInset(edge: .top, spacing: 0) { categoryTabs }
+        .background {
+            if detail == nil {
+                HorizontalSwipeCapture(reserveBackEdge: true, onEnd: { distance, _ in swipeCategory(distance) })
+            }
+        }
         .background(mobileTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) { searchField }
-        .navigationTitle("capability_title")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .mobilePageTitle(Text("capability_title")) {
+            MobilePageTitleMenu(options: CapabilityCategory.allCases.map {
+                SegmentOption(id: $0, title: $0.title, accessibilityID: "capability-category-\($0.id)")
+            }, selected: category, identifier: "capability-title", onSelect: selectCategory)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if category == .skills {
-                    Button("capability_skill_market") { openSkillMarket() }
-                        .foregroundStyle(mobileTheme.action).accessibilityIdentifier("capability-add-skills")
+                    Button("capability_skill_market", systemImage: "magnifyingglass") { openSkillMarket() }
+                        .labelStyle(.iconOnly).foregroundStyle(mobileTheme.action).accessibilityIdentifier("capability-add-skills")
                 } else if category == .plugins {
                     Button("capability_search_plugins", systemImage: "magnifyingglass") { searchFocused = true }
                         .labelStyle(.iconOnly).foregroundStyle(mobileTheme.action)
@@ -143,18 +151,19 @@ struct CapabilitiesView: View {
                     category == .agents ? (locale.identifier.hasPrefix("zh") ? "zh-CN" : "en") : nil)
     }
 
-    private var categoryTabs: some View {
-        SegmentedTabs(options: CapabilityCategory.allCases.map {
-            SegmentOption(id: $0, title: $0.title, accessibilityID: "capability-category-\($0.id)", minimumWidth: $0.tabWidth)
-        }, selected: category, label: "capability_title") { option in
-            guard option != category else { return }
-            searchFocused = false
-            query = ""
-            category = option
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 8)
-        .background(mobileTheme.canvas)
+    private func selectCategory(_ option: CapabilityCategory) {
+        guard option != category else { return }
+        searchFocused = false
+        query = ""
+        category = option
+    }
+
+    private func swipeCategory(_ distance: CGFloat) {
+        guard abs(distance) >= 40 else { return }
+        let categories = CapabilityCategory.allCases
+        guard let index = categories.firstIndex(of: category) else { return }
+        let next = index + (distance < 0 ? 1 : -1)
+        if categories.indices.contains(next) { selectCategory(categories[next]) }
     }
 
     @ViewBuilder private var catalogContent: some View {

@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -32,9 +34,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,21 +51,20 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
   language: String, section: String, insets: PaddingValues, onBack: () -> Unit,
   onOpenGateways: () -> Unit = {},
   onOpenSharing: () -> Unit = {},
+  onOpenModelSettings: (() -> Unit)? = null,
+  onOpenAppAbout: () -> Unit = {}, onOpenAbout: () -> Unit = {}, onOpenGoals: () -> Unit = {},
+  personalAgent: @Composable () -> Unit = {},
   onOpenAppearance: () -> Unit, onOpenLanguage: () -> Unit = {},
   onAppearanceModeChange: (String) -> Unit,
   onColorSchemeChange: (String) -> Unit, onLanguageChange: (String) -> Unit = {}) {
   val context = LocalContext.current
+  @Suppress("DEPRECATION")
+  val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
   Column(Modifier.fillMaxSize().padding(insets).testTag("settings-screen")) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
       PageBackButton("settings-back", onBack)
-      Text(stringResource(when (section) {
-        "appearance" -> R.string.settings_appearance
-        "language" -> R.string.settings_language
-        else -> R.string.settings_title
-      }),
-        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
-        maxLines = 1, overflow = TextOverflow.Ellipsis)
+
     }
     AnimatedContent(targetState = section, modifier = Modifier.fillMaxSize(),
       transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(180)) },
@@ -125,11 +129,21 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
               if (language == option) Text("✓", color = MaterialTheme.colorScheme.primary)
             }
           }
+        } else if (currentSection == "about") {
+          AboutAppContent(version)
         } else {
           if (profile != null) {
-            SettingsSectionLabel(R.string.settings_connection_notifications)
-            SettingsRow(profile.name, stringResource(R.string.settings_active_gateway), true,
-              onOpenGateways)
+            SettingsSectionLabel(R.string.settings_personalization)
+            personalAgent()
+            SettingsRow(stringResource(R.string.settings_privacy_memory), "", true, onOpenAbout,
+              "settings-privacy-memory")
+            SettingsRow(stringResource(R.string.personal_goals), "", true, onOpenGoals, "settings-goals")
+          }
+          SettingsSectionLabel(R.string.settings_connection_notifications)
+          SettingsRow(profile?.name ?: stringResource(R.string.gateways_title),
+            if (profile != null) stringResource(R.string.settings_active_gateway) else "", true, onOpenGateways)
+          if (profile != null && onOpenModelSettings != null) {
+            SettingsRow(stringResource(R.string.ms_title), "", true, onOpenModelSettings, "settings-models")
           }
           SettingsSectionLabel(R.string.settings_data_sharing)
           SettingsRow(stringResource(R.string.share_center),
@@ -148,12 +162,37 @@ internal fun SettingsScreen(profile: GatewayProfile?, appearanceMode: String, co
               else -> R.string.settings_system
             }), true, onOpenAppearance)
           SettingsSectionLabel(R.string.settings_about)
-          @Suppress("DEPRECATION")
-          val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
-          SettingsRow("xopc", version, false, {})
+          SettingsRow(stringResource(R.string.settings_about_xopc), version, true, onOpenAppAbout, "settings-about")
         }
       }
     }
+  }
+}
+
+@Composable
+private fun AboutAppContent(version: String) {
+  val uriHandler = LocalUriHandler.current
+  val context = LocalContext.current
+  val language = if (LocalConfiguration.current.locales[0].language == "zh") "zh" else "en"
+  Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 20.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Image(painterResource(R.drawable.brand_mark), contentDescription = null, modifier = Modifier.size(64.dp))
+    Text("xopc", style = MaterialTheme.typography.headlineSmall)
+    Text(version, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+      modifier = Modifier.testTag("settings-about-version"))
+  }
+  listOf(
+    Triple(R.string.settings_website, "", "website"),
+    Triple(R.string.settings_support, "/support", "support"),
+    Triple(R.string.settings_privacy_policy, "/privacy", "privacy"),
+    Triple(R.string.settings_terms, "/terms", "terms"),
+  ).forEach { (label, path, id) ->
+    SettingsRow(stringResource(label), "", true, {
+      try { uriHandler.openUri("https://xopc.ai/$language$path") }
+      catch (_: IllegalArgumentException) {
+        android.widget.Toast.makeText(context, R.string.settings_link_error, android.widget.Toast.LENGTH_SHORT).show()
+      }
+    }, "settings-about-$id")
   }
 }
 
@@ -191,15 +230,16 @@ private fun SettingsSectionLabel(label: Int) {
 }
 
 @Composable
-private fun SettingsRow(title: String, summary: String, navigable: Boolean, onClick: () -> Unit) {
-  Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
+private fun SettingsRow(title: String, summary: String, navigable: Boolean, onClick: () -> Unit, tag: String = "") {
+  Row(Modifier.fillMaxWidth().heightIn(min = 58.dp)
+    .then(if (tag.isEmpty()) Modifier else Modifier.testTag(tag))
     .background(MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(16))
     .then(if (navigable) Modifier.clickable(onClick = onClick) else Modifier)
     .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
       Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1,
         overflow = TextOverflow.Ellipsis)
-      Text(summary, style = MaterialTheme.typography.bodySmall,
+      if (summary.isNotBlank()) Text(summary, style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
         overflow = TextOverflow.Ellipsis)
     }

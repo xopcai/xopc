@@ -4,10 +4,12 @@ import ai.xopc.mobile.gateway.AutomationRunEvent
 import ai.xopc.mobile.gateway.AutomationRunSummary
 import ai.xopc.mobile.gateway.AutomationSummary
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -30,16 +32,30 @@ class AutomationScreensTest {
 
   @Test fun automationListFiltersAndOpensDetail() {
     var opened = ""
+    var toggled = ""
+    var filter by mutableStateOf("all")
     composeTestRule.setContent {
-      AutomationListContent(AutomationUiState(items = listOf(enabled, paused)), "gateway-1", {}, { opened = it }, searchOpen = true)
+      Column {
+        AutomationFilterButton(filter) { filter = it }
+        AutomationListContent(AutomationUiState(items = listOf(enabled, paused)), "gateway-1", {}, { opened = it },
+          searchOpen = true, filter = filter, onToggle = { id, action -> toggled = "$id:$action" })
+      }
     }
+    composeTestRule.onNodeWithTag("automation-filter-menu").performClick()
+    composeTestRule.onNodeWithTag("automation-filter-all").assertIsSelected()
     composeTestRule.onNodeWithTag("automation-filter-paused").performClick()
     composeTestRule.onNodeWithTag("automation-auto-1").assertDoesNotExist()
     composeTestRule.onNodeWithTag("automation-auto-2").performClick()
     assertEquals("auto-2", opened)
+    composeTestRule.onNodeWithTag("automation-filter-menu").performClick()
     composeTestRule.onNodeWithTag("automation-filter-all").performClick()
+    composeTestRule.onNodeWithTag("automation-card-menu-auto-1").performClick()
+    composeTestRule.onNodeWithTag("automation-card-toggle").performClick()
+    assertEquals("auto-1:pause", toggled)
     composeTestRule.onNodeWithTag("automation-search").performTextInput("Morning")
-    composeTestRule.onNodeWithTag("automation-refresh").performClick()
+    composeTestRule.onNodeWithTag("automation-refresh").assertDoesNotExist()
+    composeTestRule.onNodeWithText("Every day at 09:00").assertExists()
+    composeTestRule.onNodeWithText("0 9 * * *", substring = true).assertDoesNotExist()
     composeTestRule.onNodeWithTag("automation-auto-1").assertExists()
     composeTestRule.onNodeWithTag("automation-auto-2").assertDoesNotExist()
   }
@@ -65,6 +81,8 @@ class AutomationScreensTest {
     }
     composeTestRule.onNodeWithTag("automation-edit-error").assertExists()
     composeTestRule.onNodeWithTag("automation-edit-save").assertIsNotEnabled()
+    composeTestRule.onNodeWithTag("automation-edit-cron").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("automation-edit-advanced").performClick()
     composeTestRule.onNodeWithTag("automation-edit-cron").performTextInput(" 1")
     composeTestRule.onNodeWithTag("automation-edit-save").performClick()
     assertEquals(1, saved)

@@ -5,12 +5,15 @@ export interface XopcSessionItem {
   updatedAt: string; status?: string; projectId?: string; agentId?: string;
   customData?: XopcSessionCustomData;
 }
-export interface XopcSessionCustomData { origin?: string; }
+export interface XopcSessionCustomData { origin?: string; agentSetup?: boolean; }
 export interface XopcSidebarTaskChild {
   taskId: string; title: string; phase: string; runStatus?: string; activeConversationId?: string;
 }
 export interface XopcSidebarTaskGroup {
   total: number; activeCount: number; items: XopcSidebarTaskChild[];
+}
+export interface XopcSessionHistoryScope {
+  projectId?: string; unassigned?: boolean; expertId?: string;
 }
 export interface XopcSessionList {
   items: XopcSessionItem[]; total: number; hasMore: boolean;
@@ -109,7 +112,8 @@ export interface XopcChatModel { id: string; name?: string; description?: string
 export interface XopcChatModels { defaultId?: string; models?: XopcChatModel[]; items?: XopcChatModel[]; }
 export interface XopcAgentSkillConfig { mode?: string; include?: string[]; }
 export interface XopcAgentEffective { skills?: XopcAgentSkillConfig; }
-export interface XopcChatAgent { id: string; name?: string; description?: string; avatar?: string; effective?: XopcAgentEffective; }
+export interface XopcChatAgentOverride { purpose?: string; }
+export interface XopcChatAgent { override?: XopcChatAgentOverride; id: string; name?: string; description?: string; avatar?: string; effective?: XopcAgentEffective; }
 export interface XopcChatAgents { defaultId: string; agents: XopcChatAgent[]; }
 export interface XopcActivityDetail { default: string; override: string | null; effective: string; source: string; }
 export interface XopcAgentConfig { model?: string; thinkingLevel?: string; activityDetail?: XopcActivityDetail; effectiveWorkspacePath?: string; workingDirectoryLocked?: boolean; configVersion?: number; }

@@ -1,4 +1,4 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { mobileRoute } from '../common/homeProtocol';
@@ -6,7 +6,7 @@ import { XopcNoteIndexEntry } from '../model/note';
 import { XopcWorkspaceItem } from '../model/workspace';
 import { XopcSessionItem } from '../model/chat';
 import { XopcProjectSpaceViewModel } from '../viewmodel/projectSpaceViewModel';
-import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcPageTitleOption, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
 import { XopcAutomationIdeas } from './AutomationIdeas';
 
 @ComponentV2
@@ -140,26 +140,30 @@ export struct XopcProjectSpaceView {
     }.width('100%').padding(18)
   }
 
+  private tabOptions: XopcPageTitleOption[] = [
+    { key: 'overview', label: $r('app.string.project_overview'), id: 'project-tab-overview' },
+    { key: 'sessions', label: $r('app.string.conversations'), id: 'project-tab-sessions' },
+    { key: 'tasks', label: $r('app.string.tasks'), id: 'project-tab-tasks' },
+    { key: 'notes', label: $r('app.string.library_title'), id: 'project-tab-notes' },
+    { key: 'automations', label: $r('app.string.automations'), id: 'project-tab-automations' }
+  ];
+
   build() {
     NavDestination() {
       Column() {
-        XopcPageHeader({ heading: this.model.project?.name || $r('app.string.projects'),
+        XopcPageHeader({ heading: this.tabOptions.find((option: XopcPageTitleOption): boolean => option.key === this.tab)?.label
+          ?? $r('app.string.project_overview'), selectedTitle: this.tab, titleOptions: this.tabOptions,
+          titleMenuId: 'project-tabs', onSelectTitle: (key: string): void => { this.tab = key; },
           backVisible: true, onBack: this.onExit, actionLabel: $r('app.string.project_add_item'), actionIcon: $r('sys.symbol.plus'),
           onAction: (): void => { this.menuOpen = true; } })
+        if (this.model.project) {
+          Text(this.model.project.name).fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+            .width('100%').padding({ left: 20, right: 20, bottom: 8 })
+        }
         if (this.tab === 'overview' && (this.model.project?.brief || this.model.project?.description)) {
           Text(this.model.project?.brief || this.model.project?.description || '').fontSize(14).lineHeight(21)
             .fontColor(this.colors.secondary).width('100%').padding({ left: 20, right: 20, bottom: 10 })
         }
-        Column() {
-          XopcSegmentedTabs({ options: [
-            { key: 'overview', label: $r('app.string.project_overview'), testId: 'project-tab-overview' },
-            { key: 'sessions', label: $r('app.string.conversations'), testId: 'project-tab-sessions' },
-            { key: 'tasks', label: $r('app.string.tasks'), testId: 'project-tab-tasks' },
-            { key: 'notes', label: $r('app.string.library_title'), testId: 'project-tab-notes' },
-            { key: 'automations', label: $r('app.string.automations'), testId: 'project-tab-automations' }
-          ], selectedKey: this.tab, segmentMin: 72,
-            onSelect: (key: string): void => { this.tab = key; } })
-        }.width('100%').padding({ left: 18, right: 18, bottom: 6 })
         if (this.model.error) {
           Row({ space: 8 }) {
             Text($r('app.string.project_load_error')).fontSize(13).fontColor(this.colors.danger).layoutWeight(1)

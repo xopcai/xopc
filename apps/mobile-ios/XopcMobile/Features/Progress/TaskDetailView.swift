@@ -242,7 +242,6 @@ struct TaskConversationView: View {
                 }
                 Button("搜索消息") { searchRevision += 1 }
                 Button("会话选项") { optionsRevision += 1 }
-                Button("刷新") { Task { await refresh() } }
             } label: {
                 Image(systemName: "ellipsis").frame(width: 44, height: 44)
                     .background(mobileTheme.card, in: Circle())

@@ -5,7 +5,7 @@ const mock = vi.hoisted(() => {
   return { list: vi.fn(), action: vi.fn(), rename: vi.fn(), create: vi.fn(), gatewayId: 'gateway-a' };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
-  list = mock.list; action = mock.action; rename = mock.rename; create = mock.create;
+  historyList = mock.list; action = mock.action; rename = mock.rename; create = mock.create;
 } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
   currentProfile: () => ({ gatewayId: mock.gatewayId }),
@@ -59,20 +59,39 @@ describe('native conversation manager', () => {
   it('queries all channels and advances raw offsets even when rows overlap', async () => {
     mock.list.mockResolvedValueOnce(page(['a', 'b'], true)).mockResolvedValueOnce(page(['b', 'c'], true)).mockResolvedValueOnce(page(['d']));
     const vm = new XopcSessionsViewModel(); await vm.load(); await vm.load(true); await vm.load(true);
-    expect(mock.list.mock.calls).toEqual([['', 0, 20, '', true], ['', 2, 20, '', true], ['', 4, 20, '', true]]);
+    expect(mock.list.mock.calls).toEqual([['', 0, {}], ['', 2, {}], ['', 4, {}]]);
     expect(vm.items.map(x => x.key)).toEqual(['a', 'b', 'c', 'd']); expect(vm.hasMore).toBe(false);
+  });
+  it('resets pagination on a scope change and skips expert setup chats without losing the raw offset', async () => {
+    const vm = new XopcSessionsViewModel();
+    const old = deferred<ReturnType<typeof page>>();
+    mock.list.mockReturnValueOnce(old.promise);
+    const recent = vm.load();
+    mock.list.mockResolvedValueOnce({
+      items: [{ ...item('setup'), customData: { agentSetup: true } }],
+      total: 2, hasMore: true,
+    });
+    vm.setScope({ expertId: 'expert' });
+    await vi.advanceTimersByTimeAsync(0);
+    old.resolve(page(['recent'])); await recent;
+    expect(vm.items).toEqual([]);
+    expect(vm.hasMore).toBe(true);
+    mock.list.mockResolvedValueOnce(page(['expert-session']));
+    await vm.load(true);
+    expect(mock.list).toHaveBeenLastCalledWith('', 1, { expertId: 'expert' });
+    expect(vm.items.map(row => row.key)).toEqual(['expert-session']);
   });
   it('debounces search and ignores the old response during the debounce window', async () => {
     const old = deferred<ReturnType<typeof page>>(); mock.list.mockReturnValueOnce(old.promise);
     const vm = new XopcSessionsViewModel(); const loading = vm.load(); vm.setSearch('n'); vm.setSearch(' new ');
     old.resolve(page(['old'])); await loading; expect(vm.items).toEqual([]);
     await vi.advanceTimersByTimeAsync(249); expect(mock.list).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(1); expect(mock.list).toHaveBeenLastCalledWith('new', 0, 20, '', false); expect(vm.loading).toBe(false);
+    await vi.advanceTimersByTimeAsync(1); expect(mock.list).toHaveBeenLastCalledWith('new', 0, {}); expect(vm.loading).toBe(false);
   });
   it('submit cancels pending debounce and clearing search resets the query', async () => {
     const vm = new XopcSessionsViewModel(); vm.setSearch('term'); await vm.load();
     await vi.advanceTimersByTimeAsync(250); expect(mock.list).toHaveBeenCalledOnce();
-    vm.setSearch(''); await vi.advanceTimersByTimeAsync(250); expect(mock.list).toHaveBeenLastCalledWith('', 0, 20, '', true);
+    vm.setSearch(''); await vi.advanceTimersByTimeAsync(250); expect(mock.list).toHaveBeenLastCalledWith('', 0, {});
   });
   it('prevents duplicate pagination and stops after an empty page', async () => {
     const vm = new XopcSessionsViewModel(); mock.list.mockResolvedValueOnce(page(['a'], true)); await vm.load();
@@ -95,7 +114,7 @@ describe('native conversation manager', () => {
     mock.list.mockResolvedValueOnce(page(['later'], true)); await vm.load(true); vm.select('later');
     mock.list.mockResolvedValueOnce(page(['a'], true)); await vm.load();
     expect(vm.selectedItems().map(x => x.key)).toEqual(['later']);
-    await vm.load(true); expect(mock.list).toHaveBeenLastCalledWith('', 1, 20, '', true);
+    await vm.load(true); expect(mock.list).toHaveBeenLastCalledWith('', 1, {});
   });
   it('keeps confirmed action results if the following read fails', async () => {
     const vm = new XopcSessionsViewModel(); await vm.load(); mock.list.mockRejectedValue(new Error('OFFLINE'));

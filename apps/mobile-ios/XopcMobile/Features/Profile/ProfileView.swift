@@ -1,214 +1,125 @@
 // swiftlint:disable file_length
 import SwiftUI
 
-struct ProfileView: View {
+struct PersonalAgentSettingsRow: View {
     let configuration: GatewayConfiguration
-    let onOpenGatewaySettings: () -> Void
     var personalAgent: PersonalAgentRecord?
-    var personalAgentLoading = false
-    var personalAgentError: String?
-    var onOpenPersonalAgent: () -> Void = {}
-    var onPersonalAgentUpdated: (PersonalAgentRecord) -> Void = { _ in }
+    let busy: Bool
+    let error: String?
+    let onOpenPersonalAgent: () -> Void
+    let onSaved: (PersonalAgentRecord) -> Void
+    @State private var editing = false
 
-    @Environment(\.locale) private var locale
+    var body: some View {
+        Button {
+            if personalAgent?.isReady == true { editing = true }
+            else { onOpenPersonalAgent() }
+        } label: {
+            HStack(spacing: 12) {
+                PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 40, active: false)
+                VStack(alignment: .leading, spacing: 3) {
+                    if let personalAgent, personalAgent.isReady {
+                        Text(personalAgent.displayName).foregroundStyle(.primary)
+                        (error.map { Text(verbatim: $0) } ?? Text("配置我的助手"))
+                            .mobileTextStyle(.caption).foregroundStyle(error == nil ? Color.secondary : .red)
+                    } else {
+                        Text("创建我的助手").foregroundStyle(.primary)
+                        if let error { Text(error).mobileTextStyle(.caption).foregroundStyle(.red) }
+                    }
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }.frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .accessibilityIdentifier(personalAgent?.isReady == true ? "profile-personal-agent-configure" : "profile-personal-agent-open")
+        .sheet(isPresented: $editing) {
+            if let personalAgent {
+                let conversation = ConversationSummary(key: personalAgent.conversationId, agentId: personalAgent.agentId,
+                                                       name: personalAgent.displayName, status: "active", updatedAt: "",
+                                                       messageCount: 1, projectId: nil, transcriptId: nil)
+                PersonalAgentProfileView(configuration: configuration, record: personalAgent,
+                                         conversation: ConversationSelection(summary: conversation), onSaved: onSaved)
+            }
+        }
+    }
+}
 
-    @State private var showingPersonalProfile = false
+struct PersonalGoalsView: View {
+    let configuration: GatewayConfiguration
     @State private var summary: MobileUserSummary?
-    @State private var error: String?
-    @State private var goalEditorPresented = false
+    @State private var error = false
     @State private var selectedGoal: MobileUserGoal?
+    @State private var editing = false
 
     var body: some View {
         List {
             if let summary {
-                Section {
-                    NavigationLink {
-                        UserUnderstandingView(configuration: configuration, summary: summary)
+                ForEach(summary.goals) { goal in
+                    Button {
+                        selectedGoal = goal
+                        editing = true
                     } label: {
-                        HStack(spacing: 14) {
-                            Text(String((summary.profile.callName ?? summary.suggestedCallName ?? "X").prefix(2)))
-                                .mobileTextStyle(.detailTitle).foregroundStyle(.tint)
-                                .frame(width: 64, height: 64)
-                                .background(.blue.opacity(0.1), in: .circle)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(summary.profile.callName?.isEmpty == false ? summary.profile.callName ?? "你" : summary.suggestedCallName ?? "你")
-                                    .mobileTextStyle(.detailTitle)
-                                Text(summary.profile.role?.isEmpty == false ? summary.profile.role ?? "" : "你的个人 AI 工作空间")
-                                    .mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                                Text("\(summary.counts.total) 条理解 · \(summary.counts.review) 条待确认")
-                                    .mobileTextStyle(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                }
-                personalAgentSection
-                Section {
-                    ForEach(summary.goals) { goal in
-                        Button {
-                            selectedGoal = goal
-                            goalEditorPresented = true
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(goal.title).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
-                                if let outcome = goal.desiredOutcome {
-                                    Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                                }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(goal.title).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
+                            if let outcome = goal.desiredOutcome, !outcome.isEmpty {
+                                Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
                             }
                         }
                     }
-                    if summary.goals.isEmpty {
-                        if let focus = summary.primaryFocus {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(focus.title).mobileTextStyle(.rowTitle)
-                                if let outcome = focus.desiredOutcome {
-                                    Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                                }
-                            }
-                        } else {
-                            Button("添加一个当前目标", systemImage: "flag") {
-                                selectedGoal = nil
-                                goalEditorPresented = true
+                }
+                if summary.goals.isEmpty {
+                    if let focus = summary.primaryFocus {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(focus.title).mobileTextStyle(.rowTitle)
+                            if let outcome = focus.desiredOutcome, !outcome.isEmpty {
+                                Text(outcome).mobileTextStyle(.secondary).foregroundStyle(.secondary)
                             }
                         }
-                    }
-                } header: {
-                    HStack {
-                        Text("我的目标")
-                        Spacer()
-                        Button("添加") { selectedGoal = nil; goalEditorPresented = true }
+                    } else {
+                        Text("暂无目标").foregroundStyle(.secondary)
                     }
                 }
-                Section("xopc 如何理解你") {
-                    Text("你提供的信息和协作中逐渐学到的内容").foregroundStyle(.secondary)
-                    HStack {
-                        understandingCount(summary.counts.explicit, "你告诉 xopc")
-                        understandingCount(summary.counts.learned, "逐渐学到")
-                        understandingCount(summary.counts.review, "待确认")
-                    }
-                    LabeledContent("工作记忆", value: "\(summary.counts.workMemory) 条")
-                    NavigationLink("查看全部理解") { UserUnderstandingView(configuration: configuration, summary: summary) }
-                }
-                if !summary.recent.isEmpty {
-                    Section("最近理解") {
-                        ForEach(summary.recent) { item in
-                            Text(item.statement)
-                        }
-                    }
-                }
-                if let rules = summary.rules, !rules.isEmpty {
-                    Section("我们如何协作") {
-                        ForEach(rules) { rule in Text(rule.statement) }
-                    }
-                }
-            } else if error != nil {
-                Section {
-                    HStack(spacing: 14) {
-                        Text("X").mobileTextStyle(.detailTitle).foregroundStyle(.tint)
-                            .frame(width: 64, height: 64).background(.blue.opacity(0.1), in: .circle)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("你").mobileTextStyle(.detailTitle)
-                            Text("你的个人 AI 工作空间").mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-                personalAgentSection
-                Section("我的目标") {
-                    Text("连接 Gateway 后可查看和管理当前目标").foregroundStyle(.secondary)
-                }
-                Section("xopc 如何理解你") {
-                    Text("你提供的信息和协作中逐渐学到的内容").foregroundStyle(.secondary)
-                    Text("连接 Gateway 后可查看个人理解和工作记忆").mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                }
-                Section {
-                    Label("个人理解暂时无法读取", systemImage: "wifi.slash")
-                        .foregroundStyle(.secondary)
-                    HStack {
-                        Button("连接 Gateway") { onOpenGatewaySettings() }
-                        Spacer()
-                        Button("重试") { Task { await load() } }
-                    }
-                }
+            } else if error {
+                Button("重试") { Task { await load() } }
             } else {
-                Section { ProfileSkeleton() }
-                personalAgentSection
+                ProfileSkeleton()
             }
         }
-        .listSectionSpacing(16)
-        .mobilePageTitle(Text(verbatim: AppLocalization.string("我的", locale: locale)))
-        .refreshable { await load() }
-        .task { await load() }
+        .mobilePageTitle(Text("目标"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    AppSettingsView(configuration: configuration, onOpenGatewaySettings: onOpenGatewaySettings)
-                } label: {
-                    Image(systemName: "gearshape").accessibilityLabel("设置")
-                }
+                Button("添加", systemImage: "plus") { selectedGoal = nil; editing = true }
+                    .disabled(summary == nil)
+                    .accessibilityIdentifier("settings-goal-add")
             }
         }
-        .sheet(isPresented: $showingPersonalProfile) {
-            if let personalAgent {
-                PersonalAgentProfileView(configuration: configuration, record: personalAgent,
-                                         conversation: ConversationSelection(summary: ConversationSummary(key: personalAgent.conversationId,
-                                                                                                          agentId: personalAgent.agentId, name: personalAgent.displayName, status: "active",
-                                                                                                          updatedAt: "", messageCount: 1, projectId: nil, transcriptId: nil)),
-                                         onSaved: onPersonalAgentUpdated)
-            }
-        }
-        .sheet(isPresented: $goalEditorPresented) {
+        .task(id: configuration) { await load() }
+        .refreshable { await load() }
+        .sheet(isPresented: $editing) {
             GoalEditorView(configuration: configuration, goal: selectedGoal) { await load() }
         }
     }
 
-    private var personalAgentSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
-                    PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 40, active: false)
-                    Text(personalAgent?.displayName ?? AppLocalization.string("我的助手", locale: locale)).mobileTextStyle(.rowTitle)
-                }
-                Text(personalAgentError ?? AppLocalization.string("与你的个人助手持续对话。", locale: locale))
-                    .mobileTextStyle(.secondary).foregroundStyle(personalAgentError == nil ? Color.secondary : .red)
-                Button(action: onOpenPersonalAgent) {
-                    Text(personalAgent?.isReady == true ? LocalizedStringResource("继续对话") : LocalizedStringResource("创建我的助手"))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(personalAgentLoading)
-                .accessibilityIdentifier("profile-personal-agent-open")
-                if personalAgent?.isReady == true {
-                    Button("配置我的助手") { showingPersonalProfile = true }
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .accessibilityIdentifier("profile-personal-agent-configure")
-                }
-            }
-            .padding(.vertical, 12)
-        }
-        .listSectionSpacing(16)
-    }
-
-    private func understandingCount(_ value: Int, _ title: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("\(value)").mobileTextStyle(.heading)
-            Text(title).mobileTextStyle(.smallCaption).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     @MainActor private func load() async {
-        do { summary = try await GatewayClient(configuration: configuration).fetchMobileUserSummary(); error = nil }
-        catch is CancellationError {} catch { self.error = error.localizedDescription }
+        do {
+            summary = try await GatewayClient(configuration: configuration).fetchMobileUserSummary()
+            error = false
+        } catch is CancellationError {} catch { self.error = true }
     }
 }
 
-private struct UserUnderstandingView: View {
+struct UserUnderstandingView: View {
     let configuration: GatewayConfiguration
-    @State var summary: MobileUserSummary
+    @State private var summary: MobileUserSummary?
     @State private var section = 0
     @State private var filter = "all"
     @State private var query = ""
+    @State private var searchOpen = false
+    @FocusState private var searchFocused: Bool
+    @Environment(\.mobileTheme) private var theme
     @State private var assertions: [MobileUserAssertion] = []
     @State private var nextCursor: String?
     @State private var editingProfile = false
@@ -216,13 +127,7 @@ private struct UserUnderstandingView: View {
 
     var body: some View {
         List {
-            SegmentedTabs(options: [
-                SegmentOption(id: 0, title: "概览", accessibilityID: "about-you-tab-overview"),
-                SegmentOption(id: 1, title: "记住的你", accessibilityID: "about-you-tab-understanding")
-            ], selected: section, label: "内容") { section = $0 }
-                .accessibilityIdentifier("about-you-tabs")
-                .listRowBackground(Color.clear)
-            if section == 0 {
+            if section == 0, let summary {
                 Section("基本信息") {
                     LabeledContent("称呼", value: summary.profile.callName ?? summary.suggestedCallName ?? "你")
                     if let role = summary.profile.role, !role.isEmpty {
@@ -239,7 +144,7 @@ private struct UserUnderstandingView: View {
                     ForEach(summary.recent.prefix(3)) { item in
                         memoryRow(item)
                     }
-                    Button("查看全部记忆") { section = 1 }
+                    Button("查看全部记忆") { selectSection(1) }
                 } header: {
                     Text("xopc 记住的你")
                 }
@@ -258,7 +163,7 @@ private struct UserUnderstandingView: View {
                     LabeledContent("已保存", value: "\(summary.counts.workMemory) 条")
                     Text("事实、决定和经验保存在资料库中。").foregroundStyle(.secondary)
                 }
-            } else {
+            } else if section == 1 {
                 SegmentedTabs(options: [
                     SegmentOption(id: "all", title: "全部", accessibilityID: "about-you-filter-all"),
                     SegmentOption(id: "explicit", title: "你说过的", accessibilityID: "about-you-filter-explicit"),
@@ -279,10 +184,31 @@ private struct UserUnderstandingView: View {
             }
             if error != nil {
                 Text("内容暂时无法读取，请下拉重试").foregroundStyle(.secondary)
+            } else if section == 0, summary == nil {
+                ProfileSkeleton()
             }
         }
-        .mobilePageTitle(Text("关于你"))
-        .searchable(text: $query, prompt: "搜索记忆")
+        .mobilePageTitle(Text("隐私与记忆")) {
+            MobilePageTitleMenu(options: [
+                SegmentOption(id: 0, title: "概览", accessibilityID: "about-you-tab-overview"),
+                SegmentOption(id: 1, title: "记住的你", accessibilityID: "about-you-tab-understanding")
+            ], selected: section, identifier: "about-you-menu", onSelect: selectSection)
+        }
+        .toolbar {
+            if section == 1 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    PageSearchButton("搜索记忆", isOpen: $searchOpen, query: $query,
+                                     accessibilityID: "about-you-search-toggle")
+                }
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if section == 1, searchOpen {
+                PageSearchField("搜索记忆", text: $query, focused: $searchFocused, accessibilityID: "about-you-search")
+                    .padding(.horizontal, 20).padding(.bottom, 8).background(theme.canvas)
+            }
+        }
+        .task(id: configuration) { await refreshSummary() }
         .task(id: "\(section):\(filter):\(query)") {
             guard section == 1 else { return }
             if !query.isEmpty {
@@ -299,10 +225,18 @@ private struct UserUnderstandingView: View {
             }
         }
         .sheet(isPresented: $editingProfile) {
-            ProfileEditorView(configuration: configuration, profile: summary.profile) {
-                await refreshSummary()
+            if let summary {
+                ProfileEditorView(configuration: configuration, profile: summary.profile) { await refreshSummary() }
             }
         }
+    }
+
+    private func selectSection(_ selection: Int) {
+        guard section != selection else { return }
+        searchFocused = false
+        searchOpen = false
+        query = ""
+        section = selection
     }
 
     private func memoryRow(_ item: MobileUserAssertion) -> some View {
@@ -326,8 +260,10 @@ private struct UserUnderstandingView: View {
     }
 
     @MainActor private func refreshSummary() async {
-        do { summary = try await GatewayClient(configuration: configuration).fetchMobileUserSummary() }
-        catch { self.error = error.localizedDescription }
+        do {
+            summary = try await GatewayClient(configuration: configuration).fetchMobileUserSummary()
+            error = nil
+        } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
 
     @MainActor private func loadAssertions(cursor: String? = nil) async {
@@ -531,7 +467,7 @@ private struct UserAssertionDetailView: View {
                 Text(error).foregroundStyle(.red)
             }
         }
-        .navigationTitle("记忆详情")
+        .mobilePageTitle(Text("记忆详情"))
         .task { await load() }
         .confirmationDialog("删除这条记忆？", isPresented: $showDelete) {
             Button("删除", role: .destructive) { Task { await remove() } }
@@ -586,12 +522,48 @@ private func userMemoryScope(_ scope: String?) -> LocalizedStringKey {
 }
 
 struct AboutView: View {
+    @Environment(\.locale) private var locale
+    private var version: String? { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String }
+
     var body: some View {
         List {
-            LabeledContent("应用", value: "xopc")
-            LabeledContent("客户端", value: "原生 iOS")
-            LabeledContent("最低系统", value: "iOS 17")
+            Section {
+                VStack(spacing: 8) {
+                    Image("LaunchLogo").resizable().scaledToFit().frame(width: 64, height: 64).accessibilityHidden(true)
+                    Text("xopc").mobileTextStyle(.detailTitle)
+                    if let version {
+                        Text(version).mobileTextStyle(.secondary).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("settings-about-version")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .listRowBackground(Color.clear)
+            }
+            Section {
+                aboutLink("官网", icon: "globe", path: "", id: "website")
+                aboutLink("帮助与支持", icon: "questionmark.circle", path: "/support", id: "support")
+                aboutLink("隐私政策", icon: "lock", path: "/privacy", id: "privacy")
+                aboutLink("用户协议", icon: "doc.text", path: "/terms", id: "terms")
+            }
         }
+        .listSectionSpacing(16)
         .mobilePageTitle(Text("关于 xopc"))
+    }
+
+    @ViewBuilder
+    private func aboutLink(_ title: LocalizedStringKey, icon: String, path: String, id: String) -> some View {
+        let language = locale.language.languageCode?.identifier == "zh" ? "zh" : "en"
+        if let url = URL(string: "https://xopc.ai/\(language)\(path)") {
+            Link(destination: url) {
+                HStack {
+                    Label(title, systemImage: icon).foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "arrow.up.right").font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }.frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("settings-about-\(id)")
+        }
     }
 }

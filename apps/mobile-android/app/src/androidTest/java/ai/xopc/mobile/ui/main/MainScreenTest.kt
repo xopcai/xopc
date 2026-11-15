@@ -11,6 +11,7 @@ import ai.xopc.mobile.theme.XopcTheme
 import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.ConversationTaskChild
 import ai.xopc.mobile.gateway.ConversationTaskGroup
+import ai.xopc.mobile.gateway.ConversationShareAttachment
 import ai.xopc.mobile.gateway.ConversationSharePreview
 import ai.xopc.mobile.gateway.ConversationShare
 import ai.xopc.mobile.gateway.GatewayProfile
@@ -58,6 +59,7 @@ import java.util.concurrent.atomic.AtomicReference
 import ai.xopc.mobile.gateway.ShareItem
 import java.time.Instant
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -83,6 +85,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.assertIsEnabled
@@ -146,10 +149,7 @@ class MainScreenTest {
           onOpenPersonalAgent = { opens++ })
       }
     }
-    val profileBounds = composeTestRule.onNodeWithTag("personal-profile").fetchSemanticsNode().boundsInRoot
-    val agentBounds = composeTestRule.onNodeWithTag("personal-agent-card").fetchSemanticsNode().boundsInRoot
-    assertTrue("Profile and assistant cards must remain visually separate",
-      agentBounds.top - profileBounds.bottom >= 12f * composeTestRule.density.density)
+    composeTestRule.onNodeWithTag("settings-screen").assertExists()
     composeTestRule.onNodeWithTag("personal-agent-open").performClick()
     composeTestRule.runOnIdle { assertEquals(1, opens) }
   }
@@ -888,10 +888,10 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
     composeTestRule.onNodeWithTag("pairing-settings").performClick()
     composeTestRule.onNodeWithTag("settings-screen").assertExists()
-    composeTestRule.onNodeWithText("Language").performClick()
+    composeTestRule.onNodeWithText("Language").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("language-zh-CN").assertExists()
     composeTestRule.onNodeWithTag("settings-back").performClick()
-    composeTestRule.onNodeWithText("Appearance").performClick()
+    composeTestRule.onNodeWithText("Appearance").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("appearance-dark").assertExists()
     composeTestRule.onNodeWithTag("settings-back").performClick()
     composeTestRule.onNodeWithTag("settings-back").performClick()
@@ -970,8 +970,7 @@ class MainScreenTest {
           shares = ShareCenterUiState("gateway", listOf(share))),
         onLoadShares = { loads++ }, onCloseShares = { closes++ })
     }
-    composeTestRule.onNodeWithTag("personal-settings").performClick()
-    composeTestRule.onNodeWithText("Shared links").performClick()
+    composeTestRule.onNodeWithText("Shared links").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("share-center").assertExists()
     composeTestRule.onNodeWithTag("share-share-1").assertExists()
     composeTestRule.onNodeWithTag("tab-Me").assertDoesNotExist()
@@ -981,7 +980,7 @@ class MainScreenTest {
     composeTestRule.runOnIdle { assert(closes == 1) }
   }
 
-  @Test fun meTabShowsGatewayBackedPersonalHierarchy() {
+  @Test fun settingsOpensGatewayBackedGoalsDirectly() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val summary = PersonalSummary("Mia", "Designer", PersonalCounts(4, 2, 2, 1, 3),
       "Ship app", "Launch", listOf(PersonalGoal("g1", "Ship app", "Launch", "active", null, true)),
@@ -992,13 +991,16 @@ class MainScreenTest {
         profile = profile, realtimeStatus = "connected",
         personal = PersonalUiState("gateway", summary)), onLoadPersonal = { loads++ })
     }
-    composeTestRule.onNodeWithTag("personal-profile").assertExists()
-    composeTestRule.onNodeWithText("Mia").assertExists()
+    composeTestRule.onNodeWithTag("settings-screen").assertExists()
+    composeTestRule.onNodeWithTag("settings-goals").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("personal-goals-screen").assertExists()
     composeTestRule.onNodeWithText("Ship app").assertExists()
+    composeTestRule.onNodeWithTag("personal-goals-back").performClick()
+    composeTestRule.onNodeWithTag("settings-screen").assertExists()
     assert(loads == 1)
   }
 
-  @Test fun personalProfileOpensAboutYouAndHidesRootDockUntilBack() {
+  @Test fun settingsOpensPrivacyMenuAndAppAboutDirectly() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val summary = PersonalSummary("Mia", "Designer", PersonalCounts(0, 0, 0, 0, 0),
       "", "", emptyList(), emptyList(), emptyList())
@@ -1006,12 +1008,23 @@ class MainScreenTest {
       MainContent(selectedTab = HomeTab.Me, onSelectTab = {}, connection = ConnectionUiState(
         profile = profile, personal = PersonalUiState("gateway", summary)))
     }
-    composeTestRule.onNodeWithTag("personal-profile").performClick()
+    composeTestRule.onNodeWithTag("settings-privacy-memory").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("about-you-screen").assertExists()
-    composeTestRule.onNodeWithTag("tab-Me").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("about-you-search-toggle").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("about-you-menu").performClick()
+    composeTestRule.onNodeWithTag("about-you-tab-overview").assertIsSelected()
+    composeTestRule.onNodeWithTag("about-you-tab-understanding").performClick()
+    composeTestRule.onNodeWithTag("about-you-search-toggle").performClick()
+    composeTestRule.onNodeWithTag("about-you-search").assertExists()
+    composeTestRule.onNodeWithTag("about-you-search-toggle-close").performClick()
     composeTestRule.onNodeWithTag("about-you-back").performClick()
-    composeTestRule.onNodeWithTag("personal-profile").assertExists()
-    composeTestRule.onNodeWithTag("personal-back").assertExists()
+    composeTestRule.onNodeWithTag("settings-about").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("settings-about-version").assertExists()
+    for (link in listOf("website", "support", "privacy", "terms")) {
+      composeTestRule.onNodeWithTag("settings-about-$link").assertExists()
+    }
+    composeTestRule.onNodeWithTag("settings-back").performClick()
+    composeTestRule.onNodeWithTag("settings-privacy-memory").assertExists()
   }
 
   @Test fun meSettingsAppearanceKeepsItsBackPath() {
@@ -1025,20 +1038,18 @@ class MainScreenTest {
         appearanceMode = chosenMode, onAppearanceModeChange = { chosenMode = it },
         colorScheme = chosenScheme, onColorSchemeChange = { chosenScheme = it })
     }
-    composeTestRule.onNodeWithTag("personal-settings").performClick()
     composeTestRule.onNodeWithTag("settings-screen").assertExists()
     composeTestRule.onNodeWithText("Test Gateway").assertExists()
     composeTestRule.onNodeWithTag("tab-Me").assertDoesNotExist()
-    composeTestRule.onNodeWithText("Appearance").performClick()
+    composeTestRule.onNodeWithText("Appearance").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("appearance-dark").performClick()
     assert(chosenMode == "dark")
     composeTestRule.onNodeWithTag("scheme-porcelain").performScrollTo().performClick()
     assert(chosenScheme == "porcelain")
     composeTestRule.onNodeWithTag("settings-back").performClick()
     composeTestRule.onNodeWithText("Current Gateway").assertExists()
-    composeTestRule.onNodeWithTag("settings-back").performClick()
-    composeTestRule.onNodeWithTag("personal-profile").assertExists()
-    composeTestRule.onNodeWithTag("personal-back").assertExists()
+    composeTestRule.onNodeWithTag("settings-screen").assertExists()
+    composeTestRule.onNodeWithTag("settings-privacy-memory").assertExists()
   }
 
   @Test fun languageSettingsFollowHarmonyOptionsAndReturnToSettings() {
@@ -1050,8 +1061,7 @@ class MainScreenTest {
           personal = PersonalUiState(gatewayId = "gateway")),
         language = selected.value, onLanguageChange = { selected.value = it })
     }
-    composeTestRule.onNodeWithTag("personal-settings").performClick()
-    composeTestRule.onNodeWithText("Language").performClick()
+    composeTestRule.onNodeWithText("Language").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("language-system").assertExists()
     composeTestRule.onNodeWithTag("language-zh-CN").performClick()
     assert(selected.value == "zh-CN")
@@ -1116,8 +1126,7 @@ class MainScreenTest {
         onOpenGatewayProfiles = { opened++ }, onActivateGateway = { switched = it },
         onRemoveGateway = { removed = it })
     }
-    composeTestRule.onNodeWithTag("personal-settings").performClick()
-    composeTestRule.onNodeWithText("Home Gateway").performClick()
+    composeTestRule.onNodeWithText("Home Gateway").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("gateway-profiles-screen").assertExists()
     assert(opened == 1)
     composeTestRule.onNodeWithTag("tab-Me").assertDoesNotExist()
@@ -1137,7 +1146,7 @@ class MainScreenTest {
     composeTestRule.setContent {
       GatewayProfilesScreen(ConnectionUiState(profile = first, gatewayProfiles = listOf(first, second),
         gatewayProbes = mapOf("gateway-b" to GatewayProbeUiState(phase = "online"))),
-        androidx.compose.foundation.layout.PaddingValues(), onBack = {}, onAdd = {}, onRefresh = {},
+        androidx.compose.foundation.layout.PaddingValues(), onBack = {}, onAdd = {},
         onProbe = {}, onActivate = { selected = it }, onRename = { _, _ -> }, onRemove = {})
     }
     composeTestRule.onNodeWithTag("gateway-select-gateway-b").performClick()
@@ -1159,7 +1168,8 @@ class MainScreenTest {
           personal = personal),
         onStartUnderstandingChat = { staged = it; starts++ })
     }
-    composeTestRule.onNodeWithTag("personal-profile").performClick()
+    composeTestRule.onNodeWithTag("settings-privacy-memory").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("about-you-menu").performClick()
     composeTestRule.onNodeWithTag("about-you-tab-understanding").performClick()
     composeTestRule.onNodeWithTag("about-you-chat-modify").performClick()
     assert(staged == null && starts == 1)
@@ -1288,7 +1298,7 @@ class MainScreenTest {
     var saved = ""
     var attempts = 0
     composeTestRule.setContent {
-      PersonalScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), true,
+      PersonalGoalsScreen(state.value, androidx.compose.foundation.layout.PaddingValues(),
         onRefresh = {}, onSaveGoal = { id, title, outcome, _, target ->
           assert(id == null)
           saved = "$title|$outcome|$target"
@@ -1345,8 +1355,8 @@ class MainScreenTest {
       emptyList(), emptyList())
     var received = ""
     composeTestRule.setContent {
-      PersonalScreen(PersonalUiState("gateway", summary),
-        androidx.compose.foundation.layout.PaddingValues(), true, onRefresh = {},
+      PersonalGoalsScreen(PersonalUiState("gateway", summary),
+        androidx.compose.foundation.layout.PaddingValues(), onRefresh = {},
         onSaveGoal = { id, title, outcome, status, target ->
           received = "$id|$title|$outcome|$status|$target"
         })
@@ -1377,6 +1387,7 @@ class MainScreenTest {
     Espresso.pressBack()
     selectSidebar("chat-sidebar-library")
     composeTestRule.onNodeWithTag("space-search").assertTextContains("persistent")
+    composeTestRule.onNodeWithTag("space-scope-menu").performClick()
     composeTestRule.onNodeWithTag("space-tab-favorites").performClick()
     assertEquals("", composeTestRule.onNodeWithTag("space-search").fetchSemanticsNode()
       .config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
@@ -1460,34 +1471,35 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("library-delivery-${delivery.id}").assertExists()
   }
 
-  @Test fun progressSecondaryPagesHideComposerAndDockUntilReturningToOverview() {
+  @Test fun workPageMenuSwitchesDirectlyAndBackReturnsToChat() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val selectedTab = mutableStateOf(HomeTab.Progress)
     composeTestRule.setContent {
-      MainContent(selectedTab = HomeTab.Progress, onSelectTab = {},
+      MainContent(selectedTab = selectedTab.value, onSelectTab = { selectedTab.value = it },
         connection = ConnectionUiState(profile = profile,
           progress = ProgressUiState(gatewayId = "gateway")))
     }
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-progress").assertIsSelected()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-back").assertExists()
-    Espresso.pressBack()
-    composeTestRule.onNodeWithTag("progress-work-tasks").assertExists()
-    Espresso.pressBack()
-    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-projects").performClick()
-    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-back").assertExists()
-    androidx.test.espresso.Espresso.closeSoftKeyboard()
-    androidx.test.espresso.Espresso.pressBack()
-    composeTestRule.onNodeWithTag("progress-automations").performClick()
-    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("progress-back").assertExists()
-    androidx.test.espresso.Espresso.closeSoftKeyboard()
-    androidx.test.espresso.Espresso.pressBack()
-    composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").assertIsSelected()
+    composeTestRule.onNodeWithTag("work-page-projects").performClick()
+    composeTestRule.onNodeWithTag("projects-open-search").assertExists()
+    composeTestRule.onNodeWithTag("project-create").assertExists()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-projects").assertIsSelected()
+    composeTestRule.onNodeWithTag("work-page-automations").performClick()
+    composeTestRule.onNodeWithTag("automation-open-search").assertExists()
+    composeTestRule.onNodeWithTag("automation-create").assertExists()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-automations").assertIsSelected()
+    composeTestRule.onNodeWithTag("work-page-progress").performClick()
+    composeTestRule.onNodeWithTag("progress-back").performClick()
+    composeTestRule.runOnIdle { assertEquals(HomeTab.Assistant, selectedTab.value) }
   }
 
   @Test fun automationEditKeepsDraftAndRequiresDiscardConfirmation() {
@@ -1543,8 +1555,8 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithText("Review release").performClick()
     assert(openedChat == "chat-1")
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-1").performClick()
     assert(openedTask == "task-1")
     composeTestRule.onNodeWithText("Verify build").assertExists()
@@ -1652,8 +1664,8 @@ class MainScreenTest {
         {}, {}, {}, {}, {}, { _, _, _ -> },
         {}, { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-workflows").assertDoesNotExist()
     composeTestRule.onNodeWithTag("progress-back").assertExists()
     composeTestRule.onNodeWithTag("progress-create-task-chat").assertIsDisplayed()
@@ -1703,8 +1715,8 @@ class MainScreenTest {
       ProgressScreen(state.value, androidx.compose.foundation.layout.PaddingValues(), {}, {}, {}, {},
         {}, {}, {}, {}, { prepared++ }, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-create-task-chat").assertIsEnabled().performClick()
     assert(prepared == 1)
     state.value = state.value.copy(creatingTaskChat = true)
@@ -1766,9 +1778,11 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("progress-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-notes").performClick()
     composeTestRule.onNodeWithTag("progress-project-note-note-1").performClick()
     assertEquals("note-1", openedNote)
+    composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-automations").performClick()
     composeTestRule.onNodeWithTag("progress-project-automation-auto-1").performClick()
     assertEquals("auto-1", openedAutomation)
@@ -1790,6 +1804,7 @@ class MainScreenTest {
         onCreateProjectConversation = { createdFor = it; "new-project-chat" })
     }
     composeTestRule.onNodeWithTag("progress-project-project-1").performClick()
+    composeTestRule.onNodeWithTag("progress-project-tabs").performClick()
     composeTestRule.onNodeWithTag("progress-project-tab-sessions").performClick()
     composeTestRule.onNodeWithTag("progress-project-session-${existing.id}").performClick()
     composeTestRule.onNodeWithTag("project-chat-close").assertExists().performClick()
@@ -1816,8 +1831,8 @@ class MainScreenTest {
       }, {}, {}, { command = it }, {}, {}, {}, {}, { _, _, _ -> },
         {}, { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-ready").performClick()
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-phase-closed").performScrollTo().performClick()
@@ -1838,8 +1853,8 @@ class MainScreenTest {
       }, {}, {}, {}, { startedWith = it }, {}, {}, {}, { _, _, _ -> },
         {}, { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-start").performClick()
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-command-start").performScrollTo().assertIsNotEnabled()
@@ -1865,8 +1880,8 @@ class MainScreenTest {
       }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, { opened = it },
         { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-chat").performClick()
     composeTestRule.onNodeWithTag("progress-task-chat").performClick()
     assert(opened == "task-chat")
@@ -1908,8 +1923,8 @@ class MainScreenTest {
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
       }, {}, {}, { command = it }, { started = true }, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-task-status").performClick()
     composeTestRule.onNodeWithTag("progress-phase-active").performScrollTo().performClick()
@@ -1936,8 +1951,8 @@ class MainScreenTest {
         assertEquals(3, version); saved = edit
       }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-fields").performClick()
     composeTestRule.onNodeWithTag("progress-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-edit-project").performScrollTo().performClick()
@@ -1967,8 +1982,8 @@ class MainScreenTest {
         state.value = state.value.copy(detailTask = task.copy(title = title, version = 3), editSavedRevision = 1)
       }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-edit-title").performTextClearance()
@@ -1995,8 +2010,8 @@ class MainScreenTest {
         state.value = state.value.copy(detailTaskId = id, detailTask = task)
       }, {}, {}, {}, {}, {}, {}, {}, { _, _, _ -> }, {}, { _, _, _ -> }, {})
     }
-    composeTestRule.onNodeWithTag("progress-all-work").performClick()
-    composeTestRule.onNodeWithTag("progress-work-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
     composeTestRule.onNodeWithTag("progress-task-task-discard").performClick()
     composeTestRule.onNodeWithTag("progress-task-edit").performClick()
     composeTestRule.onNodeWithTag("progress-edit-title").performTextInput(" changed")
@@ -2243,7 +2258,23 @@ class MainScreenTest {
       }
     }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-progress").performTouchInput { swipeLeft() }
+    composeTestRule.waitUntil(5000) {
+      composeTestRule.onAllNodesWithTag("chat-sidebar").fetchSemanticsNodes().isEmpty()
+    }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
+    composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-row-meeting-plugin").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("capability-row-skills").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-panel-close").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("capability-row-skills").performTouchInput { swipeRight() }
+    composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-title").performClick()
+    composeTestRule.onNodeWithTag("capability-category-skills").performClick()
+    composeTestRule.onNodeWithTag("capability-row-skills").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-title").performClick()
+    composeTestRule.onNodeWithTag("capability-category-plugins").performClick()
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-refresh").assertDoesNotExist()
     composeTestRule.waitUntil(5000) {
@@ -2258,14 +2289,14 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertDoesNotExist()
     composeTestRule.onNodeWithTag("capability-discover").assertDoesNotExist()
     for (kind in listOf("skills", "connections", "agents", "channels")) {
-      composeTestRule.onNodeWithTag("capability-category-$kind").performScrollTo().performClick()
-      composeTestRule.onNodeWithTag("capability-title").assertTextEquals(composeTestRule.activity.getString(R.string.capability_title))
+      composeTestRule.onNodeWithTag("capability-title").performClick()
+      composeTestRule.onNodeWithTag("capability-category-$kind").performClick()
       composeTestRule.onNodeWithTag("capability-row-$kind").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertDoesNotExist()
       if (kind == "skills") {
         val setup = composeTestRule.onNodeWithTag("capability-add-$kind").assertIsDisplayed()
-        assertTrue(setup.fetchSemanticsNode().boundsInRoot.bottom <=
-          composeTestRule.onNodeWithTag("capability-category-$kind").fetchSemanticsNode().boundsInRoot.top)
+        assertTrue(setup.fetchSemanticsNode().boundsInRoot.right >=
+          composeTestRule.onNodeWithTag("capability-title").fetchSemanticsNode().boundsInRoot.right)
         setup.performClick()
         composeTestRule.onNodeWithTag("capability-field-query").assertIsDisplayed()
         composeTestRule.onNodeWithTag("capability-panel-close").performClick()
@@ -2290,7 +2321,8 @@ class MainScreenTest {
       if (kind == "channels") composeTestRule.onNodeWithTag("capability-panel-pair").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-panel-close").performClick()
     }
-    composeTestRule.onNodeWithTag("capability-category-plugins").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("capability-title").performClick()
+    composeTestRule.onNodeWithTag("capability-category-plugins").performClick()
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertIsDisplayed()
     composeTestRule.runOnIdle {
       assertTrue(chatSetups.map { it.second } == listOf(false, false, true))
@@ -2465,17 +2497,22 @@ class MainScreenTest {
       conversations = listOf(ConversationSummary(id, "Share test", Instant.now().toString(), 2, "main"))))
     var begins = 0
     var confirms = 0
+    var requestedShare: Pair<Long, List<String>>? = null
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Conversations, onSelectTab = {}, connection = state.value,
         onBeginConversationShare = {
           begins++
-          state.value = state.value.copy(conversationSharePreview = ConversationSharePreview(
-            id, "transcript-1", 9, "2026-10-05T00:00:00Z", "Share test", 2, 1))
-        }, onConfirmConversationShare = {
+          state.value = state.value.copy(conversationShareId = id, conversationSharePreview = ConversationSharePreview(
+            id, "transcript-1", 9, "2026-10-05T00:00:00Z", "Share test", 2, 1,
+            attachments = listOf(ConversationShareAttachment("report", "report.md"))))
+        }, onConfirmConversationShare = { ttl, files ->
           confirms++
+          requestedShare = ttl to files
           state.value = state.value.copy(conversationSharePreview = null,
             conversationShareResult = ConversationShare(id, "share-1", "Share test",
               "https://share.example/s/test", "public", "", "2030-01-01T00:00:00Z"))
+        }, onRevokeConversationShare = {
+          state.value = state.value.copy(conversationShareResult = null, conversationShareRevoked = true)
         }, onDismissConversationShare = {
           state.value = state.value.copy(conversationSharePreview = null,
             conversationShareResult = null)
@@ -2484,11 +2521,22 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("conversation-row-$id").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("share-conversation-$id").performClick()
     composeTestRule.runOnIdle { assert(begins == 1 && confirms == 0) }
+    composeTestRule.onNodeWithTag("conversations-share-attachments").performClick()
+    composeTestRule.onNodeWithTag("conversations-share-file-report").assertIsOff().performClick()
+    composeTestRule.onNodeWithTag("conversations-share-expiry").performClick()
+    composeTestRule.onNodeWithTag("conversations-share-expiry-604800000").performClick()
     composeTestRule.onNodeWithTag("conversations-share-confirm").performClick()
-    composeTestRule.runOnIdle { assert(confirms == 1) }
+    composeTestRule.runOnIdle {
+      assert(confirms == 1)
+      assertEquals(604_800_000L to listOf("report"), requestedShare)
+    }
     composeTestRule.onNodeWithTag("conversations-share-url").assertTextContains("https://share.example/s/test")
     composeTestRule.onNodeWithTag("conversations-share-copy").assertExists()
     composeTestRule.onNodeWithTag("conversations-share-system").assertExists()
+    composeTestRule.onNodeWithTag("conversations-share-revoke").performClick()
+    composeTestRule.onNodeWithTag("conversations-share-revoke-confirm").performClick()
+    composeTestRule.onNodeWithTag("conversations-share-url").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("conversations-share-again").assertExists()
   }
 
   @Test fun conversationSelectionBatchesOnlySelectedRowsAndConfirmsDelete() {
@@ -2680,22 +2728,28 @@ class MainScreenTest {
     composeTestRule.runOnIdle { dark.value = true }
     checkHeader()
     composeTestRule.onNodeWithTag("chat-personal-overview").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-switch-agent").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
     composeTestRule.runOnIdle { selectedId.value = "ordinary" }
     list.performTouchInput { swipeDown() }
     composeTestRule.runOnIdle { dark.value = false }
     checkHeader()
-    composeTestRule.onNodeWithTag("chat-header-agent").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-agent").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
   }
 
   @Test fun scheduleIdeaOpensUnsentConfigurationAndReturnsToList() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = "source",
       progress = ProgressUiState(gatewayId = "gateway", automations = AutomationUiState(listLoaded = true))))
-    val tab = mutableStateOf(HomeTab.Automations)
+    val tab = mutableStateOf(HomeTab.Projects)
     var sends = 0
+    var automationReads = 0
     composeTestRule.setContent {
       XopcTheme {
         MainContent(selectedTab = tab.value, onSelectTab = { tab.value = it }, connection = state.value,
+          onLoadAutomations = { automationReads++ },
           onRequestAutomationConfiguration = { project, personal ->
             assertEquals(null, project)
             assertEquals(null, personal)
@@ -2707,6 +2761,8 @@ class MainScreenTest {
           }, onSendMessage = { sends++ })
       }
     }
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-automations").performClick()
     composeTestRule.onNodeWithTag("automation-idea-morning").performClick()
     composeTestRule.onNodeWithTag("automation-configuration-close").assertExists()
     composeTestRule.onNodeWithTag("assistant-input").assertTextContains(
@@ -2714,7 +2770,10 @@ class MainScreenTest {
     assertEquals(0, sends)
     composeTestRule.onNodeWithTag("automation-configuration-close").performClick()
     composeTestRule.onNodeWithTag("automation-ideas").assertExists()
-    assertEquals("source", state.value.selectedConversationId)
+    composeTestRule.runOnIdle {
+      assertEquals("source", state.value.selectedConversationId)
+      assertEquals(2, automationReads)
+    }
   }
 
   @Test fun assistantActionGridMatchesHarmonyAndKeepsCallInHeader() {
@@ -2725,7 +2784,7 @@ class MainScreenTest {
           selectedConversationId = id))
     }
     composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
-    listOf("photos", "camera", "local-files", "voice", "reference-note", "reference-task", "reference-file").forEach {
+    listOf("photos", "camera", "local-files", "voice", "reference-note", "reference-task", "reference-file", "switch-agent").forEach {
       composeTestRule.onNodeWithTag("assistant-action-$it").assertExists()
     }
     composeTestRule.onNodeWithTag("assistant-action-new-chat").assertDoesNotExist()
@@ -2741,7 +2800,9 @@ class MainScreenTest {
           selectedConversationId = id, selectedAgentId = "main", selectedModelId = "test/one"))
     }
     composeTestRule.onNodeWithTag("chat-ordinary-title").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("chat-header-agent").performClick()
+    composeTestRule.onNodeWithTag("chat-header-agent").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-actions-toggle").performClick()
+    composeTestRule.onNodeWithTag("assistant-action-switch-agent").performClick()
     composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.assistant_agent_search)).assertExists()
     composeTestRule.onNodeWithTag("chat-options-close").performClick()
     composeTestRule.onNodeWithTag("assistant-agent").assertDoesNotExist()

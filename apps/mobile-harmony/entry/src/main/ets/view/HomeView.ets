@@ -19,8 +19,9 @@ import { XopcChatDrafts } from '../service/chatDrafts';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcFilesView } from './FilesView';
 import { XopcSettingsView } from './SettingsView';
+import { XopcModelSettingsView } from './ModelSettingsView';
 import { XopcProgressView } from './HomeHubs';
-import { XopcPersonalView } from './PersonalView';
+import { XopcPersonalGoalsView } from './PersonalView';
 import { XopcAutomationRunView } from './AutomationRunView';
 import { XopcShareCenterView } from './ShareCenterView';
 import { XopcAboutYouView } from './AboutYouView';
@@ -42,7 +43,7 @@ import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { accessibility } from '@kit.AccessibilityKit';
 import { XopcContextRef } from '../model/chat';
 import { chatDraftIntake } from '../service/chatDraftIntake';
-import { XopcBrandLoading, XopcErrorState, XopcHubRow, XopcPageHeader } from './MobileComponents';
+import { XopcBrandLoading, XopcErrorState, XopcPageHeader } from './MobileComponents';
 import { common } from '@kit.AbilityKit';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
 import { XopcDiscussionRecordingPanel } from '../viewmodel/discussionRecordingPanel';
@@ -92,7 +93,6 @@ export struct XopcHomeView {
   private readonly onMotionChange = (reduced: boolean): void => { layoutState.reduceMotion = reduced; };
   private attentionTimer: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
-  @Event onDisconnected: () => void = (): void => {};
 
   aboutToAppear(): void {
     layoutState.dismissSidebar = (): boolean => this.closeSidebar();
@@ -160,6 +160,13 @@ export struct XopcHomeView {
       return;
     }
     this.pathStack.pushPath({ name: route.page, param: route });
+  }
+
+  private selectWorkPage(current: string, page: string): void {
+    if (current === page) return;
+    this.navigationRevision++;
+    const route: XopcMobileRoute = { page, itemId: '' };
+    this.pathStack.replacePath({ name: page, param: route }, false);
   }
 
   private async openAutomationChat(route: XopcMobileRoute): Promise<void> {
@@ -464,6 +471,7 @@ export struct XopcHomeView {
     } else if (page === 'progress') {
       NavDestination() {
         XopcProgressView({ activePage: true, model: this.attention, onExit: (): void => { this.pathStack.pop(); },
+          onSelectWorkPage: (selection: string): void => { this.selectWorkPage(page, selection); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'capability-mcp-setup') {
@@ -502,9 +510,9 @@ export struct XopcHomeView {
           onStartVoice: (): void => { void this.startNoteCapture(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
-    } else if (page === 'personal' || page === 'personal-goals') {
+    } else if (page === 'personal-goals') {
       NavDestination() {
-        XopcPersonalView({ record: this.personalAgent.record, goalsPage: page === 'personal-goals', onExit: (): void => { this.pathStack.pop(); }, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+        XopcPersonalGoalsView({ onExit: (): void => { this.pathStack.pop(); } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'personal-agent-overview') {
       NavDestination() {
@@ -533,17 +541,6 @@ export struct XopcHomeView {
         attention: this.attention.needsUser,
         onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-    } else if (page === 'all-work') {
-      NavDestination() {
-        Column({ space: 12 }) {
-          XopcHubRow({ heading: $r('app.string.tasks'), symbol: $r('sys.symbol.checkmark_circle'),
-            onOpen: (): void => { this.navigate({ page: 'tasks', itemId: '' }); } })
-          XopcHubRow({ heading: $r('app.string.projects'), symbol: $r('sys.symbol.folder'),
-            onOpen: (): void => { this.navigate({ page: 'projects', itemId: '' }); } })
-          XopcHubRow({ heading: $r('app.string.automations'), symbol: $r('sys.symbol.clock'),
-            onOpen: (): void => { this.navigate({ page: 'automations', itemId: '' }); } })
-        }.width('100%').padding(20)
-      }.title($r('app.string.all_work')).backgroundColor(this.colors.surface)
     } else if (page === 'automation-configuration-chat') {
       NavDestination() {
         Column() {
@@ -591,6 +588,8 @@ export struct XopcHomeView {
         heading: page === 'tasks' || page === 'task-create' ? $r('app.string.tasks')
           : page === 'projects' || page === 'project-settings' || page === 'project-create' ? $r('app.string.projects') : $r('app.string.automations'),
         initialId: (param as XopcMobileRoute).itemId, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
+        showWorkPageMenu: (page === 'tasks' || page === 'projects' || page === 'automations') && !(param as XopcMobileRoute).itemId,
+        onSelectWorkPage: (selection: string): void => { this.selectWorkPage(page, selection); },
         createOnAppear: page === 'task-create' || page === 'project-create',
         projectId: (param as XopcMobileRoute).projectId ?? '',
         onCreated: (target: string, id: string): void => {
@@ -606,17 +605,18 @@ export struct XopcHomeView {
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'sharing') {
       XopcShareCenterView({ onExit: (): void => { this.pathStack.pop(); } })
+    } else if (page === 'model-settings') {
+      XopcModelSettingsView({ onExit: (): void => { this.pathStack.pop(); } })
     } else if (page === 'about-you') {
       XopcAboutYouView({ initialId: (param as XopcMobileRoute).itemId, onExit: (): void => { this.pathStack.pop(); },
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else {
       NavDestination() {
         if (page === 'settings') {
-          XopcSettingsView({ initialSection: (param as XopcMobileRoute).itemId, useNavigation: true,
+          XopcSettingsView({ personalAgent: this.personalAgent.record, initialSection: (param as XopcMobileRoute).itemId, useNavigation: true,
             onExit: (): void => { this.pathStack.pop(); },
             onOpenSection: (section: string): void => { this.navigate({ page: 'settings', itemId: section }); },
-            onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
-            onDisconnected: (): void => { this.onDisconnected(); } })
+            onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
         }
         else { Text($r('app.string.unsupported_route')).fontColor(this.colors.secondary).padding(20) }
       }.hideTitleBar(page === 'settings').title($r('app.string.back')).backgroundColor(this.colors.surface)
@@ -679,6 +679,14 @@ export struct XopcHomeView {
                 reveal: this.sidebarProgress, drawerWidth: this.sidebarWidth, interactive: this.sidebarOpen,
                 currentId: this.activeChatId, pendingAttention: this.pendingAttention,
                 onClose: (): void => { this.closeSidebar(); },
+                onDismissDrag: (offset: number): void => {
+                  if (this.sidebarOpen) this.sidebarProgress = 1 - chatSidebarDragProgress(-offset, this.sidebarWidth);
+                },
+                onDismissEnd: (offset: number, velocity: number): void => {
+                  if (!this.sidebarOpen) return;
+                  if (shouldOpenChatSidebar(-offset, -velocity, this.sidebarWidth)) this.closeSidebar();
+                  else this.settleSidebar(1);
+                },
                 onPersonal: (): void => { void this.openPersonalChat(); },
                 onNew: (): void => { void this.openOrdinaryChat(); },
                 onConversation: (id: string): void => { this.openConversationFromList(id); },

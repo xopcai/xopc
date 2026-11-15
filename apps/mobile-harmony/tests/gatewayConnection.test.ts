@@ -17,7 +17,10 @@ const a = { gatewayId: 'a', name: 'Office' }; const b = { gatewayId: 'b', name: 
 describe('Gateway management orchestration', () => {
   beforeEach(() => {
     vi.resetAllMocks(); mocks.current.mockReturnValue(a); mocks.profiles.mockReturnValue([a, b]);
-    mocks.probe.mockImplementation(async (id: string) => ({ gatewayId: id, status: 'healthy', latencyMs: 20, routeUrl: `https://${id}`, checkedAt: Date.now(), version: '1' }));
+    mocks.probe.mockImplementation(async (id: string) => ({
+      gatewayId: id, status: id === 'a' ? 'healthy' : 'ok', latencyMs: 20, routeUrl: `https://${id}`,
+      checkedAt: Date.now(), version: '1'
+    }));
   });
   it('opens management outside the old home and returns with the saved connection', () => {
     const model = new XopcConnectionViewModel(); model.openGateways();
@@ -47,6 +50,7 @@ describe('Gateway management orchestration', () => {
   it('checks profiles without changing the active connection', async () => {
     const model = new XopcConnectionViewModel(); model.openGateways();
     await vi.waitFor(() => expect(model.probeState('b')?.phase).toBe('online'));
+    expect(model.probeState('a')?.phase).toBe('online');
     expect(model.probeState('b')?.result?.latencyMs).toBe(20);
     expect(model.activeGatewayId).toBe('a'); expect(mocks.activate).not.toHaveBeenCalled();
   });

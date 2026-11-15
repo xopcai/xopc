@@ -3,7 +3,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcMobileRoute } from '../model/home';
 import { XopcUnderstandingItem, XopcUnderstandingProfile, XopcUnderstandingRule } from '../model/userUnderstanding';
 import { XopcUserUnderstandingViewModel } from '../viewmodel/userUnderstandingViewModel';
-import { XopcBrandLoading, XopcListSkeleton, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
+import { XopcBrandLoading, XopcListSkeleton, XopcPageHeader, XopcPageSearchField, XopcPaginationFooter, XopcSectionLabel } from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
 import { XopcLoopi } from './Loopi';
 
@@ -191,40 +191,33 @@ export struct XopcAboutYouView {
   }
 
   private closeSearch(): void {
+    if (this.searchOpen) this.getUIContext().getFocusController().clearFocus();
     this.searchOpen = false;
     if (this.model.query) this.model.search('');
   }
 
-  @Builder
-  private header(title: ResourceStr, back: () => void) {
-    Row({ space: 8 }) {
-      Text(title).fontSize(21).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
-    }.width('100%').height(60).padding({ left: 20, right: 20 })
+  private selectSection(key: string): void {
+    const section = key === 'overview' ? 0 : 1;
+    if (section === this.section) return;
+    this.section = section;
+    if (section === 0) this.closeSearch();
+    else if (!this.model.items.length) void this.model.load('all');
   }
 
   @Builder
   private mainHeader() {
-    Row({ space: 8 }) {
-      if (this.searchOpen && this.section === 1) {
-        Search({ value: this.model.query, placeholder: $r('app.string.about_you_search_placeholder') })
-          .id('about-you-search').layoutWeight(1).height(44).padding({ left: 4, right: 4 })
-          .fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-          .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
-          .onChange((query: string): void => { this.model.search(query); })
-          .onSubmit((query: string): void => { this.model.search(query); })
-        Button() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([this.colors.secondary]) }
-          .id('about-you-search-close').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .accessibilityText($r('app.string.close')).onClick((): void => { this.closeSearch(); })
-      } else {
-        Text($r('app.string.about_you')).fontSize(21).fontWeight(FontWeight.Bold)
-          .fontColor(this.colors.foreground).layoutWeight(1)
-        if (this.section === 1) {
-          Button() { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(21).fontColor([this.colors.foreground]) }
-            .id('about-you-search-open').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-            .accessibilityText($r('app.string.search')).onClick((): void => { this.searchOpen = true; })
-        }
-      }
-    }.width('100%').height(60).padding({ left: 8, right: 8 })
+    XopcPageHeader({
+      heading: this.section === 0 ? $r('app.string.about_you_overview') : $r('app.string.about_you_understanding'),
+      titleOptions: [
+        { key: 'overview', label: $r('app.string.about_you_overview'), id: 'about-you-tab-overview' },
+        { key: 'understanding', label: $r('app.string.about_you_understanding'), id: 'about-you-tab-understanding' }
+      ],
+      selectedTitle: this.section === 0 ? 'overview' : 'understanding', titleMenuId: 'about-you-menu',
+      onSelectTitle: (key: string): void => { this.selectSection(key); },
+      backVisible: true, onBack: (): void => { if (this.searchOpen) this.closeSearch(); else this.onExit(); },
+      searchId: this.section === 1 ? 'about-you-search-open' : '', searchOpen: this.searchOpen,
+      onSearch: (): void => { if (this.searchOpen) this.closeSearch(); else this.searchOpen = true; }
+    })
   }
 
   @Builder
@@ -382,7 +375,7 @@ export struct XopcAboutYouView {
   @Builder
   private detail(item: XopcUnderstandingItem) {
     Column() {
-      this.header($r('app.string.about_you_details'), (): void => { this.model.close(); })
+      XopcPageHeader({ backVisible: true, onBack: (): void => { this.model.close(); } })
       Scroll() {
         Column({ space: 12 }) {
           Column({ space: 12 }) {
@@ -543,14 +536,12 @@ export struct XopcAboutYouView {
       else {
         Column() {
           this.mainHeader()
-          Column() {
-            XopcSegmentedTabs({ options: [
-              { key: 'overview', label: $r('app.string.about_you_overview') },
-              { key: 'understanding', label: $r('app.string.about_you_understanding') }
-            ], selectedKey: this.section === 0 ? 'overview' : 'understanding',
-              onSelect: (key: string): void => { if (key === 'overview') { this.closeSearch(); this.section = 0; }
-                else { this.section = 1; if (!this.model.items.length) void this.model.load('all'); } } })
-          }.width('100%').padding({ left: 20, right: 20, bottom: 14 })
+          if (this.section === 1 && this.searchOpen) {
+            XopcPageSearchField({ text: this.model.query, placeholder: $r('app.string.about_you_search_placeholder'),
+              searchId: 'about-you-search', onChange: (query: string): void => { this.model.search(query); },
+              onSubmit: (): void => { this.getUIContext().getFocusController().clearFocus(); } })
+              .margin({ left: 20, right: 20, bottom: 8 })
+          }
           if (this.model.error) { Text(userErrorMessage(this.model.error, 'collection')).fontSize(12)
             .fontColor(this.colors.secondary).padding({ left: 20, right: 20, bottom: 8 }) }
           if (this.section === 1) {
@@ -580,6 +571,7 @@ export struct XopcAboutYouView {
       .onBackPressed((): boolean => {
       if (this.model.selected) { this.model.close(); return true; }
       if (this.model.openingId) { this.model.close(); return true; }
+      if (this.searchOpen) { this.closeSearch(); return true; }
       return false;
     }).bindSheet($$this.editProfileOpen, this.profileEditor, { height: SheetSize.LARGE, dragBar: true, backgroundColor: this.colors.panel })
   }
