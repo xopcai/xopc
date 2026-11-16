@@ -1,33 +1,16 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatBlock, XopcChatRow } from '../model/chat';
-import { chatLiveElapsedSeconds, chatLiveNarration, chatLiveStages, chatStageStatus } from '../common/chatLiveActivity';
+import { chatLiveStages, chatStageStatus } from '../common/chatLiveActivity';
 
 @ComponentV2
 export struct XopcChatStepsView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
-  @Param runStartedAtMs: number = 0;
   @Param connection: string = 'connected';
   @Param animateDots: boolean = true;
   @Param staged: boolean = false;
   @Param paused: boolean = false;
   @Event onShowDetail: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
-  @Local nowMs: number = Date.now();
-  private appearedAtMs: number = Date.now();
-  private clockTimer: number = -1;
-  aboutToAppear(): void {
-    this.appearedAtMs = Date.now();
-    this.clockTimer = setInterval((): void => {
-      this.nowMs = Date.now();
-    }, 1000);
-  }
-  aboutToDisappear(): void { clearInterval(this.clockTimer); this.clockTimer = -1; }
-  @Computed get elapsedSeconds(): number {
-    return chatLiveElapsedSeconds(this.runStartedAtMs || this.appearedAtMs, this.nowMs);
-  }
-  @Computed get narration(): string {
-    return this.elapsedSeconds >= 10 ? chatLiveNarration(this.row) : '';
-  }
   @Computed get stages(): XopcChatBlock[] { return this.staged ? chatLiveStages(this.row) : []; }
   @Computed get stageStatus(): string { return this.staged ? (this.paused ? 'waiting' : chatStageStatus(this.row)) : ''; }
   build() {
@@ -54,10 +37,6 @@ export struct XopcChatStepsView {
         }.id('chat-waiting-dots-' + this.row.id).width(72).height(44).justifyContent(FlexAlign.Center)
           .borderRadius(this.colors.corner(22)).backgroundColor(this.colors.input)
           .accessibilityText($r('app.string.chat_steps_working'))
-        if (!this.staged && this.narration) {
-          Text(this.narration).fontSize(13).fontColor(this.colors.secondary).maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%').textAlign(TextAlign.Start)
-        }
       }
     }.id('chat-waiting-' + this.row.id).width('100%').alignItems(HorizontalAlign.Start)
   }

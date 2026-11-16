@@ -66,7 +66,7 @@ import { advanceAssistantAudio, latestAssistantAudio, XopcAssistantAudioState } 
 import { assistantAudioAutoplay } from '../service/assistantAudioAutoplay';
 import { editChatImageAttachment } from '../service/chatImageEditing';
 import { chatMessageNeedsPreview, latestChatMessageId } from '../common/chatMessagePreview';
-import { CHAT_MESSAGE_MAX_WIDTH, chatTextBubbleWidth } from '../common/chatBubbleLayout';
+import { CHAT_MESSAGE_MAX_WIDTH, chatPlainAssistantBubbleText, chatTextBubbleWidth } from '../common/chatBubbleLayout';
 import { CHAT_SIDEBAR_PAN_TAG, canStartChatSidebarPan } from '../common/chatSidebarGesture';
 import { chatPresentationRows } from '../common/chatPresentation';
 import { XopcBrandLoading } from './MobileComponents';
@@ -720,6 +720,14 @@ export struct XopcChatView {
     if (row.media?.length === 1 && row.media[0].mimeType.startsWith('image/')) return chatTextBubbleWidth(row.text, 148);
     if (payloadCount === 1) return chatTextBubbleWidth(row.text, 220);
     return chatTextBubbleWidth(row.text, 44);
+  }
+
+  private assistantBubbleWidth(row: XopcChatRow): string {
+    const text = chatPlainAssistantBubbleText(row);
+    if (!text) return '100%';
+    const context = this.getUIContext();
+    const measured = context.getMeasureUtils().measureText({ textContent: text, fontSize: 16 });
+    return Math.max(44, Math.ceil(context.px2vp(measured)) + 30) + 'vp';
   }
 
   private openMessageDetail(row: XopcChatRow): void {
@@ -1457,7 +1465,7 @@ export struct XopcChatView {
           } else if (item.item.role === 'assistant') {
             Column({ space: 2 }) {
               if (this.personalConversation && item.item.live && !chatAnswerStarted(item.item) && !this.prompt.prompt) {
-                XopcChatStepsView({ row: item.item, runStartedAtMs: this.chat.runStartedAtMs,
+                XopcChatStepsView({ row: item.item,
                   connection: this.chat.connection,
                   animateDots: this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion })
               }
@@ -1466,31 +1474,32 @@ export struct XopcChatView {
                 || (this.personalConversation && item.item.outcome?.status === 'failed')
                 || (item.item.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'review')) {
               Column() {
-                XopcChatMessageContent({ row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
-                  previewEligible: item.item.id !== this.latestMessageId,
-                  onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
-                  onShowExecution: (row: XopcChatRow): void => { this.openExecutionDetail(row); },
-                  runStartedAtMs: this.chat.runStartedAtMs, connection: this.chat.connection, showWaiting: false,
-                  showFailure: this.personalConversation,
-                  reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
-                  onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
-              }.id('chat-assistant-card-' + item.item.id).width('92%')
-                .constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)
-                .padding({ left: 14, right: 14, top: 12, bottom: 12 })
-                .backgroundColor(this.colors.assistantBubble).borderRadius(this.colors.corner(20))
-                .onClick((): void => {
-                  if (item.item.id !== this.latestMessageId && chatMessageNeedsPreview(item.item)) this.openMessageDetail(item.item);
-                })
-                .gesture(LongPressGesture({ repeat: false, duration: 500 }).onAction((): void => {
-                  if (!item.item.live) {
-                    this.pauseAutomaticScroll();
-                    this.assistantMessageMore(item.item);
-                  }
-                }))
+                Column() {
+                  XopcChatMessageContent({ row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
+                    previewEligible: item.item.id !== this.latestMessageId,
+                    onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
+                    onShowExecution: (row: XopcChatRow): void => { this.openExecutionDetail(row); },
+                    connection: this.chat.connection, showWaiting: false,
+                    showFailure: this.personalConversation,
+                    reasoning: this.context.config?.activityDetail?.effective || 'on', onNavigate: (route: XopcMobileRoute): void => { this.navigateChatRoute(route); },
+                    onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
+                }.id('chat-assistant-card-' + item.item.id).width(this.assistantBubbleWidth(item.item))
+                  .constraintSize({ maxWidth: '100%' }).alignItems(HorizontalAlign.Start)
+                  .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+                  .backgroundColor(this.colors.assistantBubble).borderRadius(this.colors.corner(20))
+                  .onClick((): void => {
+                    if (item.item.id !== this.latestMessageId && chatMessageNeedsPreview(item.item)) this.openMessageDetail(item.item);
+                  })
+                  .gesture(LongPressGesture({ repeat: false, duration: 500 }).onAction((): void => {
+                    if (!item.item.live) {
+                      this.pauseAutomaticScroll();
+                      this.assistantMessageMore(item.item);
+                    }
+                  }))
+              }.width('92%').constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)
               }
               if (!this.personalConversation && (item.item.live || !!chatStageStatus(item.item))) {
                 XopcChatStepsView({ row: item.item, staged: true, paused: !!item.item.live && !!this.prompt.prompt,
-                  runStartedAtMs: this.chat.runStartedAtMs,
                   connection: this.chat.connection,
                   animateDots: this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion })
               }

@@ -1,4 +1,5 @@
 import { parseProductDeliveryEnvelope, parseProductDeliveryText, type ProductDeliveryEnvelope } from '@xopcai/gateway-contract';
+import { stripLeadingAssistantReasoning } from './assistant-reasoning-text.js';
 import type { ClientHistoryMessage } from './client-history.js';
 
 export function conciseProgress(text: string): string {
@@ -29,13 +30,31 @@ function generatedMediaId(call: NonNullable<ClientHistoryMessage['toolCalls']>[n
   } catch { return undefined; }
 }
 
+function personalReplyText(message: ClientHistoryMessage): string {
+  const hasTools = !!message.toolCalls?.length;
+  const blocks = Array.isArray(message.rawContent) ? message.rawContent.flatMap(block => {
+    if (!block || typeof block !== 'object') return [];
+    const value = block as { type?: string; text?: string; presentation?: string };
+    return value.type === 'text' && typeof value.text === 'string' ? [value] : [];
+  }) : [];
+  const text = blocks.length
+    ? blocks.filter(block => block.presentation === 'answer' || (!hasTools && block.presentation === undefined))
+      .map(block => block.text).join('')
+    : hasTools ? '' : message.content;
+  return stripLeadingAssistantReasoning(text);
+}
+
 /** Transport-only projection: stored transcripts and default clients remain unchanged. */
-export function compactHistory(messages: ClientHistoryMessage[]): ClientHistoryMessage[] {
+export function compactHistory(messages: ClientHistoryMessage[], personal = false): ClientHistoryMessage[] {
+  const contents = messages.map(message => {
+    if (message.role === 'assistant' && personal) return personalReplyText(message);
+    return message.toolCalls?.length ? conciseProgress(message.content) : message.content;
+  });
   const replyIndex = new Map<string, number>();
   const mediaByReply = new Map<number, Set<string>>();
   const seenMedia = new Set<string>();
   messages.forEach((message, index) => {
-    if (message.role === 'assistant' && message.turnId && !message.toolCalls?.length && message.content.trim()) {
+    if (message.role === 'assistant' && message.turnId && contents[index].trim() && (personal || !message.toolCalls?.length)) {
       replyIndex.set(message.turnId, index);
     }
   });
@@ -53,8 +72,8 @@ export function compactHistory(messages: ClientHistoryMessage[]): ClientHistoryM
   return messages.flatMap((message, index) => {
     if (message.role === 'system') return [];
     if (message.role === 'user') return [message];
-    const narration = !!message.toolCalls?.length;
-    const content = narration ? conciseProgress(message.content) : message.content;
+    const narration = !(personal && message.role === 'assistant') && !!message.toolCalls?.length;
+    const content = contents[index];
     const raw = Array.isArray(message.rawContent) ? message.rawContent : [];
     const mediaAndReview = raw.filter(block => block && typeof block === 'object'
       && ['image', 'audio', 'tts_audio', 'review'].includes(String((block as Record<string, unknown>).type)));

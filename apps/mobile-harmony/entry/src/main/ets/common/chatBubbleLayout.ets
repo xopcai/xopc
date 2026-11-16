@@ -1,3 +1,6 @@
+import { XopcChatBlock, XopcChatRow } from '../model/chat';
+import { chatAnswerText, chatDeliveries } from './chatRichContent';
+
 export const CHAT_MESSAGE_MAX_WIDTH = '84%';
 
 export function chatTextBubbleWidth(text: string, minimum: number): string {
@@ -14,4 +17,11 @@ export function chatTextBubbleWidth(text: string, minimum: number): string {
   }
   widestLineUnits = Math.max(widestLineUnits, lineUnits);
   return Math.max(minimum, Math.min(360, Math.ceil(widestLineUnits * 16) + 30)) + 'vp';
+}
+
+export function chatPlainAssistantBubbleText(row: XopcChatRow): string {
+  if (row.media?.length || row.refs?.length || row.outcome?.deliverables.length || row.outcome?.status === 'failed'
+    || (!row.live && chatDeliveries(row).length) || row.blocks?.some((block: XopcChatBlock): boolean => block.kind === 'review')) return '';
+  const text = chatAnswerText(row);
+  return /[\r\n#`*_~[\]<>|$\\]|^(?:[-+]\s|\d+[.)]\s)/.test(text) ? '' : text;
 }

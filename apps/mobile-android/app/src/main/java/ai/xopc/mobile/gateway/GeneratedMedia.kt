@@ -130,5 +130,7 @@ internal fun generatedMediaByReply(items: List<GeneratedMediaItem>, rows: List<C
   val anchors = buildMap {
     replies.forEach { reply -> reply.generatedMediaIds.forEach { id -> putIfAbsent(id, reply.renderId) } }
   }
-  return items.groupBy { anchors[it.id].orEmpty() }
+  // An older song belongs with its reply, which may be on another page of history.
+  return items.filter { it.kind != GeneratedMediaKind.Music || it.active || anchors.containsKey(it.id) }
+    .groupBy { anchors[it.id].orEmpty() }
 }

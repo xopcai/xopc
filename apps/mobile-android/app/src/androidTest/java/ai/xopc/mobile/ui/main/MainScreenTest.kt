@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicReference
 import ai.xopc.mobile.gateway.ShareItem
 import java.time.Instant
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -3147,6 +3148,25 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-assistant-card-message-1").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("message-copy-action").assertExists()
     composeTestRule.onNodeWithTag("message-copy-code-action").assertDoesNotExist()
+  }
+
+  @Test fun shortAssistantReplyHugsItsTextWhileRevealing() {
+    composeTestRule.setContent {
+      XopcTheme {
+        Column {
+          ChatMessageCard(ConversationMessage("short", "assistant", "OK"),
+            onMore = {}, onOpenTarget = {}, onOpenPreview = { _, _ -> }, onOpenLink = {}, onCopy = {},
+            revealAnswer = true, streaming = true)
+          ChatMessageCard(ConversationMessage("code", "assistant", "```sh\necho OK\n```"),
+            onMore = {}, onOpenTarget = {}, onOpenPreview = { _, _ -> }, onOpenLink = {}, onCopy = {})
+        }
+      }
+    }
+    composeTestRule.onNodeWithText("OK").assertIsDisplayed()
+    val short = composeTestRule.onNodeWithTag("message-assistant-card-short").fetchSemanticsNode().boundsInRoot
+    val code = composeTestRule.onNodeWithTag("message-assistant-card-code").fetchSemanticsNode().boundsInRoot
+    assertTrue(short.width < code.width / 2)
+    assertTrue(kotlin.math.abs(short.left - code.left) < 1)
   }
 
   @Test fun assistantMessageShowsActionsOnlyOnLongPress() {

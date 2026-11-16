@@ -5,6 +5,19 @@ import UIKit
 @testable import XopcMobile
 
 struct ChatRenderingTests {
+    @Test func historyUsesAnswerBlocksRatherThanFlattenedTextOrReasoning() throws {
+        let messages = try JSONDecoder().decode([WireMessage].self, from: Data(#"""
+        [{"id":"intermediate","role":"assistant","content":"working","rawContent":[
+            {"type":"text","text":"working","presentation":"narration"}]},
+         {"id":"reply","role":"assistant","content":"stale flattened text","rawContent":[
+            {"type":"thinking","thinking":"private reasoning"},
+            {"type":"text","text":"private draft","presentation":"thinking"},
+            {"type":"text","text":"Final answer","presentation":"answer"}]}]
+        """#.utf8))
+
+        #expect(AssistantState.timeline(from: messages).map(\.text) == ["Final answer"])
+    }
+
     @Test func generatedMediaKeepsRepliesWithoutText() throws {
         let messages = try JSONDecoder().decode([WireMessage].self, from: Data(#"""
         [{"id":"media","role":"assistant","content":"","generatedMediaIds":["song","video"]},
@@ -13,6 +26,26 @@ struct ChatRenderingTests {
         let rows = AssistantState.timeline(from: messages)
         #expect(rows.map(\.id) == ["media"])
         #expect(rows.first?.generatedMediaIds == ["song", "video"])
+    }
+
+    @MainActor @Test func historicalMusicReappearsOnlyWithItsOriginalReply() throws {
+        let jobs = try JSONDecoder().decode([GeneratedMediaPayload].self, from: Data(#"""
+        [{"id":"old-song","state":"completed","createdAt":1},
+         {"id":"failed-song","state":"failed","createdAt":2},
+         {"id":"new-song","state":"queued","createdAt":3},
+         {"id":"video","state":"completed","createdAt":4}]
+        """#.utf8))
+        let cards = jobs.map { GeneratedMediaCard(kind: $0.id == "video" ? .video : .music, item: $0) }
+        let messages = try JSONDecoder().decode([WireMessage].self, from: Data(#"""
+        [{"id":"original","role":"assistant","content":"","generatedMediaIds":["old-song"]},
+         {"id":"latest","role":"assistant","content":"A newer reply"}]
+        """#.utf8))
+
+        let latestPage = GeneratedMediaState.cardsByReply(cards, messages: AssistantState.timeline(from: Array(messages.suffix(1))))
+        #expect(latestPage.mapValues { $0.map(\.id) } == ["": ["new-song", "video"]])
+
+        let expandedHistory = GeneratedMediaState.cardsByReply(cards, messages: AssistantState.timeline(from: messages))
+        #expect(expandedHistory.mapValues { $0.map(\.id) } == ["": ["new-song", "video"], "original": ["old-song"]])
     }
 
     @Test func publicStagesRemainOrderedUntilTheAnswerStarts() {

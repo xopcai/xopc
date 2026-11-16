@@ -1,7 +1,6 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
-import android.os.SystemClock
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
@@ -42,15 +41,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 @Composable
-internal fun AssistantWaitingBubble(runId: String, narration: String?, connected: Boolean) {
-  var showNarration by remember(runId) { mutableStateOf(false) }
-  LaunchedEffect(runId) {
-    val started = SystemClock.elapsedRealtime()
-    while (true) {
-      delay(1000)
-      showNarration = SystemClock.elapsedRealtime() - started >= 10_000
-    }
-  }
+internal fun AssistantWaitingBubble(connected: Boolean) {
   val waitingLabel = stringResource(R.string.assistant_running)
   Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("assistant-waiting")) {
     if (!connected) Text(stringResource(R.string.assistant_connection_interrupted),
@@ -63,9 +54,6 @@ internal fun AssistantWaitingBubble(runId: String, narration: String?, connected
           WaitingReplyDot(index, android.animation.ValueAnimator.areAnimatorsEnabled())
         }
       }
-      if (showNarration && !narration.isNullOrBlank()) Text(narration,
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
   }
 }
@@ -93,7 +81,7 @@ internal fun AssistantStagesView(progress: AssistantRunProgress, answerStarted: 
     }), style = MaterialTheme.typography.bodySmall,
       color = if (status == "error") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
       modifier = Modifier.testTag("assistant-stages-status"))
-    else AssistantWaitingBubble(progress.runId ?: "sending", narration = null, connected = connected)
+    else AssistantWaitingBubble(connected = connected)
   }
 }
 

@@ -17,6 +17,8 @@ child = '22222222-2222-4222-8222-222222222222'
 personal = '33333333-3333-4333-8333-333333333333'
 schedule_chat = '44444444-4444-4444-8444-444444444444'
 music_job = {'id':'fixture-song','title':'模拟器背景音乐','lyrics':'用于校验歌词和跨页播放。','state':'completed','createdAt':1,'durationMs':30000}
+older_music_job = {'id':'fixture-older-song','title':'历史歌曲验收','state':'completed','createdAt':0,'durationMs':30000}
+music_reply = {'id':'fixture-music-reply','role':'assistant','content':'','generatedMediaIds':[music_job['id']]}
 live_music_state = None
 space_id = '55555555-5555-4555-8555-555555555555'
 space_version = {'id':'66666666-6666-4666-8666-666666666666','ordinal':2,'fileName':'验收.txt',
@@ -38,6 +40,9 @@ messages = [{'id':f'history-{i}','role':'user','content':f'移动端回归检查
 messages[-1]['deliveries'] = [{'operation':'created','primary':{'kind':'task','id':'task-header','title':'任务顶部栏检查','capabilities':['open']}}]
 keyboard_messages = [{'id':'keyboard-user','role':'user','content':'Explain the result.'},
  {'id':'keyboard-answer','role':'assistant','content':'\n\n'.join(f'Paragraph {i}: a long answer spanning several screens.' for i in range(40))}]
+bubble_messages = [{'id':'bubble-user','role':'user','content':'请只回复 OK。'},
+ {'id':'bubble-short','role':'assistant','content':'OK'},
+ {'id':'bubble-code','role':'assistant','content':'```sh\necho OK\n```'}]
 row={'key':parent,'agentId':'main','name':'移动端布局检查','status':'active','updatedAt':'2026-10-09T08:00:00Z','messageCount':len(messages)}
 record={'agentId':'personal','conversationId':personal,'state':'ready','displayName':'Ada','appearance':'loopi','revision':1,'preferences':{},'voiceCallPreferences':{'openingGreetingEnabled':True}}
 model={'id':'test/model','name':'Fixture Model','provider':'test','reasoning':True,'vision':False,'thinking':{'mode':'levels','options':['off','low','medium','high'],'initialValue':'medium'}}
@@ -93,9 +98,11 @@ class Handler(BaseHTTPRequestHandler):
   global live_music_state, space_item, capability_skill_enabled, global_model, global_model_revision
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   keyboard_fixture = path.startswith('/keyboard/')
+  bubble_fixture = path.startswith('/bubble-width/')
   music_fixture = path.startswith('/music/')
   live_music_fixture = path.startswith('/music-live/')
   if keyboard_fixture: path = path.removeprefix('/keyboard')
+  if bubble_fixture: path = path.removeprefix('/bubble-width')
   if music_fixture: path = path.removeprefix('/music')
   if live_music_fixture: path = path.removeprefix('/music-live')
   length=int(self.headers.get('Content-Length','0')); body=self.rfile.read(length) if length else b''
@@ -232,7 +239,9 @@ class Handler(BaseHTTPRequestHandler):
    data={'session':{'key':schedule_chat,'agentId':'main','messages':[]},'pagination':{'hasMore':False}}
   elif path.endswith('/history'):
    key=path.split('/')[3]
-   data={'session':{'key':key,'transcriptId':f'transcript-{key}','agentId':'main','messages':keyboard_messages if keyboard_fixture else messages},'pagination':{'hasMore':False}}
+   history = bubble_messages if bubble_fixture else keyboard_messages if keyboard_fixture else messages
+   if key == personal and (music_fixture or live_music_fixture): history = history + [music_reply]
+   data={'session':{'key':key,'transcriptId':f'transcript-{key}','agentId':'main','messages':history},'pagination':{'hasMore':False}}
   elif path.endswith('/context-summary'): data={'summary':{'conversationId':path.split('/')[3],'work':{},'sources':[],'sourcesHasMore':False,'unavailableSections':[],'environment':{'kind':'local_checkout','rootPath':'/fixture','available':True}}}
   elif path.endswith('/agent-config'):
    current = personal_config if path.split('/')[3] == personal else config
@@ -262,7 +271,8 @@ class Handler(BaseHTTPRequestHandler):
   elif path==f'/api/music-generation/sessions/{personal}/jobs' and music_fixture:
    data={'jobs':[music_job], 'configured':True, 'transcriptId':f'transcript-{personal}'}
   elif path==f'/api/music-generation/sessions/{personal}/jobs' and live_music_fixture:
-   jobs=[dict(music_job,state=live_music_state)] if live_music_state else []
+   jobs=[older_music_job]
+   if live_music_state: jobs.append(dict(music_job,state=live_music_state))
    data={'jobs':jobs,'configured':True,'transcriptId':f'transcript-{personal}'}
   elif path=='/fixture/music-state' and live_music_fixture and self.command=='POST':
    live_music_state=json.loads(body).get('state')

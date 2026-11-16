@@ -4,6 +4,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ConversationVisibilityTest {
+  @Test fun historyUsesAnswerBlocksRatherThanFlattenedTextOrReasoning() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val history = ConversationRepository.parseHistory(id, """{"session":{"key":"$id","messages":[
+      {"id":"reply","role":"assistant","content":"stale flattened text","rawContent":[
+        {"type":"thinking","thinking":"private reasoning"},
+        {"type":"text","text":"private draft","presentation":"thinking"},
+        {"type":"text","text":"working","presentation":"narration"},
+        {"type":"text","text":"Final answer","presentation":"answer"}]}
+    ]},"pagination":{"hasMore":false}}""")
+    assertEquals(listOf("Final answer"), history.messages.map { it.text })
+  }
+
   @Test fun hidesInternalContextWithoutFilteringUserAuthoredText() {
     val id = "11111111-2222-3333-4444-555555555555"
     val history = ConversationRepository.parseHistory(id, """{"session":{"key":"$id","messages":[

@@ -29,7 +29,7 @@ export function reduceChatStream(previous: XopcChatRow | undefined, event: strin
       blocks.push(target);
     }
     target.text += payload.delta || '';
-  } else if (event === 'assistant_message_end') {
+  } else if (event === 'assistant_message_end' && (payload.presentation === 'answer' || payload.presentation === 'narration')) {
     blocks.forEach((block: XopcChatBlock): void => {
       if (block.kind === 'text' && (!payload.messageId || block.segmentId === payload.messageId)) {
         block.presentation = payload.presentation === 'narration' ? 'narration' : 'answer';
@@ -56,9 +56,6 @@ export function reduceChatStream(previous: XopcChatRow | undefined, event: strin
   else if (event === 'run_end') {
     row.live = false; row.progress = '';
     row.runStatus = payload.status || row.runStatus;
-    blocks.forEach((block: XopcChatBlock): void => {
-      if (block.presentation === 'pending' && (!row.runStatus || row.runStatus === 'success')) block.presentation = 'answer';
-    });
   }
   row.blocks = blocks;
   return refreshChatRow(row);

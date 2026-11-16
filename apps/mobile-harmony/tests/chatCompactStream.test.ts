@@ -24,6 +24,13 @@ describe('compact chat reducer', () => {
     expect(stopped.live).toBe(false);
     expect(chatAnswerText(stopped)).toBe('');
   });
+  it('keeps unclassified output hidden when the run ends before the answer is confirmed', () => {
+    const draft = reduceChatStream(undefined, 'assistant_delta', { messageId: 'm', delta: 'Draft', offset: 0 }, 'r');
+    const unclassified = reduceChatStream(draft, 'assistant_message_end', { messageId: 'm' }, 'r');
+    const stopped = reduceChatStream(unclassified, 'run_end', { status: 'success' }, 'r');
+    expect(stopped.live).toBe(false);
+    expect(chatAnswerText(stopped)).toBe('');
+  });
   it('retains deliveries, reviews, audio and failed outcomes at termination', () => {
     const delivery = { version: 2, operation: 'created', primary: { kind: 'note', id: 'n', title: 'Note', capabilities: ['open'] } };
     let row = reduceChatStream(undefined, 'tool_end', { deliveries: [delivery] }, 'r');

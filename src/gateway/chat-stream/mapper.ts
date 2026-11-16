@@ -3,6 +3,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { isUserTurnDocument, parseTurnOutcome, resolveToolActivity } from '@xopcai/gateway-contract';
 
 import type { EmbeddedStreamEvent } from '../../agent/embedded/types.js';
+import { LeadingAssistantReasoningFilter } from '../../session/assistant-reasoning-text.js';
 import { productDeliveries } from '../../session/compact-history.js';
 import { stripRuntimeContextFromUserContent } from '../../session/user-message-display.js';
 import { createPetFeedback } from './pet-feedback.js';
@@ -39,6 +40,7 @@ export class ChatStreamMapper {
   private currentAssistantMessageId: string | undefined;
   private lastAssistantMessageId: string | undefined;
   private currentAssistantText = '';
+  private reasoningFilter?: LeadingAssistantReasoningFilter;
   private lastAssistantText = '';
   private currentAssistantReviewEmitted = false;
   private toolCallToMessageId = new Map<string, string>();
@@ -197,6 +199,7 @@ export class ChatStreamMapper {
     const messageId = this.nextAssistantMessageId();
     this.currentAssistantMessageId = messageId;
     this.currentAssistantText = '';
+    this.reasoningFilter = this.opts.textSurface === 'conversation' ? new LeadingAssistantReasoningFilter() : undefined;
     this.currentAssistantReviewEmitted = false;
     return [this.make('assistant_message_start', { messageId })];
   }
@@ -213,27 +216,14 @@ export class ChatStreamMapper {
     }
     const delta = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined;
     if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
-      events.push(this.make('assistant_delta', {
-        messageId,
-        delta: delta.delta,
-        offset: this.currentAssistantText.length,
-      }));
-      this.currentAssistantText += delta.delta;
+      const visible = this.reasoningFilter?.append(delta.delta) ?? delta.delta;
+      events.push(...this.appendAssistantText(messageId, visible));
     }
     if (delta?.type === 'thinking_delta' && typeof delta.delta === 'string' && delta.delta) {
       events.push(this.make('thinking_delta', { messageId, delta: delta.delta }));
     }
     if (!delta) {
-      const text = extractTextFromMessage(message);
-      const suffix = appendSuffix(this.currentAssistantText, text);
-      if (suffix) {
-        events.push(this.make('assistant_delta', {
-          messageId,
-          delta: suffix,
-          offset: this.currentAssistantText.length,
-        }));
-        this.currentAssistantText = text || `${this.currentAssistantText}${suffix}`;
-      }
+      events.push(...this.mapAssistantTextSnapshot(messageId, message));
     }
     return events;
   }
@@ -247,12 +237,29 @@ export class ChatStreamMapper {
       this.currentAssistantReviewEmitted = true;
       return [this.make('review', { messageId, review })];
     }
-    const text = extractTextFromMessage(message);
-    const suffix = appendSuffix(this.currentAssistantText, text);
-    if (!suffix) return [];
+    return this.mapAssistantTextSnapshot(messageId, message);
+  }
+
+  private appendAssistantText(messageId: string, delta: string): ChatStreamEvent[] {
+    if (!delta) return [];
     const offset = this.currentAssistantText.length;
-    this.currentAssistantText = text || `${this.currentAssistantText}${suffix}`;
-    return [this.make('assistant_delta', { messageId, delta: suffix, offset })];
+    this.currentAssistantText += delta;
+    return [this.make('assistant_delta', { messageId, delta, offset })];
+  }
+
+  private mapAssistantTextSnapshot(messageId: string, message: AgentMessage, complete = false): ChatStreamEvent[] {
+    let text = extractTextFromMessage(message);
+    if (this.reasoningFilter) {
+      if (text !== undefined) {
+        this.reasoningFilter = new LeadingAssistantReasoningFilter();
+        text = this.reasoningFilter.append(text, complete);
+      } else if (complete) {
+        return this.appendAssistantText(messageId, this.reasoningFilter.append('', true));
+      }
+    }
+    const events = this.appendAssistantText(messageId, appendSuffix(this.currentAssistantText, text));
+    if (text && (complete || events.length)) this.currentAssistantText = text;
+    return events;
   }
 
   private mapMessageEnd(raw: unknown): ChatStreamEvent[] {
@@ -265,16 +272,7 @@ export class ChatStreamMapper {
       this.currentAssistantReviewEmitted = true;
       events.push(this.make('review', { messageId, review }));
     }
-    const text = extractTextFromMessage(message);
-    const suffix = appendSuffix(this.currentAssistantText, text);
-    if (suffix) {
-      events.push(this.make('assistant_delta', {
-        messageId,
-        delta: suffix,
-        offset: this.currentAssistantText.length,
-      }));
-    }
-    this.currentAssistantText = text || this.currentAssistantText;
+    events.push(...this.mapAssistantTextSnapshot(messageId, message, true));
     events.push(this.make('thinking_end', { messageId }));
     if (this.turnDiffs.length > 0) {
       events.push(
@@ -300,6 +298,7 @@ export class ChatStreamMapper {
     this.lastAssistantMessageId = messageId;
     this.currentAssistantMessageId = undefined;
     this.currentAssistantText = '';
+    this.reasoningFilter = undefined;
     this.currentAssistantReviewEmitted = false;
     return events;
   }
@@ -466,6 +465,7 @@ export class ChatStreamMapper {
   private ensureAssistantMessageId(): string {
     if (!this.currentAssistantMessageId) {
       this.currentAssistantMessageId = this.nextAssistantMessageId();
+      this.reasoningFilter = this.opts.textSurface === 'conversation' ? new LeadingAssistantReasoningFilter() : undefined;
     }
     return this.currentAssistantMessageId;
   }

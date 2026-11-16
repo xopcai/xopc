@@ -93,6 +93,15 @@ describe('rich live event reducer', () => {
       { role: 'toolResult', toolCallId: 'c', content: 'output' }, { role: 'assistant', content: 'answer' }]);
     expect(chatAnswerText(rows[0])).toBe('answer');
   });
+  it('uses history block classifications rather than the flattened message', () => {
+    const [row] = parse([{ role: 'assistant', content: 'stale flattened text', rawContent: [
+      { type: 'thinking', thinking: 'private reasoning' },
+      { type: 'text', text: 'private draft', presentation: 'thinking' },
+      { type: 'text', text: 'working', presentation: 'narration' },
+      { type: 'text', text: 'Final answer', presentation: 'answer' },
+    ] }]);
+    expect(chatAnswerText(row)).toBe('Final answer');
+  });
   it('streams pending text while keeping classified narration separate', () => {
     const row: XopcChatRow = { id: 'r', role: 'assistant', text: 'checking\nanswer', blocks: [
       { id: 'pending', kind: 'text', text: 'checking', presentation: 'pending', active: true },

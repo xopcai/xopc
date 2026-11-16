@@ -3057,8 +3057,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
           }
         } else if (showPersonalWaiting) {
           item(key = "assistant-waiting") {
-            AssistantWaitingBubble(runId = connection.activeRunId ?: "sending", narration = connection.liveNarration,
-              connected = connection.realtimeStatus == "connected")
+            AssistantWaitingBubble(connected = connection.realtimeStatus == "connected")
           }
         }
         item(key = "assistant-latest") { Spacer(Modifier.height(1.dp)) }

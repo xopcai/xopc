@@ -2040,6 +2040,45 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(add.waitForExistence(timeout: 6))
     }
 
+    func testAssistantBubbleFitsShortTextAndKeepsCodeReadable() throws {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/bubble-width"
+        app.launch()
+        XCTAssertTrue(app.buttons["chat-header-personal"].waitForExistence(timeout: 8))
+
+        let short = app.descendants(matching: .any)["chat-message-assistant-bubble-short"].firstMatch
+        let code = app.descendants(matching: .any)["chat-message-assistant-bubble-code"].firstMatch
+        XCTAssertTrue(short.waitForExistence(timeout: 8))
+        XCTAssertTrue(code.waitForExistence(timeout: 8))
+        XCTAssertTrue(short.staticTexts["OK"].exists)
+        let image = try XCTUnwrap(app.screenshot().image.cgImage)
+        let shortWidth = try assistantBubbleFillWidth(in: short.frame, image: image)
+        let codeWidth = try assistantBubbleFillWidth(in: code.frame, image: image)
+        XCTAssertGreaterThan(codeWidth, 200)
+        XCTAssertLessThan(shortWidth, codeWidth / 2)
+    }
+
+    private func assistantBubbleFillWidth(in row: CGRect, image: CGImage) throws -> CGFloat {
+        // The accessibility element spans the full aligned row. Sample the painted bubble above the text.
+        let scale = CGFloat(image.width) / app.frame.width
+        let strip = try XCTUnwrap(image.cropping(to: CGRect(x: row.minX * scale, y: (row.minY + 8) * scale,
+                                                          width: row.width * scale, height: 1).integral))
+        var pixels = [UInt8](repeating: 0, count: strip.width * 4)
+        return try pixels.withUnsafeMutableBytes { buffer in
+            let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: strip.width, height: 1,
+                                                   bitsPerComponent: 8, bytesPerRow: strip.width * 4,
+                                                   space: CGColorSpaceCreateDeviceRGB(),
+                                                   bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+            context.draw(strip, in: CGRect(x: 0, y: 0, width: strip.width, height: 1))
+            let start = Int(24 * scale)
+            let bytes = buffer.bindMemory(to: UInt8.self)
+            let end = (start ..< strip.width).first { x in
+                (0 ..< 3).contains { channel in abs(Int(bytes[4 * x + channel]) - Int(bytes[4 * start + channel])) > 4 }
+            } ?? strip.width
+            return CGFloat(end) / scale
+        }
+    }
+
     func testMusicCardAppearsAndUpdatesWithoutReopeningTheConversation() async throws {
         let base = fixtureBase + "/music-live"
         let stateURL = try XCTUnwrap(URL(string: base + "/fixture/music-state"))
@@ -2063,11 +2102,13 @@ final class MobileLayoutParityUITests: XCTestCase {
         try await setMusicState("running")
         XCTAssertTrue(title.waitForExistence(timeout: 10))
         XCTAssertTrue(title.isHittable)
+        XCTAssertFalse(app.buttons["generated-music-open-fixture-older-song"].exists)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "生成中")).firstMatch.exists)
 
         try await setMusicState("completed")
         let player = app.buttons["generated-music-open-fixture-song"]
         XCTAssertTrue(player.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["generated-music-open-fixture-older-song"].exists)
         XCTAssertLessThan(player.frame.minX - app.frame.minX, 38)
         XCTAssertTrue(app.buttons["chat-header-personal"].exists)
     }
