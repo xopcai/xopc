@@ -16,7 +16,7 @@ data class GatewayProfile(
   val activeRouteId: String,
 )
 data class GatewayProbe(val gatewayId: String, val status: String, val latencyMs: Long,
-  val routeUrl: String, val checkedAt: Long)
+  val routeUrl: String, val checkedAt: Long, val version: String? = null)
 data class VoiceGatewayAuth(val origin: String, val bearer: String)
 private data class GatewayCatalog(val profiles: List<GatewayProfile>, val activeGatewayId: String)
 
@@ -81,8 +81,9 @@ class GatewaySession(
 
   @Synchronized
   fun request(path: String, method: String = "GET", body: String = "",
-    headers: Map<String, String> = emptyMap()): String {
+    headers: Map<String, String> = emptyMap(), expectedGatewayId: String? = null): String {
     val current = profile ?: throw IllegalStateException("NOT_PAIRED")
+    check(expectedGatewayId == null || current.gatewayId == expectedGatewayId) { "GATEWAY_CHANGED" }
     var token = token()
     var last: Exception = IllegalStateException("NO_VERIFIED_ROUTE")
     for (route in current.routes.sortedBy { if (it.id == current.activeRouteId) 0 else 1 }) {
@@ -320,11 +321,13 @@ class GatewaySession(
     for (route in current.routes.sortedBy { if (it.id == current.activeRouteId) 0 else 1 }) {
       try {
         verifyRoute(current, route)
-        val status = JSONObject(http.request(route.url, "/api/status", "GET", "", token)).getString("status")
+        val payload = JSONObject(http.request(route.url, "/api/status", "GET", "", token))
+        val status = payload.getString("status")
         require(status.isNotBlank()) { "INVALID_GATEWAY_STATUS" }
+        val version = (payload.opt("version") as? String)?.trim()?.takeIf { it.isNotEmpty() }
         profile = current.copy(activeRouteId = route.id)
         return GatewayProbe(current.gatewayId, status, System.currentTimeMillis() - started,
-          route.url, System.currentTimeMillis())
+          route.url, System.currentTimeMillis(), version)
       } catch (error: Exception) { last = error }
     }
     throw last

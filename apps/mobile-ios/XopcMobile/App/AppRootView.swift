@@ -16,6 +16,7 @@ struct AppRootView: View {
     @State private var phoneVisible = false
     @State private var actionPanelVisible = false
     @GestureState private var sidebarDrag: CGFloat = 0
+    @State private var sidebarDismissDrag: CGFloat = 0
     @State private var reopenSidebar = false
     @State private var recentConversations: [ConversationSummary]?
     @State private var recentScope: String?
@@ -167,7 +168,9 @@ struct AppRootView: View {
     private var homeShell: some View {
         GeometryReader { geometry in
             let width = min(350, geometry.size.width * 0.84)
-            let reveal = sidebarOpen ? 1 : min(1, sidebarDrag / max(1, width))
+            let reveal = sidebarOpen
+                ? max(0, 1 + sidebarDismissDrag / max(1, width))
+                : min(1, sidebarDrag / max(1, width))
 
             NavigationStack(path: $appState.homePath) {
                 chatScreen
@@ -190,6 +193,12 @@ struct AppRootView: View {
                 if sidebarOpen || sidebarDrag > 0 {
                     sidebar.frame(width: width)
                         .offset(x: (reveal - 1) * width)
+                        .background {
+                            if sidebarOpen {
+                                HorizontalSwipeCapture(leftOnly: true, onDrag: { sidebarDismissDrag = min(0, $0) },
+                                                       onEnd: { finishSidebarDismiss($0, velocity: $1, width: width) })
+                            }
+                        }
                         .allowsHitTesting(sidebarOpen)
                         .accessibilityHidden(!sidebarOpen)
                         .transition(reduceMotion ? .opacity : .move(edge: .leading))
@@ -311,11 +320,11 @@ struct AppRootView: View {
                               personalConversationID: personalAgent.record(using: configuration)?.conversationId,
                               onOpenSettings: { settingsPresented = true }, startSearching: route == .conversationSearch, onDelete: appState.conversationUnavailable)
         case .progress:
-            ProgressHubView(configuration: configuration, onOpenConversation: appState.openConversation)
+            WorkPagesView(configuration: configuration, initialPage: .progress, onOpenConversation: appState.openConversation)
         case .projects:
-            ProjectsView(configuration: configuration, onOpenConversation: appState.openConversation).navigationTitle("项目")
+            WorkPagesView(configuration: configuration, initialPage: .projects, onOpenConversation: appState.openConversation)
         case .automations:
-            AutomationsView(configuration: configuration, onOpenConversation: appState.openConversation).navigationTitle("自动化")
+            WorkPagesView(configuration: configuration, initialPage: .automations, onOpenConversation: appState.openConversation)
         case .library:
             SpaceLibraryView(configuration: configuration, onOpenSource: { source in
                 if source.kind == "task", let taskID = source.taskId {
@@ -355,13 +364,14 @@ struct AppRootView: View {
                                       onModelSaved: appState.updateConversation, onOpenConversation: appState.openConversation)
             }
         case .settings:
-            AppSettingsView(configuration: configuration, onOpenGatewaySettings: { settingsPresented = true }, showsProfile: true)
-        case .profile:
-            ProfileView(configuration: configuration, onOpenGatewaySettings: { settingsPresented = true },
-                        personalAgent: personalAgent.record(using: configuration), personalAgentLoading: personalAgent.isLoading || personalAgent.isOpening,
-                        personalAgentError: personalAgent.errorMessage,
-                        onOpenPersonalAgent: { Task { await openPersonalAgent(remember: true) } },
-                        onPersonalAgentUpdated: { personalAgent.applyProfile($0, using: configuration) })
+            AppSettingsView(configuration: configuration,
+                            gatewayName: appState.gatewayProfiles.first { $0.id == appState.activeGatewayProfileID }?.name ?? "Gateway",
+                            onOpenGatewaySettings: { settingsPresented = true },
+                            personalAgent: personalAgent.record(using: configuration),
+                            personalAgentBusy: personalAgent.isLoading || personalAgent.isOpening,
+                            personalAgentError: personalAgent.errorMessage,
+                            onOpenPersonalAgent: { Task { await openPersonalAgent(remember: true) } },
+                            onPersonalAgentSaved: { personalAgent.applyProfile($0, using: configuration) })
         }
     }
 
@@ -441,6 +451,13 @@ struct AppRootView: View {
 
     private func sidebarSwipe(_ value: DragGesture.Value) -> Bool {
         value.startLocation.x >= 24 && value.translation.width > abs(value.translation.height) * 1.5
+    }
+
+    private func finishSidebarDismiss(_ offset: CGFloat, velocity: CGFloat, width: CGFloat) {
+        if -offset >= min(width * 0.32, 96) || (-offset >= 24 && -velocity >= 550) {
+            setSidebar(false)
+        }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { sidebarDismissDrag = 0 }
     }
 
     private func restoreRecents(using configuration: GatewayConfiguration) async {

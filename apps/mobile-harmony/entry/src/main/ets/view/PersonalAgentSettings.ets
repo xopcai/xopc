@@ -29,6 +29,8 @@ export struct XopcPersonalAgentSettings {
   @Event onReloadModels: () => void = (): void => {};
   @Param record: XopcPersonalAgentRecord | null = null;
   @Event onSaved: (record: XopcPersonalAgentRecord) => void = (_record: XopcPersonalAgentRecord): void => {};
+  @Param canShare: boolean = false;
+  @Event onShare: () => void = (): void => {};
   @Event onClose: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcPersonalAgentSettingsViewModel = new XopcPersonalAgentSettingsViewModel();
@@ -162,6 +164,14 @@ export struct XopcPersonalAgentSettings {
                 .id('personal-setting-name').width('100%').height(44).fontSize(15).fontColor(this.colors.foreground).backgroundColor(this.colors.input)
                 .onChange((text: string): void => { this.assistantName = text; this.scheduleNameSave(); })
                 .onSubmit((): void => { void this.save(); })
+              if (this.canShare) {
+                XopcHubRow({ heading: $r('app.string.share_session_title'), compact: true,
+                  symbol: $r('sys.symbol.link'), onOpen: (): void => {
+                    if (!this.model.saving && !this.uploading) {
+                      void this.save().then((): void => { if (!this.model.error) this.onShare(); });
+                    }
+                  } }).enabled(!this.model.saving && !this.uploading)
+              }
               Text(this.label('对话模型', 'Chat model')).fontSize(13).fontColor(this.colors.secondary).width('100%')
               if (this.chatOptions.loading) {
                 Text($r('app.string.chat_model')).fontSize(14).fontColor(this.colors.tertiary).width('100%')

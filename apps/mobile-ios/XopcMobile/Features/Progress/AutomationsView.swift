@@ -10,22 +10,15 @@ struct AutomationsView: View {
     @State private var searchText = ""
     @State private var searchOpen = false
     @State private var setupPrompt: String?
+    @State private var editingAutomation: AutomationRecord?
+    @State private var selectedAutomationID: String?
+    @State private var workingID: String?
     @State private var isLoading = false
     @State private var error: String?
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         List {
-            SegmentedTabs(options: [
-                SegmentOption(id: "all", title: "全部", count: searchedItems.count, accessibilityID: "automation-filter-all"),
-                SegmentOption(id: "enabled", title: "已启用", count: searchedItems.filter(\.enabled).count, accessibilityID: "automation-filter-enabled"),
-                SegmentOption(id: "paused", title: "已暂停", count: searchedItems.filter { !$0.enabled }.count, accessibilityID: "automation-filter-paused")
-            ], selected: filter, label: "筛选") {
-                isSearchFocused = false
-                filter = $0
-            }
-            .accessibilityIdentifier("automation-filter-tabs")
-            .listRowBackground(Color.clear)
             if isLoading, items.isEmpty {
                 ProgressListSkeleton()
             } else if visibleItems.isEmpty {
@@ -33,9 +26,6 @@ struct AutomationsView: View {
                     ContentUnavailableView("暂无自动化", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
                                            description: Text("已配置的自动化会显示在这里。"))
                         .listRowBackground(Color.clear)
-                    if items.isEmpty, error == nil {
-                        AutomationExamples(scope: .workspace) { setupPrompt = $0 }
-                    }
                 } else {
                     ContentUnavailableView("没有匹配的自动化", systemImage: "magnifyingglass",
                                            description: Text("试试其他关键词或清除搜索。"))
@@ -43,22 +33,35 @@ struct AutomationsView: View {
                 }
             } else {
                 ForEach(visibleItems) { automation in
-                    NavigationLink {
-                        AutomationDetailView(configuration: configuration, automationID: automation.id,
-                                             onOpenConversation: onOpenConversation)
-                    } label: {
-                        AutomationListRow(automation: automation)
+                    ZStack(alignment: .topTrailing) {
+                        Button {
+                            selectedAutomationID = automation.id
+                        } label: {
+                            AutomationListRow(automation: automation)
+                                .padding(.trailing, 38)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("automation-\(automation.id)")
+
+                        AutomationActionsMenu(automation: automation, inList: true, busy: workingID != nil,
+                                              onEdit: { editingAutomation = automation },
+                                              onToggle: { Task { await toggle(automation) } },
+                                              onDelete: { Task { await delete(automation) } })
                     }
-                    .accessibilityIdentifier("automation-\(automation.id)")
                     .listRowSeparator(.hidden)
-                    .listRowBackground(RoundedRectangle(cornerRadius: mobileTheme.corner(16)).fill(Color(.secondarySystemGroupedBackground)))
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(RoundedRectangle(cornerRadius: mobileTheme.corner(18)).fill(mobileTheme.panel))
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                }
+            }
+            if !isLoading, error == nil, filter == "all", searchText.isEmpty {
+                Section("从这里开始") {
+                    AutomationExamples(scope: .workspace) { setupPrompt = $0 }
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color(.systemGroupedBackground))
+        .background(mobileTheme.canvas)
         .safeAreaInset(edge: .top, spacing: 0) {
             if searchOpen {
                 PageSearchField("搜索", text: $searchText, focused: $isSearchFocused,
@@ -75,22 +78,85 @@ struct AutomationsView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PageSearchButton("搜索", isOpen: $searchOpen, query: $searchText,
                                  accessibilityID: "automation-open-search")
-                Button("刷新", systemImage: "arrow.clockwise") {
-                    isSearchFocused = false
-                    Task { await load() }
+                Menu {
+                    filterOption("全部", id: "all")
+                    filterOption("已启用", id: "enabled")
+                    filterOption("已暂停", id: "paused")
+                    filterOption("需关注", id: "attention")
+                } label: {
+                    Label("筛选", systemImage: "line.3.horizontal.decrease")
+                        .foregroundStyle(filter == "all" ? mobileTheme.foreground : mobileTheme.action)
                 }
-                Button("新建自动化", systemImage: "plus") { isSearchFocused = false; setupPrompt = "" }
-                    .disabled(setupPrompt != nil)
-                    .accessibilityIdentifier("automation-create-in-chat")
+                .accessibilityIdentifier("automation-filter-menu")
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button {
+                isSearchFocused = false
+                setupPrompt = ""
+            } label: {
+                Label("新建自动化", systemImage: "plus").frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .disabled(setupPrompt != nil)
+            .accessibilityIdentifier("automation-create-in-chat")
+            .padding(.horizontal, 16).padding(.vertical, 8).background(mobileTheme.canvas)
+        }
+        .navigationDestination(item: $selectedAutomationID) { id in
+            AutomationDetailView(configuration: configuration, automationID: id, onOpenConversation: onOpenConversation,
+                                 onChanged: { Task { await load() } })
+        }
+        .sheet(item: $editingAutomation, onDismiss: { Task { await load() } }) { automation in
+            AutomationEditorView(configuration: configuration, existing: automation)
         }
         .modifier(AutomationSetupPresentation(configuration: configuration, scope: .workspace,
                                               prompt: $setupPrompt, onClosed: { Task { await load() } }))
         .alert("无法读取自动化", isPresented: errorBinding) { Button("好", role: .cancel) {} } message: { Text(error ?? "未知错误") }
     }
 
+    private func filterOption(_ title: LocalizedStringKey, id: String) -> some View {
+        Button {
+            isSearchFocused = false
+            filter = id
+        } label: {
+            if filter == id { Label(title, systemImage: "checkmark") } else { Text(title) }
+        }
+        .accessibilityIdentifier("automation-filter-\(id)")
+        .accessibilityAddTraits(filter == id ? .isSelected : [])
+    }
+
     private var visibleItems: [AutomationRecord] {
-        searchedItems.filter { filter == "all" || (filter == "enabled") == $0.enabled }
+        searchedItems.filter { item in
+            switch filter {
+            case "enabled": item.enabled
+            case "paused": !item.enabled
+            case "attention": ["failed", "timeout", "timed_out"].contains(item.state?.lastRunStatus ?? "")
+            default: true
+            }
+        }
+    }
+
+    @MainActor private func toggle(_ automation: AutomationRecord) async {
+        guard workingID == nil else { return }
+        workingID = automation.id
+        defer { workingID = nil }
+        do {
+            let updated = try await GatewayClient(configuration: configuration).setAutomation(automation, enabled: !automation.enabled)
+            if let index = items.firstIndex(where: { $0.id == updated.id }) { items[index] = updated }
+            await load()
+        } catch { self.error = error.localizedDescription }
+    }
+
+    @MainActor private func delete(_ automation: AutomationRecord) async {
+        guard workingID == nil else { return }
+        workingID = automation.id
+        defer { workingID = nil }
+        do {
+            try await GatewayClient(configuration: configuration).deleteAutomation(automation)
+            items.removeAll { $0.id == automation.id }
+            await load()
+        } catch { self.error = error.localizedDescription }
     }
 
     private var searchedItems: [AutomationRecord] {
@@ -129,52 +195,124 @@ struct AutomationsView: View {
     }
 }
 
+private extension AutomationRecord {
+    var canEditFromMobile: Bool {
+        management == nil && trigger.schedule?.kind == "cron" && action.kind == "agent"
+    }
+
+    var canToggleFromMobile: Bool { management?.editable?.contains("enabled") ?? (management == nil) }
+    var canDeleteFromMobile: Bool { management?.deletable ?? (management == nil) }
+    var canRunFromMobile: Bool { management?.runnable != false }
+}
+
+func automationScheduleText(_ automation: AutomationRecord, locale: Locale, expression: String? = nil) -> Text {
+    let schedule = automation.trigger.schedule
+    if let once = schedule?.onceAt, let date = ISO8601DateFormatter().date(from: once) {
+        return Text("仅执行一次 · \(date.formatted(.dateTime.month().day().hour().minute().locale(locale)))")
+    }
+    if let interval = schedule?.everyMs, interval > 0 {
+        if interval.isMultiple(of: 3_600_000) { return Text("每 \(interval / 3_600_000) 小时") }
+        if interval.isMultiple(of: 60_000) { return Text("每 \(interval / 60_000) 分钟") }
+    }
+    if automation.trigger.kind == "manual" { return Text("手动触发") }
+    let custom = Text("自定义计划")
+    let fields = (expression ?? schedule?.cronExpression ?? "").split(whereSeparator: \.isWhitespace)
+    guard fields.count == 5, fields[3] == "*" else { return custom }
+    if fields.dropFirst().allSatisfy({ $0 == "*" }), fields[0].hasPrefix("*/"),
+       let interval = Int(fields[0].dropFirst(2)), (1...59).contains(interval), 60.isMultiple(of: interval) {
+        return Text("每 \(interval) 分钟")
+    }
+    if fields[0] == "0", fields.suffix(3).allSatisfy({ $0 == "*" }), fields[1].hasPrefix("*/"),
+       let interval = Int(fields[1].dropFirst(2)), (1...23).contains(interval), 24.isMultiple(of: interval) {
+        return Text("每 \(interval) 小时")
+    }
+    guard fields[0].allSatisfy(\.isNumber), fields[1].allSatisfy(\.isNumber),
+          let minute = Int(fields[0]), (0...59).contains(minute), let hour = Int(fields[1]), (0...23).contains(hour)
+    else { return custom }
+    let time = String(format: "%02d:%02d", hour, minute)
+    if fields[2] == "*", fields[4] == "*" { return Text("每天 \(time)") }
+    if fields[2] == "*", fields[4] == "1-5" { return Text("工作日 \(time)") }
+    if fields[2] == "*", fields[4].count == 1, let weekday = Int(fields[4]), (0...7).contains(weekday) {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        let day = formatter.shortWeekdaySymbols[weekday % 7]
+        return Text("每\(day) \(time)")
+    }
+    if fields[4] == "*", fields[2].allSatisfy(\.isNumber), let day = Int(fields[2]), (1...31).contains(day) {
+        return Text("每月 \(day) 日 \(time)")
+    }
+    return custom
+}
+
 private struct AutomationListRow: View {
     @Environment(\.mobileTheme) private var mobileTheme
+    @Environment(\.locale) private var locale
     let automation: AutomationRecord
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "clock")
-                    .mobileTextStyle(.sectionTitle)
-                    .foregroundStyle(.tint)
-                    .frame(width: 44, height: 44)
-                    .background(mobileTheme.action.opacity(0.10), in: .circle)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(automation.name).mobileTextStyle(.rowTitle).lineLimit(2)
-                    if automation.enabled {
-                        Text("已启用").mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                    } else {
-                        Text("已暂停").mobileTextStyle(.secondary).foregroundStyle(.secondary)
-                    }
-                }
-            }
+        VStack(alignment: .leading, spacing: 7) {
+            Text(automation.enabled ? LocalizedStringResource("已启用") : LocalizedStringResource("已暂停"))
+                .mobileTextStyle(.caption).foregroundStyle(automation.enabled ? mobileTheme.action : Color.secondary)
+            Text(automation.name).mobileTextStyle(.rowTitle).lineLimit(2)
             if let summary = automation.description ?? automation.action.instruction ?? automation.action.goal,
-               !summary.isEmpty
-            {
-                Text(summary).mobileTextStyle(.secondary).foregroundStyle(.secondary).lineLimit(2)
+               !summary.isEmpty {
+                Text(summary).mobileTextStyle(.secondary).foregroundStyle(.secondary).lineLimit(3)
             }
             HStack(spacing: 8) {
-                Image(systemName: "calendar").accessibilityHidden(true)
-                if let next = automation.state?.nextRunAtMs {
-                    Text(next.millisecondsDate, format: .dateTime.month().day().hour().minute())
-                } else if let cron = automation.trigger.schedule?.cronExpression {
-                    Text(cron).lineLimit(1)
-                } else {
-                    Text("手动触发")
-                }
-                Spacer(minLength: 8)
-                if let status = automation.state?.lastRunStatus {
-                    Text(LocalizedStringKey(status))
+                Image(systemName: "clock").accessibilityHidden(true)
+                automationScheduleText(automation, locale: locale).lineLimit(1)
+                if automation.enabled, let next = automation.state?.nextRunAtMs {
+                    Spacer(minLength: 4)
+                    Text(next.millisecondsDate, format: .dateTime.month().day().hour().minute()).lineLimit(1)
                 }
             }
-            .mobileTextStyle(.caption)
-            .foregroundStyle(.tertiary)
+            .mobileTextStyle(.caption).foregroundStyle(.secondary)
+            .padding(.top, 4)
         }
-        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct AutomationActionsMenu: View {
+    let automation: AutomationRecord
+    let inList: Bool
+    let busy: Bool
+    let onEdit: () -> Void
+    let onToggle: () -> Void
+    let onDelete: () -> Void
+    @State private var confirmingDelete = false
+
+    var body: some View {
+        if automation.canEditFromMobile || automation.canDeleteFromMobile || (inList && automation.canToggleFromMobile) {
+            Menu {
+                if automation.canEditFromMobile {
+                    Button("编辑自动化", systemImage: "pencil", action: onEdit)
+                        .accessibilityIdentifier("automation-menu-edit")
+                }
+                if inList, automation.canToggleFromMobile {
+                    Button(automation.enabled ? LocalizedStringKey("暂停") : LocalizedStringKey("启用"),
+                           systemImage: automation.enabled ? "pause.circle" : "play.circle", action: onToggle)
+                        .accessibilityIdentifier("automation-menu-toggle")
+                }
+                if automation.canDeleteFromMobile {
+                    Button("删除", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+                        .accessibilityIdentifier("automation-menu-delete")
+                }
+            } label: {
+                Label("自动化操作", systemImage: "ellipsis").labelStyle(.iconOnly)
+                    .frame(minWidth: 44, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+            .accessibilityIdentifier(inList ? "automation-card-menu-\(automation.id)" : "automation-detail-menu")
+            .confirmationDialog("删除自动化？", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button("删除", role: .destructive, action: onDelete)
+                Button("取消", role: .cancel) {}
+            }
+        }
     }
 }
 
@@ -183,6 +321,8 @@ struct AutomationDetailView: View {
     let configuration: GatewayConfiguration
     let automationID: String
     let onOpenConversation: (String, String, String) -> Void
+    var onChanged: () -> Void = {}
+    @Environment(\.dismiss) private var dismiss
 
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -217,13 +357,13 @@ struct AutomationDetailView: View {
                             Group {
                                 if dynamicTypeSize.isAccessibilitySize {
                                     VStack(spacing: 12) {
-                                        runButton
-                                        enabledButton(automation)
+                                        if automation.canRunFromMobile { runButton }
+                                        if automation.canToggleFromMobile { enabledButton(automation) }
                                     }
                                 } else {
                                     HStack(spacing: 12) {
-                                        runButton
-                                        enabledButton(automation)
+                                        if automation.canRunFromMobile { runButton }
+                                        if automation.canToggleFromMobile { enabledButton(automation) }
                                     }
                                 }
                             }
@@ -231,12 +371,7 @@ struct AutomationDetailView: View {
                         .padding(.vertical, 8)
                     }
                     Section("运行方式") {
-                        let schedule = automation.trigger.schedule
-                        let plan = schedule?.cronExpression ?? schedule?.onceAt
-                            ?? schedule?.everyMs.map { Duration.milliseconds($0).formatted() } ?? "—"
-                        AutomationDetailValueRow("计划") {
-                            Text(verbatim: plan)
-                        }
+                        AutomationDetailValueRow("计划") { automationScheduleText(automation, locale: locale) }
                         if let next = automation.state?.nextRunAtMs {
                             AutomationDetailValueRow("下次运行") {
                                 Text(next.millisecondsDate, format: .dateTime.month().day().hour().minute())
@@ -249,12 +384,6 @@ struct AutomationDetailView: View {
                         }
                         if let instruction = automation.action.instruction ?? automation.action.goal ?? automation.description {
                             AutomationInstructionView(instruction: instruction)
-                        }
-                    }
-                    if automation.trigger.schedule?.kind == "cron", automation.action.kind == "agent" {
-                        Section {
-                            Button("编辑自动化") { editingAutomation = automation }
-                                .frame(maxWidth: .infinity)
                         }
                     }
                     if let status = automation.state?.lastRunStatus {
@@ -293,8 +422,17 @@ struct AutomationDetailView: View {
             }
         }
         .mobilePageTitle(Text("自动化"))
+        .toolbar {
+            if let automation {
+                ToolbarItem(placement: .topBarTrailing) {
+                    AutomationActionsMenu(automation: automation, inList: false, busy: isWorking,
+                                          onEdit: { editingAutomation = automation }, onToggle: {},
+                                          onDelete: { Task { await delete(automation) } })
+                }
+            }
+        }
         .task { await load() }
-        .sheet(item: $editingAutomation, onDismiss: { Task { await load() } }) { automation in
+        .sheet(item: $editingAutomation, onDismiss: { Task { await load(); onChanged() } }) { automation in
             AutomationEditorView(configuration: configuration, existing: automation)
         }
         .navigationDestination(isPresented: Binding(get: { openedRunID != nil }, set: {
@@ -392,8 +530,22 @@ struct AutomationDetailView: View {
         guard let automation else { return }
         isWorking = true
         defer { isWorking = false }
-        do { self.automation = try await GatewayClient(configuration: configuration).setAutomation(automation, enabled: enabled) }
+        do {
+            self.automation = try await GatewayClient(configuration: configuration).setAutomation(automation, enabled: enabled)
+            onChanged()
+        }
         catch { actionError = error.localizedDescription }
+    }
+
+    @MainActor private func delete(_ automation: AutomationRecord) async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await GatewayClient(configuration: configuration).deleteAutomation(automation)
+            onChanged()
+            dismiss()
+        } catch { actionError = error.localizedDescription }
     }
 
     @MainActor private func run() async {

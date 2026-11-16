@@ -223,6 +223,7 @@ struct PersonalConnectionCard: View {
 enum AssistantAction: String, CaseIterable, Identifiable {
     case photo, camera, localFile, voice
     case noteReference, taskReference, fileReference
+    case switchAgent = "switch-agent"
 
     var id: String {
         rawValue
@@ -237,6 +238,7 @@ enum AssistantAction: String, CaseIterable, Identifiable {
         case .noteReference: "引用笔记"
         case .taskReference: "引用任务"
         case .fileReference: "引用文件"
+        case .switchAgent: "切换 Agent"
         }
     }
 
@@ -248,6 +250,7 @@ enum AssistantAction: String, CaseIterable, Identifiable {
         case .voice: "mic"
         case .noteReference: "doc"
         case .taskReference: "checkmark.circle"
+        case .switchAgent: "person.crop.circle"
         }
     }
 
@@ -264,6 +267,7 @@ enum AssistantAction: String, CaseIterable, Identifiable {
 struct AssistantActionPanel: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let canReferenceFiles: Bool
+    let canSwitchAgent: Bool
     let onSelect: (AssistantAction) -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -274,7 +278,7 @@ struct AssistantActionPanel: View {
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 4) {
-            ForEach(AssistantAction.allCases) { action in
+            ForEach(AssistantAction.allCases.filter { $0 != .switchAgent || canSwitchAgent }) { action in
                 Button {
                     onSelect(action)
                 } label: {

@@ -5,6 +5,7 @@ import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.PersonalAssertion
 import ai.xopc.mobile.gateway.PersonalSummary
 import ai.xopc.mobile.gateway.PersonalProfile
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +41,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -92,37 +95,48 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
       onLoadList(filter, query.trim(), false)
     }
   }
+  val focusManager = LocalFocusManager.current
+  val keyboard = LocalSoftwareKeyboardController.current
+  fun closeSearch() {
+    focusManager.clearFocus()
+    keyboard?.hide()
+    searchOpen = false
+    query = ""
+  }
+  fun selectSection(value: String) {
+    if (section == value) return
+    if (searchOpen) closeSearch()
+    section = value
+    if (section == "understanding") onOpenList()
+  }
+  BackHandler(page == "about" && searchOpen, ::closeSearch)
   Column(Modifier.fillMaxSize().padding(insets).testTag("about-you-screen")) {
-    Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      PageBackButton("about-you-back", onBack)
-      Text(stringResource(if (page == "detail") R.string.about_you_details else R.string.about_you_title),
-        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-        modifier = Modifier.weight(1f))
-      if (page == "about" && section == "understanding") TextButton(onClick = {
-        searchOpen = !searchOpen
-        if (!searchOpen) query = ""
-      }, modifier = Modifier.testTag("about-you-search-toggle")) {
-        Text(stringResource(if (searchOpen) R.string.about_you_close_search else R.string.about_you_search))
+    Box(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        PageBackButton("about-you-back", { if (page == "about" && searchOpen) closeSearch() else onBack() })
+        Spacer(Modifier.weight(1f))
+        if (page == "about" && section == "understanding") {
+          PageSearchButton(searchOpen, R.string.about_you_search, "about-you-search-toggle") {
+            if (searchOpen) closeSearch() else searchOpen = true
+          }
+        }
+      }
+      if (page == "about") {
+        PageTitleMenu(listOf(
+          SegmentOption("overview", stringResource(R.string.about_you_overview), "about-you-tab-overview"),
+          SegmentOption("understanding", stringResource(R.string.about_you_memories), "about-you-tab-understanding"),
+        ), section, "about-you-menu", Modifier.fillMaxWidth(0.62f), ::selectSection)
       }
     }
     if (page == "detail") {
       AssertionDetail(state, onRetryDetail, onSaveStatement, onDeleteAssertion,
         onStartChat, chatBusy)
     } else {
-      SegmentedTabs(
-        listOf("overview" to R.string.about_you_overview, "understanding" to R.string.personal_understanding)
-          .map { (value, label) -> SegmentOption(value, stringResource(label), "about-you-tab-$value") },
-        section, { value ->
-          section = value
-          if (value == "understanding") onOpenList()
-        }, Modifier.padding(horizontal = 20.dp),
-      )
       if (section == "overview") AboutOverview(state.summary,
-        { section = "understanding"; onOpenList() }, onOpenDetail, onOpenNotes, ::editProfile)
+        { selectSection("understanding") }, onOpenDetail, onOpenNotes, ::editProfile)
       else {
         if (searchOpen) OutlinedTextField(query, { query = it.take(100) },
-          modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("about-you-search"),
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).then(searchInputFocus()).testTag("about-you-search"),
           placeholder = { Text(stringResource(R.string.about_you_search)) }, singleLine = true)
         SegmentedTabs(
           listOf("all" to R.string.about_you_all, "explicit" to R.string.personal_explicit,

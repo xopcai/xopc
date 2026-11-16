@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -88,8 +89,7 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
       verticalAlignment = Alignment.CenterVertically) {
       PageBackButton("shares-back", onBack)
-      Text(stringResource(R.string.share_center), modifier = Modifier.weight(1f),
-        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+      Spacer(Modifier.weight(1f))
       TextButton(onClick = { showInactive = !showInactive },
         modifier = Modifier.testTag("shares-toggle-inactive")) {
         Text(stringResource(if (showInactive) R.string.share_hide_inactive else R.string.share_show_inactive))
@@ -110,11 +110,6 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
       TextButton(onClick = onRefresh, enabled = !state.loading && state.busyId == null) {
         Text(stringResource(R.string.progress_refresh))
       }
-    }
-    if (!state.error) TextButton(onClick = onRefresh,
-      enabled = !state.loading && state.busyId == null,
-      modifier = Modifier.align(Alignment.End).testTag("shares-refresh")) {
-      Text(stringResource(R.string.progress_refresh))
     }
     if (state.loading && state.items.isEmpty()) {
       Box(Modifier.fillMaxSize().testTag("shares-loading"), contentAlignment = Alignment.Center) {

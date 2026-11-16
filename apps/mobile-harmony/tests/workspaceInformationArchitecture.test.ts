@@ -17,7 +17,8 @@ describe('workspace mobile information architecture', () => {
     expect(workspace).toContain('this.itemSummary(item)');
     expect(workspace).toContain('item.projectId');
     expect(workspace).toContain('item.priority');
-    expect(workspace).toContain('this.automationTiming(item)');
+    expect(workspace).toContain('automationCard(item: XopcWorkspaceItem)');
+    expect(workspace).toContain('this.automationScheduleLabel(item)');
   });
 
   it('keeps detail hierarchy separate from editing and exposes automation timing', () => {

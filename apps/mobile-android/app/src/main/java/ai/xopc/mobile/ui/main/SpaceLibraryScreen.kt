@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,8 +54,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.io.File
@@ -112,14 +112,17 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
 
   val activeID = selected
   Column(Modifier.fillMaxSize().padding(insets).testTag("space-library")) {
-    LibraryHeader(t("资料库", "Library"), t("返回", "Back"), onExit)
-    SegmentedTabs(listOf(
-      SegmentOption("all", t("全部资料", "All files"), "space-tab-all"),
-      SegmentOption("favorites", t("收藏", "Favorites"), "space-tab-favorites"),
-      SegmentOption("trash", t("回收站", "Trash"), "space-tab-trash"),
-    ), view, { value -> if (view != value) { query = ""; kind = ""; view = value } },
-      Modifier.padding(horizontal = 16.dp))
-    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+      PageBackButton("library-back", onExit)
+      PageTitleMenu(listOf(
+        SegmentOption("all", t("全部资料", "All files"), "space-tab-all"),
+        SegmentOption("favorites", t("收藏", "Favorites"), "space-tab-favorites"),
+        SegmentOption("trash", t("回收站", "Trash"), "space-tab-trash"),
+      ), view, "space-scope-menu", Modifier.align(Alignment.Center)) { value ->
+        if (view != value) { query = ""; kind = ""; view = value }
+      }
+    }
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
       OutlinedTextField(query, { query = it.take(160) }, Modifier.weight(1f).testTag("space-search"),
         singleLine = true, placeholder = { Text(t("搜索资料", "Search files")) },
         leadingIcon = { Icon(painterResource(R.drawable.action_search), contentDescription = null) },
@@ -138,7 +141,7 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
       }
     }
     LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 16.dp),
-      verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (loading && items.isEmpty()) items(5) {
         Box(Modifier.fillMaxWidth().height(55.dp).background(MaterialTheme.colorScheme.surfaceContainer,
           MaterialTheme.shapes.medium))
@@ -151,12 +154,6 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
           view == "trash" -> t("回收站为空", "Trash is empty")
           else -> t("暂无资料", "No results yet")
         }, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-      }
-      if (items.isNotEmpty()) item {
-        Row(Modifier.fillMaxWidth().padding(10.dp)) {
-          Text(t("名称", "Name"), Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-          Text(t("更新日期", "Updated"), style = MaterialTheme.typography.labelMedium)
-        }
       }
       items(items, key = { it.id }) { file ->
         LibraryRow(file, date = formatter.format(Date(file.updatedAt)), zh = zh, onOpen = { selected = file.id })
@@ -207,17 +204,6 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
   }
 }
 
-@Composable
-private fun LibraryHeader(title: String, back: String, onBack: () -> Unit) {
-  Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-    verticalAlignment = Alignment.CenterVertically) {
-    IconButton(onClick = onBack, Modifier.testTag("library-back").semantics { contentDescription = back }) {
-      Text("‹", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
-    }
-    Text(title, style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-  }
-}
-
 private fun sourceLabel(source: LibraryOrigin?, zh: Boolean): String? = source?.label ?: when (source?.kind) {
   "task" -> if (zh) "任务" else "Task"
   "automation" -> if (zh) "定时任务" else "Automation"
@@ -228,18 +214,27 @@ private fun sourceLabel(source: LibraryOrigin?, zh: Boolean): String? = source?.
 @Composable
 private fun LibraryRow(file: LibraryItem, date: String, zh: Boolean, onOpen: () -> Unit) {
   val extension = file.currentVersion.fileName.substringAfterLast('.', "").uppercase()
-  val metadata = listOfNotNull(extension.takeIf(String::isNotBlank), sourceLabel(file.origin, zh)).joinToString(" · ")
-  Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.shapes.medium)
+  val metadata = listOfNotNull(extension.takeIf(String::isNotBlank), sourceLabel(file.origin, zh), date).joinToString(" · ")
+  Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.large)
     .clickable(onClick = onOpen).padding(12.dp).testTag("space-item-${file.id}"),
     horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-    if (file.kind == "audio") Text("♫") else Icon(painterResource(R.drawable.tab_notes), null)
+    Box(Modifier.size(40.dp).background(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.shapes.medium),
+      contentAlignment = Alignment.Center) {
+      val icon = when (file.kind) {
+        "audio" -> R.drawable.action_waveform
+        "image" -> R.drawable.action_photo
+        "video" -> R.drawable.action_camera
+        else -> R.drawable.tab_notes
+      }
+      ActionIcon(icon, color = MaterialTheme.colorScheme.primary, size = 21.dp)
+    }
     Column(Modifier.weight(1f)) {
       Text(file.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
       if (metadata.isNotEmpty()) Text(metadata, style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
       file.hit?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     }
-    Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 14.dp)
   }
 }
 

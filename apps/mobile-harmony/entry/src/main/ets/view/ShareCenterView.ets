@@ -64,7 +64,7 @@ export struct XopcShareCenterView {
     NavDestination() {
       Column() {
         Row({ space: 8 }) {
-          Text($r('app.string.share_center')).fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).layoutWeight(1)
+          Blank().layoutWeight(1)
           Button(this.model.showInactive ? $r('app.string.share_hide_inactive') : $r('app.string.share_show_inactive'))
             .height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
             .onClick((): void => { this.model.showInactive = !this.model.showInactive; })

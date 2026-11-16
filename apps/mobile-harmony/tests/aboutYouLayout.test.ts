@@ -10,11 +10,14 @@ describe('about you understanding layout', () => {
     const footerStart = aboutYou.indexOf('private understandingConversationAction()');
 
     expect(headerStart).toBeGreaterThan(-1);
-    expect(aboutYou.indexOf(".id('about-you-search')", headerStart)).toBeLessThan(filtersStart);
+    const contentStart = aboutYou.indexOf('  build()');
+    expect(aboutYou).toContain("titleMenuId: 'about-you-menu'");
+    expect(aboutYou).toContain("searchId: this.section === 1 ? 'about-you-search-open' : ''");
+    expect(aboutYou.indexOf("searchId: 'about-you-search'", contentStart)).toBeLessThan(
+      aboutYou.indexOf('this.understandingFilters()', contentStart));
+    expect(aboutYou.indexOf("searchId: 'about-you-search'", contentStart)).toBeGreaterThan(contentStart);
     expect(footerStart).toBeGreaterThan(filtersStart);
     expect(aboutYou).toContain('this.understandingConversationAction()');
-    expect(aboutYou).toContain(".id('about-you-search-open')");
-    expect(aboutYou).toContain(".id('about-you-search-close')");
     expect(aboutYou).not.toContain('private understandingTools()');
   });
 

@@ -4,6 +4,7 @@ struct AutomationEditorView: View {
     let configuration: GatewayConfiguration
     let existing: AutomationRecord
 
+    @Environment(\.locale) private var locale
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
     @State private var instruction: String
@@ -31,12 +32,12 @@ struct AutomationEditorView: View {
                         .accessibilityIdentifier("automation-instruction")
                 }
                 Section("定时规则") {
-                    TextField("Cron 表达式", text: $cron)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Text("使用五段 Cron 表达式，例如 0 9 * * 1 表示每周一 09:00。")
-                        .mobileTextStyle(.footnote)
-                        .foregroundStyle(.secondary)
+                    automationScheduleText(existing, locale: locale, expression: cron)
+                    DisclosureGroup("高级排期") {
+                        TextField("Cron 表达式", text: $cron)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
                     Toggle(isOn: $isEnabled) {
                         Text("启用自动化")
                     }

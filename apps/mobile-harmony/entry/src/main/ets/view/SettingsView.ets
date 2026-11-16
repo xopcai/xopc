@@ -13,6 +13,8 @@ import { pushNotifications, XopcPushNotifications } from '../service/pushNotific
 import { XopcPageHeader, XopcHubRow, XopcSectionLabel } from './MobileComponents';
 import { connectionModel } from '../viewmodel/connectionViewModel';
 import { XopcMobileRoute } from '../model/home';
+import { XopcPersonalAgentRecord } from '../model/personalAgent';
+import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { userErrorMessage } from '../common/userError';
 
 @ComponentV2
@@ -41,10 +43,10 @@ struct XopcPreferenceOption {
 export struct XopcSettingsView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param initialSection: string = '';
+  @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Param useNavigation: boolean = false;
   @Event onOpenSection: (section: string) => void = (_section: string): void => {};
   @Event onExit: () => void = (): void => {};
-  @Event onDisconnected: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local preferences: XopcSettings = appSettings;
   @Local selectedLanguage: string = '';
@@ -60,7 +62,6 @@ export struct XopcSettingsView {
     this.selectedScheme = this.preferences.colorScheme;
   }
   private openSection(section: string): void {
-    if (section === 'connection') { connectionModel.openGateways(); return; }
     if (this.useNavigation) this.onOpenSection(section); else this.section = section;
   }
 
@@ -118,40 +119,84 @@ export struct XopcSettingsView {
       .borderRadius(this.colors.corner(12)).accessibilitySelected(this.selectedScheme === scheme)
       .onClick((): void => { this.choose(this.selectedLanguage, this.selectedTheme, scheme); })
   }
+  private async openAboutLink(path: string = ''): Promise<void> {
+    const language = this.preferences.effectiveLanguage().startsWith('zh') ? 'zh' : 'en';
+    const url = 'https://xopc.ai/' + language + path;
+    try {
+      await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(url, { appLinkingOnly: false });
+    } catch (error) { this.error = (error as Error).message; }
+  }
+
+  @Builder
+  aboutSettings() {
+    Column({ space: 8 }) {
+      Image($r('app.media.brand_logo')).width(64).height(64).accessibilityLevel('no')
+      Text('xopc').fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+      Text(xopcAppVersion()).id('settings-about-version').fontSize(14).fontColor(this.colors.secondary)
+    }.width('100%').padding({ top: 22, bottom: 28 })
+    XopcHubRow({ heading: $r('app.string.settings_website'), symbol: $r('sys.symbol.link'),
+      onOpen: (): void => { void this.openAboutLink(); } }).id('settings-about-website')
+    XopcHubRow({ heading: $r('app.string.settings_support'), symbol: $r('sys.symbol.questionmark_circle'),
+      onOpen: (): void => { void this.openAboutLink('/support'); } }).id('settings-about-support')
+    XopcHubRow({ heading: $r('app.string.settings_privacy_policy'), symbol: $r('sys.symbol.lock'),
+      onOpen: (): void => { void this.openAboutLink('/privacy'); } }).id('settings-about-privacy')
+    XopcHubRow({ heading: $r('app.string.settings_terms'), symbol: $r('sys.symbol.doc_text'),
+      onOpen: (): void => { void this.openAboutLink('/terms'); } }).id('settings-about-terms')
+  }
+
   @Builder
   rootSettings() {
     if (gatewaySession.currentProfile()) {
-      XopcHubRow({ heading: $r('app.string.personal'), symbol: $r('sys.symbol.person'),
-        onOpen: (): void => { this.onNavigate({ page: 'personal', itemId: '' }); } })
-        .id('settings-personal-profile')
-      XopcSectionLabel({ heading: $r('app.string.settings_connection_notifications') })
-      XopcHubRow({ heading: gatewaySession.currentProfile()?.name ?? 'Gateway', summary: $r('app.string.connection'),
-        symbol: $r('sys.symbol.link'), onOpen: (): void => { this.openSection('connection'); } })
+      XopcSectionLabel({ heading: $r('app.string.personalization') })
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 12 }) {
+          XopcPersonalAgentAvatar({ agentId: this.personalAgent?.agentId ?? '', extent: 40, compact: true,
+            appearance: this.personalAgent?.appearance ?? 'loopi', revision: this.personalAgent?.revision ?? 0 })
+          Column({ space: 3 }) {
+            Text(this.personalAgent?.displayName || $r('app.string.chat_personal_agent')).fontSize(16)
+              .fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
+            Text($r('app.string.personal_agent_summary')).fontSize(12).fontColor(this.colors.secondary)
+          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.secondary])
+        }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 14, right: 14 })
+      }.id('settings-personal-agent').width('100%').padding(0).borderRadius(this.colors.corner(16))
+        .backgroundColor(this.colors.panel).margin({ bottom: 8 }).enabled(!!this.personalAgent)
+        .onClick((): void => { this.onNavigate({ page: 'personal-agent-profile', itemId: '' }); })
+      XopcHubRow({ heading: $r('app.string.settings_privacy_memory'), symbol: $r('sys.symbol.lock'),
+        onOpen: (): void => { this.onNavigate({ page: 'about-you', itemId: '' }); } }).id('settings-privacy-memory')
+      XopcHubRow({ heading: $r('app.string.personal_goals'), symbol: $r('sys.symbol.flag'),
+        onOpen: (): void => { this.onNavigate({ page: 'personal-goals', itemId: '' }); } }).id('settings-goals')
+    }
+    XopcSectionLabel({ heading: $r('app.string.settings_connection_notifications') })
+    XopcHubRow({ heading: gatewaySession.currentProfile()?.name ?? $r('app.string.gateways_title'),
+      summary: gatewaySession.currentProfile() ? $r('app.string.connection') : '',
+      symbol: $r('sys.symbol.link'), onOpen: (): void => { connectionModel.openGateways(); } })
+    if (gatewaySession.currentProfile()) {
+      if (this.useNavigation) {
+        XopcHubRow({ heading: $r('app.string.ms_title'), symbol: $r('sys.symbol.slider_horizontal_2'),
+          onOpen: (): void => { this.onNavigate({ page: 'model-settings', itemId: '' }); } }).id('settings-models')
+      }
       XopcHubRow({ heading: $r('app.string.notifications'), summary: this.push.registered ? $r('app.string.push_registered') : $r('app.string.push_help'),
         symbol: $r('sys.symbol.bell'), onOpen: (): void => { this.openSection('notifications'); } })
     }
-    XopcSectionLabel({ heading: $r('app.string.settings_data_sharing') })
-    XopcHubRow({ heading: $r('app.string.share_center'), summary: $r('app.string.share_center_help'),
-      symbol: $r('sys.symbol.share'), onOpen: (): void => { this.onNavigate({ page: 'sharing', itemId: '' }); } })
-    XopcHubRow({ heading: $r('app.string.settings_privacy_memory'),
-      symbol: $r('sys.symbol.info_circle'), onOpen: (): void => { this.onNavigate({ page: 'about-you', itemId: '' }); } })
+    if (this.useNavigation) {
+      XopcSectionLabel({ heading: $r('app.string.settings_data_sharing') })
+      XopcHubRow({ heading: $r('app.string.share_center'), summary: $r('app.string.share_center_help'),
+        symbol: $r('sys.symbol.share'), onOpen: (): void => { this.onNavigate({ page: 'sharing', itemId: '' }); } })
+    }
     XopcSectionLabel({ heading: $r('app.string.preferences') })
     XopcHubRow({ heading: $r('app.string.language'), summary: this.languageLabel(),
       symbol: $r('sys.symbol.doc_text'), onOpen: (): void => { this.openSection('language'); } }).id('open-language')
     XopcHubRow({ heading: $r('app.string.appearance'), summary: this.themeLabel(),
       symbol: $r('sys.symbol.sun_max'), onOpen: (): void => { this.openSection('appearance'); } }).id('open-appearance')
+    XopcSectionLabel({ heading: $r('app.string.settings_about_section') })
     XopcHubRow({ heading: $r('app.string.settings_about_xopc'), summary: xopcAppVersion(),
-      symbol: $r('sys.symbol.info_circle'), onOpen: (): void => { this.openSection('about'); } })
+      symbol: $r('sys.symbol.info_circle'), onOpen: (): void => { this.openSection('about'); } }).id('settings-about')
   }
 
   build() {
     Column() {
-      XopcPageHeader({ heading: this.section === 'language' ? $r('app.string.language')
-        : this.section === 'appearance' ? $r('app.string.appearance')
-          : this.section === 'connection' ? $r('app.string.connection')
-            : this.section === 'about' ? $r('app.string.settings_about_xopc')
-              : this.section === 'notifications' ? $r('app.string.notifications') : $r('app.string.settings'),
-        backVisible: this.useNavigation || !!this.section,
+      XopcPageHeader({ backVisible: this.useNavigation || !!this.section,
         onBack: (): void => {
           if (this.useNavigation) this.onExit();
           else this.section = '';
@@ -159,17 +204,7 @@ export struct XopcSettingsView {
       Scroll() {
         Column() {
           if (!this.section) { this.rootSettings() }
-          else if (this.section === 'about') {
-            Column({ space: 8 }) {
-              Image($r('app.media.brand_logo')).width(74).height(74).accessibilityLevel('no')
-              Text('xopc').fontSize(26).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-              Text(xopcAppVersion()).fontSize(14).fontColor(this.colors.secondary)
-            }.width('100%').padding({ top: 24, bottom: 26 })
-            XopcHubRow({ heading: $r('app.string.connection'), symbol: $r('sys.symbol.link'),
-              onOpen: (): void => { this.openSection('connection'); } })
-            XopcHubRow({ heading: $r('app.string.settings_privacy_memory'), symbol: $r('sys.symbol.info_circle'),
-              onOpen: (): void => { this.onNavigate({ page: 'about-you', itemId: '' }); } })
-          }
+          else if (this.section === 'about') { this.aboutSettings() }
           else if (this.section === 'language') {
             XopcPreferenceOption({ label: $r('app.string.system'), selected: !this.selectedLanguage,
               optionId: 'language-system', onSelect: (): void => { this.choose('', this.selectedTheme); } })
@@ -195,10 +230,6 @@ export struct XopcSettingsView {
               GridItem() { this.schemeCard('emerald', $r('app.string.color_scheme_emerald'), 'scheme-emerald') }
               GridItem() { this.schemeCard('clay', $r('app.string.color_scheme_clay'), 'scheme-clay') }
             }.columnsTemplate('1fr 1fr').columnsGap(12).rowsGap(12).height(276).width('100%')
-          } else if (this.section === 'connection') {
-            XopcHubRow({ heading: gatewaySession.currentProfile()?.name ?? '', summary: $r('app.string.connection'), navigable: false })
-            Button($r('app.string.gateways_title')).id('open-gateways').fontColor(this.colors.accent).backgroundColor(this.colors.panel)
-              .width('100%').height(48).margin({ top: 24 }).enabled(!this.push.busy).onClick((): void => { connectionModel.openGateways(); })
           } else if (this.section === 'notifications') {
         Text(this.push.registered ? $r('app.string.push_registered') : $r('app.string.push_help'))
           .fontColor(this.colors.secondary).fontSize(16).lineHeight(24).width('100%').margin({ bottom: 20 })

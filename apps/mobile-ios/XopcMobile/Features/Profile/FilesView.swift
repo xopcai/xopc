@@ -139,8 +139,6 @@ struct FilesView: View {
         }
         .mobilePageTitle(Text(verbatim: space?.title ?? AppLocalization.string("文件", locale: AppLocalization.selectedLocale)))
         .toolbar {
-            Button("刷新", systemImage: "arrow.clockwise") { Task { await load() } }
-                .disabled(isLoading)
             if let space, space.writable {
                 FileUploadButton(configuration: configuration, spaceID: space.id, directory: "") {
                     await load()
@@ -227,8 +225,6 @@ private struct FileFolderView: View {
         }
         .mobilePageTitle(Text(verbatim: title))
         .toolbar {
-            Button("刷新", systemImage: "arrow.clockwise") { Task { await load() } }
-                .disabled(isLoading)
             if writable {
                 FileUploadButton(configuration: configuration, spaceID: spaceID, directory: path) {
                     await load()
@@ -299,7 +295,13 @@ struct FilePreviewView: View {
             if isLoading {
                 ProgressView("正在读取文件…")
             } else if let error {
-                ContentUnavailableView("无法预览", systemImage: "doc.badge.ellipsis", description: Text(error))
+                ContentUnavailableView {
+                    Label("无法预览", systemImage: "doc.badge.ellipsis")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("重试") { Task { await load() } }
+                }
             } else if let text {
                 ScrollView {
                     Text(text).font(.body.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding()
@@ -316,8 +318,6 @@ struct FilePreviewView: View {
         }
         .mobilePageTitle(Text(verbatim: file.name))
         .toolbar {
-            Button("刷新", systemImage: "arrow.clockwise") { Task { await load() } }
-                .disabled(isLoading)
             Button("下载", systemImage: "arrow.down.to.line") { Task { await download() } }
                 .disabled(isDownloading)
             if !isLoading, error == nil, file.capabilities.contains("edit"), text != nil {

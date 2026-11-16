@@ -1466,7 +1466,7 @@ class GatewaySessionTest {
           sessionShareReads++
           """{"ok":true,"payload":{"transcriptId":"transcript-share","cutoffSeq":9,
             "metadataUpdatedAt":"2026-10-05T00:00:00Z","title":"A chat","messageCount":2,
-            "attachmentCandidates":[{"id":"attachment-1"}]}}"""
+            "attachmentCandidates":[{"id":"attachment-1","fileName":"report.md"}]}}"""
         }
         path == "/api/sessions/11111111-2222-3333-4444-555555555555/shares" && method == "POST" -> {
           sessionShareWrites++
@@ -1475,8 +1475,8 @@ class GatewaySessionTest {
           assertEquals("2026-10-05T00:00:00Z", input.getString("expectedMetadataUpdatedAt"))
           assertEquals(86_400_000L, input.getLong("ttlMs"))
           assertEquals(true, input.isNull("maxViews"))
-          assertEquals(true, input.getBoolean("includeToolActivities"))
-          assertEquals(false, input.has("attachmentIds"))
+          assertEquals(false, input.getBoolean("includeToolActivities"))
+          assertEquals(0, input.getJSONArray("attachmentIds").length())
           """{"ok":true,"payload":{"id":"share-session-1","kind":"session",
             "shareUrl":"https://share.example/s/session","reachability":"public",
             "expiresAt":"2030-01-01T00:00:00Z"}}"""

@@ -12,6 +12,7 @@ interface XopcSessionShareRequest {
   ttlMs: number;
   maxViews: number | null;
   includeToolActivities: boolean;
+  attachmentIds: string[];
 }
 interface XopcShareExtensionRequest { extendTtlMs: number; }
 
@@ -58,15 +59,32 @@ export class XopcShareService {
     const preview = envelope.payload;
     if (!envelope.ok || !preview?.transcriptId || !Number.isFinite(preview.cutoffSeq)
       || !preview.metadataUpdatedAt || !Number.isFinite(preview.messageCount)) throw new Error('INVALID_SESSION_SHARE_PREVIEW');
+    preview.messages = Array.isArray(preview.messages) ? preview.messages : [];
     preview.attachmentCandidates = Array.isArray(preview.attachmentCandidates) ? preview.attachmentCandidates : [];
     return preview;
   }
 
-  async session(conversationId: string, preview: XopcSessionSharePreview): Promise<XopcShareResult> {
+  async activeSessionShare(conversationId: string): Promise<XopcShareResult | undefined> {
+    const envelope = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(conversationId)
+      + '/shares')) as XopcShareListEnvelope;
+    if (!envelope.ok || !Array.isArray(envelope.payload?.shares)) throw new Error('INVALID_SHARE_LIST');
+    const item = envelope.payload.shares.find((share: XopcShareItem): boolean =>
+      share?.kind === 'session' && !share.revoked && !share.expired);
+    if (!item) return undefined;
+    return validateShare({
+      id: item.id, kind: item.kind, title: item.fileName, fileName: item.fileName,
+      shareUrl: item.shareUrl, lanUrl: item.lanUrl, reachability: item.reachability,
+      reachabilityHint: item.reachabilityHint, expiresAt: item.expiresAt,
+      messageCount: item.messageCount, attachmentCount: item.attachmentCount
+    });
+  }
+
+  async session(conversationId: string, preview: XopcSessionSharePreview, ttlMs: number,
+    attachmentIds: string[]): Promise<XopcShareResult> {
     const body: XopcSessionShareRequest = {
       expectedTranscriptId: preview.transcriptId, expectedCutoffSeq: preview.cutoffSeq,
-      expectedMetadataUpdatedAt: preview.metadataUpdatedAt, ttlMs: 86400000, maxViews: null,
-      includeToolActivities: true
+      expectedMetadataUpdatedAt: preview.metadataUpdatedAt, ttlMs, maxViews: null,
+      includeToolActivities: false, attachmentIds
     };
     const envelope = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(conversationId)
       + '/shares', 'POST', JSON.stringify(body))) as XopcShareResultEnvelope;

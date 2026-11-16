@@ -47,7 +47,7 @@ personal_config=dict(config)
 second_model=dict(model,id='test/model-two',name='Second Fixture Model')
 project={'id':'fixture-project','name':'资料测试项目','status':'active','updatedAt':now}
 automation={'id':'fixture-automation','name':'每天整理纪要','enabled':True,'createdAtMs':now,'updatedAtMs':now,
-            'trigger':{'kind':'schedule','schedule':{'kind':'cron','expr':'0 9 * * *','tz':'Asia/Shanghai'}},
+            'trigger':{'kind':'schedule','schedule':{'kind':'cron','expr':'0 9 * * 1','tz':'Asia/Shanghai'}},
             'action':{'kind':'agent','instruction':'整理最近纪要'}}
 automation_run={'id':'fixture-automation-run','automationId':automation['id'],'automationName':automation['name'],
                 'status':'succeeded','summary':'已整理最近纪要。','createdAtMs':now}
@@ -74,6 +74,15 @@ with wave.open(w,'wb') as audio:
  audio.writeframes(b''.join(struct.pack('<h',int(800*math.sin(2*math.pi*440*n/8000))) for n in range(24000)))
 def envelope(value): return {'ok':True,'payload':value}
 capability_skill_enabled = True
+model_choices = [dict(ref=item['id'], name=item['name'], provider='Fixture Provider') for item in [model, second_model]]
+global_model = model_choices[0]['ref']
+global_model_revision = 1
+def global_model_payload():
+ current = next(item for item in model_choices if item['ref'] == global_model)
+ return envelope({'revision':str(global_model_revision),
+  'routing':[dict(key='chat',pool='chat',ref=current['ref'],name=current['name'])],
+  'tasks':[dict(key='coding',pool='chat',ref=None,name=None,inherited=True,allowInherit=True)],
+  'fallbacks':[], 'pools':{'chat':model_choices}})
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
  def do_PUT(self): self.do_GET()
@@ -81,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
  def do_PATCH(self): self.do_GET()
  def do_DELETE(self): self.do_GET()
  def do_GET(self):
-  global live_music_state, space_item, capability_skill_enabled
+  global live_music_state, space_item, capability_skill_enabled, global_model, global_model_revision
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   keyboard_fixture = path.startswith('/keyboard/')
   music_fixture = path.startswith('/music/')
@@ -208,6 +217,14 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/voice/realtime/status': data=envelope({'tts':{'provider':'fixture','model':'tts'}})
   elif path=='/api/voice/tts-voices': data=envelope({'voices':[{'id':'fixture-voice','name':'Fixture voice'}]})
   elif path=='/api/models': data=envelope({'defaultId':'test/model','models':[model,second_model]})
+  elif path=='/api/mobile/model-settings':
+   if self.command == 'PATCH':
+    change=json.loads(body)
+    if change.get('kind') == 'model' and change.get('key') == 'chat' and change.get('revision') == str(global_model_revision):
+     if any(item['ref'] == change.get('ref') for item in model_choices):
+      global_model = change['ref']
+      global_model_revision += 1
+   data=global_model_payload()
   elif path=='/api/sessions':
    items=[dict(row,key='draft',name='新对话',messageCount=0),row]
    data={'items':items,'total':2,'hasMore':False,'childrenByConversationId':{parent:{'total':1,'activeCount':0,'items':[{'taskId':'task-child','title':'移动端子任务','phase':'closed','activeConversationId':child}]}}}

@@ -27,7 +27,7 @@ import { getBrowserTabBindingById } from '../storage/sqlite/browser-tab-binding-
 import crypto from 'node:crypto';
 import { WorkDiscoveryService } from '../work-discovery/service.js';
 
-import { findSessionInput, findSessionInputByRunId, insertSessionInput, bumpSessionInputRevision } from '../storage/sqlite/session-input-repository.js';
+import { findSessionInput, findSessionInputByRunId, getSessionInputState, insertSessionInput, bumpSessionInputRevision } from '../storage/sqlite/session-input-repository.js';
 import { ConnectionRecoveryService } from '../connectors/connection-recovery-service.js';
 
 import { buildVoiceMemoryContext } from '../voice/realtime/memory-context.js';
@@ -1097,18 +1097,19 @@ export class GatewayService {
     conversation: ReturnType<TaskConversationRepository['requireState']>;
   }> {
     const task = new TaskRepository().require(taskId);
+    const conversations = new TaskConversationRepository();
+    const active = conversations.getActiveSession(task.id);
+    const allocation = new TaskAllocationRepository().get(taskId);
+    if (!active && !options.runId && allocation && allocation.status !== 'assigned') {
+      throw new Error('Task executor has not been assigned');
+    }
     const agentId = resolveProjectAgentId({
       config: this.config,
       projects: this.projects,
       explicitAgentId: options.requestedAgentId ?? task.delegateAgentId,
       projectId: task.projectId,
     });
-    const conversations = new TaskConversationRepository();
-    const active = conversations.getActiveSession(task.id);
-    if (active) {
-      if (active.agentId && active.agentId !== agentId) {
-        throw new Error('Task executor differs from the active conversation');
-      }
+    if (active && (!active.agentId || active.agentId === agentId)) {
       const conversation = conversations.activateExecutionSession({
         taskId: task.id,
         conversationId: active.conversationId,
@@ -1116,6 +1117,20 @@ export class GatewayService {
         runId: options.runId,
       });
       return { conversationId: active.conversationId, agentId, created: false, conversation };
+    }
+    if (active) {
+      // Older gateways could create an execution session before background allocation finished.
+      const run = new TaskRunRepository().getActiveRoot(taskId);
+      if (active.runId || !options.runId || run?.id !== options.runId || run.status !== 'queued'
+        || run.executorKind !== 'agent' || run.executorRef.agentId !== agentId
+        || allocation?.status !== 'assigned' || allocation.selected_agent_id !== agentId
+        || task.delegateAgentId !== agentId) {
+        throw new Error('Task executor differs from the active conversation');
+      }
+      const inputState = getSessionInputState(active.conversationId);
+      if (inputState.activeRunId || inputState.inputs.length) {
+        throw new Error('Task executor differs from the active conversation');
+      }
     }
 
     const peerId = `task-${sanitizeSegment(task.id) || Date.now()}${options.runId ? `-${sanitizeSegment(options.runId)}` : ''}`;

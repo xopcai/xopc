@@ -1,10 +1,61 @@
 // swiftlint:disable file_length
 import SwiftUI
 
-struct ProgressHubView: View {
+enum WorkPage: String, CaseIterable {
+    case progress, automations, projects, tasks
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .progress: "进展"
+        case .automations: "自动化"
+        case .projects: "项目"
+        case .tasks: "任务"
+        }
+    }
+}
+
+struct WorkPagesView: View {
+    let configuration: GatewayConfiguration
+    let onOpenConversation: (String, String, String) -> Void
+    @State private var page: WorkPage
+
+    init(configuration: GatewayConfiguration, initialPage: WorkPage,
+         onOpenConversation: @escaping (String, String, String) -> Void) {
+        self.configuration = configuration
+        self.onOpenConversation = onOpenConversation
+        _page = State(initialValue: initialPage)
+    }
+
+    var body: some View {
+        Group {
+            switch page {
+            case .progress:
+                ProgressHubView(configuration: configuration, onOpenConversation: onOpenConversation, onSelectPage: selectPage)
+            case .automations:
+                AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
+            case .projects:
+                ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation)
+            case .tasks:
+                TasksView(configuration: configuration)
+            }
+        }
+        .mobilePageTitle(Text(page.title)) {
+            MobilePageTitleMenu(options: WorkPage.allCases.map {
+                SegmentOption(id: $0, title: $0.title, accessibilityID: "work-page-\($0.rawValue)")
+            }, selected: page, identifier: "work-page-menu", onSelect: selectPage)
+        }
+    }
+
+    private func selectPage(_ selection: WorkPage) {
+        page = selection
+    }
+}
+
+private struct ProgressHubView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
+    let onSelectPage: (WorkPage) -> Void
 
     @Environment(\.locale) private var locale
     @State private var home: HomeSnapshot?
@@ -73,15 +124,15 @@ struct ProgressHubView: View {
                     }
                     Text("常用工作").mobileTextStyle(.rowTitle).padding(.top, 12)
                     HStack(spacing: 12) {
-                        NavigationLink {
-                            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("任务"))
+                        Button {
+                            onSelectPage(.tasks)
                         } label: { toolRow("任务", symbol: "checkmark.circle") }
-                        NavigationLink {
-                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("项目"))
+                        Button {
+                            onSelectPage(.projects)
                         } label: { toolRow("项目", symbol: "folder") }
                     }.buttonStyle(.plain)
-                    NavigationLink {
-                        AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("自动化"))
+                    Button {
+                        onSelectPage(.automations)
                     } label: { toolRow("自动化", symbol: "clock") }.buttonStyle(.plain)
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
@@ -91,26 +142,6 @@ struct ProgressHubView: View {
                 .padding(.horizontal, 20).padding(.vertical, 12)
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    List {
-                        NavigationLink("任务") {
-                            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("任务"))
-                        }
-                        NavigationLink("项目") {
-                            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("项目"))
-                        }
-                        NavigationLink("自动化") {
-                            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("自动化"))
-                        }
-                    }
-                    .mobilePageTitle(Text("全部工作"))
-                } label: { Image(systemName: "square.grid.2x2").frame(width: 44, height: 44) }
-                    .accessibilityLabel("全部工作")
-            }
-        }
-        .mobilePageTitle(Text("进展"))
         .refreshable { await load() }
         .task(id: configuration) { await load() }
         .onChange(of: locale.identifier) { Task { await load() } }
@@ -176,6 +207,10 @@ struct ProgressHubView: View {
                     Button { onOpenConversation(id, item.title, "main") } label: {
                         compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
                     }.buttonStyle(.plain)
+                } else if let page = route.workPage {
+                    Button { onSelectPage(page) } label: {
+                        compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
+                    }.buttonStyle(.plain)
                 } else {
                     NavigationLink { destination(for: route) } label: {
                         compactRow(title: item.title, subtitle: item.summary, symbol: "clock")
@@ -210,7 +245,9 @@ struct ProgressHubView: View {
 
     @ViewBuilder
     private func actionControl(_ action: HomeAction) -> some View {
-        if let route = action.route {
+        if let page = action.route?.workPage {
+            Button(action.label) { onSelectPage(page) }.buttonStyle(.bordered)
+        } else if let route = action.route {
             switch route {
             case let .chat(id):
                 Button(action.label) { onOpenConversation(id, "会话", "main") }
@@ -233,17 +270,11 @@ struct ProgressHubView: View {
     // swiftlint:disable:next cyclomatic_complexity
     private func destination(for route: HomeOpenRoute) -> some View {
         switch route {
-        case .tasks:
-            TasksView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("任务"))
         case let .task(id):
             TaskDetailView(configuration: configuration, taskID: id)
-        case .projects:
-            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("项目"))
         case let .project(id):
             ProjectDetailView(configuration: configuration, projectID: id,
                               onOpenConversation: onOpenConversation)
-        case .automations:
-            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation).mobilePageTitle(Text("自动化"))
         case let .automation(id):
             AutomationDetailView(configuration: configuration, automationID: id,
                                  onOpenConversation: onOpenConversation)
@@ -256,7 +287,7 @@ struct ProgressHubView: View {
             NoteDetailView(configuration: configuration, noteID: id, onOpenConversation: onOpenConversation)
         case .files:
             FilesView(configuration: configuration)
-        case .chat:
+        case .chat, .tasks, .projects, .automations:
             EmptyView()
         }
     }
@@ -394,6 +425,15 @@ enum HomeOpenRoute: Equatable {
     case tasks, task(String), projects, project(String), automations, automation(String), automationRun(String)
     case notes, note(String), files, chat(String)
 
+    var workPage: WorkPage? {
+        switch self {
+        case .tasks: .tasks
+        case .projects: .projects
+        case .automations: .automations
+        default: nil
+        }
+    }
+
     // swiftlint:disable:next cyclomatic_complexity
     init?(href: String) {
         guard href.hasPrefix("/"), !href.hasPrefix("//"),
@@ -428,7 +468,6 @@ enum HomeOpenRoute: Equatable {
 
 private struct TasksView: View {
     let configuration: GatewayConfiguration
-    let onOpenConversation: (String, String, String) -> Void
 
     @State private var items: [TaskListItem] = []
     @State private var filter = "open"

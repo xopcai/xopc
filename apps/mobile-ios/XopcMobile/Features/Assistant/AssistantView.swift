@@ -55,6 +55,7 @@ struct AssistantView<Dock: View>: View {
     @State private var referenceKind = ContextReferenceKind.note
     @State private var isActionPanelExpanded = false
     @State private var showingSessionActions = false
+    @State private var sharingConversation = false
     @State private var showingPersonalProfile = false
     @State private var showingAgentPicker = false
     @State private var selectedPickerAgent: String?
@@ -199,7 +200,8 @@ struct AssistantView<Dock: View>: View {
                 if let personalAgent, let conversation {
                     PersonalAgentProfileView(configuration: configuration, record: personalAgent,
                                              conversation: conversation, onSaved: onPersonalAgentUpdated,
-                                             onModelSaved: onConversationUpdated)
+                                             onModelSaved: onConversationUpdated,
+                                             allowsConversationSharing: !conversation.isDraft && !state.messages.isEmpty)
                         .presentationDetents([.fraction(0.65)])
                 }
             }
@@ -345,29 +347,37 @@ struct AssistantView<Dock: View>: View {
                 showingCameraPicker: $showingCameraPicker
             ))
             .sheet(isPresented: $showingSessionActions, onDismiss: {
+                sharingConversation = false
                 if searchAfterOptions {
                     searchAfterOptions = false
                     showingMessageSearch = true
                 }
             }) {
-                AssistantSessionActionsView(
-                    configuration: configuration,
-                    conversation: conversation,
-                    state: state,
-                    onStartConversation: { requestConversation($0) },
-                    pendingReferences: references,
-                    onAddReference: { reference in
-                        guard references.count < 5,
-                              !references.contains(where: { $0.id == reference.id }) else { return }
-                        references.append(reference)
-                    },
-                    onConversationUpdated: onConversationUpdated,
-                    onStartScopedConversation: { project, mode in
-                        requestStart(.scoped(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main"))
-                    },
-                    isTaskConversation: !showsFloatingHeader,
-                    onSearch: { searchAfterOptions = true; showingSessionActions = false }
-                )
+                if sharingConversation, let conversation {
+                    ConversationShareView(configuration: configuration, conversationID: conversation.id)
+                        .interactiveDismissDisabled()
+                        .presentationDetents([.large])
+                } else {
+                    AssistantSessionActionsView(
+                        configuration: configuration,
+                        conversation: conversation,
+                        state: state,
+                        onStartConversation: { requestConversation($0) },
+                        pendingReferences: references,
+                        onAddReference: { reference in
+                            guard references.count < 5,
+                                  !references.contains(where: { $0.id == reference.id }) else { return }
+                            references.append(reference)
+                        },
+                        onConversationUpdated: onConversationUpdated,
+                        onStartScopedConversation: { project, mode in
+                            requestStart(.scoped(project, mode, conversation?.agentId ?? state.selectedAgentID ?? "main"))
+                        },
+                        isTaskConversation: !showsFloatingHeader,
+                        onSearch: { searchAfterOptions = true; showingSessionActions = false },
+                        onShare: { sharingConversation = true }
+                    )
+                }
             }
             .sheet(item: $executionPresentation) { presentation in
                 AssistantExecutionSheet(
@@ -940,6 +950,7 @@ struct AssistantView<Dock: View>: View {
             isActionPanelExpanded: $isActionPanelExpanded,
             attachmentError: $attachmentError,
             canReferenceFiles: conversation?.isDraft == false,
+            onSwitchAgent: showsFloatingHeader && !isPersonalConversation ? { showingAgentPicker = true } : nil,
             isRunActive: state.isRunActive,
             onInputFocusChanged: onInputFocusChanged,
             onStop: {
@@ -1027,10 +1038,6 @@ struct AssistantView<Dock: View>: View {
                     phoneWorkspaceButton
                 }
                 Spacer(minLength: 0)
-                if !isPersonalConversation {
-                    headerButton("切换 Agent", symbol: "person.crop.circle") { showingAgentPicker = true }
-                        .accessibilityIdentifier("chat-header-agent")
-                }
                 if phone.summary?.available == true, !isPersonalConversation {
                     phoneWorkspaceButton
                 }
@@ -1135,6 +1142,7 @@ struct PersonalAgentProfileView: View {
     let conversation: ConversationSelection
     let onSaved: (PersonalAgentRecord) -> Void
     let onModelSaved: (ConversationSelection) -> Void
+    let allowsConversationSharing: Bool
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
@@ -1152,6 +1160,7 @@ struct PersonalAgentProfileView: View {
     @State private var avatarItem: PhotosPickerItem?
     @State private var avatarPreview: UIImage?
     @State private var uploadingAvatar = false
+    @State private var showingShare = false
     @State private var loadingVoices = true
     @State private var loadingProfile = true
     @State private var loadedProfile = false
@@ -1163,12 +1172,13 @@ struct PersonalAgentProfileView: View {
 
     init(configuration: GatewayConfiguration, record: PersonalAgentRecord, conversation: ConversationSelection,
          onSaved: @escaping (PersonalAgentRecord) -> Void,
-         onModelSaved: @escaping (ConversationSelection) -> Void = { _ in })
+         onModelSaved: @escaping (ConversationSelection) -> Void = { _ in }, allowsConversationSharing: Bool = false)
     {
         self.configuration = configuration
         self.conversation = conversation
         self.onSaved = onSaved
         self.onModelSaved = onModelSaved
+        self.allowsConversationSharing = allowsConversationSharing
         _record = State(initialValue: record)
         _name = State(initialValue: record.displayName)
         _appearance = State(initialValue: record.appearance)
@@ -1199,6 +1209,10 @@ struct PersonalAgentProfileView: View {
                         .onChange(of: name) { scheduleNameSave() }
                         .onSubmit { saveNow() }
                 }
+                if allowsConversationSharing {
+                    Button("分享会话", systemImage: "square.and.arrow.up") { showingShare = true }
+                        .accessibilityIdentifier("assistant-share")
+                }
                 modelSettings
                 callSettings
                 if saving {
@@ -1207,6 +1221,11 @@ struct PersonalAgentProfileView: View {
                     Text(error).foregroundStyle(mobileTheme.danger)
                     Button("重试") { saveNow() }
                 }
+            }
+            .sheet(isPresented: $showingShare) {
+                ConversationShareView(configuration: configuration, conversationID: conversation.id)
+                    .interactiveDismissDisabled()
+                    .presentationDetents([.large])
             }
             .disabled(saving || loadingProfile)
             .redacted(reason: loadingProfile ? .placeholder : [])

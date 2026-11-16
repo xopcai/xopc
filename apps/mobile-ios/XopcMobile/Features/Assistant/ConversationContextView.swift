@@ -56,7 +56,7 @@ struct ConversationContextView: View {
                 )
             }
         }
-        .navigationTitle("当前上下文")
+        .mobilePageTitle(Text("当前上下文"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: conversation?.id) { await loadDraftProject() }
         .sheet(isPresented: $showingReferencePicker) {
@@ -357,7 +357,7 @@ struct SessionEnvironmentSettingsView: View {
                 }
             }
         }
-        .navigationTitle("执行环境与范围")
+        .mobilePageTitle(Text("执行环境与范围"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
@@ -447,7 +447,7 @@ private struct ProjectEnvironmentChoiceView: View {
                 Button("重试") { Task { await load() } }
             }
         }
-        .navigationTitle(project.name)
+        .mobilePageTitle(Text(project.name))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }

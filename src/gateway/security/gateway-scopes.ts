@@ -40,6 +40,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (['GET', 'POST', 'DELETE'].includes(method) && path === '/api/desktop-host/execution') return 'device.self';
   if (method === 'DELETE' && ['/api/desktop-host/observation', '/api/desktop-host/screen'].includes(path)) return 'device.self';
   if (method === 'GET' && path === '/api/mobile/privacy') return 'gateway.status';
+  if (path === '/api/mobile/model-settings') return methodScope(method, 'agents.read', 'sessions.write');
   if (path === '/api/realtime/tickets' || path.startsWith('/api/status')) return 'gateway.status';
   if (path === '/api/device-auth/refresh' || path === '/api/devices/me') return 'device.self';
   if (path.startsWith('/api/devices/me/push')) return 'notifications.self';

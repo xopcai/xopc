@@ -76,7 +76,8 @@ export class XopcGatewaySession {
     if (typeof payload.status !== 'string') throw new Error('INVALID_GATEWAY_STATUS');
     return {
       gatewayId, status: payload.status, latencyMs: Date.now() - started,
-      routeUrl: session.activeOrigin(), checkedAt: Date.now(), version: payload.version ?? ''
+      routeUrl: session.activeOrigin(), checkedAt: Date.now(),
+      version: typeof payload.version === 'string' ? payload.version.trim() : ''
     };
   }
 

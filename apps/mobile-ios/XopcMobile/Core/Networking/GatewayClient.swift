@@ -1,7 +1,18 @@
 import Foundation
 
+enum ConversationHistoryScope: Equatable, Hashable, Sendable {
+    case recent, unassigned, project(String), expert(String)
+}
+
+extension GatewayServing {
+    func fetchConversationHistory(search: String, offset: Int, scope _: ConversationHistoryScope) async throws -> ConversationPage {
+        try await fetchConversations(search: search, offset: offset)
+    }
+}
+
 protocol GatewayServing: Sendable {
     func fetchAgents() async throws -> AgentCatalog
+    func fetchConversationHistory(search: String, offset: Int, scope: ConversationHistoryScope) async throws -> ConversationPage
     func fetchConversations(search: String, offset: Int) async throws -> ConversationPage
     func fetchHistory(conversationID: String) async throws -> ConversationHistory
     func fetchContext(conversationID: String) async throws -> ConversationContextSummary
@@ -216,6 +227,35 @@ struct GatewayClient: GatewayServing, Sendable {
         } else {
             query.append(URLQueryItem(name: "rootConversationsOnly", value: "true"))
         }
+        return try await request(path: "/api/sessions", queryItems: query)
+    }
+
+    func fetchConversationHistory(search: String, offset: Int, scope: ConversationHistoryScope) async throws -> ConversationPage {
+        var query = [
+            URLQueryItem(name: "limit", value: "50"),
+            URLQueryItem(name: "offset", value: String(offset)),
+            URLQueryItem(name: "excludeArchived", value: "true"),
+        ]
+        if !search.isEmpty { query.append(URLQueryItem(name: "search", value: search)) }
+        if search.isEmpty { query.append(URLQueryItem(name: "rootConversationsOnly", value: "true")) }
+        switch scope {
+        case .recent:
+            break
+        case .unassigned:
+            query.append(URLQueryItem(name: "unassigned", value: "true"))
+        case let .project(id):
+            query.append(URLQueryItem(name: "projectId", value: id))
+        case let .expert(id):
+            query += [
+                URLQueryItem(name: "agentId", value: id),
+                URLQueryItem(name: "sources", value: "workbench"),
+                URLQueryItem(name: "purposes", value: "chat"),
+                URLQueryItem(name: "activity", value: "manual"),
+            ]
+            if !search.isEmpty { query.append(URLQueryItem(name: "rootConversationsOnly", value: "true")) }
+            return try await request(path: "/api/sessions", queryItems: query)
+        }
+        query.append(URLQueryItem(name: "excludeAutomationRuns", value: "true"))
         return try await request(path: "/api/sessions", queryItems: query)
     }
 

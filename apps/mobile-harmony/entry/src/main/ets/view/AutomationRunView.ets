@@ -92,13 +92,14 @@ export struct XopcAutomationRunView {
   build() {
     NavDestination() {
       Column() {
-        XopcPageHeader({ heading: $r('app.string.automation_run_title'), backVisible: true, onBack: this.onExit,
-          actionLabel: $r('app.string.refresh'), actionIcon: $r('sys.symbol.arrow_clockwise'),
-          onAction: (): void => { void this.load(); } })
+        XopcPageHeader({ heading: $r('app.string.automation_run_title'), backVisible: true, onBack: this.onExit })
         Scroll() {
           Column({ space: 12 }) {
             if (this.busy && !this.run) { XopcListSkeleton() }
-            if (this.error) { Text(userErrorMessage(this.error, 'detail')).fontColor(this.colors.danger) }
+            if (this.error) {
+              Text(userErrorMessage(this.error, 'detail')).fontColor(this.colors.danger)
+              Button($r('app.string.retry')).enabled(!this.busy).onClick((): void => { void this.load(); })
+            }
             if (this.run) {
               Column({ space: 8 }) {
                 Text(this.run.automationName).fontSize(28).lineHeight(34).fontWeight(FontWeight.Bold)

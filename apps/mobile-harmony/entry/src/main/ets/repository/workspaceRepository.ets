@@ -108,9 +108,11 @@ export class XopcWorkspaceRepository {
       } else if (action === 'pin' || action === 'unpin') await gatewaySession.request(path + '/' + action, 'POST', '{}');
       else throw new Error('INVALID_ACTION');
     } else if (section === 'automations' && ['pause', 'resume'].includes(action)) {
-      await gatewaySession.request(path + '/' + action, 'POST', '{}');
+      const body = item.version > 0 ? JSON.stringify({ expectedRevision: item.version }) : '{}';
+      await gatewaySession.request(path + '/' + action, 'POST', body, item.version > 0 ? idempotencyKey : '');
     } else if (section === 'automations' && action === 'delete') {
-      await gatewaySession.request(path, 'DELETE');
+      const body = item.version > 0 ? JSON.stringify({ expectedRevision: item.version }) : '{}';
+      await gatewaySession.request(path, 'DELETE', body, item.version > 0 ? idempotencyKey : '');
     } else throw new Error('INVALID_ACTION');
   }
 

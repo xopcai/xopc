@@ -105,6 +105,7 @@
 		8DF6BCEE61CB87E56A8DBDEF /* AssistantComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534B8A85AE51F975E4104C07 /* AssistantComposer.swift */; };
 		902E984753F08AE804E83524 /* MathMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C2E2D33B81F4E2E94A29FA /* MathMarkdownTests.swift */; };
 		947513697F85DD78F8E32D5C /* AppPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F47BE78FE0529BB686EDBC64 /* AppPreferencesView.swift */; };
+		B0540AE732C76FCBF914EF11 /* ModelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB575C7CC724FBCEC1807C84 /* ModelSettingsView.swift */; };
 		94CFF81C365FED2D2AACE3ED /* AssistantTaskResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBF31D5A622F5FAA38FBFABB /* AssistantTaskResults.swift */; };
 		94D49C3EA7D4F9BE84D9C2EF /* NoteMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AF08714DC275A149E76AB4 /* NoteMutation.swift */; };
 		956F11E37888D267F812F456 /* AppRootTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1995C988B9EAD43B5B5383A6 /* AppRootTests.swift */; };
@@ -406,6 +407,7 @@
 		F0AF08714DC275A149E76AB4 /* NoteMutation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMutation.swift; sourceTree = "<group>"; };
 		F4334EC0967CCE3842C57872 /* ChatStreamBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStreamBuffer.swift; sourceTree = "<group>"; };
 		F47BE78FE0529BB686EDBC64 /* AppPreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferencesView.swift; sourceTree = "<group>"; };
+		BB575C7CC724FBCEC1807C84 /* ModelSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSettingsView.swift; sourceTree = "<group>"; };
 		F4C2A4FD49586D61A1532166 /* ConversationContextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContextView.swift; sourceTree = "<group>"; };
 		F829805607352507D86D54CC /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		F870C2254E2430F6C2D9D077 /* MessageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModels.swift; sourceTree = "<group>"; };
@@ -658,6 +660,7 @@
 			isa = PBXGroup;
 			children = (
 				F47BE78FE0529BB686EDBC64 /* AppPreferencesView.swift */,
+				BB575C7CC724FBCEC1807C84 /* ModelSettingsView.swift */,
 				945CE29DD9EAD63F09B42935 /* GatewayProfilesView.swift */,
 			);
 			path = Settings;
@@ -943,6 +946,7 @@
 				FED2DAEE1B07271D69C87AD8 /* AgentPicker.swift in Sources */,
 				23F0CAF9E03C1A0DB6E38E09 /* AppLocalization.swift in Sources */,
 				947513697F85DD78F8E32D5C /* AppPreferencesView.swift in Sources */,
+				B0540AE732C76FCBF914EF11 /* ModelSettingsView.swift in Sources */,
 				5E005B0434317F225D0CEBAC /* AppRootView.swift in Sources */,
 				8C6995CDAAC59764CAE6ACD3 /* AppState.swift in Sources */,
 				5822D695F90E6C3187380139 /* AssistantActionPanel.swift in Sources */,

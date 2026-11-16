@@ -1,4 +1,4 @@
-import { XopcSessionItem, XopcSidebarTaskGroup } from '../model/chat';
+import { XopcSessionItem, XopcSessionHistoryScope, XopcSidebarTaskGroup } from '../model/chat';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { gatewaySession } from '../service/gatewaySession';
 
@@ -19,6 +19,7 @@ export class XopcSessionsViewModel {
   @Trace hidden: string[] = [];
   @Trace undoId: string = '';
   private repository: XopcChatRepository = new XopcChatRepository();
+  private scope: XopcSessionHistoryScope = {};
   private generation: number = 0;
   private offset: number = 0;
   private searchTimer: number = -1;
@@ -34,6 +35,14 @@ export class XopcSessionsViewModel {
     this.loading = false; this.loadingMore = false; this.refreshing = false;
     // Already requested deletes keep their undo deadline, but never follow a Gateway switch.
   }
+  setScope(scope: XopcSessionHistoryScope): void {
+    if (!this.current() || this.busy) return;
+    this.scope = scope;
+    this.items = []; this.taskGroups = {}; this.offset = 0; this.hasMore = false;
+    this.search = ''; this.cancelSelection();
+    void this.load();
+  }
+
   setSearch(text: string): void {
     if (this.busy) return;
     clearTimeout(this.searchTimer); this.generation++;
@@ -49,12 +58,12 @@ export class XopcSessionsViewModel {
     this.loading = !more; this.loadingMore = more; this.error = '';
     this.refreshing = !more && userRefresh;
     try {
-      const page = await this.repository.list(this.search.trim(), offset, 20, '', !this.search.trim());
+      const page = await this.repository.historyList(this.search.trim(), offset, this.scope);
       if (generation !== this.generation || !this.current()) return;
       const retained = more ? [] : this.selectedItems();
       const seen: Set<string> = new Set<string>();
       this.items = (more ? this.items.concat(page.items) : page.items.concat(retained)).filter((item: XopcSessionItem): boolean => {
-        if (seen.has(item.key)) return false;
+        if (seen.has(item.key) || (this.scope.expertId && item.customData?.agentSetup === true)) return false;
         seen.add(item.key); return true;
       });
       const groups: Record<string, XopcSidebarTaskGroup> = {};

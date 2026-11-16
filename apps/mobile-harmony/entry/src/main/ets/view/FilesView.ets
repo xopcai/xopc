@@ -94,7 +94,7 @@ export struct XopcFilesView {
   @Builder
   header() {
     Row({ space: 8 }) {
-      Text($r('app.string.files')).fontSize(24).fontWeight(FontWeight.Bold).layoutWeight(1).fontColor(this.colors.foreground)
+      Blank().layoutWeight(1)
       if (this.model.space?.writable && !this.model.selected) {
         Button() {
           Row({ space: 5 }) {
@@ -126,12 +126,6 @@ export struct XopcFilesView {
           .backgroundColor(this.colors.input)
           .borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
           .onChange((query: string): void => { this.search = query; }).onSubmit((): void => { this.model.load(this.search); })
-        Button() {
-          if (this.model.busy) { XopcBrandLoading({ compact: true }) }
-          else { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(20).fontColor([this.colors.secondary]) }
-        }
-          .width(44).height(44).padding(0).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).enabled(!this.model.busy)
-          .accessibilityText($r('app.string.refresh')).onClick((): void => { this.model.load(this.search); })
       }.width('100%').padding({ left: 20, right: 20, top: 6, bottom: 16 })
 
       Row({ space: 6 }) {
@@ -186,6 +180,9 @@ export struct XopcFilesView {
           Text(userErrorMessage(this.model.error, this.model.items.length ? 'generic' : 'collection')).fontSize(13)
             .fontColor(this.colors.secondary).width('100%')
             .padding({ left: 20, right: 20, bottom: 8 })
+          if (!this.model.busy && !this.model.selected) {
+            Button($r('app.string.retry')).onClick((): void => { this.model.load(this.search); })
+          }
         }
         if (this.model.busy && !!this.initialId && !this.model.selected) { XopcBrandLoading() }
         else { this.fileList() }

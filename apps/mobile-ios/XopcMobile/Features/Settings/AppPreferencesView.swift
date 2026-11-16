@@ -2,17 +2,32 @@ import SwiftUI
 
 struct AppSettingsView: View {
     let configuration: GatewayConfiguration
+    let gatewayName: String
     let onOpenGatewaySettings: () -> Void
-    var showsProfile = false
+    let personalAgent: PersonalAgentRecord?
+    let personalAgentBusy: Bool
+    let personalAgentError: String?
+    let onOpenPersonalAgent: () -> Void
+    let onPersonalAgentSaved: (PersonalAgentRecord) -> Void
     @Environment(\.locale) private var locale
 
     var body: some View {
         List {
-            if showsProfile {
-                NavigationLink(value: HomeDestination.profile) {
-                    Label("我的", systemImage: "person.crop.circle")
+            Section("个性化") {
+                PersonalAgentSettingsRow(configuration: configuration, personalAgent: personalAgent,
+                                         busy: personalAgentBusy, error: personalAgentError, onOpenPersonalAgent: onOpenPersonalAgent, onSaved: onPersonalAgentSaved)
+                NavigationLink {
+                    UserUnderstandingView(configuration: configuration)
+                } label: {
+                    Label("隐私与记忆", systemImage: "lock")
                 }
-                .accessibilityIdentifier("settings-personal-profile")
+                .accessibilityIdentifier("settings-privacy-memory")
+                NavigationLink {
+                    PersonalGoalsView(configuration: configuration)
+                } label: {
+                    Label("目标", systemImage: "flag")
+                }
+                .accessibilityIdentifier("settings-goals")
             }
             Section("连接与通知") {
                 Button {
@@ -20,6 +35,12 @@ struct AppSettingsView: View {
                 } label: {
                     Label("Gateway 管理", systemImage: "network")
                 }
+                NavigationLink {
+                    ModelSettingsView(configuration: configuration, gatewayName: gatewayName)
+                } label: {
+                    Label("模型设置", systemImage: "slider.horizontal.3")
+                }
+                .accessibilityIdentifier("settings-models")
                 NavigationLink {
                     NotificationSettingsView()
                 } label: {
@@ -54,10 +75,12 @@ struct AppSettingsView: View {
                 NavigationLink {
                     AboutView()
                 } label: {
-                    Label("xopc", systemImage: "info.circle")
+                    Label("关于 xopc", systemImage: "info.circle")
                 }
+                .accessibilityIdentifier("settings-about")
             }
         }
+        .listSectionSpacing(16)
         .mobilePageTitle(Text(verbatim: AppLocalization.string("设置", locale: locale)))
     }
 }

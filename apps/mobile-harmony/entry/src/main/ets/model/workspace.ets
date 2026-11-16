@@ -81,7 +81,7 @@ export interface XopcProject {
 export interface XopcProjectList { items: XopcProject[]; }
 export interface XopcProjectResult { project: XopcProject; }
 export interface XopcProjectWrite { name?: string; description?: string; status?: string; }
-export interface XopcSchedule { kind: string; expr?: string; tz?: string; }
+export interface XopcSchedule { kind: string; expr?: string; tz?: string; at?: string; everyMs?: number; }
 export interface XopcTrigger { kind: string; schedule?: XopcSchedule; }
 export interface XopcAutomationAction { kind: string; instruction?: string; }
 export interface XopcAutomationState {

@@ -1,14 +1,18 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcSessionsViewModel } from '../viewmodel/sessionsViewModel';
-import { XopcSessionItem, XopcSessionGroup, XopcSidebarTaskChild, XopcSidebarTaskGroup } from '../model/chat';
+import { XopcChatAgent, XopcSessionItem, XopcSessionGroup, XopcSidebarTaskChild, XopcSidebarTaskGroup } from '../model/chat';
 import { groupChatSessions, sessionAge } from '../common/sessionGroups';
-import { XopcErrorState, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField, XopcPaginationFooter } from './MobileComponents';
+import { XopcErrorState, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField, XopcPageTitleMenu, XopcPaginationFooter } from './MobileComponents';
 import { userErrorMessage } from '../common/userError';
 import { appSettings } from '../service/settings';
-import { XopcShareResult } from '../model/share';
-import { shareService } from '../service/shareService';
-import { XopcShareResultView } from './ShareResultView';
+import { XopcConversationShare } from './ConversationShare';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
+
+import { XopcChatRepository } from '../repository/chatRepository';
+import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
+import { XopcWorkspaceItem } from '../model/workspace';
+
+interface XopcHistoryGroup { id: string; name: ResourceStr; }
 
 interface XopcSessionDisplayRow {
   key: string;
@@ -142,6 +146,14 @@ export struct XopcSessionsView {
   @Event onNew: (id: string) => void = (_id: string): void => {};
   @Event onDelete: (id: string) => void = (_id: string): void => {};
   @Local sessions: XopcSessionsViewModel = new XopcSessionsViewModel();
+  @Local historyMode: string = 'recent';
+  @Local groupId: string = '';
+  @Local groupName: ResourceStr = '';
+  @Local groupQuery: string = '';
+  @Local groups: XopcHistoryGroup[] = [];
+  @Local groupsLoading: boolean = false;
+  @Local groupsError: string = '';
+  private catalogRevision: number = 0;
   @Local searchOpen: boolean = false;
   @Local expandedTaskParents: string[] = [];
   @Local collapsedTaskParents: string[] = [];
@@ -151,18 +163,100 @@ export struct XopcSessionsView {
   private pendingMenuAction: string = '';
   @Local renameId: string = '';
   @Local renameText: string = '';
-  @Local shareResult?: XopcShareResult;
+  @Local shareConversationId: string = '';
   @Local shareOpen: boolean = false;
-  @Local shareBusy: boolean = false;
   private scroller: Scroller = new Scroller();
   private opening: boolean = false;
 
   aboutToAppear(): void { this.searchOpen = this.startSearching; }
-  aboutToDisappear(): void { this.sessions.dispose(); }
+  aboutToDisappear(): void { this.catalogRevision++; this.sessions.dispose(); }
   private activate(): void {
     this.opening = false;
-    this.sessions.load();
+    if (this.browsingGroups()) void this.loadGroups(); else void this.sessions.load();
   }
+  private browsingGroups(): boolean { return this.historyMode !== 'recent' && !this.groupId; }
+
+  private async loadGroups(): Promise<void> {
+    const mode = this.historyMode;
+    const revision = ++this.catalogRevision;
+    this.groupsLoading = true; this.groupsError = '';
+    try {
+      let groups: XopcHistoryGroup[];
+      if (mode === 'projects') {
+        const page = await new XopcWorkspaceRepository().list('projects', '');
+        groups = page.items.filter((item: XopcWorkspaceItem): boolean => item.status !== 'archived')
+          .map((item: XopcWorkspaceItem): XopcHistoryGroup => ({ id: item.id, name: item.title }));
+        groups.unshift({ id: 'unassigned', name: $r('app.string.sessions_unassigned') });
+      } else {
+        const catalog = await new XopcChatRepository().agents();
+        groups = catalog.agents.filter((agent: XopcChatAgent): boolean =>
+          agent.id !== 'main' && agent.id !== 'task-router' && !/^personal-[a-f0-9]{12}$/i.test(agent.id)
+          && agent.override?.purpose !== 'task_dispatcher')
+          .map((agent: XopcChatAgent): XopcHistoryGroup => ({ id: agent.id, name: agent.name || agent.id }));
+      }
+      if (revision === this.catalogRevision) this.groups = groups;
+    } catch (error) {
+      if (revision === this.catalogRevision) this.groupsError = (error as Error).message;
+    } finally { if (revision === this.catalogRevision) this.groupsLoading = false; }
+  }
+
+  private selectMode(mode: string): void {
+    if (mode === this.historyMode) return;
+    this.catalogRevision++;
+    this.historyMode = mode; this.groupId = ''; this.groupName = '';
+    this.groups = []; this.groupQuery = '';
+    this.closeSearch();
+    if (mode === 'recent') this.sessions.setScope({});
+    else void this.loadGroups();
+  }
+
+  private chooseGroup(group: XopcHistoryGroup): void {
+    this.searchOpen = false;
+    this.getUIContext().getFocusController().clearFocus();
+    this.groupId = group.id; this.groupName = group.name;
+    if (this.historyMode === 'experts') this.sessions.setScope({ expertId: group.id });
+    else if (group.id === 'unassigned') this.sessions.setScope({ unassigned: true });
+    else this.sessions.setScope({ projectId: group.id });
+  }
+
+  private clearGroup(): void {
+    this.groupId = ''; this.groupName = ''; this.closeSearch();
+  }
+
+  private searchLabel(): Resource {
+    if (!this.browsingGroups()) return $r('app.string.sessions_search');
+    return this.historyMode === 'projects' ? $r('app.string.sessions_search_projects') : $r('app.string.sessions_search_experts');
+  }
+
+  private groupText(name: ResourceStr): string {
+    return typeof name === 'string' ? name : this.text(name);
+  }
+
+  @Builder
+  private groupList() {
+    List({ space: 8 }) {
+      if (this.groupsLoading) {
+        ListItem() { XopcListSkeleton() }
+      } else if (this.groupsError) {
+        ListItem() { XopcErrorState({ error: this.groupsError, context: 'collection',
+          onAction: (): void => { void this.loadGroups(); } }) }
+      } else {
+        ForEach(this.groups.filter((group: XopcHistoryGroup): boolean =>
+          this.groupText(group.name).toLowerCase().includes(this.groupQuery.trim().toLowerCase())),
+          (group: XopcHistoryGroup): void => {
+            ListItem() {
+              XopcHubRow({ heading: group.name, symbol: this.historyMode === 'projects' ? $r('sys.symbol.folder') : $r('sys.symbol.person'),
+                onOpen: (): void => { this.chooseGroup(group); } })
+            }
+          }, (group: XopcHistoryGroup): string => group.id)
+        if (!this.groups.some((group: XopcHistoryGroup): boolean =>
+          this.groupText(group.name).toLowerCase().includes(this.groupQuery.trim().toLowerCase()))) {
+          ListItem() { Text($r('app.string.workspace_no_matches')).fontColor(this.colors.secondary).padding(24) }
+        }
+      }
+    }.width('100%').layoutWeight(1).padding({ left: 20, right: 20 })
+  }
+
   @Computed
   get rows(): XopcSessionDisplayRow[] {
     const result: XopcSessionDisplayRow[] = [];
@@ -221,7 +315,8 @@ export struct XopcSessionsView {
   private closeSearch(): void {
     this.getUIContext().getFocusController().clearFocus();
     this.searchOpen = false;
-    this.sessions.setSearch('');
+    this.groupQuery = '';
+    if (!this.browsingGroups()) this.sessions.setSearch('');
   }
 
   private back(): boolean {
@@ -230,6 +325,7 @@ export struct XopcSessionsView {
     if (this.renameOpen) { this.renameOpen = false; return true; }
     if (this.sessions.selecting) { this.sessions.cancelSelection(); return true; }
     if (this.searchOpen) { this.closeSearch(); return true; }
+    if (this.groupId) { this.clearGroup(); return true; }
     return false;
   }
   private renameItem(item: XopcSessionItem): void {
@@ -263,19 +359,9 @@ export struct XopcSessionsView {
     else if (action === 'delete') this.sessions.scheduleDelete(item.key, this.onDelete);
     else if (action === 'select') this.sessions.select(item.key);
   }
-  private async shareSession(item: XopcSessionItem): Promise<void> {
-    if (this.shareBusy || this.sessions.busy) return;
-    this.shareBusy = true; this.sessions.actionError = '';
-    try {
-      const preview = await shareService.sessionPreview(item.key);
-      const result = await this.getUIContext().getPromptAction().showDialog({ title: $r('app.string.share_session_title'),
-        message: this.text($r('app.string.share_session_confirm')).replace('%d', preview.messageCount.toString())
-          .replace('%d', preview.attachmentCandidates.length.toString()),
-        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
-          { text: $r('app.string.chat_share'), color: this.colors.accent }] });
-      if (result.index === 1) { this.shareResult = await shareService.session(item.key, preview); this.shareOpen = true; }
-    } catch (error) { this.sessions.actionError = (error as Error).message; }
-    finally { this.shareBusy = false; }
+  private shareSession(item: XopcSessionItem): void {
+    this.shareConversationId = item.key;
+    this.shareOpen = true;
   }
   private confirmDelete(): void {
     const targets = this.sessions.selectedItems();
@@ -330,7 +416,8 @@ export struct XopcSessionsView {
   }
   @Builder
   shareSheet() {
-    if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.shareOpen = false; } }) }
+    XopcConversationShare({ conversationId: this.shareConversationId,
+      onClose: (): void => { this.shareOpen = false; } })
   }
   @Builder
   batchBar() {
@@ -375,77 +462,95 @@ export struct XopcSessionsView {
   @Builder
   content() {
     Column() {
-        Row({ space: 8 }) {
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(21).fontColor([this.colors.foreground])
-          }.id('sessions-back').width(44).height(44).padding(0)
-            .backgroundColor(this.colors.light ? this.colors.panel : Color.Transparent)
-            .accessibilityText($r('app.string.back')).onClick((): void => { if (!this.back()) this.onExit(); })
-          Row() {
-            Text(this.sessions.selecting ? $r('app.string.sessions_selected', this.sessions.selected.length)
-              : $r('app.string.history'))
-              .fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-              .constraintSize({ maxWidth: '90%' }).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          }.layoutWeight(1)
+        Stack({ alignContent: Alignment.Center }) {
+          Row({ space: 8 }) {
+            Button({ type: ButtonType.Circle }) {
+              SymbolGlyph($r('sys.symbol.arrow_left')).fontSize(21).fontColor([this.colors.foreground])
+            }.id('sessions-back').width(44).height(44).padding(0)
+              .backgroundColor(this.colors.panel)
+              .accessibilityText($r('app.string.back')).onClick((): void => { if (!this.back()) this.onExit(); })
+            if (this.sessions.selecting) {
+              Text($r('app.string.sessions_selected', this.sessions.selected.length))
+                .fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).layoutWeight(1)
+            } else { Blank().layoutWeight(1) }
+            if (!this.sessions.selecting) {
+              XopcPageSearchButton({ searchId: 'sessions-open-search', open: this.searchOpen,
+                label: this.searchLabel(), onToggle: (): void => {
+                  if (this.searchOpen) this.closeSearch(); else this.searchOpen = true;
+                } })
+              if (this.historyMode === 'recent') {
+                Button() {
+                  SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.foreground])
+                }.id('sessions-new').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+                  .accessibilityText($r('app.string.new_chat')).enabled(!this.sessions.busy)
+                  .onClick(async (): Promise<void> => { await this.createConversation(); })
+              }
+            }
+          }.width('100%')
           if (!this.sessions.selecting) {
-            XopcPageSearchButton({ searchId: 'sessions-open-search', open: this.searchOpen,
-              label: $r('app.string.sessions_search'), onToggle: (): void => {
-                if (this.searchOpen) this.closeSearch(); else this.searchOpen = true;
-              } })
-            Button() {
-              SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.foreground])
-            }.id('sessions-new').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-              .accessibilityText($r('app.string.new_chat')).enabled(!this.sessions.busy)
-              .onClick(async (): Promise<void> => { await this.createConversation(); })
+            XopcPageTitleMenu({ heading: this.historyMode === 'projects' ? $r('app.string.projects')
+              : this.historyMode === 'experts' ? $r('app.string.capability_experts') : $r('app.string.sessions_recent'),
+              selected: this.historyMode, menuId: 'sessions-mode-menu', options: [
+                { key: 'recent', label: $r('app.string.sessions_recent'), id: 'sessions-mode-recent' },
+                { key: 'projects', label: $r('app.string.projects'), id: 'sessions-mode-projects' },
+                { key: 'experts', label: $r('app.string.capability_experts'), id: 'sessions-mode-experts' }
+              ], onSelect: (mode: string): void => { this.selectMode(mode); } }).constraintSize({ maxWidth: '48%' })
           }
         }.width('100%').padding({ left: 12, right: 12, top: 12, bottom: 12 })
+        if (this.groupId) {
+          Button(this.groupText(this.groupName) + ' ×').onClick((): void => { this.clearGroup(); })
+            .margin({ left: 20, bottom: 8 }).height(40).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
+        }
         if (this.searchOpen && !this.sessions.selecting) {
           Column() {
-            XopcPageSearchField({ searchId: 'sessions-search', text: this.sessions.search,
-              placeholder: $r('app.string.sessions_search'),
+            XopcPageSearchField({ searchId: 'sessions-search', text: this.browsingGroups() ? this.groupQuery : this.sessions.search,
+              placeholder: this.searchLabel(),
               onChange: (text: string): void => {
-                this.scroller.scrollTo({ xOffset: 0, yOffset: 0 }); this.sessions.setSearch(text);
+                if (this.browsingGroups()) this.groupQuery = text;
+                else { this.scroller.scrollTo({ xOffset: 0, yOffset: 0 }); this.sessions.setSearch(text); }
               },
-              onSubmit: (): void => { void this.sessions.load(); } })
+              onSubmit: (): void => { if (!this.browsingGroups()) void this.sessions.load(); } })
           }.padding({ left: 20, right: 20, bottom: 8 })
         }
-        if ((this.sessions.error || this.sessions.actionError) && this.sessions.items.length) {
-          Row({ space: 8 }) {
-            Text(userErrorMessage(this.sessions.actionError || this.sessions.error, 'collection')).fontSize(13)
-              .fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
-            Button($r('app.string.refresh')).height(44).enabled(!this.sessions.busy).onClick((): void => { this.sessions.load(); })
-          }.padding({ left: 20, right: 20, top: 4, bottom: 4 }).backgroundColor(this.colors.panel)
+        if (this.browsingGroups()) { this.groupList(); } else {
+          if ((this.sessions.error || this.sessions.actionError) && this.sessions.items.length) {
+            Row({ space: 8 }) {
+              Text(userErrorMessage(this.sessions.actionError || this.sessions.error, 'collection')).fontSize(13)
+                .fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
+              Button($r('app.string.refresh')).height(44).enabled(!this.sessions.busy).onClick((): void => { this.sessions.load(); })
+            }.padding({ left: 20, right: 20, top: 4, bottom: 4 }).backgroundColor(this.colors.panel)
+          }
+          Refresh({ refreshing: this.sessions.refreshing }) {
+            List({ scroller: this.scroller }) {
+              if (this.sessions.loading && !this.sessions.items.length) { ListItem() { XopcListSkeleton() } }
+              if (!this.sessions.loading && this.sessions.error && !this.sessions.items.length) {
+                ListItem() { XopcErrorState({ error: this.sessions.error, context: 'collection',
+                  onAction: (): void => { this.sessions.load(); } }) }
+              }
+              Repeat<XopcSessionDisplayRow>(this.rows).each((row: RepeatItem<XopcSessionDisplayRow>) => {
+                ListItem() {
+                  XopcSessionManagerRow({ entry: row.item, selecting: this.sessions.selecting,
+                    selected: this.sessions.selected.includes(row.item.key), current: row.item.key === this.currentId,
+                    locked: this.sessions.busy,
+                    onOpen: (item: XopcSessionItem): void => { this.open(item); }, onMenu: (item: XopcSessionItem): void => { this.menu(item); },
+                    onToggle: (id: string): void => { this.toggleTasks(id); },
+                    onOpenTask: (id: string): void => { this.openTask(id); } })
+                }
+              }).key((row: XopcSessionDisplayRow): string => row.key).virtualScroll({ totalCount: this.rows.length })
+              if (!this.sessions.loading && !this.rows.length && !this.sessions.error) {
+                ListItem() { Text(this.sessions.search.trim() ? $r('app.string.sessions_no_results') : $r('app.string.no_conversations'))
+                  .fontColor(this.colors.secondary).width('100%').padding(24) }
+              }
+              if (this.sessions.hasMore) {
+                ListItem() {
+                  XopcPaginationFooter({ loadingPage: this.sessions.loading || this.sessions.loadingMore || this.sessions.busy,
+                    failedPage: !!this.sessions.error,
+                    onLoad: (): void => { void this.sessions.load(true); } })
+                }
+              }
+            }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20 }).cachedCount(5)
+          }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(false, true); })
         }
-        Refresh({ refreshing: this.sessions.refreshing }) {
-          List({ scroller: this.scroller }) {
-            if (this.sessions.loading && !this.sessions.items.length) { ListItem() { XopcListSkeleton() } }
-            if (!this.sessions.loading && this.sessions.error && !this.sessions.items.length) {
-              ListItem() { XopcErrorState({ error: this.sessions.error, context: 'collection',
-                onAction: (): void => { this.sessions.load(); } }) }
-            }
-            Repeat<XopcSessionDisplayRow>(this.rows).each((row: RepeatItem<XopcSessionDisplayRow>) => {
-              ListItem() {
-                XopcSessionManagerRow({ entry: row.item, selecting: this.sessions.selecting,
-                  selected: this.sessions.selected.includes(row.item.key), current: row.item.key === this.currentId,
-                  locked: this.sessions.busy,
-                  onOpen: (item: XopcSessionItem): void => { this.open(item); }, onMenu: (item: XopcSessionItem): void => { this.menu(item); },
-                  onToggle: (id: string): void => { this.toggleTasks(id); },
-                  onOpenTask: (id: string): void => { this.openTask(id); } })
-              }
-            }).key((row: XopcSessionDisplayRow): string => row.key).virtualScroll({ totalCount: this.rows.length })
-            if (!this.sessions.loading && !this.rows.length && !this.sessions.error) {
-              ListItem() { Text(this.sessions.search.trim() ? $r('app.string.sessions_no_results') : $r('app.string.no_conversations'))
-                .fontColor(this.colors.secondary).width('100%').padding(24) }
-            }
-            if (this.sessions.hasMore && this.sessions.items.length) {
-              ListItem() {
-                XopcPaginationFooter({ loadingPage: this.sessions.loading || this.sessions.loadingMore || this.sessions.busy,
-                  failedPage: !!this.sessions.error,
-                  onLoad: (): void => { void this.sessions.load(true); } })
-              }
-            }
-          }.id('sessions-list').width('100%').height('100%').padding({ left: 20, right: 20 }).cachedCount(5)
-        }.layoutWeight(1).pullToRefresh(!this.sessions.busy).onRefreshing((): void => { this.sessions.load(false, true); })
         if (this.sessions.undoId) {
           Row() {
             Text($r('app.string.sessions_deleted')).fontColor(this.colors.foreground).layoutWeight(1)

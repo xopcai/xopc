@@ -9,6 +9,8 @@ import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcListSkeleton } from './MobileComponents';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 
+const SIDEBAR_TAP_SLOP_VP = 8;
+
 @ComponentV2
 export struct XopcChatSidebar {
   @Local colors: XopcThemeColors = appThemeColors;
@@ -25,6 +27,8 @@ export struct XopcChatSidebar {
   @Param drawerWidth: number = 0;
   @Param interactive: boolean = false;
   @Event onClose: () => void = (): void => {};
+  @Event onDismissDrag: (offset: number) => void = (_offset: number): void => {};
+  @Event onDismissEnd: (offset: number, velocity: number) => void = (_offset: number, _velocity: number): void => {};
   @Event onPersonal: () => void = (): void => {};
   @Event onNew: () => void = (): void => {};
   @Event onConversation: (id: string) => void = (_id: string): void => {};
@@ -66,11 +70,21 @@ export struct XopcChatSidebar {
   private go(page: string): void { this.onNavigate({ page, itemId: '' }); }
 
   @Builder
-  shortcut(label: Resource, icon: Resource, page: string, count: number = 0) {
+  shortcut(label: Resource, icon: Resource | undefined, page: string, count: number = 0) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
-        SymbolGlyph(icon).fontSize(19).fontColor([this.colors.secondary]).width(28)
-        Text(label).fontSize(15).fontColor(this.colors.foreground).layoutWeight(1)
+        if (page === 'personal') {
+          Row() {
+            XopcPersonalAgentAvatar({ extent: 24, compact: true, activePage: false,
+              agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
+              revision: this.personalAgent?.revision ?? 0 })
+          }.width(28).justifyContent(FlexAlign.Center).accessibilityLevel('no-hide-descendants')
+        } else if (icon) {
+          SymbolGlyph(icon).fontSize(19).fontColor([this.colors.secondary]).width(28)
+        }
+        Text(page === 'personal' ? this.personalAgent?.displayName || label : label)
+          .fontSize(15).fontColor(this.colors.foreground).layoutWeight(1)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         if (count > 0) {
           Text(count > 99 ? '99+' : count.toString()).fontSize(12)
             .fontColor(this.colors.attentionForeground)
@@ -78,8 +92,13 @@ export struct XopcChatSidebar {
             .backgroundColor(this.colors.attentionFill)
         }
       }.width('100%').constraintSize({ minHeight: 44 }).padding({ left: 10, right: 10 })
-    }.id('chat-sidebar-' + page).width('100%').padding(0).backgroundColor(Color.Transparent)
-      .onClick((): void => { this.go(page); })
+    }.id('chat-sidebar-' + page).width('100%').padding(0).borderRadius(this.colors.corner(12))
+      .backgroundColor(page === 'personal' && this.currentId && this.personalAgent?.conversationId === this.currentId
+        ? this.colors.active : Color.Transparent)
+      .enabled(page !== 'personal' || !this.personalBusy).onClick((): void => {
+        if (page === 'personal') this.onPersonal();
+        else this.go(page);
+      }, SIDEBAR_TAP_SLOP_VP)
   }
 
   build() {
@@ -105,27 +124,10 @@ export struct XopcChatSidebar {
         }.id('chat-sidebar-search').width('100%').padding(0)
           .backgroundColor(this.colors.input)
           .borderRadius(this.colors.corner(22))
-          .onClick((): void => { this.go('sessions-search'); })
+          .onClick((): void => { this.go('sessions-search'); }, SIDEBAR_TAP_SLOP_VP)
         Scroll() {
           Column({ space: 2 }) {
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 10 }) {
-                XopcPersonalAgentAvatar({ extent: 42, compact: true, activePage: !this.personalBusy,
-                  agentId: this.personalAgent?.agentId ?? '', appearance: this.personalAgent?.appearance ?? 'loopi',
-                  revision: this.personalAgent?.revision ?? 0 })
-                Column({ space: 3 }) {
-                  Text(this.personalAgent?.displayName || $r('app.string.chat_personal_agent')).fontSize(17)
-                    .fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
-                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  if (this.personalAgent?.displayName) {
-                    Text($r('app.string.chat_personal_agent')).fontSize(12).fontColor(this.colors.secondary).width('100%')
-                  }
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.secondary])
-              }.width('100%').constraintSize({ minHeight: 62 }).padding({ left: 8, right: 10, top: 7, bottom: 7 })
-            }.id('chat-sidebar-personal').width('100%').padding(0).borderRadius(this.colors.corner(16))
-              .backgroundColor(this.personalAgent?.conversationId === this.currentId ? this.colors.active : this.colors.panel)
-              .enabled(!this.personalBusy).onClick((): void => { this.onPersonal(); })
+            this.shortcut($r('app.string.chat_personal_agent'), undefined, 'personal')
             this.shortcut($r('app.string.progress'), $r('sys.symbol.checkmark_circle'), 'progress', this.pendingAttention)
             this.shortcut($r('app.string.projects'), $r('sys.symbol.folder'), 'projects')
             this.shortcut($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
@@ -150,10 +152,11 @@ export struct XopcChatSidebar {
                 }.id('chat-sidebar-session-' + item.key).width('100%').constraintSize({ minHeight: 44 })
                   .padding({ left: 10, right: 10 }).borderRadius(this.colors.corner(12))
                   .backgroundColor(item.key === this.currentId ? this.colors.active : Color.Transparent)
-                  .accessibilitySelected(item.key === this.currentId).onClick((): void => { this.onConversation(item.key); })
+                  .accessibilitySelected(item.key === this.currentId)
+                  .onClick((): void => { this.onConversation(item.key); }, SIDEBAR_TAP_SLOP_VP)
               }, (item: XopcSessionItem): string => item.key + ':' + item.updatedAt)
             }
-            this.shortcut($r('app.string.history'), $r('sys.symbol.list_bullet'), 'sessions')
+            this.shortcut($r('app.string.chat_view_more'), $r('sys.symbol.list_bullet'), 'sessions')
           }.width('100%').padding({ top: 12, bottom: 8 }).alignItems(HorizontalAlign.Start)
         }.layoutWeight(1).width('100%').align(Alignment.TopStart).scrollBar(BarState.Off)
         Row() {
@@ -177,6 +180,10 @@ export struct XopcChatSidebar {
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
         .translate({ x: (this.reveal - 1) * this.drawerWidth })
     }.width('100%').height('100%')
+      .priorityGesture(PanGesture({ direction: PanDirection.Left, distance: SIDEBAR_TAP_SLOP_VP })
+        .onActionUpdate((event: GestureEvent): void => { this.onDismissDrag(event.offsetX); })
+        .onActionEnd((event: GestureEvent): void => { this.onDismissEnd(event.offsetX, event.velocityX); })
+        .onActionCancel((): void => { this.onDismissEnd(0, 0); }))
       .hitTestBehavior(this.interactive ? HitTestMode.Default : HitTestMode.None)
       .accessibilityLevel(this.interactive ? 'auto' : 'no-hide-descendants')
   }

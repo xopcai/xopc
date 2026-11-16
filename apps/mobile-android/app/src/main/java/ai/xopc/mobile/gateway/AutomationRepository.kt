@@ -8,7 +8,8 @@ data class AutomationSummary(val id: String, val name: String, val description: 
   val lastRunStatus: String?, val lastError: String?, val updatedAtMs: Long = 0,
   val canRun: Boolean = true, val canToggle: Boolean = true,
   val canEditDetails: Boolean = false, val canEditSchedule: Boolean = false,
-  val canDelete: Boolean = false, val triggerJson: String = "", val actionJson: String = "")
+  val canDelete: Boolean = false, val triggerJson: String = "", val actionJson: String = "",
+  val intervalMs: Long? = null, val onceAtMs: Long? = null)
 data class AutomationRunSummary(val id: String, val automationId: String, val automationName: String,
   val status: String, val summary: String?, val error: String?, val conversationId: String?,
   val createdAtMs: Long?, val startedAtMs: Long?,
@@ -232,6 +233,7 @@ class AutomationRepository(private val gateway: GatewaySession) {
       val name = row.getString("name")
       require(name.isNotBlank()) { "INVALID_AUTOMATION" }
       val trigger = row.getJSONObject("trigger")
+      val schedule = trigger.optJSONObject("schedule")
       val action = row.getJSONObject("action")
       val state = row.optJSONObject("state")
       val management = row.optJSONObject("management")
@@ -247,7 +249,7 @@ class AutomationRepository(private val gateway: GatewaySession) {
         (0 until (editable?.length() ?: 0)).any { editable?.optString(it) == "trigger" })
       return AutomationSummary(id, name.take(200), row.optString("description").take(2000),
         row.getBoolean("enabled"), trigger.getString("kind"),
-        trigger.optJSONObject("schedule")?.optString("expr").orEmpty().take(256),
+        schedule?.optString("expr").orEmpty().take(256),
         action.optString("instruction").take(50000),
         row.optString("projectId").takeIf(String::isNotBlank),
         state?.optLongOrNull("nextRunAtMs"), state?.optLongOrNull("lastRunAtMs"),
@@ -256,7 +258,10 @@ class AutomationRepository(private val gateway: GatewaySession) {
         row.optLongOrNull("updatedAtMs") ?: 0,
         management?.optBoolean("runnable", true) ?: true, canToggle,
         canEditDetails, canEditSchedule, management?.optBoolean("deletable", false) ?: true,
-        trigger.toString(), action.toString())
+        trigger.toString(), action.toString(), intervalMs = schedule?.optLongOrNull("everyMs"),
+        onceAtMs = schedule?.optString("at")?.takeIf(String::isNotBlank)?.let { value ->
+          runCatching { java.time.Instant.parse(value).toEpochMilli() }.getOrNull()
+        })
     }
 
     private fun parseRun(row: JSONObject): AutomationRunSummary {

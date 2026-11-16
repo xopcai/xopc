@@ -28,9 +28,6 @@ struct ProjectDetailView: View {
         Group {
             if let project {
                 List {
-                    Section {
-                        projectSectionPicker
-                    }
                     if selection == .overview {
                         Section {
                             VStack(alignment: .leading, spacing: 14) {
@@ -87,7 +84,11 @@ struct ProjectDetailView: View {
                 ProgressView("正在读取项目…")
             }
         }
-        .mobilePageTitle(Text("项目详情"))
+        .mobilePageTitle(Text("项目详情")) {
+            MobilePageTitleMenu(options: ProjectSection.allCases.map {
+                SegmentOption(id: $0, title: $0.title, accessibilityID: "project-tab-\($0.rawValue)")
+            }, selected: selection, identifier: "project-tabs") { selection = $0 }
+        }
         .task { await load() }
         .sheet(item: $creationSheet, onDismiss: { Task { await load() } }) { sheet in
             switch sheet {
@@ -133,14 +134,6 @@ struct ProjectDetailView: View {
             Button("重试") { Task { await load() } }
             Button("取消", role: .cancel) {}
         } message: { Text(error ?? "未知错误") }
-    }
-
-    private var projectSectionPicker: some View {
-        SegmentedTabs(options: ProjectSection.allCases.map { section in
-            SegmentOption(id: section, title: section.title, accessibilityID: "project-tab-\(section.rawValue)")
-        }, selected: selection, label: "项目分区", minimumSegmentWidth: 72) { selection = $0 }
-            .accessibilityIdentifier("project-tabs")
-            .listRowInsets(EdgeInsets())
     }
 
     private func projectSessions(_ project: ProjectRecord) -> some View {

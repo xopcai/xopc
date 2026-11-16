@@ -167,7 +167,7 @@ describe('chat bottom region composition', () => {
     expect(ordinary.match(/Blank\(\)\.layoutWeight\(1\)/g)).toHaveLength(2);
     expect(ordinary).not.toContain('this.chat.title');
     expect(ordinary).not.toContain('this.options.agentName()');
-    expect(ordinary).toContain('this.agentPickerButton()');
+    expect(ordinary).not.toContain('this.agentPickerButton()');
     expect(ordinary).toContain('this.conversationActions()');
     expect(home).toContain('pendingAttention: this.pendingAttention');
     expect(home).toContain('return this.attention.pendingCount;');
@@ -258,8 +258,11 @@ describe('chat bottom region composition', () => {
     expect(actionPanel).toContain(".id('chat-action-panel')");
     expect(actionPanel).toContain(".width('25%').height(84)");
     expect(Array.from(actionPanel.matchAll(/this\.actionTile\('([^']+)'/g), match => match[1])).toEqual([
-      'photos', 'camera', 'document', 'record-voice', 'reference-note', 'reference-task', 'reference-file',
+      'photos', 'camera', 'document', 'record-voice', 'reference-note', 'reference-task', 'reference-file', 'switch-agent',
     ]);
+    expect(actionPanel).toContain('if (this.canSwitchAgent)');
+    expect(chat).not.toContain('chat-header-agent');
+    expect(chat).toContain("if (this.canSwitchAgent) this.openSheet('agent');");
     expect(actionPanel).toContain(".accessibilityLevel(this.open ? 'auto' : 'no-hide-descendants')");
     expect(actionPanel).not.toContain('Scroll()');
     expect(actionPanel).not.toContain('Swiper(');

@@ -66,7 +66,7 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
   onUpdateAgentProfile: (String, String, String?, Boolean, String) -> Unit,
   onUploadAvatar: suspend (ByteArray) -> Unit,
   onLoadModel: LoadPersonalModel? = null, onSaveModel: SavePersonalModel? = null,
-  modelBusy: Boolean = false) {
+  modelBusy: Boolean = false, onShare: (() -> Unit)? = null) {
   var agentName by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var agentAppearance by rememberSaveable(state.gatewayId) { mutableStateOf("loopi") }
   var callEngine by rememberSaveable(state.gatewayId) { mutableStateOf("auto") }
@@ -185,6 +185,13 @@ internal fun PersonalAgentProfileSheet(state: PersonalUiState, onDismiss: () -> 
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp),
           verticalArrangement = Arrangement.spacedBy(16.dp)) {
+          if (onShare != null) {
+            ContextRow(stringResource(R.string.conversations_share), "", "assistant-share",
+              enabled = !busy, compact = true, flat = true) {
+              closeProfile()
+              onShare()
+            }
+          }
           PersonalAvatarUpload(state, onUploadAvatar, { agentAppearance = "custom"; saveProfile() }, busy || state.agentLoading, { uploading = it })
           OutlinedTextField(agentName, { agentName = it.take(60) }, Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.personal_agent_name)) }, singleLine = true, enabled = !busy && !state.agentLoading)

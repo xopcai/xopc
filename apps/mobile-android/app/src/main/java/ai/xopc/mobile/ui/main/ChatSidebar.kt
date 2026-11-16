@@ -24,8 +24,10 @@ import androidx.compose.ui.BiasAbsoluteAlignment
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.painterResource
@@ -38,25 +40,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-internal fun Modifier.openSidebarOnSwipe(
-  enabled: Boolean, leftGestureEdge: Int, rightGestureEdge: Int,
-  onDrag: (Float) -> Unit, onRelease: (Float, Float) -> Unit, onCancel: () -> Unit,
+internal fun Modifier.horizontalSwipe(
+  enabled: Boolean = true, leftGestureEdge: Int = 0, rightGestureEdge: Int = 0,
+  allowLeft: Boolean = true, allowRight: Boolean = true,
+  onDrag: (Float) -> Unit = {}, onRelease: (Float, Float) -> Unit, onCancel: () -> Unit = {},
 ): Modifier = if (!enabled) this else composed {
   val currentDrag by rememberUpdatedState(onDrag)
   val currentRelease by rememberUpdatedState(onRelease)
   val currentCancel by rememberUpdatedState(onCancel)
-  pointerInput(leftGestureEdge, rightGestureEdge) {
+  pointerInput(leftGestureEdge, rightGestureEdge, allowLeft, allowRight) {
     awaitEachGesture {
-      val down = awaitFirstDown(requireUnconsumed = false)
+      val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
       if (down.position.x < leftGestureEdge || down.position.x > size.width - rightGestureEdge) return@awaitEachGesture
       val tracker = VelocityTracker()
       tracker.addPosition(down.uptimeMillis, down.position)
       var dragging = false
       try {
         while (true) {
-          val event = awaitPointerEvent()
+          val event = awaitPointerEvent(PointerEventPass.Initial)
           val change = event.changes.firstOrNull { it.id == down.id } ?: break
           if (change.isConsumed || event.changes.count { it.pressed } > 1) break
           tracker.addPosition(change.uptimeMillis, change.position)
@@ -64,14 +68,15 @@ internal fun Modifier.openSidebarOnSwipe(
           if (!change.pressed) {
             if (dragging) {
               dragging = false
+              change.consume()
               currentRelease(offset.x, tracker.calculateVelocity().x)
             }
             break
           }
           if (!dragging) {
-            if (offset.x < -viewConfiguration.touchSlop ||
-              abs(offset.y) > viewConfiguration.touchSlop && abs(offset.y) >= offset.x) break
-            if (offset.x < viewConfiguration.touchSlop || offset.x < abs(offset.y) * 1.25f) continue
+            if (abs(offset.y) > viewConfiguration.touchSlop && abs(offset.y) >= abs(offset.x)) break
+            if (abs(offset.x) < viewConfiguration.touchSlop || abs(offset.x) < abs(offset.y) * 1.25f) continue
+            if (offset.x < 0f && !allowLeft || offset.x > 0f && !allowRight) break
             dragging = true
           }
           change.consume()
@@ -105,7 +110,29 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
   if (!state.visible) return
   val scheme = MaterialTheme.colorScheme
   val dismissLabel = stringResource(R.string.assistant_close)
-  Box(Modifier.fillMaxSize()) {
+  val density = LocalDensity.current
+  val widthPx = with(density) { width.toPx() }
+  val closeDistance = with(density) { 96.dp.toPx() }
+  val flickDistance = with(density) { 24.dp.toPx() }
+  val flickVelocity = with(density) { 550.dp.toPx() }
+  val scope = rememberCoroutineScope()
+  val settleDrag: (Boolean) -> Unit = { close ->
+    state.dragFraction?.let { fraction ->
+      scope.launch {
+        state.settled.snapTo(fraction)
+        if (close) onClose()
+        state.dragFraction = null
+      }
+    }
+  }
+  Box(Modifier.fillMaxSize().horizontalSwipe(enabled = state.open && widthPx > 0f, allowRight = false,
+    onDrag = { state.dragFraction = (1f + it / widthPx).coerceIn(0f, 1f) },
+    onRelease = { distance, speed ->
+      settleDrag(-distance >= minOf(widthPx * 0.32f, closeDistance) ||
+        -distance >= flickDistance && -speed >= flickVelocity)
+    },
+    onCancel = { settleDrag(false) },
+  )) {
     Box(Modifier.matchParentSize().graphicsLayer { alpha = state.progress }
       .background(Color.Black.copy(alpha = 0.40f))
       .then(if (state.open) Modifier.clickable(role = Role.Button, onClick = onClose)
@@ -132,21 +159,14 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
       SidebarRow(R.string.conversations_search, R.drawable.action_search, "chat-sidebar-search",
         Modifier.clip(MaterialTheme.shapes.large).background(scheme.surfaceContainer), onClick = onSearch)
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 8.dp)) {
-        val personal = connection.personal.agent?.takeIf { it.state == "ready" }
-        Row(Modifier.fillMaxWidth().heightIn(min = 62.dp).clip(MaterialTheme.shapes.medium)
-          .background(if (personal?.conversationId == connection.selectedConversationId && personal != null)
-            scheme.surfaceContainerHigh else Color.Transparent)
-          .clickable(enabled = !connection.personal.agentCreating, role = Role.Button, onClick = onPersonal)
-          .padding(horizontal = 10.dp).testTag("chat-sidebar-personal"),
-          verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-          PersonalAgentAvatar(connection.personal.agentAvatar, personal?.appearance ?: "loopi", 42.dp, state.open)
-          Column(Modifier.weight(1f)) {
-            Text(personal?.displayName ?: stringResource(R.string.personal_agent_title), maxLines = 1,
-              overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
-            if (personal != null) Text(stringResource(R.string.personal_agent_title),
-              style = MaterialTheme.typography.labelMedium, color = scheme.onSurfaceVariant)
-          }
-          Icon(painterResource(R.drawable.action_chevron_right), null, Modifier.size(16.dp), tint = scheme.onSurfaceVariant)
+        val personal = connection.personal.agent
+        SidebarRow(personal?.displayName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.personal_agent_title),
+          "chat-sidebar-personal",
+          Modifier.clip(MaterialTheme.shapes.medium)
+            .background(if (personal != null && personal.conversationId == connection.selectedConversationId)
+              scheme.surfaceContainerHigh else Color.Transparent),
+          enabled = !connection.personal.agentCreating, onClick = onPersonal) {
+          PersonalAgentAvatar(connection.personal.agentAvatar, personal?.appearance ?: "loopi", 22.dp, active = false)
         }
         val attention = connection.progress.needsUser.size.takeIf {
           connection.progress.gatewayId == connection.profile?.gatewayId
@@ -191,7 +211,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
             Text(stringResource(R.string.progress_refresh))
           }
         }
-        SidebarRow(R.string.tab_conversations, R.drawable.tab_conversations, "chat-sidebar-history") {
+        SidebarRow(R.string.assistant_view_more, R.drawable.tab_conversations, "chat-sidebar-history") {
           onDestination(HomeTab.Conversations)
         }
       }
@@ -218,11 +238,20 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
 @Composable
 private fun SidebarRow(@StringRes label: Int, @DrawableRes icon: Int, tag: String,
   modifier: Modifier = Modifier, badge: Int = 0, onClick: () -> Unit) {
-  Row(modifier.fillMaxWidth().heightIn(min = 46.dp).clickable(role = Role.Button, onClick = onClick)
+  SidebarRow(stringResource(label), tag, modifier, badge, onClick = onClick) {
+    Icon(painterResource(icon), null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+  }
+}
+
+@Composable
+private fun SidebarRow(label: String, tag: String, modifier: Modifier = Modifier, badge: Int = 0,
+  enabled: Boolean = true, onClick: () -> Unit, icon: @Composable () -> Unit) {
+  Row(modifier.fillMaxWidth().heightIn(min = 46.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
     .padding(horizontal = 10.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically,
     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-    Icon(painterResource(icon), null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(stringResource(label), Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+    icon()
+    Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+      maxLines = 1, overflow = TextOverflow.Ellipsis,
       color = MaterialTheme.colorScheme.onSurface)
     if (badge > 0) Text(if (badge > 99) "99+" else badge.toString(),
       Modifier.background(LocalAttentionColors.current.fill, CircleShape)

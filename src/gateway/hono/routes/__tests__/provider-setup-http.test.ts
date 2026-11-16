@@ -1,3 +1,4 @@
+import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { voiceFixture } from '../../../../voice/__tests__/voice-fixture.js';
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
@@ -5,12 +6,17 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { initializeTestAgentCatalog } from '../../../../agent-catalog/test-support.js';
+import { CredentialResolver } from '../../../../auth/credentials.js';
 import { closeXopcDatabase } from '../../../../storage/sqlite/index.js';
+import { createDevice, issueDeviceTokenPair } from '../../../../storage/sqlite/device-access-repository.js';
+import { getOrCreateGatewayIdentity } from '../../../../storage/sqlite/gateway-identity-repository.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../../providers/model-catalog-store.js';
 import { resetModelRegistry } from '../../../../providers/model-registry.js';
 import { reloadImageGenerationProviders } from '../../../../agent/image/generation/provider-registry.js';
 import { ConfigSchema, type Config } from '../../../../config/schema.js';
 import { listGlobalDefaults, updateGlobalDefaults } from '../../../global-defaults-admin.js';
+import { proofDigest, requestProofMessage } from '../../../security/device-request-proof.js';
+import { DEFAULT_MOBILE_SCOPES } from '../../../security/gateway-scopes.js';
 import { auth } from '../../middleware/auth.js';
 import { gatewayScopes } from '../../middleware/scopes.js';
 import { registerAuthenticatedLazyRouteFallback, resetLazyRouteBundlesForTests } from '../lazy-fallback.js';
@@ -47,6 +53,69 @@ describe('model setup authenticated Gateway HTTP', () => {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     reloadImageGenerationProviders({ providers: {} });
     closeXopcDatabase(); resetLazyRouteBundlesForTests(); resetModelRegistry(); resetModelCatalogStore(); vi.unstubAllEnvs();
+  });
+  it('writes mobile model choices through the authenticated Gateway, preserving unrelated routes', async ({ onTestFinished }) => {
+    const credentials = new CredentialResolver();
+    await credentials.saveOAuthToken('xopc-cloud', {
+      access: 'mobile-model-fixture', refresh: 'mobile-model-refresh-fixture',
+      expiresAt: Date.now() + 3_600_000, createdAt: new Date().toISOString(),
+    });
+    onTestFinished(() => credentials.deleteOAuthToken('xopc-cloud'));
+    const endpoint = '/api/mobile/model-settings';
+    const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const device = createDevice({ platform: 'ios', displayName: 'Test iPhone',
+      publicKeyJwk: keys.publicKey.export({ format: 'jwk' }), scopes: DEFAULT_MOBILE_SCOPES });
+    const credential = issueDeviceTokenPair(device.id).accessToken;
+    const gatewayId = getOrCreateGatewayIdentity().id;
+    const signed = (method: 'GET' | 'PATCH', change?: object) => {
+      const body = change ? JSON.stringify(change) : undefined;
+      const headers = new Headers({ authorization: `Bearer ${credential}` });
+      if (body) headers.set('content-type', 'application/json');
+      const proof = { timestamp: Date.now(), nonce: randomBytes(24).toString('base64url'), digest: proofDigest(body ?? '') };
+      const message = requestProofMessage({ gatewayId, credential, method, target: endpoint, headers: name => headers.get(name) ?? undefined, proof });
+      const signature = sign('sha256', Buffer.from(message), { key: keys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+      headers.set('X-Xopc-Proof', `${proof.timestamp}.${proof.nonce}.${proof.digest}.${signature}`);
+      return fetch(origin + endpoint, { method, headers, body });
+    };
+    const read = async () => {
+      const response = await signed('GET');
+      expect(response.status).toBe(200);
+      return (await response.json()).payload;
+    };
+    const patch = (change: object) => signed('PATCH', change);
+    expect((await fetch(origin + endpoint)).status).toBe(401);
+    const previous = listGlobalDefaults().defaults;
+    const start = await read();
+    expect(start.routing.map((row: { key: string }) => row.key)).toEqual([
+      'chat', 'background', 'vision', 'image', 'transcription', 'speech', 'conversation', 'video', 'music',
+    ]);
+    const cloud = (await (await request('xopc-cloud')).json() as { payload: ModelSetupPreview }).payload;
+    const cloudModels = cloud.uses.find(use => use.id === 'chat')!.choices.map(choice => choice.id);
+    expect(start.pools.chat.map((choice: { ref: string }) => choice.ref)).toEqual(expect.arrayContaining(cloudModels));
+    const refs: string[] = start.pools.chat.map((choice: { ref: string }) => choice.ref);
+    const primary = refs.find(ref => ref !== previous.models.chat.primary)!;
+    const backup = refs.find(ref => ref !== primary)!;
+    expect(primary).toBeTruthy();
+    expect(backup).toBeTruthy();
+    const select = { kind: 'model', key: 'chat', ref: primary, revision: start.revision };
+    expect((await patch(select)).status).toBe(200);
+    expect((await patch(select)).status).toBe(409);
+    const afterChat = await read();
+    expect(afterChat.routing[0].ref).toBe(primary);
+    expect(listGlobalDefaults().defaults.models).toEqual({ ...previous.models,
+      chat: { primary, fallbacks: previous.models.chat.fallbacks.filter(ref => ref !== primary) },
+    });
+    expect((await patch({ kind: 'fallbacks', refs: [primary], revision: afterChat.revision })).status).toBe(400);
+    expect((await patch({ kind: 'fallbacks', refs: [backup], revision: afterChat.revision })).status).toBe(200);
+    const afterFallback = await read();
+    expect(afterFallback.fallbacks[0].ref).toBe(backup);
+    expect((await patch({ kind: 'task', key: 'coding', ref: backup, revision: afterFallback.revision })).status).toBe(200);
+    const afterTask = await read();
+    expect(afterTask.tasks.find((row: { key: string }) => row.key === 'coding')).toMatchObject({ ref: backup, inherited: false });
+    expect((await patch({ kind: 'task', key: 'coding', ref: null, revision: afterTask.revision })).status).toBe(200);
+    const reset = await read();
+    expect(reset.tasks.find((row: { key: string }) => row.key === 'coding')).toMatchObject({ ref: null, inherited: true });
+    expect(reset.fallbacks).toEqual(afterFallback.fallbacks);
   });
   it.each(['qwen-token-plan-cn', 'xopc-cloud', 'xiaomi-token-plan-cn'])('previews and applies %s through lazy loading and authentication', async provider => {
     expect((await request(provider, '', undefined, false)).status).toBe(401);

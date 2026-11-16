@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -39,7 +40,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValues,
-  onBack: () -> Unit, onAdd: () -> Unit, onRefresh: () -> Unit,
+  onBack: () -> Unit, onAdd: () -> Unit,
   onProbe: (String) -> Unit, onActivate: (String) -> Unit,
   onRename: (String, String) -> Unit, onRemove: (String) -> Unit) {
   var expandedId by rememberSaveable { mutableStateOf("") }
@@ -54,10 +55,7 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
       verticalAlignment = Alignment.CenterVertically) {
       PageBackButton("gateways-back", onBack)
-      Text(stringResource(R.string.gateways_title), modifier = Modifier.weight(1f).padding(start = 4.dp),
-        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-      IconButton(onClick = onRefresh, enabled = !state.gatewayBusy,
-        modifier = Modifier.testTag("gateways-refresh")) { Text("↻", style = MaterialTheme.typography.titleLarge) }
+      Spacer(Modifier.weight(1f))
       IconButton(onClick = onAdd, enabled = !state.gatewayBusy,
         modifier = Modifier.testTag("gateways-add")) { ActionIcon(R.drawable.action_add, size = 24.dp) }
     }
@@ -88,6 +86,9 @@ internal fun GatewayProfilesScreen(state: ConnectionUiState, insets: PaddingValu
               Text(gatewayOrigin(profile), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
+              Text(stringResource(R.string.gateways_server_version, probe?.result?.version ?: "—"),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (active) Text(stringResource(R.string.gateways_current),
               color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)

@@ -1,3 +1,4 @@
+import { XopcConversationShare } from './ConversationShare';
 import { LengthMetrics } from '@kit.ArkUI';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { XopcTaskChatHeader } from './TaskChatHeader';
@@ -141,6 +142,7 @@ export struct XopcChatView {
   @Param personalAgent: XopcPersonalAgentRecord | null = null;
   @Event onPersonalAgentSaved: (record: XopcPersonalAgentRecord) => void = (_record: XopcPersonalAgentRecord): void => {};
   @Local personalSettingsOpen: boolean = false;
+  @Local personalShareOpen: boolean = false;
   @Local searchOpen: boolean = false;
   @Local searchQuery: string = '';
   @Local searchCategory: string = 'messages';
@@ -1200,7 +1202,7 @@ export struct XopcChatView {
   @Builder
   composerRightActions() {
     Row({ space: 4 }) {
-      this.voiceToggle()
+      this.composerAddAction()
       if (this.hasPayload) {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.arrow_up')).fontSize(22).fontColor([this.colors.chat.onAction])
@@ -1796,7 +1798,7 @@ export struct XopcChatView {
           .align(Alignment.TopStart)
       }
       Row({ space: 4 }) {
-        if (!this.expandedComposer) { this.composerAddAction() }
+        if (!this.expandedComposer) { this.voiceToggle() }
         if (this.showVoice || this.voice.state !== 'idle') {
           Column() {
             if (this.voice.state === 'ready' && !this.voiceHeld && !this.voiceFinishing && !this.voice.busy) {
@@ -1842,7 +1844,7 @@ export struct XopcChatView {
         top: this.expandedComposer ? 8 : 4, bottom: this.expandedComposer ? 0 : 4 })
       if (this.expandedComposer) {
         Row({ space: 4 }) {
-          this.composerAddAction()
+          this.voiceToggle()
           Blank().layoutWeight(1)
           this.composerRightActions()
         }.width('100%').padding({ left: 8, right: 8, bottom: 8 })
@@ -1850,7 +1852,7 @@ export struct XopcChatView {
     }.id('chat-composer-shell').width('100%')
       .backgroundColor(this.panelOpen ? Color.Transparent : this.colors.input).borderRadius(this.colors.corner(28))
       .clip(true).margin({ bottom: 6, top: 8 })
-    XopcChatActionPanel({ open: this.panelOpen, disabledIds: this.disabledActionIds(),
+    XopcChatActionPanel({ open: this.panelOpen, canSwitchAgent: this.canSwitchAgent, disabledIds: this.disabledActionIds(),
       onSelect: (id: string): void => { this.chooseAction(id); } })
     }.width('calc(100% - 24vp)').backgroundColor(this.panelOpen ? this.colors.panel : Color.Transparent).borderRadius(this.colors.corner(28))
     }.id('chat-bottom-surface').width('100%').backgroundColor(Color.Transparent)
@@ -1901,9 +1903,17 @@ export struct XopcChatView {
     return ids;
   }
 
+  @Computed get canSwitchAgent(): boolean {
+    return !this.embedded && !this.taskId && !this.personalConversation;
+  }
+
   private chooseAction(id: string): void {
     if (!this.panelOpen || !this.visible) return;
     if (this.chat.sending || this.voice.busy || this.voice.state !== 'idle') return;
+    if (id === 'switch-agent') {
+      if (this.canSwitchAgent) this.openSheet('agent');
+      return;
+    }
     this.setPanel(false);
     if (id === 'camera' || id === 'photos' || id === 'document') this.addAttachment(id);
     else if (id.startsWith('reference-')) this.openReference(id.slice('reference-'.length));
@@ -1977,18 +1987,8 @@ export struct XopcChatView {
   }
 
   @Builder
-  agentPickerButton() {
-    Button({ type: ButtonType.Circle }) {
-      SymbolGlyph($r('sys.symbol.person')).fontSize(21).fontColor([this.colors.foreground])
-    }.id('chat-header-agent').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-      .accessibilityText($r('app.string.chat_agent'))
-      .onClick((): void => { this.dismissComposer(); this.openSheet('agent'); })
-  }
-
-  @Builder
   conversationActions() {
     Row({ space: 3 }) {
-      if (!this.personalConversation) this.agentPickerButton()
       if (this.phone.summary?.available) {
         Button({ type: ButtonType.Circle }) {
           Stack({ alignContent: Alignment.TopEnd }) {
@@ -2070,7 +2070,6 @@ export struct XopcChatView {
           this.sidebarButton()
           Blank().layoutWeight(1)
           Row({ space: 3 }) {
-            this.agentPickerButton()
             this.voiceCallButton()
             Button({ type: ButtonType.Circle }) {
               SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(20).fontColor([this.colors.foreground])
@@ -2127,7 +2126,8 @@ export struct XopcChatView {
       this.conversation()
       Column().width('100%').height(0)
         .bindSheet($$this.personalSettingsOpen, this.personalSettingsSheet, { height: '65%', dragBar: false,
-          keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, showClose: false, backgroundColor: this.colors.panel })
+          keyboardAvoidMode: SheetKeyboardAvoidMode.RESIZE_ONLY, showClose: false, backgroundColor: this.colors.panel,
+          onDisappear: (): void => { this.personalShareOpen = false; } })
       Column().width('100%').height(0)
         .bindSheet($$this.generatedVideoOpen, this.generatedVideoDrawer, {
           height: '88%', dragBar: true,
@@ -2272,7 +2272,12 @@ export struct XopcChatView {
 
   @Builder
   personalSettingsSheet() {
+    if (this.personalShareOpen) {
+      XopcConversationShare({ conversationId: this.chat.selectedId,
+        onClose: (): void => { this.personalSettingsOpen = false; } })
+    } else {
     XopcPersonalAgentSettings({ record: this.personalAgent, chatOptions: this.options,
+      canShare: this.canShareConversation(), onShare: (): void => { this.personalShareOpen = true; },
       modelBusy: this.chat.sending || !!this.chat.runId || !!this.options.queued.length,
       onReloadModels: (): void => {
         if (this.personalAgent?.conversationId === this.chat.selectedId && !this.options.saving) {
@@ -2281,6 +2286,11 @@ export struct XopcChatView {
       },
       onSaved: (record: XopcPersonalAgentRecord): void => { this.onPersonalAgentSaved(record); },
       onClose: (): void => { this.personalSettingsOpen = false; } })
+    }
+  }
+
+  private canShareConversation(): boolean {
+    return !!this.chat.selectedId && this.chat.rows.some((row: XopcChatRow): boolean => row.role === 'user' || row.role === 'assistant');
   }
 
   private openMessageSearch(): void {
@@ -2389,7 +2399,9 @@ export struct XopcChatView {
 
   @Builder
   optionsSheet() {
-    if (['context', 'project', 'environment', 'directory', 'references'].includes(this.sheetMode)) {
+    if (this.sheetMode === 'share') {
+      XopcConversationShare({ conversationId: this.chat.selectedId, onClose: (): void => { this.sheetOpen = false; } })
+    } else if (['context', 'project', 'environment', 'directory', 'references'].includes(this.sheetMode)) {
       XopcChatContext({ model: this.context, initialMode: this.sheetMode, initialReferenceKind: this.referenceKind, refs: this.refs,
         onMode: (mode: string): void => { this.sheetMode = mode; },
         onScope: (projectId: string | null, mode?: string): void => { this.newConversation(this.options.agentId, projectId, mode); },
@@ -2398,6 +2410,8 @@ export struct XopcChatView {
     } else {
     XopcChatOptions({ model: this.options, mode: this.sheetMode, personal: this.personalConversation, personalRecord: this.personalAgent,
       contextSummary: this.contextMenuSummary(),
+      canShare: this.canShareConversation(),
+      onShare: (): void => { this.sheetMode = 'share'; },
       thinkingBusy: this.chat.sending || !!this.chat.runId || !!this.options.queued.length,
       onSearch: (): void => { this.sheetOpen = false; this.openMessageSearch(); },
       onContext: (): void => { this.sheetMode = 'context'; },

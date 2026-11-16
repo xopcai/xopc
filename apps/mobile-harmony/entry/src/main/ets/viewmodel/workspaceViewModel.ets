@@ -135,6 +135,21 @@ export class XopcWorkspaceViewModel {
     } finally { if (generation === this.generation) this.busy = false; }
   }
 
+  async automationListAction(item: XopcWorkspaceItem, action: string): Promise<void> {
+    if (this.section !== 'automations' || this.selected || this.busy || !item.actions.includes(action)) return;
+    const generation = this.generation;
+    this.busy = true; this.error = '';
+    try {
+      await this.repository.action('automations', item, action, '',
+        this.idempotency(item.id + ':' + item.version + ':' + action));
+      if (generation !== this.generation) return;
+      this.busy = false;
+      await this.list(this.loadedSearch);
+    } catch (error) {
+      if (generation === this.generation) this.error = (error as Error).message;
+    } finally { if (generation === this.generation) this.busy = false; }
+  }
+
   async action(action: string, agentId: string): Promise<void> {
     const selected = this.selected;
     if (!selected?.id || this.busy) return;

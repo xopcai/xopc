@@ -4,6 +4,7 @@ import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.gateway.ProgressTaskEdit
 
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.AutomationSummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -128,6 +130,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var taskSearchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var projectSearchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var automationSearchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  var automationFilter by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
+  var pendingAutomationEditId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   fun closeTaskSearch() {
@@ -158,6 +162,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var discardEditOpen by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf(false) }
   var selectedProjectId by rememberSaveable(state.gatewayId) { mutableStateOf(initialItemId.takeIf { initialPage == "project" }) }
   var projectMenuOpen by rememberSaveable(state.gatewayId, selectedProjectId) { mutableStateOf(false) }
+  var projectSection by rememberSaveable(state.gatewayId, selectedProjectId) { mutableStateOf("overview") }
   var projectEditorMode by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var projectWriteBusy by remember(state.gatewayId) { mutableStateOf(false) }
   var projectWriteError by remember(state.gatewayId) { mutableStateOf(false) }
@@ -191,7 +196,25 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var runReturnPage by rememberSaveable(state.gatewayId) {
     mutableStateOf(if (initialDeliveryKind == "automation") "delivery" else "automation")
   }
-  var openedFromAllWork by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
+  val workPages = listOf(
+    SegmentOption("overview", stringResource(R.string.tab_progress), "work-page-progress"),
+    SegmentOption("automations", stringResource(R.string.progress_automations), "work-page-automations"),
+    SegmentOption("projects", stringResource(R.string.progress_projects), "work-page-projects"),
+    SegmentOption("tasks", stringResource(R.string.progress_tasks), "work-page-tasks"),
+  )
+  fun selectWorkPage(target: String) {
+    if (page == target) return
+    if (taskSearchOpen) closeTaskSearch()
+    projectSearchOpen = false
+    automationSearchOpen = false
+    page = target
+    when (target) {
+      "overview" -> onRefreshHome()
+      "automations" -> onLoadAutomations()
+      "projects" -> onLoadProjects()
+      "tasks" -> onRefreshTasks()
+    }
+  }
   fun goBack() {
     if (projectWriteBusy || state.commandBusy || state.editBusy || state.createBusy ||
       state.automations.editBusy || state.automations.deleteBusy) return
@@ -205,11 +228,12 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
         else -> page = detailReturnPage
       }
       "project" -> if (initialPage == "project" && selectedProjectId == initialItemId) onExit?.invoke() else page = "projects"
-      "tasks", "projects", "automations" -> {
-        if (page == initialPage && onExit != null) onExit()
-        else page = if (openedFromAllWork) "work" else "overview"
+      "overview", "tasks", "projects", "automations" -> {
+        if (onExit != null) {
+          page = initialPage
+          onExit()
+        } else page = "overview"
       }
-      "work" -> { openedFromAllWork = false; page = "overview" }
       "automation-run" -> if (runReturnPage == "delivery") onCloseDelivery() else page = runReturnPage
       "automation" -> if (initialPage == "automation" && selectedAutomationId == initialItemId &&
         automationReturnPage == "automations") onExit?.invoke() else page = automationReturnPage
@@ -217,7 +241,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       else -> onExit?.invoke()
     }
   }
-  BackHandler(enabled = page != "overview") {
+  BackHandler(enabled = page != "overview" || onExit != null) {
     goBack()
   }
   BackHandler(enabled = page == "tasks" && taskSearchOpen) { closeTaskSearch() }
@@ -313,10 +337,30 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     }
   }
   fun openAutomation(id: String) {
+    pendingAutomationEditId = null
     automationReturnPage = page
     selectedAutomationId = id
     page = "automation"
     onOpenAutomation(id)
+  }
+  fun editAutomation(item: AutomationSummary) {
+    if (item.id != selectedAutomationId || !item.canEditSchedule) return
+    automationEditName = item.name
+    automationEditInstruction = item.instruction
+    automationEditCron = item.schedule
+    automationOriginalName = item.name
+    automationOriginalInstruction = item.instruction
+    automationOriginalCron = item.schedule
+    automationEditKey = UUID.randomUUID().toString()
+    automationEditStartedRevision = state.automations.editedRevision
+    page = "automation-edit"
+  }
+  LaunchedEffect(page, state.automations.detail, pendingAutomationEditId) {
+    val item = state.automations.detail
+    if (page == "automation" && item != null && pendingAutomationEditId == item.id) {
+      pendingAutomationEditId = null
+      editAutomation(item)
+    }
   }
   fun openRun(id: String) {
     if (page != "automation-run") runReturnPage = page
@@ -328,86 +372,60 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     if (page == "automation-run") state.automations.rerunNavigationId?.let(::openRun)
   }
   Column(modifier = Modifier.fillMaxSize().padding(insets).padding(horizontal = 20.dp, vertical = 12.dp)) {
-    Row(modifier = Modifier.fillMaxWidth()
-      .padding(bottom = if (page == "overview") 12.dp else 0.dp).testTag("progress-header"),
-      horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-      if (page != "overview" || onExit != null) androidx.compose.material3.IconButton(onClick = { goBack() },
-        enabled = !state.commandBusy && !state.editBusy,
-        modifier = Modifier.testTag("progress-back")) {
-        androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.action_chevron_left),
-          contentDescription = stringResource(R.string.progress_back))
-      }
-      Text(when (page) {
-        "work" -> stringResource(R.string.progress_all_work)
-        "tasks" -> stringResource(R.string.progress_tasks)
-        "detail" -> stringResource(R.string.progress_task_detail)
-        "edit" -> stringResource(R.string.progress_edit_task)
-        "projects" -> stringResource(R.string.progress_projects)
-        "project" -> state.project?.takeIf { it.id == selectedProjectId }?.name ?: stringResource(R.string.progress_projects)
-        "create" -> stringResource(R.string.progress_new_task)
-        "automations" -> stringResource(R.string.progress_automations)
-        "automation-edit" -> stringResource(R.string.automation_edit)
-        "automation" -> state.automations.detail?.takeIf { it.id == selectedAutomationId }?.name
-          ?: stringResource(R.string.progress_automations)
-        "automation-run" -> state.automations.run?.automationName ?: stringResource(R.string.automation_run)
-        else -> stringResource(R.string.tab_progress)
-      }, modifier = Modifier.weight(1f).padding(end = 12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-        style = if (page == "overview") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold)
-      if (page == "overview") IconButton(onClick = { page = "work"; openedFromAllWork = true },
-        modifier = Modifier.testTag("progress-all-work")) {
-        Icon(painterResource(R.drawable.action_task_list), contentDescription = stringResource(R.string.progress_all_work),
-          modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
-      }
-      else if (page == "automations") {
-        PageSearchButton(automationSearchOpen, R.string.progress_search, "automation-open-search") {
-          automationSearchOpen = !automationSearchOpen
+    Box(Modifier.fillMaxWidth().padding(bottom = if (page == "overview") 12.dp else 0.dp)
+      .testTag("progress-header"), contentAlignment = Alignment.Center) {
+      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (page != "overview" || onExit != null) PageBackButton("progress-back", ::goBack,
+          enabled = !state.commandBusy && !state.editBusy)
+        Spacer(Modifier.weight(1f))
+        if (page == "automations") {
+          PageSearchButton(automationSearchOpen, R.string.progress_search, "automation-open-search") {
+            automationSearchOpen = !automationSearchOpen
+          }
+          AutomationFilterButton(automationFilter) { automationFilter = it }
         }
-        IconButton(onClick = { onArrangeAutomation(null, "") }, modifier = Modifier.testTag("automation-create")) {
-          Icon(painterResource(R.drawable.action_add), stringResource(R.string.automation_new))
+        else if (page == "projects") {
+          PageSearchButton(projectSearchOpen, R.string.progress_search_projects, "projects-open-search") {
+            projectSearchOpen = !projectSearchOpen
+          }
+          IconButton(onClick = { openProjectEditor("create") }, modifier = Modifier.testTag("project-create")) {
+            Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_new))
+          }
         }
-      }
-      else if (page == "projects") {
-        PageSearchButton(projectSearchOpen, R.string.progress_search_projects, "projects-open-search") {
-          projectSearchOpen = !projectSearchOpen
+        else if (page == "project") IconButton(onClick = { projectMenuOpen = true },
+          enabled = state.project?.id == selectedProjectId && selectedProjectId != null,
+          modifier = Modifier.testTag("project-open-actions")) {
+          Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_add_item))
         }
-        IconButton(onClick = { openProjectEditor("create") }, modifier = Modifier.testTag("project-create")) {
-          Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_new))
+        else if (page == "tasks") Row {
+          if (!taskSearchOpen) IconButton(onClick = { taskSearchOpen = true },
+            modifier = Modifier.size(48.dp).testTag("progress-open-search")) {
+            Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.progress_search),
+              modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+          }
+          IconButton(onClick = onCreateTaskWithChat, enabled = !state.creatingTaskChat,
+            modifier = Modifier.size(48.dp).testTag("progress-create-task-chat")) {
+            Icon(painterResource(R.drawable.action_add), contentDescription = stringResource(R.string.progress_new_task),
+              modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
+          }
         }
       }
-      else if (page == "project") IconButton(onClick = { projectMenuOpen = true },
-        enabled = state.project?.id == selectedProjectId && selectedProjectId != null,
-        modifier = Modifier.testTag("project-open-actions")) {
-        Icon(painterResource(R.drawable.action_add), stringResource(R.string.project_add_item))
-      }
-      else if (page == "tasks") Row {
-        if (!taskSearchOpen) IconButton(onClick = { taskSearchOpen = true },
-          modifier = Modifier.size(48.dp).testTag("progress-open-search")) {
-          Icon(painterResource(R.drawable.action_search), contentDescription = stringResource(R.string.progress_search),
-            modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
-        }
-        IconButton(onClick = onCreateTaskWithChat, enabled = !state.creatingTaskChat,
-          modifier = Modifier.size(48.dp).testTag("progress-create-task-chat")) {
-          Icon(painterResource(R.drawable.action_add), contentDescription = stringResource(R.string.progress_new_task),
-            modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurface)
-        }
+      if (workPages.any { it.value == page }) {
+        PageTitleMenu(workPages, page, "work-page-menu", Modifier.fillMaxWidth(0.44f), ::selectWorkPage)
+      } else if (page == "project" && selectedProjectId != null) {
+        PageTitleMenu(listOf(
+          SegmentOption("overview", stringResource(R.string.progress_project_overview), "progress-project-tab-overview"),
+          SegmentOption("sessions", stringResource(R.string.tab_conversations), "progress-project-tab-sessions"),
+          SegmentOption("tasks", stringResource(R.string.progress_tasks), "progress-project-tab-tasks"),
+          SegmentOption("notes", stringResource(R.string.tab_notes), "progress-project-tab-notes"),
+          SegmentOption("automations", stringResource(R.string.progress_automations), "progress-project-tab-automations"),
+        ), projectSection, "progress-project-tabs", Modifier.fillMaxWidth(0.55f)) { projectSection = it }
       }
     }
     if (state.createTaskChatError && page == "tasks") Text(
       stringResource(R.string.progress_create_chat_error), color = MaterialTheme.colorScheme.error,
       modifier = Modifier.testTag("progress-create-task-error"))
     when (page) {
-      "work" -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { page = "tasks" }, modifier = Modifier.fillMaxWidth().testTag("progress-work-tasks")) {
-          Text(stringResource(R.string.progress_tasks))
-        }
-        OutlinedButton(onClick = { page = "projects"; onLoadProjects() }, modifier = Modifier.fillMaxWidth()) {
-          Text(stringResource(R.string.progress_projects))
-        }
-        OutlinedButton(onClick = { page = "automations"; onLoadAutomations() }, modifier = Modifier.fillMaxWidth()) {
-          Text(stringResource(R.string.progress_automations))
-        }
-      }
       "create" -> ProgressTaskCreate(createTitle, { createTitle = it }, createBody, { createBody = it },
         createProjectId, { createProjectId = it }, state.createBusy, state.createError) {
         onCreateTask(createTitle, createBody, createProjectId)
@@ -420,7 +438,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           modifier = Modifier.testTag("progress-project-retry")) {
           Text(stringResource(R.string.progress_load_failed))
         }
-        state.project != null -> ProgressProjectDetail(state.project, state.projectTasks,
+        state.project != null -> ProgressProjectDetail(state.project, projectSection, state.projectTasks,
           state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
           state.projectNotes, state.projectNotesLoading, state.projectNotesError,
           state.projectAutomations, state.projectAutomationsLoading, state.projectAutomationsError,
@@ -469,23 +487,15 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       "tasks" -> ProgressTaskList(state, taskFilter, { taskFilter = it }, onRefreshTasks,
         onLoadMore, onSearchChange, onSubmitSearch, taskSearchOpen, ::closeTaskSearch) { task -> openTask(task.id) }
       "automations" -> AutomationListContent(state.automations, state.gatewayId, onLoadAutomations,
-        ::openAutomation, automationSearchOpen) { prompt -> onArrangeAutomation(null, prompt) }
+        ::openAutomation, automationSearchOpen, filter = automationFilter,
+        onEdit = { id -> openAutomation(id); pendingAutomationEditId = id },
+        onToggle = onAutomationAction, onDelete = onDeleteAutomation) { prompt -> onArrangeAutomation(null, prompt) }
       "automation" -> AutomationDetailContent(state.automations.takeIf { it.selectedId == selectedAutomationId }
         ?: AutomationUiState(detailLoading = true),
         { selectedAutomationId?.let(onOpenAutomation) }, ::openRun,
         { action -> selectedAutomationId?.let { onAutomationAction(it, action) } },
         onEdit = {
-          state.automations.detail?.takeIf { it.id == selectedAutomationId && it.canEditSchedule }?.let { item ->
-            automationEditName = item.name
-            automationEditInstruction = item.instruction
-            automationEditCron = item.schedule
-            automationOriginalName = item.name
-            automationOriginalInstruction = item.instruction
-            automationOriginalCron = item.schedule
-            automationEditKey = UUID.randomUUID().toString()
-            automationEditStartedRevision = state.automations.editedRevision
-            page = "automation-edit"
-          }
+          state.automations.detail?.let(::editAutomation)
         }, onDelete = { key -> selectedAutomationId?.let { onDeleteAutomation(it, key) } })
       "automation-edit" -> state.automations.detail?.takeIf {
         it.id == selectedAutomationId && it.canEditSchedule
@@ -504,9 +514,8 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       "automation-run" -> AutomationRunContent(state.automations,
         { selectedRunId?.let(onOpenAutomationRun) }, onOpenChat, ::openAutomation,
         { action -> selectedRunId?.let { onAutomationRunAction(it, action) } })
-      else -> ProgressOverview(state, onRefreshHome, onOpenChat, { page = "tasks" },
-        { page = "projects"; onLoadProjects() },
-        { page = "automations"; onLoadAutomations() },
+      else -> ProgressOverview(state, onRefreshHome, onOpenChat, { selectWorkPage("tasks") },
+        { selectWorkPage("projects") }, { selectWorkPage("automations") },
         ::openAutomation, ::openTask,
         { action ->
           val taskId = action.reviewTaskId
@@ -607,8 +616,6 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
       OutlinedTextField(value = search, onValueChange = { search = it },
         modifier = Modifier.weight(1f).then(searchInputFocus()).testTag("progress-project-search"),
         placeholder = { Text(stringResource(R.string.progress_search_projects)) }, singleLine = true)
-      TextButton(onClick = onRefresh, enabled = !state.projectsLoading,
-        modifier = Modifier.testTag("progress-project-refresh")) { Text(stringResource(R.string.progress_refresh)) }
     }
     SegmentedTabs(
       listOf(
@@ -622,7 +629,8 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
         BrandLoadingPanel(modifier = Modifier.testTag("progress-projects-loading"))
       }
       if (state.projectsError) item {
-        Text(stringResource(R.string.progress_load_failed), color = MaterialTheme.colorScheme.error)
+        OutlinedButton(onClick = onRefresh, enabled = !state.projectsLoading,
+          modifier = Modifier.testTag("progress-project-retry")) { Text(stringResource(R.string.progress_load_failed)) }
       }
       if (!state.projectsLoading && !state.projectsError && shown.isEmpty()) item {
         Text(stringResource(R.string.progress_no_projects))
@@ -645,7 +653,7 @@ private fun ProgressProjects(state: ProgressUiState, onRefresh: () -> Unit,
 }
 
 @Composable
-private fun ProgressProjectDetail(project: ProgressProject, tasks: List<ProgressTask>,
+private fun ProgressProjectDetail(project: ProgressProject, section: String, tasks: List<ProgressTask>,
   sessions: List<ProgressProjectSession>, sessionsLoading: Boolean, sessionsError: Boolean,
   notes: List<ai.xopc.mobile.gateway.NoteSummary>, notesLoading: Boolean, notesError: Boolean,
   automations: List<ai.xopc.mobile.gateway.AutomationSummary>,
@@ -655,12 +663,12 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
   onSchedule: (String) -> Unit, onCreateChat: () -> Unit, chatBusy: Boolean,
   onRetrySessions: () -> Unit,
   deliveries: List<ai.xopc.mobile.gateway.ProgressDelivery>, onOpenRun: (String) -> Unit) {
-  var section by rememberSaveable(project.id) { mutableStateOf("overview") }
   LazyColumn(modifier = Modifier.fillMaxSize().testTag("progress-project-detail"),
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
     item {
       Card {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(project.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
           Text(projectStatusLabel(project.status), modifier = Modifier.testTag("progress-project-detail-status"),
             color = MaterialTheme.colorScheme.onSurfaceVariant)
           Text(project.brief.ifBlank { project.description }.ifBlank {
@@ -668,17 +676,6 @@ private fun ProgressProjectDetail(project: ProgressProject, tasks: List<Progress
           })
         }
       }
-    }
-    item {
-      SegmentedTabs(
-        listOf(
-          SegmentOption("overview", stringResource(R.string.progress_project_overview), "progress-project-tab-overview"),
-          SegmentOption("sessions", stringResource(R.string.tab_conversations), "progress-project-tab-sessions", count = sessions.size),
-          SegmentOption("tasks", stringResource(R.string.progress_tasks), "progress-project-tab-tasks", count = tasks.size),
-          SegmentOption("notes", stringResource(R.string.tab_notes), "progress-project-tab-notes", count = notes.size),
-          SegmentOption("automations", stringResource(R.string.progress_automations), "progress-project-tab-automations", count = automations.size),
-        ), section, { section = it }, minimumSegmentWidth = 76.dp,
-      )
     }
     if (section == "overview" && deliveries.isNotEmpty()) {
       item { ProgressSectionTitle(R.string.library_recent_results) }

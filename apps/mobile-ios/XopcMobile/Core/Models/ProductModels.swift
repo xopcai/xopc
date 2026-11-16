@@ -431,8 +431,15 @@ struct AutomationRecord: Decodable, Identifiable, Hashable, Sendable {
     let action: AutomationAction
     let conversationMode: String?
     let state: AutomationState?
+    let management: AutomationManagement?
     let createdAtMs: Int64
     let updatedAtMs: Int64
+}
+
+struct AutomationManagement: Decodable, Hashable, Sendable {
+    let editable: [String]?
+    let runnable: Bool?
+    let deletable: Bool?
 }
 
 struct AutomationAction: Codable, Hashable, Sendable {
