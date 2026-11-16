@@ -23,11 +23,10 @@ struct WireMessage: Decodable, Sendable {
 
     var answerText: String {
         let hasTools = !(toolCalls ?? []).isEmpty
-        let body: MessageContent
-        if case let .blocks(blocks)? = rawContent, !blocks.isEmpty {
-            body = .blocks(blocks)
+        let body: MessageContent = if case let .blocks(blocks)? = rawContent, !blocks.isEmpty {
+            .blocks(blocks)
         } else {
-            body = content
+            content
         }
         switch body {
         case let .text(text): return hasTools ? "" : text

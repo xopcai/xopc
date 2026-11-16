@@ -2062,13 +2062,13 @@ final class MobileLayoutParityUITests: XCTestCase {
         // The accessibility element spans the full aligned row. Sample the painted bubble above the text.
         let scale = CGFloat(image.width) / app.frame.width
         let strip = try XCTUnwrap(image.cropping(to: CGRect(x: row.minX * scale, y: (row.minY + 8) * scale,
-                                                          width: row.width * scale, height: 1).integral))
+                                                            width: row.width * scale, height: 1).integral))
         var pixels = [UInt8](repeating: 0, count: strip.width * 4)
         return try pixels.withUnsafeMutableBytes { buffer in
             let context = try XCTUnwrap(CGContext(data: buffer.baseAddress, width: strip.width, height: 1,
-                                                   bitsPerComponent: 8, bytesPerRow: strip.width * 4,
-                                                   space: CGColorSpaceCreateDeviceRGB(),
-                                                   bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+                                                  bitsPerComponent: 8, bytesPerRow: strip.width * 4,
+                                                  space: CGColorSpaceCreateDeviceRGB(),
+                                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
             context.draw(strip, in: CGRect(x: 0, y: 0, width: strip.width, height: 1))
             let start = Int(24 * scale)
             let bytes = buffer.bindMemory(to: UInt8.self)
