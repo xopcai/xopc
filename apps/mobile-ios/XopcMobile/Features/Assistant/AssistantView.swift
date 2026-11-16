@@ -537,86 +537,7 @@ struct AssistantView<Dock: View>: View {
             ScrollViewReader { scroller in
                 ScrollView {
                     // Exact row heights keep long replies anchored during keyboard resize.
-                    VStack(spacing: 20) {
-                        if showsConversationTitleInTimeline, let conversation {
-                            Text(verbatim: conversation.title)
-                                .mobileTextStyle(.rowTitle)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 4)
-                                .accessibilityAddTraits(.isHeader)
-                        }
-                        if let errorMessage = state.errorMessage {
-                            ErrorBanner(message: errorMessage)
-                        }
-                        queueCard
-                        personalConnectionCard
-                        ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }, id: \.scrollID) { message in
-                            VStack(spacing: 20) {
-                                MessageBubble(
-                                    message: message,
-                                    configuration: configuration,
-                                    conversationID: conversation?.isDraft == false ? conversation?.id : nil,
-                                    assistantState: state,
-                                    readAloud: readAloud,
-                                    canReadAloud: realtimeVoiceCall.phase == .idle,
-                                    previewEligible: message.id != state.messages.last?.id,
-                                    onReuseUserText: { draft = $0 },
-                                    maximumWidth: maximumMessageWidth,
-                                    animateStreaming: followingBottom && !userScrollingMessages,
-                                    onReading: {
-                                        followingBottom = false
-                                        bottomScrollTask?.cancel(); bottomScrollTask = nil
-                                    }
-                                )
-                                generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth,
-                                                   viewportHeight: viewport.size.height)
-                            }
-                            .id(message.scrollID)
-                            .onGeometryChange(for: CGRect?.self) { geometry in
-                                let frame = geometry.frame(in: .named("chat-scroll"))
-                                return frame.minY <= chatHeaderClearance + 20 && frame.maxY > chatHeaderClearance ? frame : nil
-                            } action: { frame in
-                                if let frame, userScrollingMessages, let scope = timelineReadingScope {
-                                    saveReadingAnchor(ChatReadingAnchor(id: message.scrollID,
-                                                                        offset: frame.minY - chatHeaderClearance, rowHeight: frame.height), scope: scope)
-                                }
-                            }
-                        }
-                        if let unanchored = cards[""] {
-                            generatedMediaRows(unanchored, maximumWidth: maximumMessageWidth, viewportHeight: viewport.size.height)
-                        }
-                        clarificationCard
-                        if showsStagedProgress {
-                            AssistantStagesView(progress: state.runProgress,
-                                                answerStarted: state.messages.contains {
-                                                    $0.role == "assistant" && $0.turnId == state.runProgress.runID && $0.answerConfirmed && !$0.text.isEmpty
-                                                }, paused: state.clarification != nil)
-                                .id(state.runProgress.runID ?? "sending")
-                        } else if isPersonalConversation, state.isRunActive, state.errorMessage == nil, state.clarification == nil,
-                                  !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
-                        {
-                            AssistantActivityView()
-                                .id(state.runID ?? "sending")
-                        }
-                        Color.clear.frame(height: 1)
-                            .id("chat-bottom")
-                            .onGeometryChange(for: CGFloat.self) { proxy in
-                                proxy.frame(in: .named("chat-timeline-content")).maxY
-                            } action: { _ in
-                                scheduleBottomScroll(scroller)
-                            }
-                            .onGeometryChange(for: CGFloat.self) { proxy in
-                                proxy.frame(in: .named("chat-scroll")).maxY
-                            } action: { bottom in
-                                isAtBottom = bottom <= viewport.size.height + 24
-                            }
-                    }
-                    .coordinateSpace(name: "chat-timeline-content")
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 16)
-                    .frame(maxWidth: 720)
-                    .frame(maxWidth: .infinity)
+                    timelineContent(cards: cards, maximumMessageWidth: maximumMessageWidth, viewportHeight: viewport.size.height, scroller: scroller)
                 }
                 .defaultScrollAnchor(.top)
                 .contentMargins(.top, chatHeaderClearance, for: .scrollContent)
@@ -640,64 +561,167 @@ struct AssistantView<Dock: View>: View {
                     restoreTimeline(scroller)
                     scheduleBottomScroll(scroller)
                 }
-                .modifier(ChatScrollInteraction(onStart: {
-                    if !userScrollingMessages {
-                        lastUserScrollTowardLatest = false
-                    }
+                .modifier(timelineScrollInteraction())
+                .overlay(alignment: .bottom) { jumpToBottomButton(scroller) }
+            }
+        }
+    }
+
+    private func timelineScrollInteraction() -> ChatScrollInteraction {
+        ChatScrollInteraction(onStart: {
+            if !userScrollingMessages {
+                lastUserScrollTowardLatest = false
+            }
+            bottomJumpID = nil
+            userScrollingMessages = true
+            followingBottom = false
+            bottomScrollTask?.cancel(); bottomScrollTask = nil
+        }, onEnd: {
+            guard userScrollingMessages else { return }
+            followingBottom = lastUserScrollTowardLatest && isAtBottom
+            userScrollingMessages = false
+            if followingBottom, let scope = timelineReadingScope {
+                readingPositions.removeValue(forKey: scope)
+            }
+        }, onDirectionChange: { towardLatest in
+            if userScrollingMessages {
+                lastUserScrollTowardLatest = towardLatest
+            }
+        })
+    }
+
+    @ViewBuilder
+    private func jumpToBottomButton(_ scroller: ScrollViewProxy) -> some View {
+        if positionedTimeline, !followingBottom, !isAtBottom {
+            Button {
+                guard bottomJumpID == nil else { return }
+                bottomScrollTask?.cancel(); bottomScrollTask = nil
+                userScrollingMessages = false
+                followingBottom = true
+                if let scope = timelineReadingScope {
+                    readingPositions.removeValue(forKey: scope)
+                }
+                let jumpID = UUID()
+                bottomJumpID = jumpID
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
+                    scroller.scrollTo("chat-bottom", anchor: .bottom)
+                } completion: {
+                    guard bottomJumpID == jumpID else { return }
                     bottomJumpID = nil
-                    userScrollingMessages = true
-                    followingBottom = false
-                    bottomScrollTask?.cancel(); bottomScrollTask = nil
-                }, onEnd: {
-                    guard userScrollingMessages else { return }
-                    followingBottom = lastUserScrollTowardLatest && isAtBottom
-                    userScrollingMessages = false
-                    if followingBottom, let scope = timelineReadingScope {
-                        readingPositions.removeValue(forKey: scope)
-                    }
-                }, onDirectionChange: { towardLatest in
-                    if userScrollingMessages {
-                        lastUserScrollTowardLatest = towardLatest
-                    }
-                }))
-                .overlay(alignment: .bottom) {
-                    if positionedTimeline, !followingBottom, !isAtBottom {
-                        Button {
-                            guard bottomJumpID == nil else { return }
-                            bottomScrollTask?.cancel(); bottomScrollTask = nil
-                            userScrollingMessages = false
-                            followingBottom = true
-                            if let scope = timelineReadingScope {
-                                readingPositions.removeValue(forKey: scope)
-                            }
-                            let jumpID = UUID()
-                            bottomJumpID = jumpID
-                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
-                                scroller.scrollTo("chat-bottom", anchor: .bottom)
-                            } completion: {
-                                guard bottomJumpID == jumpID else { return }
-                                bottomJumpID = nil
-                                scheduleBottomScroll(scroller)
-                            }
-                        } label: {
-                            Group {
-                                if state.isRunActive {
-                                    LoopiIcon(size: 20, active: true, compact: true, working: true)
-                                } else {
-                                    Image(systemName: "arrow.down").font(.system(size: 18, weight: .medium))
-                                }
-                            }
-                            .frame(width: 36, height: 36)
-                            .background(.regularMaterial, in: .circle)
-                            .frame(width: 44, height: 44).contentShape(.circle)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("回到最新消息")
-                        .accessibilityValue(AppLocalization.string(state.isRunActive ? "正在回答" : "最新消息", locale: locale))
-                        .accessibilityIdentifier("chat-jump-bottom")
-                        .padding(.bottom, 8)
+                    scheduleBottomScroll(scroller)
+                }
+            } label: {
+                Group {
+                    if state.isRunActive {
+                        LoopiIcon(size: 20, active: true, compact: true, working: true)
+                    } else {
+                        Image(systemName: "arrow.down").font(.system(size: 18, weight: .medium))
                     }
                 }
+                .frame(width: 36, height: 36)
+                .background(.regularMaterial, in: .circle)
+                .frame(width: 44, height: 44).contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("回到最新消息")
+            .accessibilityValue(AppLocalization.string(state.isRunActive ? "正在回答" : "最新消息", locale: locale))
+            .accessibilityIdentifier("chat-jump-bottom")
+            .padding(.bottom, 8)
+        }
+    }
+
+    private func timelineContent(cards: [String: [GeneratedMediaCard]], maximumMessageWidth: CGFloat,
+                                 viewportHeight: CGFloat, scroller: ScrollViewProxy) -> some View
+    {
+        VStack(spacing: 20) {
+            if showsConversationTitleInTimeline, let conversation {
+                Text(verbatim: conversation.title)
+                    .mobileTextStyle(.rowTitle)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            if let errorMessage = state.errorMessage {
+                ErrorBanner(message: errorMessage)
+            }
+            queueCard
+            personalConnectionCard
+            ForEach(state.messages.filter { $0.role != "assistant" || $0.answerConfirmed }, id: \.scrollID) { message in
+                timelineMessageRow(message, cards: cards, maximumMessageWidth: maximumMessageWidth,
+                                   viewportHeight: viewportHeight)
+            }
+            if let unanchored = cards[""] {
+                generatedMediaRows(unanchored, maximumWidth: maximumMessageWidth, viewportHeight: viewportHeight)
+            }
+            clarificationCard
+            if showsStagedProgress {
+                AssistantStagesView(progress: state.runProgress,
+                                    answerStarted: state.messages.contains {
+                                        $0.role == "assistant" && $0.turnId == state.runProgress.runID && $0.answerConfirmed && !$0.text.isEmpty
+                                    }, paused: state.clarification != nil)
+                    .id(state.runProgress.runID ?? "sending")
+            } else if isPersonalConversation, state.isRunActive, state.errorMessage == nil, state.clarification == nil,
+                      !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
+            {
+                AssistantActivityView()
+                    .id(state.runID ?? "sending")
+            }
+            timelineBottomMarker(scroller: scroller, viewportHeight: viewportHeight)
+        }
+        .coordinateSpace(name: "chat-timeline-content")
+        .padding(.horizontal, 12)
+        .padding(.vertical, 16)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func timelineBottomMarker(scroller: ScrollViewProxy, viewportHeight: CGFloat) -> some View {
+        Color.clear.frame(height: 1)
+            .id("chat-bottom")
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .named("chat-timeline-content")).maxY
+            } action: { _ in
+                scheduleBottomScroll(scroller)
+            }
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .named("chat-scroll")).maxY
+            } action: { bottom in
+                isAtBottom = bottom <= viewportHeight + 24
+            }
+    }
+
+    private func timelineMessageRow(_ message: TimelineMessage, cards: [String: [GeneratedMediaCard]],
+                                    maximumMessageWidth: CGFloat, viewportHeight: CGFloat) -> some View
+    {
+        VStack(spacing: 20) {
+            MessageBubble(
+                message: message,
+                configuration: configuration,
+                conversationID: conversation?.isDraft == false ? conversation?.id : nil,
+                assistantState: state,
+                readAloud: readAloud,
+                canReadAloud: realtimeVoiceCall.phase == .idle,
+                previewEligible: message.id != state.messages.last?.id,
+                onReuseUserText: { draft = $0 },
+                maximumWidth: maximumMessageWidth,
+                animateStreaming: followingBottom && !userScrollingMessages,
+                onReading: {
+                    followingBottom = false
+                    bottomScrollTask?.cancel(); bottomScrollTask = nil
+                }
+            )
+            generatedMediaRows(cards[message.id] ?? [], maximumWidth: maximumMessageWidth,
+                               viewportHeight: viewportHeight)
+        }
+        .id(message.scrollID)
+        .onGeometryChange(for: CGRect?.self) { geometry in
+            let frame = geometry.frame(in: .named("chat-scroll"))
+            return frame.minY <= chatHeaderClearance + 20 && frame.maxY > chatHeaderClearance ? frame : nil
+        } action: { frame in
+            if let frame, userScrollingMessages, let scope = timelineReadingScope {
+                saveReadingAnchor(ChatReadingAnchor(id: message.scrollID,
+                                                    offset: frame.minY - chatHeaderClearance, rowHeight: frame.height), scope: scope)
             }
         }
     }

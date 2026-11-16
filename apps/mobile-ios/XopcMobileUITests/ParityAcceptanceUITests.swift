@@ -2072,8 +2072,8 @@ final class MobileLayoutParityUITests: XCTestCase {
             context.draw(strip, in: CGRect(x: 0, y: 0, width: strip.width, height: 1))
             let start = Int(24 * scale)
             let bytes = buffer.bindMemory(to: UInt8.self)
-            let end = (start ..< strip.width).first { x in
-                (0 ..< 3).contains { channel in abs(Int(bytes[4 * x + channel]) - Int(bytes[4 * start + channel])) > 4 }
+            let end = (start ..< strip.width).first { column in
+                (0 ..< 3).contains { channel in abs(Int(bytes[4 * column + channel]) - Int(bytes[4 * start + channel])) > 4 }
             } ?? strip.width
             return CGFloat(end) / scale
         }
