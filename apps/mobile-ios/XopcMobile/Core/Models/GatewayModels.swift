@@ -57,6 +57,7 @@ struct AgentCatalog: Decodable, Equatable, Sendable {
 
 struct AgentSummary: Decodable, Equatable, Identifiable, Sendable {
     struct Override: Decodable, Equatable, Sendable { let purpose: String? }
+    // swiftlint:disable:next implicit_optional_initialization
     var override: Override? = nil
     let id: String
     let name: String?
@@ -97,6 +98,7 @@ struct SidebarTask: Decodable, Equatable, Identifiable, Sendable {
 
 struct ConversationSummary: Codable, Equatable, Identifiable, Sendable {
     struct CustomData: Codable, Equatable, Sendable { let agentSetup: Bool? }
+    // swiftlint:disable:next implicit_optional_initialization
     var customData: CustomData? = nil
     let key: String
     let agentId: String

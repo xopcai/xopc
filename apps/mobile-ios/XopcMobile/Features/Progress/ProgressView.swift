@@ -268,7 +268,6 @@ private struct ProgressHubView: View {
     }
 
     @ViewBuilder
-    // swiftlint:disable:next cyclomatic_complexity
     private func destination(for route: HomeOpenRoute) -> some View {
         switch route {
         case let .task(id):

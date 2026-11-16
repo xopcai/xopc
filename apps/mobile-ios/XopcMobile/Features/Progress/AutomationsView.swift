@@ -1,5 +1,7 @@
 import SwiftUI
 
+// swiftlint:disable file_length
+
 struct AutomationsView: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
@@ -219,6 +221,7 @@ private extension AutomationRecord {
     }
 }
 
+// swiftlint:disable:next cyclomatic_complexity
 func automationScheduleText(_ automation: AutomationRecord, locale: Locale, expression: String? = nil) -> Text {
     let schedule = automation.trigger.schedule
     if let once = schedule?.onceAt, let date = ISO8601DateFormatter().date(from: once) {

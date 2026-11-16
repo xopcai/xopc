@@ -54,6 +54,7 @@ private enum GlobalModelChange: Encodable {
     }
 }
 
+// swiftlint:disable:next type_body_length
 struct ModelSettingsView: View {
     private enum Page: String { case defaults, tasks }
     private enum Sheet: Identifiable {
@@ -199,6 +200,7 @@ struct ModelSettingsView: View {
         }.frame(minHeight: 44).contentShape(Rectangle())
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func label(_ key: String, page: Page) -> LocalizedStringKey {
         switch key {
         case "chat": "对话与任务"

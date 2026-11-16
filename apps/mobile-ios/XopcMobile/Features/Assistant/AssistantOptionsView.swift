@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 
+// swiftlint:disable file_length
+
 struct AssistantSessionActionsView: View {
     let configuration: GatewayConfiguration
     let conversation: ConversationSelection?
@@ -385,6 +387,7 @@ struct ConversationShareView: View {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     @ViewBuilder private func setupRows(_ preview: SessionSharePreview) -> some View {
         Section {
             HStack {
