@@ -9,6 +9,7 @@ vi.mock('@kit.AbilityKit', () => ({}));
 vi.mock('@kit.BasicServicesKit', () => ({ systemDateTime: { TimeType: { STARTUP: 1 }, getUptime: () => mocks.now } }));
 vi.mock('@kit.ArkTS', () => ({ util: { generateRandomUUID: () => crypto.randomUUID() } }));
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { info: vi.fn(), warn: vi.fn() } }));
+vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error {} }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request, transferAuth: async () => ({ origin: "https://gateway.example" }) } }));
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class { async materialize() {} } }));
 vi.mock('../entry/src/main/ets/service/voiceCapture.ets', () => ({ voiceCapture: { async cancel() {} } }));
@@ -231,7 +232,7 @@ describe('Harmony voice connection recovery', () => {
         natural: { available: true }, assistant: { available: true }
       } } });
       if (path.endsWith('/preflight')) return JSON.stringify({ ok: true });
-      if (path.endsWith('/sessions')) return JSON.stringify({ payload: {
+      if (path.startsWith('/api/voice/realtime/sessions?')) return JSON.stringify({ payload: {
         sessionId: `session-${++issued}`, ticket: `ticket-${issued}`, route: { engine: 'omni' }, limits: { maxSessionMs: 600000 }
       } });
       return JSON.stringify({ ok: true });
@@ -245,7 +246,7 @@ describe('Harmony voice connection recovery', () => {
       if (path.endsWith('/status')) return JSON.stringify({ payload: { enabled: true, openingGreeting: true,
         capabilities: { assistant: { available: true } } } });
       if (path.endsWith('/preflight')) return JSON.stringify({ ok: true });
-      if (path.endsWith('/sessions')) {
+      if (path.startsWith('/api/voice/realtime/sessions?')) {
         const request = JSON.parse(body); bodies.push(request);
         return JSON.stringify({ payload: { sessionId: `session-${++issued}`, ticket: 'ticket', connectionEpoch: issued,
           route: { engine: 'agent' }, limits: { maxSessionMs: 600000 }, openingGreeting: { accepted: request.openingGreeting.initiation === 'user', greetingResponseId: 'greeting' } } });
