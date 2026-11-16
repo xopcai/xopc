@@ -1,5 +1,5 @@
 import { connectionProof } from './requestProof';
-import { webSocket } from '@kit.NetworkKit';
+import { connection, webSocket } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { systemDateTime } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -62,8 +62,10 @@ export class XopcVoiceCallTransport {
   private droppedBytes: number = 0;
   private audioSendQueue: Promise<void> = Promise.resolve();
   private heartbeatTimer: number = -1;
-  private lastPong: number = 0;
+  private lastActivity: number = 0;
   private lastPing: number = 0;
+  private networkWatch?: connection.NetConnection;
+  private pathProbe: number = -1;
 
   constructor(callbacks: XopcVoiceTransportCallbacks) { this.callbacks = callbacks; }
 
@@ -73,7 +75,7 @@ export class XopcVoiceCallTransport {
     await this.close();
     const generation = ++this.generation;
     this.sessionStartSent = false; this.closed = false; this.ready = false; this.session = session; this.eventSeq = 0; this.audioSeq = 0;
-    this.inputMuted = true; this.rotateUtterance(); this.lastPong = Date.now();
+    this.inputMuted = true; this.rotateUtterance(); this.lastPing = 0;
     const direct = origin.replace(/^https:/, 'wss:') + session.websocketPath;
     const proxy = origin.replace(/^https:/, 'wss:') + XOPC_VOICE_PROXY_WS_PATH;
     try { await this.open(preferProxy ? proxy : direct, generation); }
@@ -105,7 +107,10 @@ export class XopcVoiceCallTransport {
             if (settled && !this.ready) return;
             const event = xopcParseVoiceEvent(value); this.receiveEvent(event);
             if (event.type === 'session.ready' && !settled) {
-              settled = true; clearTimeout(timeout); this.rejectPending = undefined; this.ready = true; this.startHeartbeat(generation, event.payload.heartbeatIntervalMs ?? 15000); resolve();
+              settled = true; clearTimeout(timeout); this.rejectPending = undefined; this.ready = true;
+              this.startHeartbeat(generation, event.payload.heartbeatIntervalMs ?? 15000);
+              this.watchNetwork(generation);
+              resolve();
             }
           } else {
             if (!this.ready) throw new Error('PROTOCOL_ERROR');
@@ -140,10 +145,12 @@ export class XopcVoiceCallTransport {
     const session = this.session;
     if (!session || event.sessionId !== session.sessionId || event.seq !== this.eventSeq + 1) throw new Error('PROTOCOL_ERROR');
     this.eventSeq = event.seq;
+    this.lastActivity = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false);
     if (event.type === 'session.ready') {
       if (this.ready || event.payload.connectionEpoch !== session.connectionEpoch || event.payload.route?.engine !== session.route.engine) throw new Error('PROTOCOL_ERROR');
     } else if (event.type === 'session.pong') {
-      this.lastPong = Date.now(); if (this.lastPing) this.callbacks.onRtt(this.lastPong - this.lastPing);
+      if (this.lastPing) this.callbacks.onRtt(this.lastActivity - this.lastPing);
+      this.lastPing = 0;
     }
     this.callbacks.onEvent(event);
     if (event.type === 'session.error' && !event.payload.recoverable) {
@@ -160,7 +167,9 @@ export class XopcVoiceCallTransport {
   private receiveAudio(frame: XopcVoiceAudioFrame): void {
     const session = this.session;
     if (!session || frame.connectionEpoch !== session.connectionEpoch || frame.seq !== this.audioSeq + 1) throw new Error('PROTOCOL_ERROR');
-    this.audioSeq = frame.seq; this.callbacks.onAudio(frame);
+    this.audioSeq = frame.seq;
+    this.lastActivity = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false);
+    this.callbacks.onAudio(frame);
   }
 
   send(type: string, payload: XopcVoiceClientPayload): void {
@@ -262,9 +271,45 @@ export class XopcVoiceCallTransport {
     clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = setInterval((): void => {
       if (generation !== this.generation || this.closed) return;
-      if (Date.now() - this.lastPong > 35000) this.fail('NETWORK', generation);
-      else { this.lastPing = Date.now(); this.send('session.ping', {}); }
-    }, interval);
+      const now = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false);
+      if (now - this.lastActivity >= 15000) this.fail('NETWORK', generation);
+      else this.ping(now);
+    }, Math.min(5000, Math.max(1000, interval)));
+  }
+
+  private ping(now: number): void {
+    if (this.lastPing) return;
+    this.lastPing = now; this.send('session.ping', {});
+  }
+
+  private watchNetwork(generation: number): void {
+    try {
+      let networkId = connection.getDefaultNetSync().netId;
+      const watcher = connection.createNetConnection();
+      this.networkWatch = watcher;
+      watcher.on('netAvailable', (handle: connection.NetHandle): void => {
+        if (generation !== this.generation || this.closed || !handle.netId || handle.netId === networkId) return;
+        const hadNetwork = networkId !== 0;
+        networkId = handle.netId;
+        if (!hadNetwork) return;
+        const started = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false);
+        hilog.info(0x0000, 'XopcVoice', 'Voice default network changed');
+        this.ping(started);
+        clearTimeout(this.pathProbe);
+        this.pathProbe = setTimeout((): void => {
+          if (generation === this.generation && this.lastActivity < started) this.fail('NETWORK', generation);
+        }, 2000);
+      });
+      watcher.register((error: BusinessError): void => {
+        if (!error && this.networkWatch !== watcher) watcher.unregister((_error: BusinessError): void => {});
+      });
+    } catch (_) { /* The regular heartbeat still detects a broken route. */ }
+  }
+
+  private stopNetworkWatch(): void {
+    clearTimeout(this.pathProbe); this.pathProbe = -1;
+    const watcher = this.networkWatch; this.networkWatch = undefined;
+    try { watcher?.unregister((_error: BusinessError): void => {}); } catch (_) {}
   }
 
   private fail(reason: string, generation: number): void {
@@ -273,6 +318,7 @@ export class XopcVoiceCallTransport {
     const wasReady = this.ready;
     this.rejectPending?.(new Error(reason)); this.rejectPending = undefined;
     this.closed = true; this.ready = false; clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
+    this.stopNetworkWatch();
     this.releaseSocket(); if (wasReady) this.callbacks.onClose(reason);
   }
 
@@ -287,6 +333,7 @@ export class XopcVoiceCallTransport {
     this.rejectPending?.(new Error('CANCELLED')); this.rejectPending = undefined;
     ++this.generation; this.closed = true; this.ready = false; this.session = undefined;
     this.inputMuted = true; clearInterval(this.heartbeatTimer); this.heartbeatTimer = -1;
+    this.stopNetworkWatch();
     ++this.inputGeneration; this.pendingBytes = 0; this.pendingWireBytes = 0; this.pendingFrames = [];
     this.peakWaitMs = 0; this.droppedBytes = 0;
     this.audioSendQueue = Promise.resolve(); await this.releaseSocket();

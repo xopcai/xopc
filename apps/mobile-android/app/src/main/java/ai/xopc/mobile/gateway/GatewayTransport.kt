@@ -13,6 +13,9 @@ class GatewayHttpException(val status: Int, val code: String? = null, val detail
 
 interface GatewayHttp {
   fun request(origin: String, path: String, method: String = "GET", body: String = "", bearer: String = ""): String
+  fun cancelVoiceCall(origin: String, bearer: String, body: String) {
+    request(origin, "/api/voice/realtime/sessions/cancel", "POST", body, bearer)
+  }
   fun requestWithHeaders(origin: String, path: String, method: String, body: String, bearer: String,
     headers: Map<String, String>): String = request(origin, path, method, body, bearer)
   fun requestBytes(origin: String, path: String, bearer: String = ""): ByteArray =
@@ -63,7 +66,15 @@ class GatewayTransport : GatewayHttp {
     requestWithHeaders(origin, path, method, body, bearer, emptyMap())
 
   override fun requestWithHeaders(origin: String, path: String, method: String, body: String,
-    bearer: String, headers: Map<String, String>): String {
+    bearer: String, headers: Map<String, String>): String =
+    requestWithTimeouts(origin, path, method, body, bearer, headers, 8_000, 30_000)
+
+  override fun cancelVoiceCall(origin: String, bearer: String, body: String) {
+    requestWithTimeouts(origin, "/api/voice/realtime/sessions/cancel", "POST", body, bearer, emptyMap(), 3_000, 3_000)
+  }
+
+  private fun requestWithTimeouts(origin: String, path: String, method: String, body: String,
+    bearer: String, headers: Map<String, String>, connectTimeoutMs: Int, readTimeoutMs: Int): String {
     val url = URL(PairingProtocol.secureOrigin(origin) + apiPath(path))
     require(method in setOf("GET", "POST", "PATCH", "PUT", "DELETE")) { "INVALID_METHOD" }
     require(method != "GET" || body.isEmpty()) { "INVALID_BODY" }
@@ -72,8 +83,8 @@ class GatewayTransport : GatewayHttp {
     try {
       connection.requestMethod = method
       connection.instanceFollowRedirects = false
-      connection.connectTimeout = 8_000
-      connection.readTimeout = 30_000
+      connection.connectTimeout = connectTimeoutMs
+      connection.readTimeout = readTimeoutMs
       connection.setRequestProperty("Accept", "application/json")
       if (bearer.isNotEmpty()) connection.setRequestProperty("Authorization", "Bearer $bearer")
       headers.forEach { (name, value) ->

@@ -68,6 +68,7 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
     }
   }
   try {
+    const view = c.req.query('view') === 'compact' ? 'compact' : 'full';
     const payload = await receiveSessionCommand(deps.service, id.data, principal.principalId, command, async () => {
       if (!('input' in command)) return [];
       const endpoint = command.origin.type === 'endpoint' ? deps.service.endpointTools.registry.get(command.origin.endpointId) : undefined;
@@ -77,7 +78,7 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
       contexts.push(...(command.input.browserContexts ?? []).map(browserPageContextToAgentContext));
       if (command.input.appContext) contexts.push(await deps.service.prepareSessionAppContext(command.input.appContext, principal, id.data, command.clientMessageId));
       return contexts;
-    });
+    }, view);
     const receiveMs = performance.now() - receivedAt;
     c.header('Server-Timing', `session_input;dur=${receiveMs.toFixed(3)}`, { append: true });
     if ('input' in command) recordDeviceExecutionActor(id.data, command.clientMessageId, principal);
@@ -98,7 +99,8 @@ export async function handleSessionInputReceipt(c: Context, deps: AuthenticatedR
     const receipt = getSessionInputReceipt(id.data, c.req.param('clientMessageId'), getGatewayPrincipal(c).principalId);
     if (!receipt) return c.json({ ok: false, error: { code: 'NOT_RECEIVED', message: 'Input has not been received' } }, 404);
     if (isConversationDeleted(id.data)) return c.json({ ok: false, error: { code: 'SESSION_DELETED', message: 'Conversation was deleted' } }, 410);
-    const payload = await sessionCommandSnapshot(deps.service, receipt);
+    const view = c.req.query('view') === 'compact' ? 'compact' : 'full';
+    const payload = await sessionCommandSnapshot(deps.service, receipt, view);
     const input = receipt.inputId ? getSessionInputById(id.data, receipt.inputId) : undefined;
     const execution = input?.clientMessageId === receipt.clientMessageId && input.expectedTranscriptId === receipt.transcriptId
       ? { runId: input.runId, status: input.status } : undefined;

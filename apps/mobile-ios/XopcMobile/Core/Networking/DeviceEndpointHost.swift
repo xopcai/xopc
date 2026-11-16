@@ -1,47 +1,15 @@
 import CryptoKit
 import Foundation
-import Security
 import UIKit
-
-actor DeviceEndpointPool {
-    static let shared = DeviceEndpointPool()
-    private var hosts: [GatewayConfiguration: DeviceEndpointHost] = [:]
-
-    func origin(for client: GatewayClient) async throws -> DeviceEndpointOrigin {
-        let configuration = client.configuration
-        if let host = hosts[configuration] {
-            return try await host.origin()
-        }
-        for (key, host) in hosts where key.baseURL == configuration.baseURL {
-            await host.stop()
-            hosts.removeValue(forKey: key)
-        }
-        if hosts.count >= 8, let key = hosts.keys.first {
-            await hosts.removeValue(forKey: key)?.stop()
-        }
-        let host = DeviceEndpointHost(client: client)
-        hosts[configuration] = host
-        return try await host.origin()
-    }
-
-    func environment(for client: GatewayClient) async -> DeviceTurnEnvironment? {
-        guard let host = hosts[client.configuration], await host.supportsContext() else { return nil }
-        return DeviceTurnEnvironment(capturedAt: Int64(Date().timeIntervalSince1970 * 1000),
-                                     timezone: TimeZone.current.identifier, locale: Locale.current.identifier.replacingOccurrences(of: "_", with: "-"))
-    }
-}
 
 // swiftlint:disable:next type_body_length
 actor DeviceEndpointHost {
     private let client: GatewayClient
     private var socket: URLSessionWebSocketTask?
     private var claim: DeviceEndpointOrigin?
-    private var contextSupported = false
-    func supportsContext() -> Bool {
-        contextSupported
-    }
-
     private var connection: Task<DeviceEndpointOrigin, Error>?
+    private var runSubscriptions = DeviceRunSubscriptions()
+    private var retired = false
     private var invocations: [String: Task<Void, Never>] = [:]
     private var reader: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
@@ -49,12 +17,12 @@ actor DeviceEndpointHost {
     private var appProviderAccepted = false
     private var appProviderSequence = 0
     private let instance = UUID().uuidString.lowercased()
-
     init(client: GatewayClient) {
         self.client = client
     }
 
     func origin() async throws -> DeviceEndpointOrigin {
+        guard !retired else { throw CancellationError() }
         if let claim {
             return claim
         }
@@ -68,7 +36,14 @@ actor DeviceEndpointHost {
     }
 
     func stop() {
+        retired = true
+        connection?.cancel()
+        closeSocket()
+    }
+
+    private func closeSocket() {
         claim = nil
+        runSubscriptions.finishAll(throwing: retired ? CancellationError() : DeviceRunStreamError.disconnected)
         appProviderAccepted = false
         appProviderSequence = 0
         for task in invocations.values {
@@ -83,7 +58,8 @@ actor DeviceEndpointHost {
     // swiftlint:disable:next function_body_length
     private func connect() async throws -> DeviceEndpointOrigin {
         let compatibility: GatewayEnvelope<DeviceCompatibility> = try await client.request(path: "/api/endpoint-tools/compatibility")
-        contextSupported = compatibility.payload?.turnDeviceContextV1 == true
+        let clarificationVersions = compatibility.payload?.clarificationVersions
+        async let multiQuestion = client.supportsMultiQuestion(clarificationVersions)
         let key = try Self.signingKey()
         let fallback = "ios-" + SHA256.hash(data: key.publicKey.derRepresentation).prefix(16).map { String(format: "%02x", $0) }.joined()
         let principalId = compatibility.payload?.deviceId ?? fallback
@@ -102,11 +78,13 @@ actor DeviceEndpointHost {
                                        "displayName": "xopc iOS", "kind": "mobile", "platform": "ios", "appVersion": "1", "availability": "foreground",
                                        "nonce": UUID().uuidString.lowercased(), "signedAt": Self.now(), "tools": tools]
         endpoint["signature"] = try key.signature(for: Self.json(endpoint)).rawRepresentation.base64URL()
-        let url = try websocketURL()
+        let url = try client.configuration.realtimeWebSocketURL()
         var request = URLRequest(url: url)
         try await request.setValue(GatewayPairingService.shared.connectionProof(url: url, ticket: ticket.ticket),
                                    forHTTPHeaderField: "X-Xopc-Proof")
+        try Task.checkCancellation()
         let socket = client.session.webSocketTask(with: request)
+        socket.maximumMessageSize = 2 * 1024 * 1024
         self.socket = socket; socket.resume()
         do {
             try await send("realtime.hello", [
@@ -124,21 +102,31 @@ actor DeviceEndpointHost {
                 }
             }
             defer { timeout.cancel() }
-            let ready = try await receive(socket)
+            let ready = try await receive(socket).frame
             guard ready["kind"] as? String == "realtime.ready", let payload = ready["payload"] as? [String: Any],
                   let endpoint = payload["endpoint"] as? [String: Any], endpoint["endpointId"] as? String == endpointId,
                   let token = endpoint["turnToken"] as? String, token.count >= 32 else { throw GatewayClientError.invalidResponse }
-            let claim = DeviceEndpointOrigin(endpointId: endpointId, token: token)
-            self.claim = claim
-            if compatibility.payload?.endpointEnvironmentV1 == true {
-                environmentTask = Task { await publishEnvironment(claim) }
-            }
+            let multiQuestionSupported = await multiQuestion
+            guard self.socket === socket else { throw GatewayClientError.invalidResponse }
+            let claim = DeviceEndpointOrigin(endpointId: endpointId, token: token,
+                                             supportsDeviceContext: compatibility.payload?.turnDeviceContextV1 == true,
+                                             supportsMultiQuestion: multiQuestionSupported)
             if let catalog = try JSONSerialization.jsonObject(with: Data(DeviceToolCatalog.appProviderJson.utf8)) as? [String: Any] {
                 try await send("provider.catalog.replace", catalog)
             }
+            guard self.socket === socket else { throw GatewayClientError.transport }
+            self.claim = claim
             startLoops(socket)
+            if compatibility.payload?.endpointEnvironmentV1 == true {
+                environmentTask = Task { await publishEnvironment(claim) }
+            }
             return claim
-        } catch { stop(); throw error }
+        } catch {
+            if self.socket === socket {
+                closeSocket()
+            }
+            throw error
+        }
     }
 
     private func registerPrincipal(_ principalId: String, key: P256.Signing.PrivateKey) async throws {
@@ -159,7 +147,12 @@ actor DeviceEndpointHost {
                     guard self.socket === socket else { break }
                     try await send("realtime.ping", [:])
                     try await publishAppProviderState(socket)
-                } catch { break }
+                } catch {
+                    if self.socket === socket, !Task.isCancelled {
+                        closeSocket()
+                    }
+                    break
+                }
             }
         }
     }
@@ -229,27 +222,54 @@ actor DeviceEndpointHost {
         }
     }
 
-    private func websocketURL() throws -> URL {
-        guard var components = URLComponents(url: client.configuration.baseURL, resolvingAgainstBaseURL: false) else {
-            throw GatewayClientError.invalidURL
-        }
-        components.scheme = components.scheme == "https" ? "wss" : "ws"
-        components.path = "/api/realtime/v1/ws"
-        components.query = nil
-        components.fragment = nil
-        guard let url = components.url else { throw GatewayClientError.invalidURL }
-        return url
-    }
-
     private func readLoop(_ socket: URLSessionWebSocketTask) async {
         do {
             while !Task.isCancelled {
-                let frame = try await receive(socket)
+                let (frame, data) = try await receive(socket)
+                guard self.socket === socket else { return }
+                if let topic = try runSubscriptions.receive(frame, data: data) {
+                    try await send("realtime.unsubscribe", ["topics": [topic]])
+                }
                 guard try await handleFrame(frame, socket: socket) else { break }
             }
-        } catch { /* The next input reconnects and obtains a fresh claim. */ }
+        } catch { /* Active run observers reconnect from their last delivered sequence. */ }
         if self.socket === socket {
-            stop()
+            closeSocket()
+        }
+    }
+
+    func subscribeToRun(_ runID: String, after sequence: Int) async throws -> AsyncThrowingStream<RunStreamEvent, Error> {
+        _ = try await origin()
+        try Task.checkCancellation()
+        guard let socket else { throw DeviceRunStreamError.disconnected }
+        let topic = "run:\(runID)"
+        let (stream, continuation) = AsyncThrowingStream<RunStreamEvent, Error>.makeStream()
+        let id = UUID()
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeRunSubscription(topic, id: id) }
+        }
+        let cursor = runSubscriptions.add(topic, id: id, after: sequence, continuation: continuation)
+        do {
+            try await send("realtime.subscribe", ["subscriptions": [["topic": topic, "afterSeq": cursor, "view": "compact"]]])
+            return stream
+        } catch {
+            if Task.isCancelled || retired {
+                continuation.finish()
+                throw CancellationError()
+            }
+            if self.socket === socket {
+                closeSocket()
+            }
+            throw DeviceRunStreamError.disconnected
+        }
+    }
+
+    private func removeRunSubscription(_ topic: String, id: UUID) async {
+        guard runSubscriptions.remove(topic, id: id), let socket else { return }
+        do { try await send("realtime.unsubscribe", ["topics": [topic]]) } catch {
+            if self.socket === socket {
+                closeSocket()
+            }
         }
     }
 
@@ -367,16 +387,12 @@ actor DeviceEndpointHost {
         try await socket.send(.string(text))
     }
 
-    private func receive(_ socket: URLSessionWebSocketTask) async throws -> [String: Any] {
-        let data: Data
-        switch try await socket.receive() {
-        case let .data(bytes): data = bytes
-        case let .string(text): data = Data(text.utf8)
-        @unknown default: throw GatewayClientError.invalidResponse
-        }
-        guard data.count <= 256 * 1024, let frame = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              frame["protocolVersion"] as? Int == 2 else { throw GatewayClientError.invalidResponse }
-        return frame
+    private func receive(_ socket: URLSessionWebSocketTask) async throws -> (frame: [String: Any], data: Data) {
+        let data = try await socket.receiveFrameData()
+        guard let frame = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              frame["protocolVersion"] as? Int == 2,
+              data.count <= 256 * 1024 || frame["kind"] as? String == "realtime.event" else { throw GatewayClientError.invalidResponse }
+        return (frame, data)
     }
 
     private static func json(_ value: [String: Any]) throws -> Data {
@@ -385,23 +401,6 @@ actor DeviceEndpointHost {
 
     private static func now() -> Int64 {
         Int64(Date().timeIntervalSince1970 * 1000)
-    }
-
-    private static func signingKey() throws -> P256.Signing.PrivateKey {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "ai.xopc.device-tools",
-                                    kSecAttrAccount as String: "endpoint-p256", kSecReturnData as String: true]
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecSuccess, let data = result as? Data {
-            return try P256.Signing.PrivateKey(rawRepresentation: data)
-        }
-        guard status == errSecItemNotFound else { throw GatewayClientError.server("无法读取设备身份") }
-        let key = P256.Signing.PrivateKey()
-        var item = query; item.removeValue(forKey: kSecReturnData as String)
-        item[kSecValueData as String] = key.rawRepresentation
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess else { throw GatewayClientError.server("无法保存设备身份") }
-        return key
     }
 }
 

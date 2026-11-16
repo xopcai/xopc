@@ -716,10 +716,8 @@ export class VoiceRealtimeRuntime {
             claim: consumed, runtime: this.options, signal: abortController.signal, send, sendAudio, onClose: shutdown,
           });
         }
-        await Promise.all([
-          engine.start(),
-          consumed.openingGreeting ? engine.prepareOpeningGreeting?.(consumed.openingGreeting) : undefined,
-        ]);
+        if (consumed.openingGreeting) engine.prepareOpeningGreeting?.(consumed.openingGreeting);
+        await engine.start();
         if (closed) return;
         if (context?.isCurrent?.() === false || context?.memory?.isCurrent() === false) {
           invalidateContext();

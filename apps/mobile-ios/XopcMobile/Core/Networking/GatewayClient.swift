@@ -1,7 +1,5 @@
 import Foundation
 
-// swiftlint:disable file_length
-
 enum ConversationHistoryScope: Equatable, Hashable, Sendable {
     case recent, unassigned, project(String), expert(String)
 }
@@ -194,7 +192,6 @@ private extension String? {
     }
 }
 
-// swiftlint:disable:next type_body_length
 struct GatewayClient: GatewayServing, Sendable {
     let configuration: GatewayConfiguration
     let session: URLSession
@@ -316,30 +313,6 @@ struct GatewayClient: GatewayServing, Sendable {
         }
     }
 
-    func streamRun(runID: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    let clientID = "ios:\(UUID().uuidString.lowercased())"
-                    let ticket = try await issueRealtimeTicket(clientID: clientID)
-                    let socket = RealtimeRunSocket(
-                        configuration: configuration,
-                        session: session,
-                        ticket: ticket.ticket,
-                        clientID: clientID,
-                        runID: runID
-                    )
-                    try await socket.consume(into: continuation)
-                } catch is CancellationError {
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-
     func streamTaskResults(conversationID: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -384,10 +357,15 @@ struct GatewayClient: GatewayServing, Sendable {
         queryItems: [URLQueryItem] = [],
         method: String = "GET",
         body: Data? = nil,
-        idempotencyKey: UUID? = nil
+        idempotencyKey: UUID? = nil,
+        timeout: TimeInterval? = nil,
+        mapHTTPError: (@Sendable (Int, GatewayErrorPayload?) -> GatewayClientError?)? = nil
     ) async throws -> Response {
         let url = try makeURL(path: path, queryItems: queryItems)
         var request = URLRequest(url: url)
+        if let timeout {
+            request.timeoutInterval = timeout
+        }
         request.httpMethod = method
         request.httpBody = body
         if let idempotencyKey {
@@ -415,7 +393,11 @@ struct GatewayClient: GatewayServing, Sendable {
             throw GatewayClientError.invalidResponse
         }
         guard (200 ..< 300).contains(httpResponse.statusCode) else {
-            let body = try? decoder.decode(GatewayErrorPayload.self, from: data)
+            let body = (try? decoder.decode(GatewayEnvelope<IgnoredResponse>.self, from: data))?.error
+                ?? (try? decoder.decode(GatewayErrorPayload.self, from: data))
+            if let mapped = mapHTTPError?(httpResponse.statusCode, body) {
+                throw mapped
+            }
             throw GatewayClientError.http(
                 statusCode: httpResponse.statusCode,
                 message: body?.message
@@ -485,6 +467,7 @@ enum GatewayClientError: LocalizedError, Equatable {
     case invalidResponse
     case invalidPayload(String)
     case http(statusCode: Int, message: String?)
+    case voiceSessionConflict(message: String?)
     case server(String)
     case transport
 
@@ -498,6 +481,8 @@ enum GatewayClientError: LocalizedError, Equatable {
             AppLocalization.resolve("无法解析 Gateway 响应：\(message)")
         case let .http(statusCode, message):
             message ?? AppLocalization.resolve("Gateway 请求失败（\(statusCode)）")
+        case let .voiceSessionConflict(message):
+            message ?? AppLocalization.resolve("Gateway 请求失败（\(409)）")
         case let .server(message):
             NSLocalizedString(message, comment: "Gateway error returned or generated at runtime")
         case .transport:

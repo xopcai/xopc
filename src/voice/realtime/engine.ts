@@ -10,7 +10,7 @@ export interface VoiceEngine {
   restoreTasks?(): void;
   updateContext?(instructions: string, chat: string): boolean;
   start(): Promise<void>;
-  prepareOpeningGreeting?(input: { responseId: string; text: string }): Promise<void>;
+  prepareOpeningGreeting?(input: { responseId: string; text: string }): void;
   offerOpeningGreeting?(input: { responseId: string; text: string; deadlineAt: number }): Promise<OpeningGreetingResult>;
   appendAudio(bytes: Uint8Array): void;
   setInputMuted(muted: boolean): void | Promise<void>;

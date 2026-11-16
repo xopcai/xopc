@@ -48,6 +48,11 @@ class GatewaySession(
     return VoiceGatewayAuth(route.url, token())
   }
 
+  fun cancelVoiceCall(call: VoiceCallConnection, body: String) {
+    // A retired ticket must not hold the lock for authentication on a new route.
+    http.cancelVoiceCall(call.origin, call.bearer, body)
+  }
+
   fun uploadNoteMedia(path: String, name: String, mimeType: String, bytes: ByteArray,
     mutationId: String, durationSeconds: Int? = null): String {
     val auth = voiceAuth()

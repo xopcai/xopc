@@ -11,7 +11,6 @@ private struct RealtimeVoiceCancellation: Encodable {
 
 private struct RealtimeVoiceAcknowledgement: Decodable {
     let ok: Bool
-    let timingMetrics: [String]?
 }
 
 private struct RealtimeVoiceApprovalDecision: Encodable {
@@ -100,15 +99,6 @@ extension GatewayClient {
         return result.payload
     }
 
-    func preflightRealtimeVoice(conversationID: String, mode: RealtimeVoiceMode) async throws -> [String] {
-        let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode == .automatic ? nil : mode))
-        let result: RealtimeVoiceAcknowledgement = try await request(
-            path: "/api/voice/realtime/preflight", method: "POST", body: body
-        )
-        guard result.ok else { throw GatewayClientError.invalidResponse }
-        return result.timingMetrics ?? []
-    }
-
     func createRealtimeVoiceSession(conversationID: String, mode: RealtimeVoiceMode,
                                     openingGreeting: RealtimeVoiceSessionRequest.OpeningGreetingRequest? = nil) async throws -> RealtimeVoiceSession
     {
@@ -116,7 +106,13 @@ extension GatewayClient {
         let body = try encoder.encode(RealtimeVoiceSessionRequest(conversationId: conversationID, mode: mode == .automatic ? nil : mode,
                                                                   language: language, openingGreeting: openingGreeting))
         let result: VoicePayload<RealtimeVoiceSession> = try await request(
-            path: "/api/voice/realtime/sessions", method: "POST", body: body
+            path: "/api/voice/realtime/sessions",
+            queryItems: [URLQueryItem(name: "include", value: "timingMetrics")],
+            method: "POST", body: body,
+            mapHTTPError: { status, error in
+                guard status == 409, error?.code == "SESSION_CONFLICT" else { return nil }
+                return .voiceSessionConflict(message: error?.message)
+            }
         )
         guard result.payload.supportsNativePCM else { throw GatewayClientError.invalidResponse }
         return result.payload
@@ -125,7 +121,7 @@ extension GatewayClient {
     func cancelRealtimeVoiceSession(_ session: RealtimeVoiceSession) async throws {
         let body = try encoder.encode(RealtimeVoiceCancellation(sessionId: session.sessionId, ticket: session.ticket))
         let result: RealtimeVoiceAcknowledgement = try await request(
-            path: "/api/voice/realtime/sessions/cancel", method: "POST", body: body
+            path: "/api/voice/realtime/sessions/cancel", method: "POST", body: body, timeout: 3
         )
         guard result.ok else { throw GatewayClientError.invalidResponse }
     }

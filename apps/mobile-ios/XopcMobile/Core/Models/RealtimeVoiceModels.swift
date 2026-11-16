@@ -63,6 +63,7 @@ extension RealtimeVoiceMode: Encodable {
 
 struct RealtimeVoiceSession: Decodable, Sendable {
     var openingGreeting: OpeningGreeting?
+    var timingMetrics: [String]?
     struct OpeningGreeting: Decodable, Sendable {
         let accepted: Bool
         let greetingResponseId: String?

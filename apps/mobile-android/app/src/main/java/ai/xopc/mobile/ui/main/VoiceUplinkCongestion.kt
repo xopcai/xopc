@@ -2,9 +2,8 @@ package ai.xopc.mobile.ui.main
 
 internal enum class VoiceCongestion { CLEAR, WAITING, EXPIRED }
 
-internal fun voiceInputShouldMute(userMuted: Boolean, clarification: Boolean,
-  approval: Boolean, congestion: Boolean): Boolean =
-  userMuted || clarification || approval || congestion
+internal fun voiceInputShouldMute(userMuted: Boolean, clarification: Boolean, approval: Boolean): Boolean =
+  userMuted || clarification || approval
 
 /** Bounds queued microphone audio so stale speech is never sent after recovery. */
 internal class VoiceUplinkCongestion {

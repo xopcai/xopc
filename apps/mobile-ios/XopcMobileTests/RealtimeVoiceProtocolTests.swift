@@ -3,6 +3,24 @@ import Testing
 @testable import XopcMobile
 
 struct RealtimeVoiceProtocolTests {
+    @Test func silentConnectionExpiresWithOneOutstandingPing() {
+        var liveness = RealtimeVoiceLiveness(now: 100)
+        #expect(liveness.probe(now: 105) == .ping)
+        #expect(liveness.probe(now: 110) == .wait)
+        #expect(liveness.probe(now: 115) == .disconnected)
+    }
+
+    @Test func inboundAudioKeepsCallAliveWithoutAPong() {
+        var liveness = RealtimeVoiceLiveness(now: 100)
+        #expect(liveness.probe(now: 105) == .ping)
+        #expect(liveness.receive(now: 114) == nil)
+        #expect(liveness.probe(now: 115) == .wait)
+        #expect(liveness.receive(now: 116, pong: true) == 11000)
+        #expect(liveness.receive(now: 117, pong: true) == nil)
+        #expect(liveness.probe(now: 120) == .ping)
+        #expect(liveness.probe(now: 132) == .disconnected)
+    }
+
     @Test func automaticCallLeavesEngineSelectionToTheGateway() throws {
         let request = RealtimeVoiceSessionRequest(conversationId: "personal", mode: nil, language: "zh")
         let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])

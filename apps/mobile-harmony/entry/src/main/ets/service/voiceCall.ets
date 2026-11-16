@@ -6,6 +6,7 @@ import { systemDateTime } from '@kit.BasicServicesKit';
 import { XopcVoiceTiming } from '../common/voiceTiming';
 import { appSettings } from './settings';
 import { gatewaySession } from './gatewaySession';
+import { XopcHttpError } from './transport';
 import { XopcChatRepository } from '../repository/chatRepository';
 import { voiceCapture } from './voiceCapture';
 import { chatReadAloud } from './chatReadAloud';
@@ -18,12 +19,8 @@ import {
   XopcVoiceServerEvent, XopcVoiceSession, XopcVoiceSessionRequest, XopcVoiceStatus, XopcVoicePayload
 } from '../model/voice';
 
-interface XopcVoicePreflight {
-  ok: boolean;
-  timingMetrics?: string[];
-}
-
-
+interface XopcVoiceTicketFailure { code?: string; }
+interface XopcVoiceTicketErrorEnvelope { error?: XopcVoiceTicketFailure; }
 
 interface XopcVoicePendingReply {
   event?: XopcVoiceServerEvent;
@@ -103,21 +100,12 @@ export class XopcVoiceCall {
         mode: target.mode === 'auto' ? undefined : target.mode, supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] };
       if (target.mode !== 'natural') request.openingGreeting = {
         logicalCallId: this.logicalCallId, initiation: recovering ? 'recovery' : 'user', supportsOutputReady: true };
-      const preflight = JSON.parse(await gatewaySession.request('/api/voice/realtime/preflight', 'POST', JSON.stringify(request))) as XopcVoicePreflight;
-      this.supportedTimingMetrics = preflight.timingMetrics ?? [];
-      const session = (JSON.parse(await gatewaySession.request('/api/voice/realtime/sessions', 'POST',
+      const session = (JSON.parse(await gatewaySession.request('/api/voice/realtime/sessions?include=timingMetrics', 'POST',
         JSON.stringify(request))) as XopcVoicePayload<XopcVoiceSession>).payload;
       if (generation !== this.generation) { await this.cancelSession(session); return; }
       this.session = session;
+      this.supportedTimingMetrics = session.timingMetrics ?? [];
       this.mode = session.route.engine === 'omni' ? 'natural' : 'assistant';
-      await voiceCallAudio.start(context, target.background, {
-        onInput: (bytes: Uint8Array, capturedAtMs: number): void => { if (generation === this.generation) this.sendAudio(bytes, capturedAtMs); },
-        onBuffered: (id: string, milliseconds: number): void => { if (generation === this.generation) this.buffered(id, milliseconds); },
-        onPlayed: (id: string, milliseconds: number, source: string): void => { if (generation === this.generation) this.played(id, milliseconds, source); },
-        onRoute: (route: string): void => { if (generation === this.generation) this.route = route; },
-        onFailure: (reason: string): void => { if (generation === this.generation) { if (reason === 'ended') this.end(); else this.recover(reason); } }
-      });
-      voiceCallAudio.setMuted(true);
       const auth = await gatewaySession.transferAuth();
       if (generation !== this.generation) return;
       const transport = new XopcVoiceCallTransport({
@@ -127,7 +115,14 @@ export class XopcVoiceCall {
         onRtt: (milliseconds: number): void => { if (generation === this.generation) this.networkQuality = milliseconds > 800 ? 'degraded' : 'good'; }
       });
       this.transport = transport;
-      await transport.connect(auth.origin, session, recovering && this.reconnectAttempt % 2 === 1);
+      await Promise.all<void>([transport.connect(auth.origin, session, recovering && this.reconnectAttempt % 2 === 1),
+        voiceCallAudio.start(context, target.background, {
+          onInput: (bytes: Uint8Array, capturedAtMs: number): void => { if (generation === this.generation) this.sendAudio(bytes, capturedAtMs); },
+          onBuffered: (id: string, milliseconds: number): void => { if (generation === this.generation) this.buffered(id, milliseconds); },
+          onPlayed: (id: string, milliseconds: number, source: string): void => { if (generation === this.generation) this.played(id, milliseconds, source); },
+          onRoute: (route: string): void => { if (generation === this.generation) this.route = route; },
+          onFailure: (reason: string): void => { if (generation === this.generation) { if (reason === 'ended') this.end(); else this.recover(reason); } }
+        })]);
       if (generation !== this.generation) return;
       this.appliedSpeaker = false;
       if (this.speaker) {
@@ -137,6 +132,9 @@ export class XopcVoiceCall {
       await voiceCallAudio.ensurePlaybackReady();
       if (generation !== this.generation) return;
       this.phase = 'connected'; this.connectedAt = Date.now();
+      const frp = /^https:\/\/[a-z0-9]{4,16}\.frp\.xopc\.ai\/?$/.test(auth.origin);
+      hilog.info(0x0000, 'XopcVoice', 'Voice input ready, recovered: %{public}s, FRP: %{public}s',
+        recovering ? 'yes' : 'no', frp ? 'yes' : 'no');
       if (session.openingGreeting?.accepted) transport.send('session.output_ready', { connectionEpoch: session.connectionEpoch });
       this.appliedMuted = undefined; this.syncInput();
       clearTimeout(this.limitTimer);
@@ -144,6 +142,11 @@ export class XopcVoiceCall {
       { this.loadApproval(); this.approvalTimer = setInterval((): void => { this.loadApproval(); }, 3000); }
     } catch (error) {
       if (generation !== this.generation) return;
+      if (recovering && error instanceof XopcHttpError && error.status === 409) {
+        let code: string | undefined;
+        try { code = (JSON.parse(error.body) as XopcVoiceTicketErrorEnvelope).error?.code; } catch (_) {}
+        if (code === 'SESSION_CONFLICT') { await this.pause('NETWORK', true); return; }
+      }
       const reason = (error as Error).message || 'SERVICE_UNAVAILABLE';
       await this.pause(reason, xopcVoiceShouldReconnect(reason));
     }
@@ -157,11 +160,10 @@ export class XopcVoiceCall {
 
   private applyQuality(result: XopcVoiceSendResult): void {
     this.networkQuality = result.quality;
-    if (result.quality === 'good') return;
-    if (this.congested) return;
+    if (result.quality === 'good' || result.accepted || this.congested) return;
     this.congested = true; this.syncInput();
     hilog.warn(0x0000, 'XopcVoice', 'Voice input paused for congestion: %{public}s', JSON.stringify(this.transport?.inputDiagnostics()));
-    if (!result.accepted) this.reportTurnError('INPUT_DROPPED');
+    this.reportTurnError('INPUT_DROPPED');
     clearInterval(this.queueTimer);
     const generation = this.generation;
     this.queueTimer = setInterval((): void => {
@@ -416,10 +418,12 @@ export class XopcVoiceCall {
     if (this.phase === 'idle' || this.phase === 'ending' || this.releaseInProgress) return;
     this.releaseInProgress = true;
     this.error = reason; this.phase = reconnect ? 'recovering' : 'paused';
+    hilog.info(0x0000, 'XopcVoice', 'Voice recovery started: %{public}s', reason);
     const oldSession = this.session; this.session = undefined;
-    this.cleanup = this.releaseSession(oldSession);
+    this.cleanup = this.releaseSession(oldSession, reconnect);
+    const generation = this.generation;
     await this.cleanup; this.releaseInProgress = false;
-    if (this.phase === 'idle' || this.phase === 'ending') return;
+    if (generation !== this.generation || this.phase === 'idle' || this.phase === 'ending') return;
     if (!reconnect || this.reconnectAttempt >= 5) { this.phase = 'paused'; return; }
     const delays: number[] = [500, 1000, 2000, 4000, 8000];
     const delay = delays[this.reconnectAttempt++]; clearTimeout(this.reconnectTimer);
@@ -441,12 +445,13 @@ export class XopcVoiceCall {
     this.responseId = ''; this.taskId = ''; this.clarification = undefined; this.approval = undefined;
   }
 
-  private async releaseSession(session?: XopcVoiceSession): Promise<void> {
-    await this.release(false);
-    if (session) await this.cancelSession(session);
+  private async releaseSession(session: XopcVoiceSession | undefined, reconnect: boolean): Promise<void> {
+    const cancellation = session ? this.cancelSession(session) : undefined;
+    await this.release(reconnect);
+    if (!reconnect) await cancellation;
   }
 
-  private async release(clearSession: boolean): Promise<void> {
+  private async release(reconnect: boolean): Promise<void> {
     ++this.generation;
     clearInterval(this.queueTimer); this.queueTimer = -1;
     this.pendingReply = []; this.pendingResponseId = ''; this.pendingReplyBytes = 0;
@@ -457,10 +462,10 @@ export class XopcVoiceCall {
     clearInterval(this.approvalTimer); this.approvalTimer = -1;
     clearTimeout(this.limitTimer); this.limitTimer = -1;
     const transport = this.transport; this.transport = undefined;
-    await transport?.close();
+    const closing = transport?.close();
+    if (!reconnect) await closing;
     await this.speakerSwitch;
     await voiceCallAudio.stop();
-    if (clearSession) this.session = undefined;
   }
 
   private async cancelSession(session: XopcVoiceSession): Promise<void> {

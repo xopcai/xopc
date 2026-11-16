@@ -178,7 +178,7 @@ final class RealtimeVoiceCall {
         approval = nil
     }
 
-    // swiftlint:disable:next cyclomatic_complexity function_body_length
+    // swiftlint:disable:next function_body_length
     private func open(recovering: Bool) async {
         guard let gateway, let conversationID else { return }
         generation += 1
@@ -188,9 +188,9 @@ final class RealtimeVoiceCall {
         errorCode = nil
         disconnectReason = nil
         do {
-            let metrics = try await gateway.preflightRealtimeVoice(conversationID: conversationID, mode: mode)
+            try await audio.requestMicrophonePermission()
             guard generation == current else { return }
-            supportedTimingMetrics = Set(metrics)
+            scheduleConnectTimeout(for: current)
             let greeting: RealtimeVoiceSessionRequest.OpeningGreetingRequest? = mode != .natural
                 ? .init(logicalCallId: logicalCallID, initiation: recovering ? "recovery" : "user") : nil
             let session = try await gateway.createRealtimeVoiceSession(conversationID: conversationID, mode: mode, openingGreeting: greeting)
@@ -199,7 +199,15 @@ final class RealtimeVoiceCall {
                 return
             }
             self.session = session
-            let input = try await audio.start(
+            supportedTimingMetrics = Set(session.timingMetrics ?? [])
+            let stream = try await transport.connect(origin: gateway.configuration.baseURL, session: session,
+                                                     networkSession: gateway.session,
+                                                     preferProxy: recovering && reconnectAttempt % 2 == 1)
+            guard generation == current else {
+                await transport.close(sessionID: session.sessionId)
+                return
+            }
+            let input = try audio.start(
                 onPlayed: { [weak self] id, milliseconds in self?.played(id: id, milliseconds: milliseconds) },
                 onInterrupted: { [weak self] in Task { await self?.pause(reason: "AUDIO_INTERRUPTED") } },
                 onRoute: { [weak self] route in self?.route = route },
@@ -207,7 +215,6 @@ final class RealtimeVoiceCall {
                     Task { await self?.pause(reason: "route_lost", reconnect: true) }
                 }
             )
-            guard generation == current else { await release(); return }
             appliedSpeaker = false
             if speaker {
                 do {
@@ -219,19 +226,22 @@ final class RealtimeVoiceCall {
                     speaker = false
                 }
             }
-            scheduleConnectTimeout(for: current)
-            let stream = try await transport.connect(origin: gateway.configuration.baseURL, session: session,
-                                                     preferProxy: recovering && reconnectAttempt % 2 == 1)
-            guard generation == current else { await release(); return }
             captureTask = Task { await capture(input, generation: current) }
             receiveTask = Task { await consume(stream, generation: current) }
         } catch {
             guard generation == current else { return }
-            let reason = (error as? RealtimeVoiceCallError)?.code
-                ?? (error as? RealtimeVoiceAudioError)?.code
-                ?? (error is URLError || error as? GatewayClientError == .transport ? "NETWORK" : error.localizedDescription)
-            await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
+            await handleOpenFailure(error, recovering: recovering)
         }
+    }
+
+    private func handleOpenFailure(_ error: any Error, recovering: Bool) async {
+        if recovering, case .voiceSessionConflict = error as? GatewayClientError {
+            await pause(reason: "NETWORK", reconnect: true)
+            return
+        }
+        let reason = (error as? RealtimeVoiceAudioError)?.code
+            ?? (error is URLError || error as? GatewayClientError == .transport ? "NETWORK" : error.localizedDescription)
+        await pause(reason: reason, reconnect: VoiceRecoveryPolicy.shouldReconnect(reason))
     }
 
     private func scheduleConnectTimeout(for current: Int) {
@@ -248,19 +258,15 @@ final class RealtimeVoiceCall {
         for await bytes in stream {
             guard !Task.isCancelled, generation == self.generation else { return }
             if congested {
-                guard await transport.inputQueueAgeMs() < 80 else { continue }
+                guard await transport.inputQueueDurationMs() < 80 else { continue }
                 congested = false
                 networkQuality = "good"
                 try? await transport.send("input.mute", payload: .init(muted: muted || clarification != nil || approval != nil))
             }
             guard phase == .connected, !muted, clarification == nil, approval == nil else { continue }
             do {
-                let queueAgeMs = try await transport.sendAudio(bytes)
-                if queueAgeMs >= 120, !congested {
-                    congested = true
-                    networkQuality = "degraded"
-                    try? await transport.send("input.mute", payload: .init(muted: true))
-                }
+                // A burst from the audio tap measures buffered audio, not time spent waiting to send.
+                try await transport.sendAudio(bytes)
             } catch RealtimeVoiceTransportError.inputBackpressure {
                 congested = true
                 networkQuality = "critical"
@@ -311,12 +317,13 @@ final class RealtimeVoiceCall {
             reconnectAttempt = 0
         }
         generation += 1
+        let pausedGeneration = generation
         errorCode = reason
         phase = reconnect ? .recovering : .paused
         releaseInProgress = true
-        await release()
+        await release(waitForSessionCancellation: !reconnect)
         releaseInProgress = false
-        guard phase != .idle, phase != .ending else { return }
+        guard generation == pausedGeneration, phase != .idle, phase != .ending else { return }
         guard reconnect, reconnectAttempt < 5 else {
             phase = .paused
             return
@@ -330,8 +337,14 @@ final class RealtimeVoiceCall {
         }
     }
 
-    private func release() async {
-        // The task invoking release must finish cancelling the server reservation first.
+    private func release(waitForSessionCancellation: Bool = true) async {
+        let cancellation: Task<Void, Never>? = if let session, let gateway {
+            // Gateway cancellation is scoped to this ticket even if a new session connects first.
+            Task { _ = try? await gateway.cancelRealtimeVoiceSession(session) }
+        } else {
+            nil
+        }
+        session = nil
         let tasks = [connectTimeoutTask, approvalTask, limitTask, captureTask, receiveTask]
         defer { for task in tasks {
             task?.cancel()
@@ -346,10 +359,6 @@ final class RealtimeVoiceCall {
         await transport.close()
         await speakerTask?.value
         audio.stop()
-        if let session, let gateway {
-            try? await gateway.cancelRealtimeVoiceSession(session)
-        }
-        session = nil
         congested = false
         receivedMilliseconds = 0
         playedMilliseconds = 0
@@ -364,6 +373,9 @@ final class RealtimeVoiceCall {
         activity = ""
         clarification = nil
         approval = nil
+        if waitForSessionCancellation {
+            await cancellation?.value
+        }
     }
 }
 
@@ -620,16 +632,6 @@ private extension RealtimeVoiceCall {
         responseID = ""
         responseStage = ""
         activity = ""
-    }
-}
-
-private enum RealtimeVoiceCallError: Error {
-    case unavailable(String)
-
-    var code: String {
-        switch self {
-        case let .unavailable(code): code
-        }
     }
 }
 

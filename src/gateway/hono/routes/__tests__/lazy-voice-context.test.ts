@@ -33,6 +33,22 @@ describe('authenticated lazy voice context', () => {
     expect(createSession).toHaveBeenCalledWith({ purpose: 'dictation', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'gateway-owner');
   });
 
+  it('includes timing capabilities on opt-in ticket responses', async () => {
+    const app = new Hono();
+    app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-token', allowTailscale: false }) }));
+    mount(app);
+    const legacy = await app.request('/api/voice/realtime/sessions', request('test-token'));
+    expect(legacy.status).toBe(200);
+    expect(await legacy.json()).toEqual({ ok: true, payload: { principalId: 'gateway-owner' } });
+
+    const optedIn = await app.request('/api/voice/realtime/sessions?include=timingMetrics', request('test-token'));
+    expect(optedIn.status).toBe(200);
+    expect(await optedIn.json()).toMatchObject({ ok: true, payload: {
+      principalId: 'gateway-owner',
+      timingMetrics: expect.arrayContaining(['speech_end_to_audio_scheduled', 'speech_end_to_audio_buffered']),
+    } });
+  });
+
   it.each(['sessions', 'preflight', 'sessions/cancel'])('does not bypass authentication for %s', async (action) => {
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'test-token', allowTailscale: false }) }));

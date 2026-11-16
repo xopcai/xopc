@@ -18,17 +18,20 @@ final class RealtimeVoiceAudio {
     private var onRouteFailure: (() -> Void)?
     private(set) var isMuted = false
 
+    func requestMicrophonePermission() async throws {
+        guard await AVAudioApplication.requestRecordPermission() else {
+            throw RealtimeVoiceAudioError.microphonePermissionDenied
+        }
+    }
+
     // swiftlint:disable:next function_body_length
     func start(
         onPlayed: @escaping (String, Int) -> Void,
         onInterrupted: @escaping () -> Void,
         onRoute: @escaping (String) -> Void,
         onRouteFailure: @escaping () -> Void
-    ) async throws -> AsyncStream<Data> {
+    ) throws -> AsyncStream<Data> {
         stop()
-        guard await AVAudioApplication.requestRecordPermission() else {
-            throw RealtimeVoiceAudioError.microphonePermissionDenied
-        }
         let session = AVAudioSession.sharedInstance()
         GeneratedMusicPlayback.shared.yieldAudioSession()
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP])

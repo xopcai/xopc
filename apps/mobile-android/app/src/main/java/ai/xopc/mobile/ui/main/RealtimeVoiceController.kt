@@ -5,6 +5,7 @@ import ai.xopc.mobile.gateway.ClarificationRequest
 import ai.xopc.mobile.gateway.ClarificationCommand
 
 import ai.xopc.mobile.gateway.DeviceRequestProof
+import ai.xopc.mobile.gateway.GatewayHttpException
 import ai.xopc.mobile.gateway.VoiceCallConnection
 import ai.xopc.mobile.gateway.VOICE_PROXY_WS_PATH
 import ai.xopc.mobile.gateway.parseVoiceDownlink
@@ -22,6 +23,8 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.SystemClock
 import android.os.Build
 import androidx.core.content.ContextCompat
@@ -31,6 +34,9 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -99,11 +105,14 @@ internal class RealtimeVoiceController(private val context: Context, private val
   private var reconnectAttempt = 0
   private var activeConversationId = ""
   private var connectedAt = 0L
-  private var lastPongAt = 0L
+  private var lastActivityAt = 0L
+  private var pingPending = false
+  private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+  private var networkCallback: ConnectivityManager.NetworkCallback? = null
+  private var pathProbeJob: Job? = null
   var requestedMute by mutableStateOf(false); private set
   private var appliedSpeaker = false
   private var speakerJob: Job? = null
-  @Volatile private var congestionMuted = false
   @Volatile private var captureMuted = false
   private var playbackQueue = Channel<Pair<String, ByteArray>>(64)
   private var eventSequence = 0
@@ -148,7 +157,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
     mode = selectedMode; phase = "connecting"; error = ""; userText = ""; assistantText = ""
     speaking = false
     clarification = null; approval = null; taskId = ""; taskCancelling = false; activity = ""
-    requestedMute = restoreMute; congestionMuted = false; muted = restoreMute
+    requestedMute = restoreMute; muted = restoreMute
     captureMuted = restoreMute; speaker = restoreSpeaker; appliedSpeaker = false
     try {
       require(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
@@ -156,46 +165,42 @@ internal class RealtimeVoiceController(private val context: Context, private val
       val session = create(conversationId, selectedMode, logicalCallId, !fresh)
       if (current != generation) { cancel(session); return }
       connection = session
-      // Prepare the audio route while the server synthesizes the opening.
       captureMuted = true
-      startAudio(current)
-      if (restoreSpeaker) {
-        val applied = withContext(Dispatchers.IO) { runCatching { applySpeakerRoute(true) }.isSuccess }
-        if (current != generation) return
-        appliedSpeaker = applied
-        speaker = applied
-      }
-      val started = AtomicBoolean(false)
-      val path = if (!fresh && reconnectAttempt % 2 == 1) VOICE_PROXY_WS_PATH else session.websocketPath
-      try { connect(session, path, current, started) }
-      catch (failure: CancellationException) { throw failure }
-      catch (failure: Exception) {
-        if (current != generation) return
-        // A session.start may consume the ticket even if session.ready never arrives.
-        if (started.get() || path == VOICE_PROXY_WS_PATH || failure.message == "PROTOCOL_ERROR") throw failure
-        connect(session, VOICE_PROXY_WS_PATH, current, started)
+      coroutineScope {
+        val opening = async(start = CoroutineStart.UNDISPATCHED) { openSocket(session, fresh, current) }
+        startAudio(current)
+        if (restoreSpeaker) {
+          val applied = withContext(Dispatchers.IO) { runCatching { applySpeakerRoute(true) }.isSuccess }
+          if (current != generation) return@coroutineScope
+          appliedSpeaker = applied
+          speaker = applied
+        }
+        opening.await()
       }
       if (current != generation) return
       require(recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING &&
         player?.playState == AudioTrack.PLAYSTATE_PLAYING) { "AUDIO_UNAVAILABLE" }
       phase = "connected"
       connectedAt = SystemClock.elapsedRealtime()
-      lastPongAt = connectedAt
+      lastActivityAt = connectedAt
+      pingPending = false
       if (session.greetingResponseId != null) send("session.output_ready", JSONObject().put("connectionEpoch", session.connectionEpoch))
       updateMute()
       heartbeatJob = scope.launch {
         val started = SystemClock.elapsedRealtime()
         while (isActive && current == generation) {
-          delay(15_000)
+          delay(5_000)
+          if (current != generation) break
           if (SystemClock.elapsedRealtime() - started >= session.maxSessionMs) {
             fail("TIME_LIMIT", current); break
           }
-          if (SystemClock.elapsedRealtime() - lastPongAt > 35_000) {
+          if (SystemClock.elapsedRealtime() - lastActivityAt >= 15_000) {
             fail("NETWORK", current); break
           }
-          send("session.ping", JSONObject())
+          probeConnection()
         }
       }
+      watchNetwork(current)
       approvalJob = scope.launch {
         while (isActive && current == generation && phase == "connected") {
           runCatching { pendingApproval(conversationId) }.onSuccess { found ->
@@ -206,7 +211,52 @@ internal class RealtimeVoiceController(private val context: Context, private val
         }
       }
     } catch (failure: CancellationException) { throw failure }
-    catch (failure: Exception) { fail(if (failure is java.io.IOException) "NETWORK" else failure.message ?: "VOICE_UNAVAILABLE", current) }
+    catch (failure: Exception) {
+      val staleReservation = !fresh && failure is GatewayHttpException && failure.status == 409 && failure.code == "SESSION_CONFLICT"
+      fail(if (failure is java.io.IOException || staleReservation) "NETWORK" else failure.message ?: "VOICE_UNAVAILABLE", current)
+    }
+  }
+
+  private suspend fun openSocket(session: VoiceCallConnection, fresh: Boolean, current: Int) {
+    val started = AtomicBoolean(false)
+    val path = if (!fresh && reconnectAttempt % 2 == 1) VOICE_PROXY_WS_PATH else session.websocketPath
+    try { connect(session, path, current, started) }
+    catch (failure: CancellationException) { throw failure }
+    catch (failure: Exception) {
+      if (current != generation) return
+      // A session.start may consume the ticket even if session.ready never arrives.
+      if (started.get() || path == VOICE_PROXY_WS_PATH || failure.message == "PROTOCOL_ERROR") throw failure
+      connect(session, VOICE_PROXY_WS_PATH, current, started)
+    }
+  }
+
+  private fun probeConnection() {
+    if (pingPending) return
+    pingPending = true
+    send("session.ping", JSONObject())
+  }
+
+  private fun watchNetwork(current: Int) {
+    val manager = connectivity ?: return
+    var active = manager.activeNetwork
+    val callback = object : ConnectivityManager.NetworkCallback() {
+      override fun onAvailable(network: Network) {
+        scope.launch {
+          if (current != generation || network == active) return@launch
+          val hadNetwork = active != null
+          active = network
+          if (!hadNetwork) return@launch
+          val started = SystemClock.elapsedRealtime()
+          probeConnection()
+          pathProbeJob?.cancel()
+          pathProbeJob = scope.launch {
+            delay(2_000)
+            if (current == generation && lastActivityAt < started) fail("NETWORK", current)
+          }
+        }
+      }
+    }
+    runCatching { manager.registerDefaultNetworkCallback(callback) }.onSuccess { networkCallback = callback }
   }
 
   private suspend fun connect(session: VoiceCallConnection, path: String, current: Int, started: AtomicBoolean) {
@@ -232,6 +282,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
               event.getString("sessionId") == session.sessionId &&
               event.getInt("seq") == eventSequence + 1) { "PROTOCOL_ERROR" }
             eventSequence++
+            lastActivityAt = SystemClock.elapsedRealtime()
             handleEvent(event, session, ready)
           } catch (failure: Exception) {
             if (!ready.isCompleted) ready.completeExceptionally(failure)
@@ -248,6 +299,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
               "PROTOCOL_ERROR"
             }
             audioSequence++
+            lastActivityAt = SystemClock.elapsedRealtime()
             handleAudio(frame.responseId, frame.audio)
           } catch (failure: Exception) { fail(failure.message ?: "PROTOCOL_ERROR", current) }
         }
@@ -311,7 +363,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
         firstAudioTiming.speechStopped(SystemClock.elapsedRealtime())
         fadePlayback(1f, 120L)
       }
-      "session.pong" -> lastPongAt = SystemClock.elapsedRealtime()
+      "session.pong" -> pingPending = false
       "response.created" -> {
         when (voiceReplyDisposition(responseId, responseDone, incomingId,
           pendingReply.responseId)) {
@@ -451,21 +503,11 @@ internal class RealtimeVoiceController(private val context: Context, private val
           val count = recorder?.read(bytes, 0, bytes.size, AudioRecord.READ_BLOCKING) ?: break
           if (count < 0) throw IllegalStateException("CAPTURE_FAILED")
           if (count != 640) continue
-          if (captureMuted && !congestionMuted) continue
+          if (captureMuted) continue
           val active = connection ?: break
           val ws = socket ?: break
-          when (congestion.observe(ws.queueSize(), SystemClock.elapsedRealtime())) {
-            VoiceCongestion.EXPIRED -> throw IllegalStateException("INPUT_DROPPED")
-            VoiceCongestion.WAITING -> {
-              if (!congestionMuted) withContext(Dispatchers.Main.immediate) {
-                congestionMuted = true; updateMute()
-              }
-              continue
-            }
-            VoiceCongestion.CLEAR -> if (congestionMuted) withContext(Dispatchers.Main.immediate) {
-              congestionMuted = false; updateMute()
-            }
-          }
+          if (congestion.observe(ws.queueSize(), SystemClock.elapsedRealtime()) == VoiceCongestion.EXPIRED)
+            throw IllegalStateException("INPUT_DROPPED")
           if (captureMuted) continue
           val frame = synchronized(inputStateLock) {
             val sequence = ++inputSequence
@@ -536,8 +578,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
   }
 
   private fun updateMute() {
-    val value = voiceInputShouldMute(requestedMute, clarification != null,
-      approval != null, congestionMuted)
+    val value = voiceInputShouldMute(requestedMute, clarification != null, approval != null)
     if (muted && !value) synchronized(inputStateLock) {
       utteranceId = UUID.randomUUID().toString(); inputSequence = 0
     }
@@ -679,7 +720,7 @@ internal class RealtimeVoiceController(private val context: Context, private val
     val targetMode = mode
     val expected = generation
     cleanupJob = scope.launch {
-      release()
+      release(waitForCancellation = retryDelay == null)
       if (retryDelay != null && expected == generation && targetId.isNotEmpty()) {
         reconnectAttempt++
         reconnectJob = scope.launch {
@@ -703,7 +744,15 @@ internal class RealtimeVoiceController(private val context: Context, private val
     release()
   }
 
-  private suspend fun release() {
+  private suspend fun release(waitForCancellation: Boolean = true) {
+    val retired = connection
+    connection = null
+    val cancellation = retired?.let { session -> scope.launch(Dispatchers.IO) {
+      runCatching { withTimeout(6_000) { cancel(session) } }
+    } }
+    pathProbeJob?.cancel(); pathProbeJob = null
+    networkCallback?.let { callback -> runCatching { connectivity?.unregisterNetworkCallback(callback) } }
+    networkCallback = null
     speakerJob?.join(); speakerJob = null
     duckJob?.cancel(); duckJob = null; playbackGain = 1f
     speakingUtterances.clear()
@@ -731,16 +780,14 @@ internal class RealtimeVoiceController(private val context: Context, private val
       }
     }
     previousAudioMode = null
-    connection?.let { current -> withContext(Dispatchers.IO) {
-      runCatching { withTimeout(5_000) { cancel(current) } }
-    } }
-    connection = null
-    lastPongAt = 0L
+    if (waitForCancellation) cancellation?.join()
+    lastActivityAt = 0L
+    pingPending = false
     responseId = ""; responseDone = false; receivedBytes = 0; bufferedBytes = 0
     hasReply = false
     pendingReply.reset()
     firstAudioTiming.reset()
-    congestionMuted = false; captureMuted = false
+    captureMuted = false
     taskId = ""; taskCancelling = false; activity = ""; clarification = null; approval = null
     eventSequence = 0; audioSequence = 0
     synchronized(inputStateLock) {

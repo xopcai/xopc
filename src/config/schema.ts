@@ -868,7 +868,11 @@ export const VoiceConfigSchema = z
           thinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).default('off'),
         }).strict().default({ thinkingLevel: 'off' }),
         boson: z.strictObject({ defaultForNatural: z.boolean(), voice: higgsVoiceSchema }).optional(),
-        stt: z.object({ provider: z.enum(['alibaba', 'xopc-cloud']), model: z.string().min(1).max(200) }).strict().optional(),
+        stt: z.object({
+          provider: z.enum(['alibaba', 'xopc-cloud']),
+          model: z.string().min(1).max(200),
+          speechNoiseThreshold: z.number().min(-1).max(1).optional(),
+        }).strict().optional(),
         /** Conversation output selection; credentials stay in the provider configuration. */
         tts: z.object({
           provider: z.enum(['alibaba', 'xopc-cloud']),

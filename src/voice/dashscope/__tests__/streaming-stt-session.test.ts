@@ -13,7 +13,7 @@ describe('DashScope STT relay handshake', () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  it('authenticates against a relay requiring the platform Bearer scheme', async () => {
+  it('authenticates against a Bearer relay and forwards the speech noise threshold', async () => {
     const headers: string[] = [];
     const requests: Array<{ payload?: { parameters?: Record<string, unknown> } }> = [];
     server = new WebSocketServer({
@@ -38,8 +38,9 @@ describe('DashScope STT relay handshake', () => {
       apiKey: 'test-access-token',
       baseUrl: `ws://127.0.0.1:${(server.address() as AddressInfo).port}/audio/transcriptions/realtime`,
       model: 'qwen-audio-3.0-asr-flash-streaming',
+      phraseHints: ['暂停', '停一下'],
       inputFormat: { encoding: 'pcm_s16le', sampleRate: 16_000, channels: 1 },
-      turnDetection: { mode: 'server_vad', silenceDurationMs: 600 },
+      turnDetection: { mode: 'server_vad', silenceDurationMs: 600, speechNoiseThreshold: -0.2 },
       timeoutMs: 1_000,
       signal: new AbortController().signal,
       onEvent: vi.fn(),
@@ -49,6 +50,8 @@ describe('DashScope STT relay handshake', () => {
       heartbeat: true,
       max_sentence_silence: 600,
       semantic_punctuation_enabled: false,
+      speech_noise_threshold: -0.2,
+      vocabulary: { 暂停: 4, 停一下: 4 },
     });
     await session.commit();
   });

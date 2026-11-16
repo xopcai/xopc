@@ -87,17 +87,18 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
       creation: { agentId: 'main', projectId: null, execution: null, model: 'test/model', thinkingLevel: 'off', temporary: false, workingDirectory: dir },
       input: { content: 'hello', endpointContext: { version: 1, capturedAt: Date.now(), timezone: 'Asia/Shanghai', locale: 'zh-CN' } },
       origin: { type: 'endpoint', endpointId: hello.endpointId, token: registration.turnToken } };
-    const post = (body: object) => fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body) });
+    const post = (body: object, compact = false) => fetch(base + path + (compact ? '?view=compact' : ''), { method: 'POST', headers, body: JSON.stringify(body) });
     expect((await fetch(base + path, { method: 'POST', body: JSON.stringify(command) })).status).toBe(401);
     expect((await post({ content: 'old flat request', clientMessageId: 'old', delivery: 'next' })).status).toBe(400);
     expect((await fetch(`${base}/api/sessions`, { method: 'POST', headers, body: '{}' })).status).toBe(404);
     expect((await post({ ...command, creation: { ...command.creation, workingDirectory: '/' } })).status).toBe(400);
     expect(getSessionMetadata(id)).toBeNull();
-    const accepted = await post(command);
+    const accepted = await post(command, true);
     expect(accepted.status, await accepted.clone().text()).toBe(202);
     expect(getSessionConfig(id)?.workingDirectoryOverride).toBe(dir);
     const first = await accepted.json();
     expect(first.payload.receipt.conversationId).toBe(id);
+    expect(first.payload.session).toEqual({ key: id, transcriptId: first.payload.receipt.transcriptId });
     const frozen = getSessionInputById(id, first.payload.receipt.inputId)!;
     expect(frozen.contextSnapshots).toEqual([expect.objectContaining({ kind: 'device_context', sourceId: hello.endpointId, title: 'Phone' })]);
     expect(JSON.parse(frozen.contextSnapshots![0].text).taskContext.fields['environment.timezone'])
@@ -107,6 +108,7 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     command.origin.token = registration.turnToken;
     const replay = await (await post(command)).json();
     expect(replay.payload.receipt).toEqual(first.payload.receipt);
+    expect(replay.payload.session).toMatchObject({ key: id, agentId: 'main', transcriptId: first.payload.receipt.transcriptId });
     expect(getSessionInputState(id).inputs).toHaveLength(1);
     expect((await post({ ...command, input: { ...command.input, endpointContext: { ...command.input.endpointContext, timezone: 'UTC' } } })).status).toBe(409);
     const rename = await fetch(`${base}/api/endpoint-tools/devices/phone`, { method: 'PATCH', headers, body: JSON.stringify({ nickname: 'My phone', expectedRevision: 0 }) });
@@ -117,6 +119,12 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     expect((await post({ ...command, input: { content: 'changed' } })).status).toBe(409);
     const receiptPath = `${base}/api/sessions/${id}/input-receipts/${command.clientMessageId}`;
     expect((await fetch(receiptPath, { headers })).status).toBe(200);
+    const compactReceipt = await fetch(receiptPath + '?view=compact', { headers });
+    expect(compactReceipt.status).toBe(200);
+    expect((await compactReceipt.json()).payload).toMatchObject({
+      receipt: first.payload.receipt,
+      session: first.payload.session,
+    });
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
     const configVersion = (getSqliteDatabase().prepare('SELECT updated_at FROM session_config WHERE conversation_id = ?').get(id) as { updated_at: number } | undefined)?.updated_at ?? 0;
     const append = { kind: 'append', clientMessageId: randomUUID(),
