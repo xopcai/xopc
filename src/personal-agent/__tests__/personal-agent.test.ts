@@ -503,6 +503,7 @@ describe('personal Agent identity', () => {
           getSession: async (id: string) => getSessionMetadata(id),
           getAgentConfig: readConfig, getFixedAgentConfig: readConfig,
           patchAgentConfig: configService.patch.bind(configService) },
+        sessionIndexInstance: { getSessionMetadata },
       } as unknown as GatewayService });
       const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
       try {
