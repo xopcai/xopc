@@ -1,5 +1,5 @@
 import { XopcChatRow } from '../model/chat';
-import { XopcGeneratedMediaCard, XopcGeneratedMediaKind, XopcGeneratedMediaJobs } from '../model/generatedMedia';
+import { XopcGeneratedMediaCard, XopcGeneratedMediaItem, XopcGeneratedMediaKind, XopcGeneratedMediaJobs } from '../model/generatedMedia';
 
 export function generatedMediaPath(kind: XopcGeneratedMediaKind, conversationId: string): string {
   return '/api/' + kind + '-generation/sessions/' + encodeURIComponent(conversationId) + '/jobs';
@@ -16,6 +16,10 @@ export function generatedMediaCards(kind: XopcGeneratedMediaKind, response: Xopc
   return cards;
 }
 
+export function isGeneratedMediaInProgress(item: XopcGeneratedMediaItem): boolean {
+  return ['queued', 'submitting', 'submitted', 'running', 'saving'].includes(item.state ?? '');
+}
+
 export function generatedMediaByReply(cards: XopcGeneratedMediaCard[], rows: XopcChatRow[]): Map<string, XopcGeneratedMediaCard[]> {
   const anchors = new Map<string, string>();
   for (const row of rows) {
@@ -26,7 +30,10 @@ export function generatedMediaByReply(cards: XopcGeneratedMediaCard[], rows: Xop
   }
   const groups = new Map<string, XopcGeneratedMediaCard[]>();
   for (const card of cards) {
-    const id = anchors.get(card.item.id) ?? '';
+    const anchor = anchors.get(card.item.id);
+    // History is paginated. An older song should reappear only when its reply is loaded.
+    if (!anchor && card.kind === 'music' && !isGeneratedMediaInProgress(card.item)) continue;
+    const id = anchor ?? '';
     const group = groups.get(id) ?? [];
     group.push(card);
     groups.set(id, group);

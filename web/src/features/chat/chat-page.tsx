@@ -1,4 +1,3 @@
-import { rememberWorkbookConversation, takeWorkbookChatLaunch } from '@/features/space/workbook-chat-launch';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { useInitialTurnNavigation } from '@/features/chat/session/use-initial-turn-navigation';
 import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
@@ -24,6 +23,7 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-environment-picker';
 import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
+import { MAX_COMPOSER_CONTEXT_REFS } from '@/features/chat/composer/composer.types';
 import type {
   ComposerAttachmentSummary,
   ComposerContextRef,
@@ -102,9 +102,13 @@ type SourceNoteSaveDraft = {
   content: string;
 };
 
-export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome, automationWorkspace = false, automationTimelineEntries, readOnly = false, onHistoryReady, automationExecution = false, initialTurnId, onInitialTurnLocated }: {
+export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, composerPlaceholder, embeddedAttachmentHandoffId, draftSeed, sourceNoteInView = false, embedded = false, conversationId, taskId: boundTaskId, personal = false, personalWelcome, automationWorkspace = false, automationTimelineEntries, readOnly = false, onHistoryReady, automationExecution = false, initialTurnId, onInitialTurnLocated }: {
   embedded?: boolean;
   beforeSend?: () => Promise<boolean>;
+  prepareSendContext?: () => Promise<ComposerContextRef | null>;
+  onRunSettled?: () => void;
+  composerPlaceholder?: string;
+  embeddedAttachmentHandoffId?: string;
   draftSeed?: { id: number; text: string } | null;
   sourceNoteInView?: boolean;
   automationWorkspace?: boolean;
@@ -188,7 +192,6 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
 
   const draftQuery = searchParams.get(automationWorkspace ? 'chatDraft' : 'draft') ?? '';
   const autoSendQuery = searchParams.get('autoSend') === '1';
-  const workbookLaunchId = searchParams.get('workbookLaunch');
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
   const attachmentsHandoffId = searchParams.get('attachmentsHandoff');
   const chatConversationId = session.decodedKey ?? session.conversationId;
@@ -685,10 +688,37 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
     sendScope.current++;
     return () => { sendScope.current++; };
   }, [conversationId, token]);
+  const wasRunning = useRef(false);
+  const running = stream.sending || stream.streaming;
+  useEffect(() => {
+    const settled = wasRunning.current && !running;
+    wasRunning.current = running;
+    if (settled) onRunSettled?.();
+  }, [onRunSettled, running]);
+
+  const prepareContext = useCallback(async (refs: ComposerContextRef[] | undefined) => {
+    const scope = sendScope.current;
+    if (beforeSend && !await beforeSend()) return null;
+    if (scope !== sendScope.current) return null;
+    if (!prepareSendContext) return { refs };
+    const ref = await prepareSendContext();
+    if (scope !== sendScope.current) return null;
+    if (!ref) {
+      showComposerNotification('error', language === 'zh' ? '工作簿暂不可用，请检查左侧的编辑或保存状态后重试。' : 'Check the workbook’s edit or save status and try again.');
+      return null;
+    }
+    const existing = refs?.find(other => other.kind === ref.kind && other.sourceId === ref.sourceId);
+    if (existing) return { refs: refs?.map(other => other === existing ? { ...ref, refId: existing.refId } : other) };
+    if ((refs?.length ?? 0) >= MAX_COMPOSER_CONTEXT_REFS) {
+      showComposerNotification('warning', m.chat.commandPalette.contextLimitReached, { max: MAX_COMPOSER_CONTEXT_REFS - 1 });
+      return null;
+    }
+    return { refs: [...(refs ?? []), ref] };
+  }, [beforeSend, language, m.chat.commandPalette.contextLimitReached, prepareSendContext]);
+
   const handleComposerSend = useCallback(
-    (...args: Parameters<ComposerSendHandler>) => {
-      const dispatch = () => {
-        const [text, attachments, thinkingLevel, contextRefs, sendOptions] = args;
+    (...[text, attachments, thinkingLevel, refs, sendOptions]: Parameters<ComposerSendHandler>) => {
+      const dispatch = (contextRefs: ComposerContextRef[] | undefined) => {
         if (pageContextDraft && (editingUserTurn || text.trim().startsWith('/'))) {
           useChatSessionStore.getState().setShellError(m.chat.pageContext.pending);
           return false;
@@ -726,11 +756,10 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
         if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
         return true;
       };
-      if (!beforeSend) return dispatch();
-      const scope = sendScope.current;
-      return beforeSend().then(ready => ready && scope === sendScope.current ? dispatch() : false);
+      if (!beforeSend && !prepareSendContext) return dispatch(refs);
+      return prepareContext(refs).then(prepared => prepared ? dispatch(prepared.refs) : false);
     },
-    [beforeSend, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending, reserveReplySpace, pendingVideoDraft, confirmVideoDraft],
+    [beforeSend, prepareSendContext, prepareContext, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending, reserveReplySpace, pendingVideoDraft, confirmVideoDraft],
   );
 
   const projectComposer = useProjectSessionComposer({
@@ -766,22 +795,6 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   }, [followUp.composerMode, followUp.beginEditFollowUp, followUp.beginEditTurn, session.conversationId, stream.settleStoppedRun]);
 
   const handleCancelUserMessageEdit = followUp.cancelEditor;
-
-  useEffect(() => {
-    if (!workbookLaunchId || !auth.hasToken || !session.conversationId || !session.modelConfigReady
-      || session.showSessionLoading || session.sessionRoutePending || stream.sending || stream.streaming) return;
-    const launch = takeWorkbookChatLaunch(workbookLaunchId);
-    if (!launch) return;
-    const activeConversation = session.conversationId;
-    void stream.sendMessage(launch.text, undefined, undefined, [launch.reference]).then(accepted => {
-      if (accepted) rememberWorkbookConversation(launch.reference.sourceId, activeConversation);
-      else {
-        setInjectedDraftSeed({ id: Date.now(), text: launch.text });
-        setComposerContextRefs(refs => [...refs.filter(ref => ref.kind !== 'workbook'), launch.reference]);
-      }
-    });
-  }, [workbookLaunchId, auth.hasToken, session.conversationId, session.modelConfigReady, session.showSessionLoading,
-    session.sessionRoutePending, stream.sending, stream.streaming, stream.sendMessage]);
 
   useEffect(() => {
     if (!autoSendQuery || (!draftQuery.trim() && !attachmentsHandoffId)) return;
@@ -1442,11 +1455,11 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 } : undefined}
                 nextTurnSuggestionsEnabled={!stream.streaming}
                 onPersonalSendDispatched={personal ? onPersonalSendDispatched : undefined}
-                placeholder={personal
+                placeholder={composerPlaceholder ?? (personal
                   ? stream.streaming || stream.sending
                     ? language === 'zh' ? '继续聊，或补充要求…' : 'Keep talking or add a detail…'
                     : language === 'zh' ? `发消息给「${personalWelcome?.name || 'Personal AI'}」…` : `Message ${personalWelcome?.name || 'Personal AI'}…`
-                  : agentSetup ? m.agentsSettings.setupComposerPlaceholder : skillDiscovery ? m.skills.findPlaceholder : undefined}
+                  : agentSetup ? m.agentsSettings.setupComposerPlaceholder : skillDiscovery ? m.skills.findPlaceholder : undefined)}
                 composerContext={!agentSetup && !embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {
                   project: scopedProject,
                   disabled: updatingContext || projectComposer.busy || (isSessionTransitioning && !session.projectPreparation),
@@ -1462,6 +1475,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 pageContextPreview={pageContextDraft && pageContextKey ? <PageContextPreview draft={pageContextDraft} disabled={stream.sending} waiting={stream.streaming}
                   onRemove={() => pageContextDrafts.remove(pageContextKey, pageContextDraft)} /> : undefined}
                 setContextRefs={setComposerContextRefs}
+                maxContextRefs={prepareSendContext ? MAX_COMPOSER_CONTEXT_REFS - 1 : undefined}
                 onDraftAttachmentsChange={setComposerAttachmentSummaries}
                 disabled={readOnly || isLoadingHistory || projectComposer.busy || updatingContext}
                 sendDisabled={
@@ -1472,7 +1486,8 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 sending={stream.sending}
                 streaming={stream.streaming}
                 conversationId={session.conversationId}
-                attachmentHandoffReady={(!embedded || personal) && !taskId && !readOnly &&
+                embeddedAttachmentHandoffId={embeddedAttachmentHandoffId}
+                attachmentHandoffReady={(!embedded || personal || Boolean(embeddedAttachmentHandoffId)) && !taskId && !readOnly &&
                   (Boolean(session.projectPreparation) || Boolean(session.conversationId && !isSessionTransitioning))}
                 unboundDraftKey={session.conversationId ? undefined : JSON.stringify([pathname, searchParams.get('projectId')])}
                 getDraftHandoffTarget={projectComposer.getDraftHandoffTarget}
@@ -1494,25 +1509,28 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
                 onAbort={() => void stream.abort().catch(() => {})}
                 onAddPendingFollowUp={async (text, atts, contextRefs, interrupt, delivery) => {
-                  const scope = sendScope.current;
-                  if (beforeSend && (!await beforeSend() || scope !== sendScope.current)) {
-                    throw new Error(language === 'zh' ? '请先保存笔记，再发送消息。' : 'Save the note before sending.');
+                  const prepared = beforeSend || prepareSendContext ? await prepareContext(contextRefs) : { refs: contextRefs };
+                  if (!prepared) {
+                    throw new Error(prepareSendContext
+                      ? (language === 'zh' ? '工作簿还未就绪，请重试。' : 'The workbook is not ready. Try again.')
+                      : (language === 'zh' ? '请先保存笔记，再发送消息。' : 'Save the note before sending.'));
                   }
-                  await followUp.addPendingFollowUp(text, atts, contextRefs, pageContextDraft?.envelope, interrupt, delivery);
+                  await followUp.addPendingFollowUp(text, atts, prepared.refs, pageContextDraft?.envelope, interrupt, delivery);
                   if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
                 }}
                 onSteeringInterrupt={pageContextDraft ? undefined : async (text, atts, contextRefs) => {
-                  const scope = sendScope.current;
-                  if (beforeSend && (!await beforeSend() || scope !== sendScope.current)) return false;
-                  return stream.interruptAndSend(text, atts, undefined, contextRefs);
+                  const prepared = beforeSend || prepareSendContext ? await prepareContext(contextRefs) : { refs: contextRefs };
+                  if (!prepared) return false;
+                  return stream.interruptAndSend(text, atts, undefined, prepared.refs);
                 }}
                 pendingFollowUps={followUp.pendingFollowUps}
                 editingFollowUpId={followUp.editingFollowUpId}
                 onBeginEditFollowUp={followUp.beginEditFollowUp}
                 onCancelEditFollowUp={followUp.cancelEditFollowUp}
-                onCommitEditFollowUp={(id, text, atts, level, contextRefs) =>
-                  followUp.commitEditFollowUp(id, text, atts, level, contextRefs)
-                }
+                onCommitEditFollowUp={async (id, text, atts, level, contextRefs) => {
+                  const prepared = prepareSendContext ? await prepareContext(contextRefs) : { refs: contextRefs };
+                  return prepared ? followUp.commitEditFollowUp(id, text, atts, level, prepared.refs) : false;
+                }}
                 onPendingFollowUpRemove={followUp.removePendingFollowUp}
                 onPendingFollowUpMove={followUp.movePendingFollowUp}
                 onPendingFollowUpReorder={followUp.reorderPendingFollowUp}

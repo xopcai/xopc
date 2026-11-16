@@ -30,9 +30,9 @@ describe('generated media in chat', () => {
     ] }, pagination: { hasMore: false } })), undefined, '');
     const cards = [...generatedMediaCards('music', { jobs: [song] }), ...generatedMediaCards('video', video)];
     expect([...generatedMediaByReply(cards, rows).keys()]).toEqual(['tools', 'video-reply']);
-    expect(generatedMediaByReply(cards, []).get('')).toEqual(cards);
-    expect(generatedMediaByReply(cards, rows.slice(-1)).get('')).toEqual(cards);
-    expect(generatedMediaByReply(cards, rows.slice(1)).get('')).toEqual([cards[0]]);
+    expect(generatedMediaByReply(cards, []).get('')).toEqual([cards[1]]);
+    expect(generatedMediaByReply(cards, rows.slice(-1)).get('')).toEqual([cards[1]]);
+    expect(generatedMediaByReply(cards, rows.slice(1)).has('')).toBe(false);
   });
 
   it('filters old video jobs and only enables confirmation for the configured draft model', () => {
@@ -45,7 +45,7 @@ describe('generated media in chat', () => {
     expect(generatedMediaCards('video', { ...response, modelRef: 'changed' }).at(-1)?.canConfirm).toBe(false);
   });
 
-  it('shows a newly queued song before history has a reply anchor and updates the same card', async () => {
+  it('shows a queued song before history loads and keeps completed music at its original reply', async () => {
     const model = new XopcGeneratedMediaViewModel();
     const jobsPath = '/api/music-generation/sessions/live/jobs';
     let jobs: typeof song[] = [];
@@ -63,6 +63,10 @@ describe('generated media in chat', () => {
       jobs = [song];
       observe();
       await vi.waitFor(() => expect(model.cards.map(card => card.item)).toEqual([song]));
+      expect(generatedMediaByReply(model.cards, []).size).toBe(0);
+      expect(generatedMediaByReply(model.cards, [
+        { id: 'song-reply', role: 'assistant', text: 'Song ready', generatedMediaIds: [song.id] },
+      ]).get('song-reply')).toEqual(model.cards);
     } finally { model.stop(); }
   });
 

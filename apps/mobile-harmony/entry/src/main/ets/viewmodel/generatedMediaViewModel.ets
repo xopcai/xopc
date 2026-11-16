@@ -1,4 +1,4 @@
-import { generatedMediaCards, generatedMediaPath } from '../common/generatedMedia';
+import { generatedMediaCards, generatedMediaPath, isGeneratedMediaInProgress } from '../common/generatedMedia';
 import { XopcGeneratedMediaCard, XopcGeneratedMediaItem, XopcGeneratedMediaJobs, XopcGeneratedMediaKind } from '../model/generatedMedia';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcListSnapshots } from '../service/listSnapshots';
@@ -62,7 +62,7 @@ export class XopcGeneratedMediaViewModel {
     await this.load(kind, id, generation, this.videoRevision);
     if (generation !== this.generation) return;
     const active = this.cards.some((card: XopcGeneratedMediaCard): boolean =>
-      card.kind === kind && ['queued', 'submitting', 'submitted', 'running', 'saving'].includes(card.item.state ?? ''));
+      card.kind === kind && isGeneratedMediaInProgress(card.item));
     this.pollTimers.set(kind, setTimeout((): void => { void this.poll(kind, id, busy, generation); }, busy || active ? 3000 : 20000));
   }
 
