@@ -37,7 +37,7 @@ afterEach(() => { act(() => root.unmount()); container.remove(); vi.clearAllMock
 it('saves a single message reactions preference in either direction', async () => {
   const switches = container.querySelectorAll<HTMLButtonElement>('[role="switch"]');
   expect(switches).toHaveLength(1);
-  const toggle = switches[0]!;
+  const toggle = switches[0];
   expect(toggle.getAttribute('aria-label')).toBe('Message reactions');
   expect(toggle.getAttribute('aria-checked')).toBe('false');
   await act(async () => toggle.click());
