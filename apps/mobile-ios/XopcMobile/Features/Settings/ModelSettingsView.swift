@@ -4,7 +4,9 @@ private struct GlobalModelChoice: Decodable, Identifiable {
     let ref: String
     let name: String
     let provider: String
-    var id: String { ref }
+    var id: String {
+        ref
+    }
 }
 
 private struct GlobalModelRoute: Decodable, Identifiable {
@@ -14,7 +16,9 @@ private struct GlobalModelRoute: Decodable, Identifiable {
     let name: String?
     let inherited: Bool?
     let allowInherit: Bool?
-    var id: String { key }
+    var id: String {
+        key
+    }
 }
 
 private struct GlobalModelSettings: Decodable {
@@ -39,8 +43,11 @@ private enum GlobalModelChange: Encodable {
             try container.encode("fallbacks", forKey: .kind)
             try container.encode(refs, forKey: .refs)
         case let .model(key, ref), let .task(key, ref):
-            if case .model = self { try container.encode("model", forKey: .kind) }
-            else { try container.encode("task", forKey: .kind) }
+            if case .model = self {
+                try container.encode("model", forKey: .kind)
+            } else {
+                try container.encode("task", forKey: .kind)
+            }
             try container.encode(key, forKey: .key)
             try container.encode(ref, forKey: .ref)
         }
@@ -80,10 +87,14 @@ struct ModelSettingsView: View {
             if let error {
                 Section {
                     Text(error).foregroundStyle(.secondary)
-                    if data == nil { Button("重试") { Task { await load() } } }
+                    if data == nil {
+                        Button("重试") { Task { await load() } }
+                    }
                 }
             }
-            if loading { ProgressView() }
+            if loading {
+                ProgressView()
+            }
             if let data {
                 if page == .tasks {
                     Section {
@@ -112,7 +123,9 @@ struct ModelSettingsView: View {
         .task(id: configuration) { await load() }
         .refreshable { await load() }
         .sheet(item: $sheet) { sheet in
-            if let data { sheetContent(sheet, data: data).interactiveDismissDisabled(saving) }
+            if let data {
+                sheetContent(sheet, data: data).interactiveDismissDisabled(saving)
+            }
         }
     }
 
@@ -129,8 +142,11 @@ struct ModelSettingsView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("对话与任务").mobileTextStyle(.caption).foregroundStyle(.secondary)
-                            if let name = primary.name { Text(verbatim: name).mobileTextStyle(.rowTitle).foregroundStyle(.primary) }
-                            else { Text("未配置").mobileTextStyle(.rowTitle) }
+                            if let name = primary.name {
+                                Text(verbatim: name).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
+                            } else {
+                                Text("未配置").mobileTextStyle(.rowTitle)
+                            }
                         }
                         Spacer()
                         Text("更换").mobileTextStyle(.caption).foregroundStyle(theme.action)
@@ -159,10 +175,15 @@ struct ModelSettingsView: View {
     }
 
     private func routeRow(_ route: GlobalModelRoute, data: GlobalModelSettings, page: Page) -> some View {
-        let value = if route.inherited == true { Text("继承默认") }
-        else if data.pools[route.pool]?.isEmpty != false { Text("未连接服务") }
-        else if let name = route.name { Text(verbatim: name) }
-        else { Text("未配置") }
+        let value = if route.inherited == true {
+            Text("继承默认")
+        } else if data.pools[route.pool]?.isEmpty != false {
+            Text("未连接服务")
+        } else if let name = route.name {
+            Text(verbatim: name)
+        } else {
+            Text("未配置")
+        }
         return Button { open(.choose(route, page), current: route.ref) } label: {
             settingLabel(label(route.key, page: page), trailing: value)
         }
@@ -208,7 +229,9 @@ struct ModelSettingsView: View {
     private func sheetContent(_ sheet: Sheet, data: GlobalModelSettings) -> some View {
         NavigationStack {
             List {
-                if sheetError { Text("无法保存模型设置，请重试。").foregroundStyle(.red) }
+                if sheetError {
+                    Text("无法保存模型设置，请重试。").foregroundStyle(.red)
+                }
                 switch sheet {
                 case .fallbacks:
                     Section {
@@ -244,8 +267,11 @@ struct ModelSettingsView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭") { self.sheet = nil }.disabled(saving) }
             }
             .safeAreaInset(edge: .bottom) {
-                if saving { ProgressView().padding() }
-                else { confirmAction(sheet, data: data) }
+                if saving {
+                    ProgressView().padding()
+                } else {
+                    confirmAction(sheet, data: data)
+                }
             }
         }
     }
@@ -259,8 +285,12 @@ struct ModelSettingsView: View {
     }
 
     @ViewBuilder private func picker(_ options: [GlobalModelChoice], inherit: Bool) -> some View {
-        if !options.isEmpty { TextField("搜索模型或服务商", text: $query).accessibilityIdentifier("model-settings-search") }
-        if inherit { choiceRow(Text("继承默认"), detail: nil, ref: nil) }
+        if !options.isEmpty {
+            TextField("搜索模型或服务商", text: $query).accessibilityIdentifier("model-settings-search")
+        }
+        if inherit {
+            choiceRow(Text("继承默认"), detail: nil, ref: nil)
+        }
         let matches = options.filter { query.isEmpty || "\($0.name) \($0.provider) \($0.ref)".localizedCaseInsensitiveContains(query) }
         ForEach(matches) { choice in choiceRow(Text(verbatim: choice.name), detail: choice.provider, ref: choice.ref) }
         if matches.isEmpty {
@@ -273,10 +303,14 @@ struct ModelSettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     name.foregroundStyle(.primary)
-                    if let detail { Text(verbatim: detail).mobileTextStyle(.caption).foregroundStyle(.secondary) }
+                    if let detail {
+                        Text(verbatim: detail).mobileTextStyle(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
-                if selected == ref { Image(systemName: "checkmark").foregroundStyle(theme.action) }
+                if selected == ref {
+                    Image(systemName: "checkmark").foregroundStyle(theme.action)
+                }
             }.frame(minHeight: 44).contentShape(Rectangle())
         }
         .accessibilityIdentifier("model-choice-\(ref ?? "inherit")")
@@ -288,7 +322,9 @@ struct ModelSettingsView: View {
         case .fallbacks: EmptyView()
         case .addFallback:
             confirm("添加备用模型", enabled: selected != nil) {
-                if let selected { save(.fallbacks(data.fallbacks.map(\.ref) + [selected]), revision: data.revision, returnToFallbacks: true) }
+                if let selected {
+                    save(.fallbacks(data.fallbacks.map(\.ref) + [selected]), revision: data.revision, returnToFallbacks: true)
+                }
             }
         case let .choose(route, page):
             confirm("确认更换", enabled: selected != route.ref) {
@@ -312,7 +348,9 @@ struct ModelSettingsView: View {
             let envelope: GatewayEnvelope<GlobalModelSettings> = try await GatewayClient(configuration: configuration).request(path: path)
             guard let payload = envelope.payload else { throw GatewayClientError.invalidResponse }
             data = payload
-            if !preserveMessage { error = nil }
+            if !preserveMessage {
+                error = nil
+            }
         } catch is CancellationError {} catch GatewayClientError.http(statusCode: 404, message: _) {
             error = "请更新 Gateway 后再使用模型设置。"
         } catch { self.error = "无法读取模型设置。" }
@@ -334,8 +372,12 @@ struct ModelSettingsView: View {
                 guard let payload = envelope.payload else { throw GatewayClientError.invalidResponse }
                 data = payload
                 error = nil
-                if close { sheet = nil }
-                if returnToFallbacks { sheet = .fallbacks }
+                if close {
+                    sheet = nil
+                }
+                if returnToFallbacks {
+                    sheet = .fallbacks
+                }
             } catch is CancellationError {} catch GatewayClientError.http(statusCode: 409, message: _) {
                 sheet = nil
                 data = nil

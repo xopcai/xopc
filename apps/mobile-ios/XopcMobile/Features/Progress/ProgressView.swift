@@ -20,7 +20,8 @@ struct WorkPagesView: View {
     @State private var page: WorkPage
 
     init(configuration: GatewayConfiguration, initialPage: WorkPage,
-         onOpenConversation: @escaping (String, String, String) -> Void) {
+         onOpenConversation: @escaping (String, String, String) -> Void)
+    {
         self.configuration = configuration
         self.onOpenConversation = onOpenConversation
         _page = State(initialValue: initialPage)

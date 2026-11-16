@@ -234,10 +234,14 @@ struct GatewayClient: GatewayServing, Sendable {
         var query = [
             URLQueryItem(name: "limit", value: "50"),
             URLQueryItem(name: "offset", value: String(offset)),
-            URLQueryItem(name: "excludeArchived", value: "true"),
+            URLQueryItem(name: "excludeArchived", value: "true")
         ]
-        if !search.isEmpty { query.append(URLQueryItem(name: "search", value: search)) }
-        if search.isEmpty { query.append(URLQueryItem(name: "rootConversationsOnly", value: "true")) }
+        if !search.isEmpty {
+            query.append(URLQueryItem(name: "search", value: search))
+        }
+        if search.isEmpty {
+            query.append(URLQueryItem(name: "rootConversationsOnly", value: "true"))
+        }
         switch scope {
         case .recent:
             break
@@ -250,9 +254,11 @@ struct GatewayClient: GatewayServing, Sendable {
                 URLQueryItem(name: "agentId", value: id),
                 URLQueryItem(name: "sources", value: "workbench"),
                 URLQueryItem(name: "purposes", value: "chat"),
-                URLQueryItem(name: "activity", value: "manual"),
+                URLQueryItem(name: "activity", value: "manual")
             ]
-            if !search.isEmpty { query.append(URLQueryItem(name: "rootConversationsOnly", value: "true")) }
+            if !search.isEmpty {
+                query.append(URLQueryItem(name: "rootConversationsOnly", value: "true"))
+            }
             return try await request(path: "/api/sessions", queryItems: query)
         }
         query.append(URLQueryItem(name: "excludeAutomationRuns", value: "true"))

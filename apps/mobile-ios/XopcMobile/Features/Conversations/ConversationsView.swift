@@ -35,7 +35,9 @@ struct ConversationsView: View {
     @State private var catalogLoading = false
     @State private var catalogFailed = false
 
-    private var browsingGroups: Bool { mode != .recent && groupName == nil }
+    private var browsingGroups: Bool {
+        mode != .recent && groupName == nil
+    }
 
     @State private var state = ConversationsState()
     @State private var searchOpen = false
@@ -135,7 +137,9 @@ struct ConversationsView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PageSearchButton(searchLabel, isOpen: $searchOpen, query: $state.searchText,
                                  accessibilityID: "conversations-open-search")
-                if mode == .recent { Button("新建对话", systemImage: "plus", action: onStartNew) }
+                if mode == .recent {
+                    Button("新建对话", systemImage: "plus", action: onStartNew)
+                }
             }
         }
         .task {
@@ -144,8 +148,9 @@ struct ConversationsView: View {
             }
         }
         .task(id: ConversationSearchKey(configuration: configuration, query: state.searchText,
-                                       personalConversationID: personalConversationID,
-                                       scope: state.scope, loadSessions: !browsingGroups)) {
+                                        personalConversationID: personalConversationID,
+                                        scope: state.scope, loadSessions: !browsingGroups))
+        {
             guard !browsingGroups else { return }
             state.personalConversationID = personalConversationID
             state.cacheScope = ComposerDraftStore.accountScope(configuration)
@@ -155,7 +160,11 @@ struct ConversationsView: View {
             guard !Task.isCancelled else { return }
             await state.load(using: GatewayClient(configuration: configuration))
         }
-        .task(id: mode) { if mode != .recent { await loadCatalog(mode) } }
+        .task(id: mode) {
+            if mode != .recent {
+                await loadCatalog(mode)
+            }
+        }
         .alert("重命名对话", isPresented: renamePresented) {
             TextField("对话名称", text: $renameText)
             Button("取消", role: .cancel) { renameTarget = nil }
@@ -171,7 +180,9 @@ struct ConversationsView: View {
     }
 
     private var searchLabel: LocalizedStringKey {
-        if browsingGroups { return mode == .projects ? "搜索项目" : "搜索专家" }
+        if browsingGroups {
+            return mode == .projects ? "搜索项目" : "搜索专家"
+        }
         return "搜索对话"
     }
 
@@ -208,7 +219,7 @@ struct ConversationsView: View {
             let projectRows = projects.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
             let expertRows = experts.filter { query.isEmpty || $0.displayName.localizedCaseInsensitiveContains(query) }
             let showUnassigned = query.isEmpty || unassigned.localizedCaseInsensitiveContains(query)
-            if mode == .projects ? projectRows.isEmpty && !showUnassigned : expertRows.isEmpty {
+            if mode == .projects ? projectRows.isEmpty, !showUnassigned : expertRows.isEmpty {
                 if query.isEmpty {
                     ContentUnavailableView("暂无专家", systemImage: "person.2")
                 } else {
@@ -259,9 +270,13 @@ struct ConversationsView: View {
                 }
             }
         } catch {
-            if !Task.isCancelled, mode == requestedMode { catalogFailed = true }
+            if !Task.isCancelled, mode == requestedMode {
+                catalogFailed = true
+            }
         }
-        if mode == requestedMode { catalogLoading = false }
+        if mode == requestedMode {
+            catalogLoading = false
+        }
     }
 
     private func conversationButton(for conversation: ConversationSummary) -> some View {

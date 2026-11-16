@@ -49,7 +49,9 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
     var onDrag: (CGFloat) -> Void = { _ in }
     var onEnd: (CGFloat, CGFloat) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
 
     func makeUIView(context: Context) -> SwipeRegion {
         let region = SwipeRegion()
@@ -100,20 +102,21 @@ struct HorizontalSwipeCapture: UIViewRepresentable {
             region?.window?.addGestureRecognizer(pan)
         }
 
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        func gestureRecognizer(_: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             guard let region, let window = region.window, region.bounds.contains(touch.location(in: region)) else {
                 return false
             }
             return !capture.reserveBackEdge || touch.location(in: window).x >= 24
         }
 
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        func gestureRecognizerShouldBegin(_: UIGestureRecognizer) -> Bool {
             let offset = pan.translation(in: nil)
             return abs(offset.x) > abs(offset.y) * 1.25 && (!capture.leftOnly || offset.x < 0)
         }
 
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        func gestureRecognizer(_: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool
+        {
             other.view is UIScrollView
         }
 

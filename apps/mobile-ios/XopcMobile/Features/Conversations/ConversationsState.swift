@@ -32,7 +32,9 @@ final class ConversationsState {
 
     private func isVisible(_ row: ConversationSummary) -> Bool {
         guard row.messageCount > 0, row.id != personalConversationID, row.status != "archived" else { return false }
-        if case .expert = activeScope { return row.customData?.agentSetup != true }
+        if case .expert = activeScope {
+            return row.customData?.agentSetup != true
+        }
         return true
     }
 
@@ -50,7 +52,7 @@ final class ConversationsState {
         activeSearch = query
         activeScope = scope
         let requestedScope = scope
-        if query.isEmpty && requestedScope == .recent {
+        if query.isEmpty, requestedScope == .recent {
             restoreCachedHistory()
         }
         isLoading = true

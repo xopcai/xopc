@@ -132,7 +132,7 @@ extension View {
             }
     }
 
-    func mobilePageTitle<Content: View>(_ title: Text, @ViewBuilder switcher: () -> Content) -> some View {
+    func mobilePageTitle(_ title: Text, @ViewBuilder switcher: () -> some View) -> some View {
         navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)

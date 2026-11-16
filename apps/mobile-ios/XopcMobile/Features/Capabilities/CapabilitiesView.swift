@@ -163,7 +163,9 @@ struct CapabilitiesView: View {
         let categories = CapabilityCategory.allCases
         guard let index = categories.firstIndex(of: category) else { return }
         let next = index + (distance < 0 ? 1 : -1)
-        if categories.indices.contains(next) { selectCategory(categories[next]) }
+        if categories.indices.contains(next) {
+            selectCategory(categories[next])
+        }
     }
 
     @ViewBuilder private var catalogContent: some View {

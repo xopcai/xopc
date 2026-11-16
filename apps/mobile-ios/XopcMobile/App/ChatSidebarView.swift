@@ -130,8 +130,8 @@ struct ChatSidebarView: View {
         }
     }
 
-    private func row<Icon: View>(_ title: Text, badge: Int = 0, loading: Bool = false,
-                                action: @escaping () -> Void, @ViewBuilder icon: () -> Icon) -> some View
+    private func row(_ title: Text, badge: Int = 0, loading: Bool = false,
+                     action: @escaping () -> Void, @ViewBuilder icon: () -> some View) -> some View
     {
         Button(action: action) {
             HStack(spacing: 12) {
