@@ -4,7 +4,12 @@ export function normalizeSpeech(text: string): string {
 }
 
 export function isPlaybackStopPhrase(normalizedSpeech: string): boolean {
-  return /^(?:暂停|停一下|先停一下|暂停一下|先别说了|别说了|stoptalking|pleasestop)$/u.test(normalizedSpeech);
+  return /^(?:停|暂停|停一下|先停一下|暂停一下|先别说了|别说了|stoptalking|pleasestop)$/u.test(normalizedSpeech);
+}
+
+export function startsWithPlaybackStopPhrase(transcript: string): boolean {
+  const [firstClause] = transcript.split(/[，,、。.！!？?：:\n]/u, 1);
+  return isPlaybackStopPhrase(normalizeSpeech(firstClause ?? ''));
 }
 
 function normalizeSpokenDigits(text: string): string {
@@ -85,22 +90,27 @@ export function isLikelyPlaybackEcho(transcript: string, assistantText: string):
 
 /** Retains the playback at speech onset while a provider finishes delayed ASR. */
 export class PlaybackEchoCandidates {
-  private readonly candidates = new Map<string, { text: string; expiresAt: number }>();
+  private readonly candidates = new Map<string, { text?: string; playing: boolean; expiresAt: number }>();
 
-  remember(utteranceId: string, text: string | undefined): void {
-    if (!text || this.candidates.has(utteranceId)) return;
+  remember(utteranceId: string, text: string | undefined, playing = false): void {
+    if (this.candidates.has(utteranceId)) return;
     const now = Date.now();
     for (const [id, candidate] of this.candidates) {
       if (candidate.expiresAt < now) this.candidates.delete(id);
     }
     if (this.candidates.size >= 256) this.candidates.delete(this.candidates.keys().next().value!);
-    this.candidates.set(utteranceId, { text: text.slice(-8_000), expiresAt: now + 30_000 });
+    this.candidates.set(utteranceId, { text: text?.slice(-8_000), playing, expiresAt: now + 30_000 });
+  }
+
+  wasPlayingAtOnset(utteranceId: string): boolean | undefined {
+    const candidate = this.candidates.get(utteranceId);
+    return candidate && candidate.expiresAt >= Date.now() ? candidate.playing : undefined;
   }
 
   isEcho(utteranceId: string, transcript: string, currentPlayback?: string): boolean {
     const candidate = this.candidates.get(utteranceId);
     return Boolean((currentPlayback && isLikelyPlaybackEcho(transcript, currentPlayback))
-      || (candidate && candidate.text !== currentPlayback && candidate.expiresAt >= Date.now()
+      || (candidate?.text && candidate.text !== currentPlayback && candidate.expiresAt >= Date.now()
         && isLikelyPlaybackEcho(transcript, candidate.text)));
   }
 

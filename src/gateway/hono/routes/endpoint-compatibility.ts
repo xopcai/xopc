@@ -17,6 +17,7 @@ export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
         capabilities: REALTIME_CAPABILITIES,
       },
       turnDeviceContextV1: true,
+      clarificationVersions: process.env.XOPC_CLARIFY_MULTI_QUESTION === 'false' ? [1] : [1, 2],
       endpointEnvironmentV1: true,
       locationSharingV1: true,
       mobilePhoneWorkspaceV1: true,

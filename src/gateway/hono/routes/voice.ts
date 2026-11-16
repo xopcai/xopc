@@ -377,7 +377,9 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       const principal = getGatewayPrincipal(c);
       const create = () => service.voiceRealtime.createSession(parsed.data, principal.principalId);
       const payload = parsed.data.conversationId ? await withModelConfigLock(parsed.data.conversationId, create) : await create();
-      return c.json({ ok: true, payload });
+      return c.json({ ok: true, payload: c.req.query('include') === 'timingMetrics'
+        ? { ...payload, timingMetrics: VOICE_TIMING_METRICS }
+        : payload });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Realtime voice is unavailable';
       if (error instanceof VoiceSessionCreationError) {

@@ -135,6 +135,12 @@ export async function openDashScopeStreamingStt(
           semantic_punctuation_enabled: false,
           max_sentence_silence: request.turnDetection.silenceDurationMs,
           heartbeat: true,
+          ...(request.turnDetection.speechNoiseThreshold !== undefined
+            ? { speech_noise_threshold: request.turnDetection.speechNoiseThreshold }
+            : {}),
+          ...(request.phraseHints?.length && /^qwen-audio-3\.[01]-asr-flash-streaming$/u.test(request.model)
+            ? { vocabulary: Object.fromEntries(request.phraseHints.map(phrase => [phrase, 4])) }
+            : {}),
           ...(request.language && request.language !== 'auto'
             ? { language_hints: [request.language] }
             : {}),

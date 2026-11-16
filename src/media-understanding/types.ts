@@ -178,9 +178,11 @@ export interface StreamingSttOpenRequest {
   headers?: Record<string, string>;
   language?: string;
   prompt?: string;
+  phraseHints?: readonly string[];
   turnDetection: {
     mode: 'server_vad';
     silenceDurationMs: number;
+    speechNoiseThreshold?: number;
   };
   timeoutMs: number;
   signal: AbortSignal;

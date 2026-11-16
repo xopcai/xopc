@@ -347,6 +347,7 @@ struct SessionAgentConfiguration: Decodable, Sendable {
     let model: String?
     let thinkingLevel: String?
     let configVersion: Int?
+    let transcriptId: String?
     let workingDirectoryLocked: Bool?
     let effectiveWorkspacePath: String?
 
@@ -354,12 +355,14 @@ struct SessionAgentConfiguration: Decodable, Sendable {
         model: String?,
         thinkingLevel: String?,
         configVersion: Int?,
+        transcriptId: String? = nil,
         workingDirectoryLocked: Bool? = nil,
         effectiveWorkspacePath: String? = nil
     ) {
         self.model = model
         self.thinkingLevel = thinkingLevel
         self.configVersion = configVersion
+        self.transcriptId = transcriptId
         self.workingDirectoryLocked = workingDirectoryLocked
         self.effectiveWorkspacePath = effectiveWorkspacePath
     }

@@ -53,6 +53,7 @@ export interface XopcVoiceOpeningGreeting {
 }
 export interface XopcVoiceSession {
   openingGreeting?: XopcVoiceOpeningGreeting;
+  timingMetrics?: string[];
   sessionId: string;
   ticket: string;
   ticketExpiresAt: string;

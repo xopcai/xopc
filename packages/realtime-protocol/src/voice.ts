@@ -110,6 +110,7 @@ export const createVoiceSessionRequestSchema = z.strictObject({
 
 export const createVoiceSessionResponseSchema = z.strictObject({
   openingGreeting: z.strictObject({ accepted: z.boolean(), greetingResponseId: z.string().max(160).optional() }).optional(),
+  timingMetrics: z.array(z.enum(VOICE_TIMING_METRICS)).optional(),
   sessionId: idSchema,
   ticket: z.string().min(32).max(512),
   ticketExpiresAt: z.iso.datetime(),

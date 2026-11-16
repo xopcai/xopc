@@ -34,7 +34,8 @@ function validateCreation(service: GatewayService, creation: SessionCreation): v
 
 export async function receiveSessionCommand(service: GatewayService, conversationId: string, principalId: string,
   command: SessionInputCommand | SessionMaterializeCommand,
-  prepareSourceContexts: () => Promise<AgentSourceContext[]> = async () => []) {
+  prepareSourceContexts: () => Promise<AgentSourceContext[]> = async () => [],
+  view: 'full' | 'compact' = 'full') {
   const receive = () => withModelConfigLock(conversationId, async () => {
     const personal = getPersonalAgentByConversation(conversationId);
     if (personal && 'creation' in command && command.creation.agentId !== personal.agentId) {
@@ -48,7 +49,7 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
     }
     const clientMessageId = 'commandId' in command ? command.commandId : command.clientMessageId;
     const existing = matchSessionInputReceipt(conversationId, clientMessageId, principalId, sessionCommandHash(command));
-    if (existing) return sessionCommandSnapshot(service, existing);
+    if (existing) return sessionCommandSnapshot(service, existing, view);
     if ('kind' in command && command.kind === 'append') {
       const session = getSessionMetadata(conversationId);
       if (!session) throw new SessionCommandError('NOT_FOUND', 'Conversation not found');
@@ -72,17 +73,20 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
     if ('kind' in command && command.kind === 'append' && receipt.inputId) {
       await service.dispatchAcceptedSessionInput(conversationId, receipt.inputId);
     }
-    return sessionCommandSnapshot(service, receipt);
+    return sessionCommandSnapshot(service, receipt, view);
   });
   return service.withSessionInputSubmission(conversationId, receive);
 }
 
-export async function sessionCommandSnapshot(service: GatewayService, receipt: SessionInputReceipt) {
+export async function sessionCommandSnapshot(service: GatewayService, receipt: SessionInputReceipt, view: 'full' | 'compact' = 'full') {
   const { principalId: _principal, requestHash: _hash, ...identity } = receipt;
   const inputState = service.getSessionInputState(receipt.conversationId);
+  const metadata = view === 'compact' ? getSessionMetadata(receipt.conversationId) : null;
   return {
     receipt: { ...identity, lifecycle: getSessionPreparation(receipt.conversationId)?.state ?? 'ready' },
-    session: await service.sessions.getSession(receipt.conversationId),
+    session: view === 'compact'
+      ? metadata && { key: metadata.key, transcriptId: metadata.transcriptId }
+      : await service.sessions.getSession(receipt.conversationId),
     agentConfig: await service.sessions.getAgentConfig(receipt.conversationId),
     inputState,
     effectiveDelivery: inputState.inputs.find(input => input.id === receipt.inputId)?.effectiveDelivery ?? 'next',

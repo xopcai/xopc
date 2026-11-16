@@ -22,4 +22,24 @@ struct TaskConversationCommandTests {
             #expect(!GatewayClient.isTaskDestructiveCommand(text))
         }
     }
+
+    @Test func localEndpointCapabilitiesAreNotSentAsPartOfTheClaim() throws {
+        let claim = DeviceEndpointOrigin(endpointId: "phone", token: "test-token",
+                                         supportsDeviceContext: true, supportsMultiQuestion: true)
+        let body = try JSONEncoder().encode(claim)
+        let json = try #require(JSONSerialization.jsonObject(with: body) as? [String: String])
+        #expect(json == ["type": "endpoint", "endpointId": "phone", "token": "test-token"])
+        #expect(claim.environment != nil)
+    }
+
+    @Test func agentConfigDecodesWithAndWithoutTranscriptIdentity() throws {
+        let older = Data(#"{"model":"test/model","configVersion":17}"#.utf8)
+        let current = Data(#"{"model":"test/model","configVersion":17,"transcriptId":"current"}"#.utf8)
+        let decoder = JSONDecoder()
+        let legacy = try decoder.decode(SessionAgentConfiguration.self, from: older)
+        let snapshot = try decoder.decode(SessionAgentConfiguration.self, from: current)
+        #expect(legacy.transcriptId == nil)
+        #expect(snapshot.transcriptId == "current")
+        #expect(snapshot.configVersion == legacy.configVersion)
+    }
 }

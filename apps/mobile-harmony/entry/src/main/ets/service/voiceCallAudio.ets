@@ -37,22 +37,28 @@ export class XopcVoiceCallAudio {
   private duckVolume: number = 1;
 
   async start(context: common.UIAbilityContext, background: boolean, callbacks: XopcVoiceAudioCallbacks): Promise<void> {
+    const generation = this.generation + 1;
     await this.stop();
+    if (generation !== this.generation) throw new Error('CANCELLED');
     const permission = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context,
       ['ohos.permission.MICROPHONE']);
+    if (generation !== this.generation) throw new Error('CANCELLED');
     if (permission.authResults[0] !== 0) throw new Error('MICROPHONE_PERMISSION_REQUIRED');
-    const generation = ++this.generation;
     this.context = context; this.callbacks = callbacks; this.muted = false; this.speaker = false;
     const input: audio.AudioStreamInfo = { samplingRate: 16000, channels: audio.AudioChannel.CHANNEL_1,
       sampleFormat: audio.AudioSampleFormat.SAMPLE_FORMAT_S16LE, encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW };
     const output: audio.AudioStreamInfo = { samplingRate: 24000, channels: audio.AudioChannel.CHANNEL_1,
       sampleFormat: audio.AudioSampleFormat.SAMPLE_FORMAT_S16LE, encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW };
     try {
-      this.renderer = await audio.createAudioRenderer({ streamInfo: output,
+      const renderer = await audio.createAudioRenderer({ streamInfo: output,
         rendererInfo: { usage: audio.StreamUsage.STREAM_USAGE_VOICE_COMMUNICATION, rendererFlags: 0 },
         privacyType: audio.AudioPrivacyType.PRIVACY_TYPE_PRIVATE });
-      this.capturer = await audio.createAudioCapturer({ streamInfo: input,
+      if (generation !== this.generation) { await renderer.release(); throw new Error('CANCELLED'); }
+      this.renderer = renderer;
+      const capturer = await audio.createAudioCapturer({ streamInfo: input,
         capturerInfo: { source: audio.SourceType.SOURCE_TYPE_VOICE_COMMUNICATION, capturerFlags: 0 } });
+      if (generation !== this.generation) { await capturer.release(); throw new Error('CANCELLED'); }
+      this.capturer = capturer;
       this.renderer.setInterruptModeSync(audio.InterruptMode.INDEPENDENT_MODE);
       this.renderer.on('audioInterrupt', (event: audio.InterruptEvent): void => {
         if (generation === this.generation && event.hintType === audio.InterruptHint.INTERRUPT_HINT_STOP) {
@@ -68,15 +74,20 @@ export class XopcVoiceCallAudio {
           hilog.warn(0x0000, 'XopcVoice', 'Voice capture interrupted'); callbacks.onFailure('CAPTURE_INTERRUPTED');
         }
       });
-      await this.renderer.start();
-      await this.capturer.start();
+      await renderer.start();
+      if (generation !== this.generation) throw new Error('CANCELLED');
+      await capturer.start();
+      if (generation !== this.generation) throw new Error('CANCELLED');
       if (background) await this.startMediaSession(context, generation);
+      const outputDevices = await renderer.getCurrentOutputDevices();
+      if (generation !== this.generation) throw new Error('CANCELLED');
       this.capturing = true;
-      callbacks.onRoute(this.routeName(await this.renderer.getCurrentOutputDevices()));
+      callbacks.onRoute(this.routeName(outputDevices));
       this.captureLoop(generation);
     } catch (error) {
       hilog.warn(0x0000, 'XopcVoice', 'Voice audio setup failed: %{public}s', (error as Error).message);
-      await this.stop(); throw error as Error;
+      if (generation === this.generation) await this.stop();
+      throw error as Error;
     }
   }
 

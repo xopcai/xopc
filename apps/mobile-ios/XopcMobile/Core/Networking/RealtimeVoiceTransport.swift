@@ -13,11 +13,41 @@ enum RealtimeVoiceIncoming: Sendable {
     case latency(Int)
 }
 
+struct RealtimeVoiceLiveness {
+    static let maximumProbeIntervalMs = 5000
+
+    enum Probe: Equatable { case ping, wait, disconnected }
+
+    private var lastActivity: TimeInterval = 0
+    private var pingAt: TimeInterval?
+
+    init(now: TimeInterval) {
+        lastActivity = now
+    }
+
+    mutating func receive(now: TimeInterval, pong: Bool = false) -> Int? {
+        lastActivity = now
+        guard pong, let sentAt = pingAt else { return nil }
+        pingAt = nil
+        return Int((now - sentAt) * 1000)
+    }
+
+    mutating func probe(now: TimeInterval) -> Probe {
+        if now - lastActivity >= 15 {
+            return .disconnected
+        }
+        guard pingAt == nil else { return .wait }
+        pingAt = now
+        return .ping
+    }
+}
+
 // swiftlint:disable:next type_body_length
 actor RealtimeVoiceTransport {
     private var socket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
+    private var pingTask: Task<Void, Never>?
     private var readyTimeoutTask: Task<Void, Never>?
     private var audioQueue: Task<Void, Never>?
     private var continuation: AsyncThrowingStream<RealtimeVoiceIncoming, Error>.Continuation?
@@ -35,11 +65,12 @@ actor RealtimeVoiceTransport {
     private var sessionStartSent = false
     private var ready = false
     private var closed = true
-    private var lastPong = Date()
-    private var lastPing: Date?
+    private var liveness = RealtimeVoiceLiveness(now: 0)
     private var streamEpoch = 0
 
-    func connect(origin: URL, session: RealtimeVoiceSession, preferProxy: Bool = false) throws -> AsyncThrowingStream<RealtimeVoiceIncoming, Error> {
+    func connect(origin: URL, session: RealtimeVoiceSession, networkSession: URLSession,
+                 preferProxy: Bool = false) throws -> AsyncThrowingStream<RealtimeVoiceIncoming, Error>
+    {
         guard session.supportsNativePCM else { throw RealtimeVoiceTransportError.protocolMismatch }
         let availableRoutes = try Self.webSocketRoutes(origin: origin, session: session)
         let routes = preferProxy ? Array(availableRoutes.reversed()) : availableRoutes
@@ -60,7 +91,7 @@ actor RealtimeVoiceTransport {
         closed = false
         return AsyncThrowingStream<RealtimeVoiceIncoming, Error> { continuation in
             self.continuation = continuation
-            self.receiveTask = Task { await self.run(routes: routes, session: session, epoch: currentEpoch) }
+            self.receiveTask = Task { await self.run(routes: routes, session: session, networkSession: networkSession, epoch: currentEpoch) }
             continuation.onTermination = { @Sendable _ in
                 Task { await self.close(ifEpoch: currentEpoch) }
             }
@@ -104,9 +135,9 @@ actor RealtimeVoiceTransport {
         }
     }
 
-    func sendAudio(_ bytes: Data) throws -> Int {
+    func sendAudio(_ bytes: Data) throws {
         guard ready, !closed, let session else { throw RealtimeVoiceTransportError.disconnected }
-        guard !inputMuted else { return 0 }
+        guard !inputMuted else { return }
         guard pendingAudioBytes + remainder.count + bytes.count <= 9600 else {
             throw RealtimeVoiceTransportError.inputBackpressure
         }
@@ -134,10 +165,9 @@ actor RealtimeVoiceTransport {
                 await self.transmit(frame, epoch: currentEpoch, input: currentInput, queuedAt: queuedAt)
             }
         }
-        return pendingAudioBytes / 32
     }
 
-    func inputQueueAgeMs() -> Int {
+    func inputQueueDurationMs() -> Int {
         pendingAudioBytes / 32
     }
 
@@ -149,6 +179,8 @@ actor RealtimeVoiceTransport {
         receiveTask = nil
         heartbeatTask?.cancel()
         heartbeatTask = nil
+        pingTask?.cancel()
+        pingTask = nil
         readyTimeoutTask?.cancel()
         readyTimeoutTask = nil
         audioQueue?.cancel()
@@ -167,11 +199,16 @@ actor RealtimeVoiceTransport {
         close()
     }
 
-    private func run(routes: [URL], session: RealtimeVoiceSession, epoch: Int) async {
+    func close(sessionID: String) {
+        guard session?.sessionId == sessionID else { return }
+        close()
+    }
+
+    private func run(routes: [URL], session: RealtimeVoiceSession, networkSession: URLSession, epoch: Int) async {
         for route in routes {
             guard !Task.isCancelled, !closed, streamEpoch == epoch else { return }
             do {
-                try await receive(route: route, session: session, epoch: epoch)
+                try await receive(route: route, session: session, networkSession: networkSession, epoch: epoch)
                 guard streamEpoch == epoch else { return }
                 close()
                 return
@@ -193,11 +230,12 @@ actor RealtimeVoiceTransport {
         }
     }
 
-    private func receive(route: URL, session: RealtimeVoiceSession, epoch: Int) async throws {
+    private func receive(route: URL, session: RealtimeVoiceSession, networkSession: URLSession, epoch: Int) async throws {
         var request = URLRequest(url: route)
         request.timeoutInterval = 15
         try await request.setValue(GatewayPairingService.shared.connectionProof(url: route, ticket: session.ticket), forHTTPHeaderField: "X-Xopc-Proof")
-        let socket = URLSession.shared.webSocketTask(with: request)
+        guard streamEpoch == epoch, !closed else { throw CancellationError() }
+        let socket = networkSession.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
         readyTimeoutTask = Task {
@@ -224,6 +262,7 @@ actor RealtimeVoiceTransport {
                       frame.sequence == audioSequence + 1
                 else { throw RealtimeVoiceTransportError.protocolMismatch }
                 audioSequence = frame.sequence
+                _ = liveness.receive(now: ProcessInfo.processInfo.systemUptime)
                 continuation?.yield(.audio(frame))
             @unknown default:
                 throw RealtimeVoiceTransportError.protocolMismatch
@@ -236,6 +275,7 @@ actor RealtimeVoiceTransport {
             throw RealtimeVoiceTransportError.protocolMismatch
         }
         eventSequence = event.seq
+        let uptime = ProcessInfo.processInfo.systemUptime
         if event.type == "session.ready" {
             guard !ready, event.payload.connectionEpoch == session.connectionEpoch,
                   event.payload.route?.engine == session.route.engine
@@ -243,14 +283,10 @@ actor RealtimeVoiceTransport {
             ready = true
             readyTimeoutTask?.cancel()
             readyTimeoutTask = nil
-            lastPong = Date()
+            liveness = RealtimeVoiceLiveness(now: uptime)
             startHeartbeat(intervalMs: event.payload.heartbeatIntervalMs ?? 15000)
-        } else if event.type == "session.pong" {
-            lastPong = Date()
-            if let lastPing {
-                continuation?.yield(.latency(Int(Date().timeIntervalSince(lastPing) * 1000)))
-                self.lastPing = nil
-            }
+        } else if let latency = liveness.receive(now: uptime, pong: event.type == "session.pong") {
+            continuation?.yield(.latency(latency))
         }
         continuation?.yield(.event(event))
         if event.type == "session.closed" || event.type == "session.error" && event.payload.recoverable != true {
@@ -260,18 +296,34 @@ actor RealtimeVoiceTransport {
 
     private func startHeartbeat(intervalMs: Int) {
         heartbeatTask?.cancel()
+        let interval = min(RealtimeVoiceLiveness.maximumProbeIntervalMs, max(1000, intervalMs))
+        let epoch = streamEpoch
         heartbeatTask = Task {
             while !Task.isCancelled, !closed {
-                try? await Task.sleep(for: .milliseconds(max(1000, intervalMs)))
-                guard !Task.isCancelled, !closed else { return }
-                guard Date().timeIntervalSince(lastPong) < 35 else {
+                try? await Task.sleep(for: .milliseconds(interval))
+                guard !Task.isCancelled, !closed, epoch == streamEpoch else { return }
+                switch liveness.probe(now: ProcessInfo.processInfo.systemUptime) {
+                case .disconnected:
                     continuation?.finish(throwing: RealtimeVoiceTransportError.disconnected)
                     close()
                     return
+                case .ping:
+                    // A stalled socket write must not suspend the watchdog.
+                    pingTask = Task { await sendHeartbeat(epoch: epoch) }
+                case .wait: break
                 }
-                lastPing = Date()
-                try? await send("session.ping")
             }
+        }
+    }
+
+    private func sendHeartbeat(epoch: Int) async {
+        guard !Task.isCancelled, epoch == streamEpoch, !closed else { return }
+        do {
+            try await send("session.ping")
+        } catch {
+            guard epoch == streamEpoch, !closed else { return }
+            continuation?.finish(throwing: error)
+            close()
         }
     }
 

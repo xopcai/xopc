@@ -16,9 +16,9 @@ class VoiceUplinkCongestionTest {
   }
 
   @Test fun clearingCongestionDoesNotOverrideUserMuteOrApproval() {
-    assertEquals(true, voiceInputShouldMute(true, false, false, false))
-    assertEquals(true, voiceInputShouldMute(false, false, true, false))
-    assertEquals(true, voiceInputShouldMute(false, false, false, true))
-    assertEquals(false, voiceInputShouldMute(false, false, false, false))
+    assertEquals(true, voiceInputShouldMute(true, false, false))
+    assertEquals(true, voiceInputShouldMute(false, false, true))
+    assertEquals(true, voiceInputShouldMute(false, true, false))
+    assertEquals(false, voiceInputShouldMute(false, false, false))
   }
 }

@@ -10,6 +10,15 @@ extension GatewayClient {
         to conversation: ConversationSelection,
         clientMessageID: String
     ) async throws -> SessionCommandResult {
+        if !conversation.isDraft, Self.isTaskDestructiveCommand(text) {
+            let context = try await fetchContext(conversationID: conversation.id)
+            guard !context.unavailableSections.contains("work") else {
+                throw GatewayClientError.server("会话任务归属暂不可用，请稍后重试")
+            }
+            if context.work.task != nil {
+                throw GatewayClientError.server("任务需要保留连续对话，不能在这里重置或归档")
+            }
+        }
         let body = try await messageBody(
             text,
             attachments: attachments,
@@ -18,18 +27,9 @@ extension GatewayClient {
             conversation: conversation,
             clientMessageID: clientMessageID
         )
-
-        if !conversation.isDraft {
-            let context = try await fetchContext(conversationID: conversation.id)
-            guard !context.unavailableSections.contains("work") else {
-                throw GatewayClientError.server("会话任务归属暂不可用，请稍后重试")
-            }
-            if context.work.task != nil, Self.isTaskDestructiveCommand(text) {
-                throw GatewayClientError.server("任务需要保留连续对话，不能在这里重置或归档")
-            }
-        }
         let envelope: GatewayEnvelope<SessionCommandResult> = try await request(
             path: "/api/sessions/\(conversation.id)/inputs",
+            queryItems: [URLQueryItem(name: "view", value: "compact")],
             method: "POST",
             body: body
         )
@@ -56,41 +56,53 @@ extension GatewayClient {
         conversation: ConversationSelection,
         clientMessageID: String
     ) async throws -> Data {
-        _ = try await DeviceEndpointPool.shared.origin(for: self)
+        async let origin = DeviceEndpointPool.shared.origin(for: self)
         if conversation.isDraft {
-            return try await startMessageBody(
-                text,
-                attachments: attachments,
-                references: references,
-                conversation: conversation,
-                clientMessageID: clientMessageID
-            )
+            let selection = try await startModelSelection(for: conversation)
+            let readyOrigin = try await origin
+            let input = inputCommand(text: text, attachments: attachments, references: references, origin: readyOrigin)
+            return try encoder.encode(StartMessageCommand(
+                clientMessageId: clientMessageID,
+                creation: .init(
+                    agentId: conversation.agentId,
+                    projectId: conversation.projectId,
+                    execution: conversation.executionMode.map { ExecutionCommand(mode: $0, baseRef: nil) },
+                    temporary: false,
+                    model: selection.model,
+                    thinkingLevel: selection.thinking,
+                    agentSetupLanguage: conversation.agentSetupLanguage
+                ),
+                input: input,
+                origin: readyOrigin
+            ))
         }
-        let history = try await fetchHistory(conversationID: conversation.id)
         let config = try await fetchAgentConfiguration(conversationID: conversation.id)
-        guard
-            let transcriptID = history.session.transcriptId ?? conversation.transcriptId,
-            let configVersion = config.configVersion
-        else {
+        let transcriptID: String?
+        if let current = config.transcriptId {
+            transcriptID = current
+        } else {
+            let history = try await fetchHistory(conversationID: conversation.id)
+            transcriptID = history.session.transcriptId ?? conversation.transcriptId
+        }
+        guard let transcriptID, let configVersion = config.configVersion else {
             throw GatewayClientError.server("会话配置尚未就绪")
         }
-        return try await encoder.encode(AppendMessageCommand(
+        let readyOrigin = try await origin
+        let input = inputCommand(text: text, attachments: attachments, references: references, origin: readyOrigin)
+        return try encoder.encode(AppendMessageCommand(
             clientMessageId: clientMessageID,
             expectedTranscriptId: transcriptID,
             configVersion: configVersion,
             delivery: delivery.rawValue,
-            input: inputCommand(text: text, attachments: attachments, references: references),
-            origin: DeviceEndpointPool.shared.origin(for: self)
+            input: input,
+            origin: readyOrigin
         ))
     }
 
-    private func startMessageBody(
-        _ text: String,
-        attachments: [MessageAttachment],
-        references: [ContextReference],
-        conversation: ConversationSelection,
-        clientMessageID: String
-    ) async throws -> Data {
+    private func startModelSelection(for conversation: ConversationSelection) async throws -> (model: String, thinking: String) {
+        if let model = conversation.model, let thinking = conversation.thinkingLevel {
+            return (model, thinking)
+        }
         let catalog = try await fetchModels(agentID: conversation.agentId)
         guard let model = conversation.model ?? catalog.defaultId ?? catalog.models.first?.id else {
             throw GatewayClientError.server("当前助手没有可用模型")
@@ -98,27 +110,23 @@ extension GatewayClient {
         let thinking = conversation.thinkingLevel
             ?? catalog.models.first(where: { $0.id == model })?.thinking?.initialValue
             ?? "off"
-        return try await encoder.encode(StartMessageCommand(
-            clientMessageId: clientMessageID,
-            creation: .init(
-                agentId: conversation.agentId,
-                projectId: conversation.projectId,
-                execution: conversation.executionMode.map { ExecutionCommand(mode: $0, baseRef: nil) },
-                temporary: false,
-                model: model,
-                thinkingLevel: thinking,
-                agentSetupLanguage: conversation.agentSetupLanguage
-            ),
-            input: inputCommand(text: text, attachments: attachments, references: references),
-            origin: DeviceEndpointPool.shared.origin(for: self)
-        ))
+        return (model, thinking)
+    }
+
+    func supportsMultiQuestion(_ versions: [Int]?) async -> Bool {
+        if let versions {
+            return versions.contains(2)
+        }
+        let health: ClarificationHealth? = try? await request(path: "/api/health")
+        return health?.clarificationVersions?.contains(2) == true
     }
 
     private func inputCommand(
         text: String,
         attachments: [MessageAttachment],
-        references: [ContextReference]
-    ) async -> MessageInputCommand {
+        references: [ContextReference],
+        origin: DeviceEndpointOrigin
+    ) -> MessageInputCommand {
         var input = MessageInputCommand(
             content: text,
             attachments: attachments.isEmpty ? nil : attachments.map {
@@ -138,8 +146,8 @@ extension GatewayClient {
                 )
             }
         )
-        input.endpointContext = await DeviceEndpointPool.shared.environment(for: self)
-        if let health: ClarificationHealth = try? await request(path: "/api/health"), health.clarificationVersions?.contains(2) == true {
+        input.endpointContext = origin.environment
+        if origin.supportsMultiQuestion {
             input.interactionCapabilities = ClarificationCapabilities()
         }
         return input

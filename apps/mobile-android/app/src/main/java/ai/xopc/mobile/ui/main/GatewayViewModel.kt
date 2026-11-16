@@ -1215,11 +1215,10 @@ class GatewayViewModel internal constructor(application: Application, private va
       conversations.materializeForVoice(conversationId)
       val body = voiceConversationRequest(conversationId, mode,
         if (java.util.Locale.getDefault().language == "zh") "zh" else "en", logicalCallId, recovery).toString()
-      val timing = org.json.JSONObject(session.request("/api/voice/realtime/preflight", "POST", body))
-        .optJSONArray("timingMetrics")
-      val timingMetrics = (0 until (timing?.length() ?: 0)).map { timing!!.getString(it) }
-      val result = org.json.JSONObject(session.request("/api/voice/realtime/sessions", "POST", body))
+      val result = org.json.JSONObject(session.request("/api/voice/realtime/sessions?include=timingMetrics", "POST", body))
         .getJSONObject("payload")
+      val timing = result.optJSONArray("timingMetrics")
+      val timingMetrics = (0 until (timing?.length() ?: 0)).map { timing!!.getString(it) }
       require(result.getInt("protocolVersion") == 3 &&
         result.getJSONObject("inputFormat").getInt("sampleRate") == 16_000 &&
         result.getString("websocketPath") == "/api/voice/realtime/v3/ws") { "UNSUPPORTED_VOICE_SESSION" }
@@ -1233,7 +1232,7 @@ class GatewayViewModel internal constructor(application: Application, private va
 
   suspend fun cancelVoiceCall(call: VoiceCallConnection) = runInterruptible(Dispatchers.IO) {
     val body = org.json.JSONObject().put("sessionId", call.sessionId).put("ticket", call.ticket)
-    session.request("/api/voice/realtime/sessions/cancel", "POST", body.toString())
+    session.cancelVoiceCall(call, body.toString())
     Unit
   }
 

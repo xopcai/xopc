@@ -26,7 +26,7 @@ actor RealtimeRunSocket {
     }
 
     func consume(into continuation: AsyncThrowingStream<RunStreamEvent, Error>.Continuation) async throws {
-        var request = try URLRequest(url: webSocketURL())
+        var request = try URLRequest(url: configuration.realtimeWebSocketURL())
         try await request.setValue(GatewayPairingService.shared.connectionProof(url: request.url!, ticket: ticket), forHTTPHeaderField: "X-Xopc-Proof")
         let socket = session.webSocketTask(with: request)
         self.socket = socket
@@ -49,7 +49,11 @@ actor RealtimeRunSocket {
 
         var lastSequence = 0
         while !Task.isCancelled {
-            let data = try await receiveData(from: socket)
+            let data = try await withTaskCancellationHandler {
+                try await socket.receiveFrameData()
+            } onCancel: {
+                socket.cancel(with: .goingAway, reason: nil)
+            }
             let frame = try JSONDecoder().decode(RealtimeServerFrame.self, from: data)
             try validate(frame)
             guard frame.kind == "realtime.event",
@@ -66,28 +70,13 @@ actor RealtimeRunSocket {
                 guard ["session.task-result", "session.agent-reaction", "session.agent-reaction.preference"].contains(eventName),
                       eventData?.conversationId == conversationID else { continue }
             }
-            let event = makeEvent(name: eventName, sequence: sequence, data: eventData)
+            guard let event = frame.runEvent else { continue }
             continuation.yield(event)
             if event.isTerminal {
                 continuation.finish()
                 return
             }
         }
-    }
-
-    private func makeEvent(name: String, sequence: Int, data: RealtimeRunEnvelope?) -> RunStreamEvent {
-        RunStreamEvent(
-            name: name,
-            sequence: sequence,
-            messageId: data?.payload?.messageId,
-            delta: data?.payload?.delta,
-            offset: data?.payload?.offset,
-            status: data?.payload?.status,
-            errorMessage: data?.payload?.message,
-            toolName: data?.payload?.toolName,
-            stage: data?.payload?.stage,
-            presentation: data?.payload?.presentation
-        )
     }
 
     private func validate(_ frame: RealtimeServerFrame) throws {
@@ -122,12 +111,11 @@ actor RealtimeRunSocket {
             ))
         )
     }
+}
 
-    private func webSocketURL() throws -> URL {
-        guard var components = URLComponents(
-            url: configuration.baseURL.appending(path: "/api/realtime/v1/ws"),
-            resolvingAgainstBaseURL: false
-        ) else {
+extension GatewayConfiguration {
+    func realtimeWebSocketURL() throws -> URL {
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw GatewayClientError.invalidURL
         }
         switch components.scheme {
@@ -135,24 +123,20 @@ actor RealtimeRunSocket {
         case "https": components.scheme = "wss"
         default: throw GatewayClientError.invalidURL
         }
+        components.path = "/api/realtime/v1/ws"
+        components.query = nil
+        components.fragment = nil
         guard let url = components.url else { throw GatewayClientError.invalidURL }
         return url
     }
+}
 
-    private func receiveData(from socket: URLSessionWebSocketTask) async throws -> Data {
-        let received = try await withTaskCancellationHandler {
-            try await socket.receive()
-        } onCancel: {
-            socket.cancel(with: .goingAway, reason: nil)
-        }
-        switch received {
-        case let .data(data):
-            return data
-        case let .string(text):
-            guard let data = text.data(using: .utf8) else { throw GatewayClientError.invalidResponse }
-            return data
-        @unknown default:
-            throw GatewayClientError.invalidResponse
+extension URLSessionWebSocketTask {
+    func receiveFrameData() async throws -> Data {
+        switch try await receive() {
+        case let .data(data): data
+        case let .string(text): Data(text.utf8)
+        @unknown default: throw GatewayClientError.invalidResponse
         }
     }
 }
@@ -196,6 +180,14 @@ private struct RealtimeSubscription: Encodable {
 private struct RealtimeServerFrame: Decodable {
     let kind: String
     let payload: RealtimeServerPayload
+
+    var runEvent: RunStreamEvent? {
+        guard kind == "realtime.event", let name = payload.event, let sequence = payload.seq else { return nil }
+        let body = payload.data?.payload
+        return RunStreamEvent(name: name, sequence: sequence, messageId: body?.messageId, delta: body?.delta,
+                              offset: body?.offset, status: body?.status, errorMessage: body?.message,
+                              toolName: body?.toolName, stage: body?.stage, presentation: body?.presentation)
+    }
 }
 
 private struct RealtimeServerPayload: Decodable {
@@ -221,4 +213,110 @@ private struct RealtimeRunPayload: Decodable {
     let toolName: String?
     let stage: String?
     let presentation: String?
+}
+
+enum DeviceRunStreamError: Error {
+    case disconnected
+}
+
+struct DeviceRunSubscriptions {
+    typealias Continuation = AsyncThrowingStream<RunStreamEvent, Error>.Continuation
+
+    private struct Observer {
+        var sequence: Int
+        let continuation: Continuation
+    }
+
+    private var topics: [String: [UUID: Observer]] = [:]
+
+    mutating func add(_ topic: String, id: UUID, after sequence: Int, continuation: Continuation) -> Int {
+        topics[topic, default: [:]][id] = Observer(sequence: sequence, continuation: continuation)
+        return topics[topic]?.values.map(\.sequence).min() ?? sequence
+    }
+
+    mutating func remove(_ topic: String, id: UUID) -> Bool {
+        guard topics[topic]?.removeValue(forKey: id) != nil, topics[topic]?.isEmpty == true else { return false }
+        topics.removeValue(forKey: topic)
+        return true
+    }
+
+    mutating func finishAll(throwing error: Error) {
+        for topic in Array(topics.keys) {
+            finish(topic, throwing: error)
+        }
+    }
+
+    mutating func receive(_ raw: [String: Any], data: Data) throws -> String? {
+        guard let payload = raw["payload"] as? [String: Any] else { return nil }
+        if raw["kind"] as? String == "realtime.error" {
+            finishAll(throwing: GatewayClientError.server(payload["message"] as? String ?? "实时连接发生错误"))
+            return nil
+        }
+        guard let topic = payload["topic"] as? String, var observers = topics[topic] else { return nil }
+        if raw["kind"] as? String == "realtime.gap" {
+            finish(topic, throwing: GatewayClientError.server("实时事件中断，正在恢复历史记录"))
+            return topic
+        }
+        guard raw["kind"] as? String == "realtime.event",
+              let event = try JSONDecoder().decode(RealtimeServerFrame.self, from: data).runEvent else { return nil }
+        for (id, observer) in observers where observer.sequence < event.sequence {
+            observers[id]?.sequence = event.sequence
+            observer.continuation.yield(event)
+        }
+        topics[topic] = observers
+        guard event.isTerminal else { return nil }
+        finish(topic, throwing: nil)
+        return topic
+    }
+
+    private mutating func finish(_ topic: String, throwing error: Error?) {
+        guard let observers = topics.removeValue(forKey: topic) else { return }
+        for observer in observers.values {
+            observer.continuation.finish(throwing: error)
+        }
+    }
+}
+
+extension GatewayClient {
+    func streamRun(runID: String) -> AsyncThrowingStream<RunStreamEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                let host = await DeviceEndpointPool.shared.host(for: self)
+                do {
+                    try await Self.followRun(runID, on: host, into: continuation)
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private static func followRun(_ runID: String, on host: DeviceEndpointHost, into continuation: DeviceRunSubscriptions.Continuation) async throws {
+        let delays: [Duration] = [.zero, .milliseconds(250), .milliseconds(750), .seconds(2)]
+        var sequence = 0
+        var attempt = 0
+        while !Task.isCancelled {
+            do {
+                for try await event in try await host.subscribeToRun(runID, after: sequence) {
+                    sequence = event.sequence
+                    attempt = 0
+                    if case .terminated = continuation.yield(event) {
+                        return
+                    }
+                    if event.isTerminal {
+                        return
+                    }
+                }
+                return
+            } catch where error is DeviceRunStreamError || error is URLError || (error as? GatewayClientError) == .transport {
+                guard attempt < delays.count else { throw error }
+                try await Task.sleep(for: delays[attempt])
+                attempt += 1
+            }
+        }
+    }
 }
