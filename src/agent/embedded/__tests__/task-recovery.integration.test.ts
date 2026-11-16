@@ -151,7 +151,7 @@ describe('task model recovery over the real execution chain', () => {
       prepareInboundAttachments: async () => undefined, buildTranscriptUserMessage: async (content: string) => ({ role: 'user', content, timestamp: Date.now() }),
       maybeEmitWebchatTts: async () => null,
     } as unknown as ProcessDirectStreamingDeps;
-    gateway = { config: undefined as never, agentService: {
+    gateway = { config: undefined as never, getConfig: () => undefined, agentService: {
       resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => undefined, beginInboundTurn: () => {}, endInboundTurn: () => {},
       turnDispatcher: { processDirectStreaming: (content: string, id: string, origin: unknown, _attachments: unknown, _thinking: unknown, options: object) =>
         runProcessDirectStreaming(deps, { content, conversationId: id, origin, ...options } as never) },

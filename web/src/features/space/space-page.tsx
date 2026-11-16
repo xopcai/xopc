@@ -219,7 +219,7 @@ export function SpacePage() {
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const navigate = useNavigate();
-  const location = useLocation();
+  const routeLocation = useLocation();
   const [params, setParams] = useSearchParams();
   const previewHost = useOutletContext<HTMLDivElement | null>();
   const selectedVersion = params.get('version');
@@ -315,18 +315,18 @@ export function SpacePage() {
   const exactVersion = Boolean(selectedVersion && (targetSheet || proposalId || undoVersion));
   const ownSave = item && workbookSave?.itemId === item.id && workbookSave.versions.includes(item.currentVersion.id)
     ? workbookSave : undefined;
-  const version = ownSave?.locationKey === location.key ? item?.currentVersion
+  const version = ownSave?.locationKey === routeLocation.key ? item?.currentVersion
     : item?.versions.find(entry => entry.id === selectedVersion) ?? (exactVersion ? undefined : item?.currentVersion);
   const workbook = version?.mimeType === SPACE_WORKBOOK_MIME;
   const isLatestWorkbook = workbook && version.id === item?.currentVersion.id;
   const workbookSeed = isLatestWorkbook && ownSave ? ownSave.seed : version?.id;
   useEffect(() => {
     if (navigation.state !== 'unblocked' || !selectedVersion || selectedVersion === version?.id
-      || ownSave?.locationKey !== location.key) return;
+      || ownSave?.locationKey !== routeLocation.key) return;
     const next = new URLSearchParams(params);
     next.delete('version');
     setParams(next, { replace: true });
-  }, [location.key, navigation.state, ownSave, params, selectedVersion, setParams, version?.id]);
+  }, [routeLocation.key, navigation.state, ownSave, params, selectedVersion, setParams, version?.id]);
   const hit = version?.id === item?.currentVersion.id ? items.find(row => row.id === selected)?.hit : undefined;
   const origin = item?.origins.find(row => row.versionId === version?.id && row.available)
     ?? item?.origins.find(row => row.available) ?? item?.origin;
@@ -753,7 +753,7 @@ export function SpacePage() {
                 onCopy={openWorkbook}
                 onSaved={savedVersionId => {
                   setWorkbookSave(current => ({
-                    itemId: item.id, seed: workbookSeed!, locationKey: location.key,
+                    itemId: item.id, seed: workbookSeed!, locationKey: routeLocation.key,
                     versions: [...new Set([...(current?.seed && current.seed === workbookSeed ? current.versions : [version.id]), savedVersionId])],
                   }));
                   void getSpaceDetail(spaceItemPath(item.id)).then(fresh => applyWorkbookDetail(fresh, savedVersionId)).catch(() => {});
