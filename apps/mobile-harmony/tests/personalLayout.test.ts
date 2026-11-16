@@ -4,13 +4,13 @@ import { describe, expect, it } from 'vitest';
 const personal = readFileSync(new URL('../entry/src/main/ets/view/PersonalView.ets', import.meta.url), 'utf8');
 const settings = readFileSync(new URL('../entry/src/main/ets/view/SettingsView.ets', import.meta.url), 'utf8');
 const components = readFileSync(new URL('../entry/src/main/ets/view/MobileComponents.ets', import.meta.url), 'utf8');
+const home = readFileSync(new URL('../entry/src/main/ets/view/HomeView.ets', import.meta.url), 'utf8');
 
 describe('personal page card layout', () => {
   it('links the configured assistant, personal information and goals from the profile page', () => {
-    expect(personal).toContain('this.record?.displayName');
-    expect(personal).toContain("page: 'personal-agent-profile'");
-    expect(personal).toContain("page: 'about-you'");
-    expect(personal).toContain("page: 'personal-goals'");
+    expect(home).toContain("page === 'personal-agent-profile'");
+    expect(home).toContain("page === 'about-you'");
+    expect(home).toContain("page === 'personal-goals'");
     expect(personal).toContain('.bindSheet($$this.goalEditorOpen, this.goalEditor');
   });
 

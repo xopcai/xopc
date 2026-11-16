@@ -12,27 +12,22 @@ describe('workspace list loading layout', () => {
     );
   });
 
-  it('shows file refresh progress in the toolbar without adding a loading row', () => {
+  it('keeps file search above navigable rows without adding a loading row', () => {
     const listStart = files.indexOf('List({ space: 0 })');
-    const progress = files.indexOf('if (this.model.busy) { XopcBrandLoading({ compact: true }) }');
-    expect(progress).toBeGreaterThan(files.indexOf("placeholder: $r('app.string.search')"));
-    expect(progress).toBeLessThan(listStart);
+    expect(listStart).toBeGreaterThan(files.indexOf("placeholder: $r('app.string.search')"));
     expect(files.slice(listStart)).not.toContain('XopcListSkeleton');
   });
 
-  it('uses icon-only refresh controls with accessible labels', () => {
+  it('uses list loading placeholders instead of a text refresh control', () => {
     const workspaceList = workspace.slice(workspace.indexOf('  list() {'), workspace.indexOf('  automationDetail('));
-    for (const source of [workspaceList, files]) {
-      expect(source).not.toContain("Button($r('app.string.refresh'))");
-      expect(source).toContain("SymbolGlyph($r('sys.symbol.arrow_clockwise'))");
-      expect(source).toContain(".accessibilityText($r('app.string.refresh'))");
-    }
+    expect(workspaceList).not.toContain("Button($r('app.string.refresh'))");
+    expect(workspaceList).toContain('ListItem() { XopcListSkeleton() }');
   });
 
   it('renders file spaces as navigable rows instead of emphasized pill buttons', () => {
     expect(files).not.toContain('Button(space.title)');
     expect(files).toContain("XopcHubRow({ heading: space.title, symbol: $r('sys.symbol.folder')");
-    expect(files).toContain('.backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))');
+    expect(files).toContain('compact: true,');
   });
 
   it('keeps note content primary and moves secondary actions into a sheet', () => {

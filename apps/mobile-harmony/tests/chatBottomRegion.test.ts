@@ -78,7 +78,8 @@ describe('chat bottom region composition', () => {
 
   it('opens the configured personal conversation and ordinary drafts from distinct sidebar controls', () => {
     expect(sidebar).toContain('this.personalAgent?.displayName');
-    expect(sidebar).toContain("id('chat-sidebar-personal')");
+    expect(sidebar).toContain("this.shortcut($r('app.string.chat_personal_agent'), undefined, 'personal')");
+    expect(sidebar).toContain(".id('chat-sidebar-' + page)");
     expect(sidebar).toContain("id('chat-sidebar-new')");
     expect(sidebar).toContain("item.key !== this.personalAgent?.conversationId");
     expect(home).toContain('this.personalAgent.openOrCreate()');

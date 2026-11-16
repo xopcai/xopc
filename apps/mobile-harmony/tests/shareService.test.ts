@@ -28,11 +28,11 @@ describe('Harmony governed sharing service', () => {
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: preview }));
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: share }));
     const loaded = await service.sessionPreview('conversation/1');
-    await expect(service.session('conversation/1', loaded)).resolves.toMatchObject(share);
+    await expect(service.session('conversation/1', loaded, 86400000, [])).resolves.toMatchObject(share);
     expect(mocks.request).toHaveBeenLastCalledWith('/api/sessions/conversation%2F1/shares', 'POST', JSON.stringify({
       expectedTranscriptId: 'transcript-1', expectedCutoffSeq: 12,
       expectedMetadataUpdatedAt: '2026-09-22T00:00:00.000Z', ttlMs: 86400000,
-      maxViews: null, includeToolActivities: true
+      maxViews: null, includeToolActivities: false, attachmentIds: []
     }));
   });
 
