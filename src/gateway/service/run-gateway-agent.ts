@@ -64,7 +64,7 @@ export type RunGatewayAgentOptions = {
 };
 
 export type RunGatewayAgentDeps = {
-  config: Config;
+  getConfig: () => Config;
   agentService: AgentService;
   bus: MessageBus;
   runAbortControllers: Map<string, AbortController>;
@@ -75,7 +75,6 @@ export type RunGatewayAgentDeps = {
   publishRealtime: (topic: string, event: string, data: unknown) => void;
   completeRealtimeTopic: (topic: string) => void;
   reactions?: AgentReactionService;
-  canReact?: (endpointId: string) => boolean;
 };
 
 /**
@@ -178,7 +177,7 @@ export async function *runGatewayAgent(
       context: executionContext,
       inputOrigin: origin,
       fallbackObjective: message,
-      timeoutMs: executionContext.taskId ? resolveAgentTurnTimeoutMs(deps.config, webchatConversationId) : undefined,
+      timeoutMs: executionContext.taskId ? resolveAgentTurnTimeoutMs(deps.getConfig(), webchatConversationId) : undefined,
     });
   }
   const mapper = new ChatStreamMapper({ runId, conversationId: streamConversationId, channel,
@@ -267,26 +266,24 @@ export async function *runGatewayAgent(
         publishRealtime('sessions', 'run.started', { conversationId, runId, ...runOptions?.inputIdentity });
         const identity = runOptions?.inputIdentity;
         const reactions = deps.reactions;
+        const reactionsEnabled = () => reactions?.isEnabled(webchatMetadata!.agentId, deps.getConfig()) === true;
         if (personalTurn && reactions && webchatTranscriptId && !runOptions?.presentation && !runOptions?.taskRunId
-          && identity && origin.type === 'endpoint' && deps.config.experimental?.personalAgentMessageReactions) {
+          && identity && origin.type === 'endpoint' && reactionsEnabled()) {
           const target = { ...identity, conversationId, runId, transcriptId: webchatTranscriptId,
             actorAgentId: webchatMetadata!.agentId };
           const publish = (reaction: SessionAgentReaction): void => {
             publishReactionFallback = undefined;
             publishRealtime('sessions', 'session.agent-reaction', reaction);
           };
-          publishReactionFallback = () => reactions.publishFallback(target, publish);
-          const endpointId = origin.endpointId;
-          if (deps.canReact?.(endpointId)) {
-            reactionWindow = new AbortController();
-            reactionPending = true;
-            void reactions.consider({ target, text: message, started: runStartedMonotonic,
-              signal: AbortSignal.any([mergedSignal, reactionWindow.signal]),
-              eligible: () => deps.canReact?.(endpointId) === true, publish }).catch(() => {}).finally(() => {
-              reactionPending = false;
-              publishReactionFallback?.();
-            });
-          }
+          publishReactionFallback = () => reactions.publishFallback(target, deps.getConfig(), publish);
+          reactionWindow = new AbortController();
+          reactionPending = true;
+          void reactions.consider({ target, text: message, started: runStartedMonotonic,
+            signal: AbortSignal.any([mergedSignal, reactionWindow.signal]),
+            eligible: reactionsEnabled, publish }).catch(() => {}).finally(() => {
+            reactionPending = false;
+            publishReactionFallback?.();
+          });
         }
       }
       let streamError: string | undefined;

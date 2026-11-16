@@ -1,6 +1,6 @@
 /** Stage the minimal Electron app directory consumed by electron-builder. */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -172,6 +172,13 @@ export function prepareElectronPackDir(
   installRuntimeDeps(packDir, target);
   prepareCuaSdkRuntime(packDir, target);
   pruneElectronPdfjsRuntime(packDir);
+  // The packaged workbook engine loads Univer through CommonJS. The renderer already bundles its own modules.
+  const univerRoot = join(packDir, 'node_modules', '@univerjs');
+  for (const name of readdirSync(univerRoot)) {
+    const lib = join(univerRoot, name, 'lib');
+    if (!existsSync(join(lib, 'cjs'))) continue;
+    for (const format of ['es', 'umd']) rmSync(join(lib, format), { recursive: true, force: true });
+  }
   stageNodePtyRuntime(repoRoot, packDir, target);
   stageRipgrepBinary(packDir, target);
   stageVoiceHotkeyHelper(repoRoot, packDir, target);

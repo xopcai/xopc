@@ -22,16 +22,34 @@ let root: ReturnType<typeof createRoot>;
 beforeEach(async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   let profile = { agentId: 'personal', conversationId: 'conversation-1', state: 'ready', displayName: 'Ada',
-    appearance: 'loopi', voicePreference: null, voiceCallPreferences: { openingGreetingEnabled: true, enginePreference: 'natural' }, revision: 1 };
+    appearance: 'loopi', voicePreference: null, voiceCallPreferences: { openingGreetingEnabled: true, enginePreference: 'natural' },
+    messageReactionsEnabled: false, revision: 1 };
   vi.mocked(fetchJson).mockImplementation(async (url, options) => {
     if (String(url).includes('/api/voice/boson')) return { payload: { credentialSource: 'env', defaultForNatural: true, voice: 'default', legacyModel: null } };
     if (options?.method === 'PATCH') profile = { ...profile, ...JSON.parse(String(options.body)), revision: profile.revision + 1 };
     return { ok: true, payload: profile };
   });
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
-  await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><PersonalProfileSettings zh={false} /></MemoryRouter></SWRConfig>));
+  await act(async () => root.render(<SWRConfig value={{ provider: () => new Map() }}><MemoryRouter><PersonalProfileSettings zh={false} showMessageReactions /></MemoryRouter></SWRConfig>));
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.clearAllMocks(); });
+
+it('saves a single message reactions preference in either direction', async () => {
+  const switches = container.querySelectorAll<HTMLButtonElement>('[role="switch"]');
+  expect(switches).toHaveLength(1);
+  const toggle = switches[0]!;
+  expect(toggle.getAttribute('aria-label')).toBe('Message reactions');
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute('aria-checked')).toBe('true');
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  const patches = vi.mocked(fetchJson).mock.calls.filter(([, options]) => options?.method === 'PATCH');
+  expect(patches.map(([, options]) => JSON.parse(String(options?.body)))).toEqual([
+    expect.objectContaining({ revision: 1, messageReactionsEnabled: true }),
+    expect.objectContaining({ revision: 2, messageReactionsEnabled: false }),
+  ]);
+});
 
 it('edits the avatar on the settings page and saves the chosen appearance', async () => {
   const avatar = container.querySelector<HTMLButtonElement>('[aria-label="Choose avatar"]')!;

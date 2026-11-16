@@ -44,6 +44,8 @@ describe('prepare-electron-pack-dir', () => {
       existsSync(join(packDir, 'node_modules/@img', `sharp-${process.platform}-${process.arch}`)),
     ).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
+    expect(existsSync(join(packDir, 'node_modules/@univerjs/engine-formula/lib/cjs/index.js'))).toBe(true);
+    expect(existsSync(join(packDir, 'node_modules/@univerjs/engine-formula/lib/es'))).toBe(false);
     expect(existsSync(join(packDir, 'node_modules/tar'))).toBe(false);
     expect(existsSync(join(packDir, 'node_modules/@huggingface/transformers'))).toBe(false);
     expect(existsSync(join(packDir, 'node_modules/onnxruntime-node'))).toBe(false);

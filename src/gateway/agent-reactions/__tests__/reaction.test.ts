@@ -18,6 +18,7 @@ import { activeReactionEntry, commitAgentReaction, readAgentReactions, reactionC
 import { appendTranscriptEntry, closeXopcDatabase, ensureSessionRecord, getCurrentTranscriptId, openXopcDatabase } from '../../../storage/sqlite/index.js';
 import { claimNextSessionInput, finishSessionInputRun, insertSessionInput } from '../../../storage/sqlite/session-input-repository.js';
 import { resetSessionRecord } from '../../../storage/sqlite/session-repository.js';
+import { setSessionConfig } from '../../../storage/sqlite/config-repository.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { AGENT_REACTION_DEADLINE_MS, AgentReactionService, parseReactionDecision, reactionText } from '../reaction.js';
 
@@ -29,6 +30,8 @@ describe('Personal Agent message reaction', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-reactions-'));
+    vi.stubEnv('XOPC_STATE_DIR', dir);
+    vi.stubEnv('XOPC_WORKSPACE', dir);
     openXopcDatabase({ path: join(dir, 'xopc.db') });
     const catalog = new AgentCatalogRepository();
     catalog.ensureInitialized();
@@ -40,14 +43,15 @@ describe('Personal Agent message reaction', () => {
 
   afterEach(() => {
     closeXopcDatabase();
+    vi.unstubAllEnvs();
     rmSync(dir, { recursive: true, force: true });
   });
 
-  function input(text: string) {
+  function input(text: string, endpointId = 'web-test') {
     const target = { inputId: randomUUID(), clientMessageId: randomUUID(), runId: randomUUID(), conversationId, transcriptId, actorAgentId };
     insertSessionInput({ id: target.inputId, conversationId, clientMessageId: target.clientMessageId, expectedTranscriptId: transcriptId,
       requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: text,
-      origin: { type: 'endpoint', endpointId: 'mobile-test' } });
+      origin: { type: 'endpoint', endpointId } });
     getSqliteDatabase().prepare(`INSERT INTO session_input_receipts
       (conversation_id, client_message_id, principal_id, request_hash, input_id, transcript_id, accepted_at)
       VALUES (?, ?, 'test-principal', 'hash', ?, ?, ?)`).run(conversationId, target.clientMessageId, target.inputId, transcriptId, Date.now());
@@ -132,35 +136,64 @@ describe('Personal Agent message reaction', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it.each(['personalized', 'abstain', 'fast', 'timeout'] as const)('synchronizes a reaction through realtime and history (%s)', async scenario => {
+  it.each([
+    ['personalized', 'web-test'],
+    ['personalized', 'desktop-test'],
+    ['personalized', 'ios-test'],
+    ['personalized', 'android-test'],
+    ['personalized', 'harmonyos-test'],
+    ['abstain', 'web-test'],
+    ['fast', 'web-test'],
+    ['timeout', 'web-test'],
+  ] as const)('synchronizes a %s reaction through realtime and history (%s)', async (scenario, endpointId) => {
     const past = input('An older message');
     past.start(); past.append();
     finishSessionInputRun(conversationId, past.target.runId, 'completed');
-    const turn = input('We shipped!');
+    const turn = input('We shipped!', endpointId);
     turn.start();
     const slow = scenario !== 'fast';
     const expectedEmoji = scenario === 'personalized' ? '🎉' : '💬';
     const auth = { mode: 'token' as const, token: 'reaction-test-token' };
-    const config = ConfigSchema.parse({ gateway: { auth }, experimental: { personalAgentMessageReactions: true } });
+    const useSettings = scenario === 'personalized' && endpointId === 'web-test';
+    const config = ConfigSchema.parse({ gateway: { auth }, experimental: { personalAgentMessageReactions: useSettings ? undefined : true } });
+    if (useSettings) setSessionConfig(conversationId, { fixedModel: true, modelOverride: 'test/fast' }, dir);
     const sessions = new SessionIndex({ config });
+    const publishRealtime = vi.fn();
     const gateway = createHonoApp({ service: { currentConfig: config, getResolvedAuth: () => auth, isGatewayReady: () => true,
       getActiveWebchatRunId: () => turn.target.runId,
+      realtime: { broker: { publish: publishRealtime } },
       sessions: { getMessagePage: sessions.getSessionMessagePage.bind(sessions) } } as unknown as GatewayService });
     const server = serve({ fetch: gateway.fetch, hostname: '127.0.0.1', port: 0 });
     try {
       if (!server.listening) await once(server, 'listening');
       const address = server.address();
       if (!address || typeof address === 'string') throw new Error('Expected a TCP listener');
-      const path = `http://127.0.0.1:${address.port}/api/sessions/${conversationId}/history`;
+      const base = `http://127.0.0.1:${address.port}`;
+      const path = `${base}/api/sessions/${conversationId}/history`;
       const headers = { Authorization: `Bearer ${auth.token}` };
       expect((await fetch(path)).status).toBe(401);
+      const savePreference = async (enabled: boolean) => {
+        const { payload: { revision, displayName, appearance } } = await (await fetch(base + '/api/personal-agent', { headers })).json();
+        const response = await fetch(base + '/api/personal-agent/profile', {
+          method: 'PATCH',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ revision, displayName, appearance, messageReactionsEnabled: enabled }),
+        });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ payload: { messageReactionsAvailable: true, messageReactionsEnabled: enabled } });
+        expect(publishRealtime).toHaveBeenCalledWith('sessions', 'session.agent-reaction.preference', { conversationId, enabled });
+      };
+      if (useSettings) {
+        const initial = await fetch(base + '/api/personal-agent', { headers });
+        expect(await initial.json()).toMatchObject({ payload: { messageReactionsAvailable: true, messageReactionsEnabled: false } });
+        await savePreference(true);
+      }
       let release!: () => void;
       const finish = new Promise<void>(done => { release = done; });
       let decide!: (emoji: string | null) => void;
       const generate = vi.fn(() => new Promise<string | null>(done => { decide = done; }));
-      const publishRealtime = vi.fn();
       const deps = {
-        config, reactions: new AgentReactionService(generate), canReact: () => true,
+        getConfig: () => config, reactions: new AgentReactionService(generate),
         agentService: { resolveUserTimezoneForSession: () => 'UTC', beginInboundTurn: () => {}, endInboundTurn: () => {},
           turnDispatcher: { processDirectStreaming: async function* () {
             turn.append();
@@ -174,7 +207,7 @@ describe('Personal Agent message reaction', () => {
       const run = (async () => {
         const events = [];
         for await (const event of runGatewayAgent(deps, 'We shipped!', 'webchat', conversationId,
-          { type: 'endpoint', endpointId: 'mobile-test' }, undefined, undefined,
+          { type: 'endpoint', endpointId }, undefined, undefined,
           { runId: turn.target.runId, inputIdentity: { inputId: turn.target.inputId, clientMessageId: turn.target.clientMessageId } })) events.push(event.type);
         return events;
       })();
@@ -208,6 +241,17 @@ describe('Personal Agent message reaction', () => {
         expect(fullMessage.agentReaction).toMatchObject({ emoji: expectedEmoji, entryId: fullMessage.transcriptEntryId });
         expect(compactMessage.agentReaction).toEqual(fullMessage.agentReaction);
       } finally { decide?.(null); release(); await run; }
+      if (useSettings) {
+        await savePreference(false);
+        const disabled = (await (await fetch(path, { headers })).json()).session;
+        expect(disabled.agentReactions).toEqual({ available: true, enabled: false });
+        expect(disabled.messages.every((row: { agentReaction?: unknown }) => !row.agentReaction)).toBe(true);
+        await savePreference(true);
+        const enabled = (await (await fetch(path, { headers })).json()).session;
+        expect(enabled.messages).toEqual(expect.arrayContaining([
+          expect.objectContaining({ agentReaction: expect.objectContaining({ emoji: '🎉' }) }),
+        ]));
+      }
     } finally {
       server.closeAllConnections();
       await new Promise<void>(done => server.close(() => done()));

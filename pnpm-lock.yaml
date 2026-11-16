@@ -104,6 +104,18 @@ importers:
       '@trycua/cua-driver':
         specifier: 0.36.0
         version: 0.36.0
+      '@univerjs/core':
+        specifier: 1.5.0
+        version: 1.5.0(react@19.2.6)(rxjs@7.8.2)
+      '@univerjs/engine-formula':
+        specifier: 1.5.0
+        version: 1.5.0(react@19.2.6)(rxjs@7.8.2)
+      '@univerjs/sheets':
+        specifier: 1.5.0
+        version: 1.5.0(react@19.2.6)(rxjs@7.8.2)
+      '@univerjs/sheets-formula':
+        specifier: 1.5.0
+        version: 1.5.0(react@19.2.6)(rxjs@7.8.2)
       '@vscode/ripgrep':
         specifier: ^1.18.0
         version: 1.18.0
@@ -185,6 +197,9 @@ importers:
       quickjs-wasi:
         specifier: 3.6.2
         version: 3.6.2
+      rxjs:
+        specifier: 7.8.2
+        version: 7.8.2
       semver:
         specifier: ^7.8.1
         version: 7.8.1

@@ -26,6 +26,7 @@ export type PersonalAgent = {
   appearance: PersonalAppearance;
   voiceCallPreferences?: VoiceCallPreferences;
   voicePreference: { provider: string; model: string; voice: string } | null;
+  messageReactionsEnabled?: boolean;
   revision: number;
   errorMessage: string | null;
 };

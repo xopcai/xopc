@@ -57,7 +57,6 @@ import {
 const log = createLogger('Gateway:AgentRunner');
 
 export interface GatewayAgentRunnerOptions {
-  canReact?: (endpointId: string) => boolean;
   canResumeDeviceInteraction?: (conversationId: string, checkpoint: import('@xopcai/gateway-contract').DeviceInteractionCheckpoint) => boolean;
   afterConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput, status: string) => Promise<void>;
   validateConnectionResume?: (input: import('../../storage/sqlite/session-input-repository.js').SessionInput) => Promise<boolean>;
@@ -303,7 +302,7 @@ export class GatewayAgentRunner {
     try {
       const iter = runGatewayAgent(
         {
-          config: this.opts.getConfig(),
+          getConfig: () => this.opts.getConfig(),
           agentService: this.opts.getAgentService(),
           bus: this.opts.bus,
           runAbortControllers: this.runAbortControllers,
@@ -314,7 +313,6 @@ export class GatewayAgentRunner {
           publishRealtime: this.opts.publishRealtime,
           completeRealtimeTopic: this.opts.completeRealtimeTopic,
           reactions: this.reactions,
-          canReact: this.opts.canReact,
         },
         message,
         channel,

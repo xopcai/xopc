@@ -10,7 +10,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import * as Popover from '@radix-ui/react-popover';
 import { AlertCircle, Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { renderUserTurnDocument, resultReferenceId, resultReferenceVersion } from '@xopcai/gateway-contract';
+import { renderUserTurnDocument, resultReferenceId, resultReferenceVersion, spaceWorkbookRoute } from '@xopcai/gateway-contract';
 
 import type {
   ImageContent,
@@ -860,10 +860,12 @@ export const MessageBubble = memo(function MessageBubble({
                 sessionLabel={m.chat.atMention.chats}
                 browserTabLabel={m.chat.atMention.browserTabs}
                 mcpResourceLabel={m.chat.atMention.mcpResources}
+                workbookLabel={language === 'zh' ? '工作簿' : 'Workbook'}
                 truncatedLabel={m.chat.commandPalette.contextTruncated}
                 showMoreLabel={m.chat.contextReferencesMore}
                 showLessLabel={m.chat.contextReferencesLess}
-                onOpen={(ref) => openReferencedNote(ref.sourceId)}
+                onOpen={ref => ref.kind === 'workbook'
+                  ? navigate(spaceWorkbookRoute(ref.sourceId, ref.version)) : openReferencedNote(ref.sourceId)}
               />
             ) : null}
 

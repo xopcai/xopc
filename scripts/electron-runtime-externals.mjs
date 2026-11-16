@@ -11,6 +11,10 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
   'playwright-core',
   'fsevents',
   'pdfjs-dist',
+  '@univerjs/core',
+  '@univerjs/engine-formula',
+  '@univerjs/sheets',
+  '@univerjs/sheets-formula',
 ];
 
 /** Real node_modules packages required by the packaged gateway/extensions. */
@@ -22,6 +26,11 @@ export const ELECTRON_PACKAGED_DEPENDENCIES = [
   '@trycua/cua-driver',
   'quickjs-wasi',
   'pdfjs-dist',
+  '@univerjs/core',
+  '@univerjs/engine-formula',
+  '@univerjs/sheets',
+  '@univerjs/sheets-formula',
+  'rxjs',
 ];
 
 /** Security overrides required by the isolated Electron runtime install. */

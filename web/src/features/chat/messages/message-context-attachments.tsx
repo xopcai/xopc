@@ -9,6 +9,7 @@ import {
   Folder,
   MessagesSquare,
   NotebookPen,
+  Sheet,
 } from 'lucide-react';
 
 import type { MessageContextRef } from '@/features/chat/messages/messages.types';
@@ -25,6 +26,7 @@ export function MessageContextAttachments({
   sessionLabel,
   browserTabLabel,
   mcpResourceLabel,
+  workbookLabel = 'Workbook',
   truncatedLabel,
   showMoreLabel,
   showLessLabel,
@@ -38,6 +40,7 @@ export function MessageContextAttachments({
   sessionLabel: string;
   browserTabLabel: string;
   mcpResourceLabel: string;
+  workbookLabel?: string;
   truncatedLabel: string;
   showMoreLabel: string;
   showLessLabel: string;
@@ -53,9 +56,9 @@ export function MessageContextAttachments({
     <div className="flex min-w-0 flex-col gap-1.5" role="group" aria-label={groupLabel}>
       <div className="flex min-w-0 flex-wrap gap-1.5">
         {visibleRefs.map((ref) => {
-          const interactive = ref.kind === 'note';
+          const interactive = ref.kind === 'note' || ref.kind === 'workbook';
           const Wrapper = interactive ? 'button' : 'div';
-          const kindLabel = ref.kind === 'result' ? fileLabel : ref.kind === 'file'
+          const kindLabel = ref.kind === 'workbook' ? workbookLabel : ref.kind === 'result' ? fileLabel : ref.kind === 'file'
             ? ref.fileKind === 'directory' ? folderLabel : fileLabel
             : ref.kind === 'session'
               ? sessionLabel
@@ -76,7 +79,9 @@ export function MessageContextAttachments({
               title={ref.truncated ? truncatedLabel : ref.title}
             >
               <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent-fg">
-                {ref.kind === 'file' && ref.fileKind === 'directory' ? (
+                {ref.kind === 'workbook' ? (
+                  <Sheet className="size-3.5" aria-hidden />
+                ) : ref.kind === 'file' && ref.fileKind === 'directory' ? (
                   <Folder className="size-3.5" aria-hidden />
                 ) : ref.kind === 'file' || ref.kind === 'result' ? (
                   <FileText className="size-3.5" aria-hidden />

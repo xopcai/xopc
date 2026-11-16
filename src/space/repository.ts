@@ -11,6 +11,7 @@ import { MEDIA_ARTIFACT_MAX_BYTES, resolveMediaBufferPath } from '../media/store
 import { escapeFts5Query, escapeSqlLike } from '../storage/sqlite/fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { archiveSpaceContent, spaceMarkdown, SPACE_VIDEO_MAX_BYTES } from './ingest.js';
+import { purgeWorkbookProposals } from './workbook-proposals.js';
 
 type VersionRow = {
   id: string; item_id: string; ordinal: number; file_name: string; mime_type: string; size_bytes: number;
@@ -256,6 +257,7 @@ export function purgeSpaceItem(id: string, revision: number): 'ok' | 'missing' |
     const row = db.prepare('SELECT revision, trashed_at FROM space_items WHERE id = ?').get(id);
     if (!row) return 'missing';
     if (row.revision !== revision || row.trashed_at === null) return 'conflict';
+    purgeWorkbookProposals(id);
     db.prepare('DELETE FROM space_search WHERE version_id IN (SELECT id FROM space_versions WHERE item_id = ?)').run(id);
     db.prepare('DELETE FROM space_search_short WHERE version_id IN (SELECT id FROM space_versions WHERE item_id = ?)').run(id);
     db.prepare('INSERT OR IGNORE INTO space_media_cleanup SELECT media_id FROM space_versions WHERE item_id = ? AND media_id IS NOT NULL').run(id);

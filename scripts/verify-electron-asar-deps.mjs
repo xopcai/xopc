@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /** Verify the packaged Electron app contains only the minimal runtime layout. */
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { writeFinishedDesktopInventory } from './verify-desktop-inventory.mjs';
@@ -78,6 +78,15 @@ function verifyUnpackedAppLayout(asarPath) {
   if (missing.length > 0) {
     console.error(`[verify-electron-asar-deps] missing runtime paths: ${missing.join(', ')}`);
     process.exit(1);
+  }
+  const gatewayRequire = createRequire(join(unpackedDir, 'out/server/gateway.js'));
+  const packagedModules = realpathSync(join(unpackedDir, 'node_modules')) + sep;
+  for (const name of ['rxjs', '@univerjs/core/facade', '@univerjs/engine-formula/facade', '@univerjs/sheets/facade', '@univerjs/sheets-formula/facade']) {
+    const resolved = gatewayRequire.resolve(name);
+    if (!resolved.startsWith(packagedModules)) {
+      throw new Error(`Packaged workbook runtime resolved outside the app: ${name}`);
+    }
+    gatewayRequire(name);
   }
   console.log('[verify-electron-asar-deps] OK — unpacked app runtime layout present');
 }

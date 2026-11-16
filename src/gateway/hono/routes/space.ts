@@ -1,9 +1,10 @@
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import { SpacePatchSchema, SpaceSaveReplySchema, SpaceSaveVersionSchema } from '@xopcai/gateway-contract';
+import { SpacePatchSchema, SpaceSaveReplySchema, SpaceSaveVersionSchema, SpaceWorkbookActionSchema } from '@xopcai/gateway-contract';
 
-import { createSpaceWorkbook, createSpaceWorkbookSchema, openSpaceBudgetWorkbook, saveSpaceWorkbook, saveSpaceWorkbookSchema, SPACE_WORKBOOK_MAX_BYTES } from '../../../space/budget-workbook.js';
+import { createSpaceWorkbook, createSpaceWorkbookSchema, loadSpaceWorkbook, openSpaceBudgetWorkbook, saveSpaceWorkbook, saveSpaceWorkbookSchema, SPACE_WORKBOOK_MAX_BYTES, undoSpaceWorkbookVersion } from '../../../space/budget-workbook.js';
+import { applyWorkbookProposal, findWorkbookProposal, workbookProposalView } from '../../../space/workbook-proposals.js';
 import { changeSpaceItem, findSpaceArtifact, findSpaceTaskDelivery, getSpaceItem, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply, saveSpaceVersion } from '../../../space/repository.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -56,6 +57,25 @@ export function registerSpaceRoutes(app: Hono, deps: AuthenticatedRouteDeps): vo
     const input = saveSpaceWorkbookSchema.safeParse(await c.req.json().catch(() => null));
     if (!input.success) return c.json({ error: 'Invalid workbook snapshot' }, 400);
     const result = saveSpaceWorkbook(c.req.param('id'), input.data);
+    return typeof result !== 'string' ? c.json(result) : c.json({ error: result }, result === 'missing' ? 404 : 409);
+  });
+  app.get('/api/spaces/items/:id/workbook-actions', c => {
+    const input = z.uuid().safeParse(c.req.query('proposal'));
+    const proposal = input.success ? findWorkbookProposal(input.data) : undefined;
+    if (!proposal || proposal.id !== c.req.param('id') || !loadSpaceWorkbook(proposal.id)) return c.json({ error: 'Proposal is unavailable' }, 404);
+    return c.json(workbookProposalView(proposal));
+  });
+  app.post('/api/spaces/items/:id/workbook-actions', limited, async c => {
+    const input = SpaceWorkbookActionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!input.success) return c.json({ error: 'Invalid workbook action' }, 400);
+    const id = c.req.param('id');
+    if (input.data.action === 'undo') {
+      const result = undoSpaceWorkbookVersion(id, input.data.versionId, input.data.sourceVersionId);
+      return typeof result === 'string' ? c.json({ error: result }, 409) : c.json(result);
+    }
+    const proposal = findWorkbookProposal(input.data.proposalId);
+    if (!proposal || proposal.id !== id) return c.json({ error: 'Proposal is unavailable' }, 404);
+    const result = await applyWorkbookProposal(proposal, { allowReviewedChanges: true, assertWritable: () => {} });
     return typeof result !== 'string' ? c.json(result) : c.json({ error: result }, result === 'missing' ? 404 : 409);
   });
   app.patch('/api/spaces/items/:id', limited, async c => {

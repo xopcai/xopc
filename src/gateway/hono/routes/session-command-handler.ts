@@ -7,6 +7,7 @@ import { deviceTurnSourceContext, endpointClaimBelongsToPrincipal } from '../../
 import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
 import { validateWebchatAttachments, validateWebchatContent } from '../../chat-limits.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { receiveSessionCommand, sessionCommandSnapshot } from '../../service/session-command-service.js';
 import { getSessionInputReceipt, isConversationDeleted, SessionCommandError, retrySessionPreparation } from '../../../storage/sqlite/session-creation-repository.js';
 import { z } from 'zod';
@@ -37,6 +38,9 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
   const command = parsed.data;
   const principal = getGatewayPrincipal(c);
   if ('input' in command) {
+    if (command.input.contextRefs?.some(ref => ref.kind === 'workbook') && !hasGatewayScope(principal.scopes, 'workspace.read')) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Workbook context requires workspace access' } }, 403);
+    }
     const origin = command.origin.type === 'endpoint' ? endpointTurnClaimSchema.safeParse(command.origin) : null;
     if (origin && (!origin.success || !deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token))) {
       return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);

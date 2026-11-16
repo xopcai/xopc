@@ -21,6 +21,7 @@ type ProfileChanges = {
   appearance?: PersonalAppearance;
   voicePreference?: PersonalAgent['voicePreference'];
   voiceCallPreferences?: VoiceCallPreferencesPatch;
+  messageReactionsEnabled?: boolean;
 };
 
 const APPEARANCES = [
@@ -29,9 +30,10 @@ const APPEARANCES = [
   { id: 'loopi-care', zh: '温和', en: 'Gentle', color: 'bg-violet-100/50 dark:bg-violet-400/10' },
 ] as const;
 
-export function PersonalProfileSettings({ zh, onOpenVoiceServices }: {
+export function PersonalProfileSettings({ zh, onOpenVoiceServices, showMessageReactions = false }: {
   zh: boolean;
   onOpenVoiceServices?: () => void;
+  showMessageReactions?: boolean;
 }) {
   const [record, setRecord] = useState<PersonalAgent | null>(null);
   const recordRef = useRef<PersonalAgent | null>(null);
@@ -48,11 +50,12 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices }: {
     setError(null);
     try {
       const response = await fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent'));
+      const previous = recordRef.current;
       recordRef.current = response.payload;
       setRecord(response.payload);
       if (response.payload) {
-        setDisplayName(response.payload.displayName);
-        setAppearance(response.payload.appearance);
+        if (response.payload.displayName !== previous?.displayName) setDisplayName(response.payload.displayName);
+        if (response.payload.appearance !== previous?.appearance) setAppearance(response.payload.appearance);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -71,6 +74,18 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices }: {
     window.addEventListener('personal-agent-updated', updateProfile);
     return () => window.removeEventListener('personal-agent-updated', updateProfile);
   }, []);
+  useEffect(() => {
+    if (!showMessageReactions) return;
+    const onReactionPreference = (event: Event) => {
+      const detail = (event as CustomEvent<{ conversationId: string; enabled: boolean }>).detail;
+      if (!detail || detail.conversationId !== recordRef.current?.conversationId) return;
+      profileUpdateQueueRef.current = profileUpdateQueueRef.current.then(() => {
+        if (detail.enabled !== recordRef.current?.messageReactionsEnabled) return refresh();
+      });
+    };
+    window.addEventListener('session-agent-reaction-preference', onReactionPreference);
+    return () => window.removeEventListener('session-agent-reaction-preference', onReactionPreference);
+  }, [refresh, showMessageReactions]);
   const { data: boson, error: bosonError } = useSWR(record?.state === 'ready' ? apiUrl(bosonVoiceSettingsUrl) : null, fetchBosonVoiceSettings);
 
   const queueProfileUpdate = useCallback((changes: ProfileChanges, lockFields = true): Promise<boolean> => {
@@ -84,12 +99,14 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices }: {
       const voicePreference = changes.voicePreference === undefined ? current.voicePreference : changes.voicePreference;
       if (displayName === current.displayName && appearance === current.appearance
         && JSON.stringify(voicePreference) === JSON.stringify(current.voicePreference)
+        && (changes.messageReactionsEnabled === undefined || changes.messageReactionsEnabled === current.messageReactionsEnabled)
         && !changes.voiceCallPreferences) return true;
       try {
         const response = await fetchJson<ApiResult<PersonalAgent>>(apiUrl('/api/personal-agent/profile'), {
           method: 'PATCH',
           body: JSON.stringify({ revision: current.revision, displayName, appearance,
             ...(changes.voicePreference !== undefined ? { voicePreference } : {}),
+            ...(changes.messageReactionsEnabled !== undefined ? { messageReactionsEnabled: changes.messageReactionsEnabled } : {}),
             ...(changes.voiceCallPreferences ? { voiceCallPreferences: changes.voiceCallPreferences } : {}) }),
         });
         recordRef.current = response.payload;
@@ -97,13 +114,14 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices }: {
         window.dispatchEvent(new CustomEvent('personal-agent-updated', { detail: response.payload }));
         return true;
       } catch (cause) {
+        if (cause instanceof Error && 'status' in cause && cause.status === 409) await refresh();
         setError(cause instanceof Error ? cause.message : String(cause));
         return false;
       }
     }).finally(() => { if (lockFields) setSavingCount(count => count - 1); });
     profileUpdateQueueRef.current = update;
     return update;
-  }, []);
+  }, [refresh]);
 
   const uploadAvatar = async (file: File) => {
     if (!record || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
@@ -144,7 +162,9 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices }: {
     <Link to="/personal" className="text-accent hover:underline">{zh ? '前往 Ada 完成设置' : 'Finish setting up Ada'}</Link>
     {error ? <button type="button" onClick={() => void refresh()} className="ml-3 text-accent hover:underline">{zh ? '重试' : 'Retry'}</button> : null}
   </div>;
-  return <section className="space-y-5" aria-label={zh ? 'Ada 资料与通话设置' : 'Ada profile and call settings'}>
+  const messageReactionsLabel = zh ? '消息表情' : 'Message reactions';
+  const messageReactionsEnabled = record.messageReactionsEnabled === true;
+  return <section className="space-y-5" aria-label={zh ? 'Ada 助手设置' : 'Ada assistant settings'}>
     <div className="relative flex flex-col items-center text-center">
       <button type="button" disabled={uploadingAvatar} onClick={() => setShowAppearanceChoices(open => !open)} aria-expanded={showAppearanceChoices} aria-controls="personal-appearance-options" aria-label={zh ? '选择头像' : 'Choose avatar'} className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
         <PersonalAvatar appearance={appearance} agentId={record.agentId} className="size-16" />
@@ -183,6 +203,17 @@ export function PersonalProfileSettings({ zh, onOpenVoiceServices }: {
           const response = await fetchJson<ApiResult<PersonalAgent | null>>(apiUrl('/api/personal-agent'));
           if (response.ok && response.payload) { recordRef.current = response.payload; setRecord(response.payload); }
         }} />
+        {showMessageReactions && <div className="flex min-h-12 items-center justify-between gap-4 rounded-xl border border-edge px-4">
+          <span className="text-sm font-medium text-fg">{messageReactionsLabel}</span>
+          <button type="button" role="switch" aria-label={messageReactionsLabel} aria-checked={messageReactionsEnabled}
+            disabled={savingCount > 0}
+            onClick={() => void queueProfileUpdate({ messageReactionsEnabled: !messageReactionsEnabled })}
+            className="group touch-target flex shrink-0 items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60">
+            <span aria-hidden className="flex h-6 w-11 items-center rounded-full bg-fg-muted/30 p-0.5 transition-colors group-aria-checked:bg-accent motion-reduce:transition-none">
+              <span className="size-5 rounded-full bg-white transition-transform group-aria-checked:translate-x-5 motion-reduce:transition-none" />
+            </span>
+          </button>
+        </div>}
         <PersonalCallSettings preferences={record.voiceCallPreferences} settings={boson} failed={Boolean(bosonError)} disabled={savingCount > 0} zh={zh} onOpenServices={onOpenVoiceServices}
           onChange={voiceCallPreferences => queueProfileUpdate({ voiceCallPreferences }, voiceCallPreferences.enginePreference === undefined)}>
           {active => <PersonalVoiceSetting active={active} onOpenServices={onOpenVoiceServices} onGreetingChange={openingGreetingEnabled => queueProfileUpdate({ voiceCallPreferences: { openingGreetingEnabled } }, false)} record={record} zh={zh} onSelectVoice={voicePreference => queueProfileUpdate({ voicePreference })} />}

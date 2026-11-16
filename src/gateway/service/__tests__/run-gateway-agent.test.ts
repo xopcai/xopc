@@ -66,7 +66,7 @@ describe('runGatewayAgent', () => {
       yield { type: 'message_end', message: { role: 'assistant', content: [] } };
     });
     const deps = {
-      config: {}, agentService: {
+      getConfig: () => ({}), agentService: {
         resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: prepare,
         beginInboundTurn: () => {}, endInboundTurn: () => {},
         turnDispatcher: { processDirectStreaming: process },
@@ -115,7 +115,7 @@ describe('runGatewayAgent', () => {
       const start = vi.spyOn(TaskRunCoordinator, 'start');
       try {
         const deps = {
-          config: {}, agentService: {
+          getConfig: () => ({}), agentService: {
             resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => undefined,
             beginInboundTurn: () => {}, endInboundTurn: () => {},
             turnDispatcher: { processDirectStreaming: async function* () {} },
@@ -191,7 +191,7 @@ describe('runGatewayAgent', () => {
     const conversationId = "d3dcfc3b-3238-4056-8feb-c95014705996";
     const broadcastEvents: Array<{ event?: { type?: string } }> = [];
     const deps = {
-      config: {},
+      getConfig: () => ({}),
       agentService: {
         resolveUserTimezoneForSession: () => 'UTC',
         prepareInboundAttachments: async () => undefined,
@@ -254,7 +254,7 @@ describe('runGatewayAgent', () => {
     const emitted: Array<{ type: string; payload: unknown }> = [];
 
     const deps = {
-      config: {},
+      getConfig: () => ({}),
       agentService: {
         resolveUserTimezoneForSession: () => 'UTC',
         prepareInboundAttachments: async () => undefined,
@@ -321,7 +321,7 @@ describe('runGatewayAgent', () => {
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
     const deps = {
-      config: {},
+      getConfig: () => ({}),
       agentService: {
         resolveUserTimezoneForSession: () => 'UTC',
         prepareInboundAttachments: async () => undefined,
@@ -440,7 +440,7 @@ describe('runGatewayAgent', () => {
     const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
     const completedTopics: string[] = [];
     const deps = {
-      config: {},
+      getConfig: () => ({}),
       agentService: {
         resolveUserTimezoneForSession: () => { throw new Error('timezone setup failed'); },
         beginInboundTurn: () => {},
@@ -492,7 +492,7 @@ describe('runGatewayAgent', () => {
     const controller = new AbortController();
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const deps = {
-      config: {}, bus: {}, runAbortControllers: new Map(), activeWebchatRunBySession: new Map(), activeExecutionBySession: new Map(),
+      getConfig: () => ({}), bus: {}, runAbortControllers: new Map(), activeWebchatRunBySession: new Map(), activeExecutionBySession: new Map(),
       sessionIndex: { getSessionMetadata: async () => ({ transcriptId: 'session-test' }), updateSessionMetadata: async () => {} },
       agentService: {
         resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => undefined,

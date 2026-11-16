@@ -274,10 +274,12 @@ function ManageBuiltinProvider({
 
   useEffect(() => {
     if (!oauthSessionId || !oauthLoading) return;
+    let active = true;
     const intervalId = window.setInterval(() => {
       void (async () => {
         try {
           const status = await fetchOAuthSessionStatus(oauthSessionId);
+          if (!active) return;
           if (status.status === 'waiting_auth' || status.status === 'waiting_code') {
             setOAuthStatus(status.status === 'waiting_code' ? 'waiting_code' : 'waiting');
             setOAuthMessage(status.message ?? null);
@@ -289,6 +291,7 @@ function ManageBuiltinProvider({
               void openOAuthAuthorizationUrl(status.authUrl, oauthPopupRef.current).catch(() => {});
             }
           } else if (status.status === 'completed') {
+            active = false;
             window.clearInterval(intervalId);
             closeOAuthAuthorizationWindow(oauthPopupRef.current);
             oauthPopupRef.current = null;
@@ -299,19 +302,27 @@ function ManageBuiltinProvider({
               onClose();
             }, 600);
           } else if (status.status === 'failed' || status.status === 'cancelled') {
+            active = false;
             window.clearInterval(intervalId);
             closeOAuthAuthorizationWindow(oauthPopupRef.current);
             oauthPopupRef.current = null;
+            setOAuthSessionId(null);
             setOAuthStatus('error');
-            setOAuthMessage(status.error ?? status.message ?? providerLabels.revokeFailed);
+            const rejectedGrant = providerId === 'openai' && /"error"\s*:\s*"invalid_grant"/.test(status.error ?? '');
+            setOAuthMessage(rejectedGrant
+              ? providerLabels.oauthGrantRejected
+              : status.error ?? status.message ?? providerLabels.revokeFailed);
           }
         } catch {
           // Keep polling; transient gateway reloads should not kill the flow.
         }
       })();
     }, 1000);
-    return () => window.clearInterval(intervalId);
-  }, [oauthSessionId, oauthLoading, onClose, onSaved, providerLabels.revokeFailed, providerLabels.saved]);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [oauthSessionId, oauthLoading, onClose, onSaved, providerId, providerLabels.oauthGrantRejected, providerLabels.revokeFailed, providerLabels.saved]);
 
   useEffect(() => {
     return () => {
@@ -345,6 +356,7 @@ function ManageBuiltinProvider({
     setAuthUrl(null);
     setInstructions(null);
     setDeviceCode(null);
+    setCodeInput('');
     setError(null);
     try {
       const result = await startAsyncOAuthLogin(providerId);
@@ -515,8 +527,8 @@ function ManageBuiltinProvider({
                 </Button>
               </div>
             ) : null}
-            {instructions ? <p className="text-xs text-fg-muted">{instructions}</p> : null}
-            {deviceCode ? (
+            {oauthLoading && instructions ? <p className="text-xs text-fg-muted">{instructions}</p> : null}
+            {oauthLoading && deviceCode ? (
               <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
                 <p className="text-xs text-fg-muted">{providerLabels.deviceCodeLabel}</p>
                 <code className="mt-1 block select-all font-mono text-lg font-semibold tracking-widest text-fg">

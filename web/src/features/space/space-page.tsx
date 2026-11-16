@@ -22,6 +22,7 @@ import { createSpaceWorkbook, getSpaceDetail, getSpaceList, spaceContent, spaceC
 import { SpacePreview } from './space-preview';
 import { SpaceAudioButton, SpaceFileIcon, SpaceThumbnail } from './space-row-media';
 import { readWorkbookFile, supportedWorkbookFile } from './space-workbook-import';
+import { WorkbookReview } from './workbook-review';
 
 const SpaceWorkbook = lazy(() => import('./space-workbook'));
 
@@ -219,6 +220,10 @@ export function SpacePage() {
   const [params, setParams] = useSearchParams();
   const previewHost = useOutletContext<HTMLDivElement | null>();
   const selectedVersion = params.get('version');
+  const targetSheet = params.get('sheet') ?? undefined;
+  const targetRange = params.get('range') ?? undefined;
+  const proposalId = params.get('proposal') ?? undefined;
+  const undoVersion = params.get('undo') ?? undefined;
   const [previewWidth, setPreviewWidth] = useState(readPreviewWidth);
   const [editing, setEditing] = useState(false);
   const [confirmPurge, setConfirmPurge] = useState(false);
@@ -270,7 +275,8 @@ export function SpacePage() {
   });
   const items = list.data?.flatMap(page => page.items) ?? [];
   const item = detail.data;
-  const version = item?.versions.find(entry => entry.id === selectedVersion) ?? item?.currentVersion;
+  const exactVersion = Boolean(selectedVersion && (targetSheet || proposalId || undoVersion));
+  const version = item?.versions.find(entry => entry.id === selectedVersion) ?? (exactVersion ? undefined : item?.currentVersion);
   const workbook = version?.mimeType === SPACE_WORKBOOK_MIME;
   const workbookSeed = workbookSave && item?.id === workbookSave.itemId
     && (version?.id === workbookSave.from || version?.id === workbookSave.to) ? workbookSave.seed : version?.id;
@@ -295,7 +301,7 @@ export function SpacePage() {
     setEditing(false);
     setConfirmPurge(false);
     setActionError('');
-    setQueryValues({ item: id, version: null });
+    setQueryValues({ item: id, version: null, sheet: null, range: null, proposal: null, undo: null });
   }
 
   function close() {
@@ -400,7 +406,7 @@ export function SpacePage() {
   function openWorkbook(id: string) {
     setWorkbookSave(undefined);
     setEditing(false);
-    setQueryValues({ item: id, version: null, view: null, q: null, kind: null, projectId: null, taskId: null });
+    setQueryValues({ item: id, version: null, sheet: null, range: null, proposal: null, undo: null, view: null, q: null, kind: null, projectId: null, taskId: null });
     void list.mutate();
   }
 
@@ -564,10 +570,24 @@ export function SpacePage() {
           </form> : null}
           {detail.isLoading ? <Skeleton className="m-3 min-h-0 flex-1 rounded-xl" /> : null}
           {detail.error ? <p className="px-3 py-5 text-sm text-fg-muted">{zh ? '资料暂不可用' : 'Result unavailable'}</p> : null}
+          {item && exactVersion && !version ? <p role="status" className="px-3 py-5 text-sm text-fg-muted">
+            {zh ? '引用的工作簿版本已不可用。' : 'The referenced workbook version is unavailable.'}
+            <button type="button" className="ms-2 text-accent-fg" onClick={() => setQueryValues({ version: null, sheet: null, range: null, proposal: null, undo: null })}>
+              {zh ? '打开最新版本' : 'Open latest version'}
+            </button></p> : null}
           {item && version ? <>
+            {workbook && (proposalId || undoVersion) && !item.trashedAt ? <WorkbookReview key={`${proposalId ?? ''}:${undoVersion ?? ''}`}
+              id={item.id} versionId={version.id} proposalId={proposalId} undo={undoVersion} zh={zh}
+              onClose={() => setQueryValues({ proposal: null, undo: null })} onComplete={() => {
+                setWorkbookSave(undefined);
+                void detail.mutate();
+                void list.mutate();
+                setQueryValues({ version: null, proposal: null, undo: null });
+              }} /> : null}
             {workbook ? <Suspense fallback={<Skeleton className="m-3 min-h-0 flex-1 rounded-xl" />}>
               <SpaceWorkbook key={workbookSeed} id={item.id} versionId={workbookSeed!} title={item.title} zh={zh}
                 editable={!item.trashedAt && version.id === item.currentVersion.id} inTrash={Boolean(item.trashedAt)}
+                targetSheet={targetSheet} targetRange={targetRange}
                 sourceConversationId={origin?.available ? origin.conversationId : undefined} projectId={origin?.available ? origin.projectId : undefined}
                 onCopy={openWorkbook}
                 onSaved={savedVersionId => {
@@ -584,7 +604,7 @@ export function SpacePage() {
                 {version.indexStatus === 'pending' ? <span>{zh ? '正在索引' : 'Indexing'}</span> : null}
                 {item.versions.length > 1 ? <Select value={version.id} aria-label={zh ? '资料版本' : 'File version'} onChange={event => {
                   setWorkbookSave(undefined);
-                  setQueryValues({ version: event.target.value });
+                  setQueryValues({ version: event.target.value, sheet: null, range: null, proposal: null, undo: null });
                 }}>
                   {item.versions.map((entry, index) => <SelectOption key={entry.id} value={entry.id}>
                     {entry.id === item.currentVersion.id ? (zh ? '最新版' : 'Latest') : formatDate(entry.createdAt)} · v{item.versions.length - index}

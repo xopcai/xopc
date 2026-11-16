@@ -10,6 +10,7 @@ const EAGER_CORE_TOOLS = new Set([
   'skill_view', 'skills_list', 'tool_manual',
   'mcp_setup', 'video_draft', 'music_generation',
   'automation',
+  'workbook_read', 'workbook_edit',
   'publish_artifacts', 'task_collaboration', 'publish_task_result',
 ]);
 

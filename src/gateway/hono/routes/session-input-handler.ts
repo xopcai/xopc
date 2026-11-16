@@ -22,6 +22,7 @@ import { isTaskDestructiveCommand } from '../../../session/reset-triggers.js';
 import { parseSlashCommand, commandRegistry } from '../../../chat-commands/index.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
 import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
 import { createLogger } from '../../../utils/logger.js';
 import { recordDeviceExecutionActor } from '../../../endpoint-tools/execution-actor.js';
@@ -55,6 +56,9 @@ export async function submitSessionInput(
   const browserContexts = browserPageContextsInputSchema.safeParse(body.browserContexts ?? []);
   if (!browserContexts.success) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid browser page context' } }, 400);
+  }
+  if (contextRefs.some(ref => ref.kind === 'workbook') && !hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.read')) {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Workbook context requires workspace access' } }, 403);
   }
   const content = typeof body.content === 'string' ? body.content : '';
   if (!contextDocumentIsValid(content, contextRefs)) {
@@ -187,6 +191,9 @@ export async function replaceLatestSessionTurn(
   const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
   if (contextRefs === null) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid source references` } }, 400);
+  }
+  if (contextRefs.some(ref => ref.kind === 'workbook') && !hasGatewayScope(getGatewayPrincipal(c).scopes, 'workspace.read')) {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Workbook context requires workspace access' } }, 403);
   }
   const content = typeof body.content === 'string' ? body.content : '';
   if (!contextDocumentIsValid(content, contextRefs)) {

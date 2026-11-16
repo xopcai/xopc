@@ -11,8 +11,15 @@ import { ProviderSetupPanel } from '../provider-setup-panel';
 import { ProviderManageDialog } from '../provider-manage-dialog';
 
 const api = vi.hoisted(() => ({ preview: vi.fn() }));
+const oauth = vi.hoisted(() => ({ start: vi.fn(), status: vi.fn(), cleanup: vi.fn() }));
 vi.mock('../provider-setup-api', () => ({ previewModelSetup: api.preview, applyModelSetup: vi.fn() }));
 vi.mock('../oauth-provider-connect', () => ({ OAuthProviderConnect: () => <button>Connect OAuth</button> }));
+vi.mock('@/features/settings/oauth-api', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/features/settings/oauth-api')>(),
+  startAsyncOAuthLogin: oauth.start,
+  fetchOAuthSessionStatus: oauth.status,
+  cleanupOAuthSession: oauth.cleanup,
+}));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: ReturnType<typeof createRoot>;
@@ -27,7 +34,12 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 async function render(provider: ProviderRowModel) {
   await act(async () => root.render(<MemoryRouter><ProviderManageDialog open onOpenChange={vi.fn()}
     providerId={provider.id} isCustom={false} builtinRows={[provider]} allModels={[]} customConfig={null}
@@ -85,6 +97,33 @@ describe('provider credential presentation', () => {
     expect(document.body.textContent).toContain('授权已过期，请重新登录');
     const setup = [...document.querySelectorAll('button')].find(button => button.textContent === '配置模型用途');
     expect(setup?.disabled).toBe(true);
+  });
+
+  it('replaces the expired OpenAI login instructions after a rejected code and allows a fresh attempt', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, 'open').mockReturnValue(null);
+    oauth.start.mockResolvedValueOnce({ sessionId: 'rejected' }).mockResolvedValueOnce({ sessionId: 'fresh' });
+    oauth.cleanup.mockResolvedValue(undefined);
+    oauth.status.mockResolvedValueOnce({ status: 'waiting_code', instructions: 'Paste the final redirect URL here.' })
+      .mockResolvedValueOnce({ status: 'failed', error: 'OpenAI OAuth token request failed (400): { "error": "invalid_grant" }' })
+      .mockResolvedValueOnce({ status: 'waiting_code', instructions: 'Complete the new authorization.' });
+    await render(row({ authStatus: 'expired', configured: false }));
+    const login = [...document.querySelectorAll('button')].find(button => button.textContent === 'OAuth 登录')!;
+    await act(async () => login.click());
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(document.body.textContent).toContain('Paste the final redirect URL here.');
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(document.body.textContent).toContain('请点击「OAuth 登录」重新发起授权');
+    expect(document.body.textContent).not.toContain('Paste the final redirect URL here.');
+    expect(login.disabled).toBe(false);
+    expect(oauth.cleanup).toHaveBeenCalledWith('rejected');
+
+    await act(async () => login.click());
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(oauth.status).toHaveBeenLastCalledWith('fresh');
+    expect(document.body.textContent).toContain('Complete the new authorization.');
+    expect(document.body.textContent).not.toContain('invalid_grant');
   });
 
   it('does not show an API key form or picker for OAuth-only providers', async () => {

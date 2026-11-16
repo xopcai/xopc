@@ -404,7 +404,7 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
     if (
       !row
       || (row.kind !== 'note' && row.kind !== 'file' && row.kind !== 'session'
-        && row.kind !== 'browser_tab' && row.kind !== 'mcp_resource')
+        && row.kind !== 'browser_tab' && row.kind !== 'workbook' && row.kind !== 'mcp_resource')
       || typeof row.sourceId !== 'string'
       || typeof row.version !== 'string'
       || typeof row.title !== 'string'

@@ -1,3 +1,4 @@
+import { rememberWorkbookConversation, takeWorkbookChatLaunch } from '@/features/space/workbook-chat-launch';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { useInitialTurnNavigation } from '@/features/chat/session/use-initial-turn-navigation';
 import { AutomationConfigurationContext } from '@/features/automations/automation-configuration-context';
@@ -187,6 +188,7 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
 
   const draftQuery = searchParams.get(automationWorkspace ? 'chatDraft' : 'draft') ?? '';
   const autoSendQuery = searchParams.get('autoSend') === '1';
+  const workbookLaunchId = searchParams.get('workbookLaunch');
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
   const attachmentsHandoffId = searchParams.get('attachmentsHandoff');
   const chatConversationId = session.decodedKey ?? session.conversationId;
@@ -764,6 +766,22 @@ export function ChatPage({ beforeSend, draftSeed, sourceNoteInView = false, embe
   }, [followUp.composerMode, followUp.beginEditFollowUp, followUp.beginEditTurn, session.conversationId, stream.settleStoppedRun]);
 
   const handleCancelUserMessageEdit = followUp.cancelEditor;
+
+  useEffect(() => {
+    if (!workbookLaunchId || !auth.hasToken || !session.conversationId || !session.modelConfigReady
+      || session.showSessionLoading || session.sessionRoutePending || stream.sending || stream.streaming) return;
+    const launch = takeWorkbookChatLaunch(workbookLaunchId);
+    if (!launch) return;
+    const activeConversation = session.conversationId;
+    void stream.sendMessage(launch.text, undefined, undefined, [launch.reference]).then(accepted => {
+      if (accepted) rememberWorkbookConversation(launch.reference.sourceId, activeConversation);
+      else {
+        setInjectedDraftSeed({ id: Date.now(), text: launch.text });
+        setComposerContextRefs(refs => [...refs.filter(ref => ref.kind !== 'workbook'), launch.reference]);
+      }
+    });
+  }, [workbookLaunchId, auth.hasToken, session.conversationId, session.modelConfigReady, session.showSessionLoading,
+    session.sessionRoutePending, stream.sending, stream.streaming, stream.sendMessage]);
 
   useEffect(() => {
     if (!autoSendQuery || (!draftQuery.trim() && !attachmentsHandoffId)) return;

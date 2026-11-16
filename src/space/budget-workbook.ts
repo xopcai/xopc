@@ -4,7 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { SPACE_WORKBOOK_MIME, type SpaceVersionLink } from '@xopcai/gateway-contract';
 import { z } from 'zod';
 
-import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 const identity = 'native:budget-workbook-demo';
 const title = 'Project Budget';
@@ -42,6 +42,21 @@ export const createSpaceWorkbookSchema = z.object({
   snapshot: workbook,
   source: z.object({ id: z.uuid(), versionId: z.uuid() }).strict().optional(),
 }).strict();
+
+export function loadSpaceWorkbook(id: string, versionId?: string) {
+  const stored = getSqliteDatabase().prepare(`SELECT i.title, v.body, v.id AS versionId, i.current_version_id AS currentVersionId
+    FROM space_items i JOIN space_versions v ON v.item_id = i.id AND v.id = COALESCE(?, i.current_version_id)
+    WHERE i.id = ? AND i.trashed_at IS NULL AND v.mime_type = ?`).get(versionId ?? null, id, SPACE_WORKBOOK_MIME);
+  if (!stored || typeof stored.body !== 'string') return null;
+  return { id, title: String(stored.title), versionId: String(stored.versionId), currentVersionId: String(stored.currentVersionId),
+    snapshot: workbook.parse(JSON.parse(stored.body)) };
+}
+
+export function findSpaceWorkbookByTitle(title: string) {
+  return getSqliteDatabase().prepare(`SELECT i.id, i.title FROM space_items i JOIN space_versions v ON i.current_version_id=v.id
+    WHERE i.title = ? COLLATE NOCASE AND i.trashed_at IS NULL AND v.mime_type = ? LIMIT 2`)
+    .all(title, SPACE_WORKBOOK_MIME) as { id: string; title: string }[];
+}
 
 function budgetSheet(id: string, name: string, rows: (string | number)[][], widths: number[]) {
   return {
@@ -134,6 +149,7 @@ export function createSpaceWorkbook(input: z.infer<typeof createSpaceWorkbookSch
 
 export function saveSpaceWorkbook(id: string, input: z.infer<typeof saveSpaceWorkbookSchema>): SpaceVersionLink | 'missing' | 'conflict' {
   const body = JSON.stringify(input.snapshot);
+  if (Buffer.byteLength(body) > SPACE_WORKBOOK_MAX_BYTES) throw new Error('Workbook snapshot exceeds the storage limit');
   return runSqliteWriteTransaction(db => {
     const current = db.prepare(`SELECT i.identity_key, i.current_version_id, i.trashed_at, v.created_at, v.body, v.file_name
       FROM space_items i JOIN space_versions v ON i.current_version_id = v.id
@@ -150,5 +166,17 @@ export function saveSpaceWorkbook(id: string, input: z.infer<typeof saveSpaceWor
     db.prepare('UPDATE space_items SET current_version_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?')
       .run(versionId, now, id);
     return { id, versionId };
+  });
+}
+
+export function undoSpaceWorkbookVersion(id: string, versionId: string, sourceVersionId: string) {
+  return runSqliteWriteTransaction(db => {
+    const prior = db.prepare(`SELECT p.body FROM space_items i
+      JOIN space_versions current ON current.id = i.current_version_id
+      JOIN space_versions p ON p.item_id = i.id AND p.ordinal = current.ordinal - 1
+      WHERE i.id = ? AND i.trashed_at IS NULL AND current.id = ? AND p.id = ? AND p.mime_type = ?`)
+      .get(id, versionId, sourceVersionId, SPACE_WORKBOOK_MIME);
+    if (typeof prior?.body !== 'string') return 'conflict';
+    return saveSpaceWorkbook(id, saveSpaceWorkbookSchema.parse({ baseVersionId: versionId, snapshot: JSON.parse(prior.body) }));
   });
 }

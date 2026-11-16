@@ -15,7 +15,7 @@ export function PersonalSettingsPanel() {
   const openVoiceServices = () => { setServicesOpen(true); setServicesMounted(true); };
   return <SettingsPageFrame>
     <SettingsPageHeader title={displayName} />
-    <PersonalProfileSettings zh={zh} onOpenVoiceServices={openVoiceServices} />
+    <PersonalProfileSettings zh={zh} onOpenVoiceServices={openVoiceServices} showMessageReactions />
     <PersonalProactivitySetting zh={zh} />
     <details className="rounded-xl border border-edge p-4" open={servicesOpen} onToggle={event => {
       setServicesOpen(event.currentTarget.open);

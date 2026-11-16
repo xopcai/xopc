@@ -1,4 +1,4 @@
-import type { SpaceDetail, SpaceList, SpaceVersionLink } from '@xopcai/gateway-contract';
+import type { SpaceDetail, SpaceList, SpaceVersionLink, SpaceWorkbookProposal } from '@xopcai/gateway-contract';
 
 import { apiUrl } from '@/lib/url';
 import { apiFetch, fetchJson } from '@/lib/fetch';
@@ -32,6 +32,15 @@ export function saveSpaceWorkbook(id: string, baseVersionId: string, snapshot: u
   return fetchJson(apiUrl(`${spaceItemPath(id)}/workbook`), {
     method: 'POST', body: JSON.stringify({ baseVersionId, snapshot }),
   });
+}
+
+export function getWorkbookProposal(id: string, proposalId: string): Promise<SpaceWorkbookProposal> {
+  return fetchJson(apiUrl(`${spaceItemPath(id)}/workbook-actions?${new URLSearchParams({ proposal: proposalId })}`));
+}
+
+export function submitWorkbookAction(id: string, action: { action: 'apply'; proposalId: string }
+  | { action: 'undo'; versionId: string; sourceVersionId: string }): Promise<SpaceVersionLink> {
+  return fetchJson(apiUrl(`${spaceItemPath(id)}/workbook-actions`), { method: 'POST', body: JSON.stringify(action) });
 }
 
 export function spaceContentUrl(id: string, versionId: string): string {

@@ -21,6 +21,11 @@ describe('electron-runtime-externals', () => {
       '@trycua/cua-driver',
       'quickjs-wasi',
       'pdfjs-dist',
+      '@univerjs/core',
+      '@univerjs/engine-formula',
+      '@univerjs/sheets',
+      '@univerjs/sheets-formula',
+      'rxjs',
     ]);
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('sharp');
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('playwright-core');
@@ -43,6 +48,11 @@ describe('electron-runtime-externals', () => {
         '@trycua/cua-driver': '0.36.0',
         'quickjs-wasi': '3.6.2',
         'pdfjs-dist': '6.2.108',
+        '@univerjs/core': '1.5.0',
+        '@univerjs/engine-formula': '1.5.0',
+        '@univerjs/sheets': '1.5.0',
+        '@univerjs/sheets-formula': '1.5.0',
+        'rxjs': '7.8.2',
       },
       devDependencies: {
         vitest: '^4.0.0',
@@ -64,6 +74,11 @@ describe('electron-runtime-externals', () => {
       '@trycua/cua-driver',
       'quickjs-wasi',
       'pdfjs-dist',
+      '@univerjs/core',
+      '@univerjs/engine-formula',
+      '@univerjs/sheets',
+      '@univerjs/sheets-formula',
+      'rxjs',
     ]);
     expect(minimal).not.toHaveProperty('devDependencies');
     expect(minimal).not.toHaveProperty('peerDependencies');
@@ -84,6 +99,11 @@ describe('electron-runtime-externals', () => {
         '@trycua/cua-driver': '0.36.0',
         'quickjs-wasi': '3.6.2',
         'pdfjs-dist': '6.2.108',
+        '@univerjs/core': '1.5.0',
+        '@univerjs/engine-formula': '1.5.0',
+        '@univerjs/sheets': '1.5.0',
+        '@univerjs/sheets-formula': '1.5.0',
+        'rxjs': '7.8.2',
       },
       devDependencies: {
         'node-pty': '1.1.0',
@@ -97,6 +117,11 @@ describe('electron-runtime-externals', () => {
       '@trycua/cua-driver': '0.36.0',
         'quickjs-wasi': '3.6.2',
         'pdfjs-dist': '6.2.108',
+        '@univerjs/core': '1.5.0',
+        '@univerjs/engine-formula': '1.5.0',
+        '@univerjs/sheets': '1.5.0',
+        '@univerjs/sheets-formula': '1.5.0',
+        'rxjs': '7.8.2',
     });
   });
 
@@ -114,6 +139,11 @@ describe('electron-runtime-externals', () => {
           '@trycua/cua-driver': '0.36.0',
         'quickjs-wasi': '3.6.2',
         'pdfjs-dist': '6.2.108',
+        '@univerjs/core': '1.5.0',
+        '@univerjs/engine-formula': '1.5.0',
+        '@univerjs/sheets': '1.5.0',
+        '@univerjs/sheets-formula': '1.5.0',
+        'rxjs': '7.8.2',
         },
       },
       repoRoot,
@@ -126,6 +156,11 @@ describe('electron-runtime-externals', () => {
       '@trycua/cua-driver': resolveInstalledPackageVersion(repoRoot, '@trycua/cua-driver'),
       'quickjs-wasi': resolveInstalledPackageVersion(repoRoot, 'quickjs-wasi'),
       'pdfjs-dist': resolveInstalledPackageVersion(repoRoot, 'pdfjs-dist'),
+      '@univerjs/core': resolveInstalledPackageVersion(repoRoot, '@univerjs/core'),
+      '@univerjs/engine-formula': resolveInstalledPackageVersion(repoRoot, '@univerjs/engine-formula'),
+      '@univerjs/sheets': resolveInstalledPackageVersion(repoRoot, '@univerjs/sheets'),
+      '@univerjs/sheets-formula': resolveInstalledPackageVersion(repoRoot, '@univerjs/sheets-formula'),
+      'rxjs': resolveInstalledPackageVersion(repoRoot, 'rxjs'),
     });
     expect(Object.values(minimal.dependencies as Record<string, string>).every((v) => !v.startsWith('^'))).toBe(true);
   });
@@ -168,6 +203,11 @@ describe('electron-runtime-externals', () => {
         '@trycua/cua-driver': '0.36.0',
         'quickjs-wasi': '3.6.2',
         'pdfjs-dist': '6.2.108',
+        '@univerjs/core': '1.5.0',
+        '@univerjs/engine-formula': '1.5.0',
+        '@univerjs/sheets': '1.5.0',
+        '@univerjs/sheets-formula': '1.5.0',
+        'rxjs': '7.8.2',
       },
       devDependencies: {
         electron: '^41.7.1',
