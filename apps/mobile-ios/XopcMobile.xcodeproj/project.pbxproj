@@ -11,6 +11,7 @@
 		01C28E1C17A0053B04FA7E9B /* NoteEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 980992CAF7FCC3FB252A3D26 /* NoteEditorView.swift */; };
 		0302993FD1FDB80B9B34E311 /* GatewayConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 486026F4BCD826EBF74D01A3 /* GatewayConfigurationStore.swift */; };
 		0314242628382AB63367715D /* FilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58CC94202B1957EB28AC9543 /* FilesView.swift */; };
+		034C48EEE4D6F98E5A10378A /* ModelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAC1A41887453C464DCB56B /* ModelSettingsView.swift */; };
 		03E82D91F7D7105D87B79F42 /* AttachmentPickerModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94322E03B82FA6461F5B4AB6 /* AttachmentPickerModifier.swift */; };
 		0437749BE77D4F753511E9DF /* PersonalAgentOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87AFFC731003CDBDAF75F823 /* PersonalAgentOverview.swift */; };
 		0676778E0F1A8D811B9A429D /* AutomationRunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04AB488F9AD240DC800C567 /* AutomationRunDetailView.swift */; };
@@ -105,7 +106,6 @@
 		8DF6BCEE61CB87E56A8DBDEF /* AssistantComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 534B8A85AE51F975E4104C07 /* AssistantComposer.swift */; };
 		902E984753F08AE804E83524 /* MathMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C2E2D33B81F4E2E94A29FA /* MathMarkdownTests.swift */; };
 		947513697F85DD78F8E32D5C /* AppPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F47BE78FE0529BB686EDBC64 /* AppPreferencesView.swift */; };
-		B0540AE732C76FCBF914EF11 /* ModelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB575C7CC724FBCEC1807C84 /* ModelSettingsView.swift */; };
 		94CFF81C365FED2D2AACE3ED /* AssistantTaskResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBF31D5A622F5FAA38FBFABB /* AssistantTaskResults.swift */; };
 		94D49C3EA7D4F9BE84D9C2EF /* NoteMutation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0AF08714DC275A149E76AB4 /* NoteMutation.swift */; };
 		956F11E37888D267F812F456 /* AppRootTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1995C988B9EAD43B5B5383A6 /* AppRootTests.swift */; };
@@ -304,6 +304,7 @@
 		59B9D0794B0D4CE399A11BC8 /* ExecutionDetailModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutionDetailModels.swift; sourceTree = "<group>"; };
 		5A21ADCB00C6EC5E7859AE32 /* GatewayClient+Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GatewayClient+Conversation.swift"; sourceTree = "<group>"; };
 		5C57B0838C0395DE01E99D5B /* SaveFileVersionControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveFileVersionControl.swift; sourceTree = "<group>"; };
+		5CAC1A41887453C464DCB56B /* ModelSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSettingsView.swift; sourceTree = "<group>"; };
 		5D8446A360C6F405C7881D93 /* ChatRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRenderingTests.swift; sourceTree = "<group>"; };
 		5E5F7ECF0D5276CA41446DC4 /* RealtimeRunSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeRunSocket.swift; sourceTree = "<group>"; };
 		5F182FC3B26A99EE1F41200A /* AssistantActionPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantActionPanel.swift; sourceTree = "<group>"; };
@@ -407,7 +408,6 @@
 		F0AF08714DC275A149E76AB4 /* NoteMutation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMutation.swift; sourceTree = "<group>"; };
 		F4334EC0967CCE3842C57872 /* ChatStreamBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStreamBuffer.swift; sourceTree = "<group>"; };
 		F47BE78FE0529BB686EDBC64 /* AppPreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPreferencesView.swift; sourceTree = "<group>"; };
-		BB575C7CC724FBCEC1807C84 /* ModelSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSettingsView.swift; sourceTree = "<group>"; };
 		F4C2A4FD49586D61A1532166 /* ConversationContextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationContextView.swift; sourceTree = "<group>"; };
 		F829805607352507D86D54CC /* TaskDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		F870C2254E2430F6C2D9D077 /* MessageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModels.swift; sourceTree = "<group>"; };
@@ -660,8 +660,8 @@
 			isa = PBXGroup;
 			children = (
 				F47BE78FE0529BB686EDBC64 /* AppPreferencesView.swift */,
-				BB575C7CC724FBCEC1807C84 /* ModelSettingsView.swift */,
 				945CE29DD9EAD63F09B42935 /* GatewayProfilesView.swift */,
+				5CAC1A41887453C464DCB56B /* ModelSettingsView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -946,7 +946,6 @@
 				FED2DAEE1B07271D69C87AD8 /* AgentPicker.swift in Sources */,
 				23F0CAF9E03C1A0DB6E38E09 /* AppLocalization.swift in Sources */,
 				947513697F85DD78F8E32D5C /* AppPreferencesView.swift in Sources */,
-				B0540AE732C76FCBF914EF11 /* ModelSettingsView.swift in Sources */,
 				5E005B0434317F225D0CEBAC /* AppRootView.swift in Sources */,
 				8C6995CDAAC59764CAE6ACD3 /* AppState.swift in Sources */,
 				5822D695F90E6C3187380139 /* AssistantActionPanel.swift in Sources */,
@@ -1034,6 +1033,7 @@
 				AFCE8BBA2E3F11AE93B4C251 /* MobileListCache.swift in Sources */,
 				20B0DB05FE66445A6A5AA384 /* MobileTheme.swift in Sources */,
 				DA875680CA67E6FAF3CBC499 /* MobileTypography.swift in Sources */,
+				034C48EEE4D6F98E5A10378A /* ModelSettingsView.swift in Sources */,
 				1DBAA23BDF065B11F12B33C8 /* NoteAttachmentsSection.swift in Sources */,
 				4973633F8EEDFAB618DFAF2D /* NoteAudioPlayerView.swift in Sources */,
 				6AB7335B00A8B68423B65D37 /* NoteDetailView.swift in Sources */,
