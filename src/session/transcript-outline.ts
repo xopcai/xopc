@@ -1,4 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { parseTurnOutcome } from '@xopcai/gateway-contract';
 
 import {
   isTranscriptBashExecutionEntry,
@@ -11,7 +12,7 @@ import {
   type TranscriptStoredRow,
 } from './session-context-for-llm.js';
 import { stripRuntimeContextFromUserMessage } from './user-message-display.js';
-import { isVoiceConversationMessage, VOICE_CHAT_MESSAGE_TYPE, VOICE_TRANSCRIPT_TYPE } from './voice-transcript.js';
+import { isVoiceConversationMessage, VOICE_AGENT_INSTRUCTION_TYPE, VOICE_CHAT_MESSAGE_TYPE, VOICE_TRANSCRIPT_TYPE } from './voice-transcript.js';
 
 export type SessionTimelineItemKind =
   | 'turn'
@@ -416,10 +417,14 @@ function titleForEntry(params: {
   return params.label;
 }
 
+function isHiddenVoiceMessageRow(row: TranscriptStoredRow): boolean {
+  return isVoiceConversationMessage(row)
+    || (isTranscriptCustomMessageEntry(row) && row.display === false
+      && (row.customType === VOICE_TRANSCRIPT_TYPE || row.customType === VOICE_AGENT_INSTRUCTION_TYPE));
+}
+
 function isDisplayMessageRow(row: TranscriptStoredRow): boolean {
-  if (isVoiceConversationMessage(row)) return false;
-  if (isTranscriptCustomMessageEntry(row) && row.display === false
-    && [VOICE_TRANSCRIPT_TYPE, 'voice_agent_instruction'].includes(row.customType ?? '')) return false;
+  if (isHiddenVoiceMessageRow(row)) return false;
   if (isTranscriptSideChatOriginEntry(row)) return false;
   if (isTranscriptContextEntry(row)) return false;
   if (isTranscriptLabelEntry(row)) return false;
@@ -494,7 +499,10 @@ function classifyRow(params: {
   return { kind: 'turn', files: [] };
 }
 
-export function buildTranscriptOutline(rows: TranscriptStoredRow[]): TranscriptOutlineEntry[] {
+export function buildTranscriptOutline(
+  rows: TranscriptStoredRow[],
+  { hideVoiceConversation = false }: { hideVoiceConversation?: boolean } = {},
+): TranscriptOutlineEntry[] {
   const entries: TranscriptOutlineEntry[] = [];
   const byOriginalId = new Map<string, TranscriptOutlineEntry>();
   const toolCallsById = new Map<string, ToolCallDisplay>();
@@ -504,11 +512,19 @@ export function buildTranscriptOutline(rows: TranscriptStoredRow[]): TranscriptO
   let nextDisplayIndex = 0;
   let lastDisplayRole: 'assistant' | 'other' | undefined;
   let lastAssistantDisplayIndex: number | undefined;
+  const voiceTurnIds = hideVoiceConversation
+    ? new Set(rows.filter(isVoiceConversationMessage).map((row) => stringValue(asRecord(row)?.turnId)).filter(Boolean))
+    : undefined;
 
   rows.forEach((row, index) => {
     const rowNumber = index + 1;
     const id = `row-${rowNumber}`;
     const record = asRecord(row);
+    if (voiceTurnIds && (
+      isHiddenVoiceMessageRow(row)
+      || (isTranscriptContextEntry(row) && row.data?.type === 'voice_response_interrupted')
+      || (record?.customType === 'turn_outcome' && voiceTurnIds.has(parseTurnOutcome(record.data)?.turnId))
+    )) return;
     let parentId: string | undefined;
     let depth = 0;
     let label = 'entry';
@@ -688,7 +704,7 @@ function isCurrentLeafCandidate(entry: TranscriptOutlineEntry): boolean {
 }
 
 export function buildSessionTimeline(rows: TranscriptStoredRow[]): SessionTimelineItem[] {
-  return buildTranscriptOutline(rows).map((entry) => ({
+  return buildTranscriptOutline(rows, { hideVoiceConversation: true }).map((entry) => ({
     id: entry.id,
     kind: entry.kind,
     ...(roleForTimeline(entry.role) ? { role: roleForTimeline(entry.role) } : {}),

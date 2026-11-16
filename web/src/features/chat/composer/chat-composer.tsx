@@ -114,6 +114,7 @@ export const ChatComposer = memo(function ChatComposer({
   composerContext,
   pageContextPreview,
   contextRefs,
+  maxContextRefs = MAX_COMPOSER_CONTEXT_REFS,
   setContextRefs,
   onDraftAttachmentsChange,
   thinkingLevel,
@@ -152,6 +153,7 @@ export const ChatComposer = memo(function ChatComposer({
   unboundDraftKey,
   getDraftHandoffTarget,
   attachmentHandoffReady,
+  embeddedAttachmentHandoffId,
   editingUserTurnId,
   composerMode, inputControl, onResumeQueue, onRestoreEditor, onReacquireEdit, onComposerHydrated,
   onCancelUserMessageEdit,
@@ -167,6 +169,7 @@ export const ChatComposer = memo(function ChatComposer({
   composerContext?: Omit<ComposerContextBarProps, 'conversationId' | 'disabled'> & { disabled?: boolean };
   pageContextPreview?: ReactNode;
   contextRefs: ComposerContextRef[];
+  maxContextRefs?: number;
   setContextRefs: Dispatch<SetStateAction<ComposerContextRef[]>>;
   onDraftAttachmentsChange?: (attachments: ComposerAttachmentSummary[]) => void;
   addActions?: ComposerAddActions;
@@ -214,6 +217,7 @@ export const ChatComposer = memo(function ChatComposer({
   unboundDraftKey?: string;
   getDraftHandoffTarget?: () => string | undefined;
   attachmentHandoffReady?: boolean;
+  embeddedAttachmentHandoffId?: string;
   editingUserTurnId?: string | null;
   composerMode?: ComposerMode;
   onRestoreEditor?: (mode: ComposerMode) => void;
@@ -331,9 +335,9 @@ export const ChatComposer = memo(function ChatComposer({
       setContextRefs(next);
       return upgraded;
     }
-    if (current.length >= MAX_COMPOSER_CONTEXT_REFS) {
+    if (current.length >= maxContextRefs) {
       showComposerNotification('warning', m.chat.commandPalette.contextLimitReached, {
-        max: MAX_COMPOSER_CONTEXT_REFS,
+        max: maxContextRefs,
       });
       return null;
     }
@@ -341,7 +345,7 @@ export const ChatComposer = memo(function ChatComposer({
     contextRefsRef.current = next;
     setContextRefs(next);
     return ref;
-  }, [m.chat.commandPalette.contextLimitReached, setContextRefs]);
+  }, [m.chat.commandPalette.contextLimitReached, maxContextRefs, setContextRefs]);
 
   useEffect(() => {
     const selectResult = (event: Event) => {
@@ -386,13 +390,13 @@ export const ChatComposer = memo(function ChatComposer({
     resolveContextRef,
   });
 
-  const attachmentHandoffId = searchParams.get('attachmentHandoff');
+  const attachmentHandoffId = embeddedAttachmentHandoffId ?? searchParams.get('attachmentHandoff');
 
   useEffect(() => {
     if (!attachmentHandoffReady || !attachmentHandoffId) return;
     const file = takeComposerAttachmentHandoff(attachmentHandoffId);
     // Replacing the /new URL invalidates the active project preparation.
-    if (conversationId) {
+    if (conversationId && !embeddedAttachmentHandoffId) {
       setSearchParams(
         (current) => {
           const next = new URLSearchParams(current);
@@ -404,7 +408,7 @@ export const ChatComposer = memo(function ChatComposer({
     }
     if (!file) return;
     void att.processFiles([file]).then(() => editor.editorRef.current?.focus({ preventScroll: true }));
-  }, [attachmentHandoffReady, attachmentHandoffId, att.processFiles, editor.editorRef, conversationId, locationState, setSearchParams]);
+  }, [attachmentHandoffReady, attachmentHandoffId, embeddedAttachmentHandoffId, att.processFiles, editor.editorRef, conversationId, locationState, setSearchParams]);
 
   const { onUserTextCommitted, onWireInputClearWalk, tryInputHistoryArrow } =
     useComposerInputHistoryWalk({

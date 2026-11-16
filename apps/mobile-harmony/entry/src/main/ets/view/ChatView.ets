@@ -1380,8 +1380,8 @@ export struct XopcChatView {
   conversation() {
     Stack({ alignContent: Alignment.Bottom }) {
     Column() {
-    if (this.chat.loading && !this.chat.rows.length && !this.generatedMedia.cards.length) { this.skeleton() }
-    if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId && !this.generatedMedia.cards.length && this.automationSetup) {
+    if (this.chat.loading && !this.chat.rows.length && !this.generatedMediaGroups.size) { this.skeleton() }
+    if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId && !this.generatedMediaGroups.size && this.automationSetup) {
       Column({ space: 8 }) {
         Text($r('app.string.automation_setup_heading')).fontSize(22).fontWeight(FontWeight.Bold)
           .fontColor(this.colors.foreground).textAlign(TextAlign.Center)
@@ -1389,7 +1389,7 @@ export struct XopcChatView {
           .fontColor(this.colors.secondary).textAlign(TextAlign.Center)
       }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
         .padding({ left: 28, right: 28, bottom: this.bottomRegionHeight })
-    } else if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId && !this.generatedMedia.cards.length) {
+    } else if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId && !this.generatedMediaGroups.size) {
       XopcChatWelcome({ activePage: this.activePage, showPersonalAvatar: this.embedded || !!this.taskId, standaloneDraft: this.isStandaloneDraft(), projectName: this.scopedProjectName, scope: this.context.summary, language: appSettings.effectiveLanguage(),
         contextPending: this.context.loading || this.options.loading,
         personal: this.personalConversation, personalName: this.personalAgent?.displayName ?? 'Ada',

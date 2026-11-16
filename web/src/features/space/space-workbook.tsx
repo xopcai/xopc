@@ -1,7 +1,7 @@
-import { ArrowUp, Copy, MessageSquarePlus } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { SPACE_WORKBOOK_SELECTION_MAX_BYTES, SPACE_WORKBOOK_SELECTION_MIME } from '@xopcai/gateway-contract';
-import { useEffect, useRef, useState } from 'react';
-import { useBeforeUnload, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from 'react';
+import { useBeforeUnload } from 'react-router-dom';
 import { CommandType, createUniver, LifecycleStages, LocaleType, type IWorkbookData } from '@univerjs/presets';
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
 import enUS from '@univerjs/preset-sheets-core/locales/en-US';
@@ -9,65 +9,91 @@ import zhCN from '@univerjs/preset-sheets-core/locales/zh-CN';
 import '@univerjs/preset-sheets-core/lib/index.css';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import { createComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
+import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 import { useThemeStore } from '@/stores/theme-store';
 
 import { createSpaceWorkbook, saveSpaceWorkbook, spaceContent } from './space-api';
-import { WorkbookChatPicker, type WorkbookChatTarget } from './workbook-chat-picker';
-import { createWorkbookChatLaunch, previousWorkbookConversation } from './workbook-chat-launch';
 
 type Workbook = ReturnType<ReturnType<typeof createUniver>['univerAPI']['createWorkbook']>;
 type Editor = { univerAPI: ReturnType<typeof createUniver>['univerAPI']; workbook: Workbook };
 
+export type WorkbookEditorControls = {
+  hasChanges: () => boolean;
+  flushSave: () => Promise<string | undefined>;
+  prepareChatContext: () => Promise<ComposerContextRef | null>;
+  readSelection: () => Promise<File | undefined>;
+};
+
 const drafts = new Map<string, IWorkbookData>();
+const autosaveDelay = 900;
 
 function rememberDraft(versionId: string, snapshot: IWorkbookData) {
   drafts.delete(versionId);
   drafts.set(versionId, structuredClone(snapshot));
 }
 
-async function finishCellEdit({ univerAPI, workbook }: Editor) {
+async function commitCellEdit({ workbook }: Editor) {
   if (workbook.isCellEditing() && !await workbook.endEditingAsync(true)) throw new Error('Cell edit could not be committed');
+}
+
+async function recalculate({ univerAPI }: Editor) {
   const formula = univerAPI.getFormula();
   formula.executeCalculation();
   await formula.onCalculationResultApplied(5_000);
 }
 
-export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTrash, sourceConversationId, projectId, targetSheet, targetRange, onSaved, onCopy }: {
+export default function SpaceWorkbook({ id, versionId, title, zh, editable, targetSheet, targetRange, controls, newerVersionPending, onSaved, onCopy }: {
   id: string;
   versionId: string;
   title: string;
   zh: boolean;
   editable: boolean;
-  inTrash: boolean;
-  sourceConversationId?: string;
-  projectId?: string;
   targetSheet?: string;
   targetRange?: string;
+  controls: Ref<WorkbookEditorControls>;
+  newerVersionPending: boolean;
   onSaved: (versionId: string) => void;
   onCopy: (id: string) => void;
 }) {
-  const navigate = useNavigate();
+  const [initialVersion] = useState(versionId);
   const dark = useThemeStore(state => state.resolved === 'dark');
   const host = useRef<HTMLDivElement>(null);
-  const selectionButton = useRef<HTMLButtonElement>(null);
   const runtime = useRef<Editor | null>(null);
   const latest = useRef({ dark, editable, zh });
-  const pending = useRef(false);
-  const baseVersion = useRef(versionId);
-  const dirtyRef = useRef(false);
+  const pendingAction = useRef<Promise<File | undefined> | null>(null);
+  const pendingSave = useRef<Promise<string | undefined> | null>(null);
+  const autosaveTimer = useRef<number | undefined>(undefined);
+  const saveInBackground = useRef<() => void>(() => {});
+  const baseVersion = useRef(initialVersion);
+  const changeRevision = useRef(0);
+  const savedRevision = useRef(0);
+  const retryCount = useRef(0);
+  const saveConflict = useRef(false);
   const copyRequest = useRef<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [selection, setSelection] = useState<{ file: File; label: string }>();
-  const [question, setQuestion] = useState('');
+  const [saveFailed, setSaveFailed] = useState(false);
+
+  const clearAutosave = useCallback(() => {
+    window.clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = undefined;
+  }, []);
+
+  const scheduleAutosave = useCallback((delay = autosaveDelay) => {
+    clearAutosave();
+    autosaveTimer.current = window.setTimeout(() => {
+      autosaveTimer.current = undefined;
+      saveInBackground.current();
+    }, delay);
+  }, [clearAutosave]);
+
+  const hasChanges = () => changeRevision.current !== savedRevision.current || Boolean(runtime.current?.workbook.isCellEditing());
 
   useBeforeUnload(event => {
-    if (!dirtyRef.current && !runtime.current?.workbook.isCellEditing()) return;
+    if (!hasChanges()) return;
     event.preventDefault();
     event.returnValue = '';
   });
@@ -85,11 +111,11 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
     let dispose: (() => void) | undefined;
     void (async () => {
       try {
-        const blob = await spaceContent(id, versionId, request.signal);
+        const blob = await spaceContent(id, initialVersion, request.signal);
         const stored = JSON.parse(await blob.text()) as IWorkbookData;
         if (request.signal.aborted) return;
         const { dark, editable, zh } = latest.current;
-        const draft = editable ? drafts.get(versionId) : undefined;
+        const draft = editable ? drafts.get(initialVersion) : undefined;
         const { univer, univerAPI } = createUniver({
           locale: zh ? LocaleType.ZH_CN : LocaleType.EN_US,
           locales: { [LocaleType.EN_US]: enUS, [LocaleType.ZH_CN]: zhCN },
@@ -104,23 +130,32 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
         const workbook = univerAPI.createWorkbook(structuredClone(draft ?? stored));
         univerAPI.toggleDarkMode(dark);
         workbook.setEditable(editable);
-        baseVersion.current = versionId;
+        baseVersion.current = initialVersion;
         runtime.current = { univerAPI, workbook };
-        dirtyRef.current = Boolean(draft);
-        setDirty(dirtyRef.current);
+        changeRevision.current = draft ? 1 : 0;
+        savedRevision.current = 0;
+        retryCount.current = 0;
+        saveConflict.current = false;
         const listener = workbook.onCommandExecuted(command => {
           if (!latest.current.editable || command.type !== CommandType.MUTATION || command.id.includes('formula')) return;
-          dirtyRef.current = true;
-          setDirty(true);
+          // Univer applies calculated values through the same mutation as user edits.
+          if (command.params && 'sourceFormulaData' in command.params) return;
+          changeRevision.current++;
+          retryCount.current = 0;
+          if (!saveConflict.current) scheduleAutosave();
         });
-        const ready = () => { if (!request.signal.aborted) setState('ready'); };
+        const ready = () => {
+          if (request.signal.aborted) return;
+          setState('ready');
+          if (changeRevision.current !== savedRevision.current) scheduleAutosave();
+        };
         const lifecycle = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, ({ stage }) => {
           if (stage === LifecycleStages.Steady) ready();
         });
         dispose = () => {
           lifecycle.dispose();
           listener.dispose();
-          if (dirtyRef.current) rememberDraft(baseVersion.current, workbook.save());
+          if (changeRevision.current !== savedRevision.current) rememberDraft(baseVersion.current, workbook.save());
           univer.dispose();
         };
         if (univerAPI.getCurrentLifecycleStage() === LifecycleStages.Steady) ready();
@@ -134,10 +169,11 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
     })();
     return () => {
       request.abort();
+      clearAutosave();
       runtime.current = null;
       dispose?.();
     };
-  }, [attempt, id, versionId]);
+  }, [attempt, clearAutosave, id, initialVersion, scheduleAutosave]);
 
   useEffect(() => {
     if (state !== 'ready' || !targetSheet || !targetRange || !/^[A-Z]{1,2}[1-9]\d{0,3}(?::[A-Z]{1,2}[1-9]\d{0,3})?$/.test(targetRange)) return;
@@ -154,37 +190,111 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
     return () => cancelAnimationFrame(frame);
   }, [state, targetSheet, targetRange]);
 
-  async function run(action: 'save' | 'copy' | 'ask') {
-    const editor = runtime.current;
-    if (!editor || pending.current) return;
-    const hadEdits = dirtyRef.current || editor.workbook.isCellEditing();
-    if (action === 'save' && !hadEdits) return baseVersion.current;
-    pending.current = true;
-    setBusy(true);
-    setError('');
+  async function persist(editor: Editor, commit: boolean) {
     try {
-      await finishCellEdit(editor);
+      if (commit) await commitCellEdit(editor);
+      const revision = changeRevision.current;
+      if (revision === savedRevision.current) return baseVersion.current;
+      await recalculate(editor);
       if (runtime.current !== editor) return;
-      if (action === 'ask' && !hadEdits) {
-        dirtyRef.current = false;
-        setDirty(false);
+      if (revision !== changeRevision.current || editor.workbook.isCellEditing()) return baseVersion.current;
+      const previousVersion = baseVersion.current;
+      const saved = await saveSpaceWorkbook(id, previousVersion, editor.workbook.save());
+      if (runtime.current !== editor) return;
+      baseVersion.current = saved.versionId;
+      savedRevision.current = revision;
+      retryCount.current = 0;
+      drafts.delete(previousVersion);
+      setError('');
+      setSaveFailed(false);
+      if (previousVersion !== saved.versionId) onSaved(saved.versionId);
+      return saved.versionId;
+    } catch (cause) {
+      if (runtime.current !== editor) return;
+      const status = (cause as { status?: number })?.status;
+      const conflicted = status === 409;
+      saveConflict.current = conflicted;
+      setConflict(conflicted);
+      setSaveFailed(!conflicted);
+      setError(conflicted
+        ? (zh ? '已有更新的版本，当前修改仍保留。' : 'A newer version is available. Your edits are still here.')
+        : (zh ? '自动保存失败，当前修改仍保留。' : 'Autosave failed. Your edits are still here.'));
+      if ((!status || status === 429 || status >= 500) && retryCount.current < 2) {
+        retryCount.current++;
+        scheduleAutosave(retryCount.current * 3_000);
       }
-      if (action !== 'ask') {
-        const snapshot = editor.workbook.save();
+    }
+  }
+
+  async function flushSave(commit = true): Promise<string | undefined> {
+    const editor = runtime.current;
+    if (!editor) return baseVersion.current;
+    if (!latest.current.editable) return hasChanges() ? undefined : baseVersion.current;
+    if (saveConflict.current) return;
+    clearAutosave();
+    if (pendingAction.current) await pendingAction.current;
+    while (runtime.current === editor && latest.current.editable) {
+      const editingCell = editor.workbook.isCellEditing();
+      const dirty = changeRevision.current !== savedRevision.current;
+      if (!dirty && (!commit || !editingCell)) return baseVersion.current;
+      if (!commit && editingCell) {
+        scheduleAutosave();
+        return baseVersion.current;
+      }
+      pendingSave.current ??= persist(editor, commit).finally(() => { pendingSave.current = null; });
+      const version = await pendingSave.current;
+      if (!version || runtime.current !== editor) return;
+      if (!commit) {
+        if (changeRevision.current !== savedRevision.current && autosaveTimer.current === undefined) scheduleAutosave();
+        return version;
+      }
+    }
+  }
+
+  useLayoutEffect(() => { saveInBackground.current = () => { void flushSave(false); }; });
+
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'hidden') saveInBackground.current();
+    }
+    function onOnline() {
+      if (changeRevision.current === savedRevision.current || saveConflict.current) return;
+      retryCount.current = 0;
+      scheduleAutosave(0);
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', onOnline);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [scheduleAutosave]);
+
+  function run(action: 'copy' | 'attach-selection') {
+    if (pendingAction.current) return Promise.resolve(undefined);
+    const operation = runAction(action).finally(() => { pendingAction.current = null; });
+    pendingAction.current = operation;
+    return operation;
+  }
+
+  async function runAction(action: 'copy' | 'attach-selection') {
+    const editor = runtime.current;
+    if (!editor) return;
+    setBusy(true);
+    try {
+      if (pendingSave.current) await pendingSave.current;
+      if (runtime.current !== editor) return;
+      await commitCellEdit(editor);
+      await recalculate(editor);
+      if (runtime.current !== editor) return;
+      if (action === 'copy') {
         const previousVersion = baseVersion.current;
-        const saved = action === 'save'
-          ? await saveSpaceWorkbook(id, previousVersion, snapshot)
-          : await createSpaceWorkbook(copyRequest.current ??= crypto.randomUUID(), `${title.slice(0, 220)}${zh ? '（副本）' : ' (copy)'}`, snapshot, { id, versionId: previousVersion });
+        const saved = await createSpaceWorkbook(copyRequest.current ??= crypto.randomUUID(), `${title.slice(0, 220)}${zh ? '（副本）' : ' (copy)'}`, editor.workbook.save(), { id, versionId: previousVersion });
         if (runtime.current !== editor) return;
-        dirtyRef.current = false;
+        savedRevision.current = changeRevision.current;
         drafts.delete(previousVersion);
-        setDirty(false);
-        setConflict(false);
-        if (action === 'save') {
-          baseVersion.current = saved.versionId;
-          onSaved(saved.versionId);
-        } else onCopy(saved.id);
-        return saved.versionId;
+        onCopy(saved.id);
+        return;
       }
 
       const sheet = editor.workbook.getActiveSheet();
@@ -204,79 +314,43 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
         setError(zh ? '选区过大，请缩小选区后重试。' : 'Select a smaller range and try again.');
         return;
       }
-      setSelection({ file, label: `${title} · ${sheetName}!${location}` });
-    } catch (cause) {
+      if (!saveConflict.current && !saveFailed) setError('');
+      return file;
+    } catch {
       if (runtime.current !== editor) return;
-      const status = (cause as { status?: number })?.status;
-      setConflict(status === 409 && action === 'save');
-      setError(status === 409
-        ? (zh ? '已有更新的版本，可将你的修改保存为副本。' : 'A newer version exists. Save your edits as a copy.')
-        : (zh ? '操作未完成，请重试。' : 'Could not complete the action. Try again.'));
+      setError(zh ? '操作未完成，请重试。' : 'Could not complete the action. Try again.');
     } finally {
-      pending.current = false;
       if (runtime.current === editor) setBusy(false);
     }
   }
 
-  async function askWorkbook() {
-    const text = question.trim();
-    if (!text || pending.current) return;
-    const version = editable ? await run('save') : baseVersion.current;
-    if (!version) return;
-    const conversation = previousWorkbookConversation(id) ?? sourceConversationId;
-    const params = new URLSearchParams({ workbookLaunch: createWorkbookChatLaunch(text,
-      { kind: 'workbook', sourceId: id, expectedVersion: version, title }) });
-    if (!conversation && projectId) params.set('projectId', projectId);
-    if (!conversation && !projectId) params.set('projectScope', 'none');
-    navigate({ pathname: conversation ? `/chat/${encodeURIComponent(conversation)}` : '/chat/new', search: `?${params}` },
-      conversation ? undefined : { state: { forceNewChat: true } });
-  }
-
-  function sendToChat(target: WorkbookChatTarget) {
-    if (!selection) return;
-    const search = new URLSearchParams({ attachmentHandoff: createComposerAttachmentHandoff(selection.file) });
-    if (target.agentId) {
-      if (projectId) search.set('projectId', projectId);
-      else search.set('projectScope', 'none');
-    }
-    navigate({ pathname: target.pathname, search: `?${search}` }, target.agentId
-      ? { state: { forceNewChat: true, agentId: target.agentId } } : undefined);
-  }
+  useImperativeHandle(controls, () => ({
+    hasChanges,
+    flushSave,
+    readSelection: () => run('attach-selection'),
+    async prepareChatContext() {
+      if (!runtime.current) return null;
+      const version = await flushSave();
+      return version ? { kind: 'workbook', sourceId: id, expectedVersion: version, title } : null;
+    },
+  }));
 
   function onEditorKeyDown(event: React.KeyboardEvent) {
     if (!editable || !(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return;
     event.preventDefault();
     event.stopPropagation();
-    if (dirtyRef.current || runtime.current?.workbook.isCellEditing()) void run('save');
+    void flushSave();
   }
 
   return <div data-space-workbook className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onKeyDownCapture={onEditorKeyDown}>
-    {state === 'ready' ? <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-subtle px-3 py-2.5 text-xs">
-      <span className="me-auto text-fg-muted" role="status">{!editable ? (zh ? '只读版本' : 'Read-only version') : busy
-        ? (zh ? '正在处理…' : 'Working…') : dirty ? (zh ? '未保存的修改' : 'Unsaved changes') : (zh ? '已保存' : 'Saved')}</span>
-      {!inTrash ? <form onSubmit={event => { event.preventDefault(); void askWorkbook(); }}
-        className="flex min-h-10 min-w-48 flex-1 basis-56 items-center gap-1 rounded-lg border border-edge bg-surface-inset px-2.5 focus-within:border-accent">
-        <input value={question} onChange={event => setQuestion(event.target.value)} maxLength={1000}
-          aria-label={zh ? '问这份工作簿' : 'Ask about this workbook'} placeholder={zh ? '问这份工作簿…' : 'Ask about this workbook…'}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-muted" />
-        <button type="submit" disabled={busy || !question.trim()} className="inline-flex min-h-8 items-center gap-1 rounded-md px-1.5 text-accent-fg hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-35"
-          aria-label={dirty ? (zh ? '保存并提问' : 'Save and ask') : (zh ? '发送问题' : 'Send workbook question')}>
-          {dirty ? <span>{zh ? '保存并提问' : 'Save and ask'}</span> : null}<ArrowUp className="size-4" aria-hidden />
-        </button>
-      </form> : null}
-      {!inTrash ? <button ref={selectionButton} type="button" disabled={busy} onClick={() => void run('ask')}
-        className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-accent-fg hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50">
-        <MessageSquarePlus className="size-4" aria-hidden />{zh ? '在对话中使用选区' : 'Use selection in chat'}
-      </button> : null}
-      {editable ? <button type="button" disabled={busy} onClick={() => void run('save')}
-        aria-keyshortcuts="Meta+S Control+S" className="min-h-10 rounded-lg bg-accent px-3 text-sm font-medium text-on-accent hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50">
-        {zh ? '保存版本' : 'Save version'}
-      </button> : null}
-    </div> : null}
-    {error ? <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-subtle px-3 py-2 text-xs">
-      <p role="alert" className="text-danger">{error}</p>
-      {conflict ? <button type="button" disabled={busy} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-edge px-2 font-medium hover:bg-surface-hover"
+    {error || newerVersionPending ? <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-subtle px-3 py-2 text-xs">
+      {error ? <p role="alert" className="text-danger">{error}</p> : <p role="status" className="text-fg-muted">
+        {zh ? '已有新版本，当前修改仍保留。' : 'A newer version is available. Your edits are still here.'}
+      </p>}
+      {conflict || newerVersionPending ? <button type="button" disabled={busy} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-edge px-2 font-medium hover:bg-surface-hover"
         onClick={() => void run('copy')}><Copy className="size-3.5" aria-hidden />{zh ? '保存副本' : 'Save a copy'}</button> : null}
+      {saveFailed ? <button type="button" disabled={busy} className="min-h-9 rounded-lg px-2 font-medium text-accent-fg hover:bg-accent-soft"
+        onClick={() => void flushSave()}>{zh ? '重试' : 'Retry'}</button> : null}
     </div> : null}
     <div className="relative min-h-0 flex-1" aria-busy={state === 'loading'}>
       <div ref={host} inert={busy} className="absolute inset-0" />
@@ -286,7 +360,5 @@ export default function SpaceWorkbook({ id, versionId, title, zh, editable, inTr
         {zh ? '工作簿加载失败，重试' : 'Could not load the workbook. Retry'}
       </button> : null}
     </div>
-    {selection ? <WorkbookChatPicker zh={zh} label={selection.label} sourceConversationId={sourceConversationId}
-      onClose={() => setSelection(undefined)} onPick={sendToChat} restoreFocus={() => selectionButton.current?.focus()} /> : null}
   </div>;
 }

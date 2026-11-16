@@ -7,6 +7,7 @@ import { transcriptRowsToClientHistory } from '../../../session/client-history.j
 import { buildSessionContextForLlm, buildSessionDisplayMessages } from '../../../session/session-context-for-llm.js';
 import { storedRowsToFileEntries } from '../../../session/stored-rows-to-file-entries.js';
 import { SessionStore } from '../../../session/store.js';
+import { buildSessionTimeline, buildTranscriptOutline } from '../../../session/transcript-outline.js';
 import { appendTranscriptEntry, claimNextSessionInput, closeXopcDatabase, ensureSessionRecord, insertSessionInput,
   loadTranscriptRowsForSession, openXopcDatabase, resetSessionRecord, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/index.js';
 import { publishVoiceChatMessage } from '../chat-publication.js';
@@ -71,16 +72,39 @@ describe('continuous voice Chat boundary', () => {
     expect(loadTranscriptRowsForSession(conversationId)).toEqual([]);
   });
 
-  it('hides voice execution chatter but retains ordinary typed Chat', () => {
+  it('keeps voice-only activity out of the timeline and preserves visible message anchors', async () => {
+    appendTranscriptEntry(conversationId, { role: 'user', content: 'First typed message', timestamp: 9 } as never);
     insertSessionInput({ id: 'voice-input', conversationId, clientMessageId: 'voice-action:call:tool',
       expectedTranscriptId: transcriptId, requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued',
       content: 'Query the project', origin: { type: 'channel', channel: 'voice' } });
     claimNextSessionInput(conversationId, 'voice-run');
     appendTranscriptEntry(conversationId, { role: 'user', content: 'Query the project', timestamp: 10, turnId: 'voice-run' } as never);
     appendTranscriptEntry(conversationId, { role: 'assistant', content: 'I will search now.', timestamp: 11, turnId: 'voice-run' } as never);
+    appendTranscriptEntry(conversationId, { role: 'toolResult', toolCallId: 'voice-tool', toolName: 'read',
+      content: [], timestamp: 11, turnId: 'voice-run' } as never);
+    appendTranscriptEntry(conversationId, { type: 'custom', customType: 'turn_outcome', data: {
+      version: 1, outcomeId: 'voice-run:outcome', runId: 'voice-run', turnId: 'voice-run',
+      status: 'failed', summary: 'aborted', deliverables: [], evidence: [], createdAt: '2026-11-16T00:00:00.000Z',
+    } });
+    appendTranscriptEntry(conversationId, { role: 'custom', customType: 'voice_omni_transcript', display: false,
+      content: 'Spoken follow-up', details: { role: 'user' } });
+    appendTranscriptEntry(conversationId, { role: 'custom', customType: 'voice_agent_instruction', display: false,
+      content: 'Delegated voice instruction' });
+    appendTranscriptEntry(conversationId, { kind: 'context', text: 'Voice response was interrupted before playback completed.',
+      data: { type: 'voice_response_interrupted' } });
+    await publishVoiceChatMessage(store, conversationId, transcriptId, { text: 'Project summary',
+      publicationId: 'task:voice-run', source: 'agent_result' });
     appendTranscriptEntry(conversationId, { role: 'user', content: 'Please add the source links.', timestamp: 12 } as never);
     const rows = loadTranscriptRowsForSession(conversationId);
-    expect(transcriptRowsToClientHistory(rows).map(message => message.content)).toEqual(['Please add the source links.']);
+    const visible = transcriptRowsToClientHistory(rows).filter(message => message.kind === 'message');
+    expect(visible.map(message => message.content)).toEqual(['First typed message', 'Project summary', 'Please add the source links.']);
+    const timeline = buildSessionTimeline(rows);
+    expect(timeline.map(item => [item.id, item.displayIndex])).toEqual(visible.map(message => [message.id, message.displayIndex]));
+    expect(timeline.filter(item => item.role === 'user').map(item => [item.preview, item.turn, item.displayIndex])).toEqual([
+      ['First typed message', 1, 0],
+      ['Please add the source links.', 2, 2],
+    ]);
+    expect(buildTranscriptOutline(rows).find(item => item.label === 'context')?.preview).toContain('interrupted');
     expect(JSON.stringify(buildSessionContextForLlm(rows))).toContain('Query the project');
   });
 });

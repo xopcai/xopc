@@ -1,11 +1,11 @@
 import * as Popover from '@radix-ui/react-popover';
-import { ArrowDownToLine, ArrowLeft, Archive, Ellipsis, FileText, Inbox, Music2, Plus, Presentation, Search, Sheet, Star, Trash2, Upload, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeft, Archive, Ellipsis, FileText, Inbox, Music2, PanelRight, Plus, Presentation, Search, Sheet, Star, Trash2, Upload, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useNavigate, useNavigationType, useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link, useBlocker, useLocation, useNavigate, useNavigationType, useOutletContext, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
-import { SPACE_WORKBOOK_MIME, type SpaceItem, type SpaceList, type SpaceOrigin, type SpaceVersionLink } from '@xopcai/gateway-contract';
+import { SPACE_WORKBOOK_MIME, type SpaceDetail, type SpaceItem, type SpaceList, type SpaceOrigin, type SpaceVersionLink } from '@xopcai/gateway-contract';
 
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,6 +22,8 @@ import { createSpaceWorkbook, getSpaceDetail, getSpaceList, spaceContent, spaceC
 import { SpacePreview } from './space-preview';
 import { SpaceAudioButton, SpaceFileIcon, SpaceThumbnail } from './space-row-media';
 import { readWorkbookFile, supportedWorkbookFile } from './space-workbook-import';
+import type { WorkbookEditorControls } from './space-workbook';
+import { WorkbookChatPanel } from './workbook-chat-panel';
 import { WorkbookReview } from './workbook-review';
 
 const SpaceWorkbook = lazy(() => import('./space-workbook'));
@@ -217,6 +219,7 @@ export function SpacePage() {
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const navigate = useNavigate();
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
   const previewHost = useOutletContext<HTMLDivElement | null>();
   const selectedVersion = params.get('version');
@@ -229,10 +232,15 @@ export function SpacePage() {
   const [confirmPurge, setConfirmPurge] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
-  const [workbookSave, setWorkbookSave] = useState<{ itemId: string; seed: string; from: string; to: string }>();
+  const [workbookSave, setWorkbookSave] = useState<{ itemId: string; seed: string; locationKey: string; versions: string[] }>();
+  const [workbookChat, setWorkbookChat] = useState<{ itemId: string; open: boolean }>();
+  const [newWorkbookVersion, setNewWorkbookVersion] = useState<{ itemId: string; versionId: string }>();
   const [undo, setUndo] = useState<{ id: string; revision: number }>();
   const rows = useRef(new Map<string, HTMLButtonElement>());
   const previewHeading = useRef<HTMLHeadingElement>(null);
+  const titleButton = useRef<HTMLButtonElement>(null);
+  const chatToggle = useRef<HTMLButtonElement>(null);
+  const workbookControls = useRef<WorkbookEditorControls>(null);
   const listSection = useRef<HTMLElement>(null);
   const listScroll = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -240,6 +248,35 @@ export function SpacePage() {
   const q = (params.get('q') ?? '').slice(0, 160);
   const query = useDeferredValue(q);
   const selected = params.get('item');
+  const activeItemId = useRef(selected);
+  useLayoutEffect(() => {
+    if (activeItemId.current === selected) return;
+    activeItemId.current = selected;
+    setWorkbookSave(undefined);
+    setWorkbookChat(undefined);
+    setNewWorkbookVersion(undefined);
+  }, [selected]);
+  const navigation = useBlocker(({ currentLocation, nextLocation }) => {
+    if (!workbookControls.current?.hasChanges()) return false;
+    if (currentLocation.pathname !== nextLocation.pathname) return true;
+    const current = new URLSearchParams(currentLocation.search);
+    const next = new URLSearchParams(nextLocation.search);
+    if (current.get('item') !== next.get('item')) return true;
+    if (!next.has('version') && isLatestWorkbook) return false;
+    return current.get('version') !== next.get('version');
+  });
+  useEffect(() => {
+    if (navigation.state !== 'blocked') return;
+    let active = true;
+    void (async () => {
+      const controls = workbookControls.current;
+      const saved = await controls?.flushSave();
+      if (!active) return;
+      if (!controls || saved) navigation.proceed();
+      else navigation.reset();
+    })();
+    return () => { active = false; };
+  }, [navigation]);
   const kind = params.get('kind');
   const scope = params.get('taskId') ? 'taskId' : params.get('projectId') ? 'projectId' : undefined;
   const onViewChange = useCallback(() => {
@@ -276,14 +313,64 @@ export function SpacePage() {
   const items = list.data?.flatMap(page => page.items) ?? [];
   const item = detail.data;
   const exactVersion = Boolean(selectedVersion && (targetSheet || proposalId || undoVersion));
-  const version = item?.versions.find(entry => entry.id === selectedVersion) ?? (exactVersion ? undefined : item?.currentVersion);
+  const ownSave = item && workbookSave?.itemId === item.id && workbookSave.versions.includes(item.currentVersion.id)
+    ? workbookSave : undefined;
+  const version = ownSave?.locationKey === location.key ? item?.currentVersion
+    : item?.versions.find(entry => entry.id === selectedVersion) ?? (exactVersion ? undefined : item?.currentVersion);
   const workbook = version?.mimeType === SPACE_WORKBOOK_MIME;
-  const workbookSeed = workbookSave && item?.id === workbookSave.itemId
-    && (version?.id === workbookSave.from || version?.id === workbookSave.to) ? workbookSave.seed : version?.id;
+  const isLatestWorkbook = workbook && version.id === item?.currentVersion.id;
+  const workbookSeed = isLatestWorkbook && ownSave ? ownSave.seed : version?.id;
+  useEffect(() => {
+    if (navigation.state !== 'unblocked' || !selectedVersion || selectedVersion === version?.id
+      || ownSave?.locationKey !== location.key) return;
+    const next = new URLSearchParams(params);
+    next.delete('version');
+    setParams(next, { replace: true });
+  }, [location.key, navigation.state, ownSave, params, selectedVersion, setParams, version?.id]);
   const hit = version?.id === item?.currentVersion.id ? items.find(row => row.id === selected)?.hit : undefined;
   const origin = item?.origins.find(row => row.versionId === version?.id && row.available)
     ?? item?.origins.find(row => row.available) ?? item?.origin;
   const source = sourceHref(origin);
+  const workbookProjectId = origin?.projectId ?? item?.origins.find(entry => entry.projectId)?.projectId;
+  const chatOpened = workbookChat?.itemId === item?.id && Boolean(workbookChat?.open);
+  const newerVersionPending = newWorkbookVersion?.itemId === item?.id
+    && newWorkbookVersion?.versionId !== item?.currentVersion.id;
+  const missingVersion = Boolean(item && selectedVersion && !item.versions.some(entry => entry.id === selectedVersion));
+  const mutateDetail = detail.mutate;
+
+  const prepareWorkbookChat = useCallback(() => workbookControls.current?.prepareChatContext() ?? Promise.resolve(null), []);
+  const readWorkbookSelection = useCallback(async () => workbookControls.current?.readSelection(), []);
+
+  const applyWorkbookDetail = useCallback((fresh: SpaceDetail, savedVersionId?: string) => {
+    if (activeItemId.current !== fresh.id) return;
+    return mutateDetail(current => {
+      if (!current || current.revision > fresh.revision) return current;
+      if (current.currentVersion.id !== fresh.currentVersion.id && fresh.currentVersion.id !== savedVersionId
+        && workbookControls.current?.hasChanges()) {
+        setNewWorkbookVersion({ itemId: fresh.id, versionId: fresh.currentVersion.id });
+        return { ...current, title: fresh.title, favorite: fresh.favorite, revision: fresh.revision };
+      }
+      setNewWorkbookVersion(undefined);
+      return fresh;
+    }, { revalidate: false });
+  }, [mutateDetail]);
+
+  const refreshWorkbook = useCallback(async () => {
+    if (!selected) return;
+    await applyWorkbookDetail(await getSpaceDetail(spaceItemPath(selected)));
+    void list.mutate();
+  }, [applyWorkbookDetail, list.mutate, selected]);
+
+  const refreshAfterChat = useCallback(() => { void refreshWorkbook().catch(() => {}); }, [refreshWorkbook]);
+
+  useEffect(() => {
+    if (missingVersion) void refreshWorkbook().catch(() => {});
+  }, [missingVersion, refreshWorkbook, selectedVersion]);
+
+  function closeWorkbookChat() {
+    setWorkbookChat(current => current && { ...current, open: false });
+    requestAnimationFrame(() => chatToggle.current?.focus({ preventScroll: true }));
+  }
 
   function setQueryValues(values: Record<string, string | null>) {
     setParams(current => {
@@ -297,7 +384,6 @@ export function SpacePage() {
   }
 
   function select(id: string | null) {
-    setWorkbookSave(undefined);
     setEditing(false);
     setConfirmPurge(false);
     setActionError('');
@@ -319,7 +405,7 @@ export function SpacePage() {
     if (!selected) return;
     const escape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
-      if (event.target instanceof Element && event.target.closest('[data-space-workbook]')) return;
+      if (event.target instanceof Element && event.target.closest('[data-space-workbook], [data-workbook-chat]')) return;
       if (editing || confirmPurge) {
         setEditing(false);
         setConfirmPurge(false);
@@ -351,23 +437,36 @@ export function SpacePage() {
     try { await action(); }
     catch {
       setActionError(zh ? '操作未完成，请重试' : 'Could not complete the action. Try again.');
-      void detail.mutate();
+      if (workbook) void refreshWorkbook().catch(() => {});
+      else void detail.mutate();
     } finally { setBusy(false); }
   }
 
-  function mutateItem(action: 'patch' | 'trash' | 'restore' | 'purge', target: { id: string; revision: number }, patch?: { title?: string; favorite?: boolean }) {
+  function mutateItem(action: 'patch' | 'trash' | 'restore' | 'purge', target: { id: string; revision: number }, patch?: { title?: string; favorite?: boolean }, onSaved?: () => void) {
     return run(async () => {
       const path = spaceItemPath(target.id);
       const suffix = action === 'restore' || action === 'purge' ? `/${action}` : '';
-      await fetchJson(apiUrl(path + suffix), {
+      let revision = target.revision;
+      const controls = workbookControls.current;
+      if (controls && isLatestWorkbook && selected === target.id && (action === 'patch' || action === 'trash')) {
+        const savedVersionId = await controls.flushSave();
+        if (!savedVersionId) return;
+        if (savedVersionId !== version.id) revision = (await getSpaceDetail(path)).revision;
+      }
+      const updated = await fetchJson<SpaceDetail>(apiUrl(path + suffix), {
         method: action === 'patch' ? 'PATCH' : action === 'trash' ? 'DELETE' : 'POST',
-        body: JSON.stringify({ revision: target.revision, ...patch }),
+        body: JSON.stringify({ revision, ...patch }),
       });
-      if (action === 'trash') setUndo({ id: target.id, revision: target.revision + 1 });
+      if (action === 'trash') setUndo({ id: target.id, revision: revision + 1 });
       if (action === 'restore' || action === 'purge') setUndo(undefined);
       if (action === 'patch') {
-        setEditing(false);
-        await detail.mutate();
+        if (activeItemId.current === target.id) {
+          setEditing(false);
+          if (workbook) {
+            await applyWorkbookDetail(updated);
+            onSaved?.();
+          } else await detail.mutate();
+        }
       } else if (selected === target.id) {
         select(null);
       }
@@ -378,7 +477,10 @@ export function SpacePage() {
   async function download() {
     if (!item || !version) return;
     await run(async () => {
-      const content = await spaceContent(item.id, version.id);
+      const controls = workbookControls.current;
+      const versionId = isLatestWorkbook && controls ? await controls.flushSave() : version.id;
+      if (!versionId) return;
+      const content = await spaceContent(item.id, versionId);
       const fileName = workbook ? `${item.title.replace(/[\\/\x00-\x1f]/g, '_')}.xlsx` : version.fileName;
       const blob = workbook ? new Blob([await import('./space-workbook-format').then(format =>
         content.text().then(body => format.writeWorkbook(JSON.parse(body))))], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }) : content;
@@ -404,7 +506,6 @@ export function SpacePage() {
   }
 
   function openWorkbook(id: string) {
-    setWorkbookSave(undefined);
     setEditing(false);
     setQueryValues({ item: id, version: null, sheet: null, range: null, proposal: null, undo: null, view: null, q: null, kind: null, projectId: null, taskId: null });
     void list.mutate();
@@ -441,11 +542,43 @@ export function SpacePage() {
     event.preventDefault();
     if (!item) return;
     const name = String(new FormData(event.currentTarget).get('title') ?? '').trim();
-    if (name) void mutateItem('patch', item, { title: name });
+    if (!name) return;
+    if (name === item.title) cancelRename();
+    else void mutateItem('patch', item, { title: name });
+  }
+
+  function restoreTitleFocus() {
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body) titleButton.current?.focus({ preventScroll: true });
+    });
+  }
+
+  function cancelRename(restoreFocus = true) {
+    setEditing(false);
+    if (workbook && restoreFocus) restoreTitleFocus();
+  }
+
+  function finishWorkbookRename(value: string, restoreFocus: boolean) {
+    if (!item || busy) return;
+    const name = value.trim();
+    if (!name || name === item.title) cancelRename(restoreFocus);
+    else void mutateItem('patch', item, { title: name }, restoreFocus ? restoreTitleFocus : undefined);
   }
 
   const dateFormat = new Intl.DateTimeFormat(zh ? 'zh-CN' : 'en', { month: 'short', day: 'numeric' });
   const formatDate = (time: number) => dateFormat.format(time);
+  const versionPicker = item && version && item.versions.length > 1 ? <Select value={version.id}
+    aria-label={zh ? (workbook ? '工作簿版本' : '资料版本') : (workbook ? 'Workbook version' : 'File version')}
+    className={workbook ? 'max-w-32 shrink-0' : undefined} triggerClassName={workbook ? 'h-8 px-2 text-xs' : undefined}
+    onChange={event => {
+      const id = event.target.value;
+      if (id === version.id) return;
+      setQueryValues({ version: id === item.currentVersion.id ? null : id, sheet: null, range: null, proposal: null, undo: null });
+    }}>
+    {item.versions.map((entry, index) => <SelectOption key={entry.id} value={entry.id}>
+      {entry.id === item.currentVersion.id ? (zh ? '最新版' : 'Latest') : formatDate(entry.createdAt)} · v{item.versions.length - index}
+    </SelectOption>)}
+  </Select> : null;
   const sourceLabel = (row: SpaceItem) => row.origin?.label ?? (row.origin?.kind === 'task' ? (zh ? '任务' : 'Task')
     : row.origin?.kind === 'automation' ? (zh ? '定时任务' : 'Automation') : (zh ? '对话' : 'Chat'));
 
@@ -541,12 +674,40 @@ export function SpacePage() {
         <section id="space-file-preview" aria-label={workbook ? (zh ? '工作簿编辑器' : 'Workbook editor') : (zh ? '资料预览' : 'File preview')}
           style={{ '--space-preview-width': `${previewWidth}%` } as CSSProperties}
           data-space-workbook-surface={workbook ? '' : undefined}
-          className={cn('file-preview-surface absolute inset-0 z-40 flex min-h-0 min-w-0 flex-col', !workbook && '@min-[58rem]/space:relative @min-[58rem]/space:inset-auto @min-[58rem]/space:w-[var(--space-preview-width)] @min-[58rem]/space:shrink-0 @min-[58rem]/space:border-s @min-[58rem]/space:border-edge-subtle')}>
+          className={cn('file-preview-surface absolute inset-0 z-40 flex min-h-0 min-w-0', !workbook && '@min-[58rem]/space:relative @min-[58rem]/space:inset-auto @min-[58rem]/space:w-[var(--space-preview-width)] @min-[58rem]/space:shrink-0 @min-[58rem]/space:border-s @min-[58rem]/space:border-edge-subtle')}>
           {!workbook ? <SpacePreviewDivider zh={zh} width={previewWidth} onResize={setPreviewWidth} /> : null}
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <header className="flex min-h-14 shrink-0 items-center gap-1 border-b border-edge-subtle px-3 py-2">
             <button type="button" className={cn(iconButton, !workbook && '@min-[58rem]/space:hidden')} onClick={close} aria-label={zh ? '返回资料库' : 'Back to library'}><ArrowLeft className="size-4" /></button>
-            <h2 ref={previewHeading} tabIndex={-1} className="min-w-0 flex-1 py-2 text-sm leading-5 font-semibold wrap-anywhere text-fg">{item?.title ?? (zh ? '预览' : 'Preview')}</h2>
+            {workbook && editing && item ?
+              <input key={item.id} defaultValue={item.title} maxLength={240} autoFocus readOnly={busy}
+                onFocus={event => event.currentTarget.select()}
+                onBlur={event => finishWorkbookRename(event.currentTarget.value, false)}
+                onKeyDown={event => {
+                  if (event.key !== 'Enter' && event.key !== 'Escape') return;
+                  event.stopPropagation();
+                  if (busy || event.nativeEvent.isComposing || event.keyCode === 229) return;
+                  event.preventDefault();
+                  if (event.key === 'Enter') finishWorkbookRename(event.currentTarget.value, true);
+                  else cancelRename();
+                }}
+                aria-label={zh ? '工作簿名称' : 'Workbook name'}
+                className="h-9 min-w-0 flex-1 rounded-lg border border-edge bg-surface-inset px-2 text-sm font-semibold text-fg outline-none focus:border-accent" />
+              : <h2 ref={previewHeading} tabIndex={-1} className="min-w-0 flex-1 text-sm leading-5 font-semibold wrap-anywhere text-fg">
+                {workbook && item && !item.trashedAt ? <button type="button" ref={titleButton}
+                  title={zh ? '重命名工作簿' : 'Rename workbook'} disabled={busy}
+                  className="block min-h-9 max-w-full truncate rounded-lg px-2 text-start hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-accent"
+                  onClick={() => setEditing(true)}>{item.title}</button> : item?.title ?? (zh ? '预览' : 'Preview')}
+              </h2>}
+            {workbook ? versionPicker : null}
             {item && !item.trashedAt ? <>
+              {workbook ? <button type="button" ref={chatToggle}
+                className={cn(iconButton, 'w-auto gap-1.5 px-2', chatOpened && 'bg-accent-soft text-accent-fg')}
+                aria-expanded={chatOpened} aria-controls={workbookChat?.itemId === item.id ? 'workbook-chat' : undefined}
+                aria-label={zh ? '工作簿对话' : 'Workbook chat'}
+                onClick={() => chatOpened ? closeWorkbookChat() : setWorkbookChat({ itemId: item.id, open: true })}>
+                <PanelRight className="size-4" aria-hidden /><span className="hidden whitespace-nowrap @min-[34rem]/space:inline">{zh ? '工作簿对话' : 'Workbook chat'}</span>
+              </button> : null}
               <button type="button" className={cn(iconButton, item.favorite && 'text-accent-fg')} aria-pressed={item.favorite}
                 aria-label={zh ? '收藏' : 'Favorite'} disabled={busy} onClick={() => void mutateItem('patch', item, { favorite: !item.favorite })}><Star className={cn('size-4', item.favorite && 'fill-current')} /></button>
               <button type="button" className={iconButton} disabled={busy}
@@ -554,7 +715,8 @@ export function SpacePage() {
                 onClick={() => void download()}><ArrowDownToLine className="size-4" /></button>
               <Popover.Root>
                 <Popover.Trigger className={iconButton} aria-label={zh ? '更多操作' : 'More actions'}><Ellipsis className="size-4" /></Popover.Trigger>
-                <Popover.Portal><Popover.Content align="end" sideOffset={5} className="z-50 min-w-36 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover">
+                <Popover.Portal><Popover.Content align="end" sideOffset={5} className="z-50 min-w-36 rounded-xl border border-edge bg-surface-overlay p-1 shadow-popover"
+                  onCloseAutoFocus={event => { if (workbook && editing) event.preventDefault(); }}>
                   <Popover.Close className={menuButton} onClick={() => setEditing(true)}>{zh ? '重命名' : 'Rename'}</Popover.Close>
                   <Popover.Close className={cn(menuButton, 'text-red-600 dark:text-red-400')} disabled={busy} onClick={() => void mutateItem('trash', item)}>{zh ? '移到回收站' : 'Move to Trash'}</Popover.Close>
                 </Popover.Content></Popover.Portal>
@@ -562,7 +724,7 @@ export function SpacePage() {
             </> : null}
             {!workbook ? <button type="button" className={cn(iconButton, 'hidden @min-[58rem]/space:inline-flex')} onClick={close} aria-label={zh ? '关闭预览' : 'Close preview'}><X className="size-4" /></button> : null}
           </header>
-          {editing && item ? <form className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2" onSubmit={rename}>
+          {!workbook && editing && item ? <form className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2" onSubmit={rename}>
             <input name="title" defaultValue={item.title} required maxLength={240} autoFocus aria-label={zh ? '资料名称' : 'Result name'}
               className="min-w-24 flex-1 rounded-lg border border-edge bg-surface-panel px-2 py-2 text-sm" />
             <button className={primaryButton} disabled={busy}>{zh ? '保存' : 'Save'}</button>
@@ -579,37 +741,31 @@ export function SpacePage() {
             {workbook && (proposalId || undoVersion) && !item.trashedAt ? <WorkbookReview key={`${proposalId ?? ''}:${undoVersion ?? ''}`}
               id={item.id} versionId={version.id} proposalId={proposalId} undo={undoVersion} zh={zh}
               onClose={() => setQueryValues({ proposal: null, undo: null })} onComplete={() => {
-                setWorkbookSave(undefined);
                 void detail.mutate();
                 void list.mutate();
                 setQueryValues({ version: null, proposal: null, undo: null });
               }} /> : null}
             {workbook ? <Suspense fallback={<Skeleton className="m-3 min-h-0 flex-1 rounded-xl" />}>
-              <SpaceWorkbook key={workbookSeed} id={item.id} versionId={workbookSeed!} title={item.title} zh={zh}
-                editable={!item.trashedAt && version.id === item.currentVersion.id} inTrash={Boolean(item.trashedAt)}
-                targetSheet={targetSheet} targetRange={targetRange}
-                sourceConversationId={origin?.available ? origin.conversationId : undefined} projectId={origin?.available ? origin.projectId : undefined}
+              <SpaceWorkbook key={`${isLatestWorkbook ? 'latest' : 'history'}:${workbookSeed}`} id={item.id} versionId={version.id} title={item.title} zh={zh}
+                editable={!item.trashedAt && isLatestWorkbook}
+                controls={workbookControls} targetSheet={targetSheet} targetRange={targetRange}
+                newerVersionPending={newerVersionPending}
                 onCopy={openWorkbook}
                 onSaved={savedVersionId => {
-                  setWorkbookSave({ itemId: item.id, seed: workbookSeed!, from: version.id, to: savedVersionId });
-                  if (selectedVersion) setQueryValues({ version: null });
-                  void detail.mutate();
+                  setWorkbookSave(current => ({
+                    itemId: item.id, seed: workbookSeed!, locationKey: location.key,
+                    versions: [...new Set([...(current?.seed && current.seed === workbookSeed ? current.versions : [version.id]), savedVersionId])],
+                  }));
+                  void getSpaceDetail(spaceItemPath(item.id)).then(fresh => applyWorkbookDetail(fresh, savedVersionId)).catch(() => {});
                   void list.mutate();
                 }} />
             </Suspense> : <SpacePreview key={version.id} itemId={item.id} version={version} hit={hit} download={download} />}
-            <div className="max-h-[45%] shrink-0 space-y-2 overflow-y-auto border-t border-edge-subtle px-3 py-2">
+            {!workbook || hit || source || item.trashedAt || version.indexStatus === 'pending' ? <div className="max-h-[45%] shrink-0 space-y-2 overflow-y-auto border-t border-edge-subtle px-3 py-2">
               {hit ? <p className="line-clamp-2 text-xs text-fg-muted"><MarkedText text={hit.text} query={query.trim()} /></p> : null}
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
                 <span>{origin ? sourceLabel(item) : null}</span>
                 {version.indexStatus === 'pending' ? <span>{zh ? '正在索引' : 'Indexing'}</span> : null}
-                {item.versions.length > 1 ? <Select value={version.id} aria-label={zh ? '资料版本' : 'File version'} onChange={event => {
-                  setWorkbookSave(undefined);
-                  setQueryValues({ version: event.target.value, sheet: null, range: null, proposal: null, undo: null });
-                }}>
-                  {item.versions.map((entry, index) => <SelectOption key={entry.id} value={entry.id}>
-                    {entry.id === item.currentVersion.id ? (zh ? '最新版' : 'Latest') : formatDate(entry.createdAt)} · v{item.versions.length - index}
-                  </SelectOption>)}
-                </Select> : null}
+                {!workbook ? versionPicker : null}
               </div>
               <footer className="flex flex-wrap items-center justify-between gap-2">
                 {item.trashedAt ? <>
@@ -634,9 +790,14 @@ export function SpacePage() {
                   <button type="button" className={cn(menuButton, 'text-red-600 dark:text-red-400')} disabled={busy} onClick={() => void mutateItem('purge', item)}>{zh ? '删除' : 'Delete'}</button>
                 </div>
               </div> : null}
-            </div>
+            </div> : null}
           </> : null}
           {status}
+          </div>
+          {workbook && item && !item.trashedAt && workbookChat?.itemId === item.id ? <WorkbookChatPanel key={item.id} id={item.id}
+            open={chatOpened} zh={zh} originId={origin?.available ? origin.conversationId : undefined}
+            projectId={workbookProjectId} onClose={closeWorkbookChat}
+            readSelection={readWorkbookSelection} prepareSendContext={prepareWorkbookChat} onRunSettled={refreshAfterChat} /> : null}
         </section>, previewHost) : null}
       {!(selected && previewHost) ? status : null}
     </div>
