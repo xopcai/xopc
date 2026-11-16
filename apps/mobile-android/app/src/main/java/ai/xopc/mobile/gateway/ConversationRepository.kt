@@ -7,8 +7,12 @@ import android.util.Base64
 import java.net.URLEncoder
 import java.time.Instant
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import org.json.JSONArray
 import org.json.JSONObject
+
+internal const val RECENT_CONVERSATION_LIMIT = 6
 
 sealed interface ConversationHistoryScope {
   data object Recent : ConversationHistoryScope
@@ -26,7 +30,9 @@ data class ConversationSummary(
   val isLocalDraft: Boolean = false,
   val status: String = "active",
   val agentSetup: Boolean = false,
-)
+) {
+  internal val isRecentSidebarCandidate: Boolean get() = !isLocalDraft && status != "archived" && messageCount > 0
+}
 data class ConversationTaskChild(val taskId: String, val title: String, val phase: String,
   val runStatus: String?, val activeConversationId: String?)
 data class ConversationTaskGroup(val total: Int, val activeCount: Int, val items: List<ConversationTaskChild>)
@@ -438,6 +444,19 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val remote = parseList(gateway.request("/api/sessions$query"))
     val items = if (scope is ConversationHistoryScope.Expert) remote.items.filterNot { it.agentSetup } else remote.items
     return remote.copy(items = (if (offset == 0 && scope == null) localDrafts(search) else emptyList()) + items)
+  }
+
+  suspend fun recent(): List<ConversationSummary> {
+    val recent = mutableListOf<ConversationSummary>()
+    val seen = mutableSetOf<String>()
+    var offset = 0
+    do {
+      val page = runInterruptible(Dispatchers.IO) { list(offset = offset, scope = ConversationHistoryScope.Recent) }
+      recent += page.items.filter { it.isRecentSidebarCandidate && seen.add(it.id) }
+      offset += page.remoteCount
+      // Leave space for the personal conversation and a pending deletion.
+    } while (recent.size < RECENT_CONVERSATION_LIMIT + 2 && page.hasMore && page.remoteCount > 0)
+    return recent.take(20)
   }
 
   fun sharePreview(conversationId: String): ConversationSharePreview {

@@ -46,7 +46,8 @@ struct ChatSidebarView: View {
                         .accessibilityIdentifier("chat-sidebar-capabilities")
                     Text("最近对话").font(.footnote).foregroundStyle(.secondary)
                         .padding(.leading, 10).padding(.top, 14)
-                    ForEach(recent.filter { $0.id != personal?.conversationId && $0.status != "archived" && $0.messageCount > 0 }.prefix(6)) { item in
+                    let recentRows = recent.filter { $0.id != personal?.conversationId && $0.isRecentSidebarCandidate }
+                    ForEach(recentRows.prefix(ConversationSummary.recentSidebarLimit)) { item in
                         Button { onConversation(item) } label: {
                             Text(verbatim: item.displayName)
                                 .lineLimit(1).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)

@@ -3,7 +3,7 @@ import { userErrorMessage } from '../common/userError';
 import { XopcSessionItem } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
-import { XopcChatRepository } from '../repository/chatRepository';
+import { RECENT_CONVERSATION_LIMIT, XopcChatRepository } from '../repository/chatRepository';
 import { gatewaySession } from '../service/gatewaySession';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcListSkeleton } from './MobileComponents';
@@ -38,10 +38,12 @@ export struct XopcChatSidebar {
 
   @Computed get recentConversations(): XopcSessionItem[] {
     return this.recent.filter((item: XopcSessionItem): boolean =>
-      item.key !== this.personalAgent?.conversationId && item.status !== 'archived').slice(0, 6);
+      item.key !== this.personalAgent?.conversationId && item.status !== 'archived' && item.messageCount > 0)
+      .slice(0, RECENT_CONVERSATION_LIMIT);
   }
 
   aboutToAppear(): void {
+    this.disposed = false;
     const cached = this.repository.cachedRecent();
     if (cached) { this.recent = cached.items; this.hasSnapshot = true; }
     void this.loadRecent();

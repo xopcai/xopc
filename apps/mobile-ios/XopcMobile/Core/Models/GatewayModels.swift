@@ -97,6 +97,12 @@ struct SidebarTask: Decodable, Equatable, Identifiable, Sendable {
 }
 
 struct ConversationSummary: Codable, Equatable, Identifiable, Sendable {
+    static let recentSidebarLimit = 6
+
+    var isRecentSidebarCandidate: Bool {
+        status != "archived" && messageCount > 0
+    }
+
     struct CustomData: Codable, Equatable, Sendable { let agentSetup: Bool? }
     // swiftlint:disable:next implicit_optional_initialization
     var customData: CustomData? = nil

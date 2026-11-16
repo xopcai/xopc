@@ -479,15 +479,16 @@ struct AppRootView: View {
                 recentLoading = false
             }
         }
-        await restoreRecents(using: configuration)
+        if recentScope != scope || recentConversations == nil {
+            await restoreRecents(using: configuration)
+        }
         guard !Task.isCancelled else { return }
         do {
-            let page = try await GatewayClient(configuration: configuration).fetchConversations()
+            let rows = try await GatewayClient(configuration: configuration).fetchRecentConversations()
             guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
             recentScope = scope
-            recentConversations = page.items
-            MobileListCache.shared.write(page, to: .conversations, scope: scope, requestedAt: requestedAt)
-            await RecentConversationsStore.shared.write(page.items, scope: scope, requestedAt: requestedAt)
+            recentConversations = rows
+            await RecentConversationsStore.shared.write(rows, scope: scope, requestedAt: requestedAt)
         } catch is CancellationError {
         } catch {
             guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }

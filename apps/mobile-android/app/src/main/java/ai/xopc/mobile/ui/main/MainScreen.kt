@@ -354,6 +354,7 @@ fun MainScreen(
   onConversationScope: (ConversationHistoryScope?) -> Unit = {},
   onFetchConversationExperts: suspend () -> List<ConversationAgent> = { emptyList() },
   onRefreshConversations: () -> Unit = {},
+  onRefreshRecentConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
   onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
@@ -675,6 +676,7 @@ fun MainScreen(
     onConversationScope = onConversationScope,
     onFetchConversationExperts = onFetchConversationExperts,
     onRefreshConversations = onRefreshConversations,
+    onRefreshRecentConversations = onRefreshRecentConversations,
     onLoadCapabilities = onLoadCapabilities, onCapabilityPanel = onCapabilityPanel,
     onCapabilitySetupChat = onCapabilitySetupChat,
     onCreateAgentConversation = onCreateAgentConversation,
@@ -877,6 +879,7 @@ internal fun MainContent(
   onConversationScope: (ConversationHistoryScope?) -> Unit = {},
   onFetchConversationExperts: suspend () -> List<ConversationAgent> = { emptyList() },
   onRefreshConversations: () -> Unit = {},
+  onRefreshRecentConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
   onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
@@ -1477,8 +1480,7 @@ internal fun MainContent(
   var startConversationSearch by rememberSaveable(gatewayId) { mutableStateOf(false) }
   val conversationsSearch by rememberUpdatedState(connection.conversationSearch)
   val clearConversationSearch by rememberUpdatedState(onConversationSearchChange)
-  val refreshSidebarConversations by rememberUpdatedState(onRefreshConversations)
-  val loadingSidebarConversations by rememberUpdatedState(connection.conversationsLoading)
+  val refreshSidebarConversations by rememberUpdatedState(onRefreshRecentConversations)
   val closeKeyboard: () -> Unit = {
     focusManager.clearFocus(force = true)
     keyboardController?.hide()
@@ -1487,7 +1489,7 @@ internal fun MainContent(
     assistantActionsOpen = false
     closeKeyboard()
     if (conversationsSearch.isNotEmpty()) clearConversationSearch("")
-    else if (!loadingSidebarConversations) refreshSidebarConversations()
+    refreshSidebarConversations()
     sidebar.open = true
   }
   val exitDestination: () -> Unit = {
@@ -1959,7 +1961,7 @@ internal fun MainContent(
         }
       }
     }
-    ChatSidebar(sidebar, sidebarWidth, connection, onClose = { sidebar.open = false }, onRetry = onRefreshConversations,
+    ChatSidebar(sidebar, sidebarWidth, connection, onClose = { sidebar.open = false }, onRetry = onRefreshRecentConversations,
       onDestination = { destination ->
         sidebar.open = false
         linkedDetails = emptyList()
@@ -2635,7 +2637,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     if (connection.selectedConversationId != null && !connection.historyLoading && !connection.chatError &&
       connection.messages.isEmpty() && connection.context == null && !connection.contextError) onReloadContext()
   }
-  val selected = connection.conversations.firstOrNull { it.id == connection.selectedConversationId }
+  val selected = connection.conversationSummary(connection.selectedConversationId)
   var personalSettingsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var modelPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var thinkingPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
@@ -2723,7 +2725,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   fun musicTrack(item: GeneratedMediaItem, scope: GeneratedMediaScope) = MusicTrack(scope.gatewayId,
     scope.conversationId, item.id, item.title.orEmpty().ifBlank { context.getString(R.string.music_notification_channel) },
     connection.personal.agent?.displayName?.takeIf { isPersonalChat }
-      ?: connection.conversations.firstOrNull { it.id == selectedMessageConversationId }?.title.orEmpty(),
+      ?: connection.conversationSummary(selectedMessageConversationId)?.title.orEmpty(),
     item.lyrics, (item.duration ?: 0).coerceIn(0, Int.MAX_VALUE / 1000) * 1000)
   val playGeneratedMedia: (GeneratedMediaItem) -> Unit = { item ->
     reader.stop()
