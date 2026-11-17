@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { reduceChatStream } from '../entry/src/main/ets/common/chatStream.ets';
-import { chatLiveCompletedCount, chatLiveElapsedSeconds, chatLiveNarration, chatLiveStages, chatStageStatus, reduceChatSnapshotActivity } from '../entry/src/main/ets/common/chatLiveActivity.ets';
+import { chatLiveCompletedCount, chatLiveStages, chatStageStatus, reduceChatSnapshotActivity } from '../entry/src/main/ets/common/chatLiveActivity.ets';
 import { chatPresentationRows } from '../entry/src/main/ets/common/chatPresentation.ets';
 
 describe('live chat activity', () => {
@@ -19,14 +19,12 @@ describe('live chat activity', () => {
     expect(chatLiveCompletedCount(row)).toBe(1);
   });
 
-  it('ignores private progress messages and reports actual elapsed time', () => {
+  it('ignores private progress messages', () => {
     const row = reduceChatStream(undefined, 'progress', {
       stage: 'unknown', message: 'Testing /private/customer-repo',
     }, 'run');
     expect(row.activity).toBe('working');
     expect(JSON.stringify(row)).not.toContain('/private/customer-repo');
-    expect(chatLiveElapsedSeconds(1000, 8999)).toBe(7);
-    expect(chatLiveElapsedSeconds(1000, 9000)).toBe(8);
   });
 
   it('keeps safe tool activity across snapshot refreshes without duplicating answer text', () => {
@@ -46,15 +44,15 @@ describe('live chat activity', () => {
     let row = reduceChatStream(undefined, 'assistant_delta', {
       messageId: 'narration', delta: 'Checking the project structure', offset: 0,
     }, 'run');
-    expect(chatLiveNarration(row)).toBe('');
+    expect(chatLiveStages(row)).toEqual([]);
     row = reduceChatStream(row, 'assistant_message_end', {
       messageId: 'narration', presentation: 'narration',
     }, 'run');
-    expect(chatLiveNarration(row)).toBe('Checking the project structure');
+    expect(chatLiveStages(row).map(stage => stage.text)).toEqual(['Checking the project structure']);
     row = reduceChatStream(row, 'assistant_delta', {
       messageId: 'answer', delta: 'Here is the result', offset: 0,
     }, 'run');
-    expect(chatLiveNarration(row)).toBe('');
+    expect(chatLiveStages(row).map(stage => stage.text)).toEqual(['Checking the project structure']);
   });
 
   it('does not replace an active tool status with assistant text', () => {
@@ -77,7 +75,6 @@ describe('live chat activity', () => {
     row = reduceChatStream(row, 'assistant_delta', { messageId: 'final', delta: '未分类的草稿', offset: 0 }, 'run');
     expect(chatLiveStages(row).map(stage => stage.text)).toEqual(['确认手机连接', '查找京东', '安装京东', '检查安装结果']);
     expect(chatLiveStages(row).map(stage => stage.id)).toEqual(['connect:text', 'search:text', 'install:text', 'verify:text']);
-    expect(chatLiveNarration(row)).toBe(''); // Personal chat keeps its existing behavior.
     row = reduceChatStream(row, 'assistant_message_end', { messageId: 'final', presentation: 'answer' }, 'run');
     expect(chatLiveStages(row)).toEqual([]);
     expect(row.live).toBe(true);

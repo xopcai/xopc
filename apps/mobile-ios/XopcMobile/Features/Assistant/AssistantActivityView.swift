@@ -1,31 +1,21 @@
 import SwiftUI
 
 struct AssistantActivityView: View {
-    let narration: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @State private var appearedAt = Date()
 
     var body: some View {
-        TimelineView(.periodic(from: appearedAt, by: 1)) { context in
-            let elapsed = context.date.timeIntervalSince(appearedAt)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    ForEach(0 ..< 3, id: \.self) { index in
-                        WaitingReplyDot(index: index, animate: !reduceMotion && scenePhase == .active)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .frame(width: 72, height: 44)
-                .background(Color.secondary.opacity(0.1), in: .capsule)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("助手正在处理")
-                if elapsed >= 10, let narration, !narration.isEmpty {
-                    Text(verbatim: narration).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-                }
+        HStack(spacing: 6) {
+            ForEach(0 ..< 3, id: \.self) { index in
+                WaitingReplyDot(index: index, animate: !reduceMotion && scenePhase == .active)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 12)
+        .frame(width: 72, height: 44)
+        .background(Color.secondary.opacity(0.1), in: .capsule)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("助手正在处理")
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("assistant-waiting")
     }
 }
@@ -78,7 +68,7 @@ struct AssistantStagesView: View {
                     .foregroundStyle(status == "error" ? Color.red : Color.secondary)
                     .accessibilityIdentifier("assistant-stages-status")
             } else {
-                AssistantActivityView(narration: nil)
+                AssistantActivityView()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

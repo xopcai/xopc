@@ -397,7 +397,7 @@ export class SessionStore {
         startsNewBubbleTurnIds: listTaskUpdateRunIds(key),
         taskUpdateTriggers: listTaskUpdateTriggers(key),
       });
-      const messages = (options.compact ? compactHistory(history) : history) as unknown as Message[];
+      const messages = (options.compact ? compactHistory(history, metadata.customData?.personalAgent === true) : history) as unknown as Message[];
       const session: SessionDetail = {
         ...metadata,
         messages,

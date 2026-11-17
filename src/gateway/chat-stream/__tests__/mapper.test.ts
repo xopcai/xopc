@@ -17,6 +17,39 @@ describe('ChatStreamMapper', () => {
       .toMatchObject({ type: 'assistant_delta', payload: { delta: '先看结论。', textSurface: 'conversation', offset: 0 } });
     expect(mapper().start()[0].payload).not.toHaveProperty('textSurface');
   });
+  it('publishes only the Personal reply with contiguous offsets across split reasoning tags', () => {
+    const reply = '📎 正式答案';
+    const text = `\n<ThInK>private reasoning</THINK>\n<analysis>more reasoning</analysis>\n${reply}`;
+    const message = { role: 'assistant', content: [{ type: 'text', text }] };
+    for (let split = 1; split < text.length; split++) {
+      const m = new ChatStreamMapper({ runId: 'personal-run', conversationId: 'personal', channel: 'webchat', textSurface: 'conversation' });
+      m.map({ type: 'message_start', message });
+      const events = [text.slice(0, split), text.slice(split)].flatMap(delta => m.map({
+        type: 'message_update', message, assistantMessageEvent: { type: 'text_delta', delta },
+      }));
+      const deltas = [...events, ...m.map({ type: 'message_end', message })].filter(event => event.type === 'assistant_delta');
+      let visible = '';
+      for (const { payload } of deltas) {
+        expect(payload.offset).toBe(visible.length);
+        visible += payload.delta;
+      }
+      expect(visible).toBe(reply);
+      expect(m.getLastAssistantText()).toBe(reply);
+    }
+  });
+  it('uses the same reasoning filter for snapshots and when the stream ends with an open tag', () => {
+    const m = new ChatStreamMapper({ runId: 'personal-run', conversationId: 'personal', channel: 'webchat', textSurface: 'conversation' });
+    const assistant = (text: string) => ({ role: 'assistant', content: [{ type: 'text', text }] });
+    const first = '<reasoning>private text';
+    expect(m.map({ type: 'assistant_snapshot', message: assistant(first) })).toEqual([]);
+    expect(m.map({ type: 'message_end', message: assistant(first) }).find(event => event.type === 'assistant_delta')).toBeUndefined();
+    const reply = '<aside>Literal HTML</aside> and `<think>` in inline code';
+    const final = assistant(`<thinking>private text</thinking>\n${reply}`);
+    expect(m.map({ type: 'message_update', message: final })).toMatchObject([
+      { type: 'assistant_delta', payload: { offset: 0, delta: reply } },
+    ]);
+    expect(m.map({ type: 'message_end', message: final }).find(event => event.type === 'assistant_delta')).toBeUndefined();
+  });
   it('keeps nested call identity and authoritative duration through realtime mapping', () => {
     const m = mapper();
     const start = m.map({ type: 'tool_execution_start', toolCallId: 'script/1', parentToolCallId: 'script', toolName: 'read_file', args: {} });

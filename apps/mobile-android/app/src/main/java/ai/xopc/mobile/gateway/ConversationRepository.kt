@@ -1248,7 +1248,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         val content = item.opt("content")
         val raw = item.optJSONArray("rawContent")
         val textContent = raw ?: (content as? JSONArray)
-        val hasToolCall = (0 until (textContent?.length() ?: 0)).any { part ->
+        val hasToolCall = (item.optJSONArray("toolCalls")?.length() ?: 0) > 0 || (0 until (textContent?.length() ?: 0)).any { part ->
           textContent?.optJSONObject(part)?.optString("type") in setOf("toolCall", "tool_use", "tool_call")
         }
         val narration = role == "assistant" && (0 until (textContent?.length() ?: 0)).any { part ->
@@ -1257,12 +1257,11 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
         val text = when {
           role == "assistant" && textContent != null -> (0 until textContent.length()).mapNotNull { part ->
             textContent.optJSONObject(part)?.takeIf { block ->
-              block.optString("type") == "text" &&
-                block.optString("presentation") != "narration" &&
-                block.optString("presentation") != "pending" &&
-                (block.has("presentation") || !hasToolCall)
+              block.optString("type") == "text" && (block.optString("presentation") == "answer" ||
+                (block.isNull("presentation") && !hasToolCall))
             }?.optString("text")
           }.joinToString("\n")
+          role == "assistant" && hasToolCall -> ""
           content is String -> content
           content is JSONArray -> (0 until content.length()).mapNotNull { part ->
             content.optJSONObject(part)?.takeIf { it.optString("type") == "text" }?.optString("text")

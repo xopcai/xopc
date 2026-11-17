@@ -2,6 +2,10 @@ package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.gateway.ConversationMessage
 import ai.xopc.mobile.gateway.ConversationNarration
+import ai.xopc.mobile.gateway.GeneratedMediaKind
+import ai.xopc.mobile.gateway.generatedMediaByReply
+import ai.xopc.mobile.gateway.parseGeneratedMedia
+import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -71,6 +75,23 @@ class ChatRenderingTest {
     val row = chatPresentationMessages(listOf(saved), listOf(live)).single()
     assertEquals("media", row.renderId)
     assertEquals(listOf("song"), row.generatedMediaIds)
+  }
+
+  @Test fun historicalMusicReappearsOnlyWithItsOriginalReply() {
+    val items = parseGeneratedMedia(JSONObject("""{"jobs":[
+      {"id":"old-song","state":"completed"},
+      {"id":"failed-song","state":"failed"},
+      {"id":"new-song","state":"queued"}
+    ]}"""), GeneratedMediaKind.Music) + parseGeneratedMedia(JSONObject("""{"transcriptId":"current","jobs":[
+      {"id":"video","state":"completed","transcriptId":"current"}
+    ]}"""), GeneratedMediaKind.Video)
+    val latest = ConversationMessage("latest", "assistant", "A newer reply")
+    val original = ConversationMessage("original", "assistant", "", generatedMediaIds = listOf("old-song"))
+
+    assertEquals(mapOf("" to listOf("new-song", "video")),
+      generatedMediaByReply(items, listOf(latest)).mapValues { (_, cards) -> cards.map { it.id } })
+    assertEquals(mapOf("" to listOf("new-song", "video"), original.renderId to listOf("old-song")),
+      generatedMediaByReply(items, listOf(original, latest)).mapValues { (_, cards) -> cards.map { it.id } })
   }
 
   @Test fun historyAndLiveSegmentsShareOnePresentationRow() {

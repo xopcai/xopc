@@ -23,13 +23,18 @@ struct WireMessage: Decodable, Sendable {
 
     var answerText: String {
         let hasTools = !(toolCalls ?? []).isEmpty
-        switch content {
+        let body: MessageContent
+        if case let .blocks(blocks)? = rawContent, !blocks.isEmpty {
+            body = .blocks(blocks)
+        } else {
+            body = content
+        }
+        switch body {
         case let .text(text): return hasTools ? "" : text
         case let .blocks(blocks):
             let containsTools = hasTools || blocks.contains { ["toolCall", "tool_use", "tool_call"].contains($0.type) }
             return blocks.filter {
-                $0.type == "text" && $0.presentation != "pending" && $0.presentation != "narration"
-                    && ($0.presentation != nil || !containsTools)
+                $0.type == "text" && ($0.presentation == "answer" || ($0.presentation == nil && !containsTools))
             }.compactMap(\.text).joined(separator: "\n")
         }
     }

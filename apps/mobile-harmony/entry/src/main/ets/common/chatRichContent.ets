@@ -14,9 +14,12 @@ export function chatReview(raw?: XopcContentBlock): XopcContentBlock | undefined
 
 export function chatAnswerText(row: XopcChatRow): string {
   if (!row.blocks) return row.text;
-  return row.blocks.filter((block: XopcChatBlock): boolean => block.kind === 'text'
-    && block.presentation !== 'narration' && block.presentation !== 'pending')
+  return row.blocks.filter(chatIsAnswerBlock)
     .map((block: XopcChatBlock): string => block.text).join('\n').trim();
+}
+
+export function chatIsAnswerBlock(block: XopcChatBlock): boolean {
+  return block.kind === 'text' && (block.presentation === undefined || block.presentation === 'answer');
 }
 
 export function chatProductCapability(reference: XopcProductReference | undefined, capability: string): boolean {
@@ -241,8 +244,7 @@ export function chatActivities(row: XopcChatRow, reasoning: string): XopcChatBlo
 
 export function chatAnswerStarted(row: XopcChatRow): boolean {
   if (!row.blocks) return !!row.text.trim();
-  return (row.blocks || []).some((block: XopcChatBlock): boolean => block.kind === 'text'
-    && block.presentation !== 'narration' && block.presentation !== 'pending' && !!block.text.trim());
+  return row.blocks.some((block: XopcChatBlock): boolean => chatIsAnswerBlock(block) && !!block.text.trim());
 }
 
 export function chatToolKey(name: string): string { return name.split('__').pop() || name; }

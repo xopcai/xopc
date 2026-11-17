@@ -10,7 +10,6 @@ struct WaitingReplyFixture {
   @Local row: XopcChatRow = { id: 'waiting-fixture', role: 'assistant', text: '', live: true,
     blocks: [{ id: 'notice', kind: 'text', text: '正在核对开放时间和预约要求。', presentation: 'narration' }] };
   @Local connection: string = 'connected';
-  private startedAt: number = Date.now() - 11000;
   build() {
     Column({ space: 16 }) {
       Text('移动端回复展示验证').fontSize(20)
@@ -25,7 +24,7 @@ struct WaitingReplyFixture {
         this.row = reduceChatStream(this.row, 'run_end', { status: 'completed' }, 'fixture');
       })
       Button('连接中断').id('waiting-fixture-reconnect').onClick((): void => { this.connection = 'disconnected'; })
-      XopcChatMessageContent({ row: this.row, runStartedAtMs: this.startedAt, connection: this.connection, animateStreaming: true })
+      XopcChatMessageContent({ row: this.row, connection: this.connection, animateStreaming: true })
     }.width('92%').padding(24).backgroundColor($r('app.color.surface')).borderRadius(24)
   }
 }
@@ -35,7 +34,7 @@ function waitingReplyBuilder() { WaitingReplyFixture() }
 
 export default function waitingReplyTest(): void {
   describe('XopcWaitingReply', (): void => {
-    it('separatesWaitingNarrationDraftAndConfirmedAnswer', 0, async (): Promise<void> => {
+    it('showsWaitingDotsAndOnlyTheConfirmedAnswer', 0, async (): Promise<void> => {
       const delegator = abilityDelegatorRegistry.getAbilityDelegator();
       const driver = Driver.create();
       await delegator.startAbility({ bundleName: delegator.getAppContext().applicationInfo.name, abilityName: 'EntryAbility' });
@@ -45,7 +44,7 @@ export default function waitingReplyTest(): void {
       await ui.getPromptAction().openCustomDialog(content, { autoCancel: false });
       try {
         await driver.waitForComponent(ON.id('chat-waiting-dots-waiting-fixture'), 5000);
-        await driver.waitForComponent(ON.text('正在核对开放时间和预约要求。'), 5000);
+        expect(await driver.findComponent(ON.text('正在核对开放时间和预约要求。'))).assertNull();
         expect(await driver.findComponent(ON.id('chat-steps-waiting-fixture'))).assertNull();
         expect(await driver.screenCap(delegator.getAppContext().filesDir + '/waiting-reply-dots.png')).assertTrue();
         const dots = await driver.findComponent(ON.id('chat-waiting-dots-waiting-fixture'));

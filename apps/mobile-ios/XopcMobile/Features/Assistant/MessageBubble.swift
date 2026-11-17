@@ -25,6 +25,7 @@ struct MessageBubble: View {
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .body) private var previewHeight: CGFloat = 160
     @ScaledMetric(relativeTo: .body) private var previewFadeHeight: CGFloat = 48
+    @ScaledMetric(relativeTo: .body) private var assistantTextSize = MobileTextStyle.body.size
     @State private var isActionsPresented = false
     @State private var isDetailPresented = false
     @State private var isExecutionPresented = false
@@ -143,9 +144,15 @@ struct MessageBubble: View {
         }
         if !message.attachments.isEmpty || !message.references.isEmpty || !message.taskReceipts.isEmpty
             || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty || showsPreview
-            || (message.role == "assistant" && (message.revealAnswer || message.text.contains(where: { "\n#`*_~[]<>|".contains($0) })))
         {
             return maximumWidth
+        }
+        if message.role == "assistant" {
+            if message.text.range(of: #"[\r\n#`*_~\[\]<>|$\\]|^(?:[-+]\s|\d+[.)]\s)"#, options: .regularExpression) != nil {
+                return maximumWidth
+            }
+            let width = (message.text as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: assistantTextSize)]).width
+            return min(maximumWidth, max(44, ceil(width) + 30))
         }
         let longest = message.text.split(separator: "\n").map { line in
             line.reduce(0.0) { $0 + ($1.isASCII ? 8.8 : 16) }

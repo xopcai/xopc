@@ -48,24 +48,6 @@ export function chatLiveCompletedCount(row: XopcChatRow): number {
   return (row.activityTools || []).filter((item: XopcLiveActivityTool): boolean => item.status === 'completed').length;
 }
 
-export function chatLiveElapsedSeconds(startedAtMs: number, nowMs: number): number {
-  return startedAtMs > 0 ? Math.max(0, Math.floor((nowMs - startedAtMs) / 1000)) : 0;
-}
-
-/** Latest public narration for the fixed live status slot; never returns pending answer text or private thinking. */
-export function chatLiveNarration(row: XopcChatRow): string {
-  const blocks = row.blocks || [];
-  if (blocks.some((block: XopcChatBlock): boolean =>
-    block.kind === 'text' && block.presentation === 'pending' && !!block.text.trim())) return '';
-  for (let index = blocks.length - 1; index >= 0; index--) {
-    const block = blocks[index];
-    if (block.kind === 'text' && block.presentation === 'narration' && block.text.trim()) {
-      return block.text.replace(/\s+/g, ' ').trim().slice(0, 160);
-    }
-  }
-  return '';
-}
-
 /** Completed public stages remain visible while the next message is being classified. */
 export function chatLiveStages(row: XopcChatRow): XopcChatBlock[] {
   if ((!row.live && !chatStageStatus(row)) || (chatAnswerStarted(row) && !chatStageStatus(row))) return [];

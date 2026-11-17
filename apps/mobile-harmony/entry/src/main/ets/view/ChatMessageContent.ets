@@ -6,7 +6,7 @@ import { XopcChatStepsView } from './ChatStepsView';
 import { XopcChatImageGrid } from './ChatImageGrid';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatResultTail } from './ChatResultTail';
-import { chatAnswerText, chatAnswerStarted, artifactMedia } from '../common/chatRichContent';
+import { chatAnswerText, chatAnswerStarted, chatIsAnswerBlock, artifactMedia } from '../common/chatRichContent';
 import { filePreviewKind } from '../common/filePreview';
 import { chatMessageNeedsPreview, chatMessagePreviewLines, chatMessagePreviewText } from '../common/chatMessagePreview';
 
@@ -18,7 +18,6 @@ export struct XopcChatMessageContent {
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Param conversationId: string = '';
   @Param reasoning: string = 'on';
-  @Param runStartedAtMs: number = 0;
   @Param connection: string = 'connected';
   @Param showWaiting: boolean = true;
   @Param showFailure: boolean = true;
@@ -58,7 +57,7 @@ export struct XopcChatMessageContent {
   @Computed get displayedMedia(): XopcHistoryMedia[] { return this.mediaExpanded ? this.attachmentMedia : this.attachmentMedia.slice(0, 3); }
   @Computed get body(): XopcChatBlock[] {
     return (this.row.blocks || []).filter((block: XopcChatBlock): boolean =>
-      block.kind === 'review' || (block.kind === 'text' && block.presentation !== 'narration' && block.presentation !== 'pending'));
+      block.kind === 'review' || chatIsAnswerBlock(block));
   }
   @Computed get hasProgress(): boolean {
     return !!this.row.live || !!this.row.executionActivity
@@ -95,7 +94,7 @@ export struct XopcChatMessageContent {
   build() {
     Column({ space: this.showPreview ? 2 : 8 }) {
       if (this.row.role === 'assistant' && this.row.live && this.showWaiting && !chatAnswerStarted(this.row)) {
-        XopcChatStepsView({ row: this.row, runStartedAtMs: this.runStartedAtMs,
+        XopcChatStepsView({ row: this.row,
           connection: this.connection, animateDots: this.animateStreaming, onShowDetail: this.onShowExecution })
       }
       if (this.showFailure && this.row.outcome?.status === 'failed') {

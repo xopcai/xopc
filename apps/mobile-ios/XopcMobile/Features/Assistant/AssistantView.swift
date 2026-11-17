@@ -431,6 +431,7 @@ struct AssistantView<Dock: View>: View {
 
     @ViewBuilder
     private var content: some View {
+        let cards = GeneratedMediaState.cardsByReply(mediaCards, messages: state.messages)
         if conversation == nil, onOpenSidebar != nil {
             if let homeChatError {
                 ContentUnavailableView {
@@ -471,10 +472,10 @@ struct AssistantView<Dock: View>: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if state.isLoadingHistory, mediaCards.isEmpty {
+        } else if state.isLoadingHistory, cards.isEmpty {
             ProgressView("正在读取消息…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if state.messages.isEmpty, mediaCards.isEmpty, !showsStagedProgress {
+        } else if state.messages.isEmpty, cards.isEmpty, !showsStagedProgress {
             GeometryReader { viewport in
                 ScrollView {
                     LazyVStack(spacing: 16) {
@@ -506,7 +507,7 @@ struct AssistantView<Dock: View>: View {
                 .contentMargins(.bottom, 24, for: .scrollContent)
             }
         } else {
-            messageTimeline
+            messageTimeline(cards: cards)
         }
     }
 
@@ -530,9 +531,8 @@ struct AssistantView<Dock: View>: View {
         }
     }
 
-    private var messageTimeline: some View {
-        let cards = generatedMedia.cardsByReply(state.messages, in: generatedMediaScope)
-        return GeometryReader { viewport in
+    private func messageTimeline(cards: [String: [GeneratedMediaCard]]) -> some View {
+        GeometryReader { viewport in
             let maximumMessageWidth = max(0, min(viewport.size.width, 720) - 24) * ChatAppearance.messageWidthRatio
             ScrollViewReader { scroller in
                 ScrollView {
@@ -596,7 +596,7 @@ struct AssistantView<Dock: View>: View {
                         } else if isPersonalConversation, state.isRunActive, state.errorMessage == nil, state.clarification == nil,
                                   !state.messages.contains(where: { $0.role == "assistant" && $0.turnId == state.runID && $0.answerConfirmed && !$0.text.isEmpty })
                         {
-                            AssistantActivityView(narration: state.executionActivity.last(where: { $0.id.hasPrefix("narration:") })?.title)
+                            AssistantActivityView()
                                 .id(state.runID ?? "sending")
                         }
                         Color.clear.frame(height: 1)

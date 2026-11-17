@@ -121,4 +121,17 @@ describe('persisted reply lifecycle', () => {
     expect(await performSessionReset(personalConversation, {} as never)).toMatchObject({ ok: false });
     expect(await store.loadTranscriptRows(personalConversation)).toEqual(before);
   });
+
+  it('omits provider reasoning from Personal compact history when reloading a saved reply', async () => {
+    const personalConversation = '9557e481-d6db-468a-9fa8-1a54fae52ef0';
+    const raw = '<think>private text in a provider text block</think>\nSaved answer';
+    await store.saveMessages(personalConversation, [
+      { role: 'user', content: 'Question', timestamp: 0 },
+      { role: 'assistant', content: [{ type: 'text', text: raw }], stopReason: 'stop', timestamp: 1 },
+    ] as AgentMessage[], { metadata: { agentId: personalAgentId('local-owner'), customData: { personalAgent: true } } });
+    const page = await store.getMessagePage(personalConversation, { includeContextRows: true, compact: true });
+    expect(page?.session.messages.map(message => message.content)).toEqual(['Question', 'Saved answer']);
+    expect(JSON.stringify(page)).not.toContain('private text');
+    expect(JSON.stringify(await store.loadTranscriptRows(personalConversation))).toContain(raw.split('\n')[0]);
+  });
 });

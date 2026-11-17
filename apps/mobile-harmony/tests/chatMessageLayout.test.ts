@@ -38,8 +38,9 @@ describe('chat message layout parity', () => {
     const assistantLayout = chat.slice(start, end);
 
     expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id)");
-    expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width('92%')");
-    expect(assistantLayout).toContain('.constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)');
+    expect(assistantLayout).toContain(".id('chat-assistant-card-' + item.item.id).width(this.assistantBubbleWidth(item.item))");
+    expect(assistantLayout).toContain(".constraintSize({ maxWidth: '100%' })");
+    expect(assistantLayout).toContain(".width('92%').constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)");
     expect(chat).toContain(".justifyContent(entry.item.kind === 'music' ? FlexAlign.Start : FlexAlign.End)");
     expect(assistantLayout).toContain('.backgroundColor(this.colors.assistantBubble).borderRadius(this.colors.corner(20))');
     expect(content).toContain(": this.colors.assistantBubble;");

@@ -210,7 +210,8 @@ final class GeneratedMediaState {
         }
     }
 
-    func cardsByReply(_ messages: [TimelineMessage], in scope: Scope?) -> [String: [GeneratedMediaCard]] {
+    static func cardsByReply(_ cards: [GeneratedMediaCard], messages: [TimelineMessage]) -> [String: [GeneratedMediaCard]] {
+        guard !cards.isEmpty else { return [:] }
         let replies = messages.filter { $0.role == "assistant" && $0.answerConfirmed }
         var anchors: [String: String] = [:]
         for reply in replies {
@@ -218,7 +219,9 @@ final class GeneratedMediaState {
                 anchors[id] = reply.id
             }
         }
-        return Dictionary(grouping: cards(in: scope)) { anchors[$0.id] ?? "" }
+        // An older song belongs with its reply, which may be on another page of history.
+        let visibleCards = cards.filter { $0.kind != .music || $0.active || anchors[$0.id] != nil }
+        return Dictionary(grouping: visibleCards) { anchors[$0.id] ?? "" }
     }
 }
 

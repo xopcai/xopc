@@ -343,7 +343,6 @@ data class ConnectionUiState(
   val stopError: Boolean = false,
   val runError: Boolean = false,
   val liveMessages: List<ConversationMessage> = emptyList(),
-  val liveNarration: String? = null,
   internal val runProgress: AssistantRunProgress = AssistantRunProgress(),
   val models: List<ConversationModel> = emptyList(),
   val selectedModelId: String = "",
@@ -2620,7 +2619,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       "run_end" -> {
         refreshClarification()
         realtime.watchRun(null)
-        mutableState.update { it.copy(activeRunId = null, liveNarration = null,
+        mutableState.update { it.copy(activeRunId = null,
           runProgress = it.runProgress.copy(status = event.status ?: "success")) }
         refreshSelectedHistory(current.selectedConversationId)
         refreshRunState(current.selectedConversationId)
@@ -2630,16 +2629,15 @@ class GatewayViewModel internal constructor(application: Application, private va
         closedNarrations += id
         mutableState.update { state -> state.copy(
           runProgress = state.runProgress.record(id, state.liveMessages.firstOrNull { it.id == id }?.text.orEmpty()),
-          liveNarration = state.liveMessages.firstOrNull { it.id == id }?.text?.replace(Regex("\\s+"), " ")?.trim()?.take(160),
           liveMessages = state.liveMessages.filterNot { it.id == id }) }
       }
-      else {
+      else if (event.presentation == "answer") {
         val id = event.messageId ?: "live:${event.runId}"
         mutableState.update { state -> state.copy(liveMessages = state.liveMessages.map { message ->
           if (message.id == id) message.copy(answerConfirmed = true) else message
         }) }
       }
-      "error" -> mutableState.update { it.copy(runError = true, activeRunId = null, liveNarration = null,
+      "error" -> mutableState.update { it.copy(runError = true, activeRunId = null,
         runProgress = it.runProgress.copy(status = "error")) }
     }
   }
@@ -3141,7 +3139,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       historyOlderError = false,
       executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
       draftModelLoading = false, draftModelReady = false, chatError = false, activeRunId = null,
-      stoppingRun = false, stopError = false, runError = false, liveMessages = emptyList(), liveNarration = null,
+      stoppingRun = false, stopError = false, runError = false, liveMessages = emptyList(),
       runProgress = AssistantRunProgress(),
       pendingInput = null, sendError = false, sendErrorDetail = null, sendRejected = false,
       optimisticText = "", optimisticPreviousUserId = null, chatSendMessageId = null,
@@ -4267,7 +4265,7 @@ class GatewayViewModel internal constructor(application: Application, private va
           realtime.watchRun(null)
           mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(), draftText = "",
             historyLoading = false, draftModelLoading = false, draftModelReady = true,
-            activeRunId = null, liveMessages = emptyList(), liveNarration = null, pendingInput = null,
+            activeRunId = null, liveMessages = emptyList(), pendingInput = null,
             runProgress = AssistantRunProgress(),
             models = emptyList(), selectedModelId = "", agents = emptyList(), agentAvatars = emptyMap(), selectedAgentId = "",
             context = null, contextLoading = false, taskWelcome = null, projectWelcome = null) }
@@ -4414,7 +4412,7 @@ class GatewayViewModel internal constructor(application: Application, private va
             realtime.watchRun(null)
             mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(),
               draftText = "", draftRefs = emptyList(), draftAttachments = emptyList(),
-              activeRunId = null, liveMessages = emptyList(), liveNarration = null, pendingInput = null,
+              activeRunId = null, liveMessages = emptyList(), pendingInput = null,
               runProgress = AssistantRunProgress()) }
             openPersonalAgent(remember = false)
           }
@@ -4472,7 +4470,7 @@ class GatewayViewModel internal constructor(application: Application, private va
           realtime.watchRun(null)
           mutableState.update { it.copy(selectedConversationId = null, messages = emptyList(), draftText = "",
             executionMessageId = null, executionDetail = null, executionLoading = false, executionError = false,
-            historyLoading = false, activeRunId = null, liveMessages = emptyList(), liveNarration = null,
+            historyLoading = false, activeRunId = null, liveMessages = emptyList(),
             runProgress = AssistantRunProgress(),
             pendingInput = null, models = emptyList(), selectedModelId = "", agents = emptyList(), agentAvatars = emptyMap(),
             selectedAgentId = "", context = null, contextLoading = false,
@@ -4593,7 +4591,7 @@ class GatewayViewModel internal constructor(application: Application, private va
               refs.map { ref -> ref.copy(title = "") }) emptyList() else it.draftRefs,
             draftAttachments = it.draftAttachments.filterNot { item -> attachments.any { sent -> sent.id == item.id } },
             pendingInput = null, activeRunId = runId.takeIf(String::isNotBlank),
-            runError = false, liveMessages = emptyList(), liveNarration = null,
+            runError = false, liveMessages = emptyList(),
             runProgress = if (runId.isNotBlank()) it.runProgress.forRun(runId) else AssistantRunProgress()) }
           realtime.watchRun(runId.takeIf(String::isNotBlank))
         } else mutableState.update { it.copy(sending = false) }

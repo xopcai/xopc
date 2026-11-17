@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -91,6 +92,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
@@ -100,6 +102,8 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private val assistantWideText = Regex("""[\r\n#`*_~\[\]<>|$\\]|^(?:[-+]\s|\d+[.)]\s)""")
 
 internal data class MessagePreviewRequest(val conversationId: String, val media: ConversationMedia,
   val imageGallery: List<ConversationMedia> = emptyList())
@@ -138,8 +142,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
     val maxBubbleWidth = maxWidth * CHAT_MESSAGE_WIDTH
     val contentCount = message.media.size + message.references.size + message.targets.size +
       message.outcome?.artifacts.orEmpty().size
-    val wideAssistant = !isUser && (streaming || revealAnswer || contentCount > 0 || message.hasNonTextContent ||
-      message.text.any { it in "\n#`*_~[]<>|" })
+    val wideAssistant = !isUser && (showPreview || contentCount > 0 || message.outcome?.status == "failed" ||
+      assistantWideText.containsMatchIn(message.text))
     val minimumWidth = if (isUser) when {
       voiceOnly -> 132.dp
       message.media.size == 1 && mediaPreviewKind(message.media.first()) == "audio" -> 180.dp
@@ -148,11 +152,20 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       contentCount == 1 -> 220.dp
       else -> 44.dp
     } else 44.dp
-    val longestLine = if (wideAssistant) 0.0 else message.text.lineSequence().maxOfOrNull { line ->
-      line.sumOf { if (it.code > 255) 16.0 else 8.8 }
-    } ?: 0.0
-    val estimatedWidth = (longestLine + 30).dp.coerceIn(minimumWidth, 360.dp)
-    val bubbleWidth = (if (wideAssistant) maxBubbleWidth else estimatedWidth).coerceAtMost(maxBubbleWidth)
+    val bubbleWidth = when {
+      wideAssistant -> maxBubbleWidth
+      isUser -> {
+        val longestLine = message.text.lineSequence().maxOfOrNull { line ->
+          line.sumOf { if (it.code > 255) 16.0 else 8.8 }
+        } ?: 0.0
+        (longestLine + 30).dp.coerceIn(minimumWidth, 360.dp)
+      }
+      else -> {
+        val measured = rememberTextMeasurer().measure(message.text, MaterialTheme.typography.bodyLarge,
+          maxLines = 1, softWrap = false).size.width
+        (with(LocalDensity.current) { measured.toDp() } + 30.dp).coerceAtLeast(minimumWidth)
+      }
+    }.coerceAtMost(maxBubbleWidth)
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment =
       if (isUser) Alignment.End else Alignment.Start,
       verticalArrangement = Arrangement.spacedBy(2.dp)) {

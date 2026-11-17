@@ -23,7 +23,7 @@ describe('Harmony chat tool concise mode', () => {
     const stepsView = source('entry/src/main/ets/view/ChatStepsView.ets');
     const richContent = source('entry/src/main/ets/common/chatRichContent.ets');
 
-    expect(contentView).toContain("block.presentation !== 'narration'");
+    expect(contentView).toContain('chatIsAnswerBlock(block)');
     expect(richContent).toContain("block.presentation === 'pending' || block.presentation === 'narration'");
     expect(stepsView).not.toContain('this.onShowDetail(this.row)');
     expect(stepsView).not.toContain("this.reasoning === 'stream' && !!this.row.live");
@@ -36,6 +36,7 @@ describe('Harmony chat tool concise mode', () => {
     const stepsView = source('entry/src/main/ets/view/ChatStepsView.ets');
 
     expect(stepsView).toContain("chat-waiting-dots-");
+    expect(stepsView).not.toContain('chatLiveNarration');
     expect(contentView).toContain("this.row.live && this.showWaiting && !chatAnswerStarted(this.row)");
     expect(stepsView).not.toContain('this.onShowDetail(this.row)');
     expect(stepsView).not.toContain('this.row.live ? this.steps.slice(-2)');

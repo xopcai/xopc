@@ -39,7 +39,6 @@ export class XopcChatViewModel {
   @Trace error: string = '';
   @Trace connection: string = 'connecting';
   @Trace runId: string = '';
-  @Trace runStartedAtMs: number = 0;
   @Trace liveReaction?: XopcAgentReaction;
   @Trace animatedReactionEntry: string = '';
   @Trace reactionsAvailable?: boolean;
@@ -150,7 +149,7 @@ export class XopcChatViewModel {
     this.prefetchKey = ''; this.prefetchedHistory = undefined;
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
-    this.selectedId = id; this.rows = []; this.runId = ''; this.runStartedAtMs = 0; this.streaming = ''; this.thinking = ''; this.tool = '';
+    this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
     this.liveReaction = undefined; this.animatedReactionEntry = ''; this.firstAnswerRun = '';
     this.reactionsAvailable = undefined; this.reactionsAllowed = true;
     this.liveRow = undefined; this.liveActivityRow = undefined; this.historyMessages = []; this.rows = this.pendingRows();
@@ -372,7 +371,7 @@ export class XopcChatViewModel {
       else { clearTimeout(this.streamTimer); this.streamTimer = -1; this.streamBuffer.drain(); }
     }
     if (this.runId && this.runId !== id && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
-    if (this.runId !== id) { this.runStartedAtMs = id ? Date.now() : 0; this.liveActivityRow = undefined; }
+    if (this.runId !== id) this.liveActivityRow = undefined;
     this.runId = id;
     if (id && XopcChatViewModel.owner === this) realtimeClient.subscribe('run:' + id);
   }

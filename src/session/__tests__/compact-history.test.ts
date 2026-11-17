@@ -37,6 +37,28 @@ describe('compact history', () => {
     expect(JSON.stringify(compact)).not.toMatch(/private|secret|toolCalls|output/);
     expect(JSON.stringify(messages)).toBe(before);
   });
+  it('keeps only Personal reply text and still attaches generated media to the actual reply', () => {
+    const id = 'a'.repeat(64);
+    const label = '<think>private text</think>\nActual answer with `<think>` as an example';
+    const compact = compactHistory([
+      { role: 'user', content: '<think>I wrote these tags</think>' },
+      { id: 'tool', role: 'assistant', turnId: 'run', content: 'Interim narration',
+        toolCalls: [{ name: 'music_generation', result: JSON.stringify({ id }) }] },
+      { id: 'reply', role: 'assistant', turnId: 'run', content: `ignored intermediate ${label}`, rawContent: [
+        { type: 'thinking', thinking: 'structured reasoning' },
+        { type: 'text', text: 'intermediate narration', presentation: 'narration' },
+        { type: 'text', text: 'intermediate draft', presentation: 'pending' },
+        { type: 'text', text: label, presentation: 'answer' },
+      ] },
+      { id: 'aborted', role: 'assistant', turnId: 'run', content: '<analysis>unfinished reasoning' },
+    ], true);
+    expect(compact.map(message => message.content)).toEqual([
+      '<think>I wrote these tags</think>', '', 'Actual answer with `<think>` as an example',
+    ]);
+    expect(compact.find(message => message.id === 'reply')).toMatchObject({ generatedMediaIds: [id],
+      rawContent: [{ type: 'text', text: 'Actual answer with `<think>` as an example', presentation: 'answer' }] });
+    expect(JSON.stringify(compact)).not.toMatch(/private text|structured reasoning|intermediate|unfinished reasoning/);
+  });
   it('keeps outcomes, media, reviews and typed deliveries', () => {
     const delivery = { version: 2, operation: 'created', primary: { kind: 'note', id: 'n', title: 'Note', capabilities: ['open'] } };
     const result = compactHistory([{ role: 'assistant', content: '',
