@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { finished } from 'node:stream/promises';
 
 import { describe, expect, it } from 'vitest';
 
@@ -40,7 +41,8 @@ describe('desktop package resource gate', () => {
         writeFileSync(join(root, 'input', path), bytes);
       }
       const archive = join(root, 'app.asar');
-      await asar.createPackage(join(root, 'input'), archive);
+      const archiveStream = await asar.createPackage(join(root, 'input'), archive);
+      await finished(archiveStream);
       const extracted = join(root, 'extracted');
       asar.extractAll(archive, extracted);
       const read = (path: string) => readFileSync(join(extracted, path));
