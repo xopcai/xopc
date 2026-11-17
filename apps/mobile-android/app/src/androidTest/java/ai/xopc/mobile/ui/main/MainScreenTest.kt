@@ -2338,19 +2338,23 @@ class MainScreenTest {
     val latest = ConversationSummary("latest", "Latest conversation", "", 2, "main")
     val connection = mutableStateOf(ConnectionUiState(
       profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
-      conversations = listOf(searchResult), conversationResultsQuery = "filtered",
-      recentConversations = listOf(cached), conversationsLoading = true))
-    composeTestRule.setContent { MainScreen(connection = connection.value) }
+      conversations = listOf(searchResult), conversationSearch = "filtered", conversationResultsQuery = "filtered",
+      recentConversations = listOf(cached), conversationsLoading = true, recentConversationsLoading = true))
+    var recentRefreshes = 0
+    composeTestRule.setContent {
+      MainScreen(connection = connection.value, onRefreshRecentConversations = { recentRefreshes++ })
+    }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.runOnIdle { assertEquals(1, recentRefreshes) }
     composeTestRule.onNodeWithTag("chat-sidebar-session-cached").assertIsDisplayed()
     composeTestRule.onNodeWithTag("chat-sidebar-session-filtered").assertDoesNotExist()
     composeTestRule.runOnIdle {
-      connection.value = connection.value.copy(conversationsLoading = false, conversationsError = true)
+      connection.value = connection.value.copy(recentConversationsLoading = false, recentConversationsError = true)
     }
     composeTestRule.onNodeWithTag("chat-sidebar-session-cached").assertIsDisplayed()
     composeTestRule.onNodeWithTag("chat-sidebar-retry").assertDoesNotExist()
     composeTestRule.runOnIdle {
-      connection.value = connection.value.copy(recentConversations = listOf(latest), conversationsError = false)
+      connection.value = connection.value.copy(recentConversations = listOf(latest), recentConversationsError = false)
     }
     composeTestRule.onNodeWithTag("chat-sidebar-session-cached").assertDoesNotExist()
     composeTestRule.onNodeWithTag("chat-sidebar-session-latest").assertIsDisplayed()

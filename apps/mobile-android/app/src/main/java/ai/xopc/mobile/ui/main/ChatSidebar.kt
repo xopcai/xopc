@@ -1,6 +1,7 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.RECENT_CONVERSATION_LIMIT
 import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
 import androidx.annotation.DrawableRes
@@ -189,11 +190,9 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
         Text(stringResource(R.string.chat_recent_conversations),
           Modifier.padding(start = 10.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.labelMedium,
           color = scheme.onSurfaceVariant)
-        val rows = connection.recentConversations ?: connection.conversations
-          .takeIf { connection.conversationResultsQuery.isEmpty() }.orEmpty()
-        val recent = rows.filter {
-          it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.status != "archived" && !it.isLocalDraft
-        }.take(6)
+        val recent = connection.recentConversations.orEmpty().filter {
+          it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
+        }.take(RECENT_CONVERSATION_LIMIT)
         recent.forEach { item ->
           Text(item.title, Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
             .background(if (item.id == connection.selectedConversationId) scheme.surfaceContainerHigh else Color.Transparent)
@@ -201,9 +200,9 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
             .padding(horizontal = 10.dp, vertical = 12.dp).testTag("chat-sidebar-session-${item.id}"),
             maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
         }
-        if (connection.conversationsLoading && connection.recentConversations == null && rows.isEmpty())
+        if (connection.recentConversationsLoading && connection.recentConversations == null)
           BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp)
-        else if (connection.conversationsError && rows.isEmpty()) Row(Modifier.fillMaxWidth().padding(start = 10.dp),
+        else if (connection.recentConversationsError && recent.isEmpty()) Row(Modifier.fillMaxWidth().padding(start = 10.dp),
           verticalAlignment = Alignment.CenterVertically) {
           Text(stringResource(R.string.chat_load_error), Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)

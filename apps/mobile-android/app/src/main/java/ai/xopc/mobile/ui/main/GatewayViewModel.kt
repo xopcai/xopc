@@ -281,6 +281,8 @@ data class ConnectionUiState(
   val savingMessageNoteId: String? = null,
   val messageNoteFeedback: MessageNoteFeedback? = null,
   val recentConversations: List<ConversationSummary>? = null,
+  val recentConversationsLoading: Boolean = false,
+  val recentConversationsError: Boolean = false,
   val conversationsLoading: Boolean = false,
   val conversationsError: Boolean = false,
   val conversationResultsQuery: String = "",
@@ -375,6 +377,9 @@ data class ConnectionUiState(
   val personal: PersonalUiState = PersonalUiState(),
 ) {
   val liveText: String = liveMessages.joinToString("\n\n") { it.text }
+
+  internal fun conversationSummary(id: String?): ConversationSummary? =
+    conversations.firstOrNull { it.id == id } ?: recentConversations?.firstOrNull { it.id == id }
 }
 
 data class ConnectionWaitUiState(val gatewayId: String? = null, val conversationId: String? = null,
@@ -449,6 +454,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   private var listSearch = ""
   private var conversationHistoryScope: ConversationHistoryScope? = null
   private var searchJob: Job? = null
+  private var recentConversationsJob: Job? = null
   private var remoteConversationOffset = 0
   private var historyRevision = 0
   private var contextRevision = 0
@@ -2673,7 +2679,7 @@ class GatewayViewModel internal constructor(application: Application, private va
         noteDraftLock.withLock { noteDraftStore.save(oldId, draft) }
       }
     }
-    val readers = listOf(searchJob, historyJob, olderHistoryJob, executionJob, runStateJob, modelJob, agentJob,
+    val readers = listOf(searchJob, recentConversationsJob, historyJob, olderHistoryJob, executionJob, runStateJob, modelJob, agentJob,
       contextJob, contextPanelJob, connectionWaitJob, clarificationJob, referenceJob, progressJob, progressHomeJob, progressMetricsJob,
       progressMoreJob, progressDetailJob,
       projectsJob, projectDetailJob, automationJob, notesJob, sharesJob, noteDetailJob, noteHistoryJob,
@@ -2707,7 +2713,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
     unfilteredNotes = null
     mutableState.value = ConnectionUiState(profile = profile, gatewayProfiles = profiles,
-      recentConversations = recent, conversations = recent.orEmpty(), conversationsLoading = profile != null,
+      recentConversations = recent, conversationsLoading = profile != null,
       progress = ProgressUiState(gatewayId = profile?.gatewayId), restoringHomeChat = profile != null)
     if (profile == null) return
     val selectedId = withContext(Dispatchers.IO) {
@@ -2929,8 +2935,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     runInterruptible(Dispatchers.IO) { conversations.agents().agents }
 
   fun loadConversations(search: String = listSearch) {
-    val profile = mutableState.value.profile ?: return
-    val requestedAt = System.currentTimeMillis()
+    if (mutableState.value.profile == null) return
     listSearch = search.trim()
     val query = listSearch
     val scope = conversationHistoryScope
@@ -2943,18 +2948,36 @@ class GatewayViewModel internal constructor(application: Application, private va
         val result = runInterruptible(Dispatchers.IO) { conversations.list(search = query, scope = scope) }
         if (revision == listRevision) {
           remoteConversationOffset = result.remoteCount
-          val recent = result.items.filterNot { it.isLocalDraft }.take(20)
           mutableState.update { it.copy(conversations = result.items, conversationTaskGroups = result.taskGroups,
-            recentConversations = if (query.isEmpty() && scope == null) recent else it.recentConversations,
             conversationResultsQuery = query,
             conversationsLoading = false,
             conversationsHasMore = result.hasMore) }
-          if (query.isEmpty() && scope == null) withContext(Dispatchers.IO) { conversations.cacheRecent(profile, recent, requestedAt) }
         }
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {
         if (revision == listRevision) mutableState.update { it.copy(conversationsLoading = false, conversationsError = true) }
+      }
+    }
+  }
+
+  fun loadRecentConversations() {
+    val current = mutableState.value
+    val profile = current.profile ?: return
+    if (current.gatewayBusy || current.pairing || recentConversationsJob?.isActive == true) return
+    val requestedAt = System.currentTimeMillis()
+    mutableState.update { it.copy(recentConversationsLoading = true, recentConversationsError = false) }
+    recentConversationsJob = viewModelScope.launch {
+      try {
+        val recent = conversations.recent()
+        mutableState.update { it.copy(recentConversations = recent) }
+        withContext(Dispatchers.IO) { conversations.cacheRecent(profile, recent, requestedAt) }
+      } catch (error: CancellationException) {
+        throw error
+      } catch (_: Exception) {
+        mutableState.update { it.copy(recentConversationsError = true) }
+      } finally {
+        mutableState.update { it.copy(recentConversationsLoading = false) }
       }
     }
   }
@@ -2973,12 +2996,14 @@ class GatewayViewModel internal constructor(application: Application, private va
     listSearch = text.trim()
     remoteConversationOffset = 0
     listRevision++
-    mutableState.update { it.copy(conversationSearch = text, conversationsLoading = true,
-      conversations = if (listSearch.isEmpty()) it.recentConversations ?: it.conversations else it.conversations,
-      conversationResultsQuery = if (listSearch.isEmpty() && it.recentConversations != null) "" else it.conversationResultsQuery,
-      conversationTaskGroups = if (listSearch.isEmpty() && it.conversationResultsQuery.isNotEmpty()) emptyMap() else it.conversationTaskGroups,
-      conversationsLoadingMore = false, conversationsHasMore = false,
-      conversationsMoreError = false, conversationsError = false) }
+    mutableState.update { state ->
+      val clearingResults = listSearch.isEmpty() && state.conversationResultsQuery.isNotEmpty()
+      state.copy(conversationSearch = text, conversationsLoading = true,
+        conversations = if (clearingResults) emptyList() else state.conversations,
+        conversationTaskGroups = if (clearingResults) emptyMap() else state.conversationTaskGroups,
+        conversationsLoadingMore = false, conversationsHasMore = false,
+        conversationsMoreError = false, conversationsError = false)
+    }
     searchJob = viewModelScope.launch {
       delay(250)
       loadConversations(text)
@@ -3186,7 +3211,7 @@ class GatewayViewModel internal constructor(application: Application, private va
             historyLoading = false, draftModelReady = true,
             historyTranscriptId = history.transcriptId,
             historyBefore = history.nextBeforeCursor?.takeIf { _ -> history.transcriptId != null },
-            selectedAgentId = history.agentId ?: it.conversations.firstOrNull { item -> item.id == id }?.agentId.orEmpty()) }
+            selectedAgentId = history.agentId ?: it.conversationSummary(id)?.agentId.orEmpty()) }
           if (revision == historyRevision) refreshRunState(id)
           if (revision == historyRevision) loadModels(id)
           if (revision == historyRevision) loadAgents(id)
@@ -3637,7 +3662,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     mutableState.update { it.copy(modelsLoading = true, modelError = false) }
     modelJob = viewModelScope.launch {
       try {
-        val agentId = mutableState.value.conversations.firstOrNull { it.id == id }?.agentId
+        val agentId = mutableState.value.conversationSummary(id)?.agentId
         val selection = runInterruptible(Dispatchers.IO) { conversations.modelSelection(id, agentId) }
         if (mutableState.value.selectedConversationId == id) mutableState.update { it.copy(
           models = selection.models, selectedModelId = selection.selectedId,

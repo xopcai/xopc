@@ -1,5 +1,23 @@
 import Foundation
 
+extension GatewayServing {
+    func fetchRecentConversations() async throws -> [ConversationSummary] {
+        var recent: [ConversationSummary] = []
+        var seen: Set<String> = []
+        var offset = 0
+        repeat {
+            try Task.checkCancellation()
+            let page = try await fetchConversationHistory(search: "", offset: offset, scope: .recent)
+            recent.append(contentsOf: page.items.filter { $0.isRecentSidebarCandidate && seen.insert($0.id).inserted })
+            offset += page.items.count
+            // Keep a spare row for the personal conversation while its record loads.
+            if recent.count > ConversationSummary.recentSidebarLimit || !page.hasMore || page.items.isEmpty {
+                return recent
+            }
+        } while true
+    }
+}
+
 extension GatewayClient {
     func ensureTaskConversation(taskID: String) async throws -> String {
         let response: TaskConversationCreation = try await request(

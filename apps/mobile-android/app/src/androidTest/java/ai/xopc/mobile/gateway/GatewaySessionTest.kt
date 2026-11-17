@@ -26,6 +26,7 @@ import org.bouncycastle.crypto.signers.Ed25519Signer
 import org.bouncycastle.asn1.ASN1EncodableVector
 import org.bouncycastle.asn1.ASN1Integer
 import org.bouncycastle.asn1.DERSequence
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -34,6 +35,31 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GatewaySessionTest {
+  @Test fun recentConversationsFillSidebarAcrossPages() = runBlocking {
+    val app = ApplicationProvider.getApplicationContext<Context>()
+    val store = AndroidSecureStore(app, "sidebar_recents_credentials", "xopc.gateway.credentials.sidebar.recents")
+    val fake = FakeGateway()
+    val session = GatewaySession(app, fake, DeviceIdentity("xopc.gateway.device.sidebar.recents"), store)
+    val prefix = "/api/sessions?limit=20&offset="
+    val filters = "&excludeArchived=true&excludeAutomationRuns=true&rootConversationsOnly=true&sortBy=updatedAt&sortOrder=desc&search="
+    fun row(id: String, messages: Int = 1, status: String = "active") = JSONObject()
+      .put("key", id).put("updatedAt", "2026-11-17T00:00:00Z").put("messageCount", messages).put("status", status)
+    fun page(items: List<JSONObject>) = JSONObject().put("items", JSONArray(items)).put("hasMore", true).toString()
+    val personal = row("personal")
+    val first = row("one")
+    val older = listOf("two", "three", "four", "five", "six", "spare")
+    fake.sessionPages = mapOf(
+      "${prefix}0$filters" to page(listOf(personal, row("empty", messages = 0), first, row("archived", status = "archived"))),
+      "${prefix}4$filters" to page(listOf(first) + older.map { row(it) }),
+    )
+    clear(store)
+    try {
+      session.pair(invitation()) {}
+      val recent = ConversationRepository(session, app).recent()
+      assertEquals(listOf("personal", "one") + older, recent.map { it.id })
+    } finally { clear(store) }
+  }
+
   @Test fun pairedLibraryUsesSpaceVersionsAndRevisionCheckedMutations() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val store = AndroidSecureStore(context, "space_library_test_v1", "xopc.gateway.credentials.space.library.test.v1")
@@ -971,6 +997,7 @@ class GatewaySessionTest {
     var lastDirectoryPatch: JSONObject? = null
     var lastFileVersionRequest: JSONObject? = null
     var lastLibraryPath = ""
+    var sessionPages = emptyMap<String, String>()
     private var libraryRevision = 1
     private var libraryFavorite = false
     private var libraryTrashed = false
@@ -1068,7 +1095,7 @@ class GatewaySessionTest {
         path == "/api/personal-agent" && method == "GET" ->
           """{"ok":true,"payload":{"state":"ready","agentId":"personal","displayName":"Ada",
             "conversationId":"bbbbbbbb-cccc-dddd-eeee-ffffffffffff"}}"""
-        path.startsWith("/api/sessions?limit=") -> """{"items":[],"hasMore":false}"""
+        path.startsWith("/api/sessions?limit=") -> sessionPages[path] ?: """{"items":[],"hasMore":false}"""
         path == "/api/files/file-1" && method == "GET" ->
           """{"resource":{"id":"file-1","spaceId":"workspace","name":"brief.txt","relativePath":"brief.txt",
              "kind":"file","mimeType":"text/plain","size":16,"revision":"revision-1",

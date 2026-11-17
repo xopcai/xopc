@@ -36,6 +36,7 @@ interface XopcTaskInputResponse { ok: boolean; payload?: XopcTaskInputPayload; }
 
 let recentLoad: Promise<XopcSessionList> | undefined;
 let recentConnection: number = -1;
+export const RECENT_CONVERSATION_LIMIT = 6;
 
 export class XopcChatRepository {
   async ensureTaskConversation(taskId: string): Promise<string> {
@@ -112,7 +113,7 @@ export class XopcChatRepository {
     const connection = gatewaySession.connectionRevision();
     if (recentLoad && recentConnection === connection) return recentLoad;
     recentConnection = connection;
-    const request = this.list('', 0, 20, '', true).then((page: XopcSessionList): XopcSessionList => {
+    const request = this.loadRecentPages(connection).then((page: XopcSessionList): XopcSessionList => {
       gatewaySession.assertConnection(connection);
       if (recentLoad === request) {
         void chatSessionCache.write(profile.gatewayId, profile.deviceId, page).catch((): void => {});
@@ -121,6 +122,28 @@ export class XopcChatRepository {
     }).finally((): void => { if (recentLoad === request) recentLoad = undefined; });
     recentLoad = request;
     return request;
+  }
+
+  private async loadRecentPages(connection: number): Promise<XopcSessionList> {
+    const items: XopcSessionItem[] = [];
+    const seen = new Set<string>();
+    let offset = 0;
+    let page: XopcSessionList;
+    let hasMore = false;
+    do {
+      gatewaySession.assertConnection(connection);
+      page = await this.historyList('', offset, {});
+      for (const item of page.items) {
+        if (item.messageCount > 0 && item.status !== 'archived' && !seen.has(item.key)) {
+          seen.add(item.key);
+          items.push(item);
+        }
+      }
+      offset += page.items.length;
+      hasMore = page.hasMore && page.items.length > 0;
+      // The personal conversation has a separate row and may still be loading.
+    } while (items.length <= RECENT_CONVERSATION_LIMIT && hasMore);
+    return { items, total: page.total, hasMore };
   }
 
   async historyList(search: string, offset: number, scope: XopcSessionHistoryScope): Promise<XopcSessionList> {

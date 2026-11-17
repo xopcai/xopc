@@ -69,6 +69,27 @@ struct FeatureStateTests {
             == "3 transcribed, 1 processing")
     }
 
+    @Test func sidebarRecentsPullOlderPagesAfterFiltering() async throws {
+        func row(_ id: String, messageCount: Int = 1, status: String = "active") -> ConversationSummary {
+            ConversationSummary(key: id, agentId: "main", name: id, status: status,
+                                updatedAt: "2026-11-17T00:00:00Z", messageCount: messageCount,
+                                projectId: nil, transcriptId: nil)
+        }
+        let personal = row("personal")
+        let first = row("one")
+        let firstPage = [personal, row("empty", messageCount: 0), first, row("archived", status: "archived")]
+        let older = ["two", "three", "four", "five", "six"].map { row($0) }
+        var gateway = GatewayStub()
+        gateway.conversationPages = [
+            ConversationPage(items: firstPage, total: 12, hasMore: true),
+            ConversationPage(items: [first] + older, total: 12, hasMore: true)
+        ]
+
+        let recent = try await gateway.fetchRecentConversations()
+
+        #expect(recent == [personal, first] + older)
+    }
+
     @Test func assistantSendsAndRecoversPersistedHistory() async {
         let state = AssistantState()
         let conversation = ConversationSelection.draft(agentId: "main")
