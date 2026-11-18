@@ -1,5 +1,4 @@
 import { resolveUserContextSessionAccess } from '../../user-context/access-policy.js';
-import { resolveKnowledgeReadPolicy } from '../../user-context/config.js';
 import { canUseKnowledge } from '../../knowledge-memory/index.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
@@ -22,7 +21,7 @@ export interface VoiceMemorySnapshot {
   block: string;
   references: Array<{ kind: 'assertion' | 'knowledge'; id: string; updatedAt: number }>;
   isCurrent: () => boolean;
-  subscribe: (invalidate: () => void) => () => void;
+  subscribe: (onChange: () => void) => () => void;
 }
 
 export function voiceMemoryEnabled(config: Config, conversationId: string): boolean {
@@ -55,8 +54,10 @@ export function buildVoiceMemoryContext(input: {
   const started = performance.now();
   try {
     const config = input.getConfig();
-    if (!resolveUserContextSessionAccess(config, input.conversationId).userModel || !voiceMemoryEnabled(config, input.conversationId) || input.maxChars < 128) return;
+    const access = resolveUserContextSessionAccess(config, input.conversationId);
+    if (!access.userModel || !voiceMemoryEnabled(config, input.conversationId) || input.maxChars < 128) return;
     const session = getSessionMetadata(input.conversationId);
+    const workspaceOverride = getSessionConfig(input.conversationId)?.workingDirectoryOverride;
     const context = buildExecutionContext({
       query: voiceMemoryQuery(input.history),
       agentId: session?.agentId ?? 'main',
@@ -65,8 +66,8 @@ export function buildVoiceMemoryContext(input: {
       conversationId: input.conversationId,
       maxAssertions: 6,
       maxKnowledge: 3,
-      includeKnowledge: resolveUserContextSessionAccess(config, input.conversationId).knowledge,
-      knowledgePolicy: resolveKnowledgeReadPolicy(config.userContext.knowledgeMemory),
+      includeKnowledge: access.knowledge,
+      knowledgePolicy: access.knowledgePolicy,
     });
     const memory = { confirmedFacts: [] as string[], workingAssumptions: [] as string[], priorities: [] as string[], knowledge: [] as string[] };
     let omittedItems = 0;
@@ -89,19 +90,22 @@ export function buildVoiceMemoryContext(input: {
     const block = serialize();
     const configVersion = JSON.stringify(config.userContext);
     const isCurrent = () => {
-      if (!voiceMemoryEnabled(input.getConfig(), input.conversationId)
-        || JSON.stringify(input.getConfig().userContext) !== configVersion) return false;
+      const currentConfig = input.getConfig();
+      const currentAccess = resolveUserContextSessionAccess(currentConfig, input.conversationId);
+      if (!currentAccess.userModel || !voiceMemoryEnabled(currentConfig, input.conversationId)
+        || getSessionConfig(input.conversationId)?.workingDirectoryOverride !== workspaceOverride
+        || JSON.stringify(currentConfig.userContext) !== configVersion) return false;
       return references.every((reference) => reference.kind === 'assertion'
         ? (() => { const item = getUserAssertion(reference.id); return Boolean(item && item.recordedAt === reference.updatedAt
           && canUseAssertion(item, Date.now(), { use: 'answer', agentId: session?.agentId ?? 'main' })); })()
-        : (() => { const item = getKnowledgeItem(reference.id); return Boolean(item && item.updatedAt === reference.updatedAt
+        : (() => { const item = getKnowledgeItem(reference.id); return Boolean(currentAccess.knowledge && item && item.updatedAt === reference.updatedAt
           && canUseKnowledge(item, { agentId: session?.agentId ?? 'main', workspaceId: input.workspaceId,
-            projectId: input.projectId, conversationId: input.conversationId }, resolveKnowledgeReadPolicy(input.getConfig().userContext.knowledgeMemory))); })());
+            projectId: input.projectId, conversationId: input.conversationId }, currentAccess.knowledgePolicy)); })());
     };
     log.debug({ conversationId: input.conversationId, selectedCount: references.length,
       contextChars: block.length, durationMs: performance.now() - started }, 'Native voice memory selected');
-    return { block, references, isCurrent, subscribe: invalidate => onUserContextChange(change => {
-      if (change.kind === 'policy' || change.id === input.conversationId) invalidate();
+    return { block, references, isCurrent, subscribe: onChange => onUserContextChange(change => {
+      if (change.kind === 'policy' || change.id === input.conversationId) onChange();
     }) };
   } catch (err) {
     log.warn({ err, conversationId: input.conversationId, durationMs: performance.now() - started },

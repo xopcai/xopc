@@ -26,6 +26,7 @@ const HIGGS_ENDPOINT_MS = 180;
 const HIGGS_TRANSCRIPT_TIMEOUT_MS = 1_500;
 const HIGGS_GREETING_GRACE_MS = 1_100;
 const HIGGS_CONTINUATION_GRACE_MS = 1_800;
+const HIGGS_RECENT_EVENT_LIMIT = 4_096;
 const FAILURE_MESSAGES: Record<string, string> = {
   OMNI_UPLOAD_TIMEOUT: 'The connection to the voice service stopped uploading audio. Check the network to your configured endpoint and reconnect.',
   OMNI_INPUT_RESET_TIMEOUT: 'The voice service did not acknowledge clearing microphone input. Reconnect to continue.',
@@ -123,6 +124,8 @@ export function createOmniVoiceEngine(options: {
   const actionItems: Array<{ item: Record<string, unknown>; respond: boolean }> = [];
   let continuationTimer: ReturnType<typeof setTimeout> | undefined;
   let actionResponseRequested = false;
+  let higgsReplyExpected = false;
+  const seenHiggsEvents = new Set<string>();
   let lastSpeechStoppedAt: number | undefined;
   let currentTurnId: string | undefined;
   let pendingClarification: Extract<VoiceServerEvent, { type: 'response.clarification' }>['payload'] | undefined;
@@ -152,7 +155,7 @@ export function createOmniVoiceEngine(options: {
     if (!actionItems.length || closed || failed) return;
     if (inputBlocked && !clearingInput && !muted && !pendingInputs.size && !waitingForCancellation) inputBlocked = false;
     if (!ready || active || actionResponseRequested || muted || inputBlocked || clearingInput || speaking.size || pendingInputs.size
-      || higgsEndpoint || !turn.isIdle() || waitingForCancellation) {
+      || higgsEndpoint || higgsReplyExpected || !turn.isIdle() || waitingForCancellation) {
       continuationTimer = setTimeout(continueActions, 50);
       return;
     }
@@ -276,6 +279,10 @@ export function createOmniVoiceEngine(options: {
       fail('TRANSCRIPT_WRITE_FAILED');
     });
   };
+  function cancelUpstream(responseId: string) {
+    cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
+    send('response.cancel', higgs ? { response_id: responseId } : {});
+  }
   const cancel = (reason: 'barge_in' | 'client_cancelled' | 'session_closed', upstreamStopped = false) => {
     const response = active;
     if (!response) return false;
@@ -290,8 +297,7 @@ export function createOmniVoiceEngine(options: {
     if (reason !== 'session_closed' && socket?.readyState === WebSocket.OPEN) {
       if (response.generating && !upstreamStopped) {
         waitingForCancellation = response.id;
-        cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
-        send('response.cancel', higgs ? { response_id: response.id } : {});
+        cancelUpstream(response.id);
       }
       if (response.higgsAudio) {
         const { itemId, contentIndex, playedMs } = response.higgsAudio;
@@ -360,6 +366,7 @@ export function createOmniVoiceEngine(options: {
     responseCreateQueued = false;
     speaking.clear();
     turnSettled = false;
+    higgsReplyExpected = false;
     if (active && !active.published) cancel('client_cancelled');
     inputQueue = [];
     queuedInputBytes = 0;
@@ -431,6 +438,11 @@ export function createOmniVoiceEngine(options: {
           try {
             if (binary) throw new Error('Unexpected Omni binary frame');
             const event = JSON.parse(raw.toString());
+            if (higgs && typeof event.event_id === 'string' && event.event_id.length && event.event_id.length <= 160) {
+              if (seenHiggsEvents.has(event.event_id)) return;
+              if (seenHiggsEvents.size >= HIGGS_RECENT_EVENT_LIMIT) seenHiggsEvents.delete(seenHiggsEvents.values().next().value!);
+              seenHiggsEvents.add(event.event_id);
+            }
             if (event.type === 'error') {
               // Qwen may finish generation before a local cancellation reaches it.
               const lateCancellation = event.error?.type === 'invalid_request_error'
@@ -497,6 +509,7 @@ export function createOmniVoiceEngine(options: {
                 if (higgsEndpoint?.text !== undefined && higgsEndpoint.id !== id) writeInputTranscript(higgsEndpoint.id, higgsEndpoint.text);
                 resetHiggsEndpoint();
                 higgsEndpoint = { id };
+                higgsReplyExpected = true;
                 cancel('barge_in', true);
               }
             } else if (event.type === 'input_audio_buffer.speech_stopped') {
@@ -555,23 +568,28 @@ export function createOmniVoiceEngine(options: {
               discardInput();
               options.send('session.error', { code: 'INPUT_DROPPED', message: 'Could not transcribe this voice turn. Please repeat it.', recoverable: true });
             } else if (event.type === 'response.created') {
-              actionResponseRequested = false;
+              const id = event.response?.id;
+              if (typeof id !== 'string' || !id.length || id.length > 160) throw new Error('Invalid response ID');
               if (higgs && speaking.size) return;
+              if (active?.id === id) return;
               if (muted || inputBlocked) {
-                cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
-                send('response.cancel');
+                actionResponseRequested = false;
+                cancelUpstream(id);
                 return;
               }
               if (active) {
                 // A provider-created reply must not replace audio still playing to the user.
-                log.warn({ sessionId: options.callId, responseId: active.id }, 'Ignored overlapping native voice reply');
-                cancellationPendingUntil = Date.now() + CANCELLATION_ERROR_GRACE_MS;
-                send('response.cancel');
+                log.warn({ sessionId: options.callId, responseId: active.id, overlappingResponseId: id }, 'Ignored overlapping native voice reply');
+                cancelUpstream(id);
                 return;
               }
+              if (higgs && !higgsReplyExpected && !actionResponseRequested) {
+                cancelUpstream(id);
+                return;
+              }
+              actionResponseRequested = false;
+              higgsReplyExpected = false;
               clearTimeout(responseStartTimer);
-              const id = event.response?.id;
-              if (typeof id !== 'string' || !id.length || id.length > 160) throw new Error('Invalid response ID');
               log.info({ sessionId: options.callId, responseId: id, phase: 'native_response_created', transcriptConfirmed: turnSettled,
                 ...(lastSpeechStoppedAt === undefined ? {} : { speechStoppedToResponseMs: Date.now() - lastSpeechStoppedAt }) }, 'Native voice response generation started');
               responseCreateQueued = false;
@@ -621,6 +639,7 @@ export function createOmniVoiceEngine(options: {
                 }
               }).catch(() => { if (!response.abort.signal.aborted) stopReply(response, 'OMNI_PLAYBACK_FAILED'); }).finally(() => { response.queuedBytes -= audio.length; });
             } else if (event.type === 'response.done' && active?.id === event.response?.id) {
+              if (!active.generating) return;
               active.generating = false;
               if (event.response.status === 'cancelled') cancel('barge_in', true);
               else if (event.response.status !== 'completed') fail('OMNI_RESPONSE_FAILED');
@@ -680,7 +699,7 @@ export function createOmniVoiceEngine(options: {
     isConversationIdle() {
       return ready && !closed && !failed && !active && !speaking.size && !pendingInputs.size
         && !responseCreateQueued && !waitingForCancellation && !clearingInput && !inputBlocked
-        && !actionResponseRequested && !actionItems.length && !higgsEndpoint && turn.isIdle()
+        && !actionResponseRequested && !actionItems.length && !higgsEndpoint && !higgsReplyExpected && turn.isIdle()
         && Date.now() - lastInputAt >= 750;
     },
     offerReply(input) {

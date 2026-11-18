@@ -198,6 +198,38 @@ describe('Omni voice engine', () => {
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.created', { responseId: 'next' }));
   });
 
+  it('plays each Higgs delta once and cancels only the extra replies to a single utterance', async () => {
+    const test = await setup(undefined, true, false, 'boson');
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'question' });
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'question' });
+    test.emit({ type: 'input_audio_buffer.committed', item_id: 'question' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'question', transcript: '介绍一下西湖。' });
+    const created = { type: 'response.created', response: { id: 'reply' } };
+    test.emit(created);
+    test.emit(created);
+    const transcript = { type: 'response.output_audio_transcript.delta', event_id: 'text-1', response_id: 'reply', delta: '西湖在杭州。' };
+    test.emit(transcript);
+    test.emit(transcript);
+    const audio = { type: 'response.output_audio.delta', event_id: 'audio-1', response_id: 'reply',
+      item_id: 'spoken', content_index: 0, delta: Buffer.alloc(960, 1).toString('base64') };
+    test.emit(audio);
+    test.emit(audio);
+    test.emit({ ...audio, event_id: 'audio-2' });
+    test.emit({ type: 'response.created', response: { id: 'overlapping' } });
+    test.emit({ type: 'response.done', response: { id: 'reply', status: 'completed' } });
+    await vi.waitFor(() => expect(test.received).toContainEqual(expect.objectContaining({
+      type: 'response.cancel', response_id: 'overlapping',
+    })));
+    expect(test.sendAudio).toHaveBeenCalledTimes(2);
+    engine.acknowledge('reply', 40);
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'reply' })));
+    test.emit({ type: 'response.created', response: { id: 'extra' } });
+    await vi.waitFor(() => expect(test.received.filter(event => event.type === 'response.cancel').map(event => event.response_id))
+      .toEqual(['overlapping', 'extra']));
+    expect(test.send.mock.calls.filter(([type]) => type === 'response.created')).toEqual([['response.created', { responseId: 'reply' }]]);
+    expect(test.record).toHaveBeenCalledWith({ itemId: 'reply', role: 'assistant', text: '西湖在杭州。', interrupted: false });
+  });
+
   it.each([['我想问一下。', 1_500], ['你好。', 900]])('keeps a premature Higgs reply silent after %s', async (prefix, pauseMs) => {
     const test = await setup(undefined, true, false, 'boson');
     vi.useFakeTimers();

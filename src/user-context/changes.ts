@@ -1,7 +1,7 @@
 import { createLogger } from '../utils/logger.js';
 
 export interface UserContextChange {
-  kind: 'policy' | 'session' | 'session-reset';
+  kind: 'policy' | 'session' | 'session-reset' | 'history-forgotten';
   id?: string;
 }
 const listeners = new Set<(change: UserContextChange) => void>();

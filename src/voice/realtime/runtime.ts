@@ -569,12 +569,12 @@ export class VoiceRealtimeRuntime {
     const lifecycleTimer = setInterval(() => {
       if (!claim) return;
       if (this.options.isPrincipalActive?.(claim.principalId) === false) { socket.terminate(); return; }
+      if (!checkMemoryContext()) return;
       if (context?.isCurrent && !context.isCurrent()) {
         if (ready && engine?.updateContext) void refreshContext();
         else invalidateContext();
         return;
       }
-      if (context?.memory && !context.memory.isCurrent()) { invalidateContext(); return; }
       const now = Date.now();
       if (now - lastActivityAt > claim.idleTimeoutMs) void shutdown('idle_timeout', true);
       else if (now - claim.createdAt > claim.maxSessionMs) void shutdown('session_limit', true);
@@ -586,22 +586,30 @@ export class VoiceRealtimeRuntime {
       void shutdown('context_changed', true);
     };
 
+    // Configuration reloads and session writes can leave the injected memory unchanged.
+    const checkMemoryContext = (): boolean => {
+      if (closed) return false;
+      if (context?.memory?.isCurrent() !== false) return true;
+      invalidateContext();
+      return false;
+    };
+
     const refreshContext = (): Promise<void> => {
       if (contextRefresh) { contextRefreshPending = true; return contextRefresh; }
       if (!ready || closed || !claim?.omni || !claim.request.conversationId || !engine?.updateContext) return Promise.resolve();
       const current = claim;
       contextRefresh = (async () => {
         try {
-          if (await this.options.getSessionIdentity?.(current.request.conversationId!) !== current.conversationSessionId
-            || context?.memory?.isCurrent() === false) { invalidateContext(); return; }
+          if (await this.options.getSessionIdentity?.(current.request.conversationId!) !== current.conversationSessionId) { invalidateContext(); return; }
+          if (!checkMemoryContext()) return;
           const next = await this.options.getConversationContext!(current.request.conversationId!, current.conversationSessionId!, current.omni!.instructions, current.omni!.tools === true);
-          if (closed) return;
+          if (!checkMemoryContext()) return;
           if (next.isCurrent?.() === false || next.memory?.isCurrent() === false || (context?.user && !next.user)) { invalidateContext(); return; }
           if (next.sharedChat !== context?.sharedChat || context?.isCurrent?.() === false) {
             if (!engine!.updateContext!(voiceConversationInstructions(current.omni!.instructions, { ...next, history: [] }), next.sharedChat ?? '')) return;
             unsubscribeMemory?.();
-            unsubscribeMemory = next.memory?.subscribe(invalidateContext);
             context = next;
+            unsubscribeMemory = next.memory?.subscribe(checkMemoryContext);
           }
         } catch (err) {
           log.warn({ err, conversationId: current.request.conversationId }, 'Voice shared context refresh failed');
@@ -652,8 +660,8 @@ export class VoiceRealtimeRuntime {
           const snapshot = await this.options.getConversationContext!(conversationId, consumed.conversationSessionId!, omni.instructions, omni.tools === true);
           if (closed) throw new Error('Voice session closed while restoring context');
           context = snapshot;
-          if (snapshot.memory) unsubscribeMemory = snapshot.memory.subscribe(invalidateContext);
-          if (snapshot.isCurrent?.() === false || snapshot.memory?.isCurrent() === false) {
+          if (snapshot.memory) unsubscribeMemory = snapshot.memory.subscribe(checkMemoryContext);
+          if (!checkMemoryContext() || snapshot.isCurrent?.() === false) {
             invalidateContext();
             throw new Error('Conversation context changed while dialing');
           }
@@ -664,14 +672,16 @@ export class VoiceRealtimeRuntime {
         } : undefined;
         if (restoreInstructions) {
           unsubscribeSession = onUserContextChange((change) => {
-            if (change.kind === 'session-reset' && change.id === conversationId) invalidateContext();
+            if ((change.kind === 'session-reset' || change.kind === 'history-forgotten') && change.id === conversationId) invalidateContext();
           });
           if (omni && omni.route.provider !== 'boson') {
             engineOmni = { ...omni, instructions: await restoreInstructions() };
           }
         }
         setupStage = 'engine';
-        if (!engineOmni && consumed.request.purpose === 'conversation') playbackEcho = new PcmPlaybackEcho();
+        if (consumed.request.purpose === 'conversation' && (!engineOmni || engineOmni.route.provider === 'boson')) {
+          playbackEcho = new PcmPlaybackEcho();
+        }
         const sendAudio = (responseId: string, bytes: Uint8Array) => {
           if (socket.bufferedAmount > 1024 * 1024) throw new Error('Voice client audio backpressure limit exceeded');
           if (closed || socket.readyState !== WebSocketState.OPEN) return;
