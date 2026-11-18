@@ -141,3 +141,19 @@ export interface XopcHostDirectory { name: string; absolutePath: string; isDirec
 export interface XopcHostDirectories { currentPath: string; parentPath?: string; entries: XopcHostDirectory[]; }
 export interface XopcWorkingDirectory { workingDirectory: string; }
 export interface XopcReferenceItem { kind: string; id: string; title: string; description: string; version: string; relativePath?: string; directory?: boolean; mimeType?: string; size?: number; }
+
+
+export interface XopcNextTurnSuggestion {
+  id: string;
+  conversationId: string;
+  transcriptId: string;
+  agentId: string;
+  locale: string;
+  prompt: string;
+  expiresAt: number;
+}
+
+export interface XopcNextTurnSuggestionResponse {
+  status: string;
+  suggestion?: XopcNextTurnSuggestion;
+}

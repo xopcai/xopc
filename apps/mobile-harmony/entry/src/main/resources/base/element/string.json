@@ -1,5 +1,6 @@
 {
   "string": [
+    {"name": "chat_fill_suggestion", "value": "Fill suggestion: %s"},
     {"name": "agent_personal_description", "value": "A personal AI that adapts its responses to the user and coordinates work."},
     {"name": "agent_builtin_assistant_name", "value": "General assistant"},
     {"name": "agent_builtin_assistant_description", "value": "Answers general questions and helps with everyday work."},

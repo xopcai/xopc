@@ -9,6 +9,8 @@ struct AssistantComposer: View {
     let configuration: GatewayConfiguration
     var focusAllowed = true
     var personalName: String?
+    var suggestion: NextTurnSuggestion?
+    var onAcceptSuggestion: (NextTurnSuggestion) -> Void = { _ in }
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -213,17 +215,7 @@ struct AssistantComposer: View {
                                },
                                onError: { attachmentError = $0.isEmpty ? nil : $0 })
             } else {
-                TextField(placeholder, text: $draft, axis: .vertical)
-                    .foregroundStyle(.primary)
-                    .focused($isComposerFocused)
-                    .lineLimit(1 ... 3)
-                    .submitLabel(.send)
-                    .onSubmit {
-                        if sendEnabled {
-                            onSend()
-                        }
-                    }
-                    .accessibilityIdentifier("assistant-chat-composer")
+                messageField
             }
 
             if isRunActive {
@@ -266,6 +258,37 @@ struct AssistantComposer: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 1)
         .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(24)))
+    }
+
+    private var messageField: some View {
+        ZStack(alignment: .leading) {
+            TextField(placeholder, text: $draft, prompt: suggestion == nil ? nil : Text(""), axis: .vertical)
+                .foregroundStyle(.primary)
+                .focused($isComposerFocused)
+                .lineLimit(1 ... 3)
+                .submitLabel(.send)
+                .onSubmit {
+                    if sendEnabled { onSend() }
+                }
+                .accessibilityIdentifier("assistant-chat-composer")
+            if let suggestion {
+                Button {
+                    onAcceptSuggestion(suggestion)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(suggestion.prompt).lineLimit(1)
+                        Image(systemName: "arrow.turn.down.right").font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(format: AppLocalization.string("填入建议：%@", locale: locale), suggestion.prompt))
+                .accessibilityIdentifier("assistant-next-turn-suggestion")
+                .padding(.trailing, 24)
+            }
+        }
     }
 
     private var attachmentStrip: some View {

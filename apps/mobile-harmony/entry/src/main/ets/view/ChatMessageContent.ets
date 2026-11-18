@@ -229,7 +229,7 @@ struct XopcChatAnswerView {
   private revealTimer: number = -1;
   private targetText: string = '';
   aboutToAppear(): void { this.updateAnswer(); }
-  @Monitor('content') onContentChange(): void { this.updateAnswer(); }
+  @Monitor('content', 'reveal') onContentChange(): void { this.updateAnswer(); }
   aboutToDisappear(): void { clearInterval(this.revealTimer); this.revealTimer = -1; }
   private updateAnswer(): void {
     this.targetText = this.content;

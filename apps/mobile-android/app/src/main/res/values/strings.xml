@@ -1108,4 +1108,5 @@
     <string name="session_share_disclosure">Anyone with the link can view this snapshot. Later messages are not included.</string>
     <string name="session_share_revoke_help">People with this link will lose access.</string>
     <string name="session_share_error">Unable to complete the share action.</string>
+    <string name="assistant_fill_suggestion">Fill suggestion: %1$s</string>
 </resources>

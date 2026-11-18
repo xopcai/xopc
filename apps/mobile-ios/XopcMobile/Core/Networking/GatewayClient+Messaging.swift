@@ -153,3 +153,44 @@ extension GatewayClient {
         return input
     }
 }
+
+
+struct NextTurnSuggestion: Decodable, Equatable {
+    let id: String
+    let conversationId: String
+    let transcriptId: String
+    let agentId: String
+    let locale: String
+    let prompt: String
+    let expiresAt: Int64
+
+    var isCurrent: Bool { expiresAt > Int64(Date.now.timeIntervalSince1970 * 1000) }
+}
+
+extension GatewayClient {
+    struct NextTurnSuggestionResponse: Decodable {
+        let status: String
+        let suggestion: NextTurnSuggestion?
+    }
+
+    func fetchNextTurnSuggestion(conversationID: String, locale: String) async throws -> NextTurnSuggestionResponse {
+        try await request(path: "/api/sessions/\(conversationID)/next-turn-suggestion",
+                          queryItems: [URLQueryItem(name: "locale", value: locale)])
+    }
+
+    func reportNextTurnSuggestion(_ suggestion: NextTurnSuggestion, impressionID: UUID,
+                                  event: String, edited: Bool? = nil) async {
+        struct Feedback: Encodable {
+            let suggestionId: String
+            let impressionId: UUID
+            let event: String
+            let edited: Bool?
+        }
+        let path = "/api/sessions/\(suggestion.conversationId)/next-turn-suggestion-feedback"
+        let feedback = Feedback(suggestionId: suggestion.id, impressionId: impressionID, event: event, edited: edited)
+        struct Receipt: Decodable { let ok: Bool }
+        do {
+            let _: Receipt = try await request(path: path, method: "POST", body: encoder.encode(feedback))
+        } catch { /* Feedback is optional. */ }
+    }
+}

@@ -1,5 +1,6 @@
 {
   "string": [
+    {"name": "chat_fill_suggestion", "value": "填入建议：%s"},
     {"name": "agent_personal_description", "value": "了解你的交流偏好，为你提供贴合需求的回应，并协调各项工作。"},
     {"name": "agent_builtin_assistant_name", "value": "通用助手"},
     {"name": "agent_builtin_assistant_description", "value": "解答常见问题，协助处理日常事务。"},

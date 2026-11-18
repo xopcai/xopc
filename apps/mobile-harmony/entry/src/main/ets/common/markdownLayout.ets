@@ -1,5 +1,36 @@
 import { internalMessageLink } from './messageLink';
-import { markdownSpans, XopcMarkdownBlock, XopcMarkdownSpan } from './markdown';
+import { markdownSpans, XopcMarkdownBlock, XopcMarkdownSpan, XopcMarkdownTableRow } from './markdown';
+
+const compactTableValue = /^[+−-]?(?:[$€£¥￥]\s?|v)?[0-9]+(?:[.,:/\u00a0\u202f-][0-9]+)*(?:\s?(?:[%％‰]|[$€£¥￥]|ms|s|KB|MB|GB|TB))?$/i;
+export const MARKDOWN_TABLE_CELL_INSET: number = 6;
+
+export function markdownTableWidths(rows: XopcMarkdownTableRow[], available: number,
+  measureText: (text: string, strong: boolean) => number): number[] {
+  const count = rows[0]?.cells.length ?? 0;
+  const minimum: number[] = [];
+  const preferred: number[] = [];
+  for (let column = 0; column < count; column++) {
+    minimum.push(0);
+    preferred.push(0);
+  }
+  for (const row of rows) {
+    for (let column = 0; column < row.cells.length && column < count; column++) {
+      const spans = markdownSpans(row.cells[column].text);
+      const text = spans.map((span: XopcMarkdownSpan): string => span.text).join('');
+      const strong = row.header || spans.some((span: XopcMarkdownSpan): boolean => span.kind === 'bold');
+      const width = Math.max(28, Math.ceil(measureText(text.slice(0, 64), strong)) + 2 * MARKDOWN_TABLE_CELL_INSET + 1);
+      const compact = !row.header && text.length <= 16 && compactTableValue.test(text);
+      minimum[column] = Math.max(minimum[column], compact ? width : Math.min(width, 64));
+      preferred[column] = Math.max(preferred[column], compact ? width : Math.min(width, 320));
+    }
+  }
+  const minTotal = minimum.reduce((total: number, width: number): number => total + width, 0);
+  const preferredTotal = preferred.reduce((total: number, width: number): number => total + width, 0);
+  const extra = preferredTotal - minTotal;
+  const fraction = extra > 0 ? Math.min(1, Math.max(0, (available - minTotal) / extra)) : 0;
+  return minimum.map((width: number, column: number): number =>
+    width + Math.floor((preferred[column] - width) * fraction));
+}
 
 export function markdownBlockGap(block: XopcMarkdownBlock, previous?: XopcMarkdownBlock): number {
   if (!previous) return 0;

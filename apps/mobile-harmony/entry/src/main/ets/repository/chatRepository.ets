@@ -13,10 +13,11 @@ import {
   XopcSessionList, XopcSessionItem, XopcHistory, XopcCreateSession,
   XopcRun, XopcAbort, XopcRename, XopcChatAttachment,
   XopcChatModels, XopcChatAgents, XopcAgentConfig, XopcQueueState, XopcQueuedInput, XopcQueueUpdate, XopcContextRef,
-  XopcInputResult, XopcExecutionDetail
+  XopcInputResult, XopcExecutionDetail, XopcNextTurnSuggestion, XopcNextTurnSuggestionResponse
 } from '../model/chat';
 import { XopcProjectResult } from '../model/workspace';
 
+interface XopcSuggestionFeedback { suggestionId: string; impressionId: string; event: string; edited?: boolean; }
 interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; }
 interface XopcQueuePatchCommand {
   version: number; content?: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; thinking?: string; position?: number;
@@ -433,6 +434,18 @@ export class XopcChatRepository {
     if (result.payload?.conversationId !== id || !Array.isArray(result.payload.inputs)) throw new Error('INVALID_INPUT_STATE');
     return result.payload;
   }
+  async nextTurnSuggestion(id: string, locale: string): Promise<XopcNextTurnSuggestionResponse> {
+    const path = '/api/sessions/' + encodeURIComponent(id) + '/next-turn-suggestion?locale=' + encodeURIComponent(locale);
+    return JSON.parse(await gatewaySession.request(path)) as XopcNextTurnSuggestionResponse;
+  }
+
+  async reportNextTurnSuggestion(suggestion: XopcNextTurnSuggestion, impressionId: string, event: string,
+    edited?: boolean): Promise<void> {
+    const feedback: XopcSuggestionFeedback = { suggestionId: suggestion.id, impressionId, event, edited };
+    const path = '/api/sessions/' + encodeURIComponent(suggestion.conversationId) + '/next-turn-suggestion-feedback';
+    await gatewaySession.request(path, 'POST', JSON.stringify(feedback));
+  }
+
   async retryPreparation(id: string, operationId: string, revision: number): Promise<void> {
     const body: XopcPreparationRetry = { operationId, expectedRevision: revision, idempotencyKey: operationId + ':' + revision.toString() };
     await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/preparation/retry', 'POST', JSON.stringify(body));

@@ -391,3 +391,5 @@
 "capability_agent_setup_prompt" = "帮我创建一个助手或专家，先问我要做什么。";
 "capability_skill_setup_prompt" = "帮我创建一个技能，先问我它要处理什么。";
 "capability_mcp_continue" = "继续连接";
+
+"填入建议：%@" = "填入建议：%@";

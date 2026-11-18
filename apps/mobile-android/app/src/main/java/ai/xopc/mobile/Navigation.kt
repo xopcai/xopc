@@ -75,6 +75,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onDismissComposerErrors = gateway::dismissComposerErrors,
             onChatNavigationHandled = gateway::chatNavigationHandled,
             onDraftChange = gateway::changeDraft, onSendMessage = gateway::sendMessage,
+            onObserveSuggestion = gateway::observeNextTurnSuggestion, onAcceptSuggestion = gateway::acceptNextTurnSuggestion,
             onAddDraftAttachment = gateway::addDraftAttachment,
             onAddCapturedDraftAttachment = gateway::addCapturedDraftAttachment,
             onRemoveDraftAttachment = gateway::removeDraftAttachment,

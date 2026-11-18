@@ -1904,6 +1904,24 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(scope.label.contains("收藏"))
     }
 
+    func testNextTurnSuggestionFillsDraftWithoutSending() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/next-turn"
+        app.launch()
+
+        let suggestion = app.buttons["assistant-next-turn-suggestion"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["assistant-chat-send"].exists)
+        XCTAssertTrue(suggestion.label.contains("把刚才的结果拆成三个步骤"))
+        suggestion.tap()
+
+        let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
+        XCTAssertEqual(composer.value as? String, "把刚才的结果拆成三个步骤")
+        XCTAssertFalse(suggestion.exists)
+        XCTAssertTrue(app.buttons["assistant-chat-send"].isHittable)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+    }
+
     func testComposerPlacesAddOnTheLeftAndVoiceOnTheRight() {
         let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
         XCTAssertTrue(composer.waitForExistence(timeout: 5))

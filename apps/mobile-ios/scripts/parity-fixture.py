@@ -111,11 +111,13 @@ class Handler(BaseHTTPRequestHandler):
   global live_music_state, space_item, capability_skill_enabled, global_model, global_model_revision
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   keyboard_fixture = path.startswith('/keyboard/')
+  suggestion_fixture = path.startswith('/next-turn/')
   bubble_fixture = path.startswith('/bubble-width/')
   music_fixture = path.startswith('/music/')
   slow_capabilities = path.startswith('/slow-capabilities/')
   live_music_fixture = path.startswith('/music-live/')
   if keyboard_fixture: path = path.removeprefix('/keyboard')
+  if suggestion_fixture: path = path.removeprefix('/next-turn')
   if bubble_fixture: path = path.removeprefix('/bubble-width')
   if music_fixture: path = path.removeprefix('/music')
   if slow_capabilities: path = path.removeprefix('/slow-capabilities')
@@ -282,6 +284,14 @@ class Handler(BaseHTTPRequestHandler):
    history = bubble_messages if bubble_fixture else keyboard_messages if keyboard_fixture else messages
    if key == personal and (music_fixture or live_music_fixture): history = history + [music_reply]
    data={'session':{'key':key,'transcriptId':f'transcript-{key}','agentId':'main','messages':history},'pagination':{'hasMore':False}}
+  elif suggestion_fixture and path.endswith('/next-turn-suggestion'):
+   key=path.split('/')[3]
+   data={'status':'ready','suggestion':{'id':'99999999-9999-4999-8999-999999999999',
+    'conversationId':key,'transcriptId':f'transcript-{key}','agentId':'personal' if key==personal else 'main',
+    'locale':query.get('locale',['zh'])[0],'prompt':'把刚才的结果拆成三个步骤',
+    'sourceRunId':'fixture-run','inputRevision':1,'transcriptCursor':1,'expiresAt':now+600000}}
+  elif suggestion_fixture and path.endswith('/next-turn-suggestion-feedback'):
+   data={'ok':True}
   elif path.endswith('/context-summary'): data={'summary':{'conversationId':path.split('/')[3],'work':{},'sources':[],'sourcesHasMore':False,'unavailableSections':[],'environment':{'kind':'local_checkout','rootPath':'/fixture','available':True}}}
   elif path.endswith('/agent-config'):
    current = personal_config if path.split('/')[3] == personal else config

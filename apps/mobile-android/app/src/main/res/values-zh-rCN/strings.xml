@@ -1108,4 +1108,5 @@
     <string name="session_share_disclosure">持链接者可查看当前快照。后续消息不会同步。</string>
     <string name="session_share_revoke_help">撤销后，持有此链接的人将无法打开分享。</string>
     <string name="session_share_error">暂时无法完成分享操作。</string>
+    <string name="assistant_fill_suggestion">填入建议：%1$s</string>
 </resources>

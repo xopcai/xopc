@@ -45,6 +45,14 @@ private struct MarkdownPartView: View {
     let streaming: Bool
     let mathEnabled: Bool
     @State private var expanded = false
+    @State private var tableViewport: CGFloat = 0
+    @ScaledMetric(relativeTo: .body) private var tableFontSize: CGFloat = 17
+    private let cellInset: CGFloat = 6
+
+    private static let compactTableNumber = try? NSRegularExpression(
+        pattern: #"^[+−-]?(?:\p{Sc}\s?|v)?\p{Nd}+(?:[.,:/\u00a0\u202f-]\p{Nd}+)*(?:\s?(?:[%％‰]|\p{Sc}|ms|s|KB|MB|GB|TB))?$"#,
+        options: .caseInsensitive
+    )
 
     var body: some View {
         switch block {
@@ -101,34 +109,72 @@ private struct MarkdownPartView: View {
         case let .image(alt, source):
             MarkdownImageView(alt: alt, source: source, configuration: configuration, conversationID: conversationID)
         case let .table(rows, alignments):
-            VStack(alignment: .leading, spacing: 4) {
-                ScrollView(.horizontal) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(Array((expanded ? rows : Array(rows.prefix(40))).enumerated()), id: \.element.id) { rowIndex, row in
-                            HStack(alignment: .top, spacing: 0) {
-                                ForEach(Array(row.cells.enumerated()), id: \.element.id) { columnIndex, cell in
-                                    inline(cell.text)
-                                        .fontWeight(row.isHeader ? .semibold : .regular)
-                                        .multilineTextAlignment(textAlignment(columnIndex < alignments.count ? alignments[columnIndex] : .leading))
-                                        .frame(width: 168, alignment: frameAlignment(columnIndex < alignments.count ? alignments[columnIndex] : .leading))
-                                        .padding(10)
-                                }
-                            }
-                            .background(row.isHeader ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.06))
-                            .clipShape(.rect(cornerRadius: 6))
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("markdown-table-row-\(rowIndex)")
-                        }
-                    }
-                }
-                .accessibilityIdentifier("markdown-table")
-                if rows.count > 40 {
-                    Button(expanded ? "收起" : "查看更多") { expanded.toggle() }.frame(minHeight: 44)
-                }
-            }
+            table(rows, alignments: alignments)
         case .divider:
             Divider().padding(.vertical, 4)
         }
+    }
+
+    private func table(_ rows: [MarkdownTableRow], alignments: [MarkdownTableAlignment]) -> some View {
+        let visibleRows = rows.prefix(expanded ? rows.count : 40)
+        let widths = tableColumnWidths(visibleRows)
+        return VStack(alignment: .leading, spacing: 4) {
+            ScrollView(.horizontal) {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(visibleRows.enumerated()), id: \.element.id) { rowIndex, row in
+                        HStack(alignment: .top, spacing: 0) {
+                            ForEach(Array(row.cells.enumerated()), id: \.element.id) { columnIndex, cell in
+                                let alignment = columnIndex < alignments.count ? alignments[columnIndex] : .leading
+                                inline(cell.text, fontSize: tableFontSize)
+                                    .font(.system(size: tableFontSize))
+                                    .fontWeight(row.isHeader ? .semibold : .regular)
+                                    .multilineTextAlignment(textAlignment(alignment))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(width: widths[columnIndex] - 2 * cellInset, alignment: frameAlignment(alignment))
+                                    .padding(.horizontal, cellInset)
+                                    .padding(.vertical, 8)
+                            }
+                        }
+                        .background(row.isHeader ? Color.secondary.opacity(0.12) : Color.secondary.opacity(0.06))
+                        .clipShape(.rect(cornerRadius: 6))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("markdown-table-row-\(rowIndex)")
+                    }
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tableViewport = $0 }
+            .accessibilityIdentifier("markdown-table")
+            if rows.count > 40 {
+                Button(expanded ? "收起" : "查看更多") { expanded.toggle() }.frame(minHeight: 44)
+            }
+        }
+    }
+
+    private func tableColumnWidths(_ rows: ArraySlice<MarkdownTableRow>) -> [CGFloat] {
+        let count = rows.map(\.cells.count).max() ?? 0
+        var minimum = [CGFloat](repeating: 0, count: count)
+        var preferred = minimum
+        for row in rows {
+            for (column, cell) in row.cells.enumerated() {
+                let source = String(cell.text.prefix(256))
+                let spans = (try? AttributedString(markdown: source, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+                    ?? AttributedString(source)
+                let text = String(spans.characters)
+                let bold = spans.runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true }
+                let font = UIFont.systemFont(ofSize: tableFontSize, weight: bold ? .bold : row.isHeader ? .semibold : .regular)
+                let sample = String(text.prefix(64)) as NSString
+                let width = max(28, ceil(sample.size(withAttributes: [.font: font]).width) + 2 * cellInset + 1)
+                let compact = !row.isHeader && text.utf16.count <= 16 && Self.compactTableNumber?.firstMatch(
+                    in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)
+                ) != nil
+                minimum[column] = max(minimum[column], compact ? width : min(width, 64))
+                preferred[column] = max(preferred[column], compact ? width : min(width, 320))
+            }
+        }
+        let minTotal = minimum.reduce(0, +)
+        let extra = preferred.reduce(0, +) - minTotal
+        let fraction = extra > 0 ? min(1, max(0, (tableViewport - minTotal) / extra)) : 0
+        return zip(minimum, preferred).map { $0 + floor(($1 - $0) * fraction) }
     }
 
     @ViewBuilder

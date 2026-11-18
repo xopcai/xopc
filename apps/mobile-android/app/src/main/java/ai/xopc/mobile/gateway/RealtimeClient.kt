@@ -80,12 +80,13 @@ internal class RealtimeClient(
 
   suspend fun run(onState: (String) -> Unit, onInvalidation: (String) -> Unit,
     onRunEvent: (RunStreamEvent) -> Unit,
-    onTaskResult: (String) -> Unit = { onInvalidation("sessions") }) {
+    onTaskResult: (String) -> Unit = { onInvalidation("sessions") },
+    onSuggestionChanged: (String?) -> Unit = {}) {
     var attempt = 0
     while (currentCoroutineContext().isActive) {
       onState(if (attempt == 0) "connecting" else "reconnecting")
       try {
-        connectOnce(onState, onInvalidation, onRunEvent, onTaskResult)
+        connectOnce(onState, onInvalidation, onRunEvent, onTaskResult, onSuggestionChanged)
         attempt = 0
       } catch (error: CancellationException) {
         throw error
@@ -100,7 +101,8 @@ internal class RealtimeClient(
   }
 
   private suspend fun connectOnce(onState: (String) -> Unit, onInvalidation: (String) -> Unit,
-    onRunEvent: (RunStreamEvent) -> Unit, onTaskResult: (String) -> Unit) {
+    onRunEvent: (RunStreamEvent) -> Unit, onTaskResult: (String) -> Unit,
+    onSuggestionChanged: (String?) -> Unit) {
     val profile = gateway.currentProfile() ?: throw IllegalStateException("NOT_PAIRED")
     val clientId = "android:${profile.deviceId}"
     val displayName = "xopc Android"
@@ -223,7 +225,10 @@ internal class RealtimeClient(
           "realtime.event" -> {
             val payload = message.getJSONObject("payload")
             val topic = payload.getString("topic")
-            if (topic == "sessions" && payload.optString("event") in conversationHistoryEvents) {
+            if (topic == "sessions" && payload.optString("event") == "session.next-turn-suggestion.changed") {
+              val conversationId = payload.optJSONObject("data")?.optString("conversationId").orEmpty()
+              if (conversationId.isNotBlank()) onSuggestionChanged(conversationId)
+            } else if (topic == "sessions" && payload.optString("event") in conversationHistoryEvents) {
               val conversationId = payload.optJSONObject("data")?.optString("conversationId").orEmpty()
               if (conversationId.isNotBlank()) onTaskResult(conversationId)
             } else if (topic == "sessions" || topic == "gateway") onInvalidation(topic)
@@ -240,6 +245,7 @@ internal class RealtimeClient(
           "realtime.gap" -> {
             val gap = message.getJSONObject("payload")
             val topic = gap.getString("topic")
+            if (topic == "sessions") onSuggestionChanged(null)
             onInvalidation(topic)
             if (topic.startsWith("run:") && !gap.optBoolean("recoverable")) {
               synchronized(this) {
