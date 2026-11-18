@@ -13,9 +13,6 @@
     <string name="personal_chat_invitation">想到什么就告诉我。下次回来，我们还会在这里接着聊。</string>
     <string name="chat_draft_greeting">今天想聊点什么？</string>
     <string name="chat_ask_personal">问问%1$s</string>
-    <string name="file_save_version">保存为新版本</string>
-    <string name="file_version_saved">已保存新版本</string>
-    <string name="file_version_error">无法保存新版本，请重试。</string>
     <string name="library_search">搜索资料</string>
     <string name="library_results">成果</string>
     <string name="library_browse_files">浏览文件空间</string>

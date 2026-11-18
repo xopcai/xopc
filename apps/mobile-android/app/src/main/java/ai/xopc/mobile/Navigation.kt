@@ -188,7 +188,6 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onReuseMessage = gateway::reuseMessage,
             onRegenerateMessage = gateway::regenerateMessage,
             onLoadMessageMedia = gateway::readMessageMedia,
-            onResolveMessageFile = gateway::resolveMessageFile, onSaveFileVersion = gateway::saveFileVersion,
             generatedMediaAccess = gateway.generatedMediaAccess,
             modelSettingsAccess = gateway.modelSettingsAccess,
             spaceLibraryAccess = gateway.spaceLibraryAccess,

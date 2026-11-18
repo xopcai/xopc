@@ -2,7 +2,6 @@ package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
-import ai.xopc.mobile.gateway.ManagedFile
 import ai.xopc.mobile.gateway.ConversationArtifact
 import ai.xopc.mobile.gateway.ConversationMedia
 import ai.xopc.mobile.gateway.ConversationMessage
@@ -63,7 +62,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -497,15 +495,12 @@ private fun MessageResultCapsule(
 
 @Composable
 internal fun MessageMediaPreview(request: MessagePreviewRequest,
-  load: suspend (String, ConversationMedia) -> ByteArray,
-  resolveFile: (suspend (String, ConversationMedia) -> ManagedFile?)? = null,
-  saveVersion: suspend (ManagedFile, String) -> Unit = { _, _ -> }, onClose: () -> Unit) {
+  load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit) {
   if (mediaPreviewKind(request.media) == "image") {
-    MessageImageGallery(request, load, onClose, resolveFile, saveVersion)
+    MessageImageGallery(request, load, onClose)
     return
   }
   val activeMedia = request.media
-  val file = if (resolveFile == null) null else rememberMessageFile(request.conversationId, activeMedia, resolveFile)
   val result by produceState<Result<ByteArray>?>(initialValue = null, request.conversationId, activeMedia) {
     value = null
     value = runCatching { load(request.conversationId, activeMedia) }
@@ -520,7 +515,6 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
   }
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
     .testTag("message-media-preview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    FileVersionAction(file, saveVersion)
     if (result == null) {
       BrandLoadingPanel(modifier = Modifier.testTag("message-media-preview-loading"))
     } else if (payload == null) {
@@ -528,14 +522,14 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
         modifier = Modifier.testTag("message-media-preview-error"))
     } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) == PreviewFileKind.SVG) {
       FilePreviewContent(activeMedia.name, activeMedia.mimeType, payload,
-        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
+        modifier = Modifier.fillMaxWidth().weight(1f))
     } else if (activeMedia.mimeType.startsWith("video/")) {
       MessageVideoPreview(payload, activeMedia)
     } else if (mediaPreviewKind(activeMedia) == "audio") {
       AudioMessagePreview(payload, activeMedia)
     } else if (previewFileKind(activeMedia.name, activeMedia.mimeType) != PreviewFileKind.BINARY) {
       FilePreviewContent(activeMedia.name, activeMedia.mimeType, payload,
-        modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp))
+        modifier = Modifier.fillMaxWidth().weight(1f))
     } else {
       BinaryMessagePreview(payload, activeMedia)
     }
@@ -544,31 +538,13 @@ internal fun MessageMediaPreview(request: MessagePreviewRequest,
 }
 
 @Composable
-private fun rememberMessageFile(conversationId: String, media: ConversationMedia,
-  resolveFile: suspend (String, ConversationMedia) -> ManagedFile?): ManagedFile? = key(conversationId, media) {
-  val file by produceState<ManagedFile?>(null) {
-    try {
-      value = resolveFile(conversationId, media)
-    } catch (error: kotlinx.coroutines.CancellationException) {
-      throw error
-    } catch (_: Exception) {
-      // Managed-file metadata is optional for an attachment preview.
-    }
-  }
-  file
-}
-
-@Composable
 private fun MessageImageGallery(request: MessagePreviewRequest,
-  load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit,
-  resolveFile: (suspend (String, ConversationMedia) -> ManagedFile?)?,
-  saveVersion: suspend (ManagedFile, String) -> Unit) {
+  load: suspend (String, ConversationMedia) -> ByteArray, onClose: () -> Unit) {
   val gallery = request.imageGallery.takeIf { it.isNotEmpty() } ?: listOf(request.media)
   val pager = rememberPagerState(initialPage = gallery.indexOfFirst { it.id == request.media.id }.coerceAtLeast(0),
     pageCount = { gallery.size })
   val scope = rememberCoroutineScope()
   var zoomed by remember(request) { mutableStateOf(false) }
-  val versionState = rememberSaveableStateHolder()
   LaunchedEffect(pager.currentPage) { zoomed = false }
   val selectedImage = gallery[pager.currentPage]
   val export = rememberPreviewExport(selectedImage.mimeType.ifBlank { "image/*" })
@@ -580,12 +556,7 @@ private fun MessageImageGallery(request: MessagePreviewRequest,
   }
   Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)
     .testTag("message-media-preview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    val file = if (resolveFile == null) null
-      else rememberMessageFile(request.conversationId, gallery[pager.currentPage], resolveFile)
-    if (file != null) versionState.SaveableStateProvider("${file.id}:${file.revision}") {
-      FileVersionAction(file, saveVersion)
-    }
-    HorizontalPager(pager, modifier = Modifier.fillMaxWidth().height(420.dp).testTag("message-image-pager"),
+    HorizontalPager(pager, modifier = Modifier.fillMaxWidth().weight(1f).testTag("message-image-pager"),
       beyondViewportPageCount = 1, userScrollEnabled = !zoomed, key = { gallery[it].id }) { page ->
       val media = gallery[page]
       val bitmap by produceState<Result<android.graphics.Bitmap>?>(null, media, request.conversationId) {
@@ -595,9 +566,10 @@ private fun MessageImageGallery(request: MessagePreviewRequest,
           withContext(Dispatchers.Default) { requireNotNull(decodeChatThumbnail(bytes, 2560)) }
         }
       }
-      Box(Modifier.fillMaxWidth().height(420.dp), contentAlignment = Alignment.Center) {
+      Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val image = bitmap?.getOrNull()
-        if (image != null) ZoomableMessageImage(image, media.name, media.id, page == pager.currentPage) { zoomed = it }
+        if (image != null) ZoomableMessageImage(image, media.name, media.id, page == pager.currentPage,
+          Modifier.fillMaxSize()) { zoomed = it }
         else if (bitmap == null) BrandLoadingPanel(modifier = Modifier.testTag("message-image-decoding"))
         else Text(stringResource(R.string.message_preview_unavailable), modifier = Modifier.testTag("message-media-preview-error"))
       }

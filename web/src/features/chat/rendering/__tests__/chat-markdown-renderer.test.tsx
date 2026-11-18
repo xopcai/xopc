@@ -298,10 +298,20 @@ describe('React chat Markdown', () => {
   });
 
   it('keeps tables semantic inside a separate keyboard-scrollable viewport', () => {
-    render('| Name | Amount |\n| --- | ---: |\n| Item | 300 |');
+    render([
+      '| Name | Amount or explanation |',
+      '| --- | ---: |',
+      '| Item | **−1,234.50%** |',
+      '| Version | v2.7.0 |',
+      '| Reference | 123456789012345678901234567890 |',
+      '| Note | 300 requests succeeded after retrying |',
+    ].join('\n'));
     expect(container.querySelector('.markdown-table-scroll')?.getAttribute('tabindex')).toBe('0');
-    expect(container.querySelector<HTMLTableElement>('.markdown-table-scroll > table')?.style.minWidth).toBe('12rem');
-    expect(container.querySelector('td[data-markdown-align="right"]')?.textContent).toBe('300');
+    expect(container.querySelector<HTMLTableElement>('.markdown-table-scroll > table')?.style.minWidth).toBe('');
+    expect(Array.from(container.querySelectorAll('td[data-markdown-align="right"]'), cell => cell.textContent))
+      .toEqual(['−1,234.50%', 'v2.7.0', '123456789012345678901234567890', '300 requests succeeded after retrying']);
+    expect(Array.from(container.querySelectorAll('td[data-markdown-compact-number]'), cell => cell.textContent))
+      .toEqual(['−1,234.50%', 'v2.7.0']);
   });
 
   it('keeps a referenced workspace image distinct from a same-shaped app route', async () => {

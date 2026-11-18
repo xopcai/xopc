@@ -1,6 +1,5 @@
 import { XopcPreviewHeader } from './MusicPlaybackView';
 import { XopcChatResultCapsule } from './ChatResultCapsule';
-import { XopcBrandLoading, XopcHubRow } from './MobileComponents';
 import { XopcChatImagePager } from './ChatImagePager';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
@@ -10,7 +9,6 @@ import { fileIo as fs } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { webview } from '@kit.ArkWeb';
 import { XopcHistoryMedia } from '../model/chat';
-import { XopcFileVersion } from '../model/files';
 import { XopcMobileRoute } from '../model/home';
 import { clearChatMediaCache, openChatMedia, readChatMedia, saveChatMedia } from '../service/chatMedia';
 import { XopcFileDocumentViewModel } from '../viewmodel/fileDocumentViewModel';
@@ -57,7 +55,6 @@ export struct XopcChatMediaView {
   @Param resultCapsule: boolean = false;
   @Param showLibraryActions: boolean = true;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
-  @Local versionsOpen: boolean = false;
   @Param compactDisclosure: boolean = true;
   @Param compactMetadata: boolean = true;
   @Param compactThumbnailWidth: number = 0;
@@ -155,7 +152,6 @@ export struct XopcChatMediaView {
 
   private reset(): void {
     this.document.reset();
-    this.versionsOpen = false;
     this.generation++; this.picture?.release(); this.picture = undefined; this.busy = false;
     this.previewText = ''; this.expanded = false; this.attempted = false; this.resetImageTransform(); this.error = '';
     this.htmlLoading = false; this.htmlError = false;
@@ -261,46 +257,6 @@ export struct XopcChatMediaView {
     this.htmlDataLoaded = false; this.htmlLoading = this.previewKind() === 'html'; this.htmlError = false;
   }
 
-  private async saveVersion(): Promise<void> {
-    if (await this.document.saveVersion()) {
-      this.getUIContext().getPromptAction().showToast({ message: $r('app.string.file_version_saved') });
-      if (this.versionsOpen) await this.document.loadVersions();
-    } else if (this.document.error && !this.expanded) {
-      this.getUIContext().getPromptAction().showToast({ message: userErrorMessage(this.document.error, 'media') });
-    }
-  }
-
-  private async downloadVersion(version: XopcFileVersion): Promise<void> {
-    const context = this.getUIContext().getHostContext();
-    const resource = this.document.resource;
-    if (!context || !resource || this.busy) return;
-    this.busy = true;
-    try {
-      const file: XopcHistoryMedia = { id: version.id, name: version.name, type: 'file', size: version.size,
-        mimeType: resource.mimeType, uri: 'xopc-file-version:' + encodeURIComponent(resource.id) + '/' + version.id };
-      await saveChatMedia(context, file, this.conversationId);
-    } catch (error) { this.error = (error as Error).message; }
-    finally { this.busy = false; }
-  }
-
-  @Builder
-  versionList() {
-    Column({ space: 10 }) {
-      Text($r('app.string.file_version_history')).fontSize(19).fontWeight(FontWeight.Bold)
-        .fontColor(this.colors.foreground).width('100%')
-      if (this.document.busy) { XopcBrandLoading({ compact: true }) }
-      else if (this.document.error) {
-        XopcHubRow({ heading: $r('app.string.retry'), summary: userErrorMessage(this.document.error, 'media'),
-          onOpen: (): void => { void this.document.loadVersions(); } })
-      } else if (!this.document.versions.length) {
-        Text($r('app.string.file_no_versions')).fontSize(14).fontColor(this.colors.secondary).width('100%')
-      }
-      ForEach(this.document.versions, (version: XopcFileVersion) => {
-        XopcHubRow({ heading: version.name, summary: new Date(version.createdAt).toLocaleString(),
-          symbol: $r('sys.symbol.arrow_down_to_line'), onOpen: (): void => { void this.downloadVersion(version); } })
-      }, (version: XopcFileVersion): string => version.id)
-    }.width('100%').alignItems(HorizontalAlign.Start)
-  }
   private loadHtmlData(): void {
     if (this.htmlDataLoaded || !this.previewText) return;
     try {
@@ -480,17 +436,12 @@ export struct XopcChatMediaView {
           .accessibilityText(this.audioPlayer.state === 'playing' ? $r('app.string.stop') : $r('app.string.chat_media_play'))
           .onClick((): void => { this.toggleInlineAudio(); })
       } else if (this.compact && this.resultCapsule) {
-        if (this.showLibraryActions && this.document.canVersion()) {
-          Row({ space: 12 }) {
-            Button($r('app.string.file_view_in_library'), { type: ButtonType.Normal }).height(44).padding(0)
-              .fontSize(13).fontColor(this.colors.secondary).backgroundColor(Color.Transparent)
-              .onClick((): void => {
-                if (this.document.resource) this.onNavigate({ page: 'files', itemId: this.document.resource.id });
-              })
-            Button($r('app.string.file_save_version'), { type: ButtonType.Normal }).height(44).padding(0)
-              .id('chat-save-version-' + this.file.id).fontSize(13).fontColor(this.colors.secondary).backgroundColor(Color.Transparent)
-              .enabled(!this.document.busy).onClick((): void => { void this.saveVersion(); })
-          }.width('100%')
+        if (this.showLibraryActions && this.document.resource?.kind === 'file') {
+          Button($r('app.string.file_view_in_library'), { type: ButtonType.Normal }).height(44).padding(0)
+            .fontSize(13).fontColor(this.colors.secondary).backgroundColor(Color.Transparent)
+            .onClick((): void => {
+              if (this.document.resource) this.onNavigate({ page: 'files', itemId: this.document.resource.id });
+            })
         }
         XopcChatResultCapsule({ title: this.file.name || this.file.type,
           subtitle: this.file.size > 0 ? $r('app.string.chat_artifact_available_size', this.fileSizeLabel())
@@ -598,7 +549,7 @@ export struct XopcChatMediaView {
       if (this.compact && this.previewKind() === 'html') this.prefetchHtml();
       else if (!this.compact || this.compactThumbnail) this.load();
     })
-      .bindSheet($$this.expanded, this.preview, { height: '88%', dragBar: true,
+      .bindSheet($$this.expanded, this.preview, { height: '95%', dragBar: true,
         showClose: false, backgroundColor: this.colors.chat.canvas,
         onWillDismiss: (action: DismissSheetAction): void => { this.dismissPreview(action); },
         onDisappear: (): void => {
@@ -606,7 +557,6 @@ export struct XopcChatMediaView {
           if (this.busy) { this.generation++; this.busy = false; }
           this.htmlLoading = false; this.htmlError = false; this.htmlDataLoaded = false; this.clearPlayback();
           this.restoreOriginalFile();
-          this.versionsOpen = false;
           if (!this.resultCapsule || !this.showLibraryActions) this.document.reset();
           this.onPreviewClosed();
         } })
@@ -650,22 +600,8 @@ export struct XopcChatMediaView {
       }
       if (this.document.error) { Text(userErrorMessage(this.document.error, 'media')).fontSize(13)
         .fontColor(this.colors.danger).padding({ left: 16, right: 16 }) }
-      if (this.document.canVersion() && !this.document.editing) {
-        Row({ space: 8 }) {
-          if (this.showLibraryActions) {
-            Button($r('app.string.file_save_version')).id('file-preview-save-version').height(44)
-              .fontColor(this.colors.accent).backgroundColor(this.colors.accentSoft)
-              .enabled(!this.document.busy).onClick((): void => { void this.saveVersion(); })
-          }
-          Button($r('app.string.file_version_history')).id('file-preview-version-history').height(44)
-            .fontColor(this.colors.secondary).backgroundColor(Color.Transparent)
-            .onClick((): void => { this.versionsOpen = !this.versionsOpen; if (this.versionsOpen) void this.document.loadVersions(); })
-        }.width('100%').padding({ left: 16, right: 16 })
-      }
       if (this.document.busy) { LoadingProgress().width(24).height(24).color(this.colors.secondary) }
-      if (this.versionsOpen && !this.document.editing) {
-        Scroll() { this.versionList() }.width('100%').layoutWeight(1).padding({ left: 16, right: 16 })
-      } else if (this.document.editing) {
+      if (this.document.editing) {
         TextArea({ text: this.document.content }).id('file-preview-editor').width('100%').layoutWeight(1)
           .fontFamily('monospace').fontSize(14).fontColor(this.colors.foreground).backgroundColor(this.colors.panel)
           .padding(16).enabled(!this.document.busy)

@@ -86,7 +86,6 @@ describe('chat bottom region composition', () => {
     expect(home).toContain('this.openConversationFromList(record.conversationId)');
     expect(home).toContain('this.openConversationFromList(id)');
     expect(home).toContain('this.chatRepository.create()');
-    expect(chat).toContain(".id('chat-header-new')");
     expect(chat).toContain('this.chat.localDraft && !this.chat.rows.length');
     const profile = sidebar.slice(sidebar.indexOf("id('chat-sidebar-new')"));
     expect(profile).toContain("id('chat-sidebar-profile')");
@@ -149,8 +148,11 @@ describe('chat bottom region composition', () => {
     expect(header).toContain(".id('chat-header-actions')");
     expect(header).toContain(".id('chat-header-voice-call')");
     expect(header).toContain('this.startVoiceCall()');
-    expect(header.slice(header.indexOf('} else if (this.isStandaloneDraft())'), header.indexOf(".id('chat-header-new')")))
-      .toContain('this.voiceCallButton()');
+    const draftHeader = header.split('} else if (this.isStandaloneDraft())')[1]?.split('} else {')[0];
+    expect(draftHeader).toContain('this.sidebarButton()');
+    expect(draftHeader).toContain('this.voiceCallButton()');
+    expect(draftHeader).not.toContain('this.conversationActions()');
+    expect(header).not.toContain(".id('chat-header-new')");
     expect(header).not.toContain(".id('chat-header-search')");
     expect(header).toContain('this.personalSettingsOpen = true');
 

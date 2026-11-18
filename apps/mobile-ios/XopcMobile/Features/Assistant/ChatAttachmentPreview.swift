@@ -8,6 +8,7 @@ struct MobilePreview<Actions: View, Content: View>: View {
     @Environment(\.mobileTheme) private var theme
     let title: String
     var closeID = "preview-close"
+    var heightFraction: CGFloat = 0.88
     let onClose: () -> Void
     @ViewBuilder var actions: () -> Actions
     @ViewBuilder var content: () -> Content
@@ -31,7 +32,7 @@ struct MobilePreview<Actions: View, Content: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(theme.foreground).background(theme.canvas)
-        .presentationDetents([.fraction(0.88), .large])
+        .presentationDetents([.fraction(heightFraction), .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(theme.corner(28))
         .presentationBackground(theme.canvas)
@@ -103,7 +104,6 @@ struct ChatAttachmentPreview: View {
     @State private var showsPreview = false
     @State private var previewText: String?
     @State private var managedFile: FileResource?
-    @State private var versionFile: FileResource?
     @State private var share: ChatManagedShare?
 
     private var isManaged: Bool {
@@ -186,7 +186,8 @@ struct ChatAttachmentPreview: View {
             previewURL = nil
             previewText = nil
         }) {
-            MobilePreview(title: attachment.name ?? String(localized: "附件"), onClose: { showsPreview = false }) {
+            MobilePreview(title: attachment.name ?? String(localized: "附件"), heightFraction: 0.95,
+                          onClose: { showsPreview = false }) {
                 if let previewURL {
                     ShareLink(item: previewURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
                 } else if let previewText {
@@ -202,9 +203,6 @@ struct ChatAttachmentPreview: View {
                 } else {
                     PreviewText(text: previewText ?? "", html: isHTML, markdown: isMarkdown,
                                 configuration: configuration, conversationID: conversationID)
-                }
-                if let versionFile {
-                    SaveFileVersionControl(configuration: configuration, file: versionFile, revision: versionFile.revision)
                 }
             }
         }
@@ -225,7 +223,6 @@ struct ChatAttachmentPreview: View {
     // swiftlint:disable:next function_body_length
     @MainActor private func open() async {
         guard !isLoading else { return }
-        versionFile = nil
         if (attachment.uri ?? "").isEmpty, !isManaged,
            attachment.extractedText?.isEmpty == false
         {
@@ -250,7 +247,6 @@ struct ChatAttachmentPreview: View {
                     throw ChatAttachmentPreviewError.htmlTooLarge
                 }
                 previewText = isHTML ? text : String(text.prefix(100_000))
-                versionFile = resource
                 showsPreview = true
                 return
             }

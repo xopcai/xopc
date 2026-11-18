@@ -380,19 +380,27 @@ html.dark .markdown-code-copy-btn:hover {
   margin-bottom: 1em;
   overflow: auto;
   border-radius: var(--radius-lg);
+  container-type: inline-size;
 }
 
 .markdown-body.xopc-chat-markdown .markdown-table-scroll > table {
   display: table;
+  width: auto;
+  max-width: none;
   margin-bottom: 0;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
-.xopc-chat-markdown th,
-.xopc-chat-markdown td[data-markdown-align="right"] {
-  white-space: nowrap;
+.markdown-body.xopc-chat-markdown th,
+.markdown-body.xopc-chat-markdown td {
+  padding-inline: clamp(0.5rem, 2.5cqi, 0.75rem);
+  white-space: normal;
   word-break: normal;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body.xopc-chat-markdown td[data-markdown-compact-number] {
+  white-space: nowrap;
 }
 
 .xopc-chat-markdown .markdown-mermaid svg {

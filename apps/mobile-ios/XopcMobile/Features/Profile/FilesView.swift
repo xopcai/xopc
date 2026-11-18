@@ -283,7 +283,6 @@ struct FilePreviewView: View {
     @State private var shareItem: FileShareItem?
     @State private var downloadedURL: URL?
     @State private var downloadError: String?
-    @State private var hasLoaded = false
 
     init(configuration: GatewayConfiguration, file: FileResource) {
         self.configuration = configuration
@@ -311,10 +310,6 @@ struct FilePreviewView: View {
             } else {
                 ProgressView("正在读取文件…")
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            SaveFileVersionControl(configuration: configuration, file: file, revision: file.revision)
-                .disabled(isLoading || error != nil || !hasLoaded)
         }
         .mobilePageTitle(Text(verbatim: file.name))
         .toolbar {
@@ -372,7 +367,6 @@ struct FilePreviewView: View {
             file = resource
             text = content
             error = nil
-            hasLoaded = true
         } catch is CancellationError {
         } catch {
             guard !Task.isCancelled else { return }

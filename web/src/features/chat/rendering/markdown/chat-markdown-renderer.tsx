@@ -136,12 +136,9 @@ function ChatPre({ node }: ComponentProps<'pre'> & { node?: Element }) {
     incomplete={incomplete} renderMermaid={environment.renderMermaid} actions={environment.mermaidActions} copy={environment.copy} />;
 }
 
-function ChatTable({ node, children, style, ...props }: ComponentProps<'table'> & { node?: Element }) {
-  const section = node?.children.find((child): child is Element => child.type === 'element' && child.tagName === 'thead');
-  const row = (section ?? node)?.children.find((child): child is Element => child.type === 'element' && child.tagName === 'tr');
-  const columns = row?.children.filter(child => child.type === 'element' && ['th', 'td'].includes(child.tagName)).length ?? 1;
+function ChatTable({ node: _node, ...props }: ComponentProps<'table'> & { node?: Element }) {
   return <div className="markdown-table-scroll" tabIndex={0}>
-    <table {...props} style={{ ...style, minWidth: `${columns * 6}rem` }}>{children}</table>
+    <table {...props} />
   </div>;
 }
 
@@ -152,11 +149,19 @@ function MathDiv(props: ComponentProps<'div'> & { node?: Element }) {
   return (props.node?.properties.dataXopcMath ?? props.node?.properties['data-xopc-math']) ? <MathElement {...props} display /> : <div {...Object.fromEntries(Object.entries(props).filter(([key]) => key !== 'node'))} />;
 }
 
+const compactTableNumber = /^[+−-]?(?:\p{Sc}\s?|v)?\p{Nd}+(?:[.,:/\u00a0\u202f-]\p{Nd}+)*(?:\s?(?:[%％‰]|\p{Sc}|ms|s|KB|MB|GB|TB))?$/iu;
+
 const passthrough = <T extends keyof JSX.IntrinsicElements>(tag: T) => {
   return function MarkdownElement({ node: _node, ...props }: ComponentPropsWithoutRef<T> & { node?: Element }) {
     const alignment = (tag === 'th' || tag === 'td') && typeof _node?.properties.align === 'string'
       ? _node.properties.align : undefined;
-    return createElement(tag, { ...props, 'data-markdown-align': alignment });
+    const value = tag === 'td' && _node ? textIn(_node).trim() : '';
+    const compactNumber = value.length <= 16 && compactTableNumber.test(value);
+    return createElement(tag, {
+      ...props,
+      'data-markdown-align': alignment,
+      'data-markdown-compact-number': compactNumber || undefined,
+    });
   };
 };
 const components: Components = {

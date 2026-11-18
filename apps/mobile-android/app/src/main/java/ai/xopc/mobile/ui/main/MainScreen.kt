@@ -456,8 +456,6 @@ fun MainScreen(
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
-  onResolveMessageFile: suspend (String, ConversationMedia) -> ManagedFile? = { _, _ -> null },
-  onSaveFileVersion: suspend (String?, ManagedFile, String) -> Unit = { _, _, _ -> },
   onSpeechChunk: suspend (String, String) -> ByteArray = { _, _ ->
     throw IllegalStateException("SPEECH_UNAVAILABLE")
   },
@@ -762,7 +760,6 @@ fun MainScreen(
     onSaveMessageAsNote = onSaveMessageAsNote, onReuseMessage = onReuseMessage,
     onRegenerateMessage = onRegenerateMessage,
     onLoadMessageMedia = onLoadMessageMedia,
-    onResolveMessageFile = onResolveMessageFile, onSaveFileVersion = onSaveFileVersion,
     generatedMediaAccess = generatedMediaAccess,
     modelSettingsAccess = modelSettingsAccess, spaceLibraryAccess = spaceLibraryAccess, onUseLibraryFile = onUseLibraryFile,
     onSpeechChunk = onSpeechChunk,
@@ -977,8 +974,6 @@ internal fun MainContent(
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray = { _, _ ->
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
-  onResolveMessageFile: suspend (String, ConversationMedia) -> ManagedFile? = { _, _ -> null },
-  onSaveFileVersion: suspend (String?, ManagedFile, String) -> Unit = { _, _, _ -> },
   onSpeechChunk: suspend (String, String) -> ByteArray = { _, _ ->
     throw IllegalStateException("SPEECH_UNAVAILABLE")
   },
@@ -1637,8 +1632,7 @@ internal fun MainContent(
           onRefreshClarification, onRespondToClarification, onRefreshConnectionWait, onConnectionWaitAction,
           onOpenExecution, onRetryExecution, onCloseExecution,
           onCopyMessageText, onSaveMessageAsNote, onReuseMessage, onRegenerateMessage,
-          onLoadMessageMedia, onResolveMessageFile,
-          { file, id -> onSaveFileVersion(gatewayId, file, id) }, onSpeechChunk, onOpenMessageTarget = { target ->
+          onLoadMessageMedia, onSpeechChunk, onOpenMessageTarget = { target ->
             when (target.kind) {
               "note" -> openLinkedDetail(HomeTab.Notes, target.id)
               "progress" -> onSelectTab(HomeTab.Progress)
@@ -1840,7 +1834,6 @@ internal fun MainContent(
         onNoteFileSpaces = onNoteFileSpaces,
         onNoteFiles = onNoteFiles, onNoteFileText = onNoteFileText,
         onNoteFileContent = onNoteFileContent,
-        onSaveFileVersion = { file, id -> onSaveFileVersion(gatewayId, file, id) },
         initialNoteId = linkedDetailId.takeUnless { it.startsWith("project-note-") },
         initialProjectDraft = linkedDetailId.startsWith("project-note-"),
         onExit = {
@@ -1956,7 +1949,7 @@ internal fun MainContent(
         onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
         onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel)
       overviewMedia?.let { request ->
-        MobilePreviewSheet(onClose = { overviewMedia = null }) {
+        MobilePreviewSheet(onClose = { overviewMedia = null }, heightFraction = 0.95f) {
           MessageMediaPreview(request, onLoadMessageMedia) { overviewMedia = null }
         }
       }
@@ -2585,8 +2578,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   onReuseMessage: (String) -> Boolean,
   onRegenerateMessage: (String) -> Boolean,
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray,
-  onResolveMessageFile: suspend (String, ConversationMedia) -> ManagedFile?,
-  onSaveFileVersion: suspend (ManagedFile, String) -> Unit,
   onSpeechChunk: suspend (String, String) -> ByteArray,
   onOpenMessageTarget: (ConversationTarget) -> Unit,
   onComposerValueChange: (TextFieldValue) -> Unit,
@@ -3147,20 +3138,13 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               Icon(painterResource(R.drawable.action_call),
                 stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
             }
-            val newChat = personalAgent == null && selected?.isLocalDraft == true
-            IconButton(onClick = {
-              when {
-                personalAgent != null -> personalSettingsOpen = true
-                newChat -> onCreateConversation()
-                else -> optionsOpen = true
+            if (personalAgent != null || selected?.isLocalDraft != true) {
+              IconButton(onClick = {
+                if (personalAgent != null) personalSettingsOpen = true else optionsOpen = true
+              }, modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("assistant-options")) {
+                Icon(painterResource(if (personalAgent != null) R.drawable.settings_gear else R.drawable.action_more_horizontal),
+                  optionsLabel, Modifier.size(22.dp))
               }
-            }, modifier = Modifier.background(LocalChatColors.current.card, CircleShape)
-              .testTag(if (newChat) "chat-header-new" else "assistant-options")) {
-              Icon(painterResource(when {
-                personalAgent != null -> R.drawable.settings_gear
-                newChat -> R.drawable.action_new_chat
-                else -> R.drawable.action_more_horizontal
-              }), if (newChat) stringResource(R.string.assistant_action_new_chat) else optionsLabel, Modifier.size(22.dp))
             }
           }
         }
@@ -3663,8 +3647,8 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       })
   }
   previewRequest?.let { request ->
-    MobilePreviewSheet(onClose = { previewRequest = null }) {
-      MessageMediaPreview(request, onLoadMessageMedia, onResolveMessageFile, onSaveFileVersion) { previewRequest = null }
+    MobilePreviewSheet(onClose = { previewRequest = null }, heightFraction = 0.95f) {
+      MessageMediaPreview(request, onLoadMessageMedia) { previewRequest = null }
     }
   }
   externalUrl?.let { url ->

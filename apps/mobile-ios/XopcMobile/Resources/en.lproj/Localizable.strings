@@ -1090,9 +1090,6 @@
 "问问 %@" = "Ask %@";
 "无法打开个人助理" = "Could not open your assistant";
 "有 %lld 项待你处理" = "%lld items need attention";
-"保存为新版本" = "Save as new version";
-"已保存新版本" = "New version saved";
-"无法保存新版本" = "Could not save a new version";
 "历史记录" = "History";
 "查看更多" = "View more";
 

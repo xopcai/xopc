@@ -129,7 +129,6 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   onExit: (() -> Unit)? = null,
   initialNoteId: String? = null,
   initialProjectDraft: Boolean = false,
-  onSaveFileVersion: suspend (ManagedFile, String) -> Unit = { _, _ -> },
   deliveries: List<ProgressDelivery> = emptyList(),
   deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
   onRefreshDeliveries: () -> Unit = {}, onOpenDelivery: (ProgressDelivery) -> Unit = {}) {
@@ -386,7 +385,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       }, { file ->
         if (file.kind == "directory") { fileSpaceId = file.spaceId; filePath = file.relativePath }
         else selectedFile = file
-      }, Modifier.weight(1f), onSaveFileVersion)
+      }, Modifier.weight(1f))
     else if (editorOpen) NoteDraftContent(state, onDraftChange, onSaveDraft,
       Modifier.weight(1f), onResolveConflict, onAddAttachment = { attachmentSheetOpen = true },
       attachmentBusy = attachmentBusy, attachmentError = attachmentError)
@@ -1157,8 +1156,7 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
 private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<ManagedFile>,
   selected: ManagedFile?, content: ByteArray?, loading: Boolean, error: Boolean,
   onRetry: () -> Unit, onOpenSpace: (ManagedFileSpace) -> Unit,
-  onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier,
-  onSaveFileVersion: suspend (ManagedFile, String) -> Unit) {
+  onOpenFile: (ManagedFile) -> Unit, modifier: Modifier = Modifier) {
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (error) OutlinedButton(onClick = onRetry, modifier = Modifier.testTag("notes-files-retry")) {
       Text(stringResource(R.string.progress_load_failed))
@@ -1168,7 +1166,6 @@ private fun NotesFilesContent(spaces: List<ManagedFileSpace>, items: List<Manage
         modifier = Modifier.testTag("notes-file-title"))
       Text(selected.relativePath, style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
-      FileVersionAction(selected, onSaveFileVersion)
       val bitmap = remember(content) { content?.takeIf { isBitmapPreview(selected.name, selected.mimeType) }
         ?.let { bytes ->
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

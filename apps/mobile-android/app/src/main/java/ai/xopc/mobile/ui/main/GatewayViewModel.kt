@@ -3329,17 +3329,6 @@ class GatewayViewModel internal constructor(application: Application, private va
   suspend fun readMessageMedia(conversationId: String, media: ConversationMedia): ByteArray =
     withContext(Dispatchers.IO) { conversations.readMessageMedia(conversationId, media) }
 
-  suspend fun resolveMessageFile(conversationId: String, media: ConversationMedia): ManagedFile? =
-    runInterruptible(Dispatchers.IO) { fileRepository.resolveConversationFile(conversationId, media) }
-
-  suspend fun saveFileVersion(gatewayId: String?, file: ManagedFile, requestId: String) =
-    runInterruptible(Dispatchers.IO) {
-      synchronized(session) {
-        check(gatewayId != null && session.currentProfile()?.gatewayId == gatewayId) { "GATEWAY_CHANGED" }
-        fileRepository.saveVersion(file, requestId)
-      }
-    }
-
   private fun loadExecution(conversationId: String, messageId: String, turnId: String) {
     executionJob?.cancel()
     val revision = ++executionRevision

@@ -404,16 +404,6 @@ extension GatewayClient {
         return value
     }
 
-    func saveFileVersion(id: String, revision: String, requestID: UUID) async throws {
-        let request = FileVersionCommand(id: requestID.uuidString.lowercased(), revision: revision)
-        let result: FileVersionResult = try await self.request(
-            path: "/api/files/\(id)/versions", method: "POST", body: encoder.encode(request)
-        )
-        guard result.version.id == requestID else {
-            throw GatewayClientError.invalidPayload("无法保存新版本")
-        }
-    }
-
     func updateFileText(id: String, content: String, revision: String) async throws -> FileResource {
         let body = try encoder.encode(FileContentMutation(content: content, revision: revision))
         let response: FileResourceEnvelope = try await request(
@@ -781,14 +771,4 @@ private struct DiscussionSealCommand: Encodable {
     let mimeType: String
     let fileName: String
     let containerMode: String
-}
-
-private struct FileVersionCommand: Encodable {
-    let id: String
-    let revision: String
-}
-
-private struct FileVersionResult: Decodable {
-    struct Version: Decodable { let id: UUID }
-    let version: Version
 }

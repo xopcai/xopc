@@ -1068,12 +1068,7 @@ struct AssistantView<Dock: View>: View {
                 headerButton("语音通话", symbol: "phone", action: startRealtimeVoice)
                     .disabled(!canStartRealtimeVoice)
                     .accessibilityIdentifier("chat-header-voice-call")
-                if !isPersonalConversation, conversation?.isDraft == true, onOpenSidebar != nil {
-                    headerButton("新建对话", symbol: "square.and.pencil") {
-                        requestConversation(state.defaultAgentID ?? "main")
-                    }
-                    .accessibilityIdentifier("chat-header-new")
-                } else {
+                if isPersonalConversation || conversation?.isDraft != true || onOpenSidebar == nil {
                     headerButton(isPersonalConversation ? "配置助手" : "会话选项",
                                  symbol: isPersonalConversation ? "slider.horizontal.3" : "ellipsis")
                     {

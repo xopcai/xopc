@@ -2078,13 +2078,7 @@ export struct XopcChatView {
         Row() {
           this.sidebarButton()
           Blank().layoutWeight(1)
-          Row({ space: 3 }) {
-            this.voiceCallButton()
-            Button({ type: ButtonType.Circle }) {
-              SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(20).fontColor([this.colors.foreground])
-            }.id('chat-header-new').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-              .accessibilityText($r('app.string.new_chat')).onClick((): void => { this.dismissComposer(); this.onNewOrdinaryChat(); })
-          }
+          this.voiceCallButton()
         }.width('100%').padding({ left: 12, right: 12 })
       } else {
         Row({ space: 8 }) {
