@@ -613,7 +613,9 @@ struct ProjectsView: View {
             }
         }
         .onChange(of: isActive) { _, active in
-            if !active { isSearchFocused = false }
+            if !active {
+                isSearchFocused = false
+            }
         }
         .sheet(isPresented: $creating) {
             ProjectManageView(configuration: configuration) { project in

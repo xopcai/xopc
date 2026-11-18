@@ -187,7 +187,8 @@ struct ChatAttachmentPreview: View {
             previewText = nil
         }) {
             MobilePreview(title: attachment.name ?? String(localized: "附件"), heightFraction: 0.95,
-                          onClose: { showsPreview = false }) {
+                          onClose: { showsPreview = false })
+            {
                 if let previewURL {
                     ShareLink(item: previewURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
                 } else if let previewText {

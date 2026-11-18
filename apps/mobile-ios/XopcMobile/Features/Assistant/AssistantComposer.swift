@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import ImageIO
 import QuickLook
 import SwiftUI
@@ -268,7 +269,9 @@ struct AssistantComposer: View {
                 .lineLimit(1 ... 3)
                 .submitLabel(.send)
                 .onSubmit {
-                    if sendEnabled { onSend() }
+                    if sendEnabled {
+                        onSend()
+                    }
                 }
                 .accessibilityIdentifier("assistant-chat-composer")
             if let suggestion {

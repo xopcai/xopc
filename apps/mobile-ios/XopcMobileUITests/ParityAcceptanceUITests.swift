@@ -2380,11 +2380,11 @@ final class MobileLayoutParityUITests: XCTestCase {
         let close = app.buttons["capability-panel-close"]
         let compactTop = close.frame.minY
         capture("capability-drawer-authorization")
-        let qr = app.images["capability-panel-qr"]
-        XCTAssertFalse(qr.exists)
+        let qrImage = app.images["capability-panel-qr"]
+        XCTAssertFalse(qrImage.exists)
         let otherMethods = app.buttons["capability-panel-other-methods"]
         otherMethods.tap()
-        XCTAssertTrue(qr.exists)
+        XCTAssertTrue(qrImage.exists)
         let expanded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in close.frame.minY < compactTop - 80 }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 5), .completed)
         capture("capability-drawer-authorization-expanded")
@@ -2404,7 +2404,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         save.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let allow = springboard.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "允许"])).firstMatch
-        if allow.waitForExistence(timeout: 3) { allow.tap() }
+        if allow.waitForExistence(timeout: 3) {
+            allow.tap()
+        }
         XCTAssertTrue(app.staticTexts["已保存到相册。"].waitForExistence(timeout: 8))
     }
 
@@ -2426,7 +2428,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
         let scrollStart = top.withOffset(CGVector(dx: 0, dy: save.frame.minY - app.frame.minY - 30))
         let scrollEnd = top.withOffset(CGVector(dx: 0, dy: close.frame.maxY - app.frame.minY + 30))
-        for _ in 0..<4 where !lastField.isHittable {
+        for _ in 0 ..< 4 where !lastField.isHittable {
             scrollStart.press(forDuration: 0.05, thenDragTo: scrollEnd)
         }
         XCTAssertTrue(lastField.isHittable)
@@ -3292,8 +3294,11 @@ extension XCUIApplication {
         XCTAssertTrue(option.waitForExistence(timeout: 5))
         if !option.isHittable {
             let categories = descendants(matching: .any)["capability-categories"].firstMatch
-            if option.frame.midX > categories.frame.midX { categories.swipeLeft() }
-            else { categories.swipeRight() }
+            if option.frame.midX > categories.frame.midX {
+                categories.swipeLeft()
+            } else {
+                categories.swipeRight()
+            }
         }
         option.tap()
     }

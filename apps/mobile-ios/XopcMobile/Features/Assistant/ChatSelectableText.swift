@@ -44,7 +44,9 @@ struct ChatSelectableText: UIViewRepresentable {
             if index + 1 < parsed.count, MarkdownBlock.redundantImageLink(block, followedBy: parsed[index + 1]) {
                 continue
             }
-            if result.length > 0 { result.append(NSAttributedString(string: "\n")) }
+            if result.length > 0 {
+                result.append(NSAttributedString(string: "\n"))
+            }
             result.append(formattedBlock(block, color: color))
         }
         if result.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -55,6 +57,7 @@ struct ChatSelectableText: UIViewRepresentable {
         return result
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func formattedBlock(_ block: MarkdownBlock, color: UIColor) -> NSAttributedString {
         var text: String
         var size = fontSize
@@ -96,8 +99,12 @@ struct ChatSelectableText: UIViewRepresentable {
                 font = UIFont(descriptor: descriptor, size: size)
             }
             var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: paragraph]
-            if run.link != nil { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-            if intent.contains(.strikethrough) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+            if run.link != nil {
+                attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            }
+            if intent.contains(.strikethrough) {
+                attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+            }
             result.append(NSAttributedString(string: String(parsed[run.range].characters), attributes: attributes))
         }
         return result
@@ -128,7 +135,9 @@ final class ChatSelectionTextView: UITextView, UITextViewDelegate, @preconcurren
         var visible = bounds.intersection(convert(window.bounds, from: window))
         var parent = superview
         while let ancestor = parent {
-            if ancestor.clipsToBounds { visible = visible.intersection(convert(ancestor.bounds, from: ancestor)) }
+            if ancestor.clipsToBounds {
+                visible = visible.intersection(convert(ancestor.bounds, from: ancestor))
+            }
             parent = ancestor.superview
         }
         let point = visible.isNull ? CGPoint(x: 0, y: 8) : CGPoint(x: visible.minX + 2, y: visible.minY + 8)
@@ -143,7 +152,8 @@ final class ChatSelectionTextView: UITextView, UITextViewDelegate, @preconcurren
     }
 
     func editMenuInteraction(_: UIEditMenuInteraction, menuFor _: UIEditMenuConfiguration,
-                             suggestedActions _: [UIMenuElement]) -> UIMenu? {
+                             suggestedActions _: [UIMenuElement]) -> UIMenu?
+    {
         selectionMenu()
     }
 
@@ -156,7 +166,7 @@ final class ChatSelectionTextView: UITextView, UITextViewDelegate, @preconcurren
     }
 
     func textViewDidChangeSelection(_: UITextView) {
-        if didStartSelection && selectedRange.length == 0 {
+        if didStartSelection, selectedRange.length == 0 {
             initialMenu.dismissMenu()
             onDismiss()
         }
@@ -164,7 +174,7 @@ final class ChatSelectionTextView: UITextView, UITextViewDelegate, @preconcurren
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned && didStartSelection {
+        if resigned, didStartSelection {
             didStartSelection = false
             Task { @MainActor [weak self] in self?.onDismiss() }
         }
@@ -191,7 +201,9 @@ final class ChatSelectionTextView: UITextView, UITextViewDelegate, @preconcurren
     private func share(_ selected: String) {
         guard let scene = window?.windowScene,
               var presenter = scene.keyWindow?.rootViewController else { return }
-        while let presented = presenter.presentedViewController { presenter = presented }
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
         let activity = UIActivityViewController(activityItems: [selected], applicationActivities: nil)
         activity.popoverPresentationController?.sourceView = self
         activity.popoverPresentationController?.sourceRect = selectedTextRange.map { firstRect(for: $0) } ?? bounds

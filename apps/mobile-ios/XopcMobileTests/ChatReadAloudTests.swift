@@ -104,7 +104,7 @@ struct ChatReadAloudTests {
     }
 
     private func silentWAV(seconds: Double) -> Data {
-        let size = Int(seconds * 8_000) * 2
+        let size = Int(seconds * 8000) * 2
         var data = Data()
         func appendUInt(_ value: UInt32, bytes: Int = 4) {
             var littleEndian = value.littleEndian
@@ -116,8 +116,8 @@ struct ChatReadAloudTests {
         appendUInt(16)
         appendUInt(1, bytes: 2)
         appendUInt(1, bytes: 2)
-        appendUInt(8_000)
-        appendUInt(16_000)
+        appendUInt(8000)
+        appendUInt(16000)
         appendUInt(2, bytes: 2)
         appendUInt(16, bytes: 2)
         data.append(contentsOf: "data".utf8)

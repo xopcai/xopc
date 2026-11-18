@@ -29,6 +29,7 @@ final class AssistantState {
         let gateway: GatewayClient
         var acceptance: Task<Void, Never>?
     }
+
     private(set) var contextSummary: ConversationContextSummary?
     private(set) var isLoadingContext = false
     private(set) var contextError: String?
@@ -659,13 +660,14 @@ extension AssistantState {
     }
 
     func observeNextTurnSuggestion(in conversation: ConversationSelection?, transcriptID: String?,
-                                   locale: String, using gateway: GatewayClient) async {
+                                   locale: String, using gateway: GatewayClient) async
+    {
         guard !Task.isCancelled else { return }
         nextTurnSuggestion = nil
         guard let conversation, let transcriptID else { return }
         let revision = suggestionRevision
         do {
-            for _ in 0..<8 {
+            for _ in 0 ..< 8 {
                 try Task.checkCancellation()
                 let response = try await gateway.fetchNextTurnSuggestion(conversationID: conversation.id, locale: locale)
                 try Task.checkCancellation()
@@ -674,9 +676,11 @@ extension AssistantState {
                 if response.status == "ready", let suggestion = response.suggestion,
                    suggestion.conversationId == conversation.id, suggestion.transcriptId == transcriptID,
                    suggestion.agentId == conversation.agentId, suggestion.locale == locale, suggestion.isCurrent,
-                   !suggestion.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                   !suggestion.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                {
                     if suggestionImpression?.suggestion.id != suggestion.id ||
-                        suggestionImpression?.gateway.configuration != gateway.configuration {
+                        suggestionImpression?.gateway.configuration != gateway.configuration
+                    {
                         let impression = SuggestionImpression(suggestion: suggestion, gateway: gateway)
                         suggestionImpression = impression
                         Task { await gateway.reportNextTurnSuggestion(suggestion, impressionID: impression.id, event: "shown") }

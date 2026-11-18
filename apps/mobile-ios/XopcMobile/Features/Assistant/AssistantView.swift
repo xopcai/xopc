@@ -245,7 +245,9 @@ struct AssistantView<Dock: View>: View {
                 restoreComposerDraft()
             }
             .onChange(of: draft) {
-                if draft.isEmpty { state.acceptedSuggestion = nil }
+                if draft.isEmpty {
+                    state.acceptedSuggestion = nil
+                }
                 attachmentError = nil
                 if readAloud.state == .failed {
                     readAloud.stop()
@@ -994,7 +996,7 @@ struct AssistantView<Dock: View>: View {
             && !showingCameraPicker && !showingReferencePicker
         let target = conversation.flatMap {
             !$0.isDraft && state.isCurrentConversation($0.id) &&
-            composerDraftScope == ComposerDraftStore.scope(configuration, conversationID: $0.id) ? $0 : nil
+                composerDraftScope == ComposerDraftStore.scope(configuration, conversationID: $0.id) ? $0 : nil
         }
         return .init(configuration: configuration, conversationID: eligible ? target?.id : nil,
                      transcriptID: eligible ? state.historyTranscriptID(for: target) : nil,
