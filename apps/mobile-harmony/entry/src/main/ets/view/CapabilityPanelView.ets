@@ -440,7 +440,6 @@ export struct XopcCapabilityPanelView {
   @Builder
   private panelFooter() {
     if (this.readyPrompt() || this.primaryAction() || this.panel?.authorizationUrl || this.panel?.qrUrl || this.cancelPairing()) {
-      Divider().color(this.colors.border)
       Column({ space: 4 }) {
         if (this.readyPrompt()) {
           Button(this.itemId.startsWith('conversation:') ? this.t('返回对话', 'Back to chat') : this.t('通过对话使用', 'Use in chat'))
@@ -499,7 +498,7 @@ export struct XopcCapabilityPanelView {
         Button(this.t('复制', 'Copy')).height(44).backgroundColor(this.colors.input).fontColor(this.colors.chat.action)
           .enabled(!this.busy).onClick((): void => { void this.copyVerificationCode(); })
       }.width('100%').padding({ left: 14, right: 14, top: 8, bottom: 8 }).backgroundColor(this.colors.panel)
-        .borderRadius(this.colors.corner(16)).border({ width: 1, color: this.colors.border })
+        .borderRadius(this.colors.corner(16))
     }
     if (this.panel?.authorizationUrl && this.panel?.qrUrl) {
       Button() {
