@@ -41,15 +41,19 @@ enum ChatSpeechText {
             let range = NSRange(location: 0, length: window.utf16.count)
             var end = breaks.lazy.compactMap { pattern in
                 pattern.matches(in: window, range: range).last {
-                    (limit / 2...limit).contains($0.range.upperBound)
+                    (limit / 2 ... limit).contains($0.range.upperBound)
                 }?.range.upperBound
             }.first ?? limit
-            if (0xD800...0xDBFF).contains(rest.character(at: end - 1)) { end -= 1 }
+            if (0xD800 ... 0xDBFF).contains(rest.character(at: end - 1)) {
+                end -= 1
+            }
             chunks.append(rest.substring(to: end).trimmingCharacters(in: .whitespacesAndNewlines))
             rest = rest.substring(from: end).trimmingCharacters(in: .whitespacesAndNewlines) as NSString
             limit = chunkLimit
         }
-        if rest.length > 0 { chunks.append(rest as String) }
+        if rest.length > 0 {
+            chunks.append(rest as String)
+        }
         return chunks
     }
 
@@ -79,6 +83,7 @@ struct ChatSpeechObservation: Equatable {
     let replies: [ChatSpeechReply]
 }
 
+// swiftlint:disable:next type_body_length
 @MainActor @Observable final class ChatReadAloud: NSObject, AVAudioPlayerDelegate {
     static let shared = ChatReadAloud()
 
@@ -138,7 +143,9 @@ struct ChatSpeechObservation: Equatable {
         guard let observation else { leave(owner: owner); return }
         let scope = observation.scope
         if activeScope != scope {
-            if let previousOwner = self.owner { leave(owner: previousOwner) }
+            if let previousOwner = self.owner {
+                leave(owner: previousOwner)
+            }
             readings = readings.filter { key, _ in
                 key.configuration == scope.configuration && (key.conversationID != scope.conversationID || key == scope)
             }
@@ -152,7 +159,9 @@ struct ChatSpeechObservation: Equatable {
         for reply in replies.dropFirst(anchor) where reading.seen.insert(reply.id).inserted {
             reading.queue.append(reply)
         }
-        if state == .idle || state == .waiting { playNext() }
+        if state == .idle || state == .waiting {
+            playNext()
+        }
     }
 
     func leave(owner: UUID) {
@@ -168,7 +177,9 @@ struct ChatSpeechObservation: Equatable {
     }
 
     func toggle(id: String, text: String, locale: Locale, gateway: GatewayClient, conversationID: String? = nil) {
-        if let scope = activeScope, conversationID != nil, scope.conversationID != conversationID { return }
+        if let scope = activeScope, conversationID != nil, scope.conversationID != conversationID {
+            return
+        }
         if sourceID == id {
             switch state {
             case .playing:
@@ -202,7 +213,10 @@ struct ChatSpeechObservation: Equatable {
         guard let scope = activeScope, let reading = readings[scope] else { stopOutput(); return }
         while let reply = reading.queue.first {
             if start(id: reply.id, text: reply.text, locale: fallbackLocale,
-                     gateway: GatewayClient(configuration: scope.configuration), at: reading.position) { return }
+                     gateway: GatewayClient(configuration: scope.configuration), at: reading.position)
+            {
+                return
+            }
             reading.queue.removeFirst()
             reading.position = Position()
         }
@@ -212,7 +226,8 @@ struct ChatSpeechObservation: Equatable {
 
     @discardableResult
     private func start(id: String, text: String, locale: Locale, gateway: GatewayClient,
-                       at saved: Position = Position()) -> Bool {
+                       at saved: Position = Position()) -> Bool
+    {
         stopOutput()
         chunks = ChatSpeechText.chunks(from: text)
         guard !chunks.isEmpty else { return false }
@@ -229,7 +244,9 @@ struct ChatSpeechObservation: Equatable {
     }
 
     func stop() {
-        if let activeScope { readings.removeValue(forKey: activeScope) }
+        if let activeScope {
+            readings.removeValue(forKey: activeScope)
+        }
         stopOutput()
     }
 
@@ -267,6 +284,7 @@ struct ChatSpeechObservation: Equatable {
         activeGateway = nil
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func loadChunk(gateway: GatewayClient, generation: Int) async {
         guard generation == self.generation, chunkIndex < chunks.count else { return }
         state = .loading
@@ -298,7 +316,9 @@ struct ChatSpeechObservation: Equatable {
             player.delegate = self
             player.prepareToPlay()
             player.currentTime = min(playbackPosition.offset, max(0, player.duration - 0.001))
-            if playbackPosition.autoplay, !player.play() { throw GatewayClientError.invalidResponse }
+            if playbackPosition.autoplay, !player.play() {
+                throw GatewayClientError.invalidResponse
+            }
             self.player = player
             position = player.currentTime
             duration = player.duration
@@ -401,7 +421,8 @@ struct ChatSpeechObservation: Equatable {
                     self.fetchTask = Task { await self.loadChunk(gateway: gateway, generation: current) }
                 }
             } else if flag, let scope = self.activeScope, let reading = self.readings[scope],
-                      reading.queue.first?.id == self.sourceID {
+                      reading.queue.first?.id == self.sourceID
+            {
                 reading.queue.removeFirst()
                 reading.position = Position()
                 self.playNext()

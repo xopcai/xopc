@@ -90,8 +90,8 @@ struct CapabilitiesView: View {
             SegmentedTabs(options: CapabilityCategory.allCases.map {
                 SegmentOption(id: $0, title: $0.title, accessibilityID: "capability-category-\($0.id)", minimumWidth: 44)
             }, selected: category, label: "capability_title", minimumSegmentWidth: 44, onSelect: selectCategory)
-            .padding(.horizontal, 18)
-            .accessibilityIdentifier("capability-categories")
+                .padding(.horizontal, 18)
+                .accessibilityIdentifier("capability-categories")
 
             TabView(selection: $category) {
                 ForEach(CapabilityCategory.allCases) { kind in
@@ -169,8 +169,8 @@ struct CapabilitiesView: View {
     private func selectCategory(_ option: CapabilityCategory) {
         let cases = CapabilityCategory.allCases
         guard option != category, let from = cases.firstIndex(of: category),
-              let to = cases.firstIndex(of: option) else { return }
-        withAnimation(!reduceMotion && abs(to - from) == 1 ? .easeOut(duration: 0.23) : nil) {
+              let targetIndex = cases.firstIndex(of: option) else { return }
+        withAnimation(!reduceMotion && abs(targetIndex - from) == 1 ? .easeOut(duration: 0.23) : nil) {
             category = option
         }
     }
@@ -302,6 +302,7 @@ struct CapabilitiesView: View {
         detail = item
     }
 
+    // swiftlint:disable:next function_body_length
     private func catalogRow(_ item: CapabilityCatalogItem, kind: CapabilityCategory) -> some View {
         HStack(spacing: 0) {
             Button {
@@ -410,8 +411,12 @@ struct CapabilitiesView: View {
         let cases = CapabilityCategory.allCases
         guard let index = cases.firstIndex(of: category) else { return }
         load(category)
-        if index > 0 { load(cases[index - 1]) }
-        if index + 1 < cases.count { load(cases[index + 1]) }
+        if index > 0 {
+            load(cases[index - 1])
+        }
+        if index + 1 < cases.count {
+            load(cases[index + 1])
+        }
     }
 
     private func cancelRequests() {
@@ -439,9 +444,13 @@ struct CapabilitiesView: View {
                 try Task.checkCancellation()
                 pages[kind] = page
             } catch {
-                if !Task.isCancelled { failures.insert(kind) }
+                if !Task.isCancelled {
+                    failures.insert(kind)
+                }
             }
-            if !Task.isCancelled { requests[kind] = nil }
+            if !Task.isCancelled {
+                requests[kind] = nil
+            }
         }
     }
 }
@@ -781,7 +790,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                        "Select the saved image if the scanner supports Photos, or scan with another device."))
                     .font(.footnote).foregroundStyle(theme.secondary)
                     .multilineTextAlignment(.center)
-                if verifiedURL != nil { qrSaveAction(code, prominent: false) }
+                if verifiedURL != nil {
+                    qrSaveAction(code, prominent: false)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(16)
@@ -933,15 +944,22 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     private var authorizationLabel: String {
-        if let openedURL, openedURL == verifiedURL { return t("重新打开授权页", "Reopen authorization") }
-        if panel?.deviceVerificationCode != nil { return t("打开验证页", "Open verification page") }
+        if let openedURL, openedURL == verifiedURL {
+            return t("重新打开授权页", "Reopen authorization")
+        }
+        if panel?.deviceVerificationCode != nil {
+            return t("打开验证页", "Open verification page")
+        }
         return t("前往授权", "Open authorization")
     }
 
     private func openAuthorization(_ url: URL) {
         openURL(url) { accepted in
-            if accepted { openedURL = url }
-            else { errorMessage = t("无法打开授权页面，请重试。", "Could not open authorization. Try again.") }
+            if accepted {
+                openedURL = url
+            } else {
+                errorMessage = t("无法打开授权页面，请重试。", "Could not open authorization. Try again.")
+            }
         }
     }
 
@@ -1067,11 +1085,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         let failure = t("未能保存二维码，请检查相册权限后重试。", "Could not save the QR code. Check photo access and try again.")
         let access = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard panel?.qrUrl == code else { return }
-        guard access == .authorized || access == .limited else {
-            qrFeedback = failure
-            return
-        }
-        guard let data = image.pngData() else {
+        guard access == .authorized || access == .limited, let data = image.pngData() else {
             qrFeedback = failure
             return
         }
@@ -1079,16 +1093,22 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             try await PHPhotoLibrary.shared().performChanges { @Sendable in
                 PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
             }
-            if panel?.qrUrl == code { qrFeedback = t("已保存到相册。", "Saved to Photos.") }
+            if panel?.qrUrl == code {
+                qrFeedback = t("已保存到相册。", "Saved to Photos.")
+            }
         } catch {
-            if panel?.qrUrl == code { qrFeedback = failure }
+            if panel?.qrUrl == code {
+                qrFeedback = failure
+            }
         }
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func load(_ action: String? = nil, polling: Bool = false) async {
         guard !busy, !polling || !pollingNow else { return }
-        if polling { pollingNow = true }
+        if polling {
+            pollingNow = true
+        }
         busy = !polling
         if !polling {
             errorMessage = nil
@@ -1100,8 +1120,11 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         let revision = requestRevision
         let before = panel?.pollAction
         defer {
-            if polling { pollingNow = false }
-            else { busy = false }
+            if polling {
+                pollingNow = false
+            } else {
+                busy = false
+            }
         }
         do {
             let client = GatewayClient(configuration: configuration)

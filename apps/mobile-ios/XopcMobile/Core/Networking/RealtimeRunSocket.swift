@@ -25,6 +25,7 @@ actor RealtimeRunSocket {
         self.conversationID = conversationID
     }
 
+    // swiftlint:disable:next function_body_length
     func consume(into continuation: AsyncThrowingStream<RunStreamEvent, Error>.Continuation) async throws {
         var request = try URLRequest(url: configuration.realtimeWebSocketURL())
         try await request.setValue(GatewayPairingService.shared.connectionProof(url: request.url!, ticket: ticket), forHTTPHeaderField: "X-Xopc-Proof")
@@ -74,7 +75,7 @@ actor RealtimeRunSocket {
             if let conversationID {
                 guard ["session.task-result", "session.agent-reaction", "session.agent-reaction.preference",
                        "session.next-turn-suggestion.changed"].contains(eventName),
-                      eventData?.conversationId == conversationID else { continue }
+                    eventData?.conversationId == conversationID else { continue }
             }
             guard let event = frame.runEvent else { continue }
             continuation.yield(event)

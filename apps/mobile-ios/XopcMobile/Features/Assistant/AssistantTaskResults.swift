@@ -20,7 +20,9 @@ extension AssistantState {
                 }
             } catch is CancellationError { return }
             catch { /* Recover durable history on reconnect. */ }
-            if subscribed { invalidateNextTurnSuggestion() }
+            if subscribed {
+                invalidateNextTurnSuggestion()
+            }
             do { try await Task.sleep(for: .seconds(delay)) }
             catch { return }
             delay = min(delay * 2, 30)

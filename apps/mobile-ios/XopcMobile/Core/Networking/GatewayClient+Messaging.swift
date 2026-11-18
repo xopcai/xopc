@@ -154,7 +154,6 @@ extension GatewayClient {
     }
 }
 
-
 struct NextTurnSuggestion: Decodable, Equatable {
     let id: String
     let conversationId: String
@@ -164,7 +163,9 @@ struct NextTurnSuggestion: Decodable, Equatable {
     let prompt: String
     let expiresAt: Int64
 
-    var isCurrent: Bool { expiresAt > Int64(Date.now.timeIntervalSince1970 * 1000) }
+    var isCurrent: Bool {
+        expiresAt > Int64(Date.now.timeIntervalSince1970 * 1000)
+    }
 }
 
 extension GatewayClient {
@@ -179,7 +180,8 @@ extension GatewayClient {
     }
 
     func reportNextTurnSuggestion(_ suggestion: NextTurnSuggestion, impressionID: UUID,
-                                  event: String, edited: Bool? = nil) async {
+                                  event: String, edited: Bool? = nil) async
+    {
         struct Feedback: Encodable {
             let suggestionId: String
             let impressionId: UUID

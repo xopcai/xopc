@@ -165,7 +165,7 @@ private struct MarkdownPartView: View {
                 let sample = String(text.prefix(64)) as NSString
                 let width = max(28, ceil(sample.size(withAttributes: [.font: font]).width) + 2 * cellInset + 1)
                 let compact = !row.isHeader && text.utf16.count <= 16 && Self.compactTableNumber?.firstMatch(
-                    in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)
+                    in: text, range: NSRange(text.startIndex ..< text.endIndex, in: text)
                 ) != nil
                 minimum[column] = max(minimum[column], compact ? width : min(width, 64))
                 preferred[column] = max(preferred[column], compact ? width : min(width, 320))
