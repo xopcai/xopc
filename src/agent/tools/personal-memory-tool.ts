@@ -230,7 +230,7 @@ export function createPersonalMemoryTool(deps: {
           return { receiptId: operationId, status, command: input.command, target: input.target, id, scope,
             committedAt: now, effectiveFrom: 'next_turn', ...(status === 'forgotten' ? { originalSourcesRetained: true } : {}) } satisfies Receipt;
         }) as Receipt;
-        notifyUserContextChange({ kind: 'session', id: conversationId });
+        notifyUserContextChange({ kind: receipt.status === 'forgotten' ? 'history-forgotten' : 'session', id: conversationId });
         const assertion = receipt.target === 'user' ? getUserAssertion(receipt.id) : undefined;
         const item = receipt.target === 'knowledge' ? getKnowledgeItem(receipt.id) : undefined;
         const currentScope = assertion ? getAssertionSlot(assertion.slotId)?.scope : item?.scope;

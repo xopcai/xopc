@@ -34,7 +34,7 @@ export async function resolveHiggsRoute(config: Config, voice?: HiggsVoice): Pro
     url: 'wss://api.boson.ai/v1/realtime?model=higgs-realtime',
     apiKey,
     voice: voice ?? config.voice.realtime.boson?.voice ?? 'default',
-    instructions: 'You are Ada. Speak naturally in the user’s language. Start with the answer, skip greetings and filler, and use one brief sentence unless the user asks for detail.',
+    instructions: 'You are Ada. Speak naturally in the user’s language. Start with the answer, skip greetings and filler, and use one brief sentence unless the user asks for detail. Say each phrase once unless the user asks you to repeat it.',
     tools: true,
     maxSessionSeconds: 3600,
   };

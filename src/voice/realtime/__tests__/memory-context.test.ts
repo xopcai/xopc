@@ -5,6 +5,7 @@ import type { ExecutionContext } from '../../../agent/context/execution-context.
 import { ConfigSchema } from '../../../config/schema.js';
 import { personalAgentId } from '../../../personal-agent/repository.js';
 import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
+import { updateSessionConfig } from '../../../storage/sqlite/config-repository.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/index.js';
 import { notifyUserContextChange } from '../../../user-context/changes.js';
 import { applyUserProfilePatch } from '../../../user-model/profile.js';
@@ -63,13 +64,23 @@ describe('bounded native voice memory', () => {
     expect(data.confirmedFacts).toHaveLength(1); expect(data.workingAssumptions).toHaveLength(1);
   });
 
-  it('invalidates promptly when personalization policy changes and releases its subscription', async () => {
+  it('keeps the snapshot valid through unrelated settings writes and invalidates it when privacy changes', () => {
     applyUserProfilePatch({ callName: 'Alice' });
     context.assertions = listUserAssertions({ statuses: ['active'] }).map(assertion => ({ assertion, usage: 'confirmed', score: 1, reasons: [] }));
-    const invalidate = vi.fn(); const unsubscribe = build()!.subscribe(invalidate);
+    const snapshot = build()!;
+    updateSessionConfig(conversationId, { responseLanguage: 'zh' }, '/workspace');
+    expect(snapshot.isCurrent()).toBe(true);
+    updateSessionConfig(conversationId, { userContextMode: 'off' }, '/workspace');
+    expect(snapshot.isCurrent()).toBe(false);
+  });
+
+  it('signals relevant policy changes until the subscription is released', async () => {
+    applyUserProfilePatch({ callName: 'Alice' });
+    context.assertions = listUserAssertions({ statuses: ['active'] }).map(assertion => ({ assertion, usage: 'confirmed', score: 1, reasons: [] }));
+    const onChange = vi.fn(); const unsubscribe = build()!.subscribe(onChange);
     notifyUserContextChange({ kind: 'policy' }); await Promise.resolve();
-    expect(invalidate).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledOnce();
     unsubscribe(); notifyUserContextChange({ kind: 'policy' }); await Promise.resolve();
-    expect(invalidate).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledOnce();
   });
 });

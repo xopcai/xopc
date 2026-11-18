@@ -84,11 +84,21 @@ describe('native voice memory lifecycle', () => {
     expect(engine.close).not.toHaveBeenCalled();
   });
 
-  it('injects memory only upstream and ends the connection when its source changes', async () => {
-    await start(context());
+  it('keeps a call connected through unrelated writes and closes promptly when injected memory becomes stale', async () => {
+    const value = context();
+    let current = true;
+    value.memory!.isCurrent = vi.fn(() => current);
+    await start(value);
     expect(create.mock.calls[0][0].route.instructions).toContain('Mic');
     expect(JSON.stringify(events)).not.toContain('Mic');
+    vi.mocked(value.memory!.isCurrent).mockClear();
+    notifyUserContextChange({ kind: 'policy' });
+    notifyUserContextChange({ kind: 'session', id: conversationId });
+    await Promise.resolve();
+    expect(value.memory!.isCurrent).toHaveBeenCalledTimes(2);
+    expect(engine.close).not.toHaveBeenCalled();
     const closed = once(socket, 'close');
+    current = false;
     notifyUserContextChange({ kind: 'policy' });
     await closed;
     expect(engine.close).toHaveBeenCalledOnce();
@@ -120,12 +130,14 @@ describe('native voice memory lifecycle', () => {
     expect(events.some((event) => event.type === 'session.ready')).toBe(false);
   });
 
-  it('keeps history-only calls working and closes them on a real Chat reset', async () => {
+  it.each(['session-reset', 'history-forgotten'] as const)('closes history-only calls on %s', async (kind) => {
     await start({ identity: 'Ada', history: [] });
-    notifyUserContextChange({ kind: 'policy' }); await Promise.resolve();
+    notifyUserContextChange({ kind: 'policy' });
+    notifyUserContextChange({ kind, id: 'another-conversation' });
+    await Promise.resolve();
     expect(engine.close).not.toHaveBeenCalled();
     const closed = once(socket, 'close');
-    notifyUserContextChange({ kind: 'session-reset', id: conversationId }); await closed;
+    notifyUserContextChange({ kind, id: conversationId }); await closed;
     expect(engine.close).toHaveBeenCalledOnce();
   });
 
