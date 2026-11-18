@@ -13,9 +13,6 @@
     <string name="personal_chat_invitation">Tell me what is on your mind. We can pick up here whenever you return.</string>
     <string name="chat_draft_greeting">What’s on your mind?</string>
     <string name="chat_ask_personal">Ask %1$s</string>
-    <string name="file_save_version">Save as new version</string>
-    <string name="file_version_saved">Version saved</string>
-    <string name="file_version_error">Could not save the version. Try again.</string>
     <string name="library_search">Search library</string>
     <string name="library_results">Results</string>
     <string name="library_browse_files">Browse file spaces</string>

@@ -509,18 +509,13 @@ class MainScreenTest {
       ConversationMedia("file-2", "two.bin", "document", "application/octet-stream", 4, "media://file-2"),
       ConversationMedia("file-3", "three.json", "document", "application/json", 5, "media://file-3"),
       ConversationMedia("file-4", "four.csv", "document", "text/csv", 6, "media://file-4"))
-    val savedImages = mutableListOf<String>()
     composeTestRule.setContent {
       XopcTheme {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
         connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
           selectedConversationId = id,
           messages = listOf(ConversationMessage("user-media", "user", "请查看", media = media))),
-        onLoadMessageMedia = { _, item -> if (item.mimeType.startsWith("image/")) png else "abc".toByteArray() },
-        onResolveMessageFile = { _, item -> item.takeIf { it.id == "image-2" }?.let {
-          ai.xopc.mobile.gateway.ManagedFile(it.id, "workspace", it.name, it.name, "file", it.mimeType,
-            it.size, "revision-2", setOf("save_version"))
-        } }, onSaveFileVersion = { _, file, _ -> savedImages += file.id })
+        onLoadMessageMedia = { _, item -> if (item.mimeType.startsWith("image/")) png else "abc".toByteArray() })
       }
     }
     composeTestRule.onNodeWithTag("message-audio-audio-1").assertExists()
@@ -541,8 +536,6 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("file-save-version").assertDoesNotExist()
     composeTestRule.onNodeWithTag("message-image-next").performClick()
     composeTestRule.onNodeWithText("2 / 3").assertExists()
-    composeTestRule.onNodeWithTag("file-save-version").performClick()
-    composeTestRule.runOnIdle { assertEquals(listOf("image-2"), savedImages) }
     composeTestRule.onNodeWithTag("message-image-pager").performTouchInput { swipeLeft() }
     composeTestRule.onNodeWithText("3 / 3").assertExists()
     composeTestRule.onNodeWithTag("file-save-version").assertDoesNotExist()
@@ -2084,34 +2077,24 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-target-project-project-1").assertIsDisplayed()
   }
 
-  @Test fun writableWorkspaceFilesCanSaveNewVersions() {
+  @Test fun writableWorkspaceFilesPreviewWithoutVersionControls() {
     val file = ai.xopc.mobile.gateway.ManagedFile("file-1", "space", "brief.txt",
       "brief.txt", "file", "text/plain", 16, "revision-1", setOf("preview", "save_version"))
-    val requests = mutableListOf<Pair<String, String>>()
     composeTestRule.setContent {
       NotesScreen(NotesUiState(gatewayId = "gateway"), androidx.compose.foundation.layout.PaddingValues(),
         onSearch = { _, _ -> }, onLoadMore = {}, onOpen = {},
         onNoteFiles = { _, _, _ -> listOf(file) },
-        onNoteFileContent = { "Version contents".toByteArray() },
-        onSaveFileVersion = { saved, id ->
-          requests += saved.revision to id
-          if (requests.size == 1) error("RETRY")
-        })
+        onNoteFileContent = { "File contents".toByteArray() })
     }
     composeTestRule.onNodeWithTag("notes-files").performClick()
     composeTestRule.waitUntil(4_000) {
       composeTestRule.onAllNodesWithTag("notes-file-file-1").fetchSemanticsNodes().isNotEmpty()
     }
     composeTestRule.onNodeWithTag("notes-file-file-1").performClick()
-    composeTestRule.onNodeWithTag("file-save-version").performClick()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.file_version_error)).assertExists()
-    composeTestRule.onNodeWithTag("file-save-version").performClick()
-    composeTestRule.onNodeWithText(composeTestRule.activity.getString(R.string.file_version_saved)).assertExists()
-    composeTestRule.runOnIdle {
-      assertEquals(2, requests.size)
-      assertEquals("revision-1", requests.first().first)
-      assertEquals(requests.first(), requests.last())
+    composeTestRule.waitUntil(4_000) {
+      composeTestRule.onAllNodesWithText("File contents").fetchSemanticsNodes().isNotEmpty()
     }
+    composeTestRule.onNodeWithTag("file-save-version").assertDoesNotExist()
   }
 
   @Test
@@ -3342,15 +3325,21 @@ class MainScreenTest {
     composeTestRule.setContent {
       MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
         connection = ConnectionUiState(profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), ""),
-          selectedConversationId = id, draftText = "Hello", realtimeStatus = "connected", draftModelReady = true),
+          selectedConversationId = id, draftText = "Hello", realtimeStatus = "connected", draftModelReady = true,
+          conversations = listOf(ConversationSummary(id, "", "", 0, "main", isLocalDraft = true))),
         onCreateConversation = { created++ }, onSendMessage = { sent++ })
     }
     composeTestRule.onNodeWithTag("chat-floating-header").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-voice-call").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-header-new").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-options").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-send").assertIsEnabled().performClick()
-    composeTestRule.onNodeWithTag("assistant-options").performClick()
-    composeTestRule.onNodeWithTag("assistant-new").performClick()
-    assert(sent == 1)
-    assert(created == 1)
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-new").performClick()
+    composeTestRule.runOnIdle {
+      assertEquals(1, sent)
+      assertEquals(1, created)
+    }
   }
 
   @Test

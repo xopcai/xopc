@@ -2073,6 +2073,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(add.waitForExistence(timeout: 6))
         XCTAssertLessThan(app.buttons["chat-header-sidebar"].frame.maxX, app.frame.midX)
         XCTAssertFalse(app.buttons["chat-header-agent"].exists)
+        XCTAssertTrue(app.buttons["chat-header-voice-call"].exists)
+        XCTAssertFalse(app.buttons["chat-header-new"].exists)
+        XCTAssertFalse(app.buttons["assistant-options"].exists)
         add.tap()
         let switchAgent = app.buttons["assistant-action-switch-agent"]
         XCTAssertTrue(switchAgent.waitForExistence(timeout: 6))
@@ -2553,22 +2556,26 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertEqual(field.value as? String, draft)
     }
 
-    func testLibraryVersionSaveRetriesWithTheSameRequest() {
-        tab("notes")
-        let files = app.buttons["library-category-files"]
-        XCTAssertTrue(files.waitForExistence(timeout: 5))
-        files.tap()
-        let file = app.buttons["note-file-result-fixture-file"]
+    func testManagedFilePreviewUsesTallDrawer() {
+        XCTAssertTrue(app.openHomeSidebar())
+        app.buttons["chat-sidebar-personal"].tap()
+        let personal = app.buttons["chat-header-personal"]
+        XCTAssertTrue(personal.waitForExistence(timeout: 5))
+        personal.tap()
+        let library = app.buttons["personal-overview-library-tab"]
+        XCTAssertTrue(library.waitForExistence(timeout: 5))
+        library.tap()
+        let file = app.buttons["chat-attachment-preview-fixture-file"]
         XCTAssertTrue(file.waitForExistence(timeout: 5))
         file.tap()
-        let save = app.buttons["file-save-version"]
-        XCTAssertTrue(app.staticTexts["File version fixture"].waitForExistence(timeout: 5))
-        XCTAssertTrue(save.isEnabled)
-        save.tap()
-        XCTAssertTrue(app.staticTexts["无法保存新版本"].waitForExistence(timeout: 5))
-        save.tap()
-        XCTAssertTrue(app.staticTexts["已保存新版本"].waitForExistence(timeout: 5))
-        capture("ios-library-file-version")
+
+        let close = app.buttons["preview-close"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["File version fixture"].exists)
+        XCTAssertLessThan(close.frame.minY, app.frame.height * 0.20)
+        XCTAssertFalse(app.buttons["file-save-version"].exists)
+        close.tap()
+        XCTAssertTrue(library.waitForExistence(timeout: 5))
     }
 
     func testAutomationDetailsAndRunReturnToSidebarDestination() {

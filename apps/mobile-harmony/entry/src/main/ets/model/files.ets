@@ -8,8 +8,4 @@ export interface XopcFile {
 export interface XopcFiles { items: XopcFile[]; }
 export interface XopcFileResult { resource: XopcFile; }
 export interface XopcFileWrite { content: string; revision: string; }
-export interface XopcFileVersion { id: string; revision: string; name: string; size: number; createdAt: number; }
-export interface XopcFileVersionResult { version: XopcFileVersion; }
-export interface XopcFileVersions { versions: XopcFileVersion[]; }
-export interface XopcFileVersionWrite { id: string; revision: string; }
 export interface XopcTransferAuth { origin: string; token: string; }

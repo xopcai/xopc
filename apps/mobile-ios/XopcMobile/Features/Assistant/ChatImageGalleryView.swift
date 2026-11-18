@@ -18,7 +18,6 @@ struct ChatImageGalleryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scrollIndex: Int?
     @State private var zoom: CGFloat = 1
-    @State private var resolvedFile: (index: Int, resource: FileResource)?
     private var index: Int {
         scrollIndex ?? 0
     }
@@ -50,35 +49,6 @@ struct ChatImageGalleryView: View {
             .scrollDisabled(zoom > 1.01)
             .accessibilityIdentifier("chat-image-pager")
             .onChange(of: scrollIndex) { _, _ in zoom = 1 }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let resolvedFile, resolvedFile.index == index {
-                    let file = resolvedFile.resource
-                    SaveFileVersionControl(configuration: configuration, file: file, revision: file.revision)
-                        .id(file.id)
-                }
-            }
-            .task(id: index) {
-                let position = index
-                resolvedFile = nil
-                guard items.indices.contains(position) else { return }
-                let item = items[position]
-                let attachment: HistoryAttachment
-                switch (item.attachment, ChatMessageLink.resolve(item.source)) {
-                case let (original?, _):
-                    attachment = original
-                case let (_, .managedFile(id)), let (_, .route("files", id)):
-                    attachment = HistoryAttachment(mediaID: nil, type: "image", name: item.title, mimeType: nil,
-                                                   size: nil, uri: nil, duration: nil, workspaceRelativePath: nil, extractedText: nil, fileId: id)
-                case let (_, .workspaceFile(path)):
-                    attachment = HistoryAttachment(mediaID: nil, type: "image", name: item.title, mimeType: nil,
-                                                   size: nil, uri: nil, duration: nil, workspaceRelativePath: path, extractedText: nil)
-                default: return
-                }
-                let resolved = try? await ChatAttachmentLoader(configuration: configuration)
-                    .resolveManagedFile(attachment, conversationID: conversationID)
-                guard !Task.isCancelled else { return }
-                resolvedFile = resolved.map { (position, $0) }
-            }
             .navigationTitle("图片")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
