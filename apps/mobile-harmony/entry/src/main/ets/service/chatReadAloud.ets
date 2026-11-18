@@ -8,10 +8,18 @@ import { util } from '@kit.ArkTS';
 import { gatewaySession } from './gatewaySession';
 import { signedHttpRequest } from './requestProof';
 import { chatSpeechChunks, chatSpeechLanguage } from '../common/speechText';
+import { XopcChatSpeechReply } from '../common/chatAutoRead';
 import { XopcTransientNotice } from '../common/transientNotice';
 
 interface XopcSpeechBody { text: string; language: string; }
 interface XopcSpeechHeaders { Authorization: string; 'Content-Type': string; }
+interface XopcSpeechPosition { chunk: number; offset: number; autoplay: boolean; }
+interface XopcSpeechQueue {
+  conversation: string;
+  pending: XopcChatSpeechReply[];
+  seen: Set<string>;
+  position?: XopcSpeechPosition;
+}
 
 @ObservedV2
 export class XopcChatReadAloud {
@@ -24,14 +32,12 @@ export class XopcChatReadAloud {
   dismissError(): void { this.errorNotice.clear(); }
   @Trace position: number = 0;
   @Trace duration: number = 0;
-  @Trace continuousConversationId: string = '';
+  @Trace owner: number = 0;
   private generation: number = 0;
   private request?: http.HttpRequest;
   private prefetchRequest?: http.HttpRequest;
   private prefetchPromise?: Promise<ArrayBuffer>;
   private prefetchIndex: number = -1;
-  private prefetchedIndex: number = -1;
-  private prefetchedBytes?: ArrayBuffer;
   private player?: media.AVPlayer;
   private file?: fs.File;
   private path: string = '';
@@ -41,14 +47,87 @@ export class XopcChatReadAloud {
   private context?: common.Context;
   private session?: avSession.AVSession;
   private backgroundRunning: boolean = false;
+  private cleanup: Promise<void> = Promise.resolve();
+  private scope: string = '';
+  private gateway: string = '';
+  private conversationId: string = '';
+  private queues: Map<string, XopcSpeechQueue> = new Map<string, XopcSpeechQueue>();
+  private replies: XopcChatSpeechReply[] = [];
+  private chatContext?: common.Context;
+  private chatLanguage: string = 'en-US';
+  private playbackPosition: XopcSpeechPosition = { chunk: 0, offset: 0, autoplay: true };
+
+  showConversation(owner: number, context: common.Context, gateway: string, conversation: string, transcript: string,
+    replies: XopcChatSpeechReply[], language: string): void {
+    const scope = JSON.stringify([gateway, conversation, transcript]);
+    if (this.scope !== scope) {
+      if (this.owner) this.leaveForeground(this.owner);
+      if (this.gateway !== gateway) this.queues.clear();
+      this.queues.forEach((queue: XopcSpeechQueue, key: string): void => {
+        if (queue.conversation === conversation && key !== scope) this.queues.delete(key);
+      });
+      this.gateway = gateway; this.scope = scope; this.conversationId = conversation;
+    }
+    this.owner = owner; this.chatContext = context; this.chatLanguage = language; this.replies = replies;
+    const queue = this.queues.get(scope);
+    if (!queue) return;
+    let anchor = replies.length - 1;
+    while (anchor >= 0 && !queue.seen.has(replies[anchor].id)) anchor--;
+    for (let index = anchor + 1; index < replies.length; index++) {
+      const reply = replies[index];
+      if (queue.seen.has(reply.id)) continue;
+      queue.seen.add(reply.id); queue.pending.push(reply);
+    }
+    if (this.state === 'idle' || this.state === 'waiting') void this.playNext();
+  }
+
+  async readFrom(owner: number, reply: XopcChatSpeechReply): Promise<void> {
+    if (owner !== this.owner || !this.scope) return;
+    const anchor = this.replies.findIndex((row: XopcChatSpeechReply): boolean => row.id === reply.id);
+    const seen = new Set<string>(this.replies.map<string>((row: XopcChatSpeechReply): string => row.id));
+    seen.add(reply.id);
+    const scope = this.scope;
+    const queue: XopcSpeechQueue = { conversation: this.conversationId, pending: [reply], seen };
+    if (anchor >= 0) queue.pending = queue.pending.concat(this.replies.slice(anchor + 1));
+    this.queues.set(scope, queue);
+    await this.playNext();
+  }
+
+  private async playNext(): Promise<void> {
+    const queue = this.queues.get(this.scope);
+    if (!queue || !this.chatContext) { await this.stopOutput(); return; }
+    while (queue.pending.length) {
+      const reply = queue.pending[0];
+      const chunks = chatSpeechChunks(reply.text);
+      if (chunks.length) {
+        await this.startSpeech(this.chatContext, reply.text, reply.id, this.chatLanguage, chunks, queue.position);
+        return;
+      }
+      queue.pending.shift();
+      queue.position = undefined;
+    }
+    const cleanup = this.stopOutput();
+    this.state = 'waiting';
+    await cleanup;
+  }
 
   async speak(context: common.Context, text: string, id: string, language: string): Promise<void> {
+    await this.startSpeech(context, text, id, language, chatSpeechChunks(text));
+  }
+
+  private async startSpeech(context: common.Context, text: string, id: string, language: string, chunks: string[],
+    saved?: XopcSpeechPosition): Promise<void> {
     this.noticesEnabled = true;
-    const cleanup = this.stop();
+    const cleanup = this.stopOutput();
     const generation = this.generation;
+    this.chunks = chunks;
+    if (!this.chunks.length) return;
+    this.playbackPosition = saved ?? { chunk: 0, offset: 0, autoplay: true };
+    this.chunkIndex = Math.min(this.playbackPosition.chunk, this.chunks.length - 1);
+    this.sourceId = id; this.state = 'loading';
     await cleanup;
     if (generation !== this.generation) return;
-    this.context = context; this.chunks = chatSpeechChunks(text); this.chunkIndex = 0; this.sourceId = id;
+    this.context = context;
     this.language = chatSpeechLanguage(text, language);
     await this.startPlaybackSession(context, id, generation);
     if (generation !== this.generation) return;
@@ -71,6 +150,7 @@ export class XopcChatReadAloud {
         requestCode: 0,
         actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG]
       });
+      if (generation !== this.generation) return;
       await backgroundTaskManager.startBackgroundRunning(context, backgroundTaskManager.BackgroundMode.AUDIO_PLAYBACK, agent);
       if (generation === this.generation) this.backgroundRunning = true;
       else await backgroundTaskManager.stopBackgroundRunning(context);
@@ -111,50 +191,45 @@ export class XopcChatReadAloud {
     this.prefetchIndex = index;
     const pending = this.requestChunk(index, generation, true);
     this.prefetchPromise = pending;
-    void pending.then((bytes: ArrayBuffer): void => {
-      if (generation === this.generation && this.prefetchIndex === index) {
-        this.prefetchedIndex = index;
-        this.prefetchedBytes = bytes;
-      }
-    }).catch((_error: Error): void => {
-      if (generation === this.generation && this.prefetchIndex === index) {
-        this.prefetchIndex = -1;
-        this.prefetchPromise = undefined;
-      }
-    });
+    void pending.catch((_error: Error): void => {});
   }
   private async bytesForChunk(index: number, generation: number): Promise<ArrayBuffer> {
-    if (this.prefetchedIndex === index && this.prefetchedBytes) {
-      const bytes = this.prefetchedBytes;
-      this.prefetchedBytes = undefined;
-      this.prefetchedIndex = -1;
-      this.prefetchIndex = -1;
-      this.prefetchPromise = undefined;
-      return bytes;
-    }
     if (this.prefetchIndex === index && this.prefetchPromise) {
       try {
         const bytes = await this.prefetchPromise;
         if (generation !== this.generation) throw new Error('STALE_SPEECH');
-        this.prefetchedBytes = undefined;
-        this.prefetchedIndex = -1;
-        this.prefetchIndex = -1;
-        this.prefetchPromise = undefined;
         return bytes;
       } catch (_error) {
         if (generation !== this.generation) throw new Error('STALE_SPEECH');
-        this.prefetchIndex = -1;
-        this.prefetchPromise = undefined;
+      } finally {
+        if (generation === this.generation) {
+          this.prefetchIndex = -1;
+          this.prefetchPromise = undefined;
+        }
       }
     }
     return this.requestChunk(index, generation, false);
   }
   private async next(generation: number): Promise<void> {
-    if (generation !== this.generation || !this.context || this.chunkIndex >= this.chunks.length) { if (generation === this.generation) this.stop(); return; }
-    this.state = 'loading'; this.position = 0; this.duration = 0;
+    if (generation !== this.generation || !this.context) return;
+    if (this.chunkIndex >= this.chunks.length) {
+      const queue = this.queues.get(this.scope);
+      if (queue?.pending[0]?.id === this.sourceId) {
+        queue.pending.shift(); queue.position = undefined;
+        await this.playNext();
+      } else {
+        await this.stopOutput();
+      }
+      return;
+    }
+    this.state = 'loading'; this.position = this.playbackPosition.offset; this.duration = 0;
     try {
-      const bytes = await this.bytesForChunk(this.chunkIndex, generation);
+      const prefetched = this.prefetchIndex === this.chunkIndex;
+      const pending = this.bytesForChunk(this.chunkIndex, generation);
+      if (!prefetched) this.prefetchNext(generation);
+      const bytes = await pending;
       if (generation !== this.generation) return;
+      this.prefetchNext(generation);
       const path = this.context.cacheDir + '/xopc-speech-' + util.generateRandomUUID() + '.audio';
       const file = await fs.open(path, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE);
       if (generation !== this.generation) { await fs.close(file); await fs.unlink(path); return; }
@@ -164,11 +239,26 @@ export class XopcChatReadAloud {
       const player = await media.createAVPlayer();
       if (generation !== this.generation) { await player.release(); return; }
       this.player = player;
+      let restoring = this.playbackPosition.offset > 0;
+      const playOrPause = (): void => {
+        if (this.playbackPosition.autoplay) player.play().catch((error: Error): void => { this.fail(error, generation); });
+        else { this.state = 'paused'; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PAUSE); }
+      };
+      player.on('seekDone', (time: number): void => {
+        if (generation !== this.generation || this.player !== player || !restoring) return;
+        restoring = false; this.position = time; playOrPause();
+      });
       player.on('stateChange', (state: string): void => {
         if (generation !== this.generation || this.player !== player) return;
         if (state === 'initialized') player.prepare().catch((error: Error): void => { this.fail(error, generation); });
-        else if (state === 'prepared') { this.duration = player.duration; this.prefetchNext(generation); player.play().catch((error: Error): void => { this.fail(error, generation); }); }
-        else if (state === 'playing') { this.state = state; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PLAY); this.prefetchNext(generation); }
+        else if (state === 'prepared') {
+          this.duration = player.duration;
+          if (restoring) {
+            try { player.seek(Math.min(this.playbackPosition.offset, Math.max(0, this.duration - 1))); }
+            catch (_) { restoring = false; playOrPause(); }
+          } else playOrPause();
+        }
+        else if (state === 'playing') { this.state = state; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PLAY); }
         else if (state === 'paused') { this.state = state; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PAUSE); }
         else if (state === 'completed') this.advance(generation);
       });
@@ -178,8 +268,10 @@ export class XopcChatReadAloud {
     } catch (error) { this.fail(error as Error, generation); }
   }
   private async advance(generation: number): Promise<void> {
+    this.state = 'loading'; this.position = 0; this.chunkIndex++;
+    this.playbackPosition = { chunk: this.chunkIndex, offset: 0, autoplay: true };
     await this.releaseOutput(); if (generation !== this.generation) return;
-    this.chunkIndex++; await this.next(generation);
+    await this.next(generation);
   }
   private fail(error: Error, generation: number): void {
     if (generation !== this.generation) return;
@@ -200,12 +292,20 @@ export class XopcChatReadAloud {
     if (path) { try { await fs.unlink(path); } catch (_) {} }
   }
   async stop(preserveError: boolean = false): Promise<void> {
+    this.queues.delete(this.scope);
+    await this.stopOutput(preserveError);
+  }
+  private async stopOutput(preserveError: boolean = false): Promise<void> {
     if (!preserveError) this.dismissError();
     this.generation++; this.request?.destroy(); this.request = undefined;
     this.prefetchRequest?.destroy(); this.prefetchRequest = undefined;
     this.prefetchPromise = undefined; this.prefetchIndex = -1;
-    this.prefetchedBytes = undefined; this.prefetchedIndex = -1;
-    this.state = 'idle'; this.sourceId = ''; await this.releaseOutput(); await this.releasePlaybackSession();
+    this.state = 'idle'; this.sourceId = '';
+    const previous = this.cleanup;
+    const output = this.releaseOutput();
+    const session = this.releasePlaybackSession();
+    this.cleanup = Promise.all([previous, output, session]).then((): void => {});
+    await this.cleanup;
   }
   private async releasePlaybackSession(): Promise<void> {
     const context = this.context; const session = this.session; const backgroundRunning = this.backgroundRunning;
@@ -217,7 +317,22 @@ export class XopcChatReadAloud {
     }
     if (context && backgroundRunning) { try { await backgroundTaskManager.stopBackgroundRunning(context); } catch (_) {} }
   }
-  leaveForeground(): void { this.continuousConversationId = ''; this.noticesEnabled = false; this.dismissError(); }
-  disableContinuous(): void { this.continuousConversationId = ''; this.stop(); }
+  leaveForeground(owner?: number): void {
+    if (owner !== undefined && owner !== this.owner) return;
+    this.noticesEnabled = false; this.dismissError();
+    if (owner === undefined) return;
+    const queue = this.queues.get(this.scope);
+    if (queue && queue.pending.length) {
+      if (this.chunkIndex >= this.chunks.length) {
+        queue.pending.shift(); queue.position = undefined;
+      } else {
+        const time = this.player?.currentTime;
+        queue.position = { chunk: this.chunkIndex, offset: time !== undefined && time >= 0 ? time : this.position,
+          autoplay: this.state === 'playing' || (this.state === 'loading' && this.playbackPosition.autoplay) };
+      }
+    }
+    this.owner = 0; this.scope = ''; this.chatContext = undefined; this.replies = [];
+    void this.stopOutput();
+  }
 }
 export const chatReadAloud: XopcChatReadAloud = new XopcChatReadAloud();

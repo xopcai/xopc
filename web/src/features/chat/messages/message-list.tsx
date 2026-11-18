@@ -24,6 +24,7 @@ import { AgentRunErrorBanner } from './agent-run-error-banner';
 import { RunFeedbackContext } from './run-feedback-context';
 import { RunRecoveryStatus } from './run-recovery-status';
 import { userMessageTurnTarget } from './user-round-index';
+import { useChatReadAloud } from './chat-read-aloud';
 
 export interface ChatTimelineEntry {
   id: string;
@@ -66,6 +67,7 @@ export const MessageList = memo(function MessageList({
   responseFeedbackEnabled,
   showAssistantWorkLog = true,
   hideAssistantActions = false,
+  managesReadAloud = true,
   trailingContent,
   replySpaceRef,
   scrollRef,
@@ -105,6 +107,7 @@ export const MessageList = memo(function MessageList({
   showAssistantWorkLog?: boolean;
   /** Hide footer controls under assistant messages in focused conversation views. */
   hideAssistantActions?: boolean;
+  managesReadAloud?: boolean;
   /** Ephemeral UI rendered after the latest transcript message; never persisted as a message. */
   trailingContent?: ReactNode;
   replySpaceRef?: RefObject<HTMLDivElement | null>;
@@ -113,6 +116,8 @@ export const MessageList = memo(function MessageList({
   const m = messages(language);
 
   const [virtualized] = useState(Boolean(scrollRef && list.length >= 300));
+  const lastCommittedIndex = list.findLastIndex(message => !message.pendingSteer);
+  useChatReadAloud(managesReadAloud ? conversationId : null, list, streaming || sending, personal);
 
   const showWelcome = list.length === 0 && timelineEntries.length === 0 && !streaming && !sending && !runError;
 
@@ -147,7 +152,6 @@ export const MessageList = memo(function MessageList({
     ? () => onRetryUserMessageRound(lastUserIndex) : undefined;
   const feedback = { turnId: currentOutcome?.turnId, running, error: runError, onRetry: retry };
   const recovering = running && (progress?.stage === 'model_retry' || progress?.stage === 'model_fallback');
-  const lastCommittedIndex = list.findLastIndex(message => !message.pendingSteer);
 
   const isStreamingRow = (msg: Message, index: number) => Boolean(
     (streaming || sending || msg.pendingResponseStatus) && index === lastCommittedIndex && msg.role === 'assistant',

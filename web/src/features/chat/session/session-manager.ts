@@ -18,6 +18,7 @@ import type { SessionInfo } from '@/features/chat/chat.types';
 import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
 import { fetchSessionActiveRun } from '@/features/chat/session/resolve-resume-run-id';
 import { listSessions } from '@/features/sessions/session-api';
+import { resetChatReadAloud } from '@/features/voice/read-aloud-store';
 import { apiFetch } from '@/lib/fetch';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -455,6 +456,7 @@ export class SessionManager {
     if (!res.ok) throw new Error(await readErrorMessage(res));
     const result = parseSessionResetResponse(await res.json());
     if (!result.transcriptId) throw new Error('Reset response is missing transcript identity');
+    resetChatReadAloud(key);
     await rememberSessionTranscript(conversationId, result.transcriptId);
     return result;
   }

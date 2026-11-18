@@ -62,7 +62,8 @@ struct AssistantView<Dock: View>: View {
     @State private var searchAfterOptions = false
     @State private var showingMessageSearch = false
     @State private var executionPresentation: ExecutionActivityPresentation?
-    @State private var readAloud = ChatReadAloud()
+    private let readAloud = ChatReadAloud.shared
+    @State private var readAloudOwner = UUID()
     @State private var assistantAudio = AssistantAudioAutoplay()
     @State private var generatedMedia = GeneratedMediaState()
     @State private var presentedGeneratedVideo: GeneratedMediaCard?
@@ -115,10 +116,10 @@ struct AssistantView<Dock: View>: View {
                 .modifier(ChatScrollEdgeEffect())
                 .ignoresSafeArea(.container, edges: .top)
             VStack(spacing: 0) {
-                if readAloud.state == .failed, let error = readAloud.errorMessage {
+                if readAloud.owner == readAloudOwner, readAloud.state == .failed, let error = readAloud.errorMessage {
                     TransientComposerFeedback(message: error) { readAloud.stop() }
                         .padding(.horizontal, 20)
-                } else if readAloud.state != .idle {
+                } else if readAloud.owner == readAloudOwner, readAloud.state != .idle {
                     readAloudBar
                 }
                 if isActive, !showingPhone, showsFloatingHeader,
@@ -225,7 +226,6 @@ struct AssistantView<Dock: View>: View {
                 attachmentError = nil
                 voiceMode = false
                 showingPhotoPicker = false; showingFilePicker = false; showingCameraPicker = false
-                readAloud.stop()
                 assistantAudio.stop()
                 executionPresentation = nil
                 presentedGeneratedVideo = nil
@@ -264,7 +264,7 @@ struct AssistantView<Dock: View>: View {
         attachmentError = nil
         saveComposerDraft()
         state.pauseConversation()
-        readAloud.stop()
+        readAloud.leave(owner: readAloudOwner)
         assistantAudio.stop()
         onInputFocusChanged(false)
     }
@@ -335,6 +335,9 @@ struct AssistantView<Dock: View>: View {
 
     private var chatBody: some View {
         generatedMediaLifecycle
+            .onChange(of: readAloudObservation, initial: true) { _, observation in
+                readAloud.show(observation, owner: readAloudOwner, locale: locale)
+            }
             .onChange(of: assistantAudioObservation, initial: true) { _, observation in
                 assistantAudio.observe(observation, configuration: configuration)
             }
@@ -876,6 +879,20 @@ struct AssistantView<Dock: View>: View {
                 ?? state.selectedAgent?.localizedName(locale) ?? AppLocalization.string("未选择", locale: locale))
     }
 
+    private var readAloudObservation: ChatSpeechObservation? {
+        guard isActive, let conversation, !conversation.isDraft, !state.isLoadingHistory,
+              state.isCurrentConversation(conversation.id) else { return nil }
+        let scope = ChatSpeechScope(configuration: configuration, conversationID: conversation.id,
+                                    transcriptID: state.historyTranscriptID(for: conversation))
+        let replies = state.messages.compactMap { message -> ChatSpeechReply? in
+            guard message.role == "assistant", !message.isPending, message.answerConfirmed, !message.text.isEmpty,
+                  state.runID == nil || message.turnId != state.runID,
+                  !message.attachments.contains(where: \.isAudio) else { return nil }
+            return ChatSpeechReply(id: message.id, text: message.text)
+        }
+        return ChatSpeechObservation(scope: scope, replies: replies)
+    }
+
     private var assistantAudioObservation: AssistantAudioObservation {
         let audioMessage = state.messages.reversed().first {
             $0.role == "assistant" && $0.attachments.contains(where: \.isAudio)
@@ -885,7 +902,8 @@ struct AssistantView<Dock: View>: View {
         return AssistantAudioObservation(
             conversationID: conversation?.isDraft == false ? conversation?.id : nil,
             streaming: state.runID != nil,
-            enabled: isActive && !state.isLoadingHistory && realtimeVoiceCall.phase == .idle && readAloud.state == .idle,
+            enabled: isActive && !state.isLoadingHistory && realtimeVoiceCall.phase == .idle
+                && (readAloud.state == .idle || readAloud.state == .waiting),
             attachment: attachment,
             key: key
         )
@@ -896,13 +914,13 @@ struct AssistantView<Dock: View>: View {
             Image(systemName: "speaker.wave.2.fill")
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text(readAloud.state == .failed
-                    ? LocalizedStringResource("朗读失败")
+                Text(readAloud.state == .waiting
+                    ? LocalizedStringResource("等待下一条回复")
                     : LocalizedStringResource("正在朗读"))
                     .mobileTextStyle(.secondary).fontWeight(.semibold)
                 if let error = readAloud.errorMessage {
                     Text(error).mobileTextStyle(.caption).foregroundStyle(mobileTheme.danger).lineLimit(2)
-                } else {
+                } else if readAloud.state != .waiting {
                     Text("\(readAloud.chunkIndex + 1)/\(readAloud.chunkCount)")
                         .mobileTextStyle(.caption).foregroundStyle(.secondary)
                 }

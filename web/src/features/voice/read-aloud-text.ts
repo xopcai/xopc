@@ -1,7 +1,8 @@
 import { marked } from 'marked';
 
 const CODE_FENCE_RE = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
-const SENTENCE_RE = /[^。！？!?\.\n]+[。！？!?\.]?|\n+/g;
+const FIRST_CHUNK_LIMIT = 160;
+const CHUNK_LIMIT = 420;
 
 function fallbackMarkdownToText(markdown: string): string {
   return markdown
@@ -42,35 +43,34 @@ export function buildSpeakableText(markdown: string): string {
     .trim();
 }
 
-/** Split speech input on sentence boundaries while keeping every request comfortably bounded. */
-export function splitSpeakableText(text: string, maxChars = 420): string[] {
-  const normalized = text.trim();
-  if (!normalized) return [];
-  const limit = Math.max(20, maxChars);
-  const units = normalized.match(SENTENCE_RE) ?? [normalized];
-  const chunks: string[] = [];
-  let current = '';
-
-  const pushCurrent = () => {
-    const value = current.trim();
-    if (value) chunks.push(value);
-    current = '';
-  };
-
-  for (const rawUnit of units) {
-    const unit = rawUnit.trim();
-    if (!unit) continue;
-    if (unit.length > limit) {
-      pushCurrent();
-      for (let offset = 0; offset < unit.length; offset += limit) {
-        chunks.push(unit.slice(offset, offset + limit).trim());
-      }
-      continue;
-    }
-    if (current && current.length + unit.length > limit) pushCurrent();
-    current += unit;
+function lastBreak(window: string, pattern: RegExp, limit: number): number {
+  let end = 0;
+  for (const match of window.matchAll(pattern)) {
+    const boundary = match.index + match[0].length;
+    if (boundary <= limit && boundary >= Math.floor(limit / 2)) end = boundary;
   }
-  pushCurrent();
+  return end;
+}
+
+/** Group whole sentences and leave synthesis time for the next chunk. */
+export function splitSpeakableText(text: string, maxChars = CHUNK_LIMIT): string[] {
+  let rest = text.trim();
+  const limit = Math.max(20, maxChars);
+  let chunkLimit = Math.min(limit, FIRST_CHUNK_LIMIT);
+  const chunks: string[] = [];
+  while (rest.length > chunkLimit) {
+    // The extra character distinguishes a period before whitespace from a decimal point.
+    const window = rest.slice(0, chunkLimit + 1);
+    let end = lastBreak(window, /[。！？!?]+["'”’」』）)]*|\.+["'”’」』）)]*(?=\s)|\n+/g, chunkLimit)
+      || lastBreak(window, /[，、；：]|[,;:](?=\s)/g, chunkLimit)
+      || lastBreak(window, /\s/g, chunkLimit)
+      || chunkLimit;
+    if (rest.charCodeAt(end - 1) >= 0xD800 && rest.charCodeAt(end - 1) <= 0xDBFF) end--;
+    chunks.push(rest.slice(0, end).trim());
+    rest = rest.slice(end).trimStart();
+    chunkLimit = limit;
+  }
+  if (rest) chunks.push(rest);
   return chunks;
 }
 

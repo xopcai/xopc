@@ -1,7 +1,7 @@
 import { ExternalIntakeHost } from '@/features/chat/external-intake-host';
 import { MobilePrimaryNav } from '@/components/shell/mobile-primary-nav';
 import { GlobalPhoneWorkspace } from '@/features/phone/global-phone-workspace';
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { VoiceCallProvider } from '@/features/voice/realtime/voice-call-provider';
 
@@ -36,6 +36,7 @@ import { ProductNotificationCoordinator } from '@/features/notifications/product
 import { SupportReportHost } from '@/features/support/support-report-host';
 import { ReadAloudDockProvider } from '@/features/voice/read-aloud-dock';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
+import { clearReadAloudSession } from '@/features/voice/read-aloud-store';
 import { GlobalMediaPlayer } from '@/features/media-playback/global-media-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
 import { TaskDetailModal } from '@/features/tasks/task-detail-modal';
@@ -96,6 +97,7 @@ function ExtensionNavigateListener() {
 export function AppShell() {
   const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
+  useLayoutEffect(() => clearReadAloudSession, [baseUrl, token]);
   return <VoiceCallProvider key={`${baseUrl}:${token ?? ''}`}><ReadAloudDockProvider>
     <AppShellContent />
     {token ? <GlobalMediaPlayer /> : null}

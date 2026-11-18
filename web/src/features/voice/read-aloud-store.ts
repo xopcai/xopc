@@ -14,6 +14,7 @@ export type ReadAloudSource = {
   type: 'chat-message' | 'note' | 'selection';
   id: string;
   title: string;
+  conversationId?: string;
   href?: string;
   targetId?: string;
 };
@@ -76,6 +77,129 @@ let advanceChunks = false;
 let loadedChunkIndex: number | null = null;
 let offsetOnLoad: number | null = null;
 let sessionConsent = false;
+
+type PlaybackPosition = { index: number; offset: number; autoplay: boolean };
+type ChatReading = {
+  queue: ReadAloudInput[];
+  seen: Set<string>;
+  finished: boolean;
+  position?: PlaybackPosition;
+};
+type ChatSurface = { conversationId: string; replies: ReadAloudInput[] };
+const chatReadings = new Map<string, ChatReading>();
+const chatSurfaces = new Set<ChatSurface>();
+let activeChatSurface: ChatSurface | undefined;
+let activeChatReading: ChatReading | undefined;
+
+export function resetChatReadAloud(conversationId: string): void {
+  chatReadings.delete(conversationId);
+  if (activeInput?.source.conversationId === conversationId) useReadAloudStore.getState().stop();
+  if (pendingInput?.source.conversationId === conversationId) useReadAloudStore.getState().declineConsent();
+}
+
+export function clearReadAloudSession(): void {
+  chatReadings.clear();
+  useReadAloudStore.getState().stop();
+}
+
+export function bindChatReadAloud(conversationId: string) {
+  const surface: ChatSurface = { conversationId, replies: [] };
+  chatSurfaces.add(surface);
+  focusChatSurface(surface);
+  return {
+    update(replies: ReadAloudInput[]) {
+      surface.replies = replies;
+      if (activeChatSurface === surface) syncChatReading(surface);
+    },
+    dispose() {
+      chatSurfaces.delete(surface);
+      if (activeChatSurface !== surface) return;
+      focusChatSurface(undefined);
+      queueMicrotask(() => {
+        if (!activeChatSurface) {
+          const previous = Array.from(chatSurfaces).at(-1);
+          if (previous) {
+            focusChatSurface(previous);
+            syncChatReading(previous);
+          }
+        }
+      });
+    },
+  };
+}
+
+function focusChatSurface(surface: ChatSurface | undefined): void {
+  const nextId = surface?.conversationId;
+  if (activeChatReading && activeInput?.source.conversationId !== nextId) {
+    const state = useReadAloudStore.getState();
+    const index = state.currentChunkIndex;
+    const offset = offsetOnLoad ?? (loadedChunkIndex === index && audioElement?.readyState
+      ? audioElement.currentTime : Math.max(0, state.currentTime - completedDuration(index)));
+    activeChatReading.position = { index, offset, autoplay: advanceChunks || state.status === 'ended' };
+    activeChatReading = undefined;
+    stopPlayback();
+  }
+  if (pendingInput?.source.conversationId && pendingInput.source.conversationId !== nextId) {
+    useReadAloudStore.getState().declineConsent();
+  }
+  activeChatSurface = surface;
+}
+
+function syncChatReading(surface: ChatSurface): void {
+  const reading = chatReadings.get(surface.conversationId);
+  if (!reading) return;
+  const { replies } = surface;
+  // Matching the most recent known reply keeps prepended history out of the queue.
+  const anchor = replies.findLastIndex(reply => reading.seen.has(reply.source.id));
+  for (const reply of replies.slice(anchor + 1)) {
+    if (!reading.seen.has(reply.source.id)) reading.queue.push(reply);
+    reading.seen.add(reply.source.id);
+  }
+  if (activeChatReading !== reading) {
+    if (useReadAloudStore.getState().source || !reading.position) return;
+    activeChatReading = reading;
+    if (reading.finished && reading.queue.length === 1) {
+      const source = reading.queue[0].source;
+      activeInput = reading.queue[0];
+      useReadAloudStore.setState({ source, status: 'ended' });
+    } else if (!advanceChatReading()) {
+      startPlayback(reading.queue[0], reading.position);
+    }
+    reading.position = undefined;
+  } else {
+    advanceChatReading();
+  }
+}
+
+function advanceChatReading(): boolean {
+  const reading = activeChatReading;
+  if (!reading?.finished || reading.queue.length < 2) return false;
+  reading.queue.shift();
+  reading.finished = false;
+  startPlayback(reading.queue[0]);
+  return true;
+}
+
+function startReading(input: ReadAloudInput): void {
+  const id = input.source.conversationId;
+  if (!id) {
+    const previousId = activeInput?.source.conversationId;
+    if (previousId) chatReadings.delete(previousId);
+    activeChatReading = undefined;
+    startPlayback(input);
+    return;
+  }
+  const surface = activeChatSurface?.conversationId === id
+    ? activeChatSurface : Array.from(chatSurfaces).findLast(item => item.conversationId === id);
+  if (surface) focusChatSurface(surface);
+  const replies = surface?.replies ?? [];
+  const index = replies.findIndex(reply => reply.source.id === input.source.id);
+  const queue = [input, ...(index === -1 ? [] : replies.slice(index + 1))];
+  const reading = { queue, seen: new Set([...replies.map(reply => reply.source.id), input.source.id]), finished: false };
+  chatReadings.set(id, reading);
+  activeChatReading = reading;
+  startPlayback(input);
+}
 
 function hasConsent(): boolean {
   if (sessionConsent) return true;
@@ -147,7 +271,9 @@ async function playChunk(index: number, offset = 0, autoplay = true): Promise<vo
   useReadAloudStore.setState({ status: 'preparing', currentChunkIndex: index, currentText: chunks[index] ?? '', currentTime: completedDuration(index) + offset, error: null });
   audio.pause();
   try {
-    const url = await ensureChunk(index, runGeneration);
+    const pending = ensureChunk(index, runGeneration);
+    if (index + 1 < chunks.length) void ensureChunk(index + 1, runGeneration).catch(() => undefined);
+    const url = await pending;
     if (runGeneration !== generation || operation !== playbackOperation) return;
     if (loadedChunkIndex !== index || audio.getAttribute('src') !== url) {
       loadedChunkIndex = index;
@@ -168,7 +294,6 @@ async function playChunk(index: number, offset = 0, autoplay = true): Promise<vo
       claimReadAloudMediaSession({ ...useReadAloudStore.getState(), position: () => useReadAloudStore.getState().currentTime });
       updateReadAloudMediaSession(useReadAloudStore.getState());
     }
-    if (index + 1 < chunks.length) void ensureChunk(index + 1, runGeneration).catch(() => undefined);
   } catch (error) {
     if (runGeneration !== generation || operation !== playbackOperation || (error instanceof DOMException && error.name === 'AbortError')) return;
     releasePlayback(audio);
@@ -208,6 +333,10 @@ function getAudio(): HTMLAudioElement {
       void playChunk(next);
     } else {
       advanceChunks = false;
+      if (activeChatReading) {
+        activeChatReading.finished = true;
+        if (advanceChatReading()) return;
+      }
       useReadAloudStore.setState({ status: 'ended', currentTime: useReadAloudStore.getState().duration });
     }
   });
@@ -253,7 +382,7 @@ function stopPlayback(): void {
   activeInput = null;
 }
 
-function startPlayback(input: ReadAloudInput): void {
+function startPlayback(input: ReadAloudInput, position?: PlaybackPosition): void {
   stopPlayback();
   const nextChunks = splitSpeakableText(input.text);
   if (!nextChunks.length) {
@@ -275,7 +404,7 @@ function startPlayback(input: ReadAloudInput): void {
     error: null,
     consentRequired: false,
   });
-  void playChunk(0);
+  void playChunk(position?.index ?? 0, position?.offset ?? 0, position?.autoplay ?? true);
 }
 
 export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
@@ -297,7 +426,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
       set({ consentRequired: true });
       return;
     }
-    startPlayback(input);
+    startReading(input);
   },
 
   acceptConsent: () => {
@@ -306,7 +435,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     const input = pendingInput;
     pendingInput = null;
     set({ consentRequired: false });
-    if (input) startPlayback(input);
+    if (input) startReading(input);
   },
 
   declineConsent: () => {
@@ -326,6 +455,11 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
   resume: () => {
     const state = get();
     if (!state.source || !activeInput || state.status === 'preparing' || state.status === 'playing') return;
+    if (state.status === 'ended' && activeChatReading) {
+      activeChatReading.finished = false;
+      startPlayback(activeInput);
+      return;
+    }
     const index = state.status === 'ended' ? 0 : state.currentChunkIndex;
     const offset = state.status === 'ended' ? 0 : Math.max(0, state.currentTime - completedDuration(index));
     void playChunk(index, offset);
@@ -339,6 +473,7 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
       playbackOperation += 1;
       advanceChunks = false;
       audioElement?.pause();
+      if (activeChatReading) activeChatReading.finished = true;
       set({ status: 'ended', currentTime: target });
       return;
     }
@@ -351,7 +486,13 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     void playChunk(index, offset, state.status === 'playing');
   },
 
-  stop: stopPlayback,
+  stop: () => {
+    const id = get().source?.conversationId;
+    if (id) chatReadings.delete(id);
+    activeChatReading = undefined;
+    pendingInput = null;
+    stopPlayback();
+  },
 
   setRate: (rate) => {
     const safeRate = [0.75, 1, 1.25, 1.5, 2].includes(rate) ? rate : 1;

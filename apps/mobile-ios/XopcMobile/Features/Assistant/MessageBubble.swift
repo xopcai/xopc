@@ -209,7 +209,7 @@ struct MessageBubble: View {
             if !message.attachments.contains(where: \.isAudio), !ChatSpeechText.chunks(from: message.text).isEmpty {
                 Button {
                     readAloud.toggle(id: message.id, text: message.text, locale: locale,
-                                     gateway: GatewayClient(configuration: configuration))
+                                     gateway: GatewayClient(configuration: configuration), conversationID: conversationID)
                 } label: {
                     Label {
                         Text(readAloud.sourceID == message.id && readAloud.state == .playing

@@ -64,7 +64,7 @@ export default class EntryAbility extends UIAbility {
   onBackground(): void { generatedMusicPlayback.checkpoint(); cancelAllDeviceLocations(); if (!hasActivePersonalPicker()) cancelAllDevicePersonalTools(); layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); if (!hasActivePersonalPicker()) realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
   onDestroy(): void {
     void generatedMusicPlayback.shutdown();
-    voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous();
+    voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.stop();
   }
   onWindowStageCreate(stage: window.WindowStage): void {
     this.restoreAndLoad(stage);

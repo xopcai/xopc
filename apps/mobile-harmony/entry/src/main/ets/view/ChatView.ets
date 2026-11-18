@@ -31,7 +31,7 @@ import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { XopcGeneratedMediaViewModel } from '../viewmodel/generatedMediaViewModel';
 import { XopcGeneratedMediaCard } from '../model/generatedMedia';
 import { generatedMediaByReply } from '../common/generatedMedia';
-import { advanceChatAutoRead, latestChatAutoRead, XopcAutoReadState } from '../common/chatAutoRead';
+import { chatSpeechReplies } from '../common/chatAutoRead';
 import { common } from '@kit.AbilityKit';
 import { voiceCapture, XopcVoiceCapture } from '../service/voiceCapture';
 import { appSettings } from '../service/settings';
@@ -78,6 +78,7 @@ import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 
 interface XopcChatReadingAnchor { rowId: string; offset: number; }
 const chatReadingAnchors: Map<string, XopcChatReadingAnchor> = new Map<string, XopcChatReadingAnchor>();
+let readAloudOwnerSequence: number = 0;
 
 
 
@@ -360,27 +361,32 @@ export struct XopcChatView {
   private initialScrollPending: boolean = true;
   private initialScrollAttempts: number = 0;
   private olderGeneration: number = 0;
-  private autoReadState?: XopcAutoReadState;
+  private readAloudOwner: number = ++readAloudOwnerSequence;
   private assistantAudioState?: XopcAssistantAudioState;
 
-  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'reader.continuousConversationId', 'voice.state', 'generatedMusic.track', 'generatedMusic.player.state', 'generatedMusic.loading', 'generatedVideoOpen')
+  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.transcriptId', 'chat.loading', 'activePage',
+    'voice.state', 'generatedMusic.player.state', 'generatedMusic.loading', 'generatedVideoOpen')
   onAutoReadChange(): void {
-    if (!this.activePage && this.reader.continuousConversationId) this.reader.leaveForeground();
-    else if (this.voice.state !== 'idle' && this.reader.continuousConversationId) this.reader.disableContinuous();
-    const enabled = this.activePage && !this.disposed && !this.chat.loading && this.voice.state === 'idle'
-      && this.reader.continuousConversationId === this.chat.selectedId && !!this.chat.selectedId
-      && !this.generatedMusic.loading && this.generatedMusic.player.state !== 'playing' && !this.generatedVideoOpen;
-    const next = advanceChatAutoRead(this.autoReadState, this.chat.selectedId, enabled, !!this.chat.runId,
-      latestChatAutoRead(this.chat.rows, this.chat.selectedId));
-    this.autoReadState = next.state;
+    if (!this.activePage || this.disposed || this.chat.loading || !this.chat.selectedId) {
+      this.reader.leaveForeground(this.readAloudOwner);
+      return;
+    }
+    if (this.voice.state !== 'idle' || this.generatedMusic.loading
+      || this.generatedMusic.player.state === 'playing' || this.generatedVideoOpen) return;
     const context = this.getUIContext().getHostContext();
-    if (next.candidate && context) this.reader.speak(context, next.candidate.text, 'auto-read-aloud:' + next.candidate.key, appSettings.effectiveLanguage());
+    const profile = gatewaySession.currentProfile();
+    if (context && profile) {
+      this.reader.showConversation(this.readAloudOwner, context, JSON.stringify([profile.gatewayId, profile.deviceId]),
+        this.chat.selectedId, this.chat.transcriptId ?? '', chatSpeechReplies(this.chat.rows, this.chat.runId),
+        appSettings.effectiveLanguage());
+    }
   }
 
   @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'voice.state', 'call.phase', 'reader.state', 'generatedMusic.track', 'generatedMusic.player.state', 'generatedMusic.loading', 'generatedVideoOpen')
   onAssistantAudioChange(): void {
     const enabled = this.activePage && !this.disposed && !this.chat.loading && !!this.chat.selectedId
-      && this.voice.state === 'idle' && this.call.phase === 'idle' && this.reader.state === 'idle'
+      && this.voice.state === 'idle' && this.call.phase === 'idle'
+      && (this.reader.state === 'idle' || this.reader.state === 'waiting')
       && !this.generatedMusic.loading && this.generatedMusic.player.state !== 'playing' && !this.generatedVideoOpen;
     const next = advanceAssistantAudio(this.assistantAudioState, this.chat.selectedId, enabled, !!this.chat.runId,
       latestAssistantAudio(this.chat.rows, this.chat.selectedId));
@@ -427,7 +433,6 @@ export struct XopcChatView {
     if (!this.chat.selectedId || scope === this.draftScope) return;
     clearTimeout(this.draftTimer); this.saveDraft();
     this.resetMessagePosition(); this.palette.close();
-    if (this.reader.continuousConversationId !== this.chat.selectedId) this.reader.leaveForeground();
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     const generation = ++this.draftGeneration;
     this.restoringDraft = true; this.draftScope = scope; this.intakeReceipts = []; this.draft = ''; this.refs = []; this.attachments = [];
@@ -633,14 +638,15 @@ export struct XopcChatView {
         if (this.reader.sourceId === row.id && this.reader.state === 'loading') return;
         if (this.reader.sourceId === row.id && ['playing', 'paused'].includes(this.reader.state)) await this.reader.toggle();
         else {
-          const context = this.getUIContext().getHostContext();
-          if (context) {
+          const reply = chatSpeechReplies([row], this.chat.runId)[0];
+          if (reply) {
             await this.voice.cancel();
             if (!this.visible || this.disposed || conversationId !== this.chat.selectedId || generation !== this.draftGeneration) return;
             this.generatedVideoOpen = false;
             await this.generatedMusic.pause();
             if (!this.visible || this.disposed || conversationId !== this.chat.selectedId || generation !== this.draftGeneration) return;
-            await this.reader.speak(context, chatAnswerText(row), row.id, appSettings.effectiveLanguage());
+            this.onAutoReadChange();
+            await this.reader.readFrom(this.readAloudOwner, reply);
           }
         }
       }
@@ -906,7 +912,7 @@ export struct XopcChatView {
   @Monitor('chat.selectedId')
   onConnectionWaitTarget(): void {
     this.selectingMessageId = '';
-    this.voice.dismissError(); this.reader.leaveForeground(); this.composerNotice.clear();
+    this.voice.dismissError(); this.composerNotice.clear();
     this.connectionWait.start(this.chat.selectedId);
     if (!this.visible || !this.layout.foreground) this.connectionWait.pause();
   }
@@ -922,7 +928,7 @@ export struct XopcChatView {
     if (!this.activePage) { this.composerNotice.clear(); this.selectingMessageId = ''; }
     this.visible = this.activePage;
     if (!this.activePage) { clearTimeout(this.scrollTimer); this.scrollTimer = -1; }
-    if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
+    if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
     else { this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.onMessageChange(); this.options.resume(); this.prompt.resume(); if (this.layout.foreground) this.connectionWait.onReturn(); }
   }
   @Monitor('requestRevision', 'chat.sending')
@@ -933,7 +939,7 @@ export struct XopcChatView {
     this.chat.taskId = this.taskId;
     this.dismissComposer(); this.sheetOpen = false;
     this.resetMessagePosition();
-    this.saveDraft(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.showVoice = false;
+    this.saveDraft(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(this.readAloudOwner); this.showVoice = false;
     this.options.dispose(); this.context.dispose(); this.prompt.dispose();
     this.options = new XopcChatOptionsViewModel(); this.context = new XopcChatContextViewModel();
     this.prompt = new XopcChatPromptViewModel(); this.optionsId = '';
@@ -948,7 +954,7 @@ export struct XopcChatView {
     this.focusComposerOnMount = true;
     this.focusMountedComposer();
   }
-  aboutToDisappear(): void { this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.attachments = []; }
+  aboutToDisappear(): void { this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(this.readAloudOwner); this.attachments = []; }
 
   private async switchAgent(agentId: string): Promise<void> {
     if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
@@ -1668,7 +1674,7 @@ export struct XopcChatView {
           .accessibilityText($r('app.string.dismiss')).onClick((): void => { this.voice.dismissError(); })
       }.id('chat-voice-error').width('100%').padding({ left: 16, right: 8 })
     }
-    if (this.reader.error) {
+    if (this.reader.owner === this.readAloudOwner && this.reader.error) {
       Row({ space: 8 }) {
         Text(userErrorMessage(this.reader.error, 'media')).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1).maxLines(3)
         Button('×').width(44).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
@@ -1682,17 +1688,17 @@ export struct XopcChatView {
           .accessibilityText($r('app.string.dismiss')).onClick((): void => { this.composerNotice.clear(); })
       }.id('chat-composer-error').width('100%').padding({ left: 16, right: 8 })
     }
-    if (this.reader.continuousConversationId === this.chat.selectedId && this.chat.selectedId) {
+    if (this.reader.owner === this.readAloudOwner && this.reader.state === 'waiting') {
       Row({ space: 8 }) {
         Text($r('app.string.chat_continuous_active')).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
         Button('×').width(44).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.secondary)
-          .accessibilityText($r('app.string.chat_continuous_stop')).onClick((): void => { this.reader.disableContinuous(); })
+          .accessibilityText($r('app.string.chat_continuous_stop')).onClick((): void => { this.reader.stop(); })
       }.id('chat-continuous-reading').padding({ left: 16, right: 16 }).width('100%')
     }
     if (this.showMusicMiniPlayer && !this.pinPlayingMusic) { XopcMusicMiniPlayer({ onOpen: (): void => { this.dismissComposer(); } }) }
     XopcConversationMcpAction({ conversationId: this.chat.selectedId, shown: this.activePage && !this.embedded,
       activeRun: !!(this.chat.streaming || this.chat.thinking || this.chat.tool) })
-    if (this.reader.state !== 'idle') {
+    if (this.reader.owner === this.readAloudOwner && this.reader.state !== 'idle' && this.reader.state !== 'waiting') {
       Row({ space: 4 }) {
         if (this.reader.state === 'loading') {
           Row({ space: 12 }) {

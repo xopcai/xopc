@@ -58,6 +58,8 @@ import ai.xopc.mobile.gateway.ConversationContextRef
 import ai.xopc.mobile.gateway.ChatAttachment
 import ai.xopc.mobile.gateway.ChatAttachmentStore
 import java.util.UUID
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicReference
@@ -3367,6 +3369,86 @@ class MainScreenTest {
     composeTestRule.runOnIdle { state.value = state.value.copy(savingMessageNoteId = "answer-1") }
     composeTestRule.onNodeWithTag("message-assistant-card-answer-1").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("message-save-note-action").assertIsNotEnabled()
+  }
+
+  @Test fun readAloudSuspendsAcrossConversationsAndContinuesThroughNewReplies() {
+    val original = "11111111-2222-3333-4444-555555555555"
+    val other = "11111111-2222-3333-4444-666666666666"
+    val messages = listOf(
+      ConversationMessage("answer-first", "assistant", "First reply"),
+      ConversationMessage("question-next", "user", "Continue"),
+      ConversationMessage("answer-second", "assistant", "Second reply")
+    )
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val chat = ConnectionUiState(profile = profile, selectedConversationId = original,
+      historyTranscriptId = "original", messages = messages)
+    val state = mutableStateOf(chat)
+    val requests = java.util.concurrent.CopyOnWriteArrayList<String>()
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+        onSpeechChunk = { text, _ ->
+          requests.add(text)
+          silentSpeech(if (text == "First reply") 24_000 else 1_600)
+        })
+    }
+    composeTestRule.onNodeWithTag("message-assistant-card-answer-first").performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("message-read-aloud-action").performScrollTo().performClick()
+    composeTestRule.waitUntil(5_000) { composeTestRule.onAllNodesWithTag("assistant-read-aloud-toggle").fetchSemanticsNodes().isNotEmpty() }
+    composeTestRule.runOnIdle {
+      state.value = chat.copy(selectedConversationId = other, historyTranscriptId = "other", messages = emptyList())
+    }
+    composeTestRule.onNodeWithTag("assistant-read-aloud-controls").assertDoesNotExist()
+    assertEquals(listOf("First reply"), requests.toList())
+    composeTestRule.runOnIdle {
+      state.value = chat.copy(messages = messages + listOf(
+        ConversationMessage("question-new", "user", "Anything else"),
+        ConversationMessage("answer-third", "assistant", "Third reply")
+      ))
+    }
+    composeTestRule.waitUntil(10_000) { requests.size >= 4 }
+    assertEquals(listOf("First reply", "First reply", "Second reply", "Third reply"), requests.toList())
+    val waiting = composeTestRule.activity.getString(R.string.assistant_speech_waiting)
+    composeTestRule.waitUntil(5_000) { composeTestRule.onAllNodesWithText(waiting).fetchSemanticsNodes().isNotEmpty() }
+    composeTestRule.onNodeWithTag("assistant-read-aloud-stop").performClick()
+    composeTestRule.onNodeWithTag("assistant-read-aloud-controls").assertDoesNotExist()
+  }
+
+  @Test fun readAloudPrefetchesWhileFirstChunkLoadsAndRetriesAtTheBoundary() {
+    val id = "11111111-2222-3333-4444-555555555555"
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val first = "A".repeat(139) + "."
+    val second = "B".repeat(35) + "."
+    val firstReady = kotlinx.coroutines.CompletableDeferred<Unit>()
+    val secondAttempts = java.util.concurrent.atomic.AtomicInteger()
+    val chat = ConnectionUiState(profile = profile, selectedConversationId = id, historyTranscriptId = "transcript",
+      messages = listOf(ConversationMessage("long", "assistant", "$first $second")))
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = chat, onSpeechChunk = { text, _ ->
+        when (text) {
+          first -> firstReady.await()
+          second -> if (secondAttempts.incrementAndGet() == 1) throw java.io.IOException("Temporary failure")
+          else -> error("Unexpected chunk")
+        }
+        silentSpeech(4_000)
+      })
+    }
+    composeTestRule.onNodeWithTag("message-assistant-card-long").performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("message-read-aloud-action").performScrollTo().performClick()
+    composeTestRule.waitUntil(5_000) { secondAttempts.get() == 1 }
+    composeTestRule.onNodeWithTag("assistant-read-aloud-toggle").assertDoesNotExist()
+    firstReady.complete(Unit)
+    val waiting = composeTestRule.activity.getString(R.string.assistant_speech_waiting)
+    composeTestRule.waitUntil(5_000) { composeTestRule.onAllNodesWithText(waiting).fetchSemanticsNodes().isNotEmpty() }
+    assertEquals(2, secondAttempts.get())
+  }
+
+  private fun silentSpeech(samples: Int): ByteArray {
+    val size = samples * 2
+    return ByteBuffer.allocate(44 + size).order(ByteOrder.LITTLE_ENDIAN).apply {
+      put("RIFF".toByteArray()); putInt(36 + size); put("WAVEfmt ".toByteArray())
+      putInt(16); putShort(1); putShort(1); putInt(8000); putInt(16000)
+      putShort(2); putShort(16); put("data".toByteArray()); putInt(size)
+    }.array()
   }
 
   @Test fun assistantMessageRegenerateUsesItsPrecedingTextTurn() {

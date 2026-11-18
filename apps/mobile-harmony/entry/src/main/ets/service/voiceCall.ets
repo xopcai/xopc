@@ -84,7 +84,7 @@ export class XopcVoiceCall {
     this.startedAt = Date.now(); this.error = ''; this.userText = ''; this.assistantText = '';
     this.reconnectAttempt = 0;
     this.logicalCallId = xopcVoiceUuid();
-    await voiceCapture.cancel(); await chatReadAloud.disableContinuous();
+    await voiceCapture.cancel(); await chatReadAloud.stop();
     await this.open(false);
   }
 
