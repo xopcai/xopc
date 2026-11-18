@@ -1,11 +1,13 @@
 import { modelPreferenceForAgent } from '@xopcai/gateway-contract';
 import { Loader2, MessageSquarePlus } from 'lucide-react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
+import { useShallow } from 'zustand/react/shallow';
 
 import { SidebarCreateSectionHeader } from '@/components/shell/sidebar-create-section-header';
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
+import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { chatSessionAgentContextKey, useChatSessionAgentContext } from '@/features/chat/session/chat-session-agent-context';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { newAgentSetupHref } from '@/features/chat/session/composer-handoff-params';
@@ -20,6 +22,8 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+
+import './sidebar-expert-list.css';
 
 async function findLatestExpertSession(agentId: string, setupConversationIds: ReadonlySet<string>) {
   const limit = 20;
@@ -39,6 +43,21 @@ async function findLatestExpertSession(agentId: string, setupConversationIds: Re
   }
 }
 
+function ExpertReplyConversation({ conversationId, trackingKey, onResolve }: {
+  conversationId: string;
+  trackingKey: string;
+  onResolve: (trackingKey: string, agentId?: string) => void;
+}) {
+  const { data } = useChatSessionAgentContext(conversationId);
+  const agentId = data?.expertChat ? data.agentId : undefined;
+  useEffect(() => {
+    if (!agentId) return;
+    onResolve(trackingKey, agentId);
+    return () => onResolve(trackingKey);
+  }, [agentId, trackingKey, onResolve]);
+  return null;
+}
+
 export function SidebarExpertList({ agents, defaultAgentId, activeConversationId, onNavigate }: {
   agents: ChatAgentOption[];
   defaultAgentId: string;
@@ -55,6 +74,23 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
   const activeExpertId = isAgentSetup || activeChat?.agentSetup ? undefined : activeChat?.agentId;
   const { mutate } = useSWRConfig();
   const gatewaySession = useGatewayStore((s) => s.conversationId);
+  const runningConversationIds = useChatRunPresenceStore(useShallow((state) => (
+    Object.keys(state.runs).filter((id) => state.runs[id]?.status === 'running')
+  )));
+  const [replyingConversations, setReplyingConversations] = useState(() => new Map<string, string>());
+  const recordReplyingConversation = useCallback((trackingKey: string, agentId?: string) => {
+    setReplyingConversations((current) => {
+      if (current.get(trackingKey) === agentId) return current;
+      const next = new Map(current);
+      if (agentId) next.set(trackingKey, agentId);
+      else next.delete(trackingKey);
+      return next;
+    });
+  }, []);
+  const replyConversations = gatewaySession ? runningConversationIds
+    .filter((id) => !(id === activeConversationId && isAgentSetup))
+    .map((id) => ({ id, trackingKey: JSON.stringify([gatewaySession, id]) })) : [];
+  const replyingExperts = new Set(replyConversations.map(({ trackingKey }) => replyingConversations.get(trackingKey)));
   const [openingId, setOpeningId] = useState<string>();
   const [failedId, setFailedId] = useState<string>();
   const pending = useRef<object | null>(null);
@@ -118,7 +154,7 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
       }
 
       // Seed the destination header before navigation to avoid showing the previous chat's agent.
-      void mutate(chatSessionAgentContextKey(gatewaySession, conversationId), { agentId, projectId }, { revalidate: false });
+      void mutate(chatSessionAgentContextKey(gatewaySession, conversationId), { agentId, projectId, expertChat: true }, { revalidate: false });
       const href = `/chat/${encodeURIComponent(conversationId)}`;
       if (created) {
         navigateToNewChat(navigate, href, undefined, onNavigate);
@@ -138,6 +174,9 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
 
   return (
     <>
+      {replyConversations.map(({ id, trackingKey }) => (
+        <ExpertReplyConversation key={trackingKey} conversationId={id} trackingKey={trackingKey} onResolve={recordReplyingConversation} />
+      ))}
       <SidebarCreateSectionHeader
         label={sidebar.sessionViewExperts}
         createLabel={sidebar.createExpert}
@@ -158,6 +197,7 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
           const description = agentListDisplayDescription(agent, agentsSettings);
           const newLabel = sidebar.expertNewConversation.replace('{{name}}', name);
           const active = agent.id === activeExpertId;
+          const replying = replyingExperts.has(agent.id);
           return (
             <li key={agent.id}>
               <div className={cn(
@@ -168,7 +208,10 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
               )}>
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-1.5 pl-2 pr-9 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-wait"
+                  className={cn(
+                    'flex min-w-0 flex-1 items-center gap-2 rounded-lg py-1.5 pl-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-wait',
+                    replying ? 'pr-[4.5rem]' : 'pr-9',
+                  )}
                   disabled={openingId !== undefined}
                   aria-busy={openingId === agent.id}
                   aria-current={active ? 'page' : undefined}
@@ -179,9 +222,21 @@ export function SidebarExpertList({ agents, defaultAgentId, activeConversationId
                     <span className="truncate text-sm text-fg">{name}</span>
                     {description ? <span className="truncate text-xs text-fg-muted" title={description}>{description}</span> : null}
                   </span>
+                  {replying ? (
+                    <span
+                      className="absolute right-1.5 top-1/2 flex h-[18px] w-[30px] -translate-y-1/2 items-center justify-center gap-[3px] rounded-full bg-accent/10 text-accent-fg"
+                      title={sidebar.expertReplying}
+                    >
+                      <span className="sr-only">{sidebar.expertReplying}</span>
+                      <i className="expert-reply-dot" aria-hidden />
+                      <i className="expert-reply-dot" aria-hidden />
+                      <i className="expert-reply-dot" aria-hidden />
+                    </span>
+                  ) : null}
                 </button>
                 <div className={cn(
-                  'absolute inset-y-0 right-1 z-10 flex items-center transition-opacity',
+                  'absolute inset-y-0 z-10 flex items-center transition-opacity',
+                  replying ? 'right-10' : 'right-1',
                   openingId !== agent.id &&
                     'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
                 )}>

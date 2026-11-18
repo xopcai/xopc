@@ -191,6 +191,7 @@
     "expertsLoadError": "无法加载专家列表。",
     "expertConversationError": "无法打开最近对话，请重试。",
     "expertNewConversation": "与 {{name}} 新建对话",
+    "expertReplying": "在回复",
     "timelinePinned": "置顶",
     "timelineToday": "今天",
     "timelineYesterday": "昨天",

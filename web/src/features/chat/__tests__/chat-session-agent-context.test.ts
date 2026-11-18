@@ -38,6 +38,7 @@ describe('resolveChatSessionAgentContext', () => {
     await expect(resolveChatSessionAgentContext('draft-1')).resolves.toEqual({
       agentId: 'reviewer',
       projectId: 'project-a',
+      expertChat: true,
     });
     expect(readSession).not.toHaveBeenCalled();
   });
@@ -63,6 +64,8 @@ describe('resolveChatSessionAgentContext', () => {
     await expect(resolveChatSessionAgentContext('session-1')).resolves.toEqual({
       agentId: 'coder',
       projectId: null,
+      expertChat: true,
     });
+    expect(readSession).toHaveBeenCalledWith('session-1', { limit: 1 });
   });
 });

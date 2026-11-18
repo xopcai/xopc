@@ -84,21 +84,10 @@ export function taskCommand(item: XopcWorkspaceItem, action: string, agentId: st
   return command;
 }
 
-export function taskRetryCommand(detail: XopcMobileTaskDetailResult): XopcTaskCommand {
-  const latest = detail.runs.filter((run: XopcMobileTaskRun): boolean => !run.parentRunId)
-    .sort((left: XopcMobileTaskRun, right: XopcMobileTaskRun): number => (right.queuedAt ?? 0) - (left.queuedAt ?? 0))[0];
-  if (!detail.allowedCommands?.includes('start') || latest?.status !== 'failed') throw new Error('TASK_RETRY_UNAVAILABLE');
-  const ref = latest.executorRef;
-  if (latest.executorKind === 'agent' && ref?.agentId) {
-    return { type: 'start', executor: { kind: 'agent', agentId: ref.agentId } };
-  }
-  if (latest.executorKind === 'human' && ref?.actorId) {
-    return { type: 'start', executor: { kind: 'human', actorId: ref.actorId } };
-  }
-  if (latest.executorKind === 'external' && ref?.provider) {
-    return { type: 'start', executor: { kind: 'external', provider: ref.provider, config: ref.config } };
-  }
-  throw new Error('TASK_RETRY_UNAVAILABLE');
+export function taskRetryRunId(detail: XopcMobileTaskDetailResult): string {
+  const action = detail.presentation?.primaryAction;
+  if (!action || action.type !== 'retry_run' || !action.runId) throw new Error('TASK_RETRY_UNAVAILABLE');
+  return action.runId;
 }
 
 export function taskPatch(item: XopcWorkspaceItem): XopcTaskPatch {

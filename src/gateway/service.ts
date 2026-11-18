@@ -836,6 +836,7 @@ export class GatewayService {
       getChatPreviewService: () => this.chatPreviews,
       dispatchTaskEvents: () => this.dispatchTaskEvents(),
       dispatchTaskRuns: () => this.dispatchTaskRuns(),
+      retryTask: input => this.retryTask(input),
       onAgentCatalogMutate: () => this.refreshAgentCatalog(),
       sourceContextResolver: async (binding) => {
         if (binding.kind === 'note') {
@@ -1181,13 +1182,18 @@ export class GatewayService {
     getConfig: () => this.config,
     saveConfig: (config) => this.saveConfig(config),
     drain: (conversationId) => { void this.agentRunner.inputs.drain(conversationId); },
-    onPersonalRequestDelivered: (conversationId, requestId) => {
+    onPersonalRequestDelivered: (conversationId, requestId, deliveryId) => {
       this.realtime.broker.publish('sessions', 'session.task-result', {
-        conversationId, deliveryId: `personal-request:${requestId}`,
+        conversationId, deliveryId: deliveryId ?? `personal-request:${requestId}`,
       });
       this.emit('session.transcript_updated', { key: conversationId, requestId });
     },
   });
+
+  async retryTask(input: import('../tasks/task-retry-service.js').TaskRetryInput) {
+    const { retryTask } = await import('../tasks/task-retry-service.js');
+    return retryTask(input, { connectionRecovery: this.connectionRecovery, wake: () => this.dispatchTaskRuns() });
+  }
 
   submitSessionInput(...args: Parameters<GatewayAgentRunner['submitSessionInput']>) {
     return this.agentRunner.submitSessionInput(...args);

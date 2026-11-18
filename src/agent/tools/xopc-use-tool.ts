@@ -140,6 +140,7 @@ export interface XopcUseToolDeps {
   dispatchTaskEvents?: () => void;
   createTask?: TaskApplicationService['create'];
   dispatchTaskRuns?: () => void;
+  retryTask?: import('../service.types.js').AgentServiceConfig['retryTask'];
   onAgentCatalogMutate?: () => void;
 }
 

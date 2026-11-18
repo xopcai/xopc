@@ -45,6 +45,7 @@ export interface AgentServiceConfig {
   getChatPreviewService?: () => ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
+  retryTask?: (input: import('../tasks/task-retry-service.js').TaskRetryInput) => Promise<import('@xopcai/gateway-contract').TaskRetryResult>;
   /** Gateway: refresh runtime state and notify clients after a conversational Agent mutation. */
   onAgentCatalogMutate?: () => void;
   /**

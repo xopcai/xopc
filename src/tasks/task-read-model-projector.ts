@@ -8,6 +8,7 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { personalRequestForTask } from '../personal-agent/request-repository.js';
 
 import { TaskAllocationRepository } from './task-allocation-repository.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
@@ -15,6 +16,7 @@ import { TaskRunRepository } from './task-run-repository.js';
 import { resolveTaskLocale } from './task-language.js';
 import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
 import { taskInstructionSequence } from './task-instruction-sequence.js';
+import { isReadOnlyRetryDecision, isReadOnlyTaskRetry } from './task-retry-policy.js';
 
 export interface TaskReadModel {
   task: TaskAggregate;
@@ -137,7 +139,16 @@ export class TaskReadModelProjector {
     const pending = attention.find(item => item.kind === 'input_required' || item.kind === 'approval_required');
     if (pending?.sourceId) return { status: 'needsUser', reason: pending.summary, primaryAction: { type: 'resolve_wait', waitId: pending.sourceId } };
     const decision = attention.find(item => item.kind === 'run_decision_required');
-    if (decision?.sourceId) return { status: 'needsUser', reason: decision.summary, primaryAction: { type: 'inspect_run', runId: decision.sourceId } };
+    if (decision?.sourceId) {
+      const connected = Boolean(personalRequestForTask(task.id));
+      if (latestRun?.id === decision.sourceId && latestRun.status === 'failed' && latestRun.contractVersion === task.latestContractVersion
+        && latestRun.executorKind === 'agent' && typeof latestRun.executorRef.agentId === 'string'
+        && waits.every(wait => wait.taskRunId === latestRun.id && isReadOnlyRetryDecision(wait.condition, connected))
+        && (connected || isReadOnlyTaskRetry(task, latestRun))) {
+        return { status: 'failed', reason: decision.summary, primaryAction: { type: 'retry_run', runId: latestRun.id } };
+      }
+      return { status: 'needsUser', reason: decision.summary, primaryAction: { type: 'inspect_run', runId: decision.sourceId } };
+    }
     if (state === 'failed') {
       const failure = attention.find(item => item.kind === 'run_failed' || item.kind === 'verification_failed');
       const canRetryExecutor = latestRun?.executorKind === 'agent' && typeof latestRun.executorRef.agentId === 'string';

@@ -191,6 +191,7 @@ export interface ToolFactoryDeps {
   dispatchTaskEvents?: () => void;
   /** Gateway: queues Task execution for xopc_use task start/resume/verify actions. */
   dispatchTaskRuns?: () => void;
+  retryTask?: import('../service.types.js').AgentServiceConfig['retryTask'];
   /** Gateway: refreshes Agent runtime state after xopc_use mutates the catalog. */
   onAgentCatalogMutate?: () => void;
   /** Current session skill indexing (tool gating + allowlist); used by skills_list / skill_view. */
@@ -594,6 +595,7 @@ export class AgentToolsFactory {
       getPhoneSetupService: this.deps.getPhoneSetupService,
       dispatchTaskEvents: this.deps.dispatchTaskEvents,
       dispatchTaskRuns: this.deps.dispatchTaskRuns,
+      retryTask: this.deps.retryTask,
       onAgentCatalogMutate: this.deps.onAgentCatalogMutate,
     };
     const core: AgentTool<any, any>[] = [

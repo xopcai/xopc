@@ -610,13 +610,15 @@ export function buildSessionListPath(query?: SessionListQuery): string {
 
 export function buildSessionDetailPath(
   key: string,
-  options?: { includeTranscript?: boolean; includeTranscriptRows?: boolean },
+  options?: { includeTranscript?: boolean; includeTranscriptRows?: boolean; limit?: number },
 ): string {
   const includeParts: string[] = [];
   if (options?.includeTranscript) includeParts.push('transcript');
   if (options?.includeTranscriptRows) includeParts.push('transcriptRows');
-  const qs = includeParts.length ? `?include=${includeParts.join(',')}` : '';
-  return `/api/sessions/${encodeURIComponent(key)}${qs}`;
+  const params = [];
+  if (includeParts.length) params.push(`include=${includeParts.join(',')}`);
+  if (options?.limit !== undefined) params.push(`limit=${options.limit}`);
+  return `/api/sessions/${encodeURIComponent(key)}${params.length ? `?${params.join('&')}` : ''}`;
 }
 
 export function buildSessionForkAtTurnPath(key: string): string {

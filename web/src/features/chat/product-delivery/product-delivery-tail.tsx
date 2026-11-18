@@ -21,11 +21,12 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
-import { fetchTask } from '@/features/tasks/home-api';
+import { fetchTask, retryTask } from '@/features/tasks/home-api';
+import { taskRetryMessage } from '@/features/tasks/home-task-actions';
 import { taskDetailHref } from '@/features/tasks/task-detail-route';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
@@ -151,6 +152,8 @@ function DeliveryRow({
   const title = agentLabels && agent ? agentListDisplayName(agent, agentLabels) : reference.title;
   const taskDetail = useSWR(reference.kind === 'task' ? ['task-delivery', reference.id, token] : null,
     () => fetchTask(reference.id), { revalidateOnFocus: true });
+  const [retrying, setRetrying] = useState(false);
+  const [retryFeedback, setRetryFeedback] = useState('');
   useEffect(() => {
     if (reference.kind !== 'task') return;
     const refresh = (event: Event) => {
@@ -172,6 +175,26 @@ function DeliveryRow({
       attention: taskDetail.data?.attention,
     }, language)
     : deliveryMeta(delivery, reference, language);
+  const taskAction = taskDetail.data?.presentation?.primaryAction;
+  const connectionRunId = taskAction?.type === 'resolve_wait' ? taskDetail.data?.waits.find(wait =>
+    wait.id === taskAction.waitId && wait.condition.type === 'connection')?.taskRunId : undefined;
+  const retryRunId = taskAction?.type === 'retry_run' ? taskAction.runId : connectionRunId;
+  const retry = async (runId: string) => {
+    setRetrying(true);
+    setRetryFeedback('');
+    try {
+      const result = await retryTask(reference.id, runId);
+      setRetryFeedback(taskRetryMessage(result, language));
+      if (result.status === 'waiting_connection' && result.connectionConversationId && result.connectionConversationId !== conversationId) {
+        navigate(`/chat/${encodeURIComponent(result.connectionConversationId)}`);
+      }
+      void taskDetail.mutate();
+    } catch {
+      setRetryFeedback(taskRetryMessage({ status: 'changed' }, language));
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   if (reference.kind === 'automation' && delivery.operation !== 'failed') return <li className="min-w-0 max-w-full"><AutomationTaskCard automationId={reference.id} runId={reference.runId} language={language} embedded /></li>;
 
@@ -213,6 +236,12 @@ function DeliveryRow({
           trailing={canOpen ? <ChevronRight className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden /> : null}
         />
       </button>
+      {retryRunId && <button type="button" className={assistantCapsuleClassName} disabled={retrying}
+        onClick={() => void retry(retryRunId)}>
+        {connectionRunId ? (language === 'zh' ? '检查连接并继续' : 'Check connection and resume')
+          : (language === 'zh' ? '重试任务' : 'Retry task')}
+      </button>}
+      {retryFeedback && <span role="status" className="text-xs text-fg-muted">{retryFeedback}</span>}
       {agentLabels && canOpen && !isFailure ? (
         <button
           type="button"

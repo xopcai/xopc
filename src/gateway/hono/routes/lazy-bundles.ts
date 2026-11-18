@@ -24,6 +24,14 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'task-retry',
+    match: path => /^\/api\/tasks\/[^/]+\/retry$/.test(path),
+    load: async () => {
+      const { registerTaskRetryRoutes } = await import('./task-retry.js');
+      return { register: registerTaskRetryRoutes };
+    },
+  },
+  {
     id: 'space',
     match: path => /^\/api\/spaces\/(?:items(?:\/[^/]+(?:\/(?:restore|purge|workbook(?:-actions)?|versions(?:\/[^/]+\/content)?))?)?|(?:artifacts|deliveries)\/[^/]+)$/.test(path),
     load: async () => {

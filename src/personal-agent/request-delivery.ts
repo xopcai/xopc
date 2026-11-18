@@ -63,21 +63,22 @@ export function drainPersonalRequestContinuations(notify?: (conversationId: stri
 }
 
 /** Stage Task-backed personal results in the shared delivery outbox. */
-export function drainPersonalRequestResults(notify?: (conversationId: string, requestId: string) => void): void {
+export function drainPersonalRequestResults(notify?: (conversationId: string, requestId: string, deliveryId?: string) => void): void {
   const db = getSqliteDatabase();
   const rows = db.prepare(`SELECT request_id, delivery_attempts FROM personal_requests request WHERE task_id IS NOT NULL
     AND state != 'cancelled' AND notified_at IS NULL AND delivery_attempts < 8 AND delivery_next_attempt_at <= ? AND EXISTS
-    (SELECT 1 FROM task_runs run WHERE run.task_id = request.task_id AND run.parent_run_id IS NULL
+    (SELECT 1 FROM task_runs run WHERE run.run_id = (SELECT latest.run_id FROM task_runs latest
+      WHERE latest.task_id = request.task_id AND latest.parent_run_id IS NULL ORDER BY latest.queued_at DESC, latest.rowid DESC LIMIT 1)
       AND run.status IN ('succeeded','failed','cancelled')
-      AND NOT EXISTS (SELECT 1 FROM task_runs newer WHERE newer.task_id = run.task_id
-        AND newer.parent_run_id IS NULL AND newer.queued_at > run.queued_at))
-    AND NOT EXISTS (SELECT 1 FROM task_result_deliveries delivery WHERE json_extract(delivery.reply_payload_json, '$.requestId') = request.request_id)
+      AND NOT EXISTS (SELECT 1 FROM task_result_deliveries delivery WHERE delivery.task_run_id = run.run_id
+        AND json_extract(delivery.reply_payload_json, '$.requestId') = request.request_id))
     ORDER BY created_at LIMIT 50`).all(Date.now()) as { request_id: string; delivery_attempts: number }[];
   for (const row of rows) {
     try {
       const request = getPersonalRequest(row.request_id)!;
       const run = new TaskRunRepository().getLatestRoot(request.taskId!);
       if (!run || !['succeeded', 'failed', 'cancelled'].includes(run.status)) continue;
+      const deliveryId = `personal-request:${request.requestId}${run.retryOfRunId ? `:${run.id}` : ''}`;
       const state = new TaskConversationRepository().getState(request.taskId!);
       const receipt = new TaskRunRepository().getReceipt(run.id);
       runSqliteWriteTransaction(() => {
@@ -113,14 +114,14 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
         const report = [outdated ? '' : adoptionWarning, content].filter(Boolean).join('\n\n');
         const display = failed ? `查询未完成。\n\n${report}` : report;
         const now = Date.now();
-        const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId: `personal-request:${request.requestId}`,
+        const delivery = TaskResultDeliverySchema.parse({ version: 1, deliveryId,
           taskId: request.taskId, taskRunId: run.id, taskResultId: !outdated && !unverifiedDirections ? finalizedTaskResultId(run.id) : undefined,
           taskTitle: request.objective.slice(0, 300),
           conversationId: request.conversationId, originTranscriptId: request.transcriptId,
           requestInputId: request.inputId, assignmentEpoch: state?.assignmentEpoch ?? 0,
           contractVersion: run.contractVersion, instructionSequence: latestDirection,
-          outcome: { version: 1, outcomeId: `personal-request:${request.requestId}`, runId: run.id,
-            turnId: `personal-request:${request.requestId}`, status: failed ? 'failed'
+          outcome: { version: 1, outcomeId: deliveryId, runId: run.id,
+            turnId: deliveryId, status: failed ? 'failed'
               : outdated || unverifiedDirections || (parsed?.success && parsed.data.coverage?.partial) ? 'partial' : 'succeeded',
             summary: content.slice(0, 2000), deliverables: [], evidence: [], createdAt: new Date(now).toISOString() }, createdAt: now });
         const personal = getPersonalAgentByConversation(request.conversationId);
@@ -141,7 +142,7 @@ export function drainPersonalRequestResults(notify?: (conversationId: string, re
         .get(request.requestId) as { delivery_entry_id: string | null; notified_at: number | null };
       if (delivered.delivery_entry_id && !delivered.notified_at) {
         emitSessionTranscriptUpdate({ conversationId: request.conversationId });
-        notify?.(request.conversationId, request.requestId);
+        notify?.(request.conversationId, request.requestId, deliveryId);
         db.prepare('UPDATE personal_requests SET notified_at = ? WHERE request_id = ?').run(Date.now(), request.requestId);
       }
     } catch (err) {

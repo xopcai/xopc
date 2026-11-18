@@ -101,7 +101,7 @@ export async function getSessionStats(): Promise<SessionStats> {
 
 export async function getSessionDetail(
   key: string,
-  options?: { includeTranscript?: boolean; includeTranscriptRows?: boolean },
+  options?: Parameters<typeof buildSessionDetailPath>[1],
 ): Promise<SessionDetail> {
   const data = parseSessionResponse(
     await fetchJson<unknown>(apiUrl(buildSessionDetailPath(key, options))),

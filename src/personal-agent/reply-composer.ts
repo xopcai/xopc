@@ -411,7 +411,9 @@ export class PersonalReplyComposer {
         try { await notify(packet.delivery.conversationId, `reply:${packet.delivery.deliveryId}`); }
         finally { clearInterval(notificationLease); }
         db.prepare('UPDATE task_result_deliveries SET reply_notified_at = ?, reply_lease_until = 0 WHERE delivery_id = ?').run(Date.now(), row.delivery_id);
-        if (packet.requestId) db.prepare('UPDATE personal_requests SET notified_at = ? WHERE request_id = ?').run(Date.now(), packet.requestId);
+        if (packet.requestId) db.prepare(`UPDATE personal_requests SET notified_at = ? WHERE request_id = ?
+          AND (json_extract(parameters_json, '$.taskRunId') IS NULL OR json_extract(parameters_json, '$.taskRunId') = ?)`)
+          .run(Date.now(), packet.requestId, packet.delivery.taskRunId);
       } catch (err) {
         db.prepare(`UPDATE task_result_deliveries SET reply_attempts = reply_attempts + 1, reply_next_attempt_at = ?, reply_last_error = ?, reply_lease_until = 0
           WHERE delivery_id = ? AND reply_lease_token = ?`).run(Date.now() + Math.min(60_000, 1000 * 2 ** Math.min(row.attempts, 6)),

@@ -1,0 +1,17 @@
+.expert-reply-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@keyframes xopc-expert-reply-dot {
+  0%, 60%, 100% { opacity: 0.5; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .expert-reply-dot { animation: xopc-expert-reply-dot 1.35s ease-in-out infinite; }
+  .expert-reply-dot:nth-of-type(2) { animation-delay: 120ms; }
+  .expert-reply-dot:nth-of-type(3) { animation-delay: 240ms; }
+}
