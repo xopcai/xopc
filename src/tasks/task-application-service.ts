@@ -42,6 +42,8 @@ export type TaskApplicationResult =
 
 export type TaskRevisionApplicationResult = TaskApplicationResult | { ok: false; reason: 'invalid_reference'; model: TaskReadModel };
 
+type TaskRunRetry = { runId: string; readOnly: boolean; originalRequestAt?: number; decisionWaitIds: string[] };
+
 function requestHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
@@ -290,6 +292,7 @@ export class TaskApplicationService {
     actor?: ActorRef;
     triggerContext?: Record<string, unknown>;
     source?: TaskChangeSource;
+    retry?: TaskRunRetry;
   }): TaskApplicationResult {
     const actor = input.actor ?? { kind: 'user' };
     const task = this.#tasks.get(input.taskId);
@@ -351,6 +354,7 @@ export class TaskApplicationService {
             actor,
             correlationId: input.idempotencyKey,
             triggerContext: input.triggerContext,
+            retry: input.retry,
           });
           break;
         case 'request_review':
@@ -706,6 +710,7 @@ export class TaskApplicationService {
       actor: ActorRef;
       correlationId: string;
       triggerContext?: Record<string, unknown>;
+      retry?: TaskRunRetry;
     },
   ): TaskApplicationResult {
     const task = this.#tasks.get(taskId);
@@ -726,7 +731,10 @@ export class TaskApplicationService {
       return { ok: false, reason: 'invalid_transition', model: this.#projector.project(task) };
     }
 
-    if (this.#runs.listActiveWaits(taskId).length > 0) {
+    const waits = this.#runs.listActiveWaits(taskId);
+    const retryDecisions = waits.filter(wait => wait.taskRunId === options.retry?.runId
+      && wait.condition.type === 'run_decision' && options.retry?.decisionWaitIds.includes(wait.id));
+    if (waits.length !== retryDecisions.length) {
       return { ok: false, reason: 'blocked', model: this.#projector.project(task) };
     }
 
@@ -760,6 +768,9 @@ export class TaskApplicationService {
       return { ok: false, reason: 'blocked', model: this.#projector.get(taskId)! };
     }
 
+    for (const wait of retryDecisions) {
+      this.#runs.resolveWait({ waitId: wait.id, actor: options.actor, resolution: { reason: 'read_only_retry' } });
+    }
     if (options.actor.kind === 'user') this.#tasks.authorizeAutomaticPhase(taskId);
     const run = this.#runs.create({
       taskId,
@@ -773,12 +784,15 @@ export class TaskApplicationService {
             : options.actor.kind,
         actor: options.actor,
         ...(options.triggerContext ? { context: options.triggerContext } : {}),
+        ...(options.retry?.readOnly ? { readOnlyRetry: true } : {}),
+        ...(options.retry?.originalRequestAt !== undefined ? { originalRequestAt: options.retry.originalRequestAt } : {}),
       },
       correlationId: options.correlationId,
       idempotencyKey: options.idempotencyKey,
       contractVersion: task.latestContractVersion,
       scheduledAt: options.scheduleAt,
       retryPolicy: { maxAttempts: 3 },
+      retryOfRunId: options.retry?.runId,
     });
     const active = task.phase === 'active'
       ? task

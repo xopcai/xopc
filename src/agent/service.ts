@@ -303,6 +303,7 @@ export class AgentService {
       getChatPreviewService: config.getChatPreviewService,
       dispatchTaskEvents: config.dispatchTaskEvents,
       dispatchTaskRuns: config.dispatchTaskRuns,
+      retryTask: config.retryTask,
       onAgentCatalogMutate: config.onAgentCatalogMutate,
       onSkillsUpdated: config.onSkillsUpdated,
       installSkillFromSource: (opts) => this.installSkillFromSource(opts),

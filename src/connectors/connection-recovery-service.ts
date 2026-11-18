@@ -34,6 +34,7 @@ const ATTEMPT_TTL = 10 * 60_000;
 export type ConnectionAction = {
   waitId: string; expectedTranscriptId: string; expectedVersion: number; idempotencyKey: string;
   expectedObjectiveRevision?: number;
+  confirmUnchangedScope?: boolean;
   action: 'install_complete' | 'connect' | 'check' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source';
   needKey?: string; accountId?: string; candidateRef?: string; instanceId?: string;
 };
@@ -86,7 +87,7 @@ export class ConnectionRecoveryService {
     getConfig: () => Config;
     saveConfig: (config: Config) => Promise<{ saved: boolean; error?: string }>;
     drain: (conversationId: string) => void;
-    onPersonalRequestDelivered?: (conversationId: string, requestId: string) => void;
+    onPersonalRequestDelivered?: (conversationId: string, requestId: string, deliveryId?: string) => void;
     adapter?: ComposioSessionsAdapter;
     checkTimeoutMs?: number;
   }) {}
@@ -496,6 +497,7 @@ export class ConnectionRecoveryService {
         wait = this.markChecking(wait, 'connection');
         const fresh = await this.boundedCheck(wait.id, () => this.syncConnections(wait!));
         const verified = new Set(fresh.filter(item => item.status === 'active').map(item => item.id));
+        const currentAccounts = currentAccountConnections(fresh);
         const latest = getConnectionWait(wait.id);
         if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');
         const currentNeeds = this.view(wait).needs;
@@ -508,7 +510,9 @@ export class ConnectionRecoveryService {
           }
           const id = need.target.connectorId;
           const authorized = fresh.find(item => item.providerConnectionId === need.attempt?.connectionId && item.status === 'active'
-            && item.connectorId === id && (!need.accountId || item.accountId === need.accountId));
+            && item.connectorId === id && (!need.accountId || item.accountId === need.accountId))
+            ?? (action.confirmUnchangedScope && need.accountId
+              ? currentAccounts.find(item => item.connectorId === id && item.accountId === need.accountId) : undefined);
           return authorized ? { ...need, unavailable: false, ...(need.accountSelector && !need.accountId ? {} : { connectionId: authorized.id, accountId: authorized.accountId }), attempt: undefined }
             : { ...need, unavailable: !fresh.some(item => item.connectorId === id && item.status === 'active'
               && (!need.connectionId || item.id === need.connectionId) && (!need.accountId || item.accountId === need.accountId)) };
@@ -529,11 +533,13 @@ export class ConnectionRecoveryService {
         wait = this.markChecking({ ...wait, needs }, 'tools');
         needs = await this.boundedCheck(wait.id, () => this.checkCapabilities({ ...wait!, needs }, verified));
         if (getConnectionWait(wait.id)?.version !== wait.version) throw new Error('WAIT_CHANGED');
-        const readinessPhase = this.view({ ...wait, needs, checking: undefined, recoveryError: undefined }, verified).phase;
+        const scope = action.action === 'confirm_scope' || (action.confirmUnchangedScope && !wait.reviewRequired)
+          ? { scopeConfirmedAt: Date.now(), reviewRequired: false } : {};
+        const readinessPhase = this.view({ ...wait, ...scope, needs, checking: undefined, recoveryError: undefined }, verified).phase;
         const readyWithoutReview = readinessPhase === 'ready';
         wait = updateConnectionWait({ ...wait, needs,
           checking: undefined, lastCheckedAt: Date.now(), recoveryError: undefined,
-          ...(action.action === 'confirm_scope' ? { scopeConfirmedAt: Date.now(), reviewRequired: false } : {}),
+          ...scope,
           ...(needs.some(need => need.capabilityError) || (readinessPhase === 'review_scope' && action.action !== 'confirm_scope') ? { intent: undefined }
             : readyWithoutReview || action.action === 'confirm_scope'
               ? { intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }

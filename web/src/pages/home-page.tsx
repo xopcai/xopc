@@ -54,7 +54,7 @@ import { currentTaskReceipt } from '@/features/tasks/task-detail-summary';
 import { HomeTaskReview } from '@/features/tasks/home-task-review';
 import { HomeWorkbenchLayout, type WorkbenchCard } from '@/features/tasks/home-workbench-layout';
 import { WorkbenchDialog } from '@/features/tasks/workbench-dialog';
-import { retryHomeTask } from '@/features/tasks/home-task-actions';
+import { retryHomeTask, taskRetryMessage } from '@/features/tasks/home-task-actions';
 import { taskCopy } from '@/features/tasks/task-copy';
 import { taskTextForDisplay } from '@/features/tasks/task-result-presentation';
 import {
@@ -524,8 +524,11 @@ export function HomePage() {
     setLoadError(null);
     try {
       if (action.type === 'retry_task') {
-        await retryHomeTask(action.taskId, language);
-        setActionReceipt({ ...resolved, message: language === 'zh' ? '任务已重新开始，可查看执行进度。' : 'Task restarted. View progress.', href: modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(action.taskId)}`) });
+        const result = await retryHomeTask(action.taskId, language);
+        setActionReceipt({ ...resolved, message: taskRetryMessage(result, language),
+          href: result.status === 'waiting_connection' && result.connectionConversationId
+            ? `/chat/${encodeURIComponent(result.connectionConversationId)}`
+            : modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(action.taskId)}`) });
       } else if (action.type === 'connector_decision') {
         await respondToWorkDecision({ kind: 'connector_approval', approvalId: action.approvalId }, action.decision);
         setActionReceipt({ ...resolved, message: language === 'zh' ? (action.decision === 'approve' ? '已批准授权，任务状态将自动更新。' : '已拒绝授权。') : (action.decision === 'approve' ? 'Permission approved. Task status will update.' : 'Permission denied.') });

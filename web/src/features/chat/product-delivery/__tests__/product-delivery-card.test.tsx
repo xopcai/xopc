@@ -17,8 +17,10 @@ vi.mock('@/features/automations/automation-api', () => ({
 
 vi.mock('@/features/tasks/home-api', () => ({
   fetchTask: vi.fn(async () => ({ task: {} })),
+  retryTask: vi.fn(),
 }));
 
+import { fetchTask, retryTask, type TaskDetail } from '@/features/tasks/home-api';
 import { AssistantResultTail } from '@/features/chat/messages/assistant-result-tail';
 import type { AssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import { productDeliveryReferences } from '@/features/chat/product-delivery/product-delivery-model';
@@ -67,6 +69,21 @@ describe('AssistantResultTail product deliveries', () => {
       } } },
     ] satisfies AssistantTurnViewModel['deliveries'];
     expect(productDeliveryReferences(deliveries).map(({ reference }) => reference.id)).toEqual(['new-task']);
+  });
+
+  it('retries the failed run from the task card and shows the queue receipt', async () => {
+    vi.mocked(fetchTask).mockResolvedValueOnce({ task: { phase: 'active' }, operationalState: 'failed', waits: [],
+      presentation: { status: 'failed', primaryAction: { type: 'retry_run', runId: 'failed-news-run' } } } as unknown as TaskDetail);
+    vi.mocked(retryTask).mockResolvedValueOnce({ status: 'queued', taskId: 'news-task', runId: 'retried-news-run' });
+    const delivery: ProductDeliveryEnvelope = { version: 2, operation: 'started', primary: {
+      kind: 'task', id: 'news-task', title: 'AI 新闻', capabilities: ['open'],
+    } };
+    await act(async () => root.render(<MemoryRouter>{renderDelivery(delivery)}</MemoryRouter>));
+    const button = [...container.querySelectorAll('button')].find(item => item.textContent === '重试任务');
+    expect(button).toBeDefined();
+    await act(async () => button!.click());
+    expect(retryTask).toHaveBeenCalledWith('news-task', 'failed-news-run');
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('任务已排队');
   });
 
   beforeEach(() => {

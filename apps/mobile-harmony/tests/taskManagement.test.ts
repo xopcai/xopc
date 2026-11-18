@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TaskCommandRequestSchema, TaskPatchRequestSchema } from '../../../packages/gateway-contract/src/tasks';
+import { TaskCommandRequestSchema, TaskPatchRequestSchema, TaskRetryRequestSchema } from '../../../packages/gateway-contract/src/tasks';
 import { taskDetailItem } from '../entry/src/main/ets/common/workspaceProtocol';
-import { taskCommand, taskCompletionBlock, taskCriterionState, taskPhaseAction, taskRetryCommand } from '../entry/src/main/ets/common/taskManagement';
+import { taskCommand, taskCompletionBlock, taskCriterionState, taskPhaseAction, taskRetryRunId } from '../entry/src/main/ets/common/taskManagement';
 import type { XopcMobileTaskDetailResult } from '../entry/src/main/ets/model/workspace';
 
 const mocks = vi.hoisted(() => {
@@ -65,24 +65,22 @@ describe('Harmony task management', () => {
     expect(taskCommand(item, 'move:closed', '')).toEqual({ type: 'move', phase: 'closed' });
   });
 
-  it('restarts only the latest failed root run using its original executor and the current task version', async () => {
+  it('sends the failed root run to the shared task retry endpoint', async () => {
     const task = detail();
+    task.presentation = { primaryAction: { type: 'retry_run', runId: 'root' } };
     task.runs = [
       { id: 'root', contractVersion: 2, queuedAt: 10, status: 'failed',
         executorKind: 'agent', executorRef: { agentId: 'original-agent' } },
       { id: 'child', parentRunId: 'root', contractVersion: 2, queuedAt: 20, status: 'succeeded' },
     ];
-    mocks.request.mockResolvedValueOnce(JSON.stringify(task)).mockResolvedValueOnce('{}');
+    mocks.request.mockResolvedValueOnce(JSON.stringify(task)).mockResolvedValueOnce(JSON.stringify({ status: 'queued' }));
     await new XopcWorkspaceRepository().retryTask(task.task.id);
     const [url, method, body] = mocks.request.mock.calls[1];
-    expect(url).toBe('/api/tasks/task%201/commands');
+    expect(url).toBe('/api/tasks/task%201/retry');
     expect(method).toBe('POST');
-    expect(TaskCommandRequestSchema.parse(JSON.parse(body))).toEqual({
-      source: 'mobile', idempotencyKey: 'mutation-id', expectedVersion: 3,
-      command: { type: 'start', executor: { kind: 'agent', agentId: 'original-agent' } },
-    });
-    task.runs.push({ id: 'newer', contractVersion: 2, queuedAt: 30, status: 'running' });
-    expect(() => taskRetryCommand(task)).toThrow('TASK_RETRY_UNAVAILABLE');
+    expect(TaskRetryRequestSchema.parse(JSON.parse(body))).toEqual({ idempotencyKey: 'mutation-id', expectedRunId: 'root' });
+    task.presentation = {};
+    expect(() => taskRetryRunId(task)).toThrow('TASK_RETRY_UNAVAILABLE');
   });
 
   it('keeps verification separate from manual completion and cancellation', () => {

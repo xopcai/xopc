@@ -1,5 +1,6 @@
 import {
   TaskCreateResponseSchema,
+  TaskRetryResultSchema,
   HomeOpportunityActionResponseSchema,
   HomeOpportunityHistoryResponseSchema,
   parseHomeResponse,
@@ -17,6 +18,7 @@ import {
   type TaskCriterionReview,
   type TaskDetailResponse,
   type TaskPatchRequest,
+  type TaskRetryResult,
 } from '@xopcai/gateway-contract';
 
 import { fetchJson } from '@/lib/fetch';
@@ -76,6 +78,13 @@ export async function commandTask(
     body: JSON.stringify({ idempotencyKey, expectedVersion, command, source }),
   });
   return fetchTask(taskId);
+}
+
+export async function retryTask(taskId: string, expectedRunId: string): Promise<TaskRetryResult> {
+  return TaskRetryResultSchema.parse(await fetchJson<unknown>(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/retry`), {
+    method: 'POST',
+    body: JSON.stringify({ expectedRunId, idempotencyKey: crypto.randomUUID() }),
+  }));
 }
 
 export async function reviewTaskCriterion(

@@ -29,7 +29,7 @@ import { coordinatePersonalRequest, listUnallocatedPersonalRequests, PersonalReq
 import { createXopcUseTool, type XopcUseToolDeps } from './xopc-use-tool.js';
 
 const PersonalTaskSchema = Type.Object({
-  command: Type.Union([Type.Literal('revise'), Type.Literal('retry_allocation'), Type.Literal('submit'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('collaboration'), Type.Literal('entry'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel'), Type.Literal('notifications')]),
+  command: Type.Union([Type.Literal('revise'), Type.Literal('retry_allocation'), Type.Literal('retry'), Type.Literal('submit'), Type.Literal('match'), Type.Literal('selection'), Type.Literal('create'), Type.Literal('list'), Type.Literal('get'), Type.Literal('collaboration'), Type.Literal('entry'), Type.Literal('instruct'), Type.Literal('answer'), Type.Literal('cancel'), Type.Literal('notifications')]),
   requirements: Type.Optional(Type.Object({
     version: Type.Optional(Type.Literal(1)), summary: Type.String({ maxLength: 300 }),
     domain: Type.Optional(Type.String()), taskType: Type.Optional(Type.String()),
@@ -79,11 +79,11 @@ const PersonalTaskSchema = Type.Object({
 });
 
 const REQUEST_COORDINATION_COMMANDS = ['get', 'cancel', 'collaboration', 'notifications', 'entry', 'instruct', 'answer'];
-const PERSONAL_MODEL_COMMANDS = ['revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry_allocation', 'selection', 'cancel', 'notifications'] as const;
+const PERSONAL_MODEL_COMMANDS = ['revise', 'submit', 'list', 'get', 'collaboration', 'entry', 'instruct', 'answer', 'retry', 'retry_allocation', 'selection', 'cancel', 'notifications'] as const;
 
 // Keep historical commands executable for internal replay callers, without advertising executor selection to the personal model.
 const PersonalTaskModelSchema = Type.Object({
-  command: Type.String({ enum: [...PERSONAL_MODEL_COMMANDS], description: 'Required. submit=new goal; instruct=new direction on running work; answer=worker question; revise=completed work with an exact returned result baseline only.' }),
+  command: Type.String({ enum: [...PERSONAL_MODEL_COMMANDS], description: 'Required. submit=new goal; instruct=new direction on running work; answer=worker question; retry=explicit request to resume or rerun existing work; revise=completed work with an exact returned result baseline only.' }),
   sourceRefs: Type.Optional(Type.Array(Type.Object({
     kind: Type.Union(['result', 'note', 'task', 'file'].map(kind => Type.Literal(kind))),
     sourceId: Type.Optional(Type.String({ minLength: 1, maxLength: 2000 })), resultId: Type.Optional(Type.String({ minLength: 1, maxLength: 500 })), expectedVersion: Type.Optional(Type.String({ maxLength: 500 })),
@@ -104,7 +104,7 @@ const PersonalTaskModelSchema = Type.Object({
   { properties: { command: { enum: ['list', 'selection'] } } },
   { properties: { command: { const: 'retry_allocation' } }, required: ['taskId'] },
   ...['taskId', 'requestId'].flatMap(id => [
-    { properties: { command: { enum: ['get', 'collaboration', 'cancel'] } }, required: [id] },
+    { properties: { command: { enum: ['get', 'collaboration', 'cancel', 'retry'] } }, required: [id] },
     { properties: { command: { const: 'notifications' } }, required: [id, 'notificationPreference'] },
     { properties: { command: { const: 'entry' } }, required: [id, 'entryId'] },
     { properties: { command: { const: 'instruct' } }, required: [id, 'instruction'] },
@@ -149,7 +149,7 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
   return {
     name: 'personal_task',
     label: 'Personal Task',
-    description: 'Coordinate ordinary Tasks and connected-app requests. For get, instruct, cancel, answer, collaboration, entry or notifications, use the known taskId or requestId. Connected-app requests awaiting authorization have only a requestId. Use timeRange on instruct for a changed absolute query range. Always include command. New ordinary goal: submit objective plus useOriginalRequest=true for a self-contained active user message; the host preserves the complete original text. Otherwise supply a concise complete description. Include sourceRefs for required inputs without pre-reading files or planning the execution. Use requirements.requestedAgentId only for an explicitly named executor; preserve explicitly requested requiredSkills. The background Router chooses the executor. After successful persistence, give one short confirmation and finish; updates arrive automatically.\nRUNNING work: send instruct with the known ID and instruction for new direction, or answer with the known ID, questionId and instruction for an exact worker question. Reuse the SAME Task, without a baseline lookup. Never revise running work.\nCOMPLETED ordinary work only: get(section="revision"), then revise with instruction and exact returned revisionBaseline.resultId, baselineVersion and expectedVersion. If revisionBaseline is absent, use instruct/answer; never invent placeholders. This saves a revision and queues background allocation atomically. Reuse idempotencyKey for uncertain retries. supersedesEntryIds names only earlier instruction/answer entries to replace; all other requirements remain. Independent goals use submit with pinned old-result sources; connected-app side effects require a newly authorized Request.\nsourceRefs: workspace input {kind:"file",sourceId:"path"}; prior result {kind:"result",resultId:"exact result ID",sourceId:"exact artifact ID or unique file title"}, omitting sourceId only for retained body; other prior inputs use stable sourceId and optional expectedVersion. The host authorizes and pins exact versions; workspace inputs are not executor cwd. Do not invent composite IDs.\nUse notifications with the known ID and notificationPreference to change an existing Task only when the user asks. Use get(section="status") for a brief current status; list locates a Task or a request awaiting authorization and get(section,limit,offset) reads details. collaboration(afterSequence) returns previews; entry(entryId,bodyOffset) reads full bodies through nextBodyOffset. Read complete questions before answering. cancel only on explicit user instruction; report executionStopConfirmed accurately. retry_allocation retries selection, not arbitrary execution. Saved, delivered, executor-confirmed and verified completion are distinct; report only confirmed states.',
+    description: 'Coordinate ordinary Tasks and connected-app requests. For get, retry, instruct, cancel, answer, collaboration, entry or notifications, use the known taskId or requestId. Connected-app requests awaiting authorization have only a requestId. Use timeRange on instruct for a changed absolute query range. Always include command. When the user asks to retry after reauthorization or failure, locate the original request or Task (list by a distinctive title phrase, using the original date if needed), then call retry with its exact ID. Ask which one only if multiple plausible targets remain. Report the returned status; queued means accepted for execution, waiting_connection means the original request is preserved and may still need action in the connection panel. Do not submit a duplicate. New ordinary goal: submit objective plus useOriginalRequest=true for a self-contained active user message; the host preserves the complete original text. Otherwise supply a concise complete description. Include sourceRefs for required inputs without pre-reading files or planning the execution. Use requirements.requestedAgentId only for an explicitly named executor; preserve explicitly requested requiredSkills. The background Router chooses the executor. After successful persistence, give one short confirmation and finish; updates arrive automatically.\nRUNNING work: send instruct with the known ID and instruction for new direction, or answer with the known ID, questionId and instruction for an exact worker question. Reuse the SAME Task, without a baseline lookup. Never revise running work.\nCOMPLETED ordinary work only: get(section="revision"), then revise with instruction and exact returned revisionBaseline.resultId, baselineVersion and expectedVersion. If revisionBaseline is absent, use instruct/answer; never invent placeholders. This saves a revision and queues background allocation atomically. Reuse idempotencyKey for uncertain retries. supersedesEntryIds names only earlier instruction/answer entries to replace; all other requirements remain. Independent goals use submit with pinned old-result sources; connected-app side effects require a newly authorized Request.\nsourceRefs: workspace input {kind:"file",sourceId:"path"}; prior result {kind:"result",resultId:"exact result ID",sourceId:"exact artifact ID or unique file title"}, omitting sourceId only for retained body; other prior inputs use stable sourceId and optional expectedVersion. The host authorizes and pins exact versions; workspace inputs are not executor cwd. Do not invent composite IDs.\nUse notifications with the known ID and notificationPreference to change an existing Task only when the user asks. Use get(section="status") for a brief current status; list locates a Task or a request awaiting authorization and get(section,limit,offset) reads details. collaboration(afterSequence) returns previews; entry(entryId,bodyOffset) reads full bodies through nextBodyOffset. Read complete questions before answering. cancel only on explicit user instruction; report executionStopConfirmed accurately. retry_allocation retries selection, not arbitrary execution. Saved, delivered, executor-confirmed and verified completion are distinct; report only confirmed states.',
     parameters: PersonalTaskModelSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -174,6 +174,21 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
       const ownAgentId = deps.getCurrentAgentId?.();
       if (!conversationId || !ownAgentId || !isPersonalConversation(conversationId)) {
         throw new Error('Personal conversation context is unavailable');
+      }
+      if (input.command === 'retry') {
+        if (!deps.retryTask) throw new Error('Task recovery is unavailable');
+        const taskId = input.taskId?.trim();
+        const requestId = input.requestId?.trim();
+        if (Boolean(taskId) === Boolean(requestId)) throw new Error('Provide either taskId or requestId');
+        if (input.timeRange !== undefined) throw new Error('Retry preserves the original time range');
+        const activeId = getSessionInputState(conversationId).activeInputId;
+        const active = activeId ? getSessionInputById(conversationId, activeId) : undefined;
+        if (!active || active.kind !== 'message' || (active.origin.type === 'system' && active.origin.source !== 'cli')) {
+          throw new Error('Retry requires a user message in the active Personal conversation');
+        }
+        const result = await deps.retryTask({ ...(taskId ? { taskId } : { requestId: requestId! }),
+          conversationId, idempotencyKey: active.id });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: {} };
       }
       if (!requestResolved && REQUEST_COORDINATION_COMMANDS.includes(input.command)) {
         if (input.requestId !== undefined && input.taskId !== undefined) throw new Error('Provide either taskId or requestId');

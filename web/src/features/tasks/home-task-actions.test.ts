@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { commandTask, fetchTask, type TaskDetail } from './home-api';
+import { retryTask, fetchTask, type TaskDetail } from './home-api';
 import { retryHomeTask } from './home-task-actions';
 
-vi.mock('./home-api', () => ({ commandTask: vi.fn(), fetchTask: vi.fn() }));
+vi.mock('./home-api', () => ({ retryTask: vi.fn(), fetchTask: vi.fn() }));
 
 function taskRun(overrides: Partial<TaskDetail['runs'][number]> = {}): TaskDetail['runs'][number] {
   return {
@@ -34,7 +34,7 @@ function taskDetail(overrides: Partial<TaskDetail> = {}): TaskDetail {
 
 describe('retryHomeTask', () => {
   beforeEach(() => { vi.clearAllMocks(); });
-  it('uses the latest root executor and current task version', async () => {
+  it('sends the failed root run to the shared retry endpoint', async () => {
     vi.mocked(fetchTask).mockResolvedValue(taskDetail({
       runs: [
         taskRun({ id: 'child', queuedAt: 3, parentRunId: 'root' }),
@@ -43,14 +43,11 @@ describe('retryHomeTask', () => {
       ],
     }));
     await retryHomeTask('task-1');
-    expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'start', executor: { kind: 'agent', agentId: 'main' } }, 7);
+    expect(retryTask).toHaveBeenCalledWith('task-1', 'root');
   });
-  it.each([
-    { allowedCommands: [], runs: [taskRun()] },
-    { allowedCommands: ['start'], runs: [taskRun({ status: 'succeeded', startedAt: 2, contextSnapshotId: 'context-1', policySnapshot: {} })] },
-  ])('rejects a stale retry after task state changed', async (state) => {
-    vi.mocked(fetchTask).mockResolvedValue(taskDetail(state));
+  it('rejects a card whose current presentation no longer offers retry', async () => {
+    vi.mocked(fetchTask).mockResolvedValue(taskDetail({ presentation: { status: 'running' } }));
     await expect(retryHomeTask('task-1')).rejects.toThrow('no longer available');
-    expect(commandTask).not.toHaveBeenCalled();
+    expect(retryTask).not.toHaveBeenCalled();
   });
 });

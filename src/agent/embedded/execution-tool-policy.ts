@@ -8,6 +8,8 @@ import { personalRequestForExecution } from '../../personal-agent/request-reposi
 import { getXopcDatabase, isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
+import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { allowsReadOnlyRetryTool } from '../../tasks/task-retry-policy.js';
 
 export const TASK_EXECUTION_TOOL_IDS: readonly string[] = ['task_collaboration', 'publish_task_result'];
 
@@ -22,6 +24,7 @@ export type ExecutionToolPolicy = Readonly<{
   privateRoutine?: boolean;
   followUp?: boolean;
   readOnly?: boolean;
+  readOnlyRetry?: boolean;
   nativeMcp: boolean;
   externalMaterialization: boolean;
   discovery: boolean;
@@ -42,14 +45,15 @@ export function resolveExecutionToolPolicy(conversationId: string): ExecutionToo
   const interaction = getSessionInteractionPolicy(conversationId);
   const readOnly = interaction.mode === 'plan' || interaction.access === 'read-only';
   const taskSession = isXopcDatabaseOpen() ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId) : undefined;
+  const readOnlyRetry = Boolean(taskSession?.runId && new TaskRunRepository().get(taskSession.runId)?.trigger.readOnlyRetry === true);
   const followUp = Boolean(taskSession && getXopcDatabase().db.prepare('SELECT 1 FROM home_followup_steps WHERE task_id=? UNION ALL SELECT 1 FROM home_followups WHERE root_task_id=? LIMIT 1').get(taskSession.taskId,taskSession.taskId));
   const privateRoutine = followUp || Boolean(taskSession && getXopcDatabase().db.prepare(`SELECT 1 FROM observation_routine_executions WHERE task_id=?
     UNION ALL SELECT 1 FROM observation_methods WHERE validation_task_id=?
     UNION ALL SELECT 1 FROM home_observation_trials WHERE task_id=? LIMIT 1`).get(taskSession.taskId, taskSession.taskId, taskSession.taskId));
-  const unrestricted = !privateRoutine && configured && !readOnly && (!authority || authority.unrestrictedTools);
+  const unrestricted = !privateRoutine && configured && !readOnly && !readOnlyRetry && (!authority || authority.unrestrictedTools);
   const taskExecution = Boolean(taskSession);
-  return { surface, taskExecution, privateRoutine, followUp, readOnly, nativeMcp: unrestricted, externalMaterialization: unrestricted,
-    discovery: unrestricted, codemode: unrestricted, revision: `unified-tool-discovery-v1:${interaction.mode}:${interaction.access}:${interaction.sandbox ?? 'configured'}:${interaction.network ?? false}:${authority?.revision ?? ''}:${privateRoutine ? 'private-routine' : ''}` };
+  return { surface, taskExecution, privateRoutine, followUp, readOnly, readOnlyRetry, nativeMcp: unrestricted, externalMaterialization: unrestricted,
+    discovery: unrestricted, codemode: unrestricted, revision: `unified-tool-discovery-v1:${interaction.mode}:${interaction.access}:${interaction.sandbox ?? 'configured'}:${interaction.network ?? false}:${authority?.revision ?? ''}:${privateRoutine ? 'private-routine' : ''}:${readOnlyRetry}` };
 }
 
 export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): boolean {
@@ -57,6 +61,7 @@ export function allowsExecutionTool(policy: ExecutionToolPolicy, name: string): 
   authority?.assertCurrent();
   if (policy.privateRoutine && !PRIVATE_ROUTINE_TOOLS.has(name) && !(policy.followUp && name==='task_collaboration')) return false;
   if (policy.readOnly && !isReadOnlySessionTool(name)) return false;
+  if (policy.readOnlyRetry && !allowsReadOnlyRetryTool(name)) return false;
   if (authority && !authority.allowsTool(name)) return false;
   if (TASK_EXECUTION_TOOL_IDS.includes(name) && !policy.taskExecution) return false;
   if (policy.surface === 'agent') return !name.startsWith('personal_');

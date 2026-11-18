@@ -6,6 +6,11 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('loads the task retry endpoint without capturing neighboring task routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/retry')?.id).toBe('task-retry');
+    expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/commands')?.id).not.toBe('task-retry');
+    expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/retry/extra')?.id).not.toBe('task-retry');
+  });
   it('routes the mobile catalog through the capability bundle', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities/mobile-catalog')?.id).toBe('capabilities');
     for (const route of ['skills', 'mcp', 'mcp/id', 'plugin/id', 'agent/id', 'panel/plugins', 'panel/skills',

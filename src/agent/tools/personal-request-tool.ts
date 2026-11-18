@@ -52,7 +52,7 @@ export function listUnallocatedPersonalRequests(conversationId: string, limit: n
   const { total, items } = listPersonalRequestsWithoutTask(conversationId, limit, offset, query);
   return { total, items: items.map(request => ({
     requestId: request.requestId, title: request.objective, connectorId: request.connectorId,
-    state: request.state, updatedAt: request.updatedAt,
+    state: request.state, createdAt: request.createdAt, updatedAt: request.updatedAt,
   })) };
 }
 

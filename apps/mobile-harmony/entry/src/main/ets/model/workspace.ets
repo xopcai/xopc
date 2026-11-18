@@ -44,7 +44,7 @@ export interface XopcTaskPhaseChange {
 }
 export interface XopcTaskAcceptanceCheck { id: string; criterion: string; }
 export interface XopcTaskAcceptanceTarget { id: string; runId?: string; canSignOff: boolean; }
-export interface XopcTaskPrimaryAction { type: string; resultId?: string; }
+export interface XopcTaskPrimaryAction { type: string; resultId?: string; runId?: string; }
 export interface XopcTaskPresentation { reason?: string; primaryAction?: XopcTaskPrimaryAction; }
 export interface XopcTaskCheckMutation { expectedVersion: number; contractVersion: number; resultId: string; status: string; }
 export interface XopcMobileTaskDetail {

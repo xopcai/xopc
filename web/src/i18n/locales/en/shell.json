@@ -191,6 +191,7 @@
     "expertsLoadError": "Could not load experts.",
     "expertConversationError": "Could not open the latest chat. Try again.",
     "expertNewConversation": "Start a new chat with {{name}}",
+    "expertReplying": "Replying",
     "timelinePinned": "Pinned",
     "timelineToday": "Today",
     "timelineYesterday": "Yesterday",

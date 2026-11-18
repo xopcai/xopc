@@ -369,6 +369,23 @@ export const TaskCommandRequestSchema = z.object({
   command: TaskCommandSchema,
 }).strict();
 
+export const TaskRetryRequestSchema = z.object({
+  idempotencyKey: z.string().trim().min(1).max(200),
+  expectedRunId: z.string().min(1),
+}).strict();
+
+export const TaskRetryResultSchema = z.object({
+  status: z.enum(['queued', 'running', 'waiting', 'verifying', 'succeeded', 'failed', 'cancelled',
+    'waiting_connection', 'not_found', 'changed', 'blocked', 'not_retryable']),
+  taskId: z.string().optional(),
+  requestId: z.string().optional(),
+  runId: z.string().optional(),
+  connectionConversationId: z.string().optional(),
+  connectionPhase: z.enum(['needs_connection', 'ready', 'review_scope', 'queued']).optional(),
+  reason: z.enum(['check_failed', 'other_wait', 'read_scope_unverified', 'account_unavailable']).optional(),
+});
+export type TaskRetryResult = z.infer<typeof TaskRetryResultSchema>;
+
 export const TaskDependencyUpdateRequestSchema = z.object({
   dependsOnTaskIds: z.array(z.string().trim().min(1)),
   expectedVersion: z.number().int().positive(),

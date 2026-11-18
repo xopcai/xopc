@@ -74,6 +74,7 @@ describe('sessions contract', () => {
     expect(buildSessionDetailPath(key, { includeTranscript: true, includeTranscriptRows: true })).toBe(
       '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20?include=transcript,transcriptRows',
     );
+    expect(buildSessionDetailPath(key, { limit: 1 })).toBe(`/api/sessions/${key}?limit=1`);
     expect(buildSessionHistoryPath(key, { limit: 50, before: 'cursor_1' })).toBe(
       '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20/history?limit=50&before=cursor_1',
     );

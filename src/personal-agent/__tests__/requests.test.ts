@@ -1,4 +1,5 @@
 import Ajv from 'ajv';
+import { TaskCreateRequestSchema } from '@xopcai/gateway-contract';
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,6 +29,9 @@ import { cancelPersonalTask } from '../task-cancel.js';
 import { TaskAllocationDispatcher } from '../../tasks/task-allocation-service.js';
 import { TaskAllocationRepository } from '../../tasks/task-allocation-repository.js';
 import { TaskRunDispatcher } from '../../tasks/task-run-dispatcher.js';
+import { retryTask } from '../../tasks/task-retry-service.js';
+import { captureExecutionRequirements } from '../../tasks/task-execution-capabilities.js';
+import { defineTaskContract } from '../../tasks/task-contract-definition.js';
 import { ConnectionRecoveryService } from '../../connectors/connection-recovery-service.js';
 import type { ComposioSessionsAdapter } from '../../connectors/composio-sessions.js';
 import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
@@ -449,6 +453,171 @@ describe('Personal connected-app requests', () => {
       context: { runId: run.id, conversationId: worker.key, agentId: 'mail-worker', taskId: request.taskId!, channel: 'webchat', origin: 'task', triggerKind: 'user' } })!;
     return { account, request, worker, coordinator };
   }
+
+  it('uses the same retry for the authenticated card action and the Personal chat tool', async () => {
+    const { request, coordinator } = worker();
+    coordinator.finalize({ status: 'failed', summary: 'Mail search failed' });
+    drainPersonalRequestResults();
+    finishSessionInputRun(conversationId, 'main-run', 'completed');
+    let finishOriginalNotification!: () => void;
+    const originalNotification = new Promise<void>(resolve => { finishOriginalNotification = resolve; });
+    let notifyStarted!: () => void;
+    const started = new Promise<void>(resolve => { notifyStarted = resolve; });
+    const composer = new PersonalReplyComposer(async () => 'The mail query failed.');
+    const originalReply = composer.drain(async () => { notifyStarted(); await originalNotification; });
+    await started;
+    insertSessionInput({ id: 'retry-mail', clientMessageId: 'retry-mail', conversationId, requestedDelivery: 'next',
+      effectiveDelivery: 'next', status: 'queued', content: '请重试邮件查询', origin: { type: 'endpoint', endpointId: 'test' } });
+    claimNextSessionInput(conversationId, 'retry-mail-turn');
+    const runs = new TaskRunRepository();
+    const original = runs.getLatestRoot(request.taskId!)!;
+    const runRetry = (input: Parameters<typeof retryTask>[0]) => retryTask(input, {
+      connectionRecovery: { act: vi.fn(), snapshot: vi.fn() }, wake: vi.fn(),
+    });
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId, retryTask: runRetry });
+    const token = 'personal-task-retry-test';
+    const app = createHonoApp({ service: { currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
+      getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token, isGatewayReady: () => true,
+      getExtensionLoader: () => null, retryTask: runRetry } as unknown as GatewayService });
+    const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
+    try {
+      if (!server.listening) await new Promise<void>(resolve => server.once('listening', resolve));
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Expected TCP server');
+      const url = `http://127.0.0.1:${address.port}/api/tasks/${request.taskId}/retry`;
+      const body = JSON.stringify({ expectedRunId: original.id, idempotencyKey: 'retry-card' });
+      expect((await fetch(url, { method: 'POST', body })).status).toBe(401);
+      const response = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body });
+      expect(response.status).toBe(200);
+      const fromCard = await response.json();
+      expect(fromCard).toMatchObject({ taskId: request.taskId, requestId: request.requestId, status: 'queued' });
+      const fromChat = await tool.execute('retry-chat', { command: 'retry', taskId: request.taskId });
+      expect(JSON.parse(fromChat.content[0].text)).toEqual(fromCard);
+      const rerun = runs.require(fromCard.runId);
+      expect(rerun).toMatchObject({ taskId: request.taskId, retryOfRunId: original.id, executorRef: original.executorRef });
+      expect(runs.listByTask(request.taskId!)).toHaveLength(2);
+      expect(getPersonalRequest(request.requestId)).toMatchObject({ state: 'queued', accountId: request.accountId,
+        parameters: { timeRange: request.parameters.timeRange, taskRunId: rerun.id } });
+      finishOriginalNotification();
+      await originalReply;
+
+      const chat = createConversation({ agentId: 'mail-worker', sourceChannel: 'webchat' });
+      new TaskConversationRepository().activateExecutionSession({ taskId: request.taskId!, conversationId: chat.key,
+        agentId: 'mail-worker', runId: rerun.id });
+      const retryCoordinator = TaskRunCoordinator.start({ runId: rerun.id, fallbackObjective: request.objective,
+        context: { runId: rerun.id, conversationId: chat.key, agentId: 'mail-worker', taskId: request.taskId!,
+          channel: 'webchat', origin: 'task', triggerKind: 'user' } })!;
+      await createPersonalRequestResultTool(() => chat.key).execute('save-retry-result', {
+        summary: 'The mail retry completed.',
+        coverage: { from: request.parameters.timeRange!.from, to: request.parameters.timeRange!.to, scannedCount: 0, partial: false },
+        items: [],
+      });
+      retryCoordinator.finalize({ status: 'succeeded', summary: 'Mail query completed', assistantText: 'The mail retry completed.' });
+      drainPersonalRequestResults();
+      expect(resultReader.listPersonalResults(conversationId).items.map(item => item.resultId)).toEqual(expect.arrayContaining([
+        `personal-request:${request.requestId}`, `personal-request:${request.requestId}:${rerun.id}`,
+      ]));
+      finishSessionInputRun(conversationId, 'retry-mail-turn', 'completed');
+      await new PersonalReplyComposer(async () => 'The mail retry completed.').drain(vi.fn());
+      const delivered = loadTranscriptRowsForSession(conversationId).filter(row => 'customType' in row && row.customType === 'task_result_delivery');
+      expect(delivered).toHaveLength(2);
+      expect(JSON.stringify(delivered.at(-1))).toContain(`personal-request:${request.requestId}:${rerun.id}`);
+    } finally {
+      finishOriginalNotification();
+      await originalReply;
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  });
+
+  it.each(['oauth_poll', 'chat'] as const)('resumes the same parked retry after reauthorization (%s)', async entry => {
+    const { request, account, coordinator } = worker();
+    coordinator.finalize({ status: 'failed', summary: 'Mail search failed' });
+    upsertConnectorConnection({ ...account, status: 'expired' });
+    let authorized = false;
+    const config = ConfigSchema.parse({ connectors: { instances: { 'composio-gmail': {
+      xopcConnector: { managed: true, connectorId: 'composio-gmail', enabled: true },
+      runtime: { type: 'composio', role: 'toolkit', toolkit: 'gmail' },
+    } } } });
+    const recovery = new ConnectionRecoveryService({
+      getConfig: () => config, saveConfig: async () => ({ saved: true }), drain: vi.fn(),
+      adapter: {
+        authorize: async () => ({ connectionId: entry === 'chat' ? 'unused-oauth-attempt' : 'gmail-work', connectUrl: 'https://example.test/oauth' }),
+        syncConnections: async () => authorized ? [connection()] : [],
+        createSession: async () => ({ search: async () => ({ toolSchemas: {
+          GMAIL_FETCH_EMAILS: { inputSchema: { type: 'object' } },
+        } }) }),
+      } as unknown as ComposioSessionsAdapter,
+    });
+    const runs = new TaskRunRepository();
+    const original = runs.getLatestRoot(request.taskId!)!;
+    const pending = await retryTask({ taskId: request.taskId!, idempotencyKey: 'retry-expired' }, { connectionRecovery: recovery, wake: vi.fn() });
+    expect(pending).toMatchObject({ taskId: request.taskId, status: 'waiting_connection', connectionConversationId: conversationId });
+    expect(runs.require(pending.runId!)).toMatchObject({ status: 'waiting', retryOfRunId: original.id });
+    const wait = getActiveConnectionWait(conversationId)!;
+    expect(wait.checkpoint.timeRange).toEqual(request.parameters.timeRange);
+    await recovery.act(conversationId, { waitId: wait.id, expectedTranscriptId: wait.transcriptId,
+      expectedVersion: wait.version, idempotencyKey: 'retry-oauth', action: 'connect', needKey: wait.needs[0].key });
+    authorized = true;
+    if (entry === 'chat') {
+      const latest = getConnectionWait(wait.id)!;
+      updateConnectionWait({ ...latest, scopeConfirmedAt: undefined, createdAt: Date.now() - 2 * 24 * 60 * 60 * 1000 }, latest.version);
+      finishSessionInputRun(conversationId, 'main-run', 'completed');
+      insertSessionInput({ id: 'retry-after-auth', clientMessageId: 'retry-after-auth', conversationId, requestedDelivery: 'next',
+        effectiveDelivery: 'next', status: 'queued', content: '已经重新授权好了，请重试', origin: { type: 'endpoint', endpointId: 'test' } });
+      claimNextSessionInput(conversationId, 'retry-auth-turn');
+      const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId,
+        retryTask: input => retryTask(input, { connectionRecovery: recovery, wake: vi.fn() }) });
+      const result = await tool.execute('recheck-auth', { command: 'retry', requestId: request.requestId });
+      expect(JSON.parse(result.content[0].text)).toMatchObject({ taskId: request.taskId, runId: pending.runId,
+        status: 'waiting_connection', connectionPhase: 'queued' });
+      finishSessionInputRun(conversationId, 'retry-auth-turn', 'completed');
+    }
+    await recovery.poll();
+    expect(runs.require(pending.runId!).status).toBe('queued');
+    expect(runs.listByTask(request.taskId!)).toHaveLength(2);
+    expect(getPersonalRequest(request.requestId)).toMatchObject({ state: 'queued', accountId: account.accountId,
+      parameters: { timeRange: request.parameters.timeRange, taskRunId: pending.runId } });
+  });
+
+  it.each(['web_research', 'execute_code'] as const)('only retries a Personal research plan within its original read scope (%s)', async capability => {
+    const app = new TaskApplicationService();
+    const created = app.create(TaskCreateRequestSchema.parse({ title: 'AI news', body: 'Find today’s AI news',
+      idempotencyKey: 'news-task', originConversationId: conversationId,
+      contract: { ...defineTaskContract('Find today’s AI news'), outputDestinations: [] },
+      activation: { mode: 'start', executor: { kind: 'agent', agentId: 'mail-worker' } } }));
+    if (!created.ok || !created.runId) throw new Error('Expected Task run');
+    const task = created.model.task;
+    captureExecutionRequirements(task, { version: 1, summary: 'Find AI news' },
+      [{ capability, source: 'background_inference', reason: 'Original plan' }]);
+    const runs = new TaskRunRepository();
+    const original = runs.require(created.runId);
+    const failed = app.completeRun({ runId: original.id, expectedRunVersion: original.version,
+      unconfirmedEffect: { cause: 'missing_tool_result', toolName: capability === 'web_research' ? 'web_search' : 'exec_command' },
+      receipt: { status: 'failed', summary: 'Search interrupted', changes: [], evidence: [], remainingWork: [], needsUser: true,
+        verification: { status: 'unverified', checks: [] } } });
+    if (!failed.ok) throw new Error('Expected failed run receipt');
+    finishSessionInputRun(conversationId, 'main-run', 'completed');
+    insertSessionInput({ id: 'retry-news', clientMessageId: 'retry-news', conversationId, requestedDelivery: 'next',
+      effectiveDelivery: 'next', status: 'queued', content: '请重试那条 AI 新闻任务', origin: { type: 'endpoint', endpointId: 'test' } });
+    claimNextSessionInput(conversationId, 'retry-news-turn');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversationId, getCurrentAgentId: () => agentId,
+      retryTask: input => retryTask(input, { connectionRecovery: { act: vi.fn(), snapshot: vi.fn() }, wake: vi.fn() }) });
+    const result = JSON.parse((await tool.execute('retry-news-tool', { command: 'retry', taskId: task.id })).content[0].text);
+    if (capability === 'execute_code') {
+      expect(result).toMatchObject({ status: 'not_retryable', reason: 'read_scope_unverified' });
+      expect(runs.listByTask(task.id)).toHaveLength(1);
+      return;
+    }
+    expect(failed.model.presentation.primaryAction).toEqual({ type: 'retry_run', runId: original.id });
+    expect(result.status).toBe('queued');
+    expect(runs.listActiveWaits(task.id)).toHaveLength(0);
+    const retry = runs.require(result.runId!);
+    expect(retry).toMatchObject({ taskId: task.id, retryOfRunId: original.id,
+      trigger: { readOnlyRetry: true, originalRequestAt: expect.any(Number) } });
+    const chat = createConversation({ agentId: 'mail-worker', sourceChannel: 'webchat' });
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId: chat.key, agentId: 'mail-worker', runId: retry.id });
+    expect(resolveExecutionToolPolicy(chat.key)).toMatchObject({ readOnlyRetry: true, nativeMcp: false, codemode: false });
+  });
 
   async function reviewConnectedResult(x: ReturnType<typeof worker>, partial = false, reviewer?: ResearchReviewer) {
     const result = { summary: 'One important message requires a reply.', items: [{ messageId: 'mail-1', subject: 'Deadline',

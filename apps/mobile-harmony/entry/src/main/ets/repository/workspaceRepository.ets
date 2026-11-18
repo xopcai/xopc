@@ -8,7 +8,7 @@ import {
   XopcAutomationRuns, XopcAutomationRun, XopcAutomationRunResult, XopcMobileTaskDetailResult
 } from '../model/workspace';
 import { taskItem, taskDetailItem, projectItem, automationItem, newTask, scheduledAutomationPatch } from '../common/workspaceProtocol';
-import { taskCommand, taskPatch, taskReviewMutation, taskRetryCommand } from '../common/taskManagement';
+import { taskCommand, taskPatch, taskReviewMutation, taskRetryRunId } from '../common/taskManagement';
 
 interface XopcCreatedWorkspaceId { id: string; }
 interface XopcWorkspaceCreated {
@@ -16,6 +16,8 @@ interface XopcWorkspaceCreated {
 }
 interface XopcAutomationConfiguration { conversationId: string; }
 interface XopcAutomationConfigurationScope { projectId?: string; personalLocale?: string; }
+interface XopcWorkspaceTaskRetryBody { expectedRunId: string; idempotencyKey: string; }
+interface XopcWorkspaceTaskRetryResult { status: string; }
 
 const workspaceLists: XopcListSnapshots<XopcWorkspacePage> = new XopcListSnapshots<XopcWorkspacePage>();
 
@@ -123,10 +125,11 @@ export class XopcWorkspaceRepository {
     const raw = await gatewaySession.request(path);
     gatewaySession.assertConnection(connection);
     const detail = JSON.parse(raw) as XopcMobileTaskDetailResult;
-    const body: XopcTaskCommandBody = {
-      source: 'mobile', idempotencyKey: this.uuid(), expectedVersion: detail.task.version, command: taskRetryCommand(detail)
-    };
-    await gatewaySession.request(path + '/commands', 'POST', JSON.stringify(body));
+    const body: XopcWorkspaceTaskRetryBody = { expectedRunId: taskRetryRunId(detail), idempotencyKey: this.uuid() };
+    const result = JSON.parse(await gatewaySession.request(path + '/retry', 'POST', JSON.stringify(body))) as XopcWorkspaceTaskRetryResult;
+    if (!['queued', 'running', 'waiting', 'verifying', 'succeeded', 'waiting_connection'].includes(result.status)) {
+      throw new Error('TASK_RETRY_UNAVAILABLE');
+    }
   }
 
   async startAutomation(id: string, idempotencyKey: string): Promise<string> {

@@ -15,6 +15,7 @@ export interface DelegatedTaskSummary {
   presentation: TaskPresentation;
   runStatus?: string;
   allocation?: TaskAllocation;
+  createdAt: number;
   updatedAt: number;
 }
 
@@ -65,7 +66,7 @@ export class TaskOriginRepository {
         OR instr(lower(coalesce(contract.objective, '')), lower(?)) > 0)`;
     const bindings = [conversationId, query, query, query];
     const total = (db.prepare(`SELECT count(*) AS count ${selection}`).get(...bindings) as { count: number }).count;
-    const rows = db.prepare(`SELECT task.task_id AS id, task.title, contract.objective, task.phase,
+    const rows = db.prepare(`SELECT task.task_id AS id, task.title, contract.objective, task.phase, task.created_at AS createdAt,
         MAX(task.updated_at, COALESCE((SELECT COALESCE(run.completed_at, run.started_at, run.queued_at)
           FROM task_runs run WHERE run.task_id = task.task_id AND run.parent_run_id IS NULL
           ORDER BY run.queued_at DESC LIMIT 1), task.updated_at)) AS updatedAt,

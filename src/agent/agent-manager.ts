@@ -210,6 +210,7 @@ export interface AgentManagerConfig {
   getChatPreviewService?: () => import('../chat-previews/index.js').ChatPreviewService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
+  retryTask?: import('./service.types.js').AgentServiceConfig['retryTask'];
   onAgentCatalogMutate?: () => void;
   /** Runtime notification for UI/CLI shells that cache skill catalogs. */
   onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
@@ -510,6 +511,7 @@ export class AgentManager implements AgentInstanceGateway {
       getChatPreviewService: this.config.getChatPreviewService,
       dispatchTaskEvents: this.config.dispatchTaskEvents,
       dispatchTaskRuns: this.config.dispatchTaskRuns,
+      retryTask: this.config.retryTask,
       onAgentCatalogMutate: this.config.onAgentCatalogMutate,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();

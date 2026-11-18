@@ -370,7 +370,7 @@ export class TaskRunRepository {
     runId: string;
     expectedVersion: number;
     from: TaskRunStatus[];
-    to: Extract<TaskRunStatus, 'running' | 'waiting' | 'verifying'>;
+    to: Extract<TaskRunStatus, 'queued' | 'running' | 'waiting' | 'verifying'>;
     actor?: ActorRef;
     now?: number;
   }): TaskRun | undefined {

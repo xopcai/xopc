@@ -34,7 +34,8 @@ import { agentListDisplayName } from '@/features/settings/agents/agent-display-n
 import { messages } from '@/i18n/messages';
 import { DependencyPicker, type DependencyCandidate } from '@/features/tasks/dependency-picker';
 import { taskChatHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
-import { cancelTaskRun, commandTask, deleteTask, handoffTask, reviewTaskCriterion, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
+import { cancelTaskRun, commandTask, deleteTask, handoffTask, retryTask, reviewTaskCriterion, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
+import { taskRetryMessage } from '@/features/tasks/home-task-actions';
 import { TaskCollaborationPanel } from '@/features/tasks/task-collaboration-panel';
 import { taskCopy } from '@/features/tasks/task-copy';
 import { currentTaskReceipt, detailStatusKey, detailStatusTone, summarizeTaskCriteria } from '@/features/tasks/task-detail-summary';
@@ -388,6 +389,24 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
       setOperationPending(operation, false);
     }
   }, [copy.actionFailed, mutateDetail, setOperationPending, taskId]);
+
+  const retry = async (runId: string) => {
+    setOperationPending('command', true);
+    setError(null);
+    try {
+      const result = await retryTask(taskId, runId);
+      await mutateDetail();
+      if (result.status === 'waiting_connection' && result.connectionConversationId) {
+        navigate(`/chat/${encodeURIComponent(result.connectionConversationId)}`);
+      } else if (!['queued', 'running', 'verifying', 'succeeded'].includes(result.status)) {
+        setError(taskRetryMessage(result, language));
+      }
+    } catch {
+      setError(copy.actionFailed);
+    } finally {
+      setOperationPending('command', false);
+    }
+  };
 
   const savePatch = useCallback(async (
     patch: Omit<TaskPatchRequest, 'expectedVersion'>,
@@ -749,6 +768,10 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
       case 'resume': return { label: copy.resumeTask, activate: () => void execute({ type: 'resolve_wait', waitId: primaryAction.waitId }) };
       case 'resolve_wait': {
         const wait = detail.waits.find(item => item.id === primaryAction.waitId);
+        if (wait?.condition.type === 'connection' && wait.taskRunId) {
+          return { label: language === 'zh' ? '检查连接并继续' : 'Check connection and resume',
+            activate: () => void retry(wait.taskRunId!) };
+        }
         const inline = wait && wait.condition.type !== 'connection'
           && (wait.kind === 'user_input' || (wait.kind === 'approval' && typeof wait.condition.capability === 'string'));
         return { label: language === 'zh' ? '处理待办' : 'Resolve pending item',
@@ -761,12 +784,7 @@ export function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted
         activate: () => void execute({ type: 'signoff', resultId: primaryAction.resultId }) };
       case 'view_results': return { label: language === 'zh' ? '查看结果' : 'View results', activate: showResults };
       case 'retry_allocation': return { label: language === 'zh' ? '重新分配' : 'Retry assignment', activate: () => void execute({ type: 'retry_allocation' }) };
-      case 'retry_run': {
-        const run = detail.runs.find(item => item.id === primaryAction.runId);
-        const agentId = run?.executorKind === 'agent' && typeof run.executorRef.agentId === 'string' ? run.executorRef.agentId : undefined;
-        return { label: language === 'zh' ? '重试任务' : 'Retry task', disabled: !agentId,
-          activate: () => { if (agentId) void execute({ type: 'start', executor: { kind: 'agent', agentId } }); } };
-      }
+      case 'retry_run': return { label: language === 'zh' ? '重试任务' : 'Retry task', activate: () => void retry(primaryAction.runId) };
       case 'start': return { label: copy.runTask, activate: runTask, disabled: !conversationAgentId };
     }
   })();
