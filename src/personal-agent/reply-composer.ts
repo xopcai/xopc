@@ -30,6 +30,7 @@ import { PERSONAL_PERSONA_GUIDANCE } from './persona.js';
 import { resolveAgentProfileDir } from '../agent/agent-scope.js';
 import { loadProfileBootstrapFiles } from '../agent/bootstrap/load-bootstrap-files.js';
 import { hasPersonalResultFileLinks, sanitizePersonalResultFileLinks } from './result-file-links.js';
+import { isLongPersonalReport, preparePersonalReplyResult, releasePersonalReplyResult, type PersonalReplyResult } from './reply-result.js';
 
 const log = createLogger('PersonalReplyComposer');
 const TIMEOUT_MS = 12_000;
@@ -46,6 +47,8 @@ export interface PersonalReplyPacket {
   objective: string;
   /** Exact structured items are rendered by the host, not rewritten by the model. */
   preservedText?: string;
+  /** Rendered as a complete report by the host alongside this reply. */
+  fullReportAttached?: boolean;
   requestId?: string;
   taskVersion: number;
   verificationStatus?: 'passed' | 'failed' | 'unverified';
@@ -181,6 +184,7 @@ export function buildPersonalReplyPrompt(packet: PersonalReplyPacket, includeRec
     'Task collaboration is the canonical record of subsequent requirements and answers. Interpret it in sequence and apply the latest direction when explaining the result. An ack proves receipt and interpretation, not verified completion. Disclose pending, stale, delivered-but-unconfirmed or unmet changes; do not claim that an earlier output satisfies a later requirement without supporting result evidence. Task review and verification status are authoritative; successful execution alone does not mean user acceptance.',
     'Task phase review alone does not require another user decision. When the current receipt needsUser is false, deliver the result without asking whether to accept, close, or confirm the Task, unless the user explicitly requested such a decision. Do not invent an acceptance step or offer to mark the Task accepted. Keep concrete verification gaps visible without treating all unverified details as blockers.',
     'Artifacts are already delivered independently: do not attach or repeat them, emit MEDIA directives, or create local/workspace file links. Only confirmed artifact cards provide file access. If preservedText is present, the host appends it exactly; compose the explanation only and do not repeat that content.',
+    ...(packet.fullReportAttached ? ['The full report will be attached to this reply. Open with what the user can use or decide now, followed by the key limitation or action they need to take. Keep the explanation short and leave supporting detail in the attachment.'] : []),
     'Return only the concise user-facing reply text, without a JSON wrapper or internal metadata. The host records sources and status. Structured research claims and criterion checks below are authoritative for support and coverage; do not promote unsupported or unreviewed statements to facts.',
     'Lead with the answer or deliverable. Include only findings the user needs and any limitation that changes how they can use the result. Default to one short paragraph for a simple outcome; use a few bullets for distinct findings. Continue the existing exchange without repeating acknowledgements or earlier findings. If the conversation moved on, identify the earlier request in a few words and deliver its outcome. User requests for full detail or exact content take precedence.',
     'Keep internal acceptance counts and criterion indices out of the reply unless the user explicitly asks for them. Explain only practical remaining limitations; do not infer counts from a narrative report.',
@@ -222,14 +226,56 @@ async function completeReply(packet: PersonalReplyPacket, signal: AbortSignal): 
   throw new Error('Reply referred to an unrelated Task');
 }
 
-function resultStatusPrefix(packet: PersonalReplyPacket): string {
+function withResultStatus(packet: PersonalReplyPacket, reply: string): string {
   const status = packet.delivery.outcome.status;
-  if (status !== 'partial' && status !== 'failed') return '';
+  if (status !== 'partial' && status !== 'failed') return reply;
   const zh = /[\u3400-\u9fff]/u.test(packet.objective);
-  const text = status === 'partial'
+  const statusText = status === 'partial'
     ? zh ? '这次只完成了部分内容。' : 'Only part of the request was completed.'
     : zh ? '这次未能完成请求。' : 'The request could not be completed.';
-  return `${text}\n\n`;
+  const startsWithBlock = /^(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|[>|]|```|~~~)/u.test(reply.trimStart());
+  return statusText + (startsWithBlock ? '\n\n' : zh ? '' : ' ') + reply;
+}
+
+function selectedReplyText(packet: PersonalReplyPacket): string | undefined {
+  const text = packet.delivery.text;
+  return text && text === packet.delivery.outcome.research?.finalText ? text : undefined;
+}
+
+function preserveInlineResult(packet: PersonalReplyPacket): boolean {
+  if (packet.preservedText) return true;
+  const request = originalRequest(packet);
+  if (/逐字|原样|全文|完整(?:正文|列表|报告|代码)|列出全部|完整清单|(?:聊天|对话)(?:里|内|中)(?:直接)?(?:贴|发|输出|写|列)|verbatim|exact text|full (?:text|report|list|code)|list all|翻译|translate/iu.test(request)) return true;
+  const hasCodeFence = /^(?:```|~~~)/mu.test(packet.report);
+  return hasCodeFence && !packet.delivery.outcome.deliverables.some(item => item.availability === 'available')
+    && (/^(?:```|~~~)/u.test(packet.report.trimStart()) || /代码|脚本|\b(?:code|script|sql)\b/iu.test(request));
+}
+
+function fallbackReply(packet: PersonalReplyPacket, result: PersonalReplyResult | undefined): string {
+  const zh = /[\u3400-\u9fff]/u.test(packet.objective);
+  const report = sanitizePersonalResultFileLinks(packet.preservedText ?? packet.report);
+  if (!result) return report || (zh ? '暂时没有可读的结果。' : 'No readable result is available yet.');
+
+  const shortLine = (value: string | undefined): string | undefined => {
+    const line = value && sanitizePersonalResultFileLinks(value);
+    if (!line || line.includes('\n') || Array.from(line).length > 240) return undefined;
+    try { return parsePersonalReplyDraft(line, packet); }
+    catch { return undefined; }
+  };
+  const finding = report.split('\n').find(line => /^(?:#{1,6}\s+)?(?:\*\*)?(?:结论|Conclusion|Finding)\s*[:：]/iu.test(line.trim()));
+  const receipt = new TaskRunRepository().getReceipt(packet.delivery.taskRunId);
+  const summary = shortLine(finding?.trim()) ?? shortLine(receipt?.summary);
+  const action = receipt?.needsUser ? shortLine(receipt.nextAction) : undefined;
+  const remaining = packet.delivery.outcome.status !== 'succeeded' ? shortLine(receipt?.remainingWork[0]) : undefined;
+  const detail = action ?? remaining;
+  return [summary, detail && !summary?.includes(detail)
+    ? `${action ? zh ? '下一步：' : 'Next step: ' : zh ? '还有一项没完成：' : 'Still open: '}${detail}` : undefined,
+    zh ? '完整结果与限制见附件。' : 'See the attachments for the full result and limitations.'].filter(Boolean).join('\n\n');
+}
+
+function replyDelivery(packet: PersonalReplyPacket, text: string, result: PersonalReplyResult | undefined): TaskResultDelivery {
+  return TaskResultDeliverySchema.parse({ ...packet.delivery, deliveryId: `reply:${packet.delivery.deliveryId}`, text,
+    outcome: { ...packet.delivery.outcome, deliverables: result?.attachment ? [result.attachment] : [], summary: text.slice(0, 2000) } });
 }
 
 export class PersonalReplyComposer {
@@ -238,33 +284,42 @@ export class PersonalReplyComposer {
   async drain(notify: (conversationId: string, deliveryId: string) => void | Promise<void>, isAvailable: (conversationId: string) => boolean = () => true): Promise<void> {
     const db = getSqliteDatabase();
     // The durable text outbox competes atomically with composition, independent of foreground/voice availability.
-    runSqliteWriteTransaction(() => {
-      const overdue = db.prepare(`SELECT delivery_id, reply_payload_json FROM task_result_deliveries
-        WHERE status = 'delivered' AND reply_status IN ('pending','generating','ready')
-        AND reply_payload_json IS NOT NULL AND created_at <= ? ORDER BY created_at LIMIT 20`).all(Date.now() - 5000) as Array<{ delivery_id: string; reply_payload_json: string }>;
-      for (const row of overdue) {
-        const packet = PacketSchema.parse(JSON.parse(row.reply_payload_json));
-        composingReplies.get(row.delivery_id)?.abort(new Error('Durable final delivery superseded composition'));
-        if (!valid(packet)) {
-          db.prepare("UPDATE task_result_deliveries SET reply_status = 'stale', reply_lease_token = NULL, reply_lease_until = 0 WHERE delivery_id = ?").run(row.delivery_id);
-          continue;
+    const overdue = db.prepare(`SELECT delivery_id, reply_payload_json FROM task_result_deliveries
+      WHERE status = 'delivered' AND reply_status IN ('pending','generating','ready')
+      AND reply_payload_json IS NOT NULL AND created_at <= ? ORDER BY created_at LIMIT 20`).all(Date.now() - 5000) as Array<{ delivery_id: string; reply_payload_json: string }>;
+    const overduePackets = overdue.map(row => ({ id: row.delivery_id, packet: PacketSchema.parse(JSON.parse(row.reply_payload_json)) }));
+    const staged = await Promise.all(overduePackets.map(async ({ id, packet }) => ({ id, packet,
+      result: valid(packet) && !selectedReplyText(packet) && !preserveInlineResult(packet)
+        ? await preparePersonalReplyResult(packet) : undefined,
+    })));
+    try {
+      runSqliteWriteTransaction(() => {
+        const eligible = db.prepare(`SELECT 1 FROM task_result_deliveries
+          WHERE delivery_id = ? AND status = 'delivered' AND reply_status IN ('pending','generating','ready')`);
+        for (const { id, packet, result } of staged) {
+          if (!eligible.get(id)) continue;
+          composingReplies.get(id)?.abort(new Error('Durable final delivery superseded composition'));
+          if (!valid(packet)) {
+            db.prepare("UPDATE task_result_deliveries SET reply_status = 'stale', reply_lease_token = NULL, reply_lease_until = 0 WHERE delivery_id = ?").run(id);
+            continue;
+          }
+          const text = selectedReplyText(packet) ?? withResultStatus(packet, fallbackReply(packet, result));
+          const delivery = replyDelivery(packet, text, result);
+          const entry = appendTranscriptEntry(delivery.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
+            content: text, details: delivery, display: true, timestamp: Date.now() });
+          db.prepare(`UPDATE task_result_deliveries SET reply_status = 'delivered', reply_message_entry_id = ?, reply_text = ?,
+            reply_lease_token = NULL, reply_lease_until = 0 WHERE delivery_id = ?`).run(entry.entry_id, text, id);
+          archiveSpaceTaskDelivery(db, { ...packet.delivery, text: packet.delivery.text ?? (result ? sanitizePersonalResultFileLinks(packet.report) : text) }, entry.entry_id);
+          if (packet.requestId) db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, packet.requestId);
+          recordPersonalPerformance({ phase: 'busy_fallback', conversationId: delivery.conversationId,
+            taskId: delivery.taskId, runId: delivery.taskRunId, deliveryId: id,
+            resultRevision: delivery.resultRevision, contractVersion: delivery.contractVersion, instructionSequence: delivery.instructionSequence,
+            durationMs: Math.max(0, Date.now() - packet.delivery.createdAt), status: 'success' });
         }
-        const text = packet.delivery.text && packet.delivery.text === packet.delivery.outcome.research?.finalText
-          ? packet.delivery.text : resultStatusPrefix(packet) + sanitizePersonalResultFileLinks(packet.preservedText ?? packet.report);
-        const delivery = TaskResultDeliverySchema.parse({ ...packet.delivery, deliveryId: `reply:${packet.delivery.deliveryId}`, text,
-          outcome: { ...packet.delivery.outcome, deliverables: [], summary: text.slice(0, 2000) } });
-        const entry = appendTranscriptEntry(delivery.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
-          content: text, details: delivery, display: true, timestamp: Date.now() });
-        db.prepare(`UPDATE task_result_deliveries SET reply_status = 'delivered', reply_message_entry_id = ?, reply_text = ?,
-          reply_lease_token = NULL, reply_lease_until = 0 WHERE delivery_id = ?`).run(entry.entry_id, text, row.delivery_id);
-        archiveSpaceTaskDelivery(db, { ...packet.delivery, text: packet.delivery.text ?? text }, entry.entry_id);
-        if (packet.requestId) db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, packet.requestId);
-        recordPersonalPerformance({ phase: 'busy_fallback', conversationId: delivery.conversationId,
-          taskId: delivery.taskId, runId: delivery.taskRunId, deliveryId: row.delivery_id,
-          resultRevision: delivery.resultRevision, contractVersion: delivery.contractVersion, instructionSequence: delivery.instructionSequence,
-          durationMs: Math.max(0, Date.now() - packet.delivery.createdAt), status: 'success' });
-      }
-    });
+      });
+    } finally {
+      await Promise.all(staged.map(({ result }) => releasePersonalReplyResult(result)));
+    }
     // At most two independent model calls across concurrent drain invocations.
     const deliveries = runSqliteWriteTransaction(() => {
       const active = db.prepare("SELECT conversation_id FROM task_result_deliveries WHERE reply_status = 'generating' AND reply_lease_until > ?")
@@ -296,6 +351,7 @@ export class PersonalReplyComposer {
     await Promise.all(deliveries.map(async row => {
       const startedAt = Date.now();
       const startedMonotonic = performance.now();
+      let result: PersonalReplyResult | undefined;
       try {
         const packet = PacketSchema.parse(JSON.parse(row.payload_json));
         if (row.status !== 'delivered') {
@@ -311,24 +367,26 @@ export class PersonalReplyComposer {
           }
           const transcriptId = readCurrentTranscriptId(db, packet.delivery.conversationId);
           let text = row.draft_transcript_id === transcriptId && row.context_revision === conversation.revision ? row.text : null;
-          if (packet.delivery.text && packet.delivery.text === packet.delivery.outcome.research?.finalText) {
-            text = packet.delivery.text;
-            db.prepare("UPDATE task_result_deliveries SET reply_text = ?, reply_draft_transcript_id = ?, reply_context_revision = ?, reply_status = 'ready' WHERE delivery_id = ? AND reply_lease_token = ?")
-              .run(text, transcriptId, conversation.revision, row.delivery_id, row.lease_token);
+          const selectedText = selectedReplyText(packet);
+          const preserve = !selectedText && preserveInlineResult(packet);
+          const optionalLongReport = !selectedText && !preserve && isLongPersonalReport(packet.report);
+          if (optionalLongReport) {
+            result = await preparePersonalReplyResult(packet);
+            if (!db.prepare('SELECT 1 FROM task_result_deliveries WHERE delivery_id = ? AND reply_lease_token = ?')
+              .get(row.delivery_id, row.lease_token)) return;
+          }
+          if (selectedText) {
+            text = selectedText;
+          } else if (optionalLongReport && (!result || text?.endsWith(sanitizePersonalResultFileLinks(packet.report)))) {
+            text = withResultStatus(packet, fallbackReply(packet, result));
           } else if (!text) {
             const controller = new AbortController();
             composingReplies.set(row.delivery_id, controller);
             const compositionStartedAt = performance.now();
             let compositionFallback = false;
             let timer: ReturnType<typeof setTimeout> | undefined;
-            const preserve = packet.preservedText
-              || /逐字|原样|完整(?:正文|列表|报告|代码)|列出全部|完整清单|verbatim|exact text|full (?:text|report|list|code)|list all|翻译|translate/iu
-                .test(originalRequest(packet))
-              || (!packet.delivery.outcome.deliverables.some(item => item.availability === 'available')
-                && (packet.report.length > 16_000 || packet.report.includes('```')));
             try {
-              // Large/exact deliveries retain the full report while receiving a conversational introduction.
-              const promptPacket = preserve && !packet.preservedText
+              const promptPacket = result ? { ...packet, fullReportAttached: true } : preserve && !packet.preservedText
                 ? { ...packet, report: packet.report.slice(0, 2000), preservedText: packet.report } : packet;
               text = await Promise.race([this.compose(promptPacket, controller.signal), new Promise<never>((_resolve, reject) => {
                 controller.signal.addEventListener('abort', () => reject(controller.signal.reason ?? new Error('Reply composition aborted')), { once: true });
@@ -339,35 +397,22 @@ export class PersonalReplyComposer {
               if (preserve) text += `\n\n${sanitizePersonalResultFileLinks(packet.preservedText ?? packet.report)}`;
             } catch (err) {
               compositionFallback = true;
-              const available = packet.delivery.outcome.deliverables.filter(item => item.availability === 'available').length;
-              let finding = sanitizePersonalResultFileLinks(packet.report).split('\n')
-                .find(line => /^(?:结论|Conclusion|Finding)\s*[:：]/i.test(line.trim()) && line.length <= 400)?.trim();
-              try { if (finding) validateAcceptanceCounts(finding, packet); } catch { finding = undefined; }
-              text = available && !preserve
-                ? /[\u3400-\u9fff]/u.test(packet.objective)
-                  ? finding ? `${finding}\n\n完整结果与限制请查看附件。`
-                    : `已提供 ${available} 份成果。简短说明暂时不可用，完整结果与限制请查看附件。`
-                  : finding ? `${finding}\n\nSee the attachments for the full result and limitations.`
-                    : `${available} artifacts are available. A brief explanation is unavailable; see the attachments for the full result and limitations.`
-                : sanitizePersonalResultFileLinks([packet.report, packet.preservedText].filter(Boolean).join('\n\n'));
-              if (!text) text = packet.delivery.outcome.deliverables.some(item => item.availability === 'available')
-                ? /[\u3400-\u9fff]/u.test(packet.objective) ? '文件已通过成果卡提供。' : 'Files are available in the artifact cards.'
-                : /[\u3400-\u9fff]/u.test(packet.objective) ? '文件尚未发布，暂时无法提供下载。' : 'The file has not been published for download.';
+              text = fallbackReply(packet, result);
               log.warn({ err, conversationId: packet.delivery.conversationId, taskRunId: packet.delivery.taskRunId }, 'Reply composition failed; delivering the recorded result');
             } finally {
               if (timer) clearTimeout(timer);
               if (composingReplies.get(row.delivery_id) === controller) composingReplies.delete(row.delivery_id);
               controller.abort();
             }
-            text = resultStatusPrefix(packet) + text;
-            db.prepare("UPDATE task_result_deliveries SET reply_text = ?, reply_draft_transcript_id = ?, reply_context_revision = ?, reply_status = 'ready' WHERE delivery_id = ? AND reply_lease_token = ?")
-              .run(text, transcriptId, conversation.revision, row.delivery_id, row.lease_token);
+            text = withResultStatus(packet, text);
             log.info({ replyId: row.delivery_id, conversationId: packet.delivery.conversationId,
               phase: 'reply_prepared', compositionMs: performance.now() - compositionStartedAt,
               queueMs: Math.max(0, startedAt - row.created_at), fallback: compositionFallback,
               durationMs: performance.now() - startedMonotonic },
               'Personal reply prepared');
           }
+          db.prepare("UPDATE task_result_deliveries SET reply_text = ?, reply_draft_transcript_id = ?, reply_context_revision = ?, reply_status = 'ready' WHERE delivery_id = ? AND reply_lease_token = ?")
+            .run(text, transcriptId, conversation.revision, row.delivery_id, row.lease_token);
           const persisted = runSqliteWriteTransaction(() => {
             const current = db.prepare('SELECT reply_status AS status, reply_lease_token AS lease_token FROM task_result_deliveries WHERE delivery_id = ?').get(row.delivery_id) as
               { status: string; lease_token: string } | undefined;
@@ -383,16 +428,16 @@ export class PersonalReplyComposer {
               db.prepare("UPDATE task_result_deliveries SET reply_status = 'pending', reply_text = NULL, reply_context_revision = NULL, reply_lease_until = 0 WHERE delivery_id = ?").run(row.delivery_id);
               return false;
             }
-            const delivery = TaskResultDeliverySchema.parse({ ...packet.delivery, deliveryId: `reply:${packet.delivery.deliveryId}`, text,
-              outcome: { ...packet.delivery.outcome, deliverables: [], summary: text!.slice(0, 2000) } });
+            const delivery = replyDelivery(packet, text!, result);
             const entry = appendTranscriptEntry(delivery.conversationId, { role: 'custom', customType: TASK_RESULT_DELIVERY_TYPE,
               content: text!, details: delivery, display: true, timestamp: Date.now() });
             db.prepare("UPDATE task_result_deliveries SET reply_status = 'delivered', reply_message_entry_id = ? WHERE delivery_id = ?").run(entry.entry_id, row.delivery_id);
-            archiveSpaceTaskDelivery(db, { ...packet.delivery, text: packet.delivery.text ?? text }, entry.entry_id);
+            archiveSpaceTaskDelivery(db, { ...packet.delivery, text: packet.delivery.text ?? (result ? sanitizePersonalResultFileLinks(packet.report) : text!) }, entry.entry_id);
             if (packet.requestId) db.prepare('UPDATE personal_requests SET delivery_entry_id = ? WHERE request_id = ?').run(entry.entry_id, packet.requestId);
             return true;
           });
           if (!persisted) return;
+          result = undefined;
           recordPersonalPerformance({ phase: 'reply_persisted', conversationId: packet.delivery.conversationId,
             taskId: packet.delivery.taskId, runId: packet.delivery.taskRunId, deliveryId: row.delivery_id,
             resultRevision: packet.delivery.resultRevision, contractVersion: packet.delivery.contractVersion,
@@ -420,6 +465,8 @@ export class PersonalReplyComposer {
             (err instanceof Error ? err.message : String(err)).slice(0, 500), row.delivery_id, row.lease_token);
         if (row.attempts === 0 || row.attempts === 7) log.warn({ err, replyId: row.delivery_id },
           row.attempts === 7 ? 'Personal reply delivery exhausted retries' : 'Personal reply delivery will retry');
+      } finally {
+        await releasePersonalReplyResult(result);
       }
     }));
   }

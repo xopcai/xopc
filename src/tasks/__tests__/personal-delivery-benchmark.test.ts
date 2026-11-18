@@ -1,7 +1,7 @@
 import { once } from 'node:events';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { serve } from '@hono/node-server';
 import type { TurnOutcome } from '@xopcai/gateway-contract';
@@ -13,6 +13,7 @@ import { createPersonalTaskTool } from '../../agent/tools/personal-task-tool.js'
 import { ConfigSchema } from '../../config/schema.js';
 import { createHonoApp } from '../../gateway/hono/app.js';
 import type { GatewayService } from '../../gateway/service.js';
+import { getMediaBucketDir } from '../../media/paths.js';
 import { saveMediaBuffer } from '../../media/store.js';
 import { PersonalReplyComposer, parsePersonalReplyDraft, type PersonalReplyPacket } from '../../personal-agent/reply-composer.js';
 import { personalAgentId } from '../../personal-agent/repository.js';
@@ -143,16 +144,42 @@ describe('personal delivery benchmark v1', () => {
     expect(payload(runId).outcome.status).toBe('partial');
   });
 
-  it('F02-download: a published report is readable only through its authenticated original chat', async () => {
+  it.each(['worker artifact', 'long reply fallback'] as const)('F02-download: a %s is readable only through its authenticated original chat', async (source) => {
     const { main, runId, coordinator, outcome } = execution();
-    const content = '# 结论\n\n月销售额：150、210；环比：40%。\n';
-    const file = await saveMediaBuffer(Buffer.from(content), { bucket: 'outbound', contentType: 'text/markdown' });
-    outcome.deliverables = [{ artifactId: file.id, title: 'report.md', kind: 'document',
-      availability: 'available', location: 'artifact_store', uri: file.uri, capabilities: ['preview', 'download'] }];
+    const fallback = source === 'long reply fallback';
+    const content = fallback
+      ? '结论：销售额从 150 增至 210，环比 40%。\n\n' + '这里是逐笔的核对依据。'.repeat(100)
+      : '# 结论\n\n月销售额：150、210；环比：40%。\n';
+    let uri: string | undefined;
+    if (!fallback) {
+      const file = await saveMediaBuffer(Buffer.from(content), { bucket: 'outbound', contentType: 'text/markdown' });
+      uri = file.uri;
+      outcome.deliverables = [{ artifactId: file.id, title: 'report.md', kind: 'document',
+        availability: 'available', location: 'artifact_store', uri, capabilities: ['preview', 'download'] }];
+    }
     coordinator.captureOutcome(outcome);
-    coordinator.finalize({ status: 'succeeded', summary: '月销售额已计算', assistantText: '销售额从150增至210，环比40%。' });
+    coordinator.finalize({ status: 'succeeded', summary: '月销售额已计算', assistantText: fallback ? content : '销售额从150增至210，环比40%。' });
     await new TaskResultDeliveryService().drain(vi.fn());
     const store = new SessionStore(stateDir);
+    if (fallback) {
+      getSqliteDatabase().prepare('UPDATE task_result_deliveries SET created_at = ? WHERE task_run_id = ?').run(Date.now() - 6_000, runId);
+      getSqliteDatabase().prepare('UPDATE task_run_receipts SET needs_user = 1, next_action = ? WHERE run_id = ?')
+        .run('确认采用上面的对账口径。', runId);
+      const compose = vi.fn();
+      const composer = new PersonalReplyComposer(compose);
+      await Promise.all(Array.from({ length: 3 }, () => composer.drain(vi.fn(), () => false)));
+      expect(compose).not.toHaveBeenCalled();
+      const messages = (await store.getMessagePage(main.key, { includeContextRows: true }))!.session.messages;
+      expect(messages).toHaveLength(1);
+      expect(readdirSync(getMediaBucketDir('outbound'))).toHaveLength(1);
+      const message = messages[0]!;
+      expect(message.content).toContain('环比 40%');
+      expect(message.content).toContain('确认采用上面的对账口径。');
+      expect(message.content).not.toContain('逐笔的核对依据');
+      uri = (message.metadata as { turnOutcome?: TurnOutcome }).turnOutcome?.deliverables[0]?.uri;
+      expect(uri).toMatch(/^media:\/\/outbound\//);
+      expect(payload(runId).text).toBe(content);
+    }
     const token = 'frozen-benchmark-token';
     const app = createHonoApp({ service: { currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
       getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token, isGatewayReady: () => true,
@@ -163,7 +190,7 @@ describe('personal delivery benchmark v1', () => {
     try {
       if (!server.listening) await once(server, 'listening');
       const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-      const query = `/api/media/read?uri=${encodeURIComponent(file.uri)}&conversationId=`;
+      const query = `/api/media/read?uri=${encodeURIComponent(uri!)}&conversationId=`;
       const headers = { Authorization: `Bearer ${token}` };
       expect((await fetch(base + query + main.key)).status).toBe(401);
       const response = await fetch(base + query + main.key, { headers });
@@ -173,17 +200,35 @@ describe('personal delivery benchmark v1', () => {
       expect((await fetch(base + query + other.key, { headers })).status).toBe(404);
       const history = await fetch(`${base}/api/sessions/${main.key}/history?view=compact`, { headers });
       expect(history.status).toBe(200);
-      expect(JSON.stringify(await history.json())).toContain(file.uri);
+      expect(JSON.stringify(await history.json())).toContain(uri);
       expect(payload(runId).outcome.status).toBe('succeeded');
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 
+  it('keeps the complete result readable when its attachment could not be created', async () => {
+    const { main, coordinator, outcome } = execution();
+    const report = '结论：本月对账完成。\n\n' + '保留完整核对清单。'.repeat(100);
+    coordinator.captureOutcome(outcome);
+    coordinator.finalize({ status: 'succeeded', summary: '本月对账完成', assistantText: report });
+    await new TaskResultDeliveryService().drain(vi.fn());
+    const outboundPath = getMediaBucketDir('outbound');
+    mkdirSync(dirname(outboundPath), { recursive: true });
+    writeFileSync(outboundPath, 'not a directory');
+
+    const compose = vi.fn();
+    await new PersonalReplyComposer(compose).drain(vi.fn());
+    const messages = (await new SessionStore(stateDir).getMessagePage(main.key, { includeContextRows: true }))!.session.messages;
+    expect(compose).not.toHaveBeenCalled();
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.content).toBe(report);
+  });
+
   it('H03-policy: concise default and artifact fallback preserve explicit detail requests', async () => {
     const instructions = personalInstructions();
-    expect(instructions).toContain('Let the question determine how much to say');
+    expect(instructions).toContain('Write the reply as a short message to one person');
     expect(instructions).toContain('Honor a numerical length limit when the user sets one');
     expect(instructions).toContain('Requests for detail, exact text, code, tables, reports, or complete lists take precedence');
-    expect(instructions).toContain('include the evidence and uncertainty that affect the reader’s understanding');
+    expect(instructions).toContain('Keep the figures, deadlines, and limits needed to act');
     const { main, coordinator, outcome } = execution();
     const file = await saveMediaBuffer(Buffer.from('# 完整报告'), { bucket: 'outbound', contentType: 'text/markdown' });
     outcome.deliverables = [{ artifactId: file.id, title: 'report.md', kind: 'document', availability: 'available',
