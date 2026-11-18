@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { HomeTaskReview } from './home-task-review';
+import { WorkbenchDialog } from './workbench-dialog';
 function ScheduleFields({ time, setTime, day, setDay, zone, setZone, until, setUntil, zh }: {
     time: string;
     setTime(v: string): void;
@@ -39,9 +40,10 @@ export function RoutineAdoption({ topicId, trial, onUpdated, language }: {
     const [until, setUntil] = useState(new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10));
     if (!trial.taskVersion)
         return null;
+    const label = zh ? '以后也交给我' : 'Make this recurring';
     return <div className="mt-2">
-    <Button variant="secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{zh ? '以后也交给我' : 'Make this recurring'}</Button>
-    {open ? <form className="mt-3 space-y-3 rounded-lg border border-edge p-3" onSubmit={e => {
+    <WorkbenchDialog title={label} open={open} onOpenChange={setOpen} busy={busy} trigger={<Button variant="secondary">{label}</Button>}>
+    <form className="space-y-3" onSubmit={e => {
                 e.preventDefault();
                 setBusy(true);
                 setError('');
@@ -54,7 +56,8 @@ export function RoutineAdoption({ topicId, trial, onUpdated, language }: {
       <ScheduleFields {...{ time, setTime, day, setDay, zone, setZone, until, setUntil, zh }}/>
       {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
       <Button type="submit" disabled={busy}>{zh ? '确认，按这个安排开始' : 'Confirm and start'}</Button>
-    </form> : null}
+    </form>
+    </WorkbenchDialog>
   </div>;
 }
 export function RoutinePanel({ routine: prop, language, onUpdated }: {
@@ -112,7 +115,7 @@ export function RoutinePanel({ routine: prop, language, onUpdated }: {
       </div>)}
     </details>
     {routine.executions.length ? <details><summary className="text-xs text-accent-fg">{zh ? '以往结果' : 'Past results'}</summary>{routine.executions.map(e => <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-fg-muted" key={e.runId}><span>{outcomeLabel(e.status,e.verdict)} · v{e.version}</span><Button variant="ghost" onClick={() => setTaskId(e.taskId)}>{zh ? '查看结果与验收' : 'Review result'}</Button></div>)}</details> : null}
-    {taskId ? <HomeTaskReview taskId={taskId} language={language} onComplete={onUpdated}/> : null}
+    {taskId ? <HomeTaskReview key={taskId} taskId={taskId} language={language} onClose={() => setTaskId(undefined)} onComplete={onUpdated}/> : null}
     <a className="inline-block text-xs text-accent-fg" href={`#/automations?automation=${encodeURIComponent(routine.automationId)}`}>{zh ? '在自动化中管理' : 'Manage in automations'} ›</a>
   </section>;
 }

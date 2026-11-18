@@ -33,10 +33,15 @@ struct AppSettingsView: View {
                 Button {
                     onOpenGatewaySettings()
                 } label: {
-                    Label("Gateway 管理", systemImage: "network")
+                    LabeledContent {
+                        Text(gatewayName)
+                    } label: {
+                        Label("Gateway 管理", systemImage: "network")
+                    }
                 }
+                .accessibilityLabel("Gateway 管理")
                 NavigationLink {
-                    ModelSettingsView(configuration: configuration, gatewayName: gatewayName)
+                    ModelSettingsView(configuration: configuration)
                 } label: {
                     Label("模型设置", systemImage: "slider.horizontal.3")
                 }
@@ -51,8 +56,9 @@ struct AppSettingsView: View {
                 NavigationLink {
                     ShareCenterView(configuration: configuration)
                 } label: {
-                    Label("分享中心", systemImage: "square.and.arrow.up")
+                    Label("分享记录", systemImage: "square.and.arrow.up")
                 }
+                .accessibilityIdentifier("settings-share-history")
                 NavigationLink {
                     FilesView(configuration: configuration)
                 } label: {
@@ -81,82 +87,153 @@ struct AppSettingsView: View {
             }
         }
         .listSectionSpacing(16)
-        .mobilePageTitle(Text(verbatim: AppLocalization.string("设置", locale: locale)))
+        .navigationTitle(Text(verbatim: AppLocalization.string("设置", locale: locale)))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 private struct ShareCenterView: View {
     let configuration: GatewayConfiguration
     @State private var shares: [MobileShare] = []
-    @State private var showInactive = false
-    @State private var error: String?
+    @State private var activeOnly = false
+    @State private var loaded = false
+    @State private var busy = false
+    @State private var failed = false
+    @State private var revokeTarget: MobileShare?
 
     private var visibleShares: [MobileShare] {
-        showInactive ? shares : shares.filter { !$0.revoked && !$0.expired }
+        activeOnly ? shares.filter(\.isActive) : shares
     }
 
     var body: some View {
         List {
-            if error != nil {
+            Section {
+                SegmentedTabs(options: [
+                    SegmentOption(id: false, title: "全部", accessibilityID: "share-filter-all"),
+                    SegmentOption(id: true, title: "仅有效", accessibilityID: "share-filter-active")
+                ], selected: activeOnly, label: "筛选") { activeOnly = $0 }
+            }
+
+            if failed {
                 Section {
-                    Text("分享记录暂时无法读取").foregroundStyle(.secondary)
+                    Text("暂时无法读取分享记录。").foregroundStyle(.secondary)
                     Button("重试") { Task { await load() } }
                 }
+            } else if !loaded {
+                Text("正在读取分享记录").redacted(reason: .placeholder)
+            } else if visibleShares.isEmpty {
+                Section {
+                    Text(activeOnly ? "没有有效的分享链接" : "暂无分享记录").font(.headline)
+                }
             }
-            ForEach(visibleShares) { share in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(share.fileName).mobileTextStyle(.rowTitle)
-                    Text(share.revoked ? "已撤销" : share.expired ? "已过期" : "有效")
-                        .mobileTextStyle(.caption).foregroundStyle(.secondary)
-                    Text(share.expiresAt).mobileTextStyle(.smallCaption).foregroundStyle(.secondary)
-                    if let url = URL(string: share.shareUrl) {
+            Section {
+                ForEach(visibleShares) { share in
+                    shareRow(share)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(12)
+        .navigationTitle("分享记录")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: configuration) { await load() }
+        .refreshable { await load() }
+        .confirmationDialog("撤销链接", isPresented: Binding(get: { revokeTarget != nil }, set: {
+            if !$0 { revokeTarget = nil }
+        }), titleVisibility: .visible, presenting: revokeTarget) { share in
+            Button("撤销", role: .destructive) {
+                Task { await update(share) { client in try await client.revokeShare(id: share.id) } }
+            }
+        } message: { _ in
+            Text("该链接将立即停止访问。")
+        }
+    }
+
+    private func shareRow(_ share: MobileShare) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: shareIcon(share.kind)).foregroundStyle(.secondary).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(share.fileName).mobileTextStyle(.rowTitle).lineLimit(2)
+                Text(share.revoked ? "已撤销" : share.expired ? "已过期" : "有效")
+                    .font(.footnote).foregroundStyle(share.isActive ? Color.green : Color.secondary)
+                if let created = share.createdAt {
+                    Text("分享于 \(displayDate(created))").font(.caption).foregroundStyle(.secondary)
+                }
+                Text("有效期至 \(displayDate(share.expiresAt))").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            if share.isActive {
+                Menu {
+                    if let link = share.shareUrl, let url = URL(string: link),
+                       ["https", "http"].contains(url.scheme?.lowercased() ?? "")
+                    {
+                        Link("打开链接", destination: url)
                         ShareLink(item: url) { Label("分享链接", systemImage: "square.and.arrow.up") }
                     }
-                }
-                .swipeActions {
-                    if !share.revoked, !share.expired {
-                        Button("撤销", role: .destructive) { Task { await revoke(share) } }
-                        Menu("延长") {
-                            ForEach([1, 3, 7], id: \.self) { days in
-                                Button("\(days) 天") { Task { await extend(share, days: days) } }
+                    Menu("延长有效期") {
+                        ForEach([1, 3, 7], id: \.self) { days in
+                            Button("\(days) 天") {
+                                Task { await update(share) { client in try await client.extendShare(id: share.id, days: days) } }
                             }
                         }
                     }
+                    Button("撤销链接", role: .destructive) { revokeTarget = share }
+                } label: {
+                    Image(systemName: "ellipsis").frame(minWidth: 44, minHeight: 44)
                 }
-            }
-            if visibleShares.isEmpty, error == nil {
-                ContentUnavailableView("暂无分享", systemImage: "square.and.arrow.up")
-            }
-        }
-        .mobilePageTitle(Text("分享中心"))
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(showInactive ? "隐藏失效" : "显示失效") { showInactive.toggle() }
+                .accessibilityLabel("分享操作")
+                .disabled(busy || failed)
             }
         }
-        .task { await load() }
-        .refreshable { await load() }
+        .padding(.vertical, 6)
+        .accessibilityIdentifier("share-record-\(share.id)")
+    }
+
+    private func shareIcon(_ kind: String?) -> String {
+        switch kind {
+        case "directory": "folder"
+        case "session": "bubble.left"
+        case "note": "note.text"
+        case "site": "globe"
+        default: "doc"
+        }
+    }
+
+    private func displayDate(_ value: String) -> String {
+        let date = (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value))
+            ?? (try? Date.ISO8601FormatStyle().parse(value))
+        return date?.formatted(date: .abbreviated, time: .shortened) ?? value
     }
 
     @MainActor private func load() async {
-        do {
-            shares = try await GatewayClient(configuration: configuration).fetchShares()
-            error = nil
-        } catch { self.error = error.localizedDescription }
+        guard !busy else { return }
+        busy = true
+        defer { busy = false }
+        await fetch()
     }
 
-    @MainActor private func revoke(_ share: MobileShare) async {
+    @MainActor private func fetch() async {
         do {
-            try await GatewayClient(configuration: configuration).revokeShare(id: share.id)
-            await load()
-        } catch { self.error = error.localizedDescription }
+            let rows = try await GatewayClient(configuration: configuration).fetchShares()
+            try Task.checkCancellation()
+            shares = rows
+            loaded = true
+            failed = false
+        } catch {
+            if !Task.isCancelled { failed = true }
+        }
     }
 
-    @MainActor private func extend(_ share: MobileShare, days: Int) async {
+    @MainActor private func update(_ share: MobileShare, action: (GatewayClient) async throws -> Void) async {
+        guard !busy, !failed, share.isActive else { return }
+        busy = true
+        defer { busy = false }
         do {
-            try await GatewayClient(configuration: configuration).extendShare(id: share.id, days: days)
-            await load()
-        } catch { self.error = error.localizedDescription }
+            try await action(GatewayClient(configuration: configuration))
+            await fetch()
+        } catch {
+            if !Task.isCancelled { failed = true }
+        }
     }
 }
 
@@ -164,15 +241,13 @@ private struct NotificationSettingsView: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("通知") { Text("由系统管理") }
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    Link("打开系统通知设置", destination: url)
+                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                    Link("系统通知设置", destination: url)
                 }
-            } footer: {
-                Text("通知权限可在 iOS 系统设置中管理。")
             }
         }
-        .mobilePageTitle(Text("通知"))
+        .navigationTitle("通知")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -189,7 +264,8 @@ private struct LanguageSettingsView: View {
                 .pickerStyle(.inline)
             }
         }
-        .mobilePageTitle(Text(verbatim: AppLocalization.string("语言", locale: locale)))
+        .navigationTitle(Text(verbatim: AppLocalization.string("语言", locale: locale)))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -227,7 +303,8 @@ private struct AppearanceSettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(mobileTheme.canvas)
-        .mobilePageTitle(Text(verbatim: AppLocalization.string("主题", locale: locale)))
+        .navigationTitle(Text(verbatim: AppLocalization.string("外观", locale: locale)))
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func themeSwatch(_ preset: MobileThemePreset, dark: Bool) -> some View {

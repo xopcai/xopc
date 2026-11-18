@@ -2,7 +2,7 @@
 import type { HomeResponse } from '@xopcai/gateway-contract';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -25,7 +25,15 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 function LocationProbe() {
   const location = useLocation();
-  return <output>{location.pathname}{location.search}</output>;
+  const navigate = useNavigate();
+  const params = new URLSearchParams(location.search);
+  return <>
+    <output>{location.pathname}{location.search}</output>
+    {params.has('task') ? <button onClick={() => {
+      params.delete('task');
+      navigate(`/?${params}`, { replace: true });
+    }}>Close task detail route</button> : null}
+  </>;
 }
 
 describe('home card actions', () => {
@@ -42,7 +50,8 @@ describe('home card actions', () => {
     root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
-  const button = (text: string) => [...container.querySelectorAll('button')].find((item) => item.textContent === text)!;
+  const button = (text: string, scope: ParentNode = container) => [...scope.querySelectorAll('button')].find((item) => item.textContent === text)!;
+  const dialog = () => document.querySelector<HTMLDivElement>('[role="dialog"]:not([aria-hidden="true"])')!;
   const render = () => act(async () => root.render(<MemoryRouter><HomePage /><LocationProbe /></MemoryRouter>));
 
   it('promotes the unread delivery after resolving the last item and opens the idle composer after reading it', async () => {
@@ -65,8 +74,10 @@ describe('home card actions', () => {
     expect(headings()[0]).toBe('Needs attention');
     expect(button('Allow and continue')).toBeUndefined();
     await act(async () => button('Review authorization').click());
-    expect(container.textContent).toContain('To: purchasing');
-    await act(async () => button('Allow and continue').click());
+    expect(container.textContent).not.toContain('To: purchasing');
+    expect(dialog().textContent).toContain('To: purchasing');
+    await act(async () => button('Allow and continue', dialog()).click());
+    expect(dialog()).toBeNull();
     expect(headings()[0]).toBe('Recent results');
     await act(async () => button('Open result').click());
     const markRead = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
@@ -86,8 +97,9 @@ describe('home card actions', () => {
     await render();
     expect(container.textContent).not.toContain('Schedule 3');
     await act(async () => button('View all 4 items').click());
-    expect(container.textContent).toContain('Schedule 3');
-    const row = [...container.querySelectorAll('button')].find((item) => item.textContent?.includes('Schedule 3'))!;
+    expect(container.textContent).not.toContain('Schedule 3');
+    expect(dialog().textContent).toContain('Schedule 3');
+    const row = [...dialog().querySelectorAll('button')].find((item) => item.textContent?.includes('Schedule 3'))!;
     await act(async () => row.click());
     expect(container.querySelector('output')?.textContent).toBe('/automations?automation=3');
   });
@@ -104,18 +116,52 @@ describe('home card actions', () => {
     expect(container.querySelector('output')?.textContent).toBe('/chat/new-conversation');
   });
 
-  it('opens task results inline for input decisions and keeps details available', async () => {
+  it('opens a task decision in a modal and restores the result after viewing details', async () => {
     mocks.home.needsUser = [{ id: 'task:task-1', kind: 'decision', title: 'Complete report', summary: 'Need input', updatedAt: 1, secondaryActions: [], primaryAction: { type: 'open', label: 'Review task', href: '/tasks/task-1' }, openAction: { type: 'open', label: 'Review task', href: '/tasks/task-1' } }];
     mocks.fetchTask.mockResolvedValue({ task: { id: 'task-1', phase: 'active', latestContractVersion: 1 }, allowedCommands: [], waits: [], runs: [], receipts: [], criterionReviews: [] });
     await render();
-    await act(async () => button('Review task').click());
+    const trigger = button('Review task');
+    await act(async () => trigger.click());
     expect(mocks.fetchTask).toHaveBeenCalledWith('task-1');
     expect(container.querySelector('output')?.textContent).toBe('/?reviewTask=task-1');
-    expect(container.textContent).toContain('No result for the current task version');
-    const details = [...container.querySelectorAll('a')].find((item) => item.textContent === 'Task details')!;
+    expect(container.textContent).not.toContain('No result for the current task version');
+    expect(dialog().textContent).toContain('No result for the current task version');
+    const details = [...dialog().querySelectorAll('a')].find((item) => item.textContent === 'Task details')!;
     expect(details).not.toBeNull();
     expect(details.getAttribute('href')).toBe('/?reviewTask=task-1&task=task-1');
     await act(async () => details.click());
     expect(container.querySelector('output')?.textContent).toBe('/?reviewTask=task-1&task=task-1');
+    expect(dialog()).toBeNull();
+    await act(async () => button('Close task detail route').click());
+    expect(dialog().textContent).toContain('No result for the current task version');
+    await act(async () => dialog().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    expect(dialog()).toBeNull();
+    expect(container.querySelector('output')?.textContent).toBe('/');
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it('opens the result and evidence for a retryable item in the pending list without expanding the card', async () => {
+    mocks.home.needsUser = Array.from({ length: 3 }, (_, index) => ({
+      id: `task:task-${index}`, kind: 'failure', title: `Report ${index}`, summary: 'Partial result', updatedAt: 1,
+      secondaryActions: [], primaryAction: { type: 'retry_task', label: 'Retry', taskId: `task-${index}` },
+    }));
+    mocks.fetchTask.mockResolvedValue({ task: { id: 'task-2', title: 'Report 2', phase: 'active', latestContractVersion: 1 }, allowedCommands: [], waits: [], runs: [], receipts: [], criterionReviews: [] });
+    await render();
+    await act(async () => button('View 1 more pending items').click());
+    const row = [...dialog().querySelectorAll('article')].find((item) => item.textContent?.includes('Report 2'))!;
+    const trigger = button('View result and evidence', row);
+    await act(async () => trigger.click());
+    expect(dialog().textContent).toContain('Report 2');
+    expect(dialog().textContent).toContain('No result for the current task version');
+    expect(container.textContent).not.toContain('Report 2');
+    expect(mocks.fetchTask).toHaveBeenCalledOnce();
+    await act(async () => dialog().querySelector<HTMLAnchorElement>('a')!.click());
+    expect(container.querySelector('output')?.textContent).toBe('/?reviewTask=task-2&task=task-2');
+    await act(async () => button('Close task detail route').click());
+    expect(dialog().textContent).toContain('No result for the current task version');
+    await act(async () => dialog().querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
+    expect(dialog().textContent).toContain('Report 2');
+    expect(dialog().textContent).not.toContain('No result for the current task version');
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });

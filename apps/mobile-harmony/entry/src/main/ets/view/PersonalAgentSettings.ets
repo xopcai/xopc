@@ -172,15 +172,13 @@ export struct XopcPersonalAgentSettings {
                     }
                   } }).enabled(!this.model.saving && !this.uploading)
               }
-              Text(this.label('对话模型', 'Chat model')).fontSize(13).fontColor(this.colors.secondary).width('100%')
               if (this.chatOptions.loading) {
-                Text($r('app.string.chat_model')).fontSize(14).fontColor(this.colors.tertiary).width('100%')
+                XopcListSkeleton()
               } else {
                 XopcHubRow({ heading: $r('app.string.chat_model'),
-                  summary: this.chatOptions.modelId ? this.chatOptions.modelName(appSettings.effectiveLanguage()) : '',
+                  trailingValue: this.chatOptions.modelId ? this.chatOptions.modelName(appSettings.effectiveLanguage()) : '',
                   compact: true, onOpen: (): void => { this.modelPickerOpen = true; } })
                   .id('personal-setting-model').enabled(!this.chatOptions.saving)
-
               }
               if (this.model.record?.messageReactionsAvailable === true) {
                 Row() {

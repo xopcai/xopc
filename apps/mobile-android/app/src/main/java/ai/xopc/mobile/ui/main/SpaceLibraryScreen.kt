@@ -79,9 +79,14 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
   val kinds = if (zh) chineseKinds else englishKinds
   val coroutine = rememberCoroutineScope()
   var selected by rememberSaveable(profile.gatewayId, profile.deviceId) { mutableStateOf<String?>(null) }
-  var view by rememberSaveable(profile.gatewayId, profile.deviceId) { mutableStateOf("all") }
+  val navigation = rememberNavigationPreferences()
+  var view by rememberSaveable(profile.gatewayId, profile.deviceId) {
+    mutableStateOf(navigation.selection("library-scope", listOf("all", "favorites", "trash"), "all"))
+  }
   var query by rememberSaveable(profile.gatewayId, profile.deviceId) { mutableStateOf("") }
-  var kind by rememberSaveable(profile.gatewayId, profile.deviceId) { mutableStateOf("") }
+  var kind by rememberSaveable(profile.gatewayId, profile.deviceId) {
+    mutableStateOf(navigation.selection("library-kind", fileKinds, ""))
+  }
   var filterMenu by remember { mutableStateOf(false) }
   var refresh by remember { mutableStateOf(0) }
   val cleanQuery = query.trim()
@@ -119,7 +124,11 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
         SegmentOption("favorites", t("收藏", "Favorites"), "space-tab-favorites"),
         SegmentOption("trash", t("回收站", "Trash"), "space-tab-trash"),
       ), view, "space-scope-menu", Modifier.align(Alignment.Center)) { value ->
-        if (view != value) { query = ""; kind = ""; view = value }
+        if (view != value) {
+          query = ""
+          view = value
+          navigation.rememberSelection("library-scope", value)
+        }
       }
     }
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -135,7 +144,11 @@ internal fun SpaceLibraryScreen(insets: PaddingValues, profile: GatewayProfile, 
         }
         DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
           fileKinds.forEachIndexed { index, type ->
-            DropdownMenuItem(text = { Text(kinds[index]) }, onClick = { kind = type; filterMenu = false })
+            DropdownMenuItem(text = { Text(kinds[index]) }, onClick = {
+              kind = type
+              navigation.rememberSelection("library-kind", type)
+              filterMenu = false
+            })
           }
         }
       }

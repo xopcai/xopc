@@ -8,7 +8,7 @@ struct AutomationsView: View {
     let onOpenConversation: (String, String, String) -> Void
 
     @State private var items: [AutomationRecord] = []
-    @State private var filter = "all"
+    @AppStorage("navigation.automation-filter") private var filter = "all"
     @State private var searchText = ""
     @State private var searchOpen = false
     @State private var setupPrompt: String?

@@ -8,6 +8,7 @@ import type { TaskDetail } from './home-api';
 import { currentTaskReceipt } from './task-detail-summary';
 import { taskChatHref } from './task-detail-route';
 import { TaskResultEvidence } from './task-result-evidence';
+import { presentTaskRunResult } from './task-result-presentation';
 
 /** Show usable deliverable locations without promoting execution claims to acceptance. */
 export function TaskDeliverySummary({ detail, language }: { detail: TaskDetail; language: 'zh' | 'en' }) {
@@ -15,6 +16,7 @@ export function TaskDeliverySummary({ detail, language }: { detail: TaskDetail; 
   const location = useLocation();
   const deliverables = detail.deliverables ?? [];
   const receipt = currentTaskReceipt(detail);
+  const result = receipt && presentTaskRunResult(receipt, language);
   const runIds = new Set(detail.runs.filter((run) => run.contractVersion === detail.task.latestContractVersion).map((run) => run.id));
   const evidence: TaskEvidence[] = detail.context.filter((item) => item.role === 'deliverable').map((item) => ({
     kind: ['file', 'url'].includes(item.targetKind) ? 'artifact' : 'source',
@@ -32,7 +34,7 @@ export function TaskDeliverySummary({ detail, language }: { detail: TaskDetail; 
       evidence.push(item);
     }
   }
-  const summary = receipt?.summary.trim();
+  const summary = result?.summary;
   const shortSummary = summary && summary.length <= 160 && !summary.includes('\n')
     && !/\b(?:Claim|Criterion|Research claim)\b|c-ac\d|Default criteria were not/i.test(summary) ? summary : undefined;
   const remainingEvidence = evidence.filter(item => !deliverableUris.has(item.uri));
@@ -57,11 +59,10 @@ export function TaskDeliverySummary({ detail, language }: { detail: TaskDetail; 
     {remainingEvidence.length ? <TaskResultEvidence evidence={remainingEvidence} language={language} projectId={detail.task.projectId} conversationId={detail.conversation.activeConversationId ?? undefined} compact /> : null}
     {!deliverables.length && !remainingEvidence.length ? <p className="mt-2 text-sm text-fg-muted">{zh ? '尚无可查看的交付物' : 'No deliverables available yet'}</p> : null}
     {!receipt ? <p className="mt-2 text-xs text-fg-subtle">{zh ? '尚无本版任务的执行结果' : 'No run result for this task version'}</p> : null}
-    {receipt && (receipt.needsUser || receipt.remainingWork.length > 0 || receipt.nextAction || receipt.failure) ? <div className="mt-4 space-y-2 border-t border-edge-subtle pt-3" aria-label={zh ? '执行待办' : 'Run follow-up'}>
+    {receipt && result && (receipt.needsUser || result.remainingWork.length > 0 || result.nextAction) ? <div className="mt-4 space-y-2 border-t border-edge-subtle pt-3" aria-label={zh ? '执行待办' : 'Run follow-up'}>
       <h3 className="text-xs font-medium text-fg-muted">{receipt.needsUser ? (zh ? '需要你决定' : 'Your decision needed') : (zh ? '待处理事项' : 'Remaining work')}</h3>
-      {receipt.remainingWork.length > 0 ? <ul className="space-y-2 text-sm leading-6 text-fg">{[...new Set(receipt.remainingWork)].map((item) => <li key={item} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item}</li>)}</ul> : null}
-      {receipt.nextAction ? <p className="whitespace-pre-wrap break-words text-sm leading-6 text-fg [overflow-wrap:anywhere]">{receipt.nextAction}</p> : null}
-      {receipt.failure ? <p className="whitespace-pre-wrap break-words text-sm leading-6 text-danger [overflow-wrap:anywhere]">{receipt.failure.recoveryAction}</p> : null}
+      {result.remainingWork.length > 0 ? <ul className="space-y-2 text-sm leading-6 text-fg">{result.remainingWork.map((item) => <li key={item} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item}</li>)}</ul> : null}
+      {result.nextAction ? <p className="whitespace-pre-wrap break-words text-sm leading-6 text-fg [overflow-wrap:anywhere]">{result.nextAction}</p> : null}
       {receipt.needsUser ? <Link className="inline-flex min-h-9 items-center rounded-sm text-xs font-medium text-accent-fg hover:underline focus-visible:ring-2 focus-visible:ring-accent/40" to={taskChatHref(detail.task.id)}>{zh ? '查看并决定' : 'Review and decide'}</Link> : null}
     </div> : null}
   </section>;

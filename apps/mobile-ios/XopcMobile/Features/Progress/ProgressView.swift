@@ -17,14 +17,14 @@ enum WorkPage: String, CaseIterable {
 struct WorkPagesView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
-    @State private var page: WorkPage
+    @AppStorage private var page: WorkPage
 
     init(configuration: GatewayConfiguration, initialPage: WorkPage,
          onOpenConversation: @escaping (String, String, String) -> Void)
     {
         self.configuration = configuration
         self.onOpenConversation = onOpenConversation
-        _page = State(initialValue: initialPage)
+        _page = AppStorage(wrappedValue: initialPage, "navigation.work.\(initialPage.rawValue)")
     }
 
     var body: some View {

@@ -66,6 +66,7 @@ interface XopcLibraryMutation { revision: number; title?: string; favorite?: boo
 interface XopcLibraryUndo { id: string; revision: number; }
 
 const ITEM_PATH: string = '/api/spaces/items';
+const LIBRARY_KINDS: string[] = ['', 'document', 'spreadsheet', 'presentation', 'image', 'audio', 'video', 'archive', 'file'];
 const snapshots = new XopcListSnapshots<XopcLibraryPage>();
 
 @ComponentV2
@@ -101,6 +102,8 @@ export struct XopcSpaceLibraryView {
   private searchTimer: number = -1;
 
   aboutToAppear(): void {
+    this.scope = appSettings.pageSelection('library-scope', ['all', 'favorites', 'trash'], 'all');
+    this.kind = appSettings.pageSelection('library-kind', LIBRARY_KINDS, '');
     this.onBackHandler((): boolean => {
       if (this.busy) return true;
       if (!this.detailOpen) return false;
@@ -325,7 +328,8 @@ export struct XopcSpaceLibraryView {
       onSelectTitle: (scope: string): void => {
         if (this.scope === scope) return;
         this.scope = scope;
-        this.query = ''; this.kind = ''; this.undo = undefined; this.error = ''; this.setFilters();
+        appSettings.rememberPageSelection('library-scope', scope);
+        this.query = ''; this.undo = undefined; this.error = ''; this.setFilters();
       } })
     Row({ space: 8 }) {
       TextInput({ text: this.query, placeholder: this.t('搜索资料', 'Search files') }).id('space-search')
@@ -336,7 +340,8 @@ export struct XopcSpaceLibraryView {
         .optionFontColor(this.colors.foreground).optionBgColor(this.colors.panel)
         .selectedOptionFontColor(this.colors.accent).selectedOptionBgColor(this.colors.accentSoft)
         .onSelect((index: number): void => {
-          this.kind = ['', 'document', 'spreadsheet', 'presentation', 'image', 'audio', 'video', 'archive', 'file'][index] ?? '';
+          this.kind = LIBRARY_KINDS[index] ?? '';
+          appSettings.rememberPageSelection('library-kind', this.kind);
           this.setFilters();
         })
     }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 8 })

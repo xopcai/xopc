@@ -108,7 +108,11 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   onLoad: suspend (String) -> CapabilityPage, onOpenAgent: (CapabilityItem) -> Unit,
   onExit: () -> Unit, onSetupChat: (String, Boolean) -> Unit,
   onPanel: suspend (String, String, JSONObject?) -> JSONObject) {
-  var category by remember { mutableStateOf(CapabilityCategory.Plugins) }
+  val navigation = rememberNavigationPreferences()
+  var category by remember(navigation) {
+    val key = navigation.selection("capabilities", CapabilityCategory.entries.map { it.key }, CapabilityCategory.Plugins.key)
+    mutableStateOf(CapabilityCategory.entries.first { it.key == key })
+  }
   var pages by remember { mutableStateOf(emptyMap<CapabilityCategory, CapabilityPage>()) }
   var failed by remember { mutableStateOf(false) }
   var loading by remember { mutableStateOf(true) }
@@ -163,6 +167,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
       focus.clearFocus()
       keyboard?.hide()
       category = it
+      navigation.rememberSelection("capabilities", it.key)
     }
   }
 

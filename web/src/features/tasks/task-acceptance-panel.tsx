@@ -8,6 +8,7 @@ import { TaskDetailDisclosure } from './task-detail-disclosure';
 import type { CriterionSummary } from './task-detail-summary';
 import { TaskExpandableContent } from './task-expandable-content';
 import { TaskResultEvidence } from './task-result-evidence';
+import { taskTextForDisplay } from './task-result-presentation';
 
 type ReviewStatus = 'passed' | 'unverified';
 
@@ -51,7 +52,7 @@ function CriterionRow({ criterion, index, language, closed, pending, onReview, p
         <p className="font-medium text-fg">{zh ? '验收依据' : 'Acceptance evidence'}</p>
         {criterion.method ? <p>{zh ? '自动核验' : 'Automatic verification'} · {verificationLabel}{criterion.method === 'model_reviewed' ? (zh ? ' · 模型审阅' : ' · Model review') : ''}</p> : null}
         {criterion.review ? <p>{zh ? '人工验收' : 'User review'} · {reviewLabel} · {formatMediumDateTime(criterion.review.reviewedAt, language)}</p> : null}
-        {criterion.note && criterion.note !== BROAD_CRITERIA_NOTE ? <TaskExpandableContent content={criterion.note} contentKey={`criterion:${index}:note`} language={language} markdown={false} /> : null}
+        {criterion.note && criterion.note !== BROAD_CRITERIA_NOTE ? <TaskExpandableContent content={taskTextForDisplay(criterion.note, language)} contentKey={`criterion:${index}:note`} language={language} markdown={false} /> : null}
         <TaskResultEvidence evidence={criterion.evidence} projectId={projectId} conversationId={conversationId} language={language} />
         {!hasEvidence ? <p>{zh ? '暂无验收依据' : 'No evidence yet'}</p> : null}
       </div>
@@ -74,7 +75,7 @@ export function TaskAcceptancePanel({ criteria, language, closed, pending, block
   const zh = language === 'zh';
   const broadNote = criteria.some((criterion) => criterion.note === BROAD_CRITERIA_NOTE);
   return <>
-    {broadNote ? <TaskDetailDisclosure panelId="acceptance:diagnostic" title={zh ? '自动核验未完成：验收标准过于宽泛' : 'Automatic verification incomplete: criteria are too broad'} className="mx-4 mb-2 text-xs leading-5 text-fg-muted"><p className="mt-2 break-words">{BROAD_CRITERIA_NOTE}</p></TaskDetailDisclosure> : null}
+    {broadNote ? <TaskDetailDisclosure panelId="acceptance:diagnostic" title={zh ? '验收标准需要细化' : 'The criteria need more detail'} className="mx-4 mb-2 text-xs leading-5 text-fg-muted"><p className="mt-2 break-words">{taskTextForDisplay(BROAD_CRITERIA_NOTE, language)}</p></TaskDetailDisclosure> : null}
     <ul aria-busy={pending || undefined} className="border-t border-edge-subtle">{criteria.map((criterion, index) => <CriterionRow key={`${index}:${criterion.text}`} criterion={criterion} index={index} language={language} closed={closed || Boolean(reviewDisabled)} pending={pending} onReview={onReview} projectId={projectId} conversationId={conversationId} />)}</ul>
     {criteria.length === 0 ? <p className="px-4 py-4 text-sm text-fg-muted">{zh ? '尚未定义验收标准' : 'No acceptance criteria defined'}</p> : null}
     {error ? <p role="alert" className="mx-4 my-2 text-sm text-danger">{error}</p> : null}

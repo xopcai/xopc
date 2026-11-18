@@ -42,7 +42,14 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
   var error by remember(gatewayId) { mutableStateOf<Int?>(null) }
   var sheetError by remember(gatewayId) { mutableStateOf(false) }
   var saving by remember(gatewayId) { mutableStateOf(false) }
-  var tasks by rememberSaveable(gatewayId) { mutableStateOf(false) }
+  val navigation = rememberNavigationPreferences()
+  var tasks by rememberSaveable(gatewayId) {
+    mutableStateOf(navigation.selection("model-settings", listOf("defaults", "tasks"), "defaults") == "tasks")
+  }
+  fun selectTasks(selected: Boolean) {
+    tasks = selected
+    navigation.rememberSelection("model-settings", if (selected) "tasks" else "defaults")
+  }
   var showMedia by rememberSaveable(gatewayId) { mutableStateOf(false) }
   var showFallbacks by remember(gatewayId) { mutableStateOf(false) }
   var picker by remember(gatewayId) { mutableStateOf<SettingsModelRoute?>(null) }
@@ -86,16 +93,16 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
     picker = route
   }
   LaunchedEffect(gatewayId) { load() }
-  BackHandler(enabled = tasks || saving) { if (!saving) tasks = false }
+  BackHandler(enabled = saving) {}
   Column(Modifier.fillMaxSize().padding(insets).testTag("model-settings")) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
       Box(Modifier.align(Alignment.CenterStart)) {
-        PageBackButton("model-settings-back", { if (tasks) tasks = false else onBack() }, !saving)
+        PageBackButton("model-settings-back", onBack, !saving)
       }
       PageTitleMenu(listOf(
         SegmentOption(false, stringResource(R.string.ms_title), "model-page-default"),
         SegmentOption(true, stringResource(R.string.ms_tasks), "model-page-tasks")),
-        tasks, "model-settings-menu", Modifier.fillMaxWidth(0.65f)) { tasks = it }
+        tasks, "model-settings-menu", Modifier.fillMaxWidth(0.65f), ::selectTasks)
     }
     val snapshot = data
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -131,7 +138,7 @@ internal fun ModelSettingsScreen(profile: GatewayProfile, access: ModelSettingsA
             ModelSettingsRow(stringResource(R.string.ms_fallbacks), snapshot.fallbacks.size.toString(),
               { sheetError = false; showFallbacks = true })
           }
-          item { ModelSettingsRow(stringResource(R.string.ms_tasks), snapshot.tasks.count { !it.inherited }.toString(), { tasks = true }) }
+          item { ModelSettingsRow(stringResource(R.string.ms_tasks), snapshot.tasks.count { !it.inherited }.toString(), { selectTasks(true) }) }
           item { ModelSettingsCaption(stringResource(R.string.ms_other)) }
           items(snapshot.routing.filter { it.key in listOf("background", "vision", "image") }, key = { it.key }) { row ->
             ModelSettingsRouteRow(row, snapshot, { open(row) })

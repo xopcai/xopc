@@ -20,7 +20,7 @@ import { gatewaySession } from '../service/gatewaySession';
 import { XopcFilesView } from './FilesView';
 import { XopcSettingsView } from './SettingsView';
 import { XopcModelSettingsView } from './ModelSettingsView';
-import { XopcProgressView } from './HomeHubs';
+import { WORK_PAGE_OPTIONS, XopcProgressView } from './HomeHubs';
 import { XopcPersonalGoalsView } from './PersonalView';
 import { XopcAutomationRunView } from './AutomationRunView';
 import { XopcShareCenterView } from './ShareCenterView';
@@ -114,7 +114,7 @@ export struct XopcHomeView {
       if (route.target.kind === 'home') { this.navigationRevision++; this.closeSidebar(); this.pathStack.clear(); }
       else if (route.target.kind === 'task' && route.target.taskId) {
         this.pathStack.clear();
-        this.navigate({ page: 'progress', itemId: '' });
+        this.navigate({ page: 'progress', itemId: '' }, false);
         this.navigate({ page: 'tasks', itemId: route.target.taskId });
       } else if (route.target.conversationId) this.openConversationFromList(route.target.conversationId, false);
       else if (route.target.automationId) this.navigate({ page: 'automations', itemId: route.target.automationId });
@@ -144,7 +144,7 @@ export struct XopcHomeView {
     notificationNavigation.onTarget = undefined; clearInterval(this.attentionTimer); this.attention.dispose();
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
   }
-  private navigate(route: XopcMobileRoute): void {
+  private navigate(route: XopcMobileRoute, restoreWorkPage: boolean = true): void {
     if (route.page === 'automation-setup' && this.automationOpening) return;
     this.navigationRevision++;
     this.closeSidebar();
@@ -159,13 +159,21 @@ export struct XopcHomeView {
       if (route.itemId) this.openConversationFromList(route.itemId);
       return;
     }
-    this.pathStack.pushPath({ name: route.page, param: route });
+    const workPages = WORK_PAGE_OPTIONS.map((option): string => option.key);
+    if (restoreWorkPage && !route.itemId && workPages.includes(route.page)) {
+      const page = appSettings.pageSelection('work.' + route.page, workPages, route.page);
+      const restored: XopcMobileRoute = { page, itemId: '', workEntry: route.page };
+      this.pathStack.pushPath({ name: page, param: restored });
+    } else {
+      this.pathStack.pushPath({ name: route.page, param: route });
+    }
   }
 
-  private selectWorkPage(current: string, page: string): void {
+  private selectWorkPage(current: string, page: string, entry: string): void {
     if (current === page) return;
     this.navigationRevision++;
-    const route: XopcMobileRoute = { page, itemId: '' };
+    appSettings.rememberPageSelection('work.' + entry, page);
+    const route: XopcMobileRoute = { page, itemId: '', workEntry: entry };
     this.pathStack.replacePath({ name: page, param: route }, false);
   }
 
@@ -471,7 +479,7 @@ export struct XopcHomeView {
     } else if (page === 'progress') {
       NavDestination() {
         XopcProgressView({ activePage: true, model: this.attention, onExit: (): void => { this.pathStack.pop(); },
-          onSelectWorkPage: (selection: string): void => { this.selectWorkPage(page, selection); },
+          onSelectWorkPage: (selection: string): void => { this.selectWorkPage(page, selection, (param as XopcMobileRoute).workEntry ?? page); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'capability-mcp-setup') {
@@ -589,7 +597,7 @@ export struct XopcHomeView {
           : page === 'projects' || page === 'project-settings' || page === 'project-create' ? $r('app.string.projects') : $r('app.string.automations'),
         initialId: (param as XopcMobileRoute).itemId, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
         showWorkPageMenu: (page === 'tasks' || page === 'projects' || page === 'automations') && !(param as XopcMobileRoute).itemId,
-        onSelectWorkPage: (selection: string): void => { this.selectWorkPage(page, selection); },
+        onSelectWorkPage: (selection: string): void => { this.selectWorkPage(page, selection, (param as XopcMobileRoute).workEntry ?? page); },
         createOnAppear: page === 'task-create' || page === 'project-create',
         projectId: (param as XopcMobileRoute).projectId ?? '',
         onCreated: (target: string, id: string): void => {

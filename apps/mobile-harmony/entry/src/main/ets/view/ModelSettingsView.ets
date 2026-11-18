@@ -1,3 +1,4 @@
+import { appSettings } from '../service/settings';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { gatewaySession } from '../service/gatewaySession';
 import { XopcHttpError } from '../service/transport';
@@ -36,11 +37,10 @@ export struct XopcModelSettingsView {
   @Local error: number = 0;
   @Local sheetError: boolean = false;
   private gatewayId: string = '';
-  @Local gatewayName: string = '';
 
   aboutToAppear(): void {
+    this.page = appSettings.pageSelection('model-settings', ['defaults', 'tasks'], 'defaults');
     this.gatewayId = gatewaySession.currentProfile()?.gatewayId ?? '';
-    this.gatewayName = gatewaySession.currentProfile()?.name ?? '';
     void this.load();
   }
 
@@ -155,45 +155,34 @@ export struct XopcModelSettingsView {
     }
   }
 
-  @Builder
-  private row(row: XopcGlobalModelRoute) {
-    XopcHubRow({ heading: this.label(row.key), summary: this.display(row), compact: true,
-      symbol: $r('sys.symbol.slider_horizontal_2'), onOpen: (): void => { this.open('model', row); } })
-      .id('model-setting-' + row.key)
+  private selectPage(page: string): void {
+    this.page = page;
+    appSettings.rememberPageSelection('model-settings', page);
   }
 
   @Builder
-  private primary(row: XopcGlobalModelRoute) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.ellipsis_bubble')).fontSize(21).fontColor([this.colors.accent])
-        Column({ space: 4 }) {
-          Text($r('app.string.ms_chat')).fontSize(13).fontColor(this.colors.secondary)
-          Text(this.display(row)).fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-        Text($r('app.string.ms_change')).fontSize(13).fontColor(this.colors.accent)
-      }.width('100%').constraintSize({ minHeight: 72 }).padding(12)
-    }.id('model-setting-chat').width('100%').padding(0).backgroundColor(this.colors.accentSoft)
-      .borderRadius(this.colors.corner(16)).margin({ bottom: 8 }).onClick((): void => { this.open('model', row); })
+  private row(row: XopcGlobalModelRoute) {
+    XopcHubRow({ heading: this.label(row.key), trailingValue: this.display(row), compact: true,
+      symbol: row.key === 'chat' ? $r('sys.symbol.ellipsis_bubble') : $r('sys.symbol.slider_horizontal_2'),
+      onOpen: (): void => { this.open('model', row); } })
+      .id('model-setting-' + row.key)
   }
 
   @Builder
   private settingsList(data: XopcGlobalModelSettings) {
     if (this.page === 'tasks') {
-      Text($r('app.string.ms_task_help')).fontSize(13).fontColor(this.colors.secondary).width('100%').margin({ bottom: 12 })
       ForEach(data.tasks, (row: XopcGlobalModelRoute) => { this.row(row) },
         (row: XopcGlobalModelRoute): string => 'task-' + row.key + ':' + (row.name ?? ''))
     } else {
-      Text(this.gatewayName).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
-      Text($r('app.string.ms_scope')).fontSize(13).fontColor(this.colors.secondary).width('100%').margin({ top: 4 })
       XopcSectionLabel({ heading: $r('app.string.ms_default') })
       ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => row.key === 'chat'),
-        (row: XopcGlobalModelRoute) => { this.primary(row) },
+        (row: XopcGlobalModelRoute) => { this.row(row) },
         (row: XopcGlobalModelRoute): string => row.ref ?? 'default')
-      XopcHubRow({ heading: $r('app.string.ms_fallbacks'), summary: data.fallbacks.length.toString(), compact: true,
+      XopcHubRow({ heading: $r('app.string.ms_fallbacks'), trailingValue: data.fallbacks.length.toString(), compact: true,
         symbol: $r('sys.symbol.list_bullet'), onOpen: (): void => { this.open('fallbacks'); } }).id('model-settings-fallbacks')
-      XopcHubRow({ heading: $r('app.string.ms_tasks'), compact: true,
-        symbol: $r('sys.symbol.slider_horizontal_2'), onOpen: (): void => { this.page = 'tasks'; } })
+      XopcHubRow({ heading: $r('app.string.ms_tasks'), compact: true, trailingValue:
+        data.tasks.filter((route: XopcGlobalModelRoute): boolean => route.inherited !== true).length.toString(),
+        symbol: $r('sys.symbol.slider_horizontal_2'), onOpen: (): void => { this.selectPage('tasks'); } })
       XopcSectionLabel({ heading: $r('app.string.ms_other') })
       ForEach(data.routing.filter((row: XopcGlobalModelRoute): boolean => ['background', 'vision', 'image'].includes(row.key)),
         (row: XopcGlobalModelRoute) => { this.row(row) },
@@ -288,8 +277,8 @@ export struct XopcModelSettingsView {
           { key: 'tasks', label: $r('app.string.ms_tasks'), id: 'model-page-tasks' }
         ],
         selectedTitle: this.page, titleMenuId: 'model-settings-menu',
-        onSelectTitle: (page: string): void => { this.page = page; }, backVisible: true,
-        onBack: (): void => { if (this.page === 'tasks') this.page = 'defaults'; else this.onExit(); }
+        onSelectTitle: (page: string): void => { this.selectPage(page); }, backVisible: true,
+        onBack: (): void => { if (!this.saving) this.onExit(); }
       })
       Scroll() {
         Column() {
@@ -306,10 +295,6 @@ export struct XopcModelSettingsView {
     }.id('model-settings').width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.showingSheet, this.sheetBody, { height: '72%', dragBar: true, backgroundColor: this.colors.panel,
         shouldDismiss: (action: SheetDismiss): void => { if (!this.saving) action.dismiss(); } })
-    }.hideTitleBar(true).onBackPressed((): boolean => {
-      if (this.saving) return true;
-      if (this.page === 'tasks') { this.page = 'defaults'; return true; }
-      return false;
-    })
+    }.hideTitleBar(true).onBackPressed((): boolean => this.saving)
   }
 }

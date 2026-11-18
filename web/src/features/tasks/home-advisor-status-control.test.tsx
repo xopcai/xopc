@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HomeAdvisorStatusControl, type HomeAdvisorStatusCopy } from './home-advisor-status-control';
 
@@ -26,16 +26,6 @@ const copy: HomeAdvisorStatusCopy = {
 };
 
 const mounted: Array<{ container: HTMLDivElement; unmount: () => void }> = [];
-
-beforeAll(() => {
-  class TestResizeObserver implements ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-
-  globalThis.ResizeObserver = TestResizeObserver;
-});
 
 afterEach(() => {
   for (const entry of mounted.splice(0)) {
@@ -68,7 +58,7 @@ function renderControl(
 }
 
 describe('HomeAdvisorStatusControl', () => {
-  it('keeps an exhausted-generation state in the header popover', async () => {
+  it('keeps an exhausted-generation state in a dialog from the header', async () => {
     const view = renderControl({ state: 'quiet', reason: 'budget_exhausted' });
     const trigger = view.container.querySelector('button');
 
@@ -81,8 +71,9 @@ describe('HomeAdvisorStatusControl', () => {
       await Promise.resolve();
     });
 
-    expect(document.body.textContent).toContain('今天的自动建议次数已用完');
-    const buttons = Array.from(document.body.querySelectorAll('button'));
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('今天的自动建议次数已用完');
+    const buttons = Array.from(dialog.querySelectorAll('button'));
     expect(buttons.some((button) => button.textContent?.includes('建议记录'))).toBe(true);
     expect(buttons.some((button) => button.textContent?.includes('重试'))).toBe(true);
   });

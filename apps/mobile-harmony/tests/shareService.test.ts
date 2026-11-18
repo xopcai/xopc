@@ -36,6 +36,12 @@ describe('Harmony governed sharing service', () => {
     }));
   });
 
+  it('keeps historical records even when their link is unavailable', async () => {
+    const record = { id: 'expired-share', fileName: 'Archived planning', expired: true, revoked: false };
+    mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { shares: [record] } }));
+    await expect(service.list()).resolves.toEqual([record]);
+  });
+
   it('pins note shares to the current note version', async () => {
     mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { ...share, kind: 'note' } }));
     await service.note('note/1', 7);

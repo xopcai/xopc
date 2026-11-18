@@ -114,11 +114,14 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   onCloseDelivery: () -> Unit = {},
   ) {
   var pendingHomeAction by remember(state.gatewayId) { mutableStateOf<ProgressHomeAction?>(null) }
-  var page by rememberSaveable(state.gatewayId) {
+  val navigation = rememberNavigationPreferences()
+  val workOptions = listOf("overview", "automations", "projects", "tasks")
+  val workEntry = initialPage.takeIf { initialDeliveryKind == null && it in workOptions }
+  var page by rememberSaveable(state.gatewayId, initialPage) {
     mutableStateOf(when (initialDeliveryKind) {
       "task" -> "detail"
       "automation" -> "automation-run"
-      else -> initialPage
+      else -> workEntry?.let { navigation.selection("work.$it", workOptions, initialPage) } ?: initialPage
     })
   }
   var selectedTaskId by rememberSaveable(state.gatewayId) {
@@ -130,7 +133,9 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var taskSearchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var projectSearchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var automationSearchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
-  var automationFilter by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
+  var automationFilter by rememberSaveable(state.gatewayId) {
+    mutableStateOf(navigation.selection("automation-filter", listOf("all", "enabled", "paused", "attention"), "all"))
+  }
   var pendingAutomationEditId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
@@ -162,7 +167,11 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
   var discardEditOpen by rememberSaveable(state.gatewayId, selectedTaskId) { mutableStateOf(false) }
   var selectedProjectId by rememberSaveable(state.gatewayId) { mutableStateOf(initialItemId.takeIf { initialPage == "project" }) }
   var projectMenuOpen by rememberSaveable(state.gatewayId, selectedProjectId) { mutableStateOf(false) }
-  var projectSection by rememberSaveable(state.gatewayId, selectedProjectId) { mutableStateOf("overview") }
+  val projectKey = selectedProjectId?.let { "project.$it" }
+  var projectSection by rememberSaveable(state.gatewayId, selectedProjectId) {
+    val sections = listOf("overview", "sessions", "tasks", "notes", "automations")
+    mutableStateOf(projectKey?.let { navigation.selection(it, sections, "overview") } ?: "overview")
+  }
   var projectEditorMode by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var projectWriteBusy by remember(state.gatewayId) { mutableStateOf(false) }
   var projectWriteError by remember(state.gatewayId) { mutableStateOf(false) }
@@ -202,18 +211,25 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     SegmentOption("projects", stringResource(R.string.progress_projects), "work-page-projects"),
     SegmentOption("tasks", stringResource(R.string.progress_tasks), "work-page-tasks"),
   )
-  fun selectWorkPage(target: String) {
-    if (page == target) return
-    if (taskSearchOpen) closeTaskSearch()
-    projectSearchOpen = false
-    automationSearchOpen = false
-    page = target
+  fun refreshWorkPage(target: String) {
     when (target) {
       "overview" -> onRefreshHome()
       "automations" -> onLoadAutomations()
       "projects" -> onLoadProjects()
       "tasks" -> onRefreshTasks()
     }
+  }
+  fun selectWorkPage(target: String) {
+    if (page == target) return
+    if (taskSearchOpen) closeTaskSearch()
+    projectSearchOpen = false
+    automationSearchOpen = false
+    page = target
+    if (workEntry != null) navigation.rememberSelection("work.$workEntry", target)
+    refreshWorkPage(target)
+  }
+  LaunchedEffect(state.gatewayId, workEntry) {
+    if (workEntry != null && page != initialPage) refreshWorkPage(page)
   }
   fun goBack() {
     if (projectWriteBusy || state.commandBusy || state.editBusy || state.createBusy ||
@@ -230,7 +246,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
       "project" -> if (initialPage == "project" && selectedProjectId == initialItemId) onExit?.invoke() else page = "projects"
       "overview", "tasks", "projects", "automations" -> {
         if (onExit != null) {
-          page = initialPage
           onExit()
         } else page = "overview"
       }
@@ -382,7 +397,10 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           PageSearchButton(automationSearchOpen, R.string.progress_search, "automation-open-search") {
             automationSearchOpen = !automationSearchOpen
           }
-          AutomationFilterButton(automationFilter) { automationFilter = it }
+          AutomationFilterButton(automationFilter) {
+            automationFilter = it
+            navigation.rememberSelection("automation-filter", it)
+          }
         }
         else if (page == "projects") {
           PageSearchButton(projectSearchOpen, R.string.progress_search_projects, "projects-open-search") {
@@ -419,7 +437,10 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           SegmentOption("tasks", stringResource(R.string.progress_tasks), "progress-project-tab-tasks"),
           SegmentOption("notes", stringResource(R.string.tab_notes), "progress-project-tab-notes"),
           SegmentOption("automations", stringResource(R.string.progress_automations), "progress-project-tab-automations"),
-        ), projectSection, "progress-project-tabs", Modifier.fillMaxWidth(0.55f)) { projectSection = it }
+        ), projectSection, "progress-project-tabs", Modifier.fillMaxWidth(0.55f)) {
+          projectSection = it
+          if (projectKey != null) navigation.rememberSelection(projectKey, it)
+        }
       }
     }
     if (state.createTaskChatError && page == "tasks") Text(

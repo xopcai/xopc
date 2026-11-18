@@ -93,9 +93,9 @@ struct SpaceLibraryView: View {
     let onUseInChat: (MessageAttachment, LibraryOrigin?) async throws -> Void
     @Environment(\.locale) private var locale
     @Environment(\.mobileTheme) private var theme
-    @State private var scope: LibraryScope = .all
+    @AppStorage("navigation.library-scope") private var scope = LibraryScope.all
     @State private var query = ""
-    @State private var kind = ""
+    @AppStorage("navigation.library-kind") private var kind = ""
     @State private var items: [LibraryItem] = []
     @State private var selectedItem: LibraryItem?
     @State private var cursor: String?
@@ -199,7 +199,7 @@ struct SpaceLibraryView: View {
                 }
             } label: { Label(label("资料类型", "File type"), systemImage: "line.3.horizontal.decrease.circle") }
         }
-        .onChange(of: scope) { query = ""; kind = ""; undo = nil }
+        .onChange(of: scope) { query = ""; undo = nil }
         .refreshable { await load(filters) }
         .task(id: filters + [String(refresh), ComposerDraftStore.accountScope(configuration)]) {
             let request = filters

@@ -101,17 +101,8 @@ it('expands executions below the configuration chat and opens the selected run',
 });
 
 
-it.each([true, false])('automatically loads more chats when Older opens and as it scrolls (older chats already loaded: %s)', async (hasLoadedOlder) => {
+it.each([true, false])('previews four older chats and reveals the rest on demand (first page has enough: %s)', async (hasOlderPreview) => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-  let intersect: ((isIntersecting: boolean) => void) | undefined;
-  vi.stubGlobal('IntersectionObserver', class {
-    constructor(callback: IntersectionObserverCallback, options: IntersectionObserverInit) {
-      expect(options.root).toBe(container.querySelector('.app-sidebar-nav-scroll'));
-      intersect = (isIntersecting) => callback([{ isIntersecting } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
-    }
-    observe() {}
-    disconnect() { intersect = undefined; }
-  });
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -122,8 +113,9 @@ it.each([true, false])('automatically loads more chats when Older opens and as i
   }) as SessionMetadata;
   const recentProjectChat = session('latest', 'Latest project chat', today, 'another-project');
   const standalone = session('standalone', 'Standalone chat', yesterday);
-  const earlier = session('earlier', 'Earlier chat', older);
-  const oldest = session('oldest', 'Oldest chat', older);
+  const history = Array.from({ length: 7 }, (_, index) => (
+    session(`older-${index + 1}`, `Older chat ${index + 1}`, new Date(older.getTime() - index * 60_000))
+  ));
   const pinned = { ...session('pinned', 'Pinned project chat', yesterday, 'first-project'), status: 'pinned' } as SessionMetadata;
   const project = { id: 'first-project', name: 'First project' } as Project;
   vi.mocked(allProjectOptions).mockResolvedValue([{ id: 'another-project', name: 'Another project' } as Project]);
@@ -133,10 +125,12 @@ it.each([true, false])('automatically loads more chats when Older opens and as i
     inbox: { items: [standalone], total: 1, limit: 20, offset: 0, hasMore: false },
     pinned: [pinned], layouts: {}, childrenByConversationId: {},
   });
+  const firstPageOlderCount = hasOlderPreview ? 5 : 2;
+  const secondPageEnd = hasOlderPreview ? 6 : 4;
   const pages = [
-    [standalone, pinned, recentProjectChat, ...(hasLoadedOlder ? [session('existing-older', 'Existing older chat', older)] : [])],
-    [earlier],
-    [oldest],
+    [standalone, pinned, recentProjectChat, ...history.slice(0, firstPageOlderCount)],
+    history.slice(firstPageOlderCount, secondPageEnd),
+    history.slice(secondPageEnd),
   ];
   vi.mocked(listSessions).mockImplementation(async (query) => {
     const offset = query?.offset ?? 0;
@@ -162,32 +156,26 @@ it.each([true, false])('automatically loads more chats when Older opens and as i
   expect(container.querySelector('section[aria-label="Pinned"] a')?.getAttribute('title')).toContain('First project');
   expect(container.querySelector('input[type="search"]')).toBeNull();
 
-  expect(container.querySelector('a[href="/chat/existing-older"]')).toBeNull();
-  const hasLoadMore = () => [...container.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Load more');
+  const olderSection = container.querySelector('section[aria-label="Older"]')!;
+  const olderChatLinks = () => [...olderSection.querySelectorAll('a')].map((link) => link.getAttribute('href'));
   const requestsAt = (offset: number) => vi.mocked(listSessions).mock.calls.filter(([query]) => query?.offset === offset);
-  expect(hasLoadMore()).toBe(false);
-  expect(requestsAt(20)).toHaveLength(0);
-  await click('Older');
-  expect(requestsAt(20)).toHaveLength(1);
-  expect(requestsAt(40)).toHaveLength(0);
-  expect(hasLoadMore()).toBe(false);
-  if (hasLoadedOlder) expect(container.querySelector('a[href="/chat/existing-older"]')).not.toBeNull();
-  expect(container.querySelector('a[href="/chat/earlier"]')).not.toBeNull();
-  expect(intersect).toBeDefined();
-  await act(async () => intersect?.(false));
+  expect(olderChatLinks()).toEqual(['/chat/older-1', '/chat/older-2', '/chat/older-3', '/chat/older-4']);
+  expect(requestsAt(20)).toHaveLength(hasOlderPreview ? 0 : 1);
   expect(requestsAt(40)).toHaveLength(0);
 
-  await click('Older');
-  expect(intersect).toBeUndefined();
-  expect(container.querySelector('a[href="/chat/earlier"]')).toBeNull();
-  await click('Older');
-  expect(intersect).toBeDefined();
-  await act(async () => intersect?.(true));
+  if (hasOlderPreview) {
+    await click('View more');
+    expect(olderChatLinks()).toHaveLength(5);
+    expect(requestsAt(20)).toHaveLength(0);
+    await click('View more');
+    expect(olderChatLinks()).toHaveLength(6);
+    expect(requestsAt(40)).toHaveLength(0);
+  }
+  await click('View more');
   expect(requestsAt(20)).toHaveLength(1);
   expect(requestsAt(40)).toHaveLength(1);
-  expect(container.querySelector('a[href="/chat/oldest"]')).not.toBeNull();
-  expect(intersect).toBeUndefined();
-  expect(hasLoadMore()).toBe(false);
+  expect(olderChatLinks()).toEqual(history.map(({ key }) => `/chat/${key}`));
+  expect(olderSection.textContent).not.toContain('View more');
 
   await click('Projects');
   const createProject = container.querySelector('button[aria-label="Create project"]');
@@ -199,5 +187,5 @@ it.each([true, false])('automatically loads more chats when Older opens and as i
 
   await click('Recent');
   expect(container.querySelector('button[aria-label="Create project"]')).toBeNull();
-  expect(container.querySelector('a[href="/chat/earlier"]')).not.toBeNull();
+  expect(container.querySelectorAll('section[aria-label="Older"] a')).toHaveLength(history.length);
 });

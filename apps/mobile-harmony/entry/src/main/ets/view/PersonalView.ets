@@ -97,7 +97,6 @@ export struct XopcPersonalGoalsView {
       Column({ space: 12 }) {
         Text(this.editingGoalId ? $r('app.string.personal_goal_edit') : $r('app.string.personal_goal_add'))
           .fontSize(21).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
-        Text($r('app.string.personal_goal_help')).fontSize(13).lineHeight(19).fontColor(this.colors.secondary).width('100%')
         TextInput({ text: this.goalTitle, placeholder: $r('app.string.personal_goal_title') })
           .maxLength(120).fontColor(this.colors.foreground).backgroundColor(this.colors.input)
           .onChange((text: string): void => { this.goalTitle = text; })
@@ -131,7 +130,7 @@ export struct XopcPersonalGoalsView {
 
   build() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.personal_goals'), backVisible: true,
+      XopcPageHeader({ heading: $r('app.string.personal_goals'), showStaticTitle: true, backVisible: true,
         onBack: this.onExit, actionLabel: $r('app.string.personal_goal_add'),
         actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.openGoalEditor(); } })
       Scroll() {

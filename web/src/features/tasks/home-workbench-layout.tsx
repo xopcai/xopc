@@ -1,10 +1,12 @@
-import * as Popover from '@radix-ui/react-popover';
+import * as Dialog from '@radix-ui/react-dialog';
 import { GripHorizontal, Undo2 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { routeWheelThroughVerticalScrollChain } from '@/lib/wheel-scroll-chain';
+
+import { WorkbenchDialog } from './workbench-dialog';
 
 const CARD_IDS = ['attention', 'delivery', 'resume', 'background', 'observation'] as const;
 const LANES = ['left', 'right', 'full'] as const;
@@ -342,50 +344,47 @@ export function HomeWorkbenchLayout({ cards, editing, language }: {
               {isTarget ? <span aria-hidden className={cn('pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full bg-accent', target.after ? '-bottom-2' : '-top-2')} /> : null}
               {editing ? (
                 <div className="flex justify-start px-2 pt-1">
-                  <Popover.Root>
-                    <Popover.Trigger asChild>
-                      <Button
-                        variant="ghost"
-                        className="h-7 cursor-grab rounded-lg px-3 py-0 active:cursor-grabbing"
-                        aria-label={gripLabel}
-                        title={gripLabel}
-                        draggable
-                        onDragStart={(event) => {
-                          const block = event.currentTarget.closest<HTMLElement>('[data-workbench-item]');
-                          if (block) {
-                            const rect = block.getBoundingClientRect();
-                            event.dataTransfer.setDragImage(block, event.clientX - rect.left, event.clientY - rect.top);
-                          }
-                          event.dataTransfer.setData(DRAG_TYPE, card.id);
-                          event.dataTransfer.effectAllowed = 'move';
-                          setDragged(card.id);
-                        }}
-                        onDragEnd={finishDrag}
-                      >
-                        <GripHorizontal className="size-4" aria-hidden />
-                      </Button>
-                    </Popover.Trigger>
-                    <Popover.Portal>
-                      <Popover.Content align="start" sideOffset={4} aria-label={gripLabel} className="z-50 min-w-36 rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover">
-                        <Popover.Close asChild><Button variant="ghost" className={menuItem} disabled={index === 0} onClick={() => move(card.id, { lane, anchor: laneCards[index - 1]?.id })}>
-                          {zh ? '上移' : 'Move up'}
-                        </Button></Popover.Close>
-                        <Popover.Close asChild><Button variant="ghost" className={menuItem} disabled={index === laneCards.length - 1} onClick={() => move(card.id, { lane, anchor: laneCards[index + 1]?.id, after: true })}>
-                          {zh ? '下移' : 'Move down'}
-                        </Button></Popover.Close>
-                        {LANES.map((destination, destinationIndex) => (
-                          <Popover.Close key={destination} asChild><Button variant="ghost" className={menuItem} disabled={destination === lane} onClick={() => move(card.id, { lane: destination })}>
-                            {zh ? `移到${laneLabels[destinationIndex]}` : `Move to ${laneLabels[destinationIndex].toLowerCase()}`}
-                          </Button></Popover.Close>
-                        ))}
-                        <Popover.Close asChild>
-                          <Button variant="ghost" className={menuItem} disabled={!preferred} onClick={() => resetCardSize(card)}>
-                            {zh ? '恢复自动尺寸' : 'Restore automatic size'}
-                          </Button>
-                        </Popover.Close>
-                      </Popover.Content>
-                    </Popover.Portal>
-                  </Popover.Root>
+                  <WorkbenchDialog title={gripLabel} size="compact" trigger={(
+                    <Button
+                      variant="ghost"
+                      className="h-7 cursor-grab rounded-lg px-3 py-0 active:cursor-grabbing"
+                      aria-label={gripLabel}
+                      title={gripLabel}
+                      draggable
+                      onDragStart={(event) => {
+                        const block = event.currentTarget.closest<HTMLElement>('[data-workbench-item]');
+                        if (block) {
+                          const rect = block.getBoundingClientRect();
+                          event.dataTransfer.setDragImage(block, event.clientX - rect.left, event.clientY - rect.top);
+                        }
+                        event.dataTransfer.setData(DRAG_TYPE, card.id);
+                        event.dataTransfer.effectAllowed = 'move';
+                        setDragged(card.id);
+                      }}
+                      onDragEnd={finishDrag}
+                    >
+                      <GripHorizontal className="size-4" aria-hidden />
+                    </Button>
+                  )}>
+                    <div className="space-y-1">
+                      <Dialog.Close asChild><Button variant="ghost" className={menuItem} disabled={index === 0} onClick={() => move(card.id, { lane, anchor: laneCards[index - 1]?.id })}>
+                        {zh ? '上移' : 'Move up'}
+                      </Button></Dialog.Close>
+                      <Dialog.Close asChild><Button variant="ghost" className={menuItem} disabled={index === laneCards.length - 1} onClick={() => move(card.id, { lane, anchor: laneCards[index + 1]?.id, after: true })}>
+                        {zh ? '下移' : 'Move down'}
+                      </Button></Dialog.Close>
+                      {LANES.map((destination, destinationIndex) => (
+                        <Dialog.Close key={destination} asChild><Button variant="ghost" className={menuItem} disabled={destination === lane} onClick={() => move(card.id, { lane: destination })}>
+                          {zh ? `移到${laneLabels[destinationIndex]}` : `Move to ${laneLabels[destinationIndex].toLowerCase()}`}
+                        </Button></Dialog.Close>
+                      ))}
+                      <Dialog.Close asChild>
+                        <Button variant="ghost" className={menuItem} disabled={!preferred} onClick={() => resetCardSize(card)}>
+                          {zh ? '恢复自动尺寸' : 'Restore automatic size'}
+                        </Button>
+                      </Dialog.Close>
+                    </div>
+                  </WorkbenchDialog>
                 </div>
               ) : null}
               <div

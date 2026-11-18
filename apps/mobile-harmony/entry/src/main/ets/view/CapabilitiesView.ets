@@ -1,3 +1,4 @@
+import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { agentDisplayDescription, agentDisplayName } from '../common/agentPresentation';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -27,11 +28,15 @@ export struct XopcCapabilitiesView {
   @Local catalog?: XopcCapabilityPage;
   @Local detail?: XopcCapabilityItem;
   @Local detailOpen: boolean = false;
+  private pendingChatPrompt: string = '';
   private pages: Map<string, XopcCapabilityPage> = new Map<string, XopcCapabilityPage>();
   private scroller: Scroller = new Scroller();
   private generation: number = 0;
 
-  aboutToAppear(): void { void this.load(); }
+  aboutToAppear(): void {
+    this.category = appSettings.pageSelection('capabilities', categories, 'plugins');
+    void this.load();
+  }
   aboutToDisappear(): void { this.generation++; }
 
   private async load(): Promise<void> {
@@ -53,6 +58,7 @@ export struct XopcCapabilitiesView {
     this.getUIContext().getFocusController().clearFocus();
     this.query = '';
     this.category = category;
+    appSettings.rememberPageSelection('capabilities', category);
     this.catalog = this.pages.get(category);
     this.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
     void this.load();
@@ -109,7 +115,8 @@ export struct XopcCapabilitiesView {
   }
 
   @Computed get matches(): XopcCapabilityItem[] {
-    let rows = this.catalog?.items ?? [];
+    if (!this.catalog) return [];
+    let rows = this.catalog.items;
     const personal = this.personal;
     if (this.category === 'agents') {
       rows = rows.map((item: XopcCapabilityItem): XopcCapabilityItem => {
@@ -150,25 +157,50 @@ export struct XopcCapabilitiesView {
     }
   }
 
+  private showDetail(item: XopcCapabilityItem): void {
+    this.getUIContext().getFocusController().clearFocus();
+    this.detail = item;
+    this.detailOpen = true;
+  }
+
+  @Builder
+  private itemContent(item: XopcCapabilityItem) {
+    this.icon(item)
+    Column({ space: 4 }) {
+      Text(item.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      if (item.description) Text(item.description).fontSize(13).lineHeight(18).fontColor(this.colors.secondary)
+        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+  }
+
   @Builder
   itemRow(item: XopcCapabilityItem) {
-    Button({ type: ButtonType.Normal }) {
-      Row({ space: 14 }) {
-        this.icon(item)
-        Column({ space: 4 }) {
-          Text(item.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          if (item.description) Text(item.description).fontSize(13).lineHeight(18).fontColor(this.colors.secondary)
-            .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
-      }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
-    }.width('100%').padding(0).backgroundColor(this.colors.panel)
-      .borderRadius(this.colors.corner(18)).id('capability-row-' + item.id)
-      .onClick((): void => {
-        this.getUIContext().getFocusController().clearFocus();
-        this.detail = item; this.detailOpen = true;
-      }, SEGMENTED_PAGE_TAP_SLOP_VP)
+    Row() {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 14 }) {
+          this.itemContent(item)
+          if (this.category !== 'agents') {
+            SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
+          }
+        }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
+      }.layoutWeight(1).padding(0).backgroundColor(Color.Transparent).id('capability-row-' + item.id)
+        .enabled(this.category !== 'agents' || item.group !== 'disabled')
+        .onClick((): void => {
+          if (this.category === 'agents') {
+            this.getUIContext().getFocusController().clearFocus();
+            this.onOpenAgent(item.id, item.id === this.personal?.agentId);
+          } else this.showDetail(item);
+        }, SEGMENTED_PAGE_TAP_SLOP_VP)
+      if (this.category === 'agents') {
+        Button({ type: ButtonType.Circle }) {
+          Text('⋯').fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
+        }.width(44).height(44).padding(0).margin({ right: 8 }).backgroundColor(Color.Transparent)
+          .id('capability-settings-' + item.id)
+          .accessibilityText(this.getLabel($r('app.string.settings')) + ' · ' + item.name)
+          .onClick((): void => { this.showDetail(item); }, SEGMENTED_PAGE_TAP_SLOP_VP)
+      }
+    }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18))
   }
 
   @Builder
@@ -179,16 +211,14 @@ export struct XopcCapabilitiesView {
         iconUrl: this.detail.iconUrl ?? '', avatarReference: this.detail.avatar ?? '',
         appearance: this.detail.id === this.personal?.agentId ? this.personal?.appearance ?? 'loopi' : 'configured',
         avatarRevision: this.detail.id === this.personal?.agentId ? this.personal?.revision ?? 0 : 0,
-        canChat: this.category === 'agents' && this.detail.group !== 'disabled',
         onClose: (): void => { this.detailOpen = false; },
         onChanged: (): void => {
           void this.load();
           if (this.detail?.id && this.detail.id === this.personal?.agentId) this.onPersonalChanged();
         },
-        onChat: (): void => {
-          const id = this.detail?.id ?? '';
+        onUseInChat: (prompt: string): void => {
+          this.pendingChatPrompt = prompt;
           this.detailOpen = false;
-          if (id) this.onOpenAgent(id, id === this.personal?.agentId);
         } })
     }
   }
@@ -237,8 +267,12 @@ export struct XopcCapabilitiesView {
           .onActionEnd((event: GestureEvent): void => { this.swipeCategory(event); }))
       this.searchField()
     }.width('100%').height('100%').padding({ left: 18, right: 18 }).backgroundColor(this.colors.surface)
-      .bindSheet($$this.detailOpen, this.detailSheet, { height: '78%', dragBar: true,
-        showClose: false, backgroundColor: this.colors.panel })
+      .bindSheet($$this.detailOpen, this.detailSheet, { height: '88%', dragBar: true,
+        showClose: false, backgroundColor: this.colors.surface, onDisappear: (): void => {
+          const prompt = this.pendingChatPrompt;
+          this.pendingChatPrompt = '';
+          if (prompt) this.onSetupChat(prompt, false);
+        } })
   }
 
   @Builder

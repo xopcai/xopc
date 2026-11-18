@@ -3893,7 +3893,10 @@ private fun ConversationsScreen(
   onLoadProjects: () -> Unit,
   onFetchExperts: suspend () -> List<ConversationAgent>,
 ) {
-  var mode by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("recent") }
+  val navigation = rememberNavigationPreferences()
+  var mode by rememberSaveable(connection.profile?.gatewayId) {
+    mutableStateOf(navigation.selection("conversation-history", listOf("recent", "projects", "experts"), "recent"))
+  }
   var groupId by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
   var groupName by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
   var groupQuery by rememberSaveable(connection.profile?.gatewayId) { mutableStateOf("") }
@@ -4112,6 +4115,7 @@ private fun ConversationsScreen(
         if (mode != selected) {
           clearGroup()
           mode = selected
+          navigation.rememberSelection("conversation-history", selected)
         }
       }
     }

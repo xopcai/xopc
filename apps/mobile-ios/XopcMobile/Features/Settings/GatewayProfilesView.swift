@@ -53,16 +53,12 @@ struct GatewayProfilesView: View {
                             )
                         }
                     }
-                } header: {
-                    Text("已保存的 Gateway")
-                } footer: {
-                    Text("切换前必须先探测成功。连接凭据分别保存在系统钥匙串中。")
                 }
                 if let storageError {
                     Section { Label(storageError, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
                 }
             }
-            .mobilePageTitle(Text("Gateway 管理"))
+            .navigationTitle("Gateway 管理")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $detailProfile) { profile in
                 GatewayProfileDetailView(

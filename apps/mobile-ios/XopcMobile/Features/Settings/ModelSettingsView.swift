@@ -70,10 +70,9 @@ struct ModelSettingsView: View {
     }
 
     let configuration: GatewayConfiguration
-    let gatewayName: String
     private let path = "/api/mobile/model-settings"
     @State private var data: GlobalModelSettings?
-    @State private var page: Page = .defaults
+    @AppStorage("navigation.model-settings") private var page = Page.defaults
     @State private var sheet: Sheet?
     @State private var saving = false
     @State private var loading = false
@@ -100,7 +99,7 @@ struct ModelSettingsView: View {
                 if page == .tasks {
                     Section {
                         ForEach(data.tasks) { route in routeRow(route, data: data, page: .tasks) }
-                    } footer: { Text("未单独设置的任务使用默认对话模型。") }
+                    }
                 } else {
                     defaultSections(data)
                 }
@@ -113,14 +112,6 @@ struct ModelSettingsView: View {
                 SegmentOption(id: Page.tasks, title: "按任务选模型", accessibilityID: "model-page-tasks")
             ], selected: page, identifier: "model-settings-menu") { page = $0 }
         }
-        .navigationBarBackButtonHidden(page == .tasks)
-        .toolbar {
-            if page == .tasks {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("返回", systemImage: "chevron.backward") { page = .defaults }.labelStyle(.iconOnly)
-                }
-            }
-        }
         .task(id: configuration) { await load() }
         .refreshable { await load() }
         .sheet(item: $sheet) { sheet in
@@ -131,30 +122,9 @@ struct ModelSettingsView: View {
     }
 
     @ViewBuilder private func defaultSections(_ data: GlobalModelSettings) -> some View {
-        Section {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: gatewayName).mobileTextStyle(.rowTitle)
-                Text("未单独设置模型的助理会继承此配置。").mobileTextStyle(.caption).foregroundStyle(.secondary)
-            }
-        }
         Section("默认模型") {
             if let primary = data.routing.first(where: { $0.key == "chat" }) {
-                Button { open(.choose(primary, .defaults), current: primary.ref) } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("对话与任务").mobileTextStyle(.caption).foregroundStyle(.secondary)
-                            if let name = primary.name {
-                                Text(verbatim: name).mobileTextStyle(.rowTitle).foregroundStyle(.primary)
-                            } else {
-                                Text("未配置").mobileTextStyle(.rowTitle)
-                            }
-                        }
-                        Spacer()
-                        Text("更换").mobileTextStyle(.caption).foregroundStyle(theme.action)
-                    }.frame(minHeight: 56).contentShape(Rectangle())
-                }
-                .accessibilityIdentifier("model-setting-chat")
-                .listRowBackground(theme.action.opacity(0.10))
+                routeRow(primary, data: data, page: .defaults)
             }
             Button { open(.fallbacks) } label: {
                 settingLabel("备用模型", trailing: Text(data.fallbacks.count.formatted()))
@@ -178,7 +148,7 @@ struct ModelSettingsView: View {
     private func routeRow(_ route: GlobalModelRoute, data: GlobalModelSettings, page: Page) -> some View {
         let value = if route.inherited == true {
             Text("继承默认")
-        } else if data.pools[route.pool]?.isEmpty != false {
+        } else if route.key != "chat", data.pools[route.pool]?.isEmpty != false {
             Text("未连接服务")
         } else if let name = route.name {
             Text(verbatim: name)
@@ -252,7 +222,7 @@ struct ModelSettingsView: View {
                             }.buttonStyle(.borderless)
                         }
                         Button("添加备用模型", systemImage: "plus") { open(.addFallback) }
-                    } footer: { Text("默认对话模型失败时，从上到下依次尝试。") }
+                    } footer: { Text("默认模型失败时，按顺序尝试。") }
                 case .addFallback:
                     picker(data.pools["chat", default: []].filter { candidate in
                         candidate.ref != data.routing.first(where: { $0.key == "chat" })?.ref &&

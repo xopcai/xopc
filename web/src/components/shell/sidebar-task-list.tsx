@@ -108,6 +108,7 @@ function isSidebarConversation(session: SessionMetadata): boolean {
 }
 
 const PAGE_SIZE = 20;
+const OLDER_SESSION_PREVIEW_LIMIT = 4;
 const PROJECT_LIMIT = 12;
 const PROJECT_PREVIEW_LIMIT = 5;
 const SIDEBAR_STALE_DAYS = 60;
@@ -1151,9 +1152,7 @@ function SidebarTaskListContent({
   const [includedConversationId, setIncludedConversationId] = useState<string | undefined>(() => activeConversationId);
   const [view, setView] = useState<SessionView>(readSessionView);
   const [viewOrder, setViewOrder] = useState(readSessionViewOrder);
-  const [showOlder, setShowOlder] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const recentLoadMoreRef = useRef<HTMLDivElement>(null);
+  const [showAllLoadedOlder, setShowAllLoadedOlder] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
@@ -1340,10 +1339,10 @@ function SidebarTaskListContent({
   const recentGroups = groupRecentSessions(recentItems.filter(
     (session) => session.status !== 'pinned' && !pinnedConversationIds.has(session.key),
   ));
-  const activeOlder = recentGroups.older.some((session) => session.key === activeConversationId);
-  useEffect(() => {
-    if (activeOlder) setShowOlder(true);
-  }, [activeConversationId, activeOlder]);
+  const activeOlderIndex = recentGroups.older.findIndex((session) => session.key === activeConversationId);
+  const visibleOlder = showAllLoadedOlder
+    ? recentGroups.older
+    : recentGroups.older.slice(0, Math.max(OLDER_SESSION_PREVIEW_LIMIT, activeOlderIndex + 1));
 
   const loadingMore = Boolean(data && size > data.length);
   const lastPage = data?.[data.length - 1];
@@ -1682,27 +1681,15 @@ function SidebarTaskListContent({
 
   const recentHasMore = recentPages?.at(-1)?.hasMore ?? false;
   const pendingRecentPage = Boolean(recentPages && recentSize > recentPages.length);
-  const loadingRecentMore = pendingRecentPage && validatingRecent;
-  const hasOlderSessions = recentGroups.older.length > 0;
+  const needsOlderPreview = recentGroups.older.length < OLDER_SESSION_PREVIEW_LIMIT;
+  const hasHiddenOlder = visibleOlder.length < recentGroups.older.length;
+  const hasMoreOlder = hasHiddenOlder || (recentHasMore && !needsOlderPreview && !recentError);
+  const canLoadRecentPage = recentHasMore && !recentError && !validatingRecent && !pendingRecentPage;
   useEffect(() => {
-    if (view !== 'recent' || !showOlder || !recentHasMore || recentError || validatingRecent || pendingRecentPage) return;
-    const loadNextPage = () => void setRecentSize(recentSize + 1);
-    if (recentSize === 1 || !hasOlderSessions) {
-      loadNextPage();
-      return;
+    if (view === 'recent' && needsOlderPreview && canLoadRecentPage) {
+      void setRecentSize(recentSize + 1);
     }
-    const root = scrollRef.current;
-    const sentinel = recentLoadMoreRef.current;
-    if (!root || !sentinel || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        observer.disconnect();
-        loadNextPage();
-      }
-    }, { root, rootMargin: '0px 0px 100px' });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasOlderSessions, pendingRecentPage, recentError, recentHasMore, recentSize, setRecentSize, showOlder, validatingRecent, view]);
+  }, [canLoadRecentPage, needsOlderPreview, recentSize, setRecentSize, view]);
 
   const recentLoadError = recentError ? (
     <div role="alert" className="space-y-2 p-2 text-xs text-fg-muted">
@@ -1772,10 +1759,11 @@ function SidebarTaskListContent({
     </div>
   );
 
-  const renderRecentPeriod = (label: string, sessions: SessionMetadata[]) => sessions.length > 0 ? (
+  const renderRecentPeriod = (label: string, sessions: SessionMetadata[], footer?: ReactNode) => sessions.length > 0 || footer ? (
     <section aria-label={label}>
       <h2 className={cn('px-2 pb-1', sidebarSectionLabelClass)}>{label}</h2>
       {renderRecentRows(sessions)}
+      {footer}
     </section>
   ) : null;
 
@@ -1807,7 +1795,6 @@ function SidebarTaskListContent({
     <TaskGroupsContext value={taskGroups}>
     <div className="flex min-h-0 flex-1 flex-col">
       <div
-        ref={scrollRef}
         className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-2"
         onScroll={onScroll}
       >
@@ -1846,32 +1833,30 @@ function SidebarTaskListContent({
         ) : view === 'recent' ? (
           <div className="flex flex-col gap-2 px-2">
             {!recentPages && !recentError ? <SidebarTaskListSkeleton /> : null}
-            {!pendingRecentPage || !showOlder ? recentLoadError : null}
+            {!pendingRecentPage ? recentLoadError : null}
             {recentPages && !recentError && !recentItems.length && !pinnedSessions.length && !recentHasMore
               ? <p className="px-2 py-3 text-xs text-fg-muted">{sb.taskListEmpty}</p>
               : null}
             {renderRecentPeriod(sb.timelineToday, recentGroups.today)}
             {renderRecentPeriod(sb.timelineYesterday, recentGroups.yesterday)}
-            {hasOlderSessions || recentHasMore ? (
-              <div>
-                <button
-                  type="button"
-                  className={cn('flex w-full items-center gap-1 rounded-lg px-2 py-1 text-left hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', sidebarSectionButtonClass)}
-                  aria-expanded={showOlder}
-                  onClick={() => setShowOlder((value) => !value)}
-                >
-                  <ChevronDown className={cn('size-3.5 transition-transform', !showOlder && '-rotate-90')} aria-hidden />
-                  {sb.timelineOlder}
-                </button>
-                {showOlder ? (
-                  <>
-                    {renderRecentRows(recentGroups.older)}
-                    {loadingRecentMore ? <SidebarSessionSkeletonRow /> : pendingRecentPage ? recentLoadError : null}
-                    {recentHasMore ? <div ref={recentLoadMoreRef} className="h-px" aria-hidden /> : null}
-                  </>
+            {renderRecentPeriod(sb.timelineOlder, visibleOlder, pendingRecentPage || hasMoreOlder ? (
+              <>
+                {pendingRecentPage ? recentLoadError ?? <SidebarSessionSkeletonRow /> : null}
+                {hasMoreOlder ? (
+                  <button
+                    type="button"
+                    className="min-h-8 w-full rounded-lg px-2 text-left text-xs text-fg-muted hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                    disabled={!hasHiddenOlder && !canLoadRecentPage}
+                    onClick={() => {
+                      setShowAllLoadedOlder(true);
+                      if (!hasHiddenOlder && canLoadRecentPage) void setRecentSize(recentSize + 1);
+                    }}
+                  >
+                    {sb.timelineViewMore}
+                  </button>
                 ) : null}
-              </div>
-            ) : null}
+              </>
+            ) : null)}
           </div>
         ) : (
           <div>

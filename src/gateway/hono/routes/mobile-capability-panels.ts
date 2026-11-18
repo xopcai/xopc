@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { AgentCatalogRepository } from '../../../agent-catalog/repository.js';
 import { AgentCatalogService } from '../../../agent-catalog/service.js';
+import type { SkillCatalogEntry } from '../../../agent/agent-manager.js';
 import { McpConnectionDrafts, McpDraftError } from '../../../agent/mcp/connection-drafts.js';
 import { evictAllEmbeddedSessionRunners } from '../../../agent/embedded/session-runner.js';
 import { checkUrlSafety } from '../../../agent/tools/url-safety.js';
@@ -79,6 +80,7 @@ type Panel = {
   qrUrl?: string;
   pollAction?: string;
   results?: SkillResult[];
+  chatPrompt?: string;
 };
 type Translator = (zh: string, en: string) => string;
 type Command = z.output<typeof schema>;
@@ -87,8 +89,20 @@ type SkillMarket = {
     items: { id: string; name: string; provider: string; selection?: string; description?: string; iconUrl?: string; installed: boolean }[];
     incomplete: boolean;
   }>;
-  install: (c: Context, selection: string) => Promise<unknown>;
+  install: (c: Context, selection: string) => Promise<{ name: string }>;
 };
+
+function useCapability(name: string, id: string, t: Translator): string {
+  const label = name.replace(/\s+/g, ' ').trim();
+  const target = label && label !== id ? `${label} (${id})` : id;
+  return t(`请使用「${target}」帮我：`, `Use “${target}” to help me with:`);
+}
+
+function skillChatPrompt(item: SkillCatalogEntry, t: Translator): string | undefined {
+  if (!item.enabled || (item.plugin && (!item.plugin.active || item.plugin.readiness !== 'ready'))) return;
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(item.name) ? `/skill:${item.name} `
+    : useCapability(item.name, item.directoryId, t);
+}
 
 function safeLink(value?: string): string | undefined {
   if (!value) return;
@@ -171,13 +185,15 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
   async function skill(c: Context, id: string, t: Translator, command?: Command): Promise<Panel> {
     if (id === 'marketplace:search') {
       const installing = command?.action.startsWith('install:');
-      if (installing) await skillMarket.install(c, command!.action.slice('install:'.length));
+      const installed = installing ? await skillMarket.install(c, command!.action.slice('install:'.length)) : undefined;
       const query = command?.values.query?.trim() ?? '';
       const panel: Panel = { fields: [{ ...text('query', t('技能名称或关键词', 'Skill name or keyword'), query),
         hint: t('例如：会议纪要、PDF', 'For example: meeting notes or PDF') }],
         actions: [{ id: 'search', label: t('搜索', 'Search') }] };
-      if (installing) {
-        panel.message = t('技能已安装，可在技能列表中使用。', 'Skill installed. It is available in your skills.');
+      if (installed) {
+        const entry = service.marketplace.getSkillsApi().catalog.find(row => row.directoryId === installed.name);
+        panel.message = t('技能已安装', 'Skill installed');
+        if (entry) panel.chatPrompt = skillChatPrompt(entry, t);
       } else if (query) {
         if (query.length < 2) return { ...panel, message: t('请输入至少两个字符。', 'Enter at least two characters.') };
         const found = await skillMarket.search(c, query);
@@ -211,6 +227,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
     }
     return { fields: [toggle('enabled', t('启用技能', 'Enable skill'), item.enabled !== false)],
       message: command?.action === 'save' ? t('已保存', 'Saved') : undefined,
+      chatPrompt: skillChatPrompt(item, t),
       actions: [{ id: 'save', label: t('保存', 'Save') }] };
   }
 
@@ -292,6 +309,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       if (result.phase === 'ready') return {
         message: result.reloadRequired ? t('连接已保存，重启网关后生效。', 'Connection saved. Restart the Gateway to apply it.')
           : t('连接已完成。', 'Connection complete.'),
+        ...(!result.reloadRequired ? { chatPrompt: useCapability(name, result.serverId, t) } : {}),
       };
       if (!setup) return ended;
       const cancel: PanelAction = { id: 'cancel', label: t('取消连接', 'Cancel connection'), advanced: true };
@@ -331,9 +349,16 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       const owner = getGatewayPrincipal(c).principalId;
       const flow = command?.flow;
       if (flow) {
+        const complete = async (): Promise<Panel> => {
+          const result = await withGatewayConfigWriteLock(service, () => drafts.commit(owner, flow, true));
+          if (result.reloadRequired) return {
+            message: t('连接已保存，重启网关后生效。', 'Connection saved. Restart the Gateway to apply it.'),
+          };
+          return { message: t('连接已添加', 'Connection added'),
+            chatPrompt: useCapability(service.currentConfig.mcp?.servers?.[result.serverId]?.displayName ?? result.serverId, result.serverId, t) };
+        };
         if (command.action === 'save') {
-          await withGatewayConfigWriteLock(service, () => drafts.commit(owner, flow, true));
-          return { message: t('连接已安装', 'Connection installed') };
+          return complete();
         }
         if (command.action === 'cancel') { drafts.remove(owner, flow); return connection(c, id, t); }
         let current: { state: string; authorizationUrl?: string; acceptsRedirect?: boolean };
@@ -348,8 +373,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           default: throw new McpDraftError(400, 'Unknown connection action.');
         }
         if (current.state === 'connected') {
-          await withGatewayConfigWriteLock(service, () => drafts.commit(owner, flow, true));
-          return { message: t('连接已添加，可以使用了。', 'Connection added and ready to use.') };
+          return complete();
         }
         const authorizing = current.state === 'authorizing' || current.state === 'starting';
         const recoverable = current.state === 'oauth_required' || current.state === 'auth_unknown'
@@ -406,6 +430,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
         return connection(c, id, t);
       }
       return { fields: [toggle('enabled', t('启用连接', 'Enable connection'), server.enabled !== false)],
+        chatPrompt: server.enabled !== false ? useCapability(server.displayName ?? key, key, t) : undefined,
         actions: [{ id: 'save', label: t('保存配置', 'Save settings') }] };
     }
     const definition = getConnectorDefinition(id);
@@ -447,8 +472,11 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           });
           return { ...await connection(c, id, t), message: t('连接设置已保存。', 'Connection settings saved.') };
         }
+        const ready = instance?.enabled && !['unauthorized', 'error'].includes(instance.connectionStatus)
+          && !['missing', 'unauthorized'].includes(instance.authStatus);
         return { fields: [...connectorFields(known, instance?.config), ...(instance
           ? [toggle('enabled', t('启用连接', 'Enable connection'), instance.enabled)] : [])],
+          chatPrompt: ready ? useCapability(instance.displayName, id, t) : undefined,
           actions: [{ id: 'save', label: instance ? t('保存设置', 'Save settings') : t('添加连接', 'Add connection'),
             ...(!instance ? { confirmation: [known.displayName, ...(known.capabilities ?? [])].join('\n') } : {}) }] };
       }
@@ -537,6 +565,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       return connection(c, id, t);
     }
     return { message: rows.length ? t('已连接', 'Connected') : t('尚未连接', 'Not connected'),
+      chatPrompt: rows.length ? useCapability(definition.displayName, id, t) : undefined,
       actions: rows.length ? rows.map((row, index) => ({ id: 'disconnect:' + row.id,
         label: rows.length > 1 ? t('断开账号 ', 'Disconnect account ') + (index + 1) : t('断开连接', 'Disconnect'),
         confirmation: t('断开后，助理将无法使用此账号。', 'The assistant will lose access to this account.'), advanced: true }))
@@ -556,13 +585,16 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
         if (command?.action === 'save') {
           const result = await service.setExtensionActivationTarget(id, command.values.enabled === 'true');
           if (!result.ok) throw new McpDraftError(400, result.error ?? 'Could not save extension settings.');
-          return { ...await plugin(c, id, t), message: result.requiresGatewayRestart
+          const panel = await plugin(c, id, t);
+          return { ...panel, chatPrompt: result.requiresGatewayRestart ? undefined : panel.chatPrompt, message: result.requiresGatewayRestart
             ? t('已保存，重启网关后生效。', 'Settings saved. Restart the Gateway to apply them.')
             : t('已保存。', 'Settings saved.') };
         }
         const active = new ActivationPlanner(loader.buildManifestRegistry())
           .getActivatedIds(mergeActivationContext(service.currentConfig as unknown as SurfaceConfig)).includes(id);
+        const runtime = loader.getRegistry().getExtension(id);
         return { fields: [toggle('enabled', t('启用插件', 'Enable plugin'), active)],
+          chatPrompt: active && runtime?.enabled ? useCapability(runtime.name, id, t) : undefined,
           actions: [{ id: 'save', label: t('保存设置', 'Save settings') }] };
       }
       const principal = getGatewayPrincipal(c).principalId;
@@ -737,6 +769,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           actions: [{ id: redirectAction, label: t('完成授权', 'Finish authorization'), advanced: true }] } : {}) };
     }
     const result: Panel = { revision: job?.revision, actions: [],
+      chatPrompt: active && pkg.readiness === 'ready' && !store.pending(id) ? useCapability(pkg.manifest.name, id, t) : undefined,
       message: active ? t('已启用', 'Enabled') : t('未启用', 'Disabled') };
     const actions = result.actions!;
     if (active) actions.push({ id: 'disable', label: t('停用插件', 'Disable plugin'), advanced: true });

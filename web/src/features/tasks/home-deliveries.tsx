@@ -14,6 +14,8 @@ import { formatMediumDateTime } from '@/lib/date-formatters';
 import { fetchTask } from './home-api';
 import { TaskExpandableContent } from './task-expandable-content';
 import { TaskResultEvidence } from './task-result-evidence';
+import { presentTaskRunResult, taskTextForDisplay } from './task-result-presentation';
+import { TaskRunIssueNotice } from './task-run-issue-notice';
 
 const WorkspaceFilePreviewPanel = lazy(() => import('@/features/workspace/workspace-file-preview-dialog')
   .then((module) => ({ default: module.WorkspaceFilePreviewPanel })));
@@ -26,6 +28,7 @@ export function HomeDeliveryRow({ item, language, primary, showNew = false, onOp
   onOpen: () => void;
 }) {
   const copy = messages(language).projectsPage.home.workbench;
+  const summary = taskTextForDisplay(item.summary, language);
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
       <div className="flex min-w-0 flex-1 basis-48 items-start gap-3">
@@ -40,7 +43,7 @@ export function HomeDeliveryRow({ item, language, primary, showNew = false, onOp
             {showNew ? <span className="mr-2 font-medium text-accent-fg">{copy.newDelivery}</span> : null}
             <time dateTime={new Date(item.completedAt).toISOString()}>{formatMediumDateTime(new Date(item.completedAt), language)}</time>
           </p>
-          {item.summary ? <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-fg-muted">{item.summary}</p> : null}
+          {summary ? <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-fg-muted">{summary}</p> : null}
         </div>
       </div>
       <Button variant={primary ? 'primary' : showNew ? 'ghost' : 'tonal'} className="min-h-9 shrink-0 gap-1 rounded-lg px-2.5 text-xs sm:shadow-none" onClick={onOpen}>
@@ -77,6 +80,7 @@ export function HomeDeliveriesDialog({ view, items, language, onSelect, onClose,
     if (!receipt) throw new Error(copy.workbench.deliveryFailed);
     return { kind: 'task' as const, detail, receipt };
   }, { shouldRetryOnError: false });
+  const taskResult = result?.kind === 'task' ? presentTaskRunResult(result.receipt, language) : undefined;
   const canMark = result?.kind === 'task' || Boolean(result?.summary?.trim());
 
   async function finish(item: HomeDelivery) {
@@ -120,7 +124,8 @@ export function HomeDeliveriesDialog({ view, items, language, onSelect, onClose,
               <div className="space-y-3" aria-busy><Skeleton className="h-5 w-2/3" /><Skeleton className="h-24" /></div>
             ) : result.kind === 'task' ? (
               <>
-                <TaskExpandableContent content={result.receipt.summary} contentKey={result.receipt.runId} language={language} />
+                {taskResult?.issue ? <TaskRunIssueNotice issue={taskResult.issue} /> : null}
+                {taskResult?.summary ? <TaskExpandableContent content={taskResult.summary} contentKey={result.receipt.runId} language={language} /> : null}
                 <TaskResultEvidence
                   evidence={result.receipt.evidence}
                   projectId={result.detail.task.projectId}
@@ -141,7 +146,7 @@ export function HomeDeliveriesDialog({ view, items, language, onSelect, onClose,
                 </Dialog.Root>
               </>
             ) : result.kind === 'automation' && result.summary ? (
-              <MarkdownView content={result.summary} />
+              <MarkdownView content={taskTextForDisplay(result.summary, language)} />
             ) : <p className="text-sm text-fg-muted">{copy.workbench.noSummary}</p>}
           </div>
           {selected ? (

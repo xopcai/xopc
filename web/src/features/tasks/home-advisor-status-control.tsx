@@ -1,10 +1,11 @@
-import * as Popover from '@radix-ui/react-popover';
 import type { HomeAdvisor } from '@xopcai/gateway-contract';
 import { History, RefreshCw, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+
+import { WorkbenchDialog } from './workbench-dialog';
 
 export interface HomeAdvisorStatusCopy {
   label: string;
@@ -124,8 +125,12 @@ export function HomeAdvisorStatusControl({
   const statusLabel = `${copy.label}：${status.label}`;
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
+    <WorkbenchDialog
+      title={copy.label}
+      open={open}
+      onOpenChange={setOpen}
+      size="compact"
+      trigger={(
         <Button
           type="button"
           variant="ghost"
@@ -142,59 +147,52 @@ export function HomeAdvisorStatusControl({
             <span className={cn('absolute right-1.5 top-1.5 size-1.5 rounded-full', toneClass[status.tone])} aria-hidden />
           ) : null}
         </Button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          side="bottom"
-          align="end"
-          sideOffset={6}
-          className="z-[70] w-[min(21rem,calc(100vw-1.5rem))] rounded-xl border border-edge bg-surface-overlay p-4 text-sm text-fg shadow-popover outline-none"
-          onOpenAutoFocus={(event) => event.preventDefault()}
-        >
-          <div className="flex items-start gap-3">
-            <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-              {status.refreshing ? (
-                <RefreshCw className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-              ) : (
-                <Sparkles className="size-4" aria-hidden />
-              )}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-fg">{status.label}</p>
-              <p className="mt-1 text-xs leading-5 text-fg-muted">{status.detail}</p>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3">
+      )}
+      footer={(
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-9 rounded-lg text-xs"
+            onClick={() => {
+              setOpen(false);
+              onOpenHistory();
+            }}
+          >
+            <History className="size-3.5" aria-hidden />
+            {copy.history}
+          </Button>
+          {canRefresh ? (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               className="h-9 rounded-lg text-xs"
+              disabled={busy}
               onClick={() => {
                 setOpen(false);
-                onOpenHistory();
+                onRefresh();
               }}
             >
-              <History className="size-3.5" aria-hidden />
-              {copy.history}
+              <RefreshCw className="size-3.5" aria-hidden />
+              {refreshLabel}
             </Button>
-            {canRefresh ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-9 rounded-lg text-xs"
-                disabled={busy}
-                onClick={() => {
-                  setOpen(false);
-                  onRefresh();
-                }}
-              >
-                <RefreshCw className="size-3.5" aria-hidden />
-                {refreshLabel}
-              </Button>
-            ) : null}
-          </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+          ) : null}
+        </div>
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          {status.refreshing ? (
+            <RefreshCw className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+          ) : (
+            <Sparkles className="size-4" aria-hidden />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-fg">{status.label}</p>
+          <p className="mt-1 text-xs leading-5 text-fg-muted">{status.detail}</p>
+        </div>
+      </div>
+    </WorkbenchDialog>
   );
 }

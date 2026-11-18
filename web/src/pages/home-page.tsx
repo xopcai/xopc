@@ -8,7 +8,7 @@ import type {
   HomeOpportunityFeedbackRequest,
   HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
-import { ArrowRight, CalendarClock, Check, ChevronDown, ChevronRight, CircleAlert, CirclePause, ListTodo, MessageSquare, PanelsTopLeft, Plus, Search, Sparkles, X } from 'lucide-react';
+import { ArrowRight, CalendarClock, Check, ChevronRight, CircleAlert, CirclePause, ListTodo, MessageSquare, PanelsTopLeft, Plus, Search, Sparkles, X } from 'lucide-react';
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -53,8 +53,10 @@ import { HomeDeliveriesDialog, HomeDeliveryRow } from '@/features/tasks/home-del
 import { currentTaskReceipt } from '@/features/tasks/task-detail-summary';
 import { HomeTaskReview } from '@/features/tasks/home-task-review';
 import { HomeWorkbenchLayout, type WorkbenchCard } from '@/features/tasks/home-workbench-layout';
+import { WorkbenchDialog } from '@/features/tasks/workbench-dialog';
 import { retryHomeTask } from '@/features/tasks/home-task-actions';
 import { taskCopy } from '@/features/tasks/task-copy';
+import { taskTextForDisplay } from '@/features/tasks/task-result-presentation';
 import {
   type VoiceInputShortcutTarget,
   VOICE_INPUT_CANCEL_EVENT,
@@ -98,7 +100,22 @@ function HomeSkeleton() {
   );
 }
 
-type HomeActionRunner = (action: HomeAction, itemId: string) => void;
+type HomeActionRunner = (action: HomeAction, itemId: string) => Promise<boolean>;
+type OpenTaskReview = (taskId: string, trigger: HTMLButtonElement) => void;
+
+function workbenchTaskId(item: HomeWorkbenchItem): string | undefined {
+  if (item.primaryAction?.type === 'task_review' || item.primaryAction?.type === 'retry_task') {
+    return item.primaryAction.taskId;
+  }
+  const action = item.openAction ?? item.primaryAction;
+  const match = action?.type === 'open' ? /^\/tasks\/([^/?#]+)/.exec(action.href) : null;
+  if (!match) return undefined;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
 
 function DecisionCard({
   item,
@@ -108,8 +125,8 @@ function DecisionCard({
   failureLabel,
   locale,
   onAction,
-  onComplete,
-  onUpdated,
+  onOpenReview,
+  actionError,
 }: {
   item: HomeWorkbenchItem;
   busy: boolean;
@@ -118,26 +135,19 @@ function DecisionCard({
   failureLabel: string;
   locale: 'en' | 'zh';
   onAction: HomeActionRunner;
-  onComplete: () => void;
-  onUpdated: (detail: TaskDetail) => void;
+  onOpenReview: OpenTaskReview;
+  actionError?: string | null;
 }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const taskMatch = item.openAction?.type === 'open' ? /^\/tasks\/([^/?#]+)/.exec(item.openAction.href) : null;
-  const reviewTaskId = item.primaryAction?.type === 'task_review' ? item.primaryAction.taskId
-    : taskMatch ? decodeURIComponent(taskMatch[1]) : undefined;
-  const reviewOpen = Boolean(reviewTaskId && searchParams.get('reviewTask') === reviewTaskId);
-  const setReviewOpen = (open: boolean) => {
-    const next = new URLSearchParams(searchParams);
-    if (open && reviewTaskId) next.set('reviewTask', reviewTaskId);
-    else next.delete('reviewTask');
-    setSearchParams(next);
-  };
+  const reviewTaskId = workbenchTaskId(item);
   const [scopeOpen, setScopeOpen] = useState(false);
   const work = messages(locale).projectsPage.home.workbench;
   const authorization = item.primaryAction?.type === 'connector_decision';
   const due = item.dueAt !== undefined ? `${dueLabel} ${formatMediumDateTime(item.dueAt, locale)}` : null;
-  const subtitle = [item.projectName, authorization ? item.summary.split('\n')[0] : item.summary].filter(Boolean).join(' · ');
-  const expandReview = Boolean(reviewTaskId && (item.primaryAction?.type === 'task_review' || item.primaryAction?.type === 'open'));
+  const subtitle = [item.projectName, authorization ? item.summary.split('\n')[0] : taskTextForDisplay(item.summary, locale)].filter(Boolean).join(' · ');
+  const opensReview = Boolean(reviewTaskId && (item.primaryAction?.type === 'task_review' || item.primaryAction?.type === 'open'));
+  const decideAuthorization = async (action: HomeAction) => {
+    if (await onAction(action, item.id)) setScopeOpen(false);
+  };
   return (
     <article className="px-4 py-3.5 sm:px-5 sm:py-4" aria-busy={busy}>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -152,7 +162,7 @@ function DecisionCard({
         </div>
         <div className="flex flex-wrap items-center gap-1">
           {reviewTaskId && item.primaryAction?.type === 'retry_task' ? (
-            <Button variant="ghost" className="min-h-9 px-2 text-xs" aria-expanded={reviewOpen} onClick={() => setReviewOpen(!reviewOpen)}>{locale === 'zh' ? '查看结果与依据' : 'View result and evidence'}</Button>
+            <Button variant="ghost" className="min-h-9 px-2 text-xs" aria-haspopup="dialog" onClick={(event) => onOpenReview(reviewTaskId, event.currentTarget)}>{locale === 'zh' ? '查看结果与依据' : 'View result and evidence'}</Button>
           ) : null}
           {item.primaryAction ? (
             <Button
@@ -160,11 +170,11 @@ function DecisionCard({
               variant={primary ? 'primary' : 'tonal'}
               className="min-h-9 shrink-0 rounded-lg px-3 text-xs sm:shadow-none"
               disabled={busy}
-              aria-expanded={authorization ? scopeOpen : expandReview ? reviewOpen : undefined}
-              onClick={() => {
-                if (authorization) setScopeOpen((open) => !open);
-                else if (expandReview) setReviewOpen(!reviewOpen);
-                else onAction(item.primaryAction!, item.id);
+              aria-haspopup={authorization || opensReview ? 'dialog' : undefined}
+              onClick={(event) => {
+                if (authorization) setScopeOpen(true);
+                else if (opensReview && reviewTaskId) onOpenReview(reviewTaskId, event.currentTarget);
+                else void onAction(item.primaryAction!, item.id);
               }}
             >
               {authorization ? work.viewScope : item.primaryAction.label}
@@ -172,59 +182,61 @@ function DecisionCard({
           ) : null}
         </div>
       </div>
-      {authorization && scopeOpen ? (
-        <div className="mt-3 space-y-2 rounded-lg bg-surface-inset px-3 py-2">
-          <p className="whitespace-pre-wrap break-words text-xs text-fg-muted">{item.summary}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" disabled={busy} onClick={() => onAction(item.primaryAction!, item.id)}>{item.primaryAction?.label}</Button>
-            {item.secondaryActions.map((action) => <Button key={action.label} disabled={busy} onClick={() => onAction(action, item.id)}>{action.label}</Button>)}
-          </div>
-        </div>
+      {authorization ? (
+        <WorkbenchDialog
+          title={work.viewScope}
+          subtitle={item.title}
+          open={scopeOpen}
+          onOpenChange={setScopeOpen}
+          busy={busy}
+          size="compact"
+          footer={<div className="flex flex-wrap justify-end gap-2">
+            {item.secondaryActions.map((action) => <Button key={action.label} disabled={busy} onClick={() => void decideAuthorization(action)}>{action.label}</Button>)}
+            <Button variant="primary" disabled={busy} onClick={() => void decideAuthorization(item.primaryAction!)}>{item.primaryAction?.label}</Button>
+          </div>}
+        >
+          <p className="whitespace-pre-wrap break-words text-sm text-fg-muted">{item.summary}</p>
+          {actionError ? <p role="alert" className="mt-3 text-sm text-danger">{actionError}</p> : null}
+        </WorkbenchDialog>
       ) : null}
-      {!authorization && !expandReview && item.secondaryActions.length ? (
+      {!authorization && !opensReview && item.secondaryActions.length ? (
         <div className="mt-1 flex flex-wrap gap-1">
           {item.secondaryActions.filter((action) => action.type !== 'open').map((action) => (
-            <Button key={action.label} variant="ghost" disabled={busy} onClick={() => onAction(action, item.id)}>{action.label}</Button>
+            <Button key={action.label} variant="ghost" disabled={busy} onClick={() => void onAction(action, item.id)}>{action.label}</Button>
           ))}
         </div>
       ) : null}
-      {reviewOpen && reviewTaskId ? <HomeTaskReview key={reviewTaskId} taskId={reviewTaskId} language={locale} onUpdated={onUpdated} onComplete={() => { setReviewOpen(false); onComplete(); }} /> : null}
     </article>
   );
 }
 
-function BackgroundRow({ item, onAction, language, onUpdated }: { item: HomeWorkbenchItem; onAction: HomeActionRunner; language: 'zh' | 'en'; onUpdated: (detail: TaskDetail) => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const taskMatch = item.openAction?.type === 'open' ? /^\/tasks\/([^/?#]+)/.exec(item.openAction.href) : null;
-  const taskId = taskMatch ? decodeURIComponent(taskMatch[1]) : undefined;
+function BackgroundRow({ item, onAction, language, onOpenReview }: { item: HomeWorkbenchItem; onAction: HomeActionRunner; language: 'zh' | 'en'; onOpenReview: OpenTaskReview }) {
+  const taskId = workbenchTaskId(item);
   const icon = item.kind === 'scheduled'
     ? <CalendarClock className="size-4" aria-hidden />
     : item.backgroundState === 'paused' ? <CirclePause className="size-4" aria-hidden />
       : <span className="size-1.5 rounded-full bg-fg-subtle" aria-hidden />;
   return (
-    <div>
-      <button
-        type="button"
-        className="group flex min-h-12 w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left motion-safe:transition-colors enabled:hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
-        disabled={!item.openAction}
-        aria-expanded={taskId ? expanded : undefined}
-        onClick={() => taskId ? setExpanded((value) => !value) : item.openAction && onAction(item.openAction, item.id)}
-      >
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-inset text-fg-muted">{icon}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block line-clamp-2 break-words text-sm font-medium text-fg">{item.title}</span>
-          {item.kind === 'scheduled' ? <time className="block text-xs text-fg-muted" dateTime={new Date(item.updatedAt).toISOString()}>{formatMediumDateTime(item.updatedAt, language)}</time>
-            : <span className="block truncate text-xs text-fg-muted">{item.summary}</span>}
+    <button
+      type="button"
+      className="group flex min-h-12 w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left motion-safe:transition-colors enabled:hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+      disabled={!item.openAction}
+      aria-haspopup={taskId ? 'dialog' : undefined}
+      onClick={(event) => taskId ? onOpenReview(taskId, event.currentTarget) : item.openAction && void onAction(item.openAction, item.id)}
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-inset text-fg-muted">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block line-clamp-2 break-words text-sm font-medium text-fg">{item.title}</span>
+        {item.kind === 'scheduled' ? <time className="block text-xs text-fg-muted" dateTime={new Date(item.updatedAt).toISOString()}>{formatMediumDateTime(item.updatedAt, language)}</time>
+          : <span className="block truncate text-xs text-fg-muted">{taskTextForDisplay(item.summary, language)}</span>}
+      </span>
+      {item.openAction ? (
+        <span className="flex max-w-[35%] shrink-0 items-center gap-1 text-right text-xs leading-4 text-fg-muted group-hover:text-fg">
+          <span>{item.openAction.label}</span>
+          <ChevronRight className="size-3.5 shrink-0" aria-hidden />
         </span>
-        {item.openAction ? (
-          <span className="flex max-w-[35%] shrink-0 items-center gap-1 text-right text-xs leading-4 text-fg-muted group-hover:text-fg">
-            <span>{item.openAction.label}</span>
-            <ChevronRight className={expanded ? 'size-3.5 shrink-0 rotate-90' : 'size-3.5 shrink-0'} aria-hidden />
-          </span>
-        ) : null}
-      </button>
-      {taskId && expanded ? <HomeTaskReview taskId={taskId} language={language} onUpdated={onUpdated} onComplete={() => setExpanded(false)} /> : null}
-    </div>
+      ) : null}
+    </button>
   );
 }
 
@@ -235,6 +247,24 @@ export function HomePage() {
   const copy = taskCopy(language);
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reviewTaskId = searchParams.get('reviewTask');
+  const reviewTrigger = useRef<HTMLButtonElement>(null);
+  const openTaskReview: OpenTaskReview = (taskId, trigger) => {
+    reviewTrigger.current = trigger;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('reviewTask', taskId);
+      return next;
+    });
+  };
+  const closeTaskReview = () => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('reviewTask');
+      return next;
+    }, { replace: true });
+  };
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [showAllAttention, setShowAllAttention] = useState(false);
@@ -245,7 +275,7 @@ export function HomePage() {
   const [deliveryView, setDeliveryView] = useState<HomeDelivery | 'history' | null>(null);
   const [readDeliveries, setReadDeliveries] = useState(loadReadDeliveries);
   const resultTrigger = useRef<HTMLElement | null>(null);
-  const [suggestionExpanded, setSuggestionExpanded] = useState(false);
+  const [suggestionOpen, setSuggestionOpen] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [intent, setIntent] = useState('');
   const actionPendingRef = useRef(false);
@@ -383,6 +413,8 @@ export function HomePage() {
   nextMidnight.setHours(24, 0, 0, 0);
   const dueToday = home?.needsUser.filter((item) => item.dueAt !== undefined && item.dueAt >= now && item.dueAt < nextMidnight.getTime()).length ?? 0;
   const background = home?.background ?? [];
+  const pendingReviewItem = reviewTaskId ? home?.needsUser.find((item) => workbenchTaskId(item) === reviewTaskId) : undefined;
+  const reviewItem = pendingReviewItem ?? (reviewTaskId ? background.find((item) => workbenchTaskId(item) === reviewTaskId) : undefined);
   const moving = background.filter((item) => item.kind !== 'scheduled');
   const scheduled = background.filter((item) => item.kind === 'scheduled');
   const advisorVisible = home?.advisor.state === 'ready' || home?.advisor.state === 'clarification' || Boolean(advisorReceipt);
@@ -478,42 +510,42 @@ export function HomePage() {
     setConversationOpen(open);
   }, [cancelVoiceCapture]);
 
-  const runAction = useCallback<HomeActionRunner>((action, itemId) => {
+  const runAction = useCallback<HomeActionRunner>(async (action, itemId) => {
     if (action.type === 'open') {
       navigate(modalizeTaskDetailHref('/', action.href));
-      return;
+      return true;
     }
-    if (action.type === 'task_review' || actionPendingRef.current) return;
+    if (action.type === 'task_review' || actionPendingRef.current) return false;
     actionPendingRef.current = true;
     setBusyItemId(itemId);
     const slot = home?.needsUser.findIndex((item) => item.id === itemId) ?? -1;
     const resolved = slot < 0 ? undefined : { item: home?.needsUser[slot], slot };
     setActionReceipt(undefined);
     setLoadError(null);
-    void (async () => {
-      try {
-        if (action.type === 'retry_task') {
-          await retryHomeTask(action.taskId, language);
-          setActionReceipt({ ...resolved, message: language === 'zh' ? '任务已重新开始，可查看执行进度。' : 'Task restarted. View progress.', href: modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(action.taskId)}`) });
-        } else if (action.type === 'connector_decision') {
-          await respondToWorkDecision({ kind: 'connector_approval', approvalId: action.approvalId }, action.decision);
-          setActionReceipt({ ...resolved, message: language === 'zh' ? (action.decision === 'approve' ? '已批准授权，任务状态将自动更新。' : '已拒绝授权。') : (action.decision === 'approve' ? 'Permission approved. Task status will update.' : 'Permission denied.') });
-        } else if (action.type === 'retry_run') {
-          const result = await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
-          setActionReceipt({ ...resolved, message: language === 'zh' ? '已发起重试，可查看新的执行结果。' : 'Retry started. Follow the new execution.', href: result.conversationId ? `/chat/${encodeURIComponent(result.conversationId)}` : `/automations?run=${encodeURIComponent(result.runId)}` });
-        } else if (action.type === 'acknowledge_run') {
-          await acknowledgeWorkAttention({ kind: action.subjectKind, runId: action.runId });
-          setActionReceipt({ ...resolved, message: language === 'zh' ? '已确认此异常，已从待处理事项移除。' : 'Issue acknowledged and removed from pending items.' });
-        }
-        focusAfterWork.current = true;
-        await load();
-      } catch (error) {
-        setLoadError(error instanceof Error ? error.message : String(error));
-      } finally {
-        actionPendingRef.current = false;
-        setBusyItemId(null);
+    try {
+      if (action.type === 'retry_task') {
+        await retryHomeTask(action.taskId, language);
+        setActionReceipt({ ...resolved, message: language === 'zh' ? '任务已重新开始，可查看执行进度。' : 'Task restarted. View progress.', href: modalizeTaskDetailHref('/', `/tasks/${encodeURIComponent(action.taskId)}`) });
+      } else if (action.type === 'connector_decision') {
+        await respondToWorkDecision({ kind: 'connector_approval', approvalId: action.approvalId }, action.decision);
+        setActionReceipt({ ...resolved, message: language === 'zh' ? (action.decision === 'approve' ? '已批准授权，任务状态将自动更新。' : '已拒绝授权。') : (action.decision === 'approve' ? 'Permission approved. Task status will update.' : 'Permission denied.') });
+      } else if (action.type === 'retry_run') {
+        const result = await retryWorkAttention({ kind: action.subjectKind, runId: action.runId });
+        setActionReceipt({ ...resolved, message: language === 'zh' ? '已发起重试，可查看新的执行结果。' : 'Retry started. Follow the new execution.', href: result.conversationId ? `/chat/${encodeURIComponent(result.conversationId)}` : `/automations?run=${encodeURIComponent(result.runId)}` });
+      } else if (action.type === 'acknowledge_run') {
+        await acknowledgeWorkAttention({ kind: action.subjectKind, runId: action.runId });
+        setActionReceipt({ ...resolved, message: language === 'zh' ? '已确认此异常，已从待处理事项移除。' : 'Issue acknowledged and removed from pending items.' });
       }
-    })();
+      focusAfterWork.current = true;
+      await load();
+      return true;
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error));
+      return false;
+    } finally {
+      actionPendingRef.current = false;
+      setBusyItemId(null);
+    }
   }, [home, language, load, navigate]);
 
   const onTaskUpdated = useCallback((detail: TaskDetail, item?: HomeWorkbenchItem) => {
@@ -554,6 +586,7 @@ export function HomePage() {
         setAdvisorPreflight(undefined);
         setAdvisorHistoryRefreshKey((value) => value + 1);
         if (result.outcome === 'task') {
+          setSuggestionOpen(false);
           setAdvisorReceipt({
             title: t.home.advisorStartedTitle,
             detail: interpolate(t.home.advisorStartedDetail, { title: opportunity.title }),
@@ -579,6 +612,7 @@ export function HomePage() {
     const snoozedUntil = kind === 'too_early' ? Date.now() + 3 * 24 * 60 * 60_000 : undefined;
     void submitHomeOpportunityFeedback(opportunity, { kind, snoozedUntil })
       .then(({ idempotencyKey }) => {
+        setSuggestionOpen(false);
         setAdvisorUndo({ opportunityId: opportunity.id, idempotencyKey });
         setAdvisorHistoryRefreshKey((value) => value + 1);
         return load();
@@ -619,8 +653,14 @@ export function HomePage() {
     setActionReceipt({ message: work.deliverySaved });
     void load();
   };
-  const visibleAttention = showAllAttention ? (home?.needsUser ?? []) : (home?.needsUser.slice(0, 2) ?? []);
+  const visibleAttention = home?.needsUser.slice(0, 2) ?? [];
   const remainingAttention = needsUserCount - visibleAttention.length;
+  const actionStatus = actionReceipt ? (
+    <div className="mb-3 flex w-full flex-wrap items-center justify-between gap-2 rounded-lg bg-success-soft px-3 py-1.5 text-xs text-fg">
+      <span>{actionReceipt.message}</span>
+      {actionReceipt.href ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => navigate(actionReceipt.href!)}>{language === 'zh' ? '查看进展与结果' : 'View progress and result'}</Button> : null}
+    </div>
+  ) : null;
   const handled = actionReceipt?.item && !home?.needsUser.some((item) => item.id === actionReceipt.item?.id)
     && (actionReceipt.slot ?? Infinity) < 2 ? actionReceipt.item : undefined;
   const attentionRows = [...visibleAttention];
@@ -631,7 +671,7 @@ export function HomePage() {
     openAction: { type: 'open', label: work.inProgress, href: `/chat/${encodeURIComponent(run.conversationId)}` },
   }));
   const liveBackground = [...moving, ...runningChats].sort((a, b) => b.updatedAt - a.updatedAt);
-  const advisorCompact = mode === 'attention' && !advisorReceipt && !suggestionExpanded;
+  const advisorCompact = mode === 'attention' && !advisorReceipt;
   const advisorTitle = home?.advisor.state === 'ready' ? home.advisor.primary.title
     : home?.advisor.state === 'clarification' ? home.advisor.question.question : undefined;
 
@@ -657,6 +697,16 @@ export function HomePage() {
     { title: work.scheduled, items: scheduled },
   ].filter((group) => group.items.length > 0);
   const backgroundLimit = mode === 'attention' ? 1 : 3;
+  const renderBackgroundGroups = (limit?: number) => backgroundGroups.map(({ title, items }) => (
+    <div key={title} className="pt-3">
+      <h3 className="mb-1 px-2 text-xs font-medium text-fg-muted">{title}</h3>
+      <div className="space-y-1">
+        {(limit === undefined ? items : items.slice(0, limit)).map((item) => (
+          <BackgroundRow key={item.id} item={item} language={language} onAction={runAction} onOpenReview={openTaskReview} />
+        ))}
+      </div>
+    </div>
+  ));
   const backgroundSection = backgroundGroups.length ? (
     <section className={workPanel} aria-labelledby="home-background-title" data-workbench-panel>
       <div className="flex items-center gap-3 px-4 pb-1 pt-4">
@@ -666,24 +716,38 @@ export function HomePage() {
         <h2 id="home-background-title" className={sectionTitle}>{work.background}</h2>
       </div>
       <div className="px-3 pb-3">
-        {backgroundGroups.map(({ title, items }) => (
-          <div key={title} className="pt-3">
-            <h3 className="mb-1 px-2 text-xs font-medium text-fg-muted">{title}</h3>
-            <div className="space-y-1">
-              {(showAllBackground ? items : items.slice(0, backgroundLimit)).map((item) => <BackgroundRow key={item.id} item={item} language={language} onAction={runAction} onUpdated={onTaskUpdated} />)}
-            </div>
-          </div>
-        ))}
+        {renderBackgroundGroups(backgroundLimit)}
         {backgroundGroups.some(({ items }) => items.length > backgroundLimit) ? (
-          <Button variant="ghost" className="mt-2 w-full justify-start rounded-lg px-2 text-xs" aria-expanded={showAllBackground} onClick={() => setShowAllBackground((value) => !value)}>
-            <ChevronDown className={showAllBackground ? 'size-3.5 rotate-180' : 'size-3.5'} aria-hidden />
-            {language === 'zh' ? (showAllBackground ? '收起' : `查看全部 ${liveBackground.length + scheduled.length} 项`) : (showAllBackground ? 'Show less' : `View all ${liveBackground.length + scheduled.length} items`)}
-          </Button>
+          <WorkbenchDialog
+            title={work.background}
+            open={showAllBackground}
+            onOpenChange={setShowAllBackground}
+            trigger={<Button variant="ghost" className="mt-2 w-full justify-start rounded-lg px-2 text-xs">
+              {language === 'zh' ? `查看全部 ${liveBackground.length + scheduled.length} 项` : `View all ${liveBackground.length + scheduled.length} items`}
+              <ChevronRight className="size-3.5" aria-hidden />
+            </Button>}
+          >
+            {renderBackgroundGroups()}
+          </WorkbenchDialog>
         ) : null}
       </div>
     </section>
   ) : null;
   const hasAdvisor = !home?.observation && advisorVisible;
+  const renderDecision = (item: HomeWorkbenchItem, primary: boolean) => (
+    <DecisionCard
+      key={item.id}
+      item={item}
+      primary={primary}
+      busy={busyItemId !== null}
+      dueLabel={t.home.dueLabel}
+      failureLabel={copy.runAttention}
+      locale={language}
+      onAction={runAction}
+      onOpenReview={openTaskReview}
+      actionError={taskTextForDisplay(loadError ?? undefined, language)}
+    />
+  );
   const attentionSection = needsUserCount > 0 ? (
     <section className={workPanel} aria-labelledby="home-needs-user-title" data-workbench-panel>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 px-4 pb-1 pt-4 sm:px-5">
@@ -699,30 +763,67 @@ export function HomePage() {
           <div key={item.id} className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 text-sm text-fg-muted">
             <span>{item.title}</span><Check className="size-4 shrink-0 text-success" aria-label={language === 'zh' ? '已处理' : 'Handled'} />
           </div>
-        ) : (
-          <DecisionCard
-            key={item.id}
-            item={item}
-            primary={index === 0 || (index === 1 && attentionRows[0] === handled)}
-            busy={busyItemId !== null}
-            dueLabel={t.home.dueLabel}
-            failureLabel={copy.runAttention}
-            locale={language}
-            onAction={runAction}
-            onComplete={() => void load()}
-            onUpdated={(detail) => onTaskUpdated(detail, item)}
-          />
-        ))}
-        {showAllAttention || remainingAttention > 0 ? (
+        ) : renderDecision(item, index === 0 || (index === 1 && attentionRows[0] === handled)))}
+        {remainingAttention > 0 ? (
           <div className="px-2 py-1.5 sm:px-3">
-            <Button variant="ghost" className="w-full justify-start rounded-lg px-2 text-xs" aria-expanded={showAllAttention} onClick={() => setShowAllAttention((value) => !value)}>
-              <ChevronDown className={showAllAttention ? 'size-3.5 rotate-180' : 'size-3.5'} aria-hidden />
-              {showAllAttention ? work.collapse : interpolate(work.remaining, { count: remainingAttention })}
-            </Button>
+            <WorkbenchDialog
+              title={work.attention}
+              open={showAllAttention}
+              onOpenChange={setShowAllAttention}
+              trigger={<Button variant="ghost" className="w-full justify-start rounded-lg px-2 text-xs">
+                {interpolate(work.remaining, { count: remainingAttention })}
+                <ChevronRight className="size-3.5" aria-hidden />
+              </Button>}
+            >
+              {loadError ? <p role="alert" className="mb-3 text-sm text-danger">{taskTextForDisplay(loadError, language)}</p> : null}
+              <div role="status">{actionStatus}</div>
+              {home?.needsUser.map((item, index) => renderDecision(item, index === 0))}
+            </WorkbenchDialog>
           </div>
         ) : null}
       </div>
     </section>
+  ) : null;
+  const advisorCard = hasAdvisor && home ? (
+    <HomeAdvisorCard
+      advisor={home.advisor}
+      busy={advisorBusy}
+      copy={{
+        aiLabel: t.home.advisorAiLabel,
+        why: t.home.advisorWhy,
+        evidence: t.home.advisorEvidence,
+        needsSetup: t.home.advisorNeedsSetup,
+        start: t.home.advisorStart,
+        discuss: t.home.advisorDiscuss,
+        refresh: t.home.advisorRefresh,
+        refreshing: t.home.advisorRefreshing,
+        history: t.home.advisorHistory,
+        viewProgress: t.home.advisorViewProgress,
+        alternatives: t.home.advisorAlternatives,
+        more: work.moreSuggestionActions,
+        feedback: t.home.advisorFeedback,
+        alreadyDone: t.home.advisorAlreadyDone,
+        irrelevant: t.home.advisorIrrelevant,
+        later: t.home.advisorLater,
+        lessLikeThis: t.home.advisorLessLikeThis,
+        sourceIncorrect: t.home.advisorSourceIncorrect,
+        minutes: t.home.advisorMinutes,
+        setupTitle: t.home.advisorSetupTitle,
+        setupHint: t.home.advisorSetupHint,
+        configure: t.home.advisorConfigure,
+        degradedStart: t.home.advisorDegradedStart,
+        automationHint: t.home.advisorAutomationHint,
+        automationAction: t.home.advisorAutomationAction,
+      }}
+      onRefresh={() => { setSuggestionOpen(false); refreshAdvisor(); }}
+      onAction={actOnAdvisor}
+      onFeedback={sendAdvisorFeedback}
+      onClarification={discussClarification}
+      onOpenHistory={() => { setSuggestionOpen(false); setAdvisorHistoryOpen(true); }}
+      preflight={advisorPreflight}
+      receipt={advisorReceipt}
+      inDialog={advisorCompact}
+    />
   ) : null;
   const resumeSection = home && (resumable.length > 0 || hasAdvisor) ? (
     <section className="space-y-2" aria-labelledby="home-resume-title">
@@ -749,52 +850,15 @@ export function HomePage() {
           ))}
         </div>
       ) : null}
-      {!home.observation && advisorTitle && mode === 'attention' && !advisorReceipt ? (
+      {advisorCard && advisorCompact && advisorTitle ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-inset px-3 py-1">
           <p className="flex min-w-0 flex-1 items-center gap-2 text-xs text-fg-muted"><Sparkles className="size-4 shrink-0 text-accent" aria-hidden /><span className="truncate">{t.home.advisorStatusLabel} · {advisorTitle}</span></p>
-          <Button variant="ghost" aria-expanded={suggestionExpanded} onClick={() => setSuggestionExpanded((value) => !value)}>{suggestionExpanded ? work.hideSuggestion : work.viewSuggestion}</Button>
+          <WorkbenchDialog title={work.viewSuggestion} open={suggestionOpen} onOpenChange={setSuggestionOpen} trigger={<Button variant="ghost">{work.viewSuggestion}</Button>}>
+            {advisorCard}
+            {loadError ? <p role="alert" className="mt-3 text-sm text-danger">{taskTextForDisplay(loadError, language)}</p> : null}
+          </WorkbenchDialog>
         </div>
-      ) : null}
-      {!home.observation && advisorVisible && !advisorCompact ? (
-        <HomeAdvisorCard
-          advisor={home.advisor}
-          busy={advisorBusy}
-          copy={{
-            aiLabel: t.home.advisorAiLabel,
-            why: t.home.advisorWhy,
-            evidence: t.home.advisorEvidence,
-            needsSetup: t.home.advisorNeedsSetup,
-            start: t.home.advisorStart,
-            discuss: t.home.advisorDiscuss,
-            refresh: t.home.advisorRefresh,
-            refreshing: t.home.advisorRefreshing,
-            history: t.home.advisorHistory,
-            viewProgress: t.home.advisorViewProgress,
-            alternatives: t.home.advisorAlternatives,
-            more: work.moreSuggestionActions,
-            feedback: t.home.advisorFeedback,
-            alreadyDone: t.home.advisorAlreadyDone,
-            irrelevant: t.home.advisorIrrelevant,
-            later: t.home.advisorLater,
-            lessLikeThis: t.home.advisorLessLikeThis,
-            sourceIncorrect: t.home.advisorSourceIncorrect,
-            minutes: t.home.advisorMinutes,
-            setupTitle: t.home.advisorSetupTitle,
-            setupHint: t.home.advisorSetupHint,
-            configure: t.home.advisorConfigure,
-            degradedStart: t.home.advisorDegradedStart,
-            automationHint: t.home.advisorAutomationHint,
-            automationAction: t.home.advisorAutomationAction,
-          }}
-          onRefresh={refreshAdvisor}
-          onAction={actOnAdvisor}
-          onFeedback={sendAdvisorFeedback}
-          onClarification={discussClarification}
-          onOpenHistory={() => setAdvisorHistoryOpen(true)}
-          preflight={advisorPreflight}
-          receipt={advisorReceipt}
-        />
-      ) : null}
+      ) : advisorCard}
     </section>
   ) : null;
   const cards: WorkbenchCard[] = [
@@ -928,7 +992,7 @@ export function HomePage() {
 
       {loadError ? (
         <div role="alert" className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
-          <span>{loadError}</span>
+          <span>{taskTextForDisplay(loadError, language)}</span>
           <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void load()}>{t.home.retry}</Button>
         </div>
       ) : null}
@@ -947,14 +1011,7 @@ export function HomePage() {
         }}
       />
 
-      <div role="status">
-        {actionReceipt ? (
-          <div className="mb-3 flex w-full flex-wrap items-center justify-between gap-2 rounded-lg bg-success-soft px-3 py-1.5 text-xs text-fg">
-            <span>{actionReceipt.message}</span>
-            {actionReceipt.href ? <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => navigate(actionReceipt.href!)}>{language === 'zh' ? '查看进展与结果' : 'View progress and result'}</Button> : null}
-          </div>
-        ) : null}
-      </div>
+      <div role="status">{actionStatus}</div>
 
       {loading ? <HomeSkeleton /> : home ? (
         <div ref={stageRef} tabIndex={-1} className="flex min-h-0 w-full flex-1 flex-col gap-4 outline-none">
@@ -997,6 +1054,21 @@ export function HomePage() {
           ) : null}
         </div>
       ) : null}
+      {reviewTaskId ? (
+        <HomeTaskReview
+          key={reviewTaskId}
+          taskId={reviewTaskId}
+          taskTitle={reviewItem?.title}
+          language={language}
+          onClose={closeTaskReview}
+          onUpdated={(detail) => onTaskUpdated(detail, pendingReviewItem)}
+          restoreFocus={() => {
+            const trigger = reviewTrigger.current;
+            (trigger?.isConnected ? trigger : stageRef.current)?.focus({ preventScroll: true });
+          }}
+        />
+      ) : null}
+
       {advisorUndo ? (
         <div role="status" className="fixed bottom-5 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-4 rounded-lg border border-edge bg-surface-overlay px-4 py-3 text-sm text-fg shadow-float">
           <span>{t.home.advisorFeedbackSaved}</span>
