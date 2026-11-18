@@ -123,7 +123,7 @@ async function connections(config: Config, locale: Locale): Promise<CapabilityCa
 
   for (const [targetId, server] of Object.entries(config.mcp?.servers ?? {})) {
     if (isManagedConnectorServer(server)) continue;
-    const id = 'mcp:' + targetId;
+    const id = targetId === 'setup' ? 'mcp:server:setup' : 'mcp:' + targetId;
     rows.set(id, { id, targetId, name: server.displayName ?? targetId, group: server.enabled === false ? 'disabled' : 'configured' });
   }
 

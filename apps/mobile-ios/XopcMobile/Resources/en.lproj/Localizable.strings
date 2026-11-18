@@ -1208,13 +1208,13 @@
 "color_scheme_clay" = "Clay";
 "capability_create_agent" = "Create an assistant";
 "capability_create_skill" = "Create a skill";
-"capability_add_mcp" = "Add an MCP connection";
+"capability_add_mcp" = "Add custom MCP connection";
+"capability_connect" = "Connect";
 "capability_search_plugins" = "Find and install plugins";
 "capability_skill_market" = "Skill Store";
 "capability_search_installed_skills" = "Search installed skills";
 "capability_agent_setup_prompt" = "Help me create an assistant or expert. Ask what it should do.";
 "capability_skill_setup_prompt" = "Help me create a reusable skill. Ask what it should do.";
-"capability_mcp_setup_prompt" = "Help me add an MCP connection. Ask which service to connect.";
 "capability_mcp_continue" = "Continue setup";
 
 "个性化" = "Personalization";

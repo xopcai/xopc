@@ -200,17 +200,14 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
             skills -> R.string.capability_create_skill
             else -> R.string.capability_add_mcp
           })
-          val prompt = stringResource(when {
-            agents -> R.string.capability_agent_setup_prompt
-            skills -> R.string.capability_skill_setup_prompt
-            else -> R.string.capability_mcp_setup_prompt
-          })
+          val prompt = stringResource(if (agents) R.string.capability_agent_setup_prompt else R.string.capability_skill_setup_prompt)
           IconButton(onClick = {
             focus.clearFocus()
             keyboard?.hide()
-            onSetupChat(prompt, agents)
+            if (connections) detail = CapabilityItem("mcp:setup", label, group = "available")
+            else onSetupChat(prompt, agents)
           }, modifier = Modifier.size(44.dp).background(colors.primaryContainer, CircleShape)
-            .testTag("capability-chat-setup-${category.key}")) {
+            .testTag(if (connections) "capability-add-mcp" else "capability-chat-setup-${category.key}")) {
             ActionIcon(R.drawable.action_add, color = colors.primary, contentDescription = label)
           }
         }
@@ -257,7 +254,11 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
                 if (row.description.isNotBlank()) Text(row.description, style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
               }
-              ActionIcon(R.drawable.action_chevron_right, color = MaterialTheme.colorScheme.onSurfaceVariant, size = 14.dp)
+              if (connections && (row.group == "available" || row.group == "attention")) {
+                Text(stringResource(R.string.capability_connect), style = MaterialTheme.typography.labelLarge, color = colors.primary)
+              } else {
+                ActionIcon(R.drawable.action_chevron_right, color = colors.onSurfaceVariant, size = 14.dp)
+              }
             }
           }
         }

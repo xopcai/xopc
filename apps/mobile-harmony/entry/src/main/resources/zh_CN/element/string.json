@@ -1676,7 +1676,7 @@
     {"name": "capability_search_plugins", "value": "检索并安装插件"},
     {"name": "capability_agent_setup_prompt", "value": "帮我创建一个助手或专家，先问我要做什么。"},
     {"name": "capability_skill_setup_prompt", "value": "帮我创建一个技能，先问我它要处理什么。"},
-    {"name": "capability_mcp_setup_prompt", "value": "帮我添加一个 MCP 连接，先问我要连接哪个服务。"},
+    {"name": "capability_connect", "value": "连接"},
     {"name": "capability_mcp_continue", "value": "继续连接"}
   ]
 }

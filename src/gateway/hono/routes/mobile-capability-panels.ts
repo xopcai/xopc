@@ -19,6 +19,7 @@ import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
 import { startConnectorAuthorization } from '../../../connectors/auth-provider-registry.js';
 import { getConnectorDefinition } from '../../../connectors/catalog.js';
 import { listComposioConnections, revokeComposioConnection } from '../../../connectors/composio.js';
+import { assertComposioAccessConfigured } from '../../../connectors/composio-sessions.js';
 import { getInstalledConnectorDefinition, listConnectorInstances } from '../../../connectors/instances.js';
 import { installConnectorDefinition, updateConnectorConfig } from '../../../connectors/install.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
@@ -348,9 +349,20 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
     if (id === 'mcp:setup') {
       const owner = getGatewayPrincipal(c).principalId;
       const flow = command?.flow;
+      const form = (url = '', name = ''): Panel => ({
+        fields: [{ ...text('url', t('MCP 服务地址', 'MCP server URL'), url), hint: 'https://' },
+          text('id', t('名称（选填）', 'Name (optional)'), name),
+          { ...text('token', t('Bearer 令牌（选填）', 'Bearer token (optional)'), '', 'secret'), advanced: true }],
+        actions: [{ id: 'create', label: t('测试并连接', 'Test and connect') }],
+      });
       if (flow) {
         const complete = async (): Promise<Panel> => {
-          const result = await withGatewayConfigWriteLock(service, () => drafts.commit(owner, flow, true));
+          const result = await withGatewayConfigWriteLock(service, () => drafts.commit(owner, flow, true)).catch(error => {
+            if (error instanceof McpDraftError && error.status === 500) return undefined;
+            throw error;
+          });
+          if (!result) return { flow, message: t('验证通过，暂未保存连接。', 'Verification passed. The connection could not be saved.'),
+            actions: [{ id: 'save', label: t('重试保存', 'Retry save') }, { id: 'cancel', label: t('取消连接', 'Cancel connection') }] };
           if (result.reloadRequired) return {
             message: t('连接已保存，重启网关后生效。', 'Connection saved. Restart the Gateway to apply it.'),
           };
@@ -376,12 +388,22 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           return complete();
         }
         const authorizing = current.state === 'authorizing' || current.state === 'starting';
-        const recoverable = current.state === 'oauth_required' || current.state === 'auth_unknown'
+        const canAuthorize = current.state === 'oauth_required' || current.state === 'auth_unknown'
           || (current.state === 'error' && command.action !== 'probe');
+        if (!authorizing && !canAuthorize) {
+          const { url, id: name, token } = command.values;
+          drafts.remove(owner, flow);
+          return { ...form(url, name), message: current.state === 'token_required' || token
+            ? t('连接验证失败。请检查服务地址、令牌和访问权限。', 'Verification failed. Check the server URL, token and permissions.')
+            : t('无法建立连接。请检查服务地址后重试。', 'Could not connect. Check the server URL and try again.') };
+        }
         return { flow, message: authorizing
           ? t('请在服务商页面完成授权。返回后会自动添加。', 'Finish signing in with the provider. The connection will be added automatically.')
-          : recoverable ? t('此连接需要服务商授权。', 'This connection needs provider authorization.')
-            : t('无法建立连接。请检查服务地址后重试。', 'Could not connect. Check the service address and try again.'),
+          : current.state === 'auth_unknown'
+            ? t('此服务需要授权。可以尝试登录，或修改配置并填写服务商提供的令牌。', 'This server requires authorization. Sign in or edit the connection to enter the provider’s token.')
+            : current.state === 'error'
+              ? t('授权未完成。请重试或修改连接配置。', 'Sign-in did not complete. Retry or edit the connection settings.')
+              : t('此连接需要服务商授权。', 'This connection needs provider authorization.'),
           authorizationUrl: authorizing ? safeLink(current.authorizationUrl) : undefined,
           pollAction: authorizing ? 'status' : undefined,
           fields: authorizing && current.acceptsRedirect ? [{
@@ -390,10 +412,9 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
             advanced: true,
           }] : undefined,
           actions: [
-            ...(!authorizing ? [recoverable ? { id: 'authorize', label: t('连接账号', 'Connect account') }
-              : { id: 'cancel', label: t('修改地址', 'Edit address') }] : []),
+            ...(!authorizing ? [{ id: 'authorize', label: t('连接账号', 'Connect account') }] : []),
             ...(authorizing && current.acceptsRedirect ? [{ id: 'callback', label: t('完成授权', 'Finish authorization'), advanced: true }] : []),
-            ...(authorizing || recoverable ? [{ id: 'cancel', label: t('取消连接', 'Cancel connection') }] : []),
+            { id: 'cancel', label: authorizing ? t('取消连接', 'Cancel connection') : t('修改连接配置', 'Edit connection settings') },
           ] };
       }
       if (command?.action === 'create') {
@@ -404,18 +425,20 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
         if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !checkUrlSafety(url.href).safe) {
           throw new McpDraftError(400, t('请输入不含账号或参数的公共 HTTPS 地址。', 'Use a public HTTPS address without a username, password, or parameters.'));
         }
+        const token = command.values.token?.trim();
+        if (token && !/^[!-~]+$/.test(token)) {
+          throw new McpDraftError(400, t('请输入服务商提供的 Bearer 令牌。', 'Enter the Bearer token provided by the service.'));
+        }
         const host = url.hostname.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 42);
         const serverId = host + '-' + createHash('sha256').update(url.href).digest('hex').slice(0, 12);
         const draft = await drafts.create(owner, { serverId, server: { type: 'http', url: url.href,
-          displayName: displayName || url.hostname, xopcPublicOnly: true } });
-        return connection(c, id, t, { action: 'probe', flow: draft.id, values: {} });
+          displayName: displayName || url.hostname, xopcPublicOnly: true } }, token);
+        return connection(c, id, t, { action: 'probe', flow: draft.id, values: command.values });
       }
-      return { fields: [{ ...text('url', t('服务地址', 'Service address')), hint: 'https://' },
-        { ...text('id', t('名称（选填）', 'Name (optional)')), hint: t('留空则使用服务名称', 'Defaults to the service name') }],
-        actions: [{ id: 'create', label: t('添加连接', 'Add connection') }] };
+      return form();
     }
     if (id.startsWith('mcp:')) {
-      const key = id.slice(4);
+      const key = id === 'mcp:server:setup' ? 'setup' : id.slice(4);
       const server = Object.hasOwn(service.currentConfig.mcp?.servers ?? {}, key) ? service.currentConfig.mcp?.servers?.[key] : undefined;
       if (!server) throw new McpDraftError(404, 'Connection not found.');
       if (command?.action === 'save') {
@@ -514,9 +537,19 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           throw error;
         }
       }
-      return { actions: [{ id: 'inspect', label: t('查看安装信息', 'Review installation') }] };
+      return { actions: [{ id: 'inspect', label: t('设置连接', 'Set up connection') }] };
     }
     const currentAccounts = () => listConnectorConnections({ principalId: 'local-owner', connectorId: id }).filter(row => row.status === 'active');
+    const instanceFor = (config: typeof service.currentConfig) => listConnectorInstances(config).find(row => row.connectorId === id);
+    const ensureEnabled = () => withGatewayConfigWriteLock(service, async () => {
+      const previous = service.currentConfig;
+      const instance = instanceFor(previous);
+      if (instance?.enabled) return;
+      const next = structuredClone(previous);
+      if (instance) setConnectorEnabled(next, instance.instanceId, true);
+      else await installConnectorDefinition(next, definition, {});
+      if (!(await service.saveConfig(next, previous)).saved) throw new McpDraftError(409, 'Connection settings changed.');
+    });
     const rows = currentAccounts();
     const principal = getGatewayPrincipal(c).principalId;
     const waiting = (flow: string, url: string): Panel => ({
@@ -524,8 +557,17 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       message: t('在服务商页面完成授权。返回后会自动刷新。', 'Finish signing in with the provider. This panel updates automatically.'),
       actions: [{ id: 'cancel-sign-in', label: t('取消连接', 'Cancel sign-in') }],
     });
-    if (command?.action === 'authorize') {
-      const auth = await startConnectorAuthorization(definition, service.currentConfig);
+    if (command?.action === 'authorize' || command?.action === 'enable') {
+      await assertComposioAccessConfigured().catch(() => {
+        throw new McpDraftError(400, t('请先在电脑端的连接服务设置中配置 Composio 或登录 XOPC Cloud，再回到手机连接此账号。',
+          'Set up Composio or sign in to XOPC Cloud in Connection service settings on your computer, then try again here.'));
+      });
+      await ensureEnabled();
+      if (command.action === 'enable') return connection(c, id, t);
+      const auth = await startConnectorAuthorization(definition, service.currentConfig).catch(() => {
+        throw new McpDraftError(400, t('无法启动授权。请检查电脑端的连接服务和此应用的授权配置，然后重试。',
+          'Could not start sign-in. Check the connection service and this app’s authorization settings on your computer, then try again.'));
+      });
       const authorizationUrl = safeLink(auth.authorizationUrl);
       if (!authorizationUrl) throw new McpDraftError(500, t('未收到可用的授权链接。', 'No valid authorization link was returned.'));
       const flow = randomUUID();
@@ -563,6 +605,10 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       if (!row || definition.auth.mode !== 'oauth' || definition.auth.provider !== 'composio') throw new McpDraftError(404, 'Connection not found.');
       await revokeComposioConnection(row.id);
       return connection(c, id, t);
+    }
+    if (rows.length && !instanceFor(service.currentConfig)?.enabled) {
+      return { message: t('账号已授权，连接待启用。', 'Account authorized. Enable the connection to use it.'),
+        actions: [{ id: 'enable', label: t('启用连接', 'Enable connection') }] };
     }
     return { message: rows.length ? t('已连接', 'Connected') : t('尚未连接', 'Not connected'),
       chatPrompt: rows.length ? useCapability(definition.displayName, id, t) : undefined,
