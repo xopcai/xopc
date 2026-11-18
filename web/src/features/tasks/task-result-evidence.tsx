@@ -1,5 +1,6 @@
 import { ArtifactRecovery } from './artifact-recovery';
 import { TaskExpandableContent } from './task-expandable-content';
+import { taskTextForDisplay } from './task-result-presentation';
 import type { TaskEvidence } from '@xopcai/gateway-contract';
 import { ExternalLink, FileText } from 'lucide-react';
 
@@ -17,7 +18,13 @@ export function TaskResultEvidence({ evidence, projectId, conversationId, langua
       const uri = item.uri?.trim();
       const external = uri && /^https?:\/\//i.test(uri);
       const file = uri && !external && item.kind === 'artifact' && !/^[a-z][a-z0-9+.-]*:/i.test(uri) && !uri.startsWith('//');
-      const label = item.title || (language === 'zh' ? '查看产物' : 'Open artifact');
+      const zh = language === 'zh';
+      const researchClaim = item.kind === 'source' && item.provenance === 'judge' && item.title.startsWith('Research claim: ');
+      const source = external ? URL.parse(uri)?.hostname : undefined;
+      const label = researchClaim
+        ? (source ? (zh ? `查看来源 · ${source}` : `Open source · ${source}`) : (zh ? '结论依据' : 'Evidence for this finding'))
+        : (item.title || (zh ? '查看交付物' : 'Open artifact'));
+      const summary = taskTextForDisplay(item.summary, language);
       const controlClass = 'inline-flex min-h-11 items-center gap-2 text-sm font-medium text-accent hover:underline [overflow-wrap:anywhere]';
       return <div key={`${item.title}-${index}`} className="min-w-0 rounded-lg border border-edge-subtle p-3">
         <TaskExpandableContent content={label} contentKey={`${conversationId ?? projectId}:evidence-title:${index}:${item.title}`} language={language} previewHeight={60}>
@@ -27,7 +34,7 @@ export function TaskResultEvidence({ evidence, projectId, conversationId, langua
         </TaskExpandableContent>
         {external && item.kind === 'artifact' && <ArtifactRecovery key={uri} uri={uri} zh={language === 'zh'} />}
         {compact && !external && !(file && (projectId || conversationId)) ? <p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? '位置待确认' : 'Location needs confirmation'}</p> : null}
-        {!compact && item.summary ? <TaskExpandableContent content={item.summary} contentKey={`${conversationId ?? projectId}:evidence:${index}:${item.title}`} language={language} markdown={false} previewHeight={80} className="mt-1 text-xs leading-5 text-fg-muted" /> : null}
+        {!compact && summary ? <TaskExpandableContent content={summary} contentKey={`${conversationId ?? projectId}:evidence:${index}:${item.title}`} language={language} markdown={false} previewHeight={80} className="mt-1 text-xs leading-5 text-fg-muted" /> : null}
         {!compact ? <p className="mt-1 text-xs text-fg-subtle">{item.provenance === 'judge'
           ? (item.strength === 'verified' ? (language === 'zh' ? '模型审阅通过' : 'Model reviewed') : (language === 'zh' ? '模型未确认，待核验' : 'Not confirmed by review'))
           : item.strength === 'verified' ? (language === 'zh' ? '已验证' : 'Verified') : (language === 'zh' ? '已记录，待验证' : 'Observed, not verified')}</p> : null}

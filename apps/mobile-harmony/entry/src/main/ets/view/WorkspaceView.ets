@@ -1,3 +1,4 @@
+import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import {
@@ -102,6 +103,9 @@ export struct XopcWorkspaceView {
   @Local automationAdvancedSchedule: boolean = false;
 
   aboutToAppear(): void {
+    if (this.section === 'automations') {
+      this.filter = appSettings.pageSelection('automation-filter', ['all', 'primary', 'secondary', 'attention'], 'all');
+    }
     if (this.initialTaskAction) void this.openTaskAction();
     else this.model.start(this.section, this.initialId, this.createOnAppear, this.projectId);
     if (this.section === 'tasks') this.loadAgents();
@@ -591,7 +595,10 @@ export struct XopcWorkspaceView {
       ForEach(this.filterOptions(), (option: XopcSegmentOption) => {
         MenuItem({ content: option.label }).id('automation-filter-' + option.key)
           .selected(this.filter === option.key).selectIcon(true).contentFontColor(this.colors.foreground)
-          .onChange((): void => { this.filter = option.key; })
+          .onChange((): void => {
+            this.filter = option.key;
+            appSettings.rememberPageSelection('automation-filter', option.key);
+          })
       }, (option: XopcSegmentOption): string => option.key)
     }.width(196).borderRadius(this.colors.corner(18)).backgroundColor(this.colors.panel)
   }

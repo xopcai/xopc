@@ -132,7 +132,8 @@ it('serves only category metadata to a signed mobile device through the authenti
       accounts: { default: { botToken: 'fixture-bot-secret', groupPolicy: 'allowlist' } } } },
   });
   const installSkill = vi.fn(async () => ({ skillId: 'safe-test-skill' }));
-  const patchSkillEnabled = vi.fn();
+  const enabledSkills = new Map<string, boolean>();
+  const patchSkillEnabled = vi.fn((id: string, enabled: boolean) => { enabledSkills.set(id, enabled); });
   const setupConversation = '9970c1da-a50e-4ca3-ad8f-ebe31b35f532';
   const setupGoal = { setupId: 'native-conversation-mcp', conversationId: setupConversation,
     displayName: 'Test service', serverId: 'test-service', version: 3, phase: 'approval_required', approveWithToken: true,
@@ -232,7 +233,9 @@ it('serves only category metadata to a signed mobile device through the authenti
       getSkillsApi: () => ({ catalog: [{ directoryId: 'meeting-skill', name: 'Meeting Skill',
         description: 'Summarize meetings', enabled: true, path: '/private/workspace/SKILL.md', plugin: { id: 'installed-plugin' } },
       { directoryId: 'retired-skill', name: 'Retired Skill', enabled: false },
-      { directoryId: '阅读清单', name: '阅读清单', enabled: true }] }),
+      { directoryId: '阅读清单', name: '阅读清单', enabled: enabledSkills.get('阅读清单') ?? true },
+      ...(installSkill.mock.calls.length > 1
+        ? [{ directoryId: 'safe-test-skill', name: 'safe-test-skill', enabled: true }] : [])] }),
     },
   } as unknown as GatewayService });
   const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
@@ -343,7 +346,7 @@ it('serves only category metadata to a signed mobile device through the authenti
     verification.resolve();
     mcpInteract.mockImplementationOnce(async () => ({ ...setupGoal, phase: 'ready', version: 4 }));
     expect((await (await signed(chatMcp, 'POST', { action: 'check', flow: setupGoal.setupId })).json()).payload)
-      .toMatchObject({ message: 'Connection complete.' });
+      .toMatchObject({ message: 'Connection complete.', chatPrompt: 'Use “Test service (test-service)” to help me with:' });
     expect((await signed(panel('connections', 'conversation:ef1832d4-35ec-47e0-995f-e5ca5a8d6b26'), 'POST',
       { action: 'check', flow: setupGoal.setupId })).status).toBe(404);
     setupAvailable = true;
@@ -358,8 +361,9 @@ it('serves only category metadata to a signed mobile device through the authenti
     expect((await signed(skillPanel, 'POST', { action: 'save', values: { enabled: 'false' } })).status).toBe(200);
     expect(patchSkillEnabled).toHaveBeenCalledExactlyOnceWith('meeting-skill', false);
     const localizedSkill = panel('skills', '阅读清单');
-    expect((await signed(localizedSkill)).status).toBe(200);
+    expect((await (await signed(localizedSkill)).json()).payload.chatPrompt).toBe('Use “阅读清单” to help me with:');
     expect((await signed(localizedSkill, 'POST', { action: 'save', values: { enabled: 'false' } })).status).toBe(200);
+    expect((await (await signed(localizedSkill)).json()).payload.chatPrompt).toBeUndefined();
     const market = panel('skills', 'marketplace:search');
     const marketResult = await signed(market, 'POST', { action: 'search', values: { query: 'sample' } });
     const marketplace = (await marketResult.json()).payload;
@@ -369,7 +373,7 @@ it('serves only category metadata to a signed mobile device through the authenti
     });
     const installation = marketplace.results[0].action;
     expect((await (await signed(market, 'POST', { action: installation.id, values: { query: 'sample' } })).json()).payload)
-      .toMatchObject({ fields: [{ id: 'query', value: 'sample' }], message: expect.stringContaining('Skill installed') });
+      .toMatchObject({ fields: [{ id: 'query', value: 'sample' }], message: 'Skill installed', chatPrompt: '/skill:safe-test-skill ' });
     expect((await signed(market, 'POST', { action: installation.id })).status).toBe(409);
     const agentPanel = panel('agents', 'coder');
     const editablePanel = (await (await signed(agentPanel)).json()).payload;
@@ -380,13 +384,15 @@ it('serves only category metadata to a signed mobile device through the authenti
     });
     const connection = panel('connections', 'mcp:calendar');
     expect(await (await signed(connection)).text()).not.toMatch(/private-secret|calendar\.example/);
+    expect((await (await signed(connection)).json()).payload.chatPrompt).toBe('Use “calendar” to help me with:');
     expect((await signed(connection, 'POST', { action: 'save', values: { enabled: 'false' } })).status).toBe(200);
     expect(config.mcp?.servers?.calendar?.enabled).toBe(false);
+    expect((await (await signed(connection)).json()).payload.chatPrompt).toBeUndefined();
     const custom = panel('connections', 'mcp:setup');
     expect((await signed(custom, 'POST', { action: 'create', values: { url: 'https://127.0.0.1/mcp' } })).status).toBe(400);
     expect((await (await signed(custom, 'POST', { action: 'create', values: {
       url: 'https://example.com/mcp', id: 'Calendar notes',
-    } })).json()).payload).toEqual({ message: 'Connection added and ready to use.' });
+    } })).json()).payload).toMatchObject({ message: 'Connection added', chatPrompt: expect.stringContaining('Calendar notes') });
     expect(Object.values(config.mcp?.servers ?? {})).toContainEqual(expect.objectContaining({
       url: 'https://example.com/mcp', enabled: true, displayName: 'Calendar notes', xopcPublicOnly: true,
     }));
@@ -409,15 +415,18 @@ it('serves only category metadata to a signed mobile device through the authenti
     const connected = (await (await signed(signIn, 'POST', { action: 'check', flow: pending.flow })).json()).payload;
     expect(connected.message).toBe('Connected');
     expect(connected.pollAction).toBeUndefined();
+    expect(connected.chatPrompt).toContain('composio-gmail');
     const marketPlugin = panel('plugins', 'meeting-plugin');
     const review = (await (await signed(marketPlugin)).json()).payload;
     expect(review).toMatchObject({ flow: expect.any(String), message: expect.stringContaining('Adds skills to the assistant'),
       details: expect.stringContaining('Skill meeting-summary'),
       actions: [expect.objectContaining({ id: 'install', label: 'Install and enable', inlineReview: true })] });
+    expect(review.chatPrompt).toBeUndefined();
     expect(pluginStore.get('meeting-plugin')).toBeUndefined();
     expect((await (await signed(marketPlugin, 'POST', { action: 'install', flow: review.flow })).json()).payload)
       .toMatchObject({ pollAction: 'refresh' });
     await vi.waitFor(() => expect(pluginStore.get('meeting-plugin')?.receipt.enabled).toBe(true));
+    expect((await (await signed(marketPlugin)).json()).payload.chatPrompt).toContain('meeting-plugin');
     const installedPlugin = panel('plugins', pluginId);
     const settingUp = (await (await signed(installedPlugin, 'POST', { action: 'start' })).json()).payload;
     expect(settingUp).toMatchObject({ revision: expect.any(Number) });

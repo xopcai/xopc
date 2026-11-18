@@ -320,6 +320,7 @@ describe('task detail action-first layout', () => {
     const report = [...container.querySelectorAll('summary')].find((item) => item.textContent === '完整执行报告')!.parentElement as HTMLDetailsElement;
     expect(report.open).toBe(true);
     expect(report.textContent).toContain('Full report with detailed reasoning');
+    expect(report.textContent).not.toMatch(/Claim c-ac0-scope|Research claim: c-file/);
     expect(report.textContent).toContain(copy.doneWell);
     const management = container.querySelector<HTMLDetailsElement>('[aria-label="任务管理"]')!;
     expect(management.open).toBe(true);
@@ -329,7 +330,8 @@ describe('task detail action-first layout', () => {
     expect(followUp.querySelector('a')?.getAttribute('href')).toBe('/chat/task/task-1');
     const acceptance = container.querySelector(`[aria-label="${copy.successDefinition}"]`)!;
     expect(acceptance.querySelector('[aria-live=polite]')?.textContent).toBe('0/2');
-    expect(acceptance.textContent.split(note)).toHaveLength(2);
+    expect(acceptance.textContent).toContain('验收条件还不够具体，暂时无法逐项确认完成情况。');
+    expect(acceptance.textContent).not.toContain(note);
     const evidencePanels = [...acceptance.querySelectorAll('li > details > summary')];
     expect(evidencePanels).toHaveLength(2);
     expect(evidencePanels.map(item => item.textContent)).toEqual(['Report saved', 'Evidence checked']);

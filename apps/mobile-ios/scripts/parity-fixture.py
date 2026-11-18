@@ -31,6 +31,19 @@ def space_seed():
   'updatedAt':now,'revision':1,'currentVersion':space_version,'origin':space_origin,
   'versions':[space_version,older_space_version],'origins':[space_origin,older_space_origin]}
 space_item = space_seed()
+work_memory = [
+ {'id':'fixture-work-decision','kind':'decision','scope':{'type':'project'},'status':'active','updatedAt':now,
+  'content':'移动端项目决定：验收须覆盖首屏布局。\n同时检查搜索和记录详情。\n验证返回路径。\n保留分页后的滚动位置。'},
+ {'id':'fixture-work-lesson','kind':'task_lesson','scope':{'type':'global'},'status':'active','updatedAt':now-1,
+  'content':'验收经验：先使用独立数据。'}
+]
+shares = [
+ {'id':f'fixture-share-{kind}','kind':kind,'fileName':name,'shareUrl':None if revoked else f'https://example.test/s/{kind}',
+  'createdAt':'2026-10-05T09:00:00.000Z','expiresAt':'2026-10-06T09:00:00.000Z','expired':expired,'revoked':revoked}
+ for kind,name,expired,revoked in [
+  ('session','已过期的对话链接',True,False), ('note','已撤销的笔记链接',False,True)
+ ]
+]
 long_body = '# 移动端阅读\n\n' + '\n\n'.join(f'{i}. **工作记录**\n   - 窄屏列表应该保留足够的阅读宽度，换行不重复占用左侧缩进。\n   - 保持信息清晰。' for i in range(1, 20))
 messages = [{'id':f'history-{i}','role':'user','content':f'移动端回归检查记录 {i}'} for i in range(12)] + [
  {'id':'long-ai','turnId':'turn-1','role':'assistant','content':long_body},
@@ -148,7 +161,7 @@ class Handler(BaseHTTPRequestHandler):
    data=envelope({
     'fields':[{'id':'query','label':'技能名称或关键词','type':'text','value':search,'hint':'例如：会议纪要、PDF'}],
     'actions':[{'id':'search','label':'搜索'}],
-    **({'message':'技能已安装，可在技能列表中使用。'} if action=='install:sample' else {}),
+    **({'message':'技能已安装','chatPrompt':'/skill:meeting-summary '} if action=='install:sample' else {}),
     **({'results':[{'id':'sample','name':'Meeting Summary','source':'技能市场','summary':'整理会议纪要与待办',
                     'iconUrl':capability_plugin_icon,
                     'action':{'id':'install:sample','label':'安装','confirmation':'Meeting Summary'}}]} if action=='search' else {}),
@@ -158,13 +171,14 @@ class Handler(BaseHTTPRequestHandler):
     capability_skill_enabled=json.loads(body)['values']['enabled']=='true'
    data=envelope({'fields':[{'id':'enabled','label':'启用技能','type':'toggle',
                             'value':str(capability_skill_enabled).lower()}],
-                  'actions':[{'id':'save','label':'保存配置'}]})
+                  'actions':[{'id':'save','label':'保存配置'}],
+                  **({'chatPrompt':'/skill:meeting-skill '} if capability_skill_enabled else {})})
   elif path=='/api/capabilities/mobile-actions/panel/plugins':
    request=json.loads(body) if body else {}
    if request.get('action')=='start':
     data=envelope({'message':'正在完成设置…','pollAction':'refresh','revision':1})
    elif request.get('action')=='refresh':
-    data=envelope({'message':'已启用','actions':[{'id':'disable','label':'停用插件','advanced':True}]})
+    data=envelope({'message':'已启用','chatPrompt':'请使用「Meeting Plugin」帮我：','actions':[{'id':'disable','label':'停用插件','advanced':True}]})
    else:
     data=envelope({'actions':[{'id':'start','label':'启用插件'}]})
   elif path=='/api/capabilities/mobile-actions/panel/connections':
@@ -172,7 +186,8 @@ class Handler(BaseHTTPRequestHandler):
     data=envelope({'fields':[{'id':'url','label':'服务地址','type':'text','hint':'https://'}],
                    'actions':[{'id':'prepare','label':'添加连接'}]})
    else:
-    data=envelope({'message':'账号已连接','actions':[{'id':'authorize','label':'重新授权'}]})
+    data=envelope({'message':'账号已连接','chatPrompt':'请使用「Drive Connection」帮我：',
+                   'actions':[{'id':'authorize','label':'重新授权','advanced':True}]})
   elif path=='/api/capabilities/mobile-actions/panel/agents':
    data=envelope({'fields':[{'id':'name','label':'名称','type':'text','value':'Coding Expert'}],
                   'actions':[{'id':'save','label':'保存'}]})
@@ -308,7 +323,11 @@ class Handler(BaseHTTPRequestHandler):
    else:
     status=201; data={'version':{'id':key,'revision':file_fixture['revision']}}
   elif path=='/api/notes': data={'items':[{'id':'note-1','title':'布局检查笔记','kind':'note','status':'active','createdAt':now,'updatedAt':now,'snippet':'用于模拟器验证。'}],'total':1,'hasMore':False}
-  elif path=='/api/user-model/mobile-summary': data={'profile':{'callName':'Tester','role':'工程师'},'settings':{'memoryEnabled':True,'showMemoryReferences':True,'sensitiveWritePolicy':'ask'},'counts':{'total':0,'explicit':0,'learned':0,'review':0,'workMemory':0},'goals':[],'recent':[]}
+  elif path=='/api/user-model/mobile-summary': data={'profile':{'callName':'Tester','role':'工程师'},'settings':{'memoryEnabled':True,'showMemoryReferences':True,'sensitiveWritePolicy':'confirm'},'counts':{'total':0,'explicit':0,'learned':0,'review':0,'workMemory':len(work_memory)},'goals':[],'recent':[]}
+  elif path=='/api/user-model/assertions': data={'items':[]}
+  elif path=='/api/knowledge-memory' and query.get('view')==['manage']:
+   data={'items':work_memory[1:]} if query.get('cursor')==['work-next'] else {'items':work_memory[:1],'nextCursor':'work-next'}
+  elif path=='/api/shares': data={'ok':True,'payload':{'shares':shares}}
   elif 'media' in path or path.endswith('voice.wav'):
    self.send_response(200);self.send_header('Content-Type','audio/wav');self.send_header('Content-Length',str(len(w.getvalue())));self.end_headers();self.wfile.write(w.getvalue());return
   else:

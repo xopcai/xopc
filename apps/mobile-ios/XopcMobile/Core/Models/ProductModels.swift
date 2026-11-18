@@ -634,13 +634,31 @@ struct MobileUserAssertionPage: Decodable, Sendable {
 
 struct MobileUserAssertionEnvelope: Decodable, Sendable { let assertion: MobileUserAssertion }
 
+struct MobileWorkMemory: Decodable, Identifiable, Sendable {
+    let id: String
+    let content: String
+    let kind: String
+    let status: String
+    let scope: MobileUserScope
+    let updatedAt: Int64
+}
+
+struct MobileWorkMemoryPage: Decodable, Sendable {
+    let items: [MobileWorkMemory]
+    let nextCursor: String?
+}
+
 struct MobileShare: Decodable, Identifiable, Sendable {
     let id: String
     let fileName: String
-    let shareUrl: String
+    let shareUrl: String?
+    let kind: String?
+    let createdAt: String?
     let expiresAt: String
     let revoked: Bool
     let expired: Bool
+
+    var isActive: Bool { !revoked && !expired }
 }
 
 struct MobileShareListEnvelope: Decodable, Sendable {

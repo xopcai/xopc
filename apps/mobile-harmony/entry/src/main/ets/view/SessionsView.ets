@@ -168,7 +168,10 @@ export struct XopcSessionsView {
   private scroller: Scroller = new Scroller();
   private opening: boolean = false;
 
-  aboutToAppear(): void { this.searchOpen = this.startSearching; }
+  aboutToAppear(): void {
+    this.historyMode = appSettings.pageSelection('conversation-history', ['recent', 'projects', 'experts'], 'recent');
+    this.searchOpen = this.startSearching;
+  }
   aboutToDisappear(): void { this.catalogRevision++; this.sessions.dispose(); }
   private activate(): void {
     this.opening = false;
@@ -204,6 +207,7 @@ export struct XopcSessionsView {
     if (mode === this.historyMode) return;
     this.catalogRevision++;
     this.historyMode = mode; this.groupId = ''; this.groupName = '';
+    appSettings.rememberPageSelection('conversation-history', mode);
     this.groups = []; this.groupQuery = '';
     this.closeSearch();
     if (mode === 'recent') this.sessions.setScope({});

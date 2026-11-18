@@ -6,6 +6,7 @@ import { appSettings } from '../service/settings';
 import { XopcHttpError } from '../service/transport';
 import { XopcCapabilityLogo } from './CapabilityLogo';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
+import { XopcListSkeleton } from './MobileComponents';
 
 interface CapabilityChoice { id: string; label: string; }
 interface CapabilityFieldVisibility { field: string; value: string; }
@@ -18,7 +19,7 @@ interface CapabilitySearchResult { id: string; name: string; summary?: string; s
 interface CapabilityPanelPayload {
   fields?: CapabilityField[]; actions?: CapabilityAction[]; message?: string; details?: string;
   authorizationUrl?: string; qrUrl?: string; flow?: string; revision?: number;
-  pollAction?: string; results?: CapabilitySearchResult[];
+  pollAction?: string; results?: CapabilitySearchResult[]; chatPrompt?: string;
 }
 interface CapabilityPanelEnvelope { ok: boolean; payload?: CapabilityPanelPayload; error?: string; }
 interface CapabilityPanelCommand { action: string; values: Record<string, string>; flow?: string; revision?: number; }
@@ -35,8 +36,7 @@ export struct XopcCapabilityPanelView {
   @Param avatarRevision: number = 0;
   @Event onClose: () => void = (): void => {};
   @Event onChanged: () => void = (): void => {};
-  @Event onChat: () => void = (): void => {};
-  @Param canChat: boolean = false;
+  @Event onUseInChat: (prompt: string) => void = (_prompt: string): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local panel?: CapabilityPanelPayload;
   @Local values: Map<string, string> = new Map<string, string>();
@@ -285,7 +285,7 @@ export struct XopcCapabilityPanelView {
       } else {
         Text(this.t('已安装', 'Installed')).fontSize(13).fontColor(this.colors.secondary)
       }
-    }.width('100%').padding(14).backgroundColor(this.colors.input).borderRadius(this.colors.corner(16))
+    }.width('100%').padding(14).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
   }
 
   @Builder
@@ -301,30 +301,72 @@ export struct XopcCapabilityPanelView {
       }
       Text(this.itemName).fontSize(20).fontWeight(FontWeight.Bold)
         .fontColor(this.colors.foreground).layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-      if (this.canChat) {
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.ellipsis_bubble')).fontSize(20).fontColor([this.colors.chat.action])
-        }.id('capability-start-chat').width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
-          .accessibilityText($r('app.string.capability_start_chat')).onClick(this.onChat)
-      }
       Button({ type: ButtonType.Circle }) {
         SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([this.colors.foreground])
       }.id('capability-panel-close').width(44).height(44).padding(0).backgroundColor(this.colors.input)
         .accessibilityText($r('app.string.close')).onClick(this.onClose)
-    }.width('100%').padding({ left: 20, right: 20, top: 12, bottom: 12 })
+    }.width('100%').padding({ left: 20, right: 20, top: 10, bottom: 14 })
+  }
+
+  private readyPrompt(): string {
+    if (this.panel?.pollAction || this.errorMessage || !this.panel?.chatPrompt) return '';
+    const changed = (this.panel.fields ?? []).some((field: CapabilityField): boolean =>
+      (this.values.get(field.id) ?? '') !== (field.type === 'secret' ? '' : field.value ?? ''));
+    return changed ? '' : this.panel.chatPrompt;
+  }
+
+  private primaryAction(): CapabilityAction | undefined {
+    if (this.readyPrompt() || this.panel?.authorizationUrl || this.panel?.pollAction) return undefined;
+    return this.actions(false)[0];
+  }
+
+  @Builder
+  private panelFooter() {
+    if (this.readyPrompt() || this.primaryAction() || this.panel?.authorizationUrl) {
+      Column() {
+        if (this.readyPrompt()) {
+          Button(this.itemId.startsWith('conversation:') ? this.t('返回对话', 'Back to chat') : this.t('通过对话使用', 'Use in chat'))
+            .id('capability-use-in-chat').width('100%').height(48).fontSize(16)
+            .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).enabled(!this.busy)
+            .onClick((): void => {
+              const prompt = this.readyPrompt();
+              if (!prompt) return;
+              if (this.itemId.startsWith('conversation:')) this.onClose();
+              else this.onUseInChat(prompt);
+            })
+        } else if (this.panel?.authorizationUrl) {
+          Button(this.t('继续授权', 'Continue sign-in')).width('100%').height(48)
+            .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).enabled(!this.busy)
+            .onClick((): void => { void this.authorize(this.panel?.authorizationUrl ?? ''); })
+        } else if (this.primaryAction()) {
+          this.actionButton(this.primaryAction()!, true)
+        }
+      }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 }).backgroundColor(this.colors.surface)
+    }
   }
 
   @Builder
   panelBody() {
     Scroll() {
-      Column({ space: 18 }) {
-        if (this.panel?.message) {
-          Text(this.panel?.message).fontSize(14).fontColor(this.colors.secondary).width('100%').padding(14)
-            .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14)).id('capability-panel-status')
-        } else if (this.description) Text(this.description).fontSize(14).fontColor(this.colors.secondary)
-        if (this.busy) LoadingProgress().width(24).height(24).color(this.colors.accent)
+      Column({ space: 14 }) {
+        if (this.panel?.message || this.readyPrompt() || this.panel?.pollAction) {
+          Row({ space: 10 }) {
+            if (this.panel?.pollAction) {
+              LoadingProgress().width(20).height(20).color(this.colors.accent)
+            } else if (this.readyPrompt()) {
+              SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([this.colors.success])
+            }
+            Text(this.panel?.message || this.t('可在对话中使用', 'Ready to use in chat')).fontSize(14)
+              .fontColor(this.colors.foreground).layoutWeight(1)
+          }.id('capability-panel-status').width('100%').padding(14)
+            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
+        } else if (this.panel && this.description && this.category !== 'agents') {
+          Text(this.description).fontSize(14).fontColor(this.colors.secondary).width('100%')
+        }
+        if (this.busy && this.panel) LoadingProgress().width(22).height(22).color(this.colors.accent)
+        if (!this.panel && !this.errorMessage) { XopcListSkeleton() }
         if (this.errorMessage) {
-          Text(this.errorMessage).fontSize(14).fontColor(this.colors.danger)
+          Text(this.errorMessage).fontSize(14).fontColor(this.colors.danger).width('100%')
           if (!this.panel) Button(this.t('重试', 'Retry')).enabled(!this.busy).onClick((): void => { void this.request(); })
           if (this.panel?.pollAction) Button(this.t('刷新状态', 'Refresh status')).enabled(!this.busy)
             .onClick((): void => { if (this.panel?.pollAction) void this.request(this.panel.pollAction); })
@@ -334,42 +376,47 @@ export struct XopcCapabilityPanelView {
             QRCode(this.panel!.qrUrl!).width(176).height(176).color('#111318').backgroundColor(Color.White)
           }.padding(12).backgroundColor(Color.White).borderRadius(16).alignSelf(ItemAlign.Center)
         }
-        if (this.panel?.authorizationUrl) {
-          Button(this.t('继续授权', 'Continue sign-in')).width('100%').enabled(!this.busy)
-            .backgroundColor(this.colors.input).fontColor(this.colors.chat.action)
-            .onClick((): void => { if (this.panel?.authorizationUrl) void this.authorize(this.panel.authorizationUrl); })
-        }
         if (this.panel?.details) {
-          Button(this.detailsOpen ? this.t('收起详情', 'Hide details') : this.t('查看详情', 'View details'))
-            .id('capability-panel-review-details').height(44).backgroundColor(this.colors.input).fontColor(this.colors.chat.action)
-            .onClick((): void => { this.detailsOpen = !this.detailsOpen; })
-          if (this.detailsOpen) Text(this.panel?.details).fontSize(13).fontColor(this.colors.secondary).width('100%')
+          Column({ space: 6 }) {
+            Button(this.detailsOpen ? this.t('收起详情', 'Hide details') : this.t('查看详情', 'View details'))
+              .id('capability-panel-review-details').height(44).backgroundColor(Color.Transparent)
+              .fontColor(this.colors.chat.action).onClick((): void => { this.detailsOpen = !this.detailsOpen; })
+            if (this.detailsOpen) Text(this.panel?.details).fontSize(13).fontColor(this.colors.secondary).width('100%')
+          }.width('100%').padding({ left: 12, right: 12, bottom: this.detailsOpen ? 12 : 0 })
+            .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
         }
-        ForEach(this.fields(false), (entry: CapabilityField) => { this.field(entry) },
-          (entry: CapabilityField): string => entry.id)
-        ForEach(this.actions(false), (action: CapabilityAction, index: number) => {
-          this.actionButton(action, index === 0 && !this.panel?.pollAction)
-        }, (action: CapabilityAction): string => action.id)
+        if (this.fields(false).length) {
+          Column({ space: 14 }) {
+            ForEach(this.fields(false), (entry: CapabilityField) => { this.field(entry) },
+              (entry: CapabilityField): string => entry.id)
+          }.width('100%').padding(14).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
+        }
+        ForEach(this.actions(false).filter((action: CapabilityAction): boolean => action.id !== this.primaryAction()?.id),
+          (action: CapabilityAction) => { this.actionButton(action, false) }, (action: CapabilityAction): string => action.id)
         ForEach(this.panel?.results ?? [], (entry: CapabilitySearchResult) => { this.resultRow(entry) },
           (entry: CapabilitySearchResult): string => entry.id)
         if (this.fields(true).length || this.actions(true).length) {
-          Button(this.advanced ? this.t('收起选项', 'Fewer options') : this.t('更多选项', 'More options'))
-            .id('capability-panel-more').height(44).backgroundColor(this.colors.input).fontColor(this.colors.chat.action)
-            .onClick((): void => { this.advanced = !this.advanced; })
-          if (this.advanced) {
-            ForEach(this.fields(true), (field: CapabilityField) => { this.field(field) }, (field: CapabilityField): string => field.id)
-            ForEach(this.actions(true), (action: CapabilityAction) => { this.actionButton(action, false) },
-              (action: CapabilityAction): string => action.id)
-          }
+          Column({ space: 10 }) {
+            Button(this.t('更多选项', 'More options'))
+              .id('capability-panel-more').height(44).backgroundColor(Color.Transparent).fontColor(this.colors.chat.action)
+              .accessibilitySelected(this.advanced).onClick((): void => { this.advanced = !this.advanced; })
+            if (this.advanced) {
+              ForEach(this.fields(true), (field: CapabilityField) => { this.field(field) }, (field: CapabilityField): string => field.id)
+              ForEach(this.actions(true), (action: CapabilityAction) => { this.actionButton(action, false) },
+                (action: CapabilityAction): string => action.id)
+            }
+          }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 12, right: 12 })
+            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
         }
-      }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 4, bottom: 24 })
-    }.width('100%').layoutWeight(1).align(Alignment.Top).scrollBar(BarState.Off)
+      }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 4, bottom: 12 })
+    }.width('100%').layoutWeight(1).align(Alignment.Top).scrollBar(BarState.Auto)
   }
 
   build() {
     Column() {
       this.panelHeader()
       this.panelBody()
-    }.width('100%').height('100%')
+      this.panelFooter()
+    }.width('100%').height('100%').backgroundColor(this.colors.surface)
   }
 }

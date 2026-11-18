@@ -16,6 +16,8 @@ export class XopcSettings {
   @Trace colorScheme: XopcColorScheme = 'default';
   onColorModeChanged?: (dark: boolean) => void;
   private store: XopcSecureStore = new XopcSecureStore();
+  private data?: preferences.Preferences;
+  private navigationWrite: Promise<void> = Promise.resolve();
 
   effectiveLanguage(): string { return this.language || i18n.System.getSystemLanguage(); }
   customTheme(): CustomTheme { return xopcCustomTheme(this.colorScheme); }
@@ -29,6 +31,7 @@ export class XopcSettings {
 
   async restore(context: common.Context): Promise<void> {
     const data = await preferences.getPreferences(context, PREFERENCES_STORE);
+    this.data = data;
     let raw = await data.get(PREFERENCES_KEY, '') as string;
     if (!raw) {
       try { raw = await this.store.read(PREFERENCES_KEY) ?? ''; }
@@ -41,6 +44,23 @@ export class XopcSettings {
       this.colorScheme = normalizeXopcColorScheme(saved.colorScheme);
     }
     this.apply(context);
+  }
+
+  pageSelection(key: string, options: string[], fallback: string): string {
+    try {
+      const value = this.data?.getSync('navigation.' + key, fallback);
+      return typeof value === 'string' && options.includes(value) ? value : fallback;
+    } catch (_) { return fallback; }
+  }
+
+  rememberPageSelection(key: string, value: string): void {
+    const data = this.data;
+    if (!data) return;
+    try {
+      data.putSync('navigation.' + key, value);
+      this.navigationWrite = this.navigationWrite.then((): Promise<void> => data.flush())
+        .catch((): void => {});
+    } catch (_) {}
   }
   async update(context: common.Context, language: string, theme: string,
     colorScheme: string = this.colorScheme): Promise<void> {

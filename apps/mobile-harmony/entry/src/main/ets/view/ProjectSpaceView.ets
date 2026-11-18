@@ -1,3 +1,4 @@
+import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
@@ -32,10 +33,14 @@ export struct XopcProjectSpaceView {
   private menuDestination: string = '';
   private shownOnce: boolean = false;
 
-  aboutToAppear(): void { void this.model.load(this.projectId); }
+  aboutToAppear(): void { this.onProjectChange(); }
   aboutToDisappear(): void { this.model.dispose(); }
   @Monitor('projectId')
-  onProjectChange(): void { this.tab = 'overview'; void this.model.load(this.projectId); }
+  onProjectChange(): void {
+    this.tab = appSettings.pageSelection('project.' + this.projectId,
+      this.tabOptions.map((option: XopcPageTitleOption): string => option.key), 'overview');
+    void this.model.load(this.projectId);
+  }
 
   private go(page: string, itemId: string = ''): void {
     const title = page === 'project-new-chat' || page === 'project-chat' ? this.model.project?.name : undefined;
@@ -153,7 +158,10 @@ export struct XopcProjectSpaceView {
       Column() {
         XopcPageHeader({ heading: this.tabOptions.find((option: XopcPageTitleOption): boolean => option.key === this.tab)?.label
           ?? $r('app.string.project_overview'), selectedTitle: this.tab, titleOptions: this.tabOptions,
-          titleMenuId: 'project-tabs', onSelectTitle: (key: string): void => { this.tab = key; },
+          titleMenuId: 'project-tabs', onSelectTitle: (key: string): void => {
+            this.tab = key;
+            appSettings.rememberPageSelection('project.' + this.projectId, key);
+          },
           backVisible: true, onBack: this.onExit, actionLabel: $r('app.string.project_add_item'), actionIcon: $r('sys.symbol.plus'),
           onAction: (): void => { this.menuOpen = true; } })
         if (this.model.project) {

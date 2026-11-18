@@ -16,7 +16,9 @@ interface XopcSessionShareRequest {
 }
 interface XopcShareExtensionRequest { extendTtlMs: number; }
 
-function validShareUrl(value: string): boolean { return value.startsWith('https://') || value.startsWith('http://'); }
+export function validShareUrl(value: string | undefined): boolean {
+  return !!value && (value.startsWith('https://') || value.startsWith('http://'));
+}
 
 function validateShare(result: XopcShareResult): XopcShareResult {
   if (!result?.id || !validShareUrl(result.shareUrl) || !['public', 'lan', 'local-only'].includes(result.reachability)) {
@@ -29,7 +31,7 @@ export class XopcShareService {
   async list(): Promise<XopcShareItem[]> {
     const envelope = JSON.parse(await gatewaySession.request('/api/shares')) as XopcShareListEnvelope;
     if (!envelope.ok || !Array.isArray(envelope.payload?.shares)) throw new Error('INVALID_SHARE_LIST');
-    return envelope.payload.shares.filter((item: XopcShareItem): boolean => !!item?.id && validShareUrl(item.shareUrl));
+    return envelope.payload.shares.filter((item: XopcShareItem): boolean => !!item?.id);
   }
 
   async revoke(id: string): Promise<void> {

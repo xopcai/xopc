@@ -94,6 +94,7 @@ export interface XopcPageTitleOption {
 export struct XopcPageHeader {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param heading: ResourceStr = '';
+  @Param showStaticTitle: boolean = false;
   @Param titleOptions: XopcPageTitleOption[] = [];
   @Param selectedTitle: string = '';
   @Param titleMenuId: string = '';
@@ -138,6 +139,10 @@ export struct XopcPageHeader {
         XopcPageTitleMenu({ heading: this.heading, options: this.titleOptions,
           selected: this.selectedTitle, menuId: this.titleMenuId, onSelect: this.onSelectTitle })
           .constraintSize({ maxWidth: '57%' })
+      } else if (this.showStaticTitle) {
+        Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '57%' })
+          .accessibilityGroup(true).hitTestBehavior(HitTestMode.None)
       }
     }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
   }
@@ -190,6 +195,7 @@ export struct XopcHubRow {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param heading: ResourceStr = '';
   @Param summary: ResourceStr = '';
+  @Param trailingValue: ResourceStr = '';
   @Param symbol: Resource = $r('sys.symbol.doc');
   @Param navigable: boolean = true;
   @Param showChevron: boolean = true;
@@ -213,6 +219,10 @@ export struct XopcHubRow {
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           }
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        if (this.trailingValue !== '') {
+          Text(this.trailingValue).fontSize(13).fontColor(this.colors.secondary).textAlign(TextAlign.End)
+            .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '38%' })
+        }
         if (this.navigable && this.showChevron) { SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.tertiary]) }
       }.width('100%').constraintSize({ minHeight: this.compact ? 52 : 64 })
         .padding({ left: this.compact ? 12 : 16, right: this.compact ? 12 : 16,

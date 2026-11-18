@@ -23,13 +23,11 @@ struct PersonalAgentSettingsRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     if let personalAgent, personalAgent.isReady {
                         Text(personalAgent.displayName).foregroundStyle(.primary)
-                        (error.map { Text(verbatim: $0) } ?? Text("配置我的助手"))
-                            .mobileTextStyle(.caption).foregroundStyle(error == nil ? Color.secondary : .red)
                     } else {
                         Text("创建我的助手").foregroundStyle(.primary)
-                        if let error {
-                            Text(error).mobileTextStyle(.caption).foregroundStyle(.red)
-                        }
+                    }
+                    if let error {
+                        Text(error).mobileTextStyle(.caption).foregroundStyle(.red)
                     }
                 }
                 Spacer()
@@ -93,7 +91,8 @@ struct PersonalGoalsView: View {
                 ProfileSkeleton()
             }
         }
-        .mobilePageTitle(Text("目标"))
+        .navigationTitle("目标")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("添加", systemImage: "plus") { selectedGoal = nil; editing = true }
@@ -119,7 +118,8 @@ struct PersonalGoalsView: View {
 struct UserUnderstandingView: View {
     let configuration: GatewayConfiguration
     @State private var summary: MobileUserSummary?
-    @State private var section = 0
+    @AppStorage("navigation.privacy-memory") private var savedSection = 0
+    private var section: Int { (0 ... 2).contains(savedSection) ? savedSection : 0 }
     @State private var filter = "all"
     @State private var query = ""
     @State private var searchOpen = false
@@ -127,76 +127,41 @@ struct UserUnderstandingView: View {
     @Environment(\.mobileTheme) private var theme
     @State private var assertions: [MobileUserAssertion] = []
     @State private var nextCursor: String?
+    @State private var workItems: [MobileWorkMemory] = []
+    @State private var workCursor: String?
+    @State private var workLoading = true
+    @State private var workFailed = false
+    @State private var expandedWorkID: String?
     @State private var editingProfile = false
     @State private var error: String?
 
     var body: some View {
         List {
-            if section == 0, let summary {
-                Section("基本信息") {
-                    LabeledContent("称呼", value: summary.profile.callName ?? summary.suggestedCallName ?? "你")
-                    if let role = summary.profile.role, !role.isEmpty {
-                        LabeledContent("角色", value: role)
-                    }
-                    Button("编辑基本信息") { editingProfile = true }
+            if section == 0 {
+                if let summary {
+                    overview(summary)
+                } else if error == nil {
+                    ProfileSkeleton()
                 }
-                Section {
-                    Text("记住你的偏好。记错了，随时改。")
-                        .foregroundStyle(.secondary)
-                    if summary.recent.isEmpty {
-                        Text("试着告诉 xopc「回答时先给结论」，让它记住你的偏好。")
-                    }
-                    ForEach(summary.recent.prefix(3)) { item in
-                        memoryRow(item)
-                    }
-                    Button("查看全部记忆") { selectSection(1) }
-                } header: {
-                    Text("xopc 记住的你")
-                }
-                if let focus = summary.primaryFocus {
-                    Section("最近在关注") {
-                        Text(focus.title)
-                        if let outcome = focus.desiredOutcome, !outcome.isEmpty {
-                            Text(outcome).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                if let rules = summary.rules, !rules.isEmpty {
-                    Section("我们如何协作") { ForEach(rules) { Text($0.statement) } }
-                }
-                Section("工作记忆") {
-                    LabeledContent("已保存", value: "\(summary.counts.workMemory) 条")
-                    Text("事实、决定和经验保存在资料库中。").foregroundStyle(.secondary)
-                }
-            } else if section == 1 {
-                SegmentedTabs(options: [
-                    SegmentOption(id: "all", title: "全部", accessibilityID: "about-you-filter-all"),
-                    SegmentOption(id: "explicit", title: "你说过的", accessibilityID: "about-you-filter-explicit"),
-                    SegmentOption(id: "learned", title: "协作中发现", accessibilityID: "about-you-filter-learned"),
-                    SegmentOption(id: "review", title: "待确认", accessibilityID: "about-you-filter-review")
-                ], selected: filter, label: "筛选") { filter = $0 }
-                    .accessibilityIdentifier("about-you-filter-tabs")
-                    .listRowBackground(Color.clear)
-                ForEach(assertions) { item in
-                    memoryRow(item)
-                }
-                if let nextCursor {
-                    Button("加载更多") { Task { await loadAssertions(cursor: nextCursor) } }
-                } else if assertions.isEmpty {
-                    ContentUnavailableView("暂无相关记忆", systemImage: "text.bubble",
-                                           description: Text("试试其他筛选，或在聊天中告诉 xopc 你的偏好。"))
-                }
+            } else if section == 2 {
+                workMemory
+            } else {
+                personalMemory
             }
-            if error != nil {
-                Text("内容暂时无法读取，请下拉重试").foregroundStyle(.secondary)
-            } else if section == 0, summary == nil {
-                ProfileSkeleton()
+            if section != 2, error != nil {
+                Section {
+                    Text("内容暂时无法读取，请下拉重试").foregroundStyle(.secondary)
+                    Button("重试") { Task { await refreshCurrentSection() } }
+                }
             }
         }
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(12)
         .mobilePageTitle(Text("隐私与记忆")) {
             MobilePageTitleMenu(options: [
                 SegmentOption(id: 0, title: "概览", accessibilityID: "about-you-tab-overview"),
-                SegmentOption(id: 1, title: "记住的你", accessibilityID: "about-you-tab-understanding")
+                SegmentOption(id: 1, title: "记住的你", accessibilityID: "about-you-tab-understanding"),
+                SegmentOption(id: 2, title: "工作记忆", accessibilityID: "about-you-tab-work")
             ], selected: section, identifier: "about-you-menu", onSelect: selectSection)
         }
         .toolbar {
@@ -223,16 +188,186 @@ struct UserUnderstandingView: View {
                 await loadAssertions()
             }
         }
-        .refreshable {
-            await refreshSummary()
-            if section == 1 {
-                await loadAssertions()
-            }
+        .task(id: section) {
+            if section == 2 { await loadWork() }
         }
+        .refreshable { await refreshCurrentSection() }
         .sheet(isPresented: $editingProfile) {
             if let summary {
                 ProfileEditorView(configuration: configuration, profile: summary.profile) { await refreshSummary() }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func overview(_ summary: MobileUserSummary) -> some View {
+        Section("基本信息") {
+            LabeledContent("称呼", value: summary.profile.callName.flatMap { $0.isEmpty ? nil : $0 } ?? summary.suggestedCallName ?? "你")
+            if let role = summary.profile.role, !role.isEmpty {
+                LabeledContent("角色", value: role)
+            }
+            if let timezone = summary.profile.timezone, !timezone.isEmpty {
+                LabeledContent("时区", value: timezone)
+            }
+            Button("编辑基本信息") { editingProfile = true }
+        }
+        Section {
+            Button {
+                selectSection(2)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "doc.text").foregroundStyle(theme.action)
+                    Text("工作记忆").mobileTextStyle(.rowTitle).foregroundStyle(.primary)
+                    Spacer(minLength: 8)
+                    Text(summary.counts.workMemory.formatted()).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+            .accessibilityIdentifier("about-you-work-memory")
+        }
+        Section("xopc 记住的你") {
+            if summary.recent.isEmpty {
+                Text("暂无相关记忆").foregroundStyle(.secondary)
+            }
+            ForEach(summary.recent.prefix(3)) { item in
+                memoryRow(item)
+            }
+            Button("查看全部记忆") { selectSection(1) }
+        }
+        if let focus = summary.primaryFocus {
+            Section("最近在关注") {
+                Text(focus.title)
+                if let outcome = focus.desiredOutcome, !outcome.isEmpty {
+                    Text(outcome).foregroundStyle(.secondary)
+                }
+            }
+        }
+        if let rules = summary.rules, !rules.isEmpty {
+            Section("我们如何协作") { ForEach(rules) { Text($0.statement) } }
+        }
+        Section("记忆设置") {
+            LabeledContent("使用记忆") { Text(summary.settings.memoryEnabled ? "已开启" : "已关闭") }
+            LabeledContent("显示记忆引用") { Text(summary.settings.showMemoryReferences ? "已开启" : "已关闭") }
+            LabeledContent("保存敏感记忆") { Text(memoryWritePolicy(summary.settings.sensitiveWritePolicy)) }
+        }
+    }
+
+    @ViewBuilder
+    private var personalMemory: some View {
+        SegmentedTabs(options: [
+            SegmentOption(id: "all", title: "全部", accessibilityID: "about-you-filter-all"),
+            SegmentOption(id: "explicit", title: "你说过的", accessibilityID: "about-you-filter-explicit"),
+            SegmentOption(id: "learned", title: "协作中发现", accessibilityID: "about-you-filter-learned"),
+            SegmentOption(id: "review", title: "待确认", accessibilityID: "about-you-filter-review")
+        ], selected: filter, label: "筛选") { filter = $0 }
+            .accessibilityIdentifier("about-you-filter-tabs")
+            .listRowBackground(Color.clear)
+        ForEach(assertions) { item in
+            memoryRow(item)
+        }
+        if let nextCursor {
+            Button("加载更多") { Task { await loadAssertions(cursor: nextCursor) } }
+        } else if assertions.isEmpty, error == nil {
+            ContentUnavailableView("暂无相关记忆", systemImage: "text.bubble")
+        }
+    }
+
+    @ViewBuilder
+    private var workMemory: some View {
+        if workFailed {
+            Section {
+                Text("暂时无法读取工作记忆。").foregroundStyle(.secondary)
+                Button("重试") { Task { await loadWork() } }
+            }
+        } else if workLoading, workItems.isEmpty {
+            ProfileSkeleton()
+        } else if workItems.isEmpty {
+            ContentUnavailableView("还没有工作记忆", systemImage: "doc.text")
+        }
+        if !workItems.isEmpty {
+            Section {
+                ForEach(workItems) { item in
+                    workRow(item)
+                }
+                if let workCursor, !workFailed {
+                    Button("加载更多") { Task { await loadWork(cursor: workCursor) } }
+                        .disabled(workLoading)
+                }
+            }
+        }
+    }
+
+    private func workRow(_ item: MobileWorkMemory) -> some View {
+        DisclosureGroup(isExpanded: Binding(get: { expandedWorkID == item.id }, set: { expanded in
+            expandedWorkID = expanded ? item.id : nil
+        })) {
+            Text(item.content).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(workMemoryKind(item.kind)).fontWeight(.semibold).foregroundStyle(theme.action)
+                    Text(userMemoryScope(item.scope.type)).foregroundStyle(.secondary)
+                }
+                .font(.footnote)
+                if expandedWorkID != item.id {
+                    Text(item.content).lineLimit(3)
+                }
+                Text(item.updatedAt.millisecondsDate, format: .dateTime.year().month().day())
+                    .font(.caption).foregroundStyle(.secondary)
+                if item.status != "active" {
+                    Text(item.status == "stale" ? "已过时" : "待你确认")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .accessibilityIdentifier("work-memory-\(item.id)")
+    }
+
+    private func workMemoryKind(_ kind: String) -> LocalizedStringKey {
+        switch kind {
+        case "decision": "决定"
+        case "task_lesson": "经验"
+        case "work_thread": "工作线索"
+        case "project_fact", "workspace_fact": "事实"
+        case "commitment": "承诺"
+        case "open_question": "待解决问题"
+        default: "记忆"
+        }
+    }
+
+    private func refreshCurrentSection() async {
+        switch section {
+        case 1: await loadAssertions()
+        case 2: await loadWork()
+        default: await refreshSummary()
+        }
+    }
+
+    private func memoryWritePolicy(_ policy: String) -> LocalizedStringKey {
+        switch policy {
+        case "allow": "允许"
+        case "deny": "禁止"
+        case "confirm": "先确认"
+        default: "未设置"
+        }
+    }
+
+    @MainActor private func loadWork(cursor: String? = nil) async {
+        if cursor != nil, workLoading || cursor != workCursor { return }
+        workLoading = true
+        workFailed = false
+        defer { workLoading = false }
+        do {
+            let page = try await GatewayClient(configuration: configuration).fetchWorkMemory(cursor: cursor)
+            try Task.checkCancellation()
+            workItems = cursor == nil ? page.items : workItems + page.items
+            workCursor = page.nextCursor == cursor ? nil : page.nextCursor
+        } catch is CancellationError {
+            return
+        } catch {
+            if !Task.isCancelled { workFailed = true }
         }
     }
 
@@ -241,7 +376,7 @@ struct UserUnderstandingView: View {
         searchFocused = false
         searchOpen = false
         query = ""
-        section = selection
+        savedSection = selection
     }
 
     private func memoryRow(_ item: MobileUserAssertion) -> some View {
@@ -382,7 +517,7 @@ private struct ProfileEditorView: View {
                     TextField("角色", text: $role)
                     TextField("称谓", text: $pronouns)
                     TextField("时区", text: $timezone)
-                    Picker("语言", selection: $language) {
+                    Picker("回复语言", selection: $language) {
                         Text("中文").tag("zh")
                         Text("English").tag("en")
                     }
@@ -555,7 +690,8 @@ struct AboutView: View {
             }
         }
         .listSectionSpacing(16)
-        .mobilePageTitle(Text("关于 xopc"))
+        .navigationTitle("关于 xopc")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder

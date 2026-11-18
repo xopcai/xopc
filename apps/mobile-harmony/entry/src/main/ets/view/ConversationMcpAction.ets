@@ -59,7 +59,7 @@ export struct XopcConversationMcpAction {
           })
       }
     }.width('100%').margin({ bottom: this.available ? 8 : 0 })
-      .bindSheet($$this.panelOpen, this.panel, { height: '70%', dragBar: true, showClose: false,
-        backgroundColor: this.colors.panel, onDisappear: (): void => { void this.refresh(); } })
+      .bindSheet($$this.panelOpen, this.panel, { height: '86%', dragBar: true, showClose: false,
+        backgroundColor: this.colors.surface, onDisappear: (): void => { void this.refresh(); } })
   }
 }

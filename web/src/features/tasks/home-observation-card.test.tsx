@@ -6,6 +6,7 @@ import type { ObservationState, HomeAdvisor } from '@xopcai/gateway-contract';
 
 import { HomeObservationCard } from './home-observation-card';
 
+const dialog = () => document.querySelector<HTMLDivElement>('[role="dialog"]:not([aria-hidden="true"])')!;
 const fetchJson = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/fetch', () => ({ fetchJson }));
 vi.mock('./home-task-review', () => ({ HomeTaskReview: ({ taskId }: { taskId: string }) => <div>Trial review {taskId}</div> }));
@@ -19,7 +20,7 @@ function render(observation = state, advisor: HomeAdvisor = { state: 'quiet', re
   const root = createRoot(container); const updated = vi.fn();
   act(() => root.render(<HomeObservationCard observation={observation} advisor={advisor} language="zh" onUpdated={updated} />));
   cleanups.push(() => { act(() => root.unmount()); container.remove(); });
-  const button = (text: string) => [...container.querySelectorAll('button')].find(b => b.textContent?.includes(text))!;
+  const button = (text: string, scope: ParentNode = dialog() ?? container) => [...scope.querySelectorAll('button')].find(b => b.textContent?.includes(text))!;
   return { container, button, updated };
 }
 describe('Home observation card', () => {
@@ -27,15 +28,16 @@ describe('Home observation card', () => {
     const {container,button}=render({...state,analyzedRevision:0});
     expect(container.textContent).toContain('把一件事推进到完成');
     act(()=>button('一次性整理与定期安排').click());
-    expect(container.textContent).toContain('先做一件具体的事');
+    expect(dialog().textContent).toContain('先做一件具体的事');
     expect(container.textContent).not.toContain('项目周报');
     expect(container.textContent).not.toContain('正在整理');
-    const link=container.querySelector<HTMLAnchorElement>('a')!;
+    const link=dialog().querySelector<HTMLAnchorElement>('a')!;
     expect(link.textContent).toContain('PR 审查准备清单');
     expect(new URL(link.href).hash).toContain('/chat/new?draft=');
     expect(fetchJson).not.toHaveBeenCalled();
+    act(() => dialog().querySelector<HTMLButtonElement>('button[aria-label]')!.click());
     act(()=>button('记录与设置').click());
-    expect(container.textContent).toContain('正在整理最近的工作记录');
+    expect(dialog().textContent).toContain('正在整理最近的工作记录');
     expect(container.textContent).not.toContain('项目周报');
     expect(container.textContent).not.toContain('整理周报');
   });
@@ -44,13 +46,13 @@ describe('Home observation card', () => {
     fetchJson.mockResolvedValue({outcome:'task',taskId:'prepared',href:'/tasks/prepared'});
     const {container,button}=render({...state,starters:[{kind:'pr_review',topicIds:['topic'],requestCount:3,previews:['审查 PR 11622']}]});
     act(()=>button('一次性整理与定期安排').click());
-    expect(container.textContent).toContain('最近有 3 条相关请求');
-    expect(container.textContent).toContain('PR 审查准备清单');
+    expect(dialog().textContent).toContain('最近有 3 条相关请求');
+    expect(dialog().textContent).toContain('PR 审查准备清单');
     expect(container.querySelector('a')).toBeNull();
     act(()=>button('看看会做什么').click());
     expect(fetchJson).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('你会得到：PR 审查准备清单');
-    await act(async()=>container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(dialog().querySelector('h2')?.textContent).toBe('PR 审查准备清单');
+    await act(async()=>dialog().querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
     expect(fetchJson.mock.calls[0][0]).toContain('/observation/prepare');
     expect(JSON.parse(fetchJson.mock.calls[0][1].body)).toMatchObject({kind:'pr_review',topicIds:['topic'],expectedRevision:3,locale:'zh'});
     expect(container.textContent).toContain('Trial review prepared');
@@ -66,35 +68,35 @@ describe('Home observation card', () => {
     fetchJson.mockResolvedValue({outcome:'task',taskId:'trial',href:'/tasks/trial'});
     const {container,button}=render(state,advisor);
     act(()=>button('一次性整理与定期安排').click());
-    expect(container.textContent).toContain('一份附来源的周报草稿');
-    expect(container.querySelector('details')?.open).toBe(false);
+    expect(dialog().textContent).toContain('一份附来源的周报草稿');
+    expect(dialog().textContent).not.toContain('你整理过项目进展');
     await act(async()=>button('先帮我做一次').click());
     expect(JSON.parse(fetchJson.mock.calls[0][1].body)).toMatchObject({topicId:'topic',opportunityId:'opportunity',expectedOpportunityRevision:2});
     expect(container.textContent).toContain('Trial review trial');
   });
 
   it('keeps one-off feedback scoped and retains the input on a stale revision response', async () => {
-    const { container, button } = render({...state,topics:state.topics.map(t=>({...t,feedback:[{id:'feedback',text:'每项附来源',scope:'similar',status:'active',createdAt:1}]}))});
+    const { button } = render({...state,topics:state.topics.map(t=>({...t,feedback:[{id:'feedback',text:'每项附来源',scope:'similar',status:'active',createdAt:1}]}))});
     act(() => button('记录与设置').click());
     act(() => button('管理').click());
     act(() => button('调整要求').click());
-    const input = container.querySelector('textarea')!;
+    const input = dialog().querySelector('textarea')!;
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, '只在发布期需要');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     fetchJson.mockRejectedValueOnce(new Error('Observation revision changed'));
-    await act(async () => container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    await act(async () => dialog().querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
     const body = JSON.parse(fetchJson.mock.calls[0][1].body);
     expect(body.command).toEqual({ kind: 'feedback', topicId: 'topic', text: '只在发布期需要', scope: 'once' });
     expect(body.expectedRevision).toBe(3);
-    expect(container.querySelector('textarea')?.value).toBe('只在发布期需要');
-    expect(container.querySelector('[role=alert]')?.textContent).toContain('revision changed');
+    expect(dialog().querySelector('textarea')?.value).toBe('只在发布期需要');
+    expect(dialog().querySelector('[role=alert]')?.textContent).toContain('revision changed');
   });
 
   it('requires explicit resume coverage and a separate forget confirmation', async () => {
     fetchJson.mockResolvedValue(state);
-    const { container, button } = render({ ...state, status: 'paused',topics:state.topics.map(t=>({...t,feedback:[{id:'feedback',text:'每项附来源',scope:'similar',status:'active',createdAt:1}]})) });
+    const { button } = render({ ...state, status: 'paused',topics:state.topics.map(t=>({...t,feedback:[{id:'feedback',text:'每项附来源',scope:'similar',status:'active',createdAt:1}]})) });
     act(() => button('恢复寻找建议').click());
     expect(fetchJson).not.toHaveBeenCalled();
     await act(async () => button('只看之后的工作').click());
@@ -103,7 +105,7 @@ describe('Home observation card', () => {
     act(() => button('管理').click());
     act(() => button('不再参考这件事').click());
     expect(fetchJson).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain('原始记录、已有任务和自动化保留');
+    expect(dialog().textContent).toContain('原始记录、已有任务和自动化保留');
     await act(async () => button('确认不再参考').click());
     expect(JSON.parse(fetchJson.mock.calls[1][1].body).command.kind).toBe('forget');
   });

@@ -6,7 +6,7 @@ struct ProjectDetailView: View {
     let configuration: GatewayConfiguration
     let projectID: String
     let onOpenConversation: (String, String, String) -> Void
-    var onProjectUpdated: (ProjectRecord) -> Void = { _ in }
+    let onProjectUpdated: (ProjectRecord) -> Void
 
     @Environment(\.locale) private var locale
     @State private var project: ProjectRecord?
@@ -15,7 +15,7 @@ struct ProjectDetailView: View {
     @State private var tasks: [TaskListItem] = []
     @State private var notes: [NoteSummary] = []
     @State private var automations: [AutomationRecord] = []
-    @State private var selection = ProjectSection.overview
+    @AppStorage private var selection: ProjectSection
     @State private var isLoading = true
     @State private var error: String?
     @State private var creationSheet: ProjectCreationSheet?
@@ -23,6 +23,17 @@ struct ProjectDetailView: View {
     @State private var setupPrompt: String?
     @State private var projectChat: ConversationSelection?
     @State private var localChats: [ConversationSelection] = []
+
+    init(configuration: GatewayConfiguration, projectID: String,
+         onOpenConversation: @escaping (String, String, String) -> Void,
+         onProjectUpdated: @escaping (ProjectRecord) -> Void = { _ in })
+    {
+        self.configuration = configuration
+        self.projectID = projectID
+        self.onOpenConversation = onOpenConversation
+        self.onProjectUpdated = onProjectUpdated
+        _selection = AppStorage(wrappedValue: .overview, "navigation.project.\(projectID)")
+    }
 
     var body: some View {
         Group {

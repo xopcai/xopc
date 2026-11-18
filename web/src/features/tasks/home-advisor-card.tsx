@@ -5,12 +5,13 @@ import type {
   HomeOpportunityActionRequest,
   HomeOpportunityFeedbackRequest,
 } from '@xopcai/gateway-contract';
-import { CheckCircle2, ChevronDown, Clock3, History, MessageCircle, RefreshCw, Settings2, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Clock3, History, MessageCircle, RefreshCw, Settings2, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
 import { HomeEvidenceList } from './home-evidence-list';
+import { WorkbenchDialog } from './workbench-dialog';
 
 type FeedbackKind = HomeOpportunityFeedbackRequest['kind'];
 
@@ -69,6 +70,7 @@ function OpportunityBody({
   copy: HomeAdvisorCopy;
   onOpenHistory(): void;
 }) {
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
   const missing = opportunity.capabilities.filter((item) => item.readiness !== 'ready');
   return (
     <>
@@ -103,13 +105,13 @@ function OpportunityBody({
           ))}
         </div>
       ) : null}
-      <details className="mt-4 group">
-        <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          {copy.evidence}
-          <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" aria-hidden />
-        </summary>
-        <HomeEvidenceList opportunity={opportunity} />
-      </details>
+      <WorkbenchDialog title={copy.evidence} subtitle={opportunity.title} open={evidenceOpen} onOpenChange={setEvidenceOpen}
+        trigger={<Button type="button" variant="ghost" className="mt-3 text-xs">
+          {copy.evidence}<ChevronRight className="size-3.5" aria-hidden />
+        </Button>}
+      >
+        <HomeEvidenceList opportunity={opportunity} onOpen={() => setEvidenceOpen(false)} />
+      </WorkbenchDialog>
     </>
   );
 }
@@ -125,6 +127,7 @@ export function HomeAdvisorCard({
   onOpenHistory,
   preflight,
   receipt,
+  inDialog = false,
 }: {
   advisor: HomeAdvisor;
   copy: HomeAdvisorCopy;
@@ -136,8 +139,10 @@ export function HomeAdvisorCard({
   onOpenHistory(): void;
   preflight?: { opportunityId: string; value: HomeCapabilityPreflight };
   receipt?: HomeAdvisorReceipt;
+  inDialog?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string>();
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const opportunities = advisor.state === 'ready' ? [advisor.primary, ...advisor.alternatives] : [];
   const selected = opportunities.find((item) => item.id === selectedId) ?? opportunities[0];
   useEffect(() => setSelectedId(opportunities[0]?.id), [advisor.state, opportunities[0]?.id]);
@@ -170,7 +175,7 @@ export function HomeAdvisorCard({
   }
   if (advisor.state === 'clarification') {
     return (
-      <section className="mt-7 rounded-2xl border border-accent/25 bg-surface-base px-5 py-5" aria-labelledby="home-advisor-question">
+      <section className={inDialog ? undefined : 'mt-7 rounded-2xl border border-accent/25 bg-surface-base px-5 py-5'} aria-labelledby="home-advisor-question">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-medium text-accent"><Sparkles className="size-4" aria-hidden />{copy.aiLabel}</div>
           <HistoryButton label={copy.history} onClick={onOpenHistory} />
@@ -187,8 +192,8 @@ export function HomeAdvisorCard({
   if (!selected) return null;
   const selectedPreflight = preflight?.opportunityId === selected.id ? preflight.value : undefined;
   return (
-    <section className="mt-7 rounded-2xl border border-accent/25 bg-surface-base" aria-label={copy.aiLabel}>
-      <div className="px-5 py-5 sm:px-6">
+    <section className={inDialog ? undefined : 'mt-7 rounded-2xl border border-accent/25 bg-surface-base'} aria-label={copy.aiLabel}>
+      <div className={inDialog ? undefined : 'px-5 py-5 sm:px-6'}>
         {advisor.stale ? <p className="mb-3 inline-flex items-center gap-2 text-xs text-accent"><RefreshCw className="size-3.5 animate-spin" aria-hidden />{copy.refreshing}</p> : null}
         <OpportunityBody opportunity={selected} copy={copy} onOpenHistory={onOpenHistory} />
         {selectedPreflight?.state === 'needs_setup' ? (
@@ -231,40 +236,45 @@ export function HomeAdvisorCard({
             </Button>
           ) : null}
         </div>
-        <details className="mt-1">
-          <summary className="inline-flex min-h-9 cursor-pointer list-none items-center gap-1.5 rounded-lg px-2 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-accent">
-            {copy.more}<ChevronDown className="size-3.5" aria-hidden />
-          </summary>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="ghost" className="min-h-11" disabled={busy} onClick={onRefresh} title={copy.refresh}>
+        <WorkbenchDialog title={copy.more} subtitle={selected.title} open={optionsOpen} onOpenChange={setOptionsOpen}
+          trigger={<Button type="button" variant="ghost" className="mt-1 text-xs">{copy.more}<ChevronRight className="size-3.5" aria-hidden /></Button>}
+        >
+          <div className="space-y-4">
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => { setOptionsOpen(false); onRefresh(); }}>
               <RefreshCw className="size-4" aria-hidden />{copy.refresh}
             </Button>
-            <details className="relative">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg px-3 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{copy.feedback}</summary>
-              <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-edge bg-surface-overlay p-1 shadow-float">
+            <div>
+              <p className="text-sm font-medium text-fg">{copy.feedback}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
                 {([
                   ['already_done', copy.alreadyDone],
                   ['irrelevant', copy.irrelevant],
                   ['too_early', copy.later],
                   ['source_incorrect', copy.sourceIncorrect],
                   ['less_like_this', copy.lessLikeThis],
-                ] as Array<[FeedbackKind, string]>).map(([kind, label]) => (
-                  <button key={kind} type="button" disabled={busy} className="min-h-10 w-full rounded-lg px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => onFeedback(selected, kind)}>{label}</button>
-                ))}
-              </div>
-            </details>
-          </div>
-          {opportunities.length > 1 ? (
-            <div className="border-t border-edge-subtle pt-2">
-              <p className="text-xs font-medium text-fg-subtle">{copy.alternatives}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {opportunities.filter((item) => item.id !== selected.id).map((item) => (
-                  <button key={item.id} type="button" disabled={busy} className="min-h-10 rounded-lg border border-edge px-3 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => setSelectedId(item.id)}>{item.title}</button>
+                ] as const).map(([kind, label]) => (
+                  <Button key={kind} type="button" variant="secondary" disabled={busy} onClick={() => {
+                    setOptionsOpen(false);
+                    onFeedback(selected, kind);
+                  }}>{label}</Button>
                 ))}
               </div>
             </div>
-          ) : null}
-        </details>
+            {opportunities.length > 1 ? (
+              <div className="border-t border-edge pt-4">
+                <p className="text-sm font-medium text-fg">{copy.alternatives}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {opportunities.filter((item) => item.id !== selected.id).map((item) => (
+                    <Button key={item.id} type="button" variant="secondary" disabled={busy} onClick={() => {
+                      setSelectedId(item.id);
+                      setOptionsOpen(false);
+                    }}>{item.title}</Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </WorkbenchDialog>
       </div>
     </section>
   );

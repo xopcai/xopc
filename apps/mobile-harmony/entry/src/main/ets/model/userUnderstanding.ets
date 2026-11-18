@@ -14,6 +14,12 @@ export interface XopcUnderstandingCounts {
   workMemory: number;
 }
 
+export interface XopcUnderstandingSettings {
+  memoryEnabled: boolean;
+  showMemoryReferences: boolean;
+  sensitiveWritePolicy: string;
+}
+
 export interface XopcUnderstandingSource {
   id: string;
   kind: string;
@@ -57,6 +63,7 @@ export interface XopcUserGoal {
 
 export interface XopcUnderstandingSummary {
   profile: XopcUnderstandingProfile;
+  settings?: XopcUnderstandingSettings;
   suggestedCallName: string;
   counts: XopcUnderstandingCounts;
   primaryFocus?: XopcUnderstandingFocus;
@@ -67,3 +74,14 @@ export interface XopcUnderstandingSummary {
 
 export interface XopcUnderstandingPage { items: XopcUnderstandingItem[]; nextCursor?: string; }
 export interface XopcUnderstandingItemResponse { assertion: XopcUnderstandingItem; }
+
+export interface XopcWorkMemoryItem {
+  id: string;
+  content: string;
+  kind: string;
+  status: string;
+  scope: XopcUnderstandingScope;
+  updatedAt: number;
+}
+
+export interface XopcWorkMemoryPage { items: XopcWorkMemoryItem[]; nextCursor?: string; }

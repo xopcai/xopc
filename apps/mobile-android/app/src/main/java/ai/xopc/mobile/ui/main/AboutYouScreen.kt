@@ -62,7 +62,12 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
   onOpenNotes: () -> Unit, onSaveProfile: (PersonalProfile) -> Unit = {},
   onSaveStatement: (String) -> Unit = {}, onDeleteAssertion: () -> Unit = {},
   onStartChat: (PersonalAssertion?) -> Unit = {}, chatBusy: Boolean = false) {
-  var section by rememberSaveable(state.gatewayId) { mutableStateOf(initialSection) }
+  val navigation = rememberNavigationPreferences()
+  var section by rememberSaveable(state.gatewayId, initialSection) {
+    val start = if (initialSection == "overview")
+      navigation.selection("privacy-memory", listOf("overview", "understanding"), "overview") else initialSection
+    mutableStateOf(start)
+  }
   var filter by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
   var query by rememberSaveable(state.gatewayId) { mutableStateOf("") }
   var searchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
@@ -85,7 +90,6 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
     profileSaveStarted = state.savedProfileRevision
     profileEditorOpen = true
   }
-  LaunchedEffect(initialSection) { section = initialSection }
   LaunchedEffect(state.savedProfileRevision, profileSaveStarted, profileEditorOpen) {
     if (profileEditorOpen && state.savedProfileRevision > profileSaveStarted) profileEditorOpen = false
   }
@@ -107,6 +111,7 @@ internal fun AboutYouScreen(state: PersonalUiState, page: String, insets: Paddin
     if (section == value) return
     if (searchOpen) closeSearch()
     section = value
+    navigation.rememberSelection("privacy-memory", value)
     if (section == "understanding") onOpenList()
   }
   BackHandler(page == "about" && searchOpen, ::closeSearch)

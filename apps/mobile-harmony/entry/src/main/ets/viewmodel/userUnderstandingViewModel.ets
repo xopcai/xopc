@@ -3,7 +3,9 @@ import {
   XopcUnderstandingItemResponse,
   XopcUnderstandingPage,
   XopcUnderstandingProfile,
-  XopcUnderstandingSummary
+  XopcUnderstandingSummary,
+  XopcWorkMemoryItem,
+  XopcWorkMemoryPage
 } from '../model/userUnderstanding';
 import { gatewaySession } from '../service/gatewaySession';
 
@@ -20,11 +22,16 @@ export class XopcUserUnderstandingViewModel {
   @Trace error: string = '';
   @Trace nextCursor: string = '';
   @Trace openingId: string = '';
+  @Trace workItems: XopcWorkMemoryItem[] = [];
+  @Trace workCursor: string = '';
+  @Trace workLoading: boolean = true;
+  @Trace workError: string = '';
   private generation: number = 0;
   private requestRevision: number = 0;
+  private workRequest: number = 0;
   private searchTimer: number = -1;
 
-  dispose(): void { this.generation++; this.requestRevision++; clearTimeout(this.searchTimer); }
+  dispose(): void { this.generation++; this.requestRevision++; this.workRequest++; clearTimeout(this.searchTimer); }
 
   async refresh(): Promise<void> {
     const generation = ++this.generation;
@@ -59,6 +66,25 @@ export class XopcUserUnderstandingViewModel {
   }
 
   async loadMore(): Promise<void> { if (this.nextCursor && !this.loadingMore) await this.loadPage(true); }
+
+  async loadWork(cursor: string = ''): Promise<void> {
+    if (cursor && (this.workLoading || cursor !== this.workCursor)) return;
+    const request = ++this.workRequest;
+    this.workLoading = true;
+    this.workError = '';
+    try {
+      const path = '/api/knowledge-memory?view=manage' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
+      const page = JSON.parse(await gatewaySession.request(path)) as XopcWorkMemoryPage;
+      if (request !== this.workRequest) return;
+      if (!Array.isArray(page.items)) throw new Error('INVALID_WORK_MEMORY');
+      this.workItems = cursor ? this.workItems.concat(page.items) : page.items;
+      this.workCursor = page.nextCursor !== cursor ? page.nextCursor ?? '' : '';
+    } catch (error) {
+      if (request === this.workRequest) this.workError = (error as Error).message;
+    } finally {
+      if (request === this.workRequest) this.workLoading = false;
+    }
+  }
 
   private async loadPage(append: boolean): Promise<void> {
     const generation = this.generation;

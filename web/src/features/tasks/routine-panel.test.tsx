@@ -25,11 +25,12 @@ function render(node: React.ReactNode) {
 }
 it('requires confirmation of the recurring agreement and sends the reviewed Task version', async () => {
     fetchJson.mockResolvedValue(routine);
-    const { container, button } = render(<RoutineAdoption topicId="topic" trial={{ taskId: 'trial', title: 'Trial draft', phase: 'review', resolution: null, taskVersion: 9 }} language="zh" onUpdated={vi.fn()}/>);
+    const { button } = render(<RoutineAdoption topicId="topic" trial={{ taskId: 'trial', title: 'Trial draft', phase: 'review', resolution: null, taskVersion: 9 }} language="zh" onUpdated={vi.fn()}/>);
     act(() => button('以后也交给我').click());
     expect(fetchJson).not.toHaveBeenCalled();
-    expect(container.textContent).toContain('不自动发送或发布');
-    await act(async () => container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('不自动发送或发布');
+    await act(async () => dialog.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
     expect(fetchJson.mock.calls[0][0]).toContain('/routines/adopt');
     expect(JSON.parse(fetchJson.mock.calls[0][1].body)).toMatchObject({ topicId: 'topic', trialTaskId: 'trial', expectedTaskVersion: 9, schedule: { kind: 'cron' } });
 });

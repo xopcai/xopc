@@ -50,7 +50,7 @@ export function ProductSectionHeader({ fallback }: { fallback: ReactNode }) {
           onChange={changeSection}
           ariaLabel={copy.sectionsAria}
           tabIdPrefix={`${domainId}-section-tab`}
-          className="pb-0"
+          className="overflow-y-hidden pb-0"
           buttonClassName="h-9 py-1.5"
         />
       </div>

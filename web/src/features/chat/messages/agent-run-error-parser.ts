@@ -33,7 +33,7 @@ export function safeErrorDetail(message: string): string {
     .replace(/((?:access_token|refresh_token|api_key|client_secret|authorization)["']?\s*[:=]\s*["']?)[^\s"'&,}]+/gi, '$1[redacted]');
 }
 
-function parseStructuredJson(text: string): AgentRunErrorPayload | null {
+export function parseStructuredAgentRunError(text: string): AgentRunErrorPayload | null {
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
     if (typeof parsed.kind !== 'string' || typeof parsed.message !== 'string') return null;
@@ -71,7 +71,7 @@ export function parseAgentRunError(text: string): AgentRunErrorPayload | null {
   if (!trimmed) return null;
 
   if (trimmed.startsWith('{')) {
-    const structured = parseStructuredJson(trimmed);
+    const structured = parseStructuredAgentRunError(trimmed);
     if (structured) return structured;
   }
 

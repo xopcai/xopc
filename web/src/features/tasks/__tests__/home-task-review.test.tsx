@@ -34,7 +34,8 @@ describe('HomeTaskReview', () => {
     root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
-  const button = (label: string) => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === label)!;
+  const dialog = () => document.querySelector('[role="dialog"]:not([aria-hidden="true"])')!;
+  const button = (label: string) => Array.from(dialog().querySelectorAll('button')).find((item) => item.textContent === label)!;
 
   it('requires a separate sign-off after saving the last criterion', async () => {
     vi.mocked(fetchTask).mockResolvedValue(detail());
@@ -43,7 +44,7 @@ describe('HomeTaskReview', () => {
     vi.mocked(reviewTaskCriterion).mockResolvedValue(detail(true));
     vi.mocked(commandTask).mockResolvedValue(closed);
     const complete = vi.fn();
-    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="zh" onComplete={complete} /></MemoryRouter>));
+    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" onClose={vi.fn()} language="zh" onComplete={complete} /></MemoryRouter>));
     expect(button('确认验收').disabled).toBe(true);
     await act(async () => button('确认通过').click());
     expect(reviewTaskCriterion).toHaveBeenCalledWith('task-1', 'task-1:1:0', 'passed', 3, 1, 'run-1');
@@ -59,9 +60,9 @@ describe('HomeTaskReview', () => {
     vi.mocked(fetchTask).mockResolvedValue(detail(true));
     vi.mocked(commandTask).mockRejectedValue(new Error('Task version changed'));
     const complete = vi.fn();
-    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="en" onComplete={complete} /></MemoryRouter>));
+    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" onClose={vi.fn()} language="en" onComplete={complete} /></MemoryRouter>));
     await act(async () => button('Accept task').click());
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Task version changed');
+    expect(dialog().querySelector('[role="alert"]')?.textContent).toContain('Task version changed');
     expect(complete).not.toHaveBeenCalled();
   });
   function automaticDetail(): TaskDetail {
@@ -82,10 +83,10 @@ describe('HomeTaskReview', () => {
     vi.mocked(fetchTask).mockResolvedValue(value);
     vi.mocked(commandTask).mockResolvedValue({ ...value, task: { ...value.task, phase: 'active', version: 4 }, allowedCommands: [] });
     const onUpdated = vi.fn();
-    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="zh" onComplete={vi.fn()} onUpdated={onUpdated} /></MemoryRouter>));
-    expect(container.textContent).toContain('Only a file path was returned.');
-    expect(container.textContent).toContain('Verify delivery');
-    expect(container.textContent).toContain('Open the report and verify its contents');
+    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" onClose={vi.fn()} language="zh" onComplete={vi.fn()} onUpdated={onUpdated} /></MemoryRouter>));
+    expect(dialog().textContent).toContain('Only a file path was returned.');
+    expect(dialog().textContent).toContain('Verify delivery');
+    expect(dialog().textContent).toContain('Open the report and verify its contents');
     expect(button('确认通过')).toBeUndefined();
     expect(button('确认验收').disabled).toBe(true);
     await act(async () => button('Open report').click());
@@ -93,15 +94,54 @@ describe('HomeTaskReview', () => {
     expect(document.querySelector('[data-preview-file]')?.getAttribute('data-preview-project')).toBe('project-1');
     expect(document.querySelector('[data-preview-file]')?.getAttribute('data-preview-conversation')).toBe('conversation-1');
     await act(async () => [...document.querySelectorAll('button')].find((item) => item.textContent === 'Close preview')!.click());
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[data-preview-file]')).toBeNull();
+    expect(dialog().textContent).toContain('Verify delivery');
     await act(async () => button('继续执行并验证').click());
     expect(commandTask).toHaveBeenCalledWith('task-1', { type: 'start', executor: { kind: 'agent', agentId: 'main' } }, 3);
     expect(onUpdated).toHaveBeenCalledOnce();
-    expect(container.querySelector('[role="status"]')?.textContent).toContain('已开始执行');
+    expect(dialog().querySelector('[role="status"]')?.textContent).toContain('已开始执行');
     expect(button('确认验收')).toBeUndefined();
   });
 
-  it('shows the wait question and saves the answer on the home card', async () => {
+  it('explains a legacy model setup blocker and translates internal gaps without treating them as a partial result', async () => {
+    const value = automaticDetail();
+    value.task.phase = 'active';
+    value.receipts[0] = {
+      ...value.receipts[0],
+      status: 'failed',
+      summary: JSON.stringify({
+        kind: 'provider_setup_required',
+        code: 'provider_setup_required',
+        provider: 'qwen-token-plan-cn',
+        deepLink: '/unexpected',
+        message: 'No API key found for qwen-token-plan-cn.\nSee /Users/example/node_modules/agent/docs/providers.md',
+      }),
+      remainingWork: [
+        'The required evidence-linked research result is missing. Submit actual sources and claims for review.',
+        'The requested chat reply is missing. Submit the exact user-facing text in finalText for review.',
+        'Criterion 0: 带来源链接。. 没有收到可核对的来源。',
+      ],
+      nextAction: undefined,
+      completionVerdict: 'not_achieved',
+      failure: { code: 'agent_run_failed', phase: 'execution', recoveryAction: 'Retry with another model' },
+      evidence: [],
+    };
+    vi.mocked(fetchTask).mockResolvedValue(value);
+
+    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" onClose={vi.fn()} language="zh" /></MemoryRouter>));
+    const modal = dialog();
+    expect(modal.textContent).toContain('模型服务商未配置');
+    expect(modal.textContent).toContain('阿里云百炼订阅');
+    expect(modal.textContent).toContain('缺少可核对的来源和结论');
+    expect(modal.textContent).toContain('还没有生成可在对话中查看的答复');
+    expect(modal.textContent).toContain('没有收到可核对的来源');
+    expect(modal.textContent).toContain('1 项待核验');
+    expect(modal.textContent).not.toMatch(/provider_setup_required|node_modules|finalText|Criterion 0|阶段性结果/);
+    expect([...modal.querySelectorAll('a')].find((link) => link.textContent === '打开模型设置')?.getAttribute('href')).toBe('/settings/capabilities/models');
+    expect(button('重试任务')).toBeTruthy();
+  });
+
+  it('shows the wait question and saves the answer in the result dialog', async () => {
     const value = detail(true);
     value.acceptanceTarget = { id: 'run-1', runId: 'run-1', canSignOff: false };
     value.allowedCommands = ['resolve_wait', 'close'];
@@ -109,10 +149,10 @@ describe('HomeTaskReview', () => {
     vi.mocked(fetchTask).mockResolvedValue(value);
     vi.mocked(commandTask).mockResolvedValue({ ...value, waits: [], acceptanceTarget: { id: 'run-1', runId: 'run-1', canSignOff: true } });
     const onUpdated = vi.fn();
-    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="en" onComplete={vi.fn()} onUpdated={onUpdated} /></MemoryRouter>));
+    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" onClose={vi.fn()} language="en" onComplete={vi.fn()} onUpdated={onUpdated} /></MemoryRouter>));
     expect(button('Accept task').disabled).toBe(true);
-    expect(container.textContent).toContain('Who should receive the report?');
-    const textarea = container.querySelector('textarea')!;
+    expect(dialog().textContent).toContain('Who should receive the report?');
+    const textarea = dialog().querySelector('textarea')!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'Alice');
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -127,9 +167,9 @@ describe('HomeTaskReview', () => {
     const value = automaticDetail();
     value.task.latestContractVersion = 2;
     vi.mocked(fetchTask).mockResolvedValue(value);
-    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="en" onComplete={vi.fn()} /></MemoryRouter>));
-    expect(container.textContent).not.toContain('Report generated');
-    expect(container.textContent).toContain('No result for the current task version');
+    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" onClose={vi.fn()} language="en" onComplete={vi.fn()} /></MemoryRouter>));
+    expect(dialog().textContent).not.toContain('Report generated');
+    expect(dialog().textContent).toContain('No result for the current task version');
     await act(async () => window.dispatchEvent(new CustomEvent('task-changed-v2', { detail: { taskId: 'another-task' } })));
     expect(fetchTask).toHaveBeenCalledTimes(1);
     await act(async () => window.dispatchEvent(new CustomEvent('task-changed-v2', { detail: { taskId: 'task-1' } })));
@@ -140,7 +180,7 @@ describe('HomeTaskReview', () => {
     let resolveRefresh!: (value: TaskDetail) => void;
     vi.mocked(fetchTask).mockResolvedValueOnce(detail()).mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; }));
     vi.mocked(reviewTaskCriterion).mockResolvedValue(detail(true));
-    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" language="en" onComplete={vi.fn()} /></MemoryRouter>));
+    await act(async () => root.render(<MemoryRouter><HomeTaskReview taskId="task-1" onClose={vi.fn()} language="en" onComplete={vi.fn()} /></MemoryRouter>));
     await act(async () => window.dispatchEvent(new Event('focus')));
     await act(async () => button('Mark passed').click());
     await act(async () => resolveRefresh(detail()));

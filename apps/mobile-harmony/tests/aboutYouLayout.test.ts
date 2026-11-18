@@ -34,12 +34,11 @@ describe('about you understanding layout', () => {
     expect(editor).toContain('Scroll()');
   });
 
-  it('keeps empty understanding guidance near the filters with context-specific copy', () => {
+  it('shows a concise, context-specific empty state near the filters', () => {
     const listStart = aboutYou.indexOf('private understandingList()');
-    const list = aboutYou.slice(listStart, aboutYou.indexOf('\n  @Builder\n  private profileEditor()', listStart));
+    const list = aboutYou.slice(listStart, aboutYou.indexOf('\n  @Builder\n  private detail(', listStart));
 
     expect(list).toContain('Text(this.emptyTitle())');
-    expect(list).toContain('Text(this.emptyHelp())');
     expect(list).toContain("backgroundColor(this.colors.panel)");
     expect(aboutYou).toContain("this.model.filter === 'review'");
     expect(aboutYou).toContain('about_you_empty_search_title');

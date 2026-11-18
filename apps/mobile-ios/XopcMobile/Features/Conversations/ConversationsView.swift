@@ -31,7 +31,7 @@ struct ConversationsView: View {
 
     @Environment(\.locale) private var locale
 
-    @State private var mode: ConversationHistoryMode = .recent
+    @AppStorage("navigation.conversation-history") private var mode = ConversationHistoryMode.recent
     @State private var groupName: String?
     @State private var projects: [ProjectRecord] = []
     @State private var experts: [AgentSummary] = []

@@ -1856,8 +1856,52 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.launchEnvironment["XOPC_UI_TEST_LANGUAGE"] = "chinese"
         app.launchEnvironment["XOPC_E2E_GATEWAY_TOKEN"] = "synthetic-layout-fixture"
         app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase
+        app.launchEnvironment["XOPC_UI_TEST_RESET_NAVIGATION"] = "1"
         app.launch()
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
+    }
+
+    func testTopNavigationChoicesRestoreAfterAppRelaunch() {
+        tab("capabilities")
+        app.selectPageOption("capability-category-skills", from: "capability-title")
+        XCTAssertTrue(app.buttons["capability-row-meeting-skill"].waitForExistence(timeout: 6))
+        tab("profile")
+        app.buttons["settings-models"].tap()
+        app.selectPageOption("model-page-tasks", from: "model-settings-menu")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["settings-models"].waitForExistence(timeout: 6))
+
+        app.terminate()
+        app.launchEnvironment.removeValue(forKey: "XOPC_UI_TEST_RESET_NAVIGATION")
+        app.launch()
+        tab("capabilities")
+        XCTAssertTrue(app.buttons["capability-row-meeting-skill"].waitForExistence(timeout: 6))
+        tab("profile")
+        app.buttons["settings-models"].tap()
+        let modelMenu = app.buttons["model-settings-menu"]
+        XCTAssertTrue(modelMenu.waitForExistence(timeout: 6))
+        XCTAssertTrue(modelMenu.label.contains("按任务选模型"))
+    }
+
+    func testWorkAndLibraryNavigationChoicesRestoreIndependently() {
+        tab("progress")
+        app.selectPageOption("work-page-automations", from: "work-page-menu")
+        XCTAssertTrue(app.buttons["automation-filter-menu"].waitForExistence(timeout: 6))
+        app.selectPageOption("automation-filter-paused", from: "automation-filter-menu")
+
+        tab("library")
+        app.selectPageOption("library-scope-favorites", from: "space-scope-menu")
+        tab("progress")
+        let filter = app.buttons["automation-filter-menu"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 6))
+        filter.tap()
+        XCTAssertTrue(app.buttons["automation-filter-paused"].isSelected)
+        app.buttons["automation-filter-paused"].tap()
+
+        tab("library")
+        let scope = app.buttons["space-scope-menu"]
+        XCTAssertTrue(scope.waitForExistence(timeout: 6))
+        XCTAssertTrue(scope.label.contains("收藏"))
     }
 
     func testComposerPlacesAddOnTheLeftAndVoiceOnTheRight() {
@@ -2320,13 +2364,17 @@ final class MobileLayoutParityUITests: XCTestCase {
                 XCTAssertTrue(brandRendered, "The gateway-provided Gmail SVG should render rather than its initials.")
             }
             capture("capability-\(category)")
-            row.tap()
+            if category == "agents" {
+                app.buttons["capability-settings-\(id)"].tap()
+            } else {
+                row.tap()
+            }
             XCTAssertTrue(close.waitForExistence(timeout: 5))
             if category == "connections" {
-                XCTAssertTrue(app.buttons["capability-panel-authorize"].waitForExistence(timeout: 5))
+                XCTAssertTrue(app.buttons["capability-use-in-chat"].waitForExistence(timeout: 5))
             }
             if category == "agents" {
-                XCTAssertTrue(app.buttons["capability-start-chat"].exists)
+                XCTAssertTrue(app.buttons["capability-panel-save"].waitForExistence(timeout: 5))
             }
             if category == "channels" {
                 XCTAssertTrue(app.buttons["capability-panel-pair"].waitForExistence(timeout: 5))
@@ -2347,6 +2395,23 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertNotEqual(skill.value as? String, initial)
         close.tap()
         XCTAssertFalse(app.buttons["capability-discover"].exists)
+    }
+
+    func testCapabilityAgentRowAndSettingsHaveSeparateActions() {
+        tab("capabilities")
+        app.selectPageOption("capability-category-agents", from: "capability-title")
+        let expert = app.buttons["capability-row-coder"]
+        let settings = app.buttons["capability-settings-coder"]
+        XCTAssertTrue(expert.waitForExistence(timeout: 5))
+        XCTAssertTrue(settings.isHittable)
+        XCTAssertLessThan(expert.frame.midX, settings.frame.midX)
+        capture("capability-agent-actions")
+        settings.tap()
+        XCTAssertTrue(app.buttons["capability-panel-save"].waitForExistence(timeout: 5))
+        app.buttons["capability-panel-close"].tap()
+        expert.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["assistant-chat-composer"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["capability-panel-close"].exists)
     }
 
     func testCapabilityCreationOpensAnUnsentConversationDraft() {
@@ -2389,7 +2454,10 @@ final class MobileLayoutParityUITests: XCTestCase {
         let enable = app.buttons["capability-panel-start"]
         XCTAssertTrue(enable.waitForExistence(timeout: 5))
         enable.tap()
+        XCTAssertFalse(app.buttons["capability-use-in-chat"].exists)
         XCTAssertTrue(app.staticTexts["已启用"].waitForExistence(timeout: 9))
+        XCTAssertTrue(app.buttons["capability-use-in-chat"].exists)
+        capture("capability-plugin-ready")
         let disable = app.buttons["capability-panel-disable"]
         XCTAssertFalse(disable.exists)
         app.buttons["更多选项"].tap()
@@ -2406,7 +2474,12 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Meeting Summary"].waitForExistence(timeout: 5))
         app.buttons["capability-panel-install:sample"].tap()
         app.alerts.buttons["确认"].tap()
-        XCTAssertTrue(app.staticTexts["技能已安装，可在技能列表中使用。"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["技能已安装"].waitForExistence(timeout: 5))
+        capture("capability-skill-installed")
+        app.buttons["capability-use-in-chat"].tap()
+        let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertEqual((composer.value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), "/skill:meeting-summary")
     }
 
     func testSecondarySearchOpensFromHeaderAndSidebarShortcut() {
@@ -2904,6 +2977,36 @@ final class MobileLayoutParityUITests: XCTestCase {
         entry.tap()
         XCTAssertTrue(active.waitForExistence(timeout: 5))
         XCTAssertTrue(active.label.contains(target))
+    }
+
+    func testPrivacyWorkMemoryAndInactiveShareHistory() {
+        tab("profile")
+        app.buttons["settings-privacy-memory"].tap()
+        let work = app.buttons["about-you-work-memory"]
+        XCTAssertTrue(work.waitForExistence(timeout: 6))
+        work.tap()
+        let decision = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "移动端项目决定")).firstMatch
+        XCTAssertTrue(decision.waitForExistence(timeout: 6))
+        XCTAssertLessThan(decision.frame.minY, app.frame.midY)
+        decision.tap()
+        let loadMore = app.buttons["加载更多"]
+        if !loadMore.isHittable { app.swipeUp() }
+        loadMore.tap()
+        XCTAssertTrue(app.staticTexts["验收经验：先使用独立数据。"].waitForExistence(timeout: 6))
+        capture("work-memory")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        let history = app.buttons["settings-share-history"]
+        if !history.isHittable { app.swipeUp() }
+        history.tap()
+        XCTAssertTrue(app.staticTexts["已过期的对话链接"].waitForExistence(timeout: 6))
+        XCTAssertTrue(app.staticTexts["已撤销的笔记链接"].exists)
+        capture("share-history")
+        app.buttons["share-filter-active"].tap()
+        XCTAssertTrue(app.staticTexts["没有有效的分享链接"].exists)
+        XCTAssertFalse(app.staticTexts["已过期的对话链接"].exists)
+        app.buttons["share-filter-all"].tap()
+        XCTAssertTrue(app.staticTexts["已撤销的笔记链接"].exists)
     }
 
     func testProgressLibraryAndSettingsLayout() {

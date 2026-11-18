@@ -72,6 +72,21 @@ export struct XopcSettingsView {
     return this.selectedTheme === 'dark' ? $r('app.string.dark') : this.selectedTheme === 'light' ? $r('app.string.light') : $r('app.string.system');
   }
 
+  private sectionTitle(): Resource {
+    switch (this.section) {
+      case 'about': return $r('app.string.settings_about_xopc');
+      case 'language': return $r('app.string.language');
+      case 'appearance': return $r('app.string.appearance');
+      case 'notifications': return $r('app.string.notifications');
+      default: return $r('app.string.settings');
+    }
+  }
+
+  private notificationStatus(): Resource {
+    if (this.push.registered) return $r('app.string.push_registered');
+    return this.push.enabled ? $r('app.string.push_not_registered') : $r('app.string.push_disabled');
+  }
+
   private async choose(language: string, theme: string, colorScheme: XopcColorScheme = this.selectedScheme): Promise<void> {
     try {
       const context = this.getUIContext().getHostContext();
@@ -152,11 +167,9 @@ export struct XopcSettingsView {
         Row({ space: 12 }) {
           XopcPersonalAgentAvatar({ agentId: this.personalAgent?.agentId ?? '', extent: 40, compact: true,
             appearance: this.personalAgent?.appearance ?? 'loopi', revision: this.personalAgent?.revision ?? 0 })
-          Column({ space: 3 }) {
-            Text(this.personalAgent?.displayName || $r('app.string.chat_personal_agent')).fontSize(16)
-              .fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
-            Text($r('app.string.personal_agent_summary')).fontSize(12).fontColor(this.colors.secondary)
-          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+          Text(this.personalAgent?.displayName || $r('app.string.chat_personal_agent')).fontSize(16)
+            .fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.secondary])
         }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 14, right: 14 })
       }.id('settings-personal-agent').width('100%').padding(0).borderRadius(this.colors.corner(16))
@@ -168,35 +181,34 @@ export struct XopcSettingsView {
         onOpen: (): void => { this.onNavigate({ page: 'personal-goals', itemId: '' }); } }).id('settings-goals')
     }
     XopcSectionLabel({ heading: $r('app.string.settings_connection_notifications') })
-    XopcHubRow({ heading: gatewaySession.currentProfile()?.name ?? $r('app.string.gateways_title'),
-      summary: gatewaySession.currentProfile() ? $r('app.string.connection') : '',
-      symbol: $r('sys.symbol.link'), onOpen: (): void => { connectionModel.openGateways(); } })
+    XopcHubRow({ heading: $r('app.string.gateways_title'), trailingValue: gatewaySession.currentProfile()?.name ?? '',
+      symbol: $r('sys.symbol.link'), onOpen: (): void => { connectionModel.openGateways(); } }).id('settings-gateways')
     if (gatewaySession.currentProfile()) {
       if (this.useNavigation) {
         XopcHubRow({ heading: $r('app.string.ms_title'), symbol: $r('sys.symbol.slider_horizontal_2'),
           onOpen: (): void => { this.onNavigate({ page: 'model-settings', itemId: '' }); } }).id('settings-models')
       }
-      XopcHubRow({ heading: $r('app.string.notifications'), summary: this.push.registered ? $r('app.string.push_registered') : $r('app.string.push_help'),
-        symbol: $r('sys.symbol.bell'), onOpen: (): void => { this.openSection('notifications'); } })
+      XopcHubRow({ heading: $r('app.string.notifications'), trailingValue: this.notificationStatus(),
+        symbol: $r('sys.symbol.bell'), onOpen: (): void => { this.openSection('notifications'); } }).id('settings-notifications')
     }
     if (this.useNavigation) {
       XopcSectionLabel({ heading: $r('app.string.settings_data_sharing') })
-      XopcHubRow({ heading: $r('app.string.share_center'), summary: $r('app.string.share_center_help'),
-        symbol: $r('sys.symbol.share'), onOpen: (): void => { this.onNavigate({ page: 'sharing', itemId: '' }); } })
+      XopcHubRow({ heading: $r('app.string.share_center'),
+        symbol: $r('sys.symbol.share'), onOpen: (): void => { this.onNavigate({ page: 'sharing', itemId: '' }); } }).id('settings-share-history')
     }
     XopcSectionLabel({ heading: $r('app.string.preferences') })
-    XopcHubRow({ heading: $r('app.string.language'), summary: this.languageLabel(),
+    XopcHubRow({ heading: $r('app.string.language'), trailingValue: this.languageLabel(),
       symbol: $r('sys.symbol.doc_text'), onOpen: (): void => { this.openSection('language'); } }).id('open-language')
-    XopcHubRow({ heading: $r('app.string.appearance'), summary: this.themeLabel(),
+    XopcHubRow({ heading: $r('app.string.appearance'), trailingValue: this.themeLabel(),
       symbol: $r('sys.symbol.sun_max'), onOpen: (): void => { this.openSection('appearance'); } }).id('open-appearance')
     XopcSectionLabel({ heading: $r('app.string.settings_about_section') })
-    XopcHubRow({ heading: $r('app.string.settings_about_xopc'), summary: xopcAppVersion(),
+    XopcHubRow({ heading: $r('app.string.settings_about_xopc'), trailingValue: xopcAppVersion(),
       symbol: $r('sys.symbol.info_circle'), onOpen: (): void => { this.openSection('about'); } }).id('settings-about')
   }
 
   build() {
     Column() {
-      XopcPageHeader({ backVisible: this.useNavigation || !!this.section,
+      XopcPageHeader({ heading: this.sectionTitle(), showStaticTitle: true, backVisible: this.useNavigation || !!this.section,
         onBack: (): void => {
           if (this.useNavigation) this.onExit();
           else this.section = '';
@@ -231,16 +243,19 @@ export struct XopcSettingsView {
               GridItem() { this.schemeCard('clay', $r('app.string.color_scheme_clay'), 'scheme-clay') }
             }.columnsTemplate('1fr 1fr').columnsGap(12).rowsGap(12).height(276).width('100%')
           } else if (this.section === 'notifications') {
-        Text(this.push.registered ? $r('app.string.push_registered') : $r('app.string.push_help'))
-          .fontColor(this.colors.secondary).fontSize(16).lineHeight(24).width('100%').margin({ bottom: 20 })
-        Row({ space: 8 }) {
-          Button($r('app.string.enable_push')).enabled(!this.push.busy)
-            .onClick((): void => { this.push.enable(this.getUIContext().getHostContext() as common.UIAbilityContext); })
-          if (this.push.enabled) {
-            Button($r('app.string.disable_push')).enabled(!this.push.busy).onClick((): void => { this.push.disable(); })
-          }
-        }
-        if (this.push.error) { Text(userErrorMessage(this.push.error, 'save')).fontColor(this.colors.danger).fontSize(13) }
+            Row({ space: 12 }) {
+              Text(this.notificationStatus()).fontColor(this.colors.foreground).fontSize(16).layoutWeight(1)
+              Button(this.push.enabled ? $r('app.string.refresh') : $r('app.string.enable_push')).height(44)
+                .enabled(!this.push.busy)
+                .onClick((): void => { this.push.enable(this.getUIContext().getHostContext() as common.UIAbilityContext); })
+              if (this.push.enabled) {
+                Button($r('app.string.disable_push')).height(44).enabled(!this.push.busy)
+                  .onClick((): void => { this.push.disable(); })
+              }
+            }.width('100%').padding(12).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
+            if (this.push.error) {
+              Text(userErrorMessage(this.push.error, 'save')).fontColor(this.colors.danger).fontSize(13).margin({ top: 8 })
+            }
           }
           if (this.error) { Text(userErrorMessage(this.error, 'save')).fontColor(this.colors.danger).margin({ top: 16 }) }
         }.width('100%').padding({ left: 20, right: 20, bottom: 24 }).alignItems(HorizontalAlign.Start)

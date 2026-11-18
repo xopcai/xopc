@@ -9,6 +9,7 @@ import { currentTaskReceipt } from './task-detail-summary';
 import { TaskExpandableContent } from './task-expandable-content';
 import { TaskInputCard } from './task-input-card';
 import { taskChatHref } from './task-detail-route';
+import { taskTextForDisplay } from './task-result-presentation';
 
 /** Keep actionable waits ahead of supporting status and historical results. */
 export function TaskCurrentAction({ detail, executorName, language, onUpdated, ref }: {
@@ -36,20 +37,21 @@ export function TaskCurrentAction({ detail, executorName, language, onUpdated, r
     waiting: zh ? '任务正在等待继续。' : 'The task is waiting to resume.',
     verifying: zh ? '正在检查执行结果。' : 'Checking the result.',
   };
-  const summary = detail.presentation.reason ?? pausedWait?.reason ?? detail.waits[0]?.reason
+  const summary = taskTextForDisplay(detail.presentation.reason ?? pausedWait?.reason ?? detail.waits[0]?.reason
     ?? (detail.task.phase === 'closed'
       ? receipt?.summary ?? (zh ? '任务已关闭，可查看交付物与执行结果。' : 'The task is closed. Review its deliverables and results.')
       : detail.task.phase === 'review'
         ? (zh ? '请检查交付物并勾选通过的验收项。' : 'Review the deliverables and check the criteria that pass.')
         : (activeRun && activeProgress[activeRun.status]) ?? receipt?.summary
-          ?? (zh ? '任务尚未开始，可开始执行或设置执行时间。' : 'Start the task or set an execution time.'));
+          ?? (zh ? '任务尚未开始，可开始执行或设置执行时间。' : 'Start the task or set an execution time.')), language);
   const attentionContent = detail.attention.length > 0 ? <ul className="mt-3 space-y-3">
     {detail.attention.map((item, index) => {
       const hasInlineControl = actionableWaits.some((wait) => (item.kind === 'input_required' && wait.kind === 'user_input')
         || (item.kind === 'approval_required' && wait.kind === 'approval'));
+      const text = taskTextForDisplay(item.summary, language);
       return <li key={`${item.kind}-${index}`} className="text-sm leading-6 text-fg-muted">
-        <TaskExpandableContent content={item.summary} contentKey={`${detail.task.id}:attention:${item.kind}:${index}`} language={language} previewHeight={72}>
-          <ChatMarkdownRenderer content={taskDescriptionForDisplay(item.summary)} compact breaks />
+        <TaskExpandableContent content={text} contentKey={`${detail.task.id}:attention:${item.kind}:${index}`} language={language} previewHeight={72}>
+          <ChatMarkdownRenderer content={taskDescriptionForDisplay(text)} compact breaks />
         </TaskExpandableContent>
         {!hasInlineControl && (item.kind === 'input_required' || item.kind === 'approval_required') ? <Link className="mt-2 inline-flex min-h-11 items-center rounded-lg bg-accent-soft px-3 font-medium text-accent-fg" to={taskChatHref(detail.task.id)}>{zh ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}
       </li>;

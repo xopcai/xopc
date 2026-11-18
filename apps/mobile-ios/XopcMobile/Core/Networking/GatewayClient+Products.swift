@@ -519,6 +519,14 @@ extension GatewayClient {
         let _: UserMutationResult = try await request(path: "/api/user-model/assertions/\(id)", method: "DELETE")
     }
 
+    func fetchWorkMemory(cursor: String? = nil) async throws -> MobileWorkMemoryPage {
+        var query = [URLQueryItem(name: "view", value: "manage")]
+        if let cursor {
+            query.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        return try await request(path: "/api/knowledge-memory", queryItems: query)
+    }
+
     func fetchShares() async throws -> [MobileShare] {
         let result: MobileShareListEnvelope = try await request(path: "/api/shares")
         return result.payload.shares
