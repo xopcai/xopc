@@ -14,27 +14,31 @@ export function chatSpeechLanguage(text: string, fallback: string): string {
 }
 
 export function chatSpeechChunks(markdown: string): string[] {
-  const units = chatSpeakableText(markdown).match(/[^。！？!?.\n]+[。！？!?.]?|\n+/g) || [];
+  let rest = chatSpeakableText(markdown);
+  let limit = 160;
   const chunks: string[] = [];
-  let current = '';
-  const split = (source: string, limit: number): void => {
-    let rest = source;
-    while (rest) {
-      let end = Math.min(rest.length, limit);
-      if (end < rest.length && rest.charCodeAt(end - 1) >= 0xD800 && rest.charCodeAt(end - 1) <= 0xDBFF) end--;
-      const chunk = rest.slice(0, end).trim(); if (chunk) chunks.push(chunk);
-      rest = rest.slice(end);
-    }
-  };
-  split((units.shift() || '').trim(), 80);
-  for (const raw of units) {
-    const unit = raw.trim(); if (!unit) continue;
-    if (unit.length > 240) {
-      if (current.trim()) chunks.push(current.trim()); current = ''; split(unit, 240); continue;
-    }
-    if (current && current.length + unit.length > 240) { chunks.push(current.trim()); current = ''; }
-    current += unit;
+  while (rest.length > limit) {
+    const window = rest.slice(0, limit + 1);
+    let end = lastSpeechBreak(window, /[。！？!?]+["'”’」』）)]*|\.+["'”’」』）)]*(?=\s)|\n+/g, limit)
+      || lastSpeechBreak(window, /[，、；：]|[,;:](?=\s)/g, limit)
+      || lastSpeechBreak(window, /\s/g, limit)
+      || limit;
+    if (rest.charCodeAt(end - 1) >= 0xD800 && rest.charCodeAt(end - 1) <= 0xDBFF) end--;
+    chunks.push(rest.slice(0, end).trim());
+    rest = rest.slice(end).trimStart();
+    limit = 420;
   }
-  if (current.trim()) chunks.push(current.trim());
+  if (rest) chunks.push(rest);
   return chunks;
+}
+
+function lastSpeechBreak(window: string, pattern: RegExp, limit: number): number {
+  let end = 0;
+  let match = pattern.exec(window);
+  while (match) {
+    const boundary = match.index + match[0].length;
+    if (boundary <= limit && boundary >= Math.floor(limit / 2)) end = boundary;
+    match = pattern.exec(window);
+  }
+  return end;
 }

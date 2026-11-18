@@ -13,7 +13,7 @@ vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: c
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request, transferAuth: async () => ({ origin: "https://gateway.example" }) } }));
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class { async materialize() {} } }));
 vi.mock('../entry/src/main/ets/service/voiceCapture.ets', () => ({ voiceCapture: { async cancel() {} } }));
-vi.mock('../entry/src/main/ets/service/chatReadAloud.ets', () => ({ chatReadAloud: { async disableContinuous() {} } }));
+vi.mock('../entry/src/main/ets/service/chatReadAloud.ets', () => ({ chatReadAloud: { async stop() {} } }));
 vi.mock('../entry/src/main/ets/service/voiceCallAudio.ets', () => ({ voiceCallAudio: mocks }));
 vi.mock('../entry/src/main/ets/service/voiceCallTransport.ets', () => ({ XopcVoiceCallTransport: class { connect = mocks.connect; send = mocks.send; async close() {} } }));
 

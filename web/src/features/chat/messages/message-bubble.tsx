@@ -44,7 +44,7 @@ import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { ReadAloudButton } from '@/features/voice/read-aloud-button';
-import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-aloud-text';
+import { chatReadAloudInput } from './chat-read-aloud';
 import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
@@ -376,21 +376,12 @@ export const MessageBubble = memo(function MessageBubble({
     () => (assistantActionsVisible && copyMarkdown ? getAssistantCopyPlainText(message.content ?? []) : ''),
     [assistantActionsVisible, copyMarkdown, message],
   );
-  const speakableText = useMemo(
-    () => (assistantActionsVisible && copyMarkdown ? buildSpeakableText(copyMarkdown) : ''),
-    [assistantActionsVisible, copyMarkdown],
+  const readAloudInput = useMemo(
+    () => assistantActionsVisible
+      ? chatReadAloudInput(rawMessage, messageIndex ?? 0, conversationId, language, m.chat.messageReadAloudTitle, personal)
+      : undefined,
+    [assistantActionsVisible, rawMessage, messageIndex, conversationId, language, m.chat.messageReadAloudTitle, personal],
   );
-  const readAloudInput = useMemo(() => ({
-    source: {
-      type: 'chat-message' as const,
-      id: `${conversationId ?? 'chat'}:${message.timestamp ?? messageIndex ?? copyMarkdown.length}`,
-      title: speakableText.split('\n')[0]?.slice(0, 48) || m.chat.messageReadAloudTitle,
-      href: conversationId ? `#/chat/${encodeURIComponent(conversationId)}` : undefined,
-      targetId: messageIndex == null ? undefined : `chat-message-${messageIndex}`,
-    },
-    text: speakableText,
-    language: detectSpeechLanguage(speakableText, language),
-  }), [copyMarkdown.length, language, m.chat.messageReadAloudTitle, message.timestamp, messageIndex, conversationId, speakableText]);
   const userCopyText = useMemo(() => {
     if (!isUser) return '';
     if (message.userTurnDocument) {
@@ -1028,7 +1019,7 @@ export const MessageBubble = memo(function MessageBubble({
               )}
             </button>
             </ChatActionTooltip>
-            <ChatActionTooltip label={m.chat.messageReadAloud}>
+            {readAloudInput ? <ChatActionTooltip label={m.chat.messageReadAloud}>
             <ReadAloudButton
               input={readAloudInput}
               labels={{
@@ -1040,7 +1031,7 @@ export const MessageBubble = memo(function MessageBubble({
               }}
               hideNativeTitle
             />
-            </ChatActionTooltip>
+            </ChatActionTooltip> : null}
             <Popover.Root open={moreActionsOpen} onOpenChange={(open) => {
               setMoreActionsOpen(open);
               if (open) loadResponseFeedback();

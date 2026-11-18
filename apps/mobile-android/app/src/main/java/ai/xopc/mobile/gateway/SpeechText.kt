@@ -1,5 +1,11 @@
 package ai.xopc.mobile.gateway
 
+private const val FIRST_CHUNK_LIMIT = 160
+private const val CHUNK_LIMIT = 420
+private val sentenceBreaks = Regex("""[。！？!?]+["'”’」』）)]*|\.+["'”’」』）)]*(?=\s)|\n+""")
+private val clauseBreaks = Regex("""[，、；：]|[,;:](?=\s)""")
+private val wordBreaks = Regex("""\s""")
+
 internal fun speakableText(markdown: String): String = markdown
   .replace(Regex("```[\\s\\S]*?```|~~~[\\s\\S]*?~~~"), "\n")
   .replace(Regex("xopc-product-delivery:\\S+"), "")
@@ -25,35 +31,23 @@ internal fun speechLanguage(text: String, fallback: String): String {
 }
 
 internal fun speechChunks(markdown: String): List<String> {
-  val source = speakableText(markdown)
-  if (source.isEmpty()) return emptyList()
-  val units = Regex("[^。！？!?.\\n]+[。！？!?.]?|\\n+").findAll(source)
-    .map { it.value.trim() }.filter(String::isNotEmpty).toList()
+  var rest = speakableText(markdown)
+  var limit = FIRST_CHUNK_LIMIT
   val chunks = mutableListOf<String>()
-  var current = ""
-  fun split(value: String, limit: Int) {
-    var offset = 0
-    while (offset < value.length) {
-      var end = minOf(value.length, offset + limit)
-      if (end < value.length && value[end - 1].isHighSurrogate()) end--
-      value.substring(offset, end).trim().takeIf(String::isNotEmpty)?.let(chunks::add)
-      offset = end
-    }
+  while (rest.length > limit) {
+    val window = rest.substring(0, limit + 1)
+    var end = lastBreak(window, sentenceBreaks, limit)
+      ?: lastBreak(window, clauseBreaks, limit)
+      ?: lastBreak(window, wordBreaks, limit)
+      ?: limit
+    if (rest[end - 1].isHighSurrogate()) end--
+    chunks.add(rest.substring(0, end).trim())
+    rest = rest.substring(end).trimStart()
+    limit = CHUNK_LIMIT
   }
-  split(units.first(), 80)
-  for (unit in units.drop(1)) {
-    if (unit.length > 240) {
-      current.trim().takeIf(String::isNotEmpty)?.let(chunks::add)
-      current = ""
-      split(unit, 240)
-    } else {
-      if (current.length + unit.length > 240) {
-        current.trim().takeIf(String::isNotEmpty)?.let(chunks::add)
-        current = ""
-      }
-      current += unit
-    }
-  }
-  current.trim().takeIf(String::isNotEmpty)?.let(chunks::add)
+  if (rest.isNotEmpty()) chunks.add(rest)
   return chunks
 }
+
+private fun lastBreak(window: String, pattern: Regex, limit: Int): Int? =
+  pattern.findAll(window).map { it.range.last + 1 }.lastOrNull { it in (limit / 2)..limit }

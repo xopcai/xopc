@@ -19,6 +19,7 @@ import { useComposerEditor } from '@/features/chat/composer/use-composer-editor'
 import { ComposerModelConfigControl } from '@/features/chat/model/composer-model-config-control';
 import { MAX_CHAT_ATTACHMENTS, type Attachment } from '@/features/chat/attachments/attachment-utils';
 import { MessageList } from '@/features/chat/messages/message-list';
+import { useChatReadAloud } from '@/features/chat/messages/chat-read-aloud';
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { ScrollToBottomDock } from '@/features/chat/scroll/scroll-to-bottom-button';
@@ -444,6 +445,7 @@ export function SideChatConversation({
   const isCurrent = useCallback(() => activeRef.current && sameGateway(), [sameGateway]);
   useEffect(() => { activeRef.current = true; return () => { activeRef.current = false; }; }, []);
   const [running, setRunning] = useState(Boolean(initialRunId));
+  useChatReadAloud(visible ? sideChatId : null, messages, running);
   const [runId, setRunId] = useState<string | undefined>(initialRunId);
   const [error, setError] = useState<string | null>(null);
   const [clarify, setClarify] = useState<SideChatClarifyPrompt | null>(null);
@@ -881,6 +883,7 @@ export function SideChatConversation({
               messages={messages}
               authToken={token}
               conversationId={sideChatId}
+              managesReadAloud={false}
               workspaceConversationId={parentConversationId}
               streaming={running}
               progress={null}

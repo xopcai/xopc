@@ -1065,6 +1065,11 @@ internal fun MainContent(
   val voiceContext = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
   val voiceScope = rememberCoroutineScope()
+  val currentSpeechFetch by rememberUpdatedState(onSpeechChunk)
+  val reader = remember(gatewayId, connection.profile?.deviceId) {
+    ReadAloudController(voiceContext, voiceScope) { text, language -> currentSpeechFetch(text, language) }
+  }
+  DisposableEffect(reader) { onDispose { reader.stop() } }
   val currentVoiceCreate by rememberUpdatedState(onCreateVoiceCall)
   val currentVoiceCancel by rememberUpdatedState(onCancelVoiceCall)
   val currentVoiceClarification by rememberUpdatedState(onVoiceClarification)
@@ -1632,7 +1637,7 @@ internal fun MainContent(
           onRefreshClarification, onRespondToClarification, onRefreshConnectionWait, onConnectionWaitAction,
           onOpenExecution, onRetryExecution, onCloseExecution,
           onCopyMessageText, onSaveMessageAsNote, onReuseMessage, onRegenerateMessage,
-          onLoadMessageMedia, onSpeechChunk, onOpenMessageTarget = { target ->
+          onLoadMessageMedia, reader, onOpenMessageTarget = { target ->
             when (target.kind) {
               "note" -> openLinkedDetail(HomeTab.Notes, target.id)
               "progress" -> onSelectTab(HomeTab.Progress)
@@ -2579,7 +2584,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   onReuseMessage: (String) -> Boolean,
   onRegenerateMessage: (String) -> Boolean,
   onLoadMessageMedia: suspend (String, ConversationMedia) -> ByteArray,
-  onSpeechChunk: suspend (String, String) -> ByteArray,
+  reader: ReadAloudController,
   onOpenMessageTarget: (ConversationTarget) -> Unit,
   onComposerValueChange: (TextFieldValue) -> Unit,
   onFocusDraft: () -> Unit,
@@ -2617,14 +2622,22 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   val bottomChromeHeight = bottomChromeInsets.calculateBottomPadding()
   val uriHandler = LocalUriHandler.current
   val context = LocalContext.current
-  val speechScope = rememberCoroutineScope()
-  val currentSpeechFetch by rememberUpdatedState(onSpeechChunk)
-  val reader = remember(connection.profile?.gatewayId, connection.selectedConversationId) {
-    ReadAloudController(context, speechScope) { text, language ->
-      currentSpeechFetch(text, language)
+  val speechChat = connection.selectedConversationId?.let { ChatSpeechScope(it, connection.historyTranscriptId) }
+  val speechLanguage = LocalConfiguration.current.locales[0].toLanguageTag()
+  DisposableEffect(reader, speechChat) {
+    onDispose { speechChat?.let(reader::leaveConversation) }
+  }
+  LaunchedEffect(reader, speechChat, connection.historyLoading, connection.messages, connection.activeRunId, speechLanguage) {
+    if (speechChat != null && !connection.historyLoading) {
+      val replies = connection.messages.mapNotNull { message ->
+        if (message.role != "assistant" || !message.answerConfirmed || message.text.isBlank() ||
+          (connection.activeRunId != null && message.turnId == connection.activeRunId) ||
+          message.media.any { it.mimeType.startsWith("audio/") }) null
+        else ChatSpeechReply(message.id, message.text)
+      }
+      reader.showConversation(speechChat, replies, speechLanguage)
     }
   }
-  DisposableEffect(reader) { onDispose { reader.stop() } }
   LaunchedEffect(connection.selectedConversationId, connection.historyLoading) {
     if (connection.selectedConversationId != null && !connection.historyLoading && !connection.chatError &&
       connection.messages.isEmpty() && connection.context == null && !connection.contextError) onReloadContext()
@@ -2968,6 +2981,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         if (reader.state.phase == "loading") BrandLoadingIndicator(extent = 20.dp)
         Text(when (reader.state.phase) {
           "loading" -> stringResource(R.string.assistant_speech_loading)
+          "waiting" -> stringResource(R.string.assistant_speech_waiting)
           "error" -> stringResource(R.string.assistant_speech_error)
           else -> "${reader.state.segment}/${reader.state.segmentCount}"
         }, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -3068,7 +3082,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
                       "read-aloud", enabled = phase != "loading") {
                       messageActionsId = null
                       if (phase == "playing" || phase == "paused") reader.toggle()
-                      else reader.speak(actionsMessage.text, actionsMessage.id, Locale.getDefault().toLanguageTag())
+                      else speechChat?.let { reader.speak(it, ChatSpeechReply(actionsMessage.id, actionsMessage.text)) }
                     }
                   }
                   if (hasText) {

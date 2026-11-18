@@ -32,7 +32,8 @@ export function GlobalReadAloudPlayer() {
   const ended = state.status === 'ended';
   const status = preparing ? (zh ? '正在准备语音' : 'Preparing audio')
     : failed ? (zh ? '朗读失败，请重试' : 'Unable to play. Try again')
-      : ended ? (zh ? '播放完毕' : 'Finished') : playing ? (zh ? '正在朗读' : 'Reading aloud') : (zh ? '已暂停' : 'Paused');
+      : ended && state.source?.conversationId ? (zh ? '等待下一条回复' : 'Waiting for the next reply')
+        : ended ? (zh ? '播放完毕' : 'Finished') : playing ? (zh ? '正在朗读' : 'Reading aloud') : (zh ? '已暂停' : 'Paused');
   const returnToSource = (event: MouseEvent<HTMLAnchorElement>) => {
     const target = state.source?.targetId ? document.getElementById(state.source.targetId) : null;
     if (!target) return;

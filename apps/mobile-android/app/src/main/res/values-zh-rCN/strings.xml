@@ -235,6 +235,7 @@
     <string name="assistant_pause">暂停</string>
     <string name="assistant_resume">继续</string>
     <string name="assistant_speech_loading">正在准备语音…</string>
+    <string name="assistant_speech_waiting">等待下一条回复</string>
     <string name="assistant_speech_error">语音播放失败</string>
     <string name="assistant_reuse">复用</string>
     <string name="assistant_regenerate">重新生成</string>

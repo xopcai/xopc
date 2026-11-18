@@ -3,6 +3,14 @@ import MediaPlayer
 import SwiftUI
 
 enum ChatSpeechText {
+    private static let firstChunkLimit = 160
+    private static let chunkLimit = 420
+    private static let breaks = [
+        #"[。！？!?]+["'”’」』）)]*|\.+["'”’」』）)]*(?=\s)|\n+"#,
+        #"[，、；：]|[,;:](?=\s)"#,
+        #"\s"#
+    ].compactMap { try? NSRegularExpression(pattern: $0) }
+
     static func chunks(from markdown: String) -> [String] {
         let patterns = [
             "(?s)```.*?```|~~~.*?~~~",
@@ -24,42 +32,25 @@ enum ChatSpeechText {
         text = text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "[\\t ]+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return [] }
 
         var chunks: [String] = []
-        var current = ""
-        for sentence in sentences(in: text) {
-            var remaining = sentence
-            while !remaining.isEmpty {
-                let piece = String(remaining.prefix(240))
-                remaining.removeFirst(piece.count)
-                if current.count + piece.count > 240 {
-                    chunks.append(current)
-                    current = ""
-                }
-                current += piece
-            }
+        var rest = text as NSString
+        var limit = firstChunkLimit
+        while rest.length > limit {
+            let window = rest.substring(to: limit + 1)
+            let range = NSRange(location: 0, length: window.utf16.count)
+            var end = breaks.lazy.compactMap { pattern in
+                pattern.matches(in: window, range: range).last {
+                    (limit / 2...limit).contains($0.range.upperBound)
+                }?.range.upperBound
+            }.first ?? limit
+            if (0xD800...0xDBFF).contains(rest.character(at: end - 1)) { end -= 1 }
+            chunks.append(rest.substring(to: end).trimmingCharacters(in: .whitespacesAndNewlines))
+            rest = rest.substring(from: end).trimmingCharacters(in: .whitespacesAndNewlines) as NSString
+            limit = chunkLimit
         }
-        if !current.isEmpty {
-            chunks.append(current)
-        }
+        if rest.length > 0 { chunks.append(rest as String) }
         return chunks
-    }
-
-    private static func sentences(in text: String) -> [String] {
-        var sentences: [String] = []
-        var sentence = ""
-        for character in text {
-            sentence.append(character)
-            if "。！？!?.\n".contains(character) {
-                sentences.append(sentence.trimmingCharacters(in: .whitespacesAndNewlines))
-                sentence = ""
-            }
-        }
-        if !sentence.isEmpty {
-            sentences.append(sentence.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        return sentences
     }
 
     static func language(for text: String, fallback: Locale) -> String {
@@ -72,8 +63,43 @@ enum ChatSpeechText {
     }
 }
 
+struct ChatSpeechScope: Hashable {
+    let configuration: GatewayConfiguration
+    let conversationID: String
+    let transcriptID: String?
+}
+
+struct ChatSpeechReply: Equatable {
+    let id: String
+    let text: String
+}
+
+struct ChatSpeechObservation: Equatable {
+    let scope: ChatSpeechScope
+    let replies: [ChatSpeechReply]
+}
+
 @MainActor @Observable final class ChatReadAloud: NSObject, AVAudioPlayerDelegate {
-    enum State { case idle, loading, playing, paused, failed }
+    static let shared = ChatReadAloud()
+
+    enum State { case idle, loading, playing, paused, waiting, failed }
+
+    private struct Position {
+        var chunk = 0
+        var offset: TimeInterval = 0
+        var autoplay = true
+    }
+
+    private final class Reading {
+        var queue: [ChatSpeechReply]
+        var seen: Set<String>
+        var position = Position()
+
+        init(queue: [ChatSpeechReply], seen: Set<String>) {
+            self.queue = queue
+            self.seen = seen
+        }
+    }
 
     private(set) var state: State = .idle
     private(set) var sourceID: String?
@@ -93,8 +119,56 @@ enum ChatSpeechText {
     private var isAudioSessionActive = false
     private var progressTimer: Timer?
     private var remoteTargets: [(MPRemoteCommand, Any)] = []
+    @ObservationIgnored private var readings: [ChatSpeechScope: Reading] = [:]
+    @ObservationIgnored private var activeScope: ChatSpeechScope?
+    private(set) var owner: UUID?
+    @ObservationIgnored private var replies: [ChatSpeechReply] = []
+    @ObservationIgnored private var fallbackLocale = Locale(identifier: "en-US")
+    @ObservationIgnored private var playbackPosition = Position()
+    @ObservationIgnored private let synthesize: @MainActor (GatewayClient, String, String) async throws -> Data
 
-    func toggle(id: String, text: String, locale: Locale, gateway: GatewayClient) {
+    init(synthesize: @escaping @MainActor (GatewayClient, String, String) async throws -> Data = {
+        try await $0.synthesizeSpeech(text: $1, language: $2)
+    }) {
+        self.synthesize = synthesize
+        super.init()
+    }
+
+    func show(_ observation: ChatSpeechObservation?, owner: UUID, locale: Locale) {
+        guard let observation else { leave(owner: owner); return }
+        let scope = observation.scope
+        if activeScope != scope {
+            if let previousOwner = self.owner { leave(owner: previousOwner) }
+            readings = readings.filter { key, _ in
+                key.configuration == scope.configuration && (key.conversationID != scope.conversationID || key == scope)
+            }
+            activeScope = scope
+        }
+        self.owner = owner
+        replies = observation.replies
+        fallbackLocale = locale
+        guard let reading = readings[scope] else { return }
+        let anchor = replies.lastIndex { reading.seen.contains($0.id) }.map { $0 + 1 } ?? 0
+        for reply in replies.dropFirst(anchor) where reading.seen.insert(reply.id).inserted {
+            reading.queue.append(reply)
+        }
+        if state == .idle || state == .waiting { playNext() }
+    }
+
+    func leave(owner: UUID) {
+        guard self.owner == owner else { return }
+        if let activeScope, let reading = readings[activeScope], !reading.queue.isEmpty {
+            reading.position = Position(chunk: chunkIndex, offset: player?.currentTime ?? playbackPosition.offset,
+                                        autoplay: state == .playing || (state == .loading && playbackPosition.autoplay))
+        }
+        self.owner = nil
+        activeScope = nil
+        replies = []
+        stopOutput()
+    }
+
+    func toggle(id: String, text: String, locale: Locale, gateway: GatewayClient, conversationID: String? = nil) {
+        if let scope = activeScope, conversationID != nil, scope.conversationID != conversationID { return }
         if sourceID == id {
             switch state {
             case .playing:
@@ -110,22 +184,56 @@ enum ChatSpeechText {
             case .loading:
                 stop()
                 return
-            case .idle, .failed: break
+            case .idle, .waiting, .failed: break
             }
         }
-        stop()
+        if let scope = activeScope, scope.conversationID == conversationID {
+            let next = replies.firstIndex { $0.id == id }.map { Array(replies.dropFirst($0 + 1)) } ?? []
+            readings[scope] = Reading(queue: [ChatSpeechReply(id: id, text: text)] + next,
+                                      seen: Set(replies.map(\.id)).union([id]))
+            fallbackLocale = locale
+            playNext()
+        } else {
+            start(id: id, text: text, locale: locale, gateway: gateway)
+        }
+    }
+
+    private func playNext() {
+        guard let scope = activeScope, let reading = readings[scope] else { stopOutput(); return }
+        while let reply = reading.queue.first {
+            if start(id: reply.id, text: reply.text, locale: fallbackLocale,
+                     gateway: GatewayClient(configuration: scope.configuration), at: reading.position) { return }
+            reading.queue.removeFirst()
+            reading.position = Position()
+        }
+        stopOutput()
+        state = .waiting
+    }
+
+    @discardableResult
+    private func start(id: String, text: String, locale: Locale, gateway: GatewayClient,
+                       at saved: Position = Position()) -> Bool {
+        stopOutput()
         chunks = ChatSpeechText.chunks(from: text)
-        guard !chunks.isEmpty else { return }
+        guard !chunks.isEmpty else { return false }
         sourceID = id
-        chunkIndex = 0
+        chunkIndex = min(saved.chunk, chunks.count - 1)
         chunkCount = chunks.count
+        playbackPosition = saved
         language = ChatSpeechText.language(for: text, fallback: locale)
         activeGateway = gateway
+        state = .loading
         let current = generation
         fetchTask = Task { await loadChunk(gateway: gateway, generation: current) }
+        return true
     }
 
     func stop() {
+        if let activeScope { readings.removeValue(forKey: activeScope) }
+        stopOutput()
+    }
+
+    private func stopOutput() {
         generation += 1
         fetchTask?.cancel()
         fetchTask = nil
@@ -169,26 +277,32 @@ enum ChatSpeechText {
                     data = try await prefetchTask.value
                 } catch {
                     guard generation == self.generation, !Task.isCancelled else { return }
-                    data = try await gateway.synthesizeSpeech(text: chunks[chunkIndex], language: language)
+                    data = try await synthesize(gateway, chunks[chunkIndex], language)
                 }
+                guard generation == self.generation, !Task.isCancelled else { return }
                 self.prefetchTask = nil
                 prefetchIndex = -1
             } else {
-                data = try await gateway.synthesizeSpeech(text: chunks[chunkIndex], language: language)
+                prefetchNext(gateway: gateway, generation: generation)
+                data = try await synthesize(gateway, chunks[chunkIndex], language)
             }
             guard generation == self.generation, !Task.isCancelled else { return }
-            GeneratedMusicPlayback.shared.yieldAudioSession()
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-            try AVAudioSession.sharedInstance().setActive(true)
-            isAudioSessionActive = true
+            prefetchNext(gateway: gateway, generation: generation)
+            if !isAudioSessionActive {
+                GeneratedMusicPlayback.shared.yieldAudioSession()
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
+                try AVAudioSession.sharedInstance().setActive(true)
+                isAudioSessionActive = true
+            }
             let player = try AVAudioPlayer(data: data)
             player.delegate = self
             player.prepareToPlay()
-            guard player.play() else { throw GatewayClientError.invalidResponse }
+            player.currentTime = min(playbackPosition.offset, max(0, player.duration - 0.001))
+            if playbackPosition.autoplay, !player.play() { throw GatewayClientError.invalidResponse }
             self.player = player
-            position = 0
+            position = player.currentTime
             duration = player.duration
-            state = .playing
+            state = playbackPosition.autoplay ? .playing : .paused
             installRemoteCommands()
             updateNowPlaying()
             progressTimer?.invalidate()
@@ -199,11 +313,10 @@ enum ChatSpeechText {
                     self.updateNowPlaying()
                 }
             }
-            prefetchNext(gateway: gateway, generation: generation)
         } catch {
             guard generation == self.generation, !Task.isCancelled else { return }
             let message = error.localizedDescription
-            stop()
+            stopOutput()
             state = .failed
             errorMessage = message
         }
@@ -216,7 +329,8 @@ enum ChatSpeechText {
         prefetchIndex = next
         let text = chunks[next]
         let language = language
-        prefetchTask = Task { try await gateway.synthesizeSpeech(text: text, language: language) }
+        let synthesize = synthesize
+        prefetchTask = Task { try await synthesize(gateway, text, language) }
     }
 
     func seek(to value: TimeInterval) {
@@ -281,10 +395,16 @@ enum ChatSpeechText {
             self.player = nil
             if flag, self.chunkIndex + 1 < self.chunks.count {
                 self.chunkIndex += 1
+                self.playbackPosition = Position(chunk: self.chunkIndex)
                 let current = self.generation
                 if let gateway = self.activeGateway {
                     self.fetchTask = Task { await self.loadChunk(gateway: gateway, generation: current) }
                 }
+            } else if flag, let scope = self.activeScope, let reading = self.readings[scope],
+                      reading.queue.first?.id == self.sourceID {
+                reading.queue.removeFirst()
+                reading.position = Position()
+                self.playNext()
             } else {
                 self.stop()
             }

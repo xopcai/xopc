@@ -19,9 +19,13 @@ vi.mock('@kit.CoreFileKit', () => ({ fileIo: { OpenMode: { CREATE: 1, READ_WRITE
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { transferAuth: async () => ({ origin: 'https://gateway.example', token: 'xopc_at_test-token' }) } }));
 import { registerRequestProof } from '../entry/src/main/ets/service/requestProof.ets';
 import { XopcChatReadAloud } from '../entry/src/main/ets/service/chatReadAloud.ets';
+const firstChunk = 'A'.repeat(139) + '.';
+const secondChunk = 'B'.repeat(35) + '.';
+const longReply = firstChunk + ' ' + secondChunk;
+
 describe('chat read aloud lifecycle', () => {
   let reader: XopcChatReadAloud;
-  let player: { on: ReturnType<typeof vi.fn>; prepare: ReturnType<typeof vi.fn>; play: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn>; duration: number };
+  let player: { on: ReturnType<typeof vi.fn>; prepare: ReturnType<typeof vi.fn>; play: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn>; seek: ReturnType<typeof vi.fn>; duration: number };
   let session: { on: ReturnType<typeof vi.fn>; setAVMetadata: ReturnType<typeof vi.fn>; setAVPlaybackState: ReturnType<typeof vi.fn>;
     activate: ReturnType<typeof vi.fn>; deactivate: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> };
   let events: Map<string, (...args: any[]) => void>;
@@ -36,7 +40,7 @@ describe('chat read aloud lifecycle', () => {
       sign: async (message: string) => sign('sha256', Buffer.from(message), { key: keyPair.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url'),
     } as never);
     vi.resetAllMocks(); reader = new XopcChatReadAloud(); events = new Map();
-    player = { on: vi.fn((event, listener) => events.set(event, listener)), prepare: vi.fn(async () => {}), play: vi.fn(async () => {}), release: vi.fn(async () => {}), pause: vi.fn(async () => {}), duration: 1000 };
+    player = { on: vi.fn((event, listener) => events.set(event, listener)), prepare: vi.fn(async () => {}), play: vi.fn(async () => {}), release: vi.fn(async () => {}), pause: vi.fn(async () => {}), seek: vi.fn(), duration: 1000 };
     session = { on: vi.fn(), setAVMetadata: vi.fn(async () => {}), setAVPlaybackState: vi.fn(async () => {}),
       activate: vi.fn(async () => {}), deactivate: vi.fn(async () => {}), destroy: vi.fn(async () => {}) };
     mock.createPlayer.mockResolvedValue(player); mock.open.mockResolvedValue({ fd: 3 }); mock.request.mockResolvedValue({ responseCode: 200, result: new ArrayBuffer(8) });
@@ -81,7 +85,7 @@ describe('chat read aloud lifecycle', () => {
     expect(mock.close).toHaveBeenCalledOnce(); expect(mock.unlink.mock.calls[0][0]).toMatch(/^\/test-cache\/xopc-speech-[\w-]+\.audio$/);
   });
   it('signs the exact body of initial and prefetched speech requests with distinct nonces', async () => {
-    await reader.speak(context, 'First. Second.', 'signed-row', 'en');
+    await reader.speak(context, longReply, 'signed-row', 'en');
     events.get('stateChange')?.('prepared');
     await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
     const nonces: string[] = [];
@@ -100,29 +104,32 @@ describe('chat read aloud lifecycle', () => {
   });
   it('keeps current playback alive when the ability moves to the background', async () => {
     await reader.speak(context, 'Hello', 'one', 'en');
-    events.get('stateChange')?.('playing'); reader.continuousConversationId = 'conversation';
+    events.get('stateChange')?.('playing');
     reader.leaveForeground();
-    expect(reader.continuousConversationId).toBe(''); expect(reader.state).toBe('playing');
+    expect(reader.state).toBe('playing');
     expect(player.release).not.toHaveBeenCalled(); expect(mock.stopBackground).not.toHaveBeenCalled();
   });
-  it('continues through the next speech chunk after leaving the chat page', async () => {
-    await reader.speak(context, 'First. Second.', 'one', 'en');
+  it('continues through the next speech chunk when the ability moves to the background', async () => {
+    await reader.speak(context, longReply, 'one', 'en');
     events.get('stateChange')?.('prepared');
     await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
     events.get('stateChange')?.('playing');
-    reader.continuousConversationId = 'conversation';
     reader.leaveForeground();
     events.get('stateChange')?.('completed');
     await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(2));
-    expect(reader.continuousConversationId).toBe('');
     expect(mock.startBackground).toHaveBeenCalledOnce();
     expect(mock.stopBackground).not.toHaveBeenCalled();
   });
-  it('prefetches the next sentence during playback and reuses it at the boundary', async () => {
-    await reader.speak(context, 'First. Second.', 'one', 'en');
-    expect(mock.request).toHaveBeenCalledOnce();
-    events.get('stateChange')?.('prepared');
+  it('prefetches the next chunk before the first request completes and reuses it at the boundary', async () => {
+    let resolve!: (value: unknown) => void;
+    mock.request.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const speech = reader.speak(context, longReply, 'one', 'en');
     await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
+    expect(mock.request.mock.calls.map(([, options]) => JSON.parse(options.extraData).text)).toEqual([firstChunk, secondChunk]);
+    expect(mock.createPlayer).not.toHaveBeenCalled();
+    resolve({ responseCode: 200, result: new ArrayBuffer(8) });
+    await speech;
+    events.get('stateChange')?.('prepared');
     events.get('stateChange')?.('playing');
     expect(reader.state).toBe('playing');
     events.get('stateChange')?.('completed');
@@ -133,7 +140,7 @@ describe('chat read aloud lifecycle', () => {
     let resolve!: (value: unknown) => void;
     mock.request.mockResolvedValueOnce({ responseCode: 200, result: new ArrayBuffer(8) });
     mock.request.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-    await reader.speak(context, 'First. Second.', 'one', 'en');
+    await reader.speak(context, longReply, 'one', 'en');
     events.get('stateChange')?.('playing');
     await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
     events.get('stateChange')?.('completed');
@@ -146,7 +153,7 @@ describe('chat read aloud lifecycle', () => {
   it('retries a failed prefetch when the next sentence is needed', async () => {
     mock.request.mockResolvedValueOnce({ responseCode: 200, result: new ArrayBuffer(8) });
     mock.request.mockRejectedValueOnce(new Error('Temporary network failure'));
-    await reader.speak(context, 'First. Second.', 'one', 'en');
+    await reader.speak(context, longReply, 'one', 'en');
     events.get('stateChange')?.('playing');
     await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(reader.state).toBe('playing'));
@@ -158,7 +165,7 @@ describe('chat read aloud lifecycle', () => {
     let resolve!: (value: unknown) => void;
     mock.request.mockResolvedValueOnce({ responseCode: 200, result: new ArrayBuffer(8) });
     mock.request.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
-    await reader.speak(context, 'First. Second.', 'one', 'en');
+    await reader.speak(context, longReply, 'one', 'en');
     events.get('stateChange')?.('playing');
     await vi.waitFor(() => expect(mock.request).toHaveBeenCalledTimes(2));
     await reader.stop();
@@ -180,5 +187,35 @@ describe('chat read aloud lifecycle', () => {
   it('surfaces HTTP errors without trying to decode error bodies as audio', async () => {
     mock.request.mockResolvedValueOnce({ responseCode: 503, result: new ArrayBuffer(8) });
     await reader.speak(context, 'Hello', 'one', 'en'); expect(reader.error).toBe('SPEECH_HTTP_503'); expect(reader.state).toBe('idle'); expect(mock.createPlayer).not.toHaveBeenCalled();
+  });
+  it('suspends on conversation switch and resumes the saved offset before later replies', async () => {
+    const first = { id: 'one', text: 'First' };
+    const second = { id: 'two', text: 'Second' };
+    const third = { id: 'three', text: 'Third' };
+    reader.showConversation(1, context, 'gateway', 'original', 'a', [first, second], 'en');
+    await reader.readFrom(1, first);
+    events.get('stateChange')?.('prepared');
+    events.get('stateChange')?.('playing');
+    events.get('timeUpdate')?.(450);
+    reader.showConversation(2, context, 'gateway', 'other', 'b', [], 'en');
+    expect(reader.state).toBe('idle');
+    expect(player.release).toHaveBeenCalledOnce();
+
+    reader.showConversation(1, context, 'gateway', 'original', 'a', [first, second, third], 'en');
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(2));
+    events.get('stateChange')?.('prepared');
+    expect(player.seek).toHaveBeenCalledWith(450);
+    expect(player.play).toHaveBeenCalledOnce();
+    events.get('seekDone')?.(450);
+    expect(player.play).toHaveBeenCalledTimes(2);
+    for (const [index, reply] of [second, third].entries()) {
+      events.get('stateChange')?.('completed');
+      await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(index + 3));
+      expect(reader.sourceId).toBe(reply.id);
+    }
+    events.get('stateChange')?.('completed');
+    await vi.waitFor(() => expect(reader.state).toBe('waiting'));
+    reader.showConversation(1, context, 'gateway', 'original', 'a', [first, second, third], 'en');
+    expect(reader.state).toBe('waiting');
   });
 });

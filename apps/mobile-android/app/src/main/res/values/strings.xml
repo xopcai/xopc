@@ -235,6 +235,7 @@
     <string name="assistant_pause">Pause</string>
     <string name="assistant_resume">Resume</string>
     <string name="assistant_speech_loading">Preparing speech…</string>
+    <string name="assistant_speech_waiting">Waiting for the next reply</string>
     <string name="assistant_speech_error">Speech playback failed</string>
     <string name="assistant_reuse">Reuse</string>
     <string name="assistant_regenerate">Regenerate</string>

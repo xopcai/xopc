@@ -31,7 +31,7 @@ const response = () => ({ ok: true, blob: async () => new Blob(['audio']) });
 const input = (id = 'first', text = 'one|two') => ({ source: { type: 'chat-message' as const, id, title: id }, text, language: 'en-US' as const });
 
 // Import once so the singleton's window listeners have the same lifetime as its store.
-import { useReadAloudStore } from '../read-aloud-store';
+import { bindChatReadAloud, resetChatReadAloud, useReadAloudStore } from '../read-aloud-store';
 
 describe('read aloud playback lifecycle', () => {
   const audio = new FakeAudio();
@@ -49,6 +49,19 @@ describe('read aloud playback lifecycle', () => {
     store().requestStart(value);
     await vi.waitFor(() => expect(store().status).toBe('playing'));
   }
+
+  it('requests the next chunk before the first chunk is ready and keeps playback in order', async () => {
+    const first = deferred<ReturnType<typeof response>>();
+    mocks.fetch.mockReturnValueOnce(first.promise);
+    store().requestStart(input());
+    expect(mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).text)).toEqual(['one', 'two']);
+    expect(audio.play).not.toHaveBeenCalled();
+    first.resolve(response());
+    await vi.waitFor(() => expect(store()).toMatchObject({ currentText: 'one', status: 'playing' }));
+    audio.dispatchEvent(new Event('ended'));
+    await vi.waitFor(() => expect(store()).toMatchObject({ currentText: 'two', status: 'playing' }));
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
   // The store reuses one Audio element; keep its reference between tests.
   it('preserves a paused request and does not start when generation finishes', async () => {
     const pending = deferred<ReturnType<typeof response>>();
@@ -196,4 +209,76 @@ describe('read aloud playback lifecycle', () => {
     expect(audio.currentTime).toBe(0);
   });
 
+  it('continues queued replies in order, waits for new replies, and ignores older history', async () => {
+    const chat = bindChatReadAloud('ordered');
+    const reply = (id: string) => ({ ...input(id, id), source: { ...input(id).source, conversationId: 'ordered' } });
+    const [older, first, second, third, fourth] = ['older', 'first', 'second', 'third', 'fourth'].map(reply);
+    try {
+      chat.update([first, second]);
+      await start(first);
+      chat.update([older, first, second, third]);
+      for (const expected of [second, third]) {
+        audio.dispatchEvent(new Event('ended'));
+        await vi.waitFor(() => expect(store()).toMatchObject({ source: expected.source, status: 'playing' }));
+      }
+      audio.dispatchEvent(new Event('ended'));
+      expect(store().status).toBe('ended');
+      chat.update([older, first, second, third]);
+      expect(store().status).toBe('ended');
+      chat.update([older, first, second, third, fourth]);
+      await vi.waitFor(() => expect(store()).toMatchObject({ source: fourth.source, status: 'playing' }));
+      store().stop();
+      chat.update([older, first, second, third, fourth, reply('fifth')]);
+      expect(store().status).toBe('idle');
+    } finally {
+      resetChatReadAloud('ordered');
+      chat.dispose();
+    }
+  });
+
+  it('resumes the same chunk and offset after switching conversations', async () => {
+    const reply = { ...input('offset'), source: { ...input('offset').source, conversationId: 'original' } };
+    const original = bindChatReadAloud('original');
+    try {
+      original.update([reply]);
+      await start(reply);
+      audio.metadata();
+      audio.dispatchEvent(new Event('ended'));
+      await vi.waitFor(() => expect(store()).toMatchObject({ currentChunkIndex: 1, status: 'playing' }));
+      audio.metadata();
+      audio.currentTime = 3.5;
+      const switched = bindChatReadAloud('other');
+      expect(audio.paused).toBe(true);
+      expect(store().status).toBe('idle');
+      const newReply = { ...input('while-away', 'new reply'), source: { ...input('while-away').source, conversationId: 'original' } };
+      original.update([reply, newReply]);
+      switched.dispose();
+      await vi.waitFor(() => expect(store()).toMatchObject({ currentChunkIndex: 1, status: 'playing' }));
+      audio.metadata();
+      expect(audio.currentTime).toBe(3.5);
+      audio.dispatchEvent(new Event('ended'));
+      await vi.waitFor(() => expect(store()).toMatchObject({ source: newReply.source, status: 'playing' }));
+    } finally {
+      resetChatReadAloud('original');
+      original.dispose();
+    }
+  });
+
+  it('keeps an explicitly paused reply paused on return', async () => {
+    const chat = bindChatReadAloud('paused');
+    const reply = { ...input('paused', 'one'), source: { ...input('paused').source, conversationId: 'paused' } };
+    try {
+      chat.update([reply]);
+      await start(reply);
+      store().pause();
+      const plays = audio.play.mock.calls.length;
+      const other = bindChatReadAloud('other');
+      other.dispose();
+      await vi.waitFor(() => expect(store().status).toBe('paused'));
+      expect(audio.play).toHaveBeenCalledTimes(plays);
+    } finally {
+      resetChatReadAloud('paused');
+      chat.dispose();
+    }
+  });
 });
