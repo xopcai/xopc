@@ -236,7 +236,7 @@ struct UserUnderstandingView: View {
                 Text("暂无相关记忆").foregroundStyle(.secondary)
             }
             ForEach(summary.recent.prefix(3)) { item in
-                memoryRow(item)
+                UserMemoryRow(configuration: configuration, item: item, onUpdated: memoryUpdated)
             }
             Button("查看全部记忆") { selectSection(1) }
         }
@@ -269,7 +269,7 @@ struct UserUnderstandingView: View {
             .accessibilityIdentifier("about-you-filter-tabs")
             .listRowBackground(Color.clear)
         ForEach(assertions) { item in
-            memoryRow(item)
+            UserMemoryRow(configuration: configuration, item: item, onUpdated: memoryUpdated)
         }
         if let nextCursor {
             Button("加载更多") { Task { await loadAssertions(cursor: nextCursor) } }
@@ -293,52 +293,13 @@ struct UserUnderstandingView: View {
         if !workItems.isEmpty {
             Section {
                 ForEach(workItems) { item in
-                    workRow(item)
+                    WorkMemoryRow(item: item, expandedWorkID: $expandedWorkID)
                 }
                 if let workCursor, !workFailed {
                     Button("加载更多") { Task { await loadWork(cursor: workCursor) } }
                         .disabled(workLoading)
                 }
             }
-        }
-    }
-
-    private func workRow(_ item: MobileWorkMemory) -> some View {
-        DisclosureGroup(isExpanded: Binding(get: { expandedWorkID == item.id }, set: { expanded in
-            expandedWorkID = expanded ? item.id : nil
-        })) {
-            Text(item.content).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(workMemoryKind(item.kind)).fontWeight(.semibold).foregroundStyle(theme.action)
-                    Text(userMemoryScope(item.scope.type)).foregroundStyle(.secondary)
-                }
-                .font(.footnote)
-                if expandedWorkID != item.id {
-                    Text(item.content).lineLimit(3)
-                }
-                Text(item.updatedAt.millisecondsDate, format: .dateTime.year().month().day())
-                    .font(.caption).foregroundStyle(.secondary)
-                if item.status != "active" {
-                    Text(item.status == "stale" ? "已过时" : "待你确认")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .padding(.vertical, 6)
-        }
-        .accessibilityIdentifier("work-memory-\(item.id)")
-    }
-
-    private func workMemoryKind(_ kind: String) -> LocalizedStringKey {
-        switch kind {
-        case "decision": "决定"
-        case "task_lesson": "经验"
-        case "work_thread": "工作线索"
-        case "project_fact", "workspace_fact": "事实"
-        case "commitment": "承诺"
-        case "open_question": "待解决问题"
-        default: "记忆"
         }
     }
 
@@ -388,23 +349,12 @@ struct UserUnderstandingView: View {
         savedSection = selection
     }
 
-    private func memoryRow(_ item: MobileUserAssertion) -> some View {
-        NavigationLink {
-            UserAssertionDetailView(configuration: configuration, id: item.id) {
-                Task {
-                    await refreshSummary()
-                    if section == 1 {
-                        await loadAssertions()
-                    }
-                }
+    private func memoryUpdated() {
+        Task {
+            await refreshSummary()
+            if section == 1 {
+                await loadAssertions()
             }
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.statement).lineLimit(3)
-                Text(userMemorySource(item))
-                    .mobileTextStyle(.caption).foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 4)
         }
     }
 
@@ -423,6 +373,70 @@ struct UserUnderstandingView: View {
             nextCursor = page.nextCursor
             error = nil
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
+    }
+}
+
+private struct WorkMemoryRow: View {
+    let item: MobileWorkMemory
+    @Binding var expandedWorkID: String?
+    @Environment(\.mobileTheme) private var theme
+
+    var body: some View {
+        DisclosureGroup(isExpanded: Binding(get: { expandedWorkID == item.id }, set: { expanded in
+            expandedWorkID = expanded ? item.id : nil
+        })) {
+            Text(item.content).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(workMemoryKind(item.kind)).fontWeight(.semibold).foregroundStyle(theme.action)
+                    Text(userMemoryScope(item.scope.type)).foregroundStyle(.secondary)
+                }
+                .font(.footnote)
+                if expandedWorkID != item.id {
+                    Text(item.content).lineLimit(3)
+                }
+                Text(item.updatedAt.millisecondsDate, format: .dateTime.year().month().day())
+                    .font(.caption).foregroundStyle(.secondary)
+                if item.status != "active" {
+                    Text(item.status == "stale" ? "已过时" : "待你确认")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .accessibilityIdentifier("work-memory-\(item.id)")
+    }
+
+    private func workMemoryKind(_ kind: String) -> LocalizedStringKey {
+        switch kind {
+        case "decision": "决定"
+        case "task_lesson": "经验"
+        case "work_thread": "工作线索"
+        case "project_fact", "workspace_fact": "事实"
+        case "commitment": "承诺"
+        case "open_question": "待解决问题"
+        default: "记忆"
+        }
+    }
+}
+
+private struct UserMemoryRow: View {
+    let configuration: GatewayConfiguration
+    let item: MobileUserAssertion
+    let onUpdated: () -> Void
+
+    var body: some View {
+        NavigationLink {
+            UserAssertionDetailView(configuration: configuration, id: item.id, onChanged: onUpdated)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.statement).lineLimit(3)
+                Text(userMemorySource(item))
+                    .mobileTextStyle(.caption).foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        }
     }
 }
 
