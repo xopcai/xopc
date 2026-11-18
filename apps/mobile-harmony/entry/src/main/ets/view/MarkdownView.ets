@@ -12,7 +12,8 @@ import { XopcHistoryMedia } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { internalMessageLink } from '../common/messageLink';
 import { normalizedFileMimeType } from '../common/filePreview';
-import { markdownReadingBlocks, markdownBlockGap, markdownPreviewBlocks, markdownPreviewBlockLines } from '../common/markdownLayout';
+import { markdownReadingBlocks, markdownBlockGap, markdownPreviewBlocks, markdownPreviewBlockLines,
+  markdownTableWidths, MARKDOWN_TABLE_CELL_INSET } from '../common/markdownLayout';
 import { markdownCodePreview } from '../common/markdownStreamParser';
 
 @ComponentV2
@@ -160,6 +161,7 @@ export struct XopcMarkdownView {
   @Local previewRequest: number = 0;
   @Local expandedBlocks: Set<string> = new Set<string>();
   @Local projection: XopcMarkdownProjection = new XopcMarkdownProjection();
+  @Local tableViewport: number = 0;
   aboutToAppear(): void { this.syncContent(); }
   @Monitor('content')
   syncContent(): void { this.projection.update(this.content); }
@@ -197,6 +199,21 @@ export struct XopcMarkdownView {
   private listMarker(block: XopcMarkdownBlock): string { return block.text.match(/^(?:[•☐☑]|\d+\.)\s+/)?.[0] || ''; }
   private tableRows(block: XopcMarkdownBlock): XopcMarkdownTableRow[] {
     return this.expandedBlocks.has(block.id) ? block.rows || [] : (block.rows || []).slice(0, 40);
+  }
+  @Computed get tableColumns(): Map<string, number[]> {
+    const widths = new Map<string, number[]>();
+    if (this.previewLineLimit > 0) return widths;
+    const context = this.getUIContext();
+    const measure = context.getMeasureUtils();
+    for (const block of this.blocks) {
+      if (block.kind !== 'table') continue;
+      widths.set(block.id, markdownTableWidths(this.tableRows(block), this.tableViewport,
+        (text: string, strong: boolean): number => context.px2vp(measure.measureText({
+          textContent: text, fontSize: 16,
+          fontWeight: strong ? (this.compactReading ? FontWeight.Medium : FontWeight.Bold) : FontWeight.Normal
+        }))));
+    }
+    return widths;
   }
   private toggleBlock(id: string): void {
     const expanded = new Set<string>(Array.from(this.expandedBlocks));
@@ -261,7 +278,8 @@ export struct XopcMarkdownView {
                       compactReading: this.compactReading,
                       onReading: this.onReading,
                       onOpenLink: (href: string): void => { this.openInternalLink(href); } })
-                      .width(168).padding(10)
+                      .width(this.tableColumns.get(item.item.id)?.[cell.index] ?? 64)
+                      .padding({ left: MARKDOWN_TABLE_CELL_INSET, right: MARKDOWN_TABLE_CELL_INSET, top: 8, bottom: 8 })
                   }).key((cell: XopcMarkdownCell): string => cell.id)
                 }.alignItems(VerticalAlign.Top).backgroundColor(row.item.header ? this.colors.grouped : this.colors.panel)
                   .margin({ bottom: 4 })
@@ -296,5 +314,9 @@ export struct XopcMarkdownView {
           .height(0)
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
+      .onSizeChange((_before: SizeOptions, after: SizeOptions): void => {
+        const viewport = Number(after.width ?? 0);
+        if (viewport !== this.tableViewport) this.tableViewport = viewport;
+      })
   }
 }

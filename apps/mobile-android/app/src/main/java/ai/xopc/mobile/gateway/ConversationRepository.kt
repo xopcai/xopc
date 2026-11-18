@@ -118,6 +118,11 @@ data class LocalConversationDraft(
 
 private const val RECENT_CACHE_AGE = 72 * 60 * 60 * 1000L
 
+data class NextTurnSuggestion(
+  val id: String, val conversationId: String, val transcriptId: String, val agentId: String,
+  val locale: String, val prompt: String, val expiresAt: Long,
+)
+
 /** Assistant and Conversations read the same Gateway-backed conversation data. */
 class ConversationRepository(private val gateway: GatewaySession, context: Context? = null,
   private val pendingStore: AndroidSecureStore? = context?.let(::AndroidSecureStore),
@@ -739,6 +744,23 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     val payload = response.getJSONObject("payload")
     return ModelSelection(emptyList(), payload.getString("model"), payload.getLong("configVersion"),
       payload.getString("thinkingLevel"))
+  }
+
+  fun nextTurnSuggestion(conversationId: String, locale: String): Pair<String, NextTurnSuggestion?> {
+    val response = JSONObject(gateway.request("/api/sessions/${encode(conversationId)}/next-turn-suggestion?locale=$locale"))
+    val status = response.getString("status")
+    val item = response.optJSONObject("suggestion")
+    return status to item?.let {
+      NextTurnSuggestion(it.getString("id"), it.getString("conversationId"), it.getString("transcriptId"),
+        it.getString("agentId"), it.getString("locale"), it.getString("prompt"), it.getLong("expiresAt"))
+    }
+  }
+
+  fun nextTurnSuggestionFeedback(suggestion: NextTurnSuggestion, impressionId: String,
+    event: String, edited: Boolean?) {
+    val body = JSONObject().put("suggestionId", suggestion.id).put("impressionId", impressionId).put("event", event)
+    if (edited != null) body.put("edited", edited)
+    gateway.request("/api/sessions/${encode(suggestion.conversationId)}/next-turn-suggestion-feedback", "POST", body.toString())
   }
 
   fun queuedInputs(conversationId: String): QueuedInputState {

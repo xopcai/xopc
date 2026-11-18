@@ -17,6 +17,7 @@ import ai.xopc.mobile.gateway.ClarificationRepository
 import ai.xopc.mobile.gateway.ClarificationRequest
 import ai.xopc.mobile.gateway.ClarificationCommand
 import ai.xopc.mobile.gateway.ConversationRepository
+import ai.xopc.mobile.gateway.NextTurnSuggestion
 import ai.xopc.mobile.gateway.ConversationSummary
 import ai.xopc.mobile.gateway.ConversationTaskGroup
 import ai.xopc.mobile.gateway.ConversationSharePreview
@@ -329,6 +330,7 @@ data class ConnectionUiState(
   val sendErrorDetail: String? = null,
   val sendRejected: Boolean = false,
   val pendingInput: PendingInput? = null,
+  val nextTurnSuggestion: NextTurnSuggestion? = null,
   val draftText: String = "",
   val draftRefs: List<ConversationContextRef> = emptyList(),
   val draftAttachments: List<ChatAttachment> = emptyList(),
@@ -381,6 +383,12 @@ data class ConnectionUiState(
   internal fun conversationSummary(id: String?): ConversationSummary? =
     conversations.firstOrNull { it.id == id } ?: recentConversations?.firstOrNull { it.id == id }
 }
+
+internal fun ConnectionUiState.canSuggestNextTurn(): Boolean =
+  historyTranscriptId != null && selectedConversationId != null && realtimeStatus == "connected" &&
+    !historyLoading && !sending && draftModelReady && !modelSaving && !attachmentLoading &&
+    draftText.isEmpty() && draftRefs.isEmpty() && draftAttachments.isEmpty() && pendingInput == null &&
+    activeRunId == null && queuedInputs.isEmpty() && clarification == null && connectionWait.snapshot?.wait == null
 
 data class ConnectionWaitUiState(val gatewayId: String? = null, val conversationId: String? = null,
   val snapshot: ConnectionWaitSnapshot? = null, val loading: Boolean = false, val error: Boolean = false)
@@ -520,6 +528,13 @@ class GatewayViewModel internal constructor(application: Application, private va
   private var cancelPairingJob: Job? = null
   private var gatewayProbeGeneration = 0
   private var draftWriteJob: Job? = null
+  private var suggestionJob: Job? = null
+  private var suggestionLocale: String? = null
+  private var suggestionImpression: SuggestionImpression? = null
+  private var acceptedSuggestion: SuggestionImpression? = null
+
+  private data class SuggestionImpression(val gatewayId: String, val deviceId: String, val suggestion: NextTurnSuggestion,
+    val impressionId: String = UUID.randomUUID().toString(), val acceptance: Job? = null)
   private var refWriteJob: Job? = null
   private var deleteJob: Job? = null
   private val draftWriteLock = Mutex()
@@ -2573,6 +2588,9 @@ class GatewayViewModel internal constructor(application: Application, private va
         onRunEvent = ::handleRunEvent,
         onTaskResult = { conversationId ->
           if (mutableState.value.selectedConversationId == conversationId) refreshSelectedHistory(conversationId)
+        },
+        onSuggestionChanged = { conversationId ->
+          if (conversationId == null || mutableState.value.selectedConversationId == conversationId) refreshNextTurnSuggestion()
         })
     }
   }
@@ -3863,12 +3881,89 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
+  fun observeNextTurnSuggestion(locale: String?) {
+    suggestionLocale = locale
+    refreshNextTurnSuggestion()
+  }
+
+  private fun refreshNextTurnSuggestion() {
+    suggestionJob?.cancel()
+    mutableState.update { it.copy(nextTurnSuggestion = null) }
+    val locale = suggestionLocale ?: return
+    val current = mutableState.value
+    val profile = current.profile ?: return
+    val id = current.selectedConversationId ?: return
+    val transcriptId = current.historyTranscriptId ?: return
+    if (!current.canSuggestNextTurn()) return
+    suggestionJob = viewModelScope.launch {
+      try {
+        repeat(8) {
+          val (status, suggestion) = withContext(Dispatchers.IO) { conversations.nextTurnSuggestion(id, locale) }
+          val latest = mutableState.value
+          if (latest.profile?.gatewayId != profile.gatewayId || latest.profile.deviceId != profile.deviceId ||
+            latest.selectedConversationId != id ||
+            latest.historyTranscriptId != transcriptId || !latest.canSuggestNextTurn()) return@launch
+          if (status == "ready" && suggestion != null && suggestion.conversationId == id &&
+            suggestion.transcriptId == transcriptId && suggestion.locale == locale &&
+            (latest.selectedAgentId.isEmpty() || latest.selectedAgentId == suggestion.agentId) &&
+            suggestion.expiresAt > System.currentTimeMillis() && suggestion.prompt.isNotBlank()) {
+            val previous = suggestionImpression
+            val impression = previous?.takeIf {
+              it.gatewayId == profile.gatewayId && it.deviceId == profile.deviceId && it.suggestion.id == suggestion.id
+            } ?: SuggestionImpression(profile.gatewayId, profile.deviceId, suggestion)
+            suggestionImpression = impression
+            mutableState.update { it.copy(nextTurnSuggestion = suggestion) }
+            if (impression !== previous) reportSuggestion(impression, "shown")
+            delay((suggestion.expiresAt - System.currentTimeMillis()).coerceAtLeast(0))
+            mutableState.update { it.copy(nextTurnSuggestion = null) }
+            return@launch
+          }
+          if (status != "pending") return@launch
+          delay(600)
+        }
+      } catch (error: CancellationException) {
+        throw error
+      } catch (_: Exception) {
+        // The ordinary placeholder is available on older or disconnected Gateways.
+      }
+    }
+  }
+
+  fun acceptNextTurnSuggestion(id: String): String? {
+    val impression = suggestionImpression ?: return null
+    val current = mutableState.value
+    val suggestion = current.nextTurnSuggestion ?: return null
+    if (!current.canSuggestNextTurn() || id != suggestion.id || impression.suggestion.id != id ||
+      current.profile?.gatewayId != impression.gatewayId || current.profile.deviceId != impression.deviceId ||
+      current.selectedConversationId != suggestion.conversationId ||
+      current.historyTranscriptId != suggestion.transcriptId || suggestion.expiresAt <= System.currentTimeMillis()) return null
+    acceptedSuggestion = impression.copy(acceptance = reportSuggestion(impression, "accepted"))
+    mutableState.update { it.copy(nextTurnSuggestion = null) }
+    return suggestion.prompt
+  }
+
+  private fun reportSuggestion(impression: SuggestionImpression, event: String, edited: Boolean? = null): Job =
+    viewModelScope.launch(Dispatchers.IO) {
+      try {
+        impression.acceptance?.join()
+        val profile = session.currentProfile()
+        if (profile?.gatewayId == impression.gatewayId && profile.deviceId == impression.deviceId) {
+          conversations.nextTurnSuggestionFeedback(impression.suggestion, impression.impressionId, event, edited)
+        }
+      } catch (error: CancellationException) {
+        throw error
+      } catch (_: Exception) {
+        // Feedback is optional.
+      }
+    }
+
   fun changeDraft(text: String) {
     val current = mutableState.value
     val id = current.selectedConversationId ?: return
     val gatewayId = current.profile?.gatewayId ?: return
     if (current.pendingDeleteId == id || current.historyLoading) return
     if (text.length > 32_000) return
+    if (text.isEmpty()) acceptedSuggestion = null
     mutableState.update { it.copy(draftText = text) }
     draftWriteJob?.cancel()
     draftWriteJob = viewModelScope.launch {
@@ -4578,6 +4673,10 @@ class GatewayViewModel internal constructor(application: Application, private va
       mutableState.value.taskScopeLoading ||
       (!modelPrepared && !mutableState.value.draftModelReady) ||
       mutableState.value.realtimeStatus != "connected") return false
+    val accepted = acceptedSuggestion?.takeIf { !preserveDraft && content.isNotBlank() &&
+      it.gatewayId == mutableState.value.profile?.gatewayId && it.deviceId == mutableState.value.profile?.deviceId &&
+      it.suggestion.conversationId == id &&
+      it.suggestion.transcriptId == mutableState.value.historyTranscriptId }
     val clientMessageId = mutableState.value.pendingInput?.clientMessageId ?: UUID.randomUUID().toString()
     val optimisticText = content.ifBlank { (attachments.map { it.name } + refs.map { it.title }).joinToString("\n") }
     mutableState.update { it.copy(sending = true, sendError = false, sendErrorDetail = null,
@@ -4595,6 +4694,10 @@ class GatewayViewModel internal constructor(application: Application, private va
         val runId = runInterruptible(Dispatchers.IO) {
           if (taskId != null) conversations.sendTask(taskId, id, content, realtime.turnClaim(), refs, attachments, clientMessageId)
           else conversations.send(id, content, realtime.turnClaim(), refs, attachments, clientMessageId)
+        }
+        if (accepted != null) {
+          if (acceptedSuggestion == accepted) acceptedSuggestion = null
+          reportSuggestion(accepted, "submitted", content.trim() != accepted.suggestion.prompt)
         }
         if (mutableState.value.selectedConversationId == id) {
           discardStream()

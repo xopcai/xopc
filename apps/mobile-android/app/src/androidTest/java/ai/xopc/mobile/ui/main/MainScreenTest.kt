@@ -20,6 +20,7 @@ import ai.xopc.mobile.gateway.ConversationShareAttachment
 import ai.xopc.mobile.gateway.ConversationSharePreview
 import ai.xopc.mobile.gateway.ConversationShare
 import ai.xopc.mobile.gateway.GatewayProfile
+import ai.xopc.mobile.gateway.NextTurnSuggestion
 import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
 import ai.xopc.mobile.gateway.ConversationAgent
@@ -1098,6 +1099,28 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("assistant-actions-toggle").assertExists()
     composeTestRule.onNodeWithTag("assistant-send").assertDoesNotExist()
     composeTestRule.onNodeWithTag("assistant-stop").assertDoesNotExist()
+  }
+
+  @Test fun nextTurnSuggestionFillsDraftWithoutSending() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val prompt = "Turn the previous response into three steps"
+    val suggestion = NextTurnSuggestion("suggestion", "test", "transcript", "main", "en", prompt, Long.MAX_VALUE)
+    val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = "test",
+      historyTranscriptId = "transcript", realtimeStatus = "connected", nextTurnSuggestion = suggestion))
+    val sent = AtomicReference<String?>(null)
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {}, connection = state.value,
+        onAcceptSuggestion = { id -> state.value.nextTurnSuggestion?.takeIf { it.id == id }?.prompt },
+        onDraftChange = { state.value = state.value.copy(draftText = it) },
+        onSendMessage = { sent.set(state.value.draftText) })
+    }
+    composeTestRule.onNodeWithTag("assistant-send").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-next-turn-suggestion").performClick()
+    composeTestRule.onNodeWithTag("assistant-next-turn-suggestion").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("assistant-input").assertTextContains(prompt)
+    assertEquals(null, sent.get())
+    composeTestRule.onNodeWithTag("assistant-send").assertIsEnabled().performClick()
+    assertEquals(prompt, sent.get())
   }
 
   @Test fun assistantFirstKeystrokeExpandsComposerWithoutLosingEditorFocus() {

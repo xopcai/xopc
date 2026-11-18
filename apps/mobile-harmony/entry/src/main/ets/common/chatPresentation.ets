@@ -1,5 +1,5 @@
 import { XopcChatRow, XopcChatBlock } from '../model/chat';
-import { mergeAssistantRows, chatAnswerText } from './chatRichContent';
+import { mergeAssistantRows, chatAnswerText, chatIsAnswerBlock, refreshChatRow } from './chatRichContent';
 import { chatStageStatus } from './chatLiveActivity';
 
 /** Progress and rich results need a readable container even before answer text exists. */
@@ -28,7 +28,14 @@ export function chatPresentationRows(history: XopcChatRow[], live: XopcChatRow |
   const unfinishedTail = tail?.role === 'assistant' && !tail.outcome && !chatAnswerText(tail);
   if (live) {
     if (tail?.role === 'assistant' && !distinctTurn && (sameTurn || unfinishedTail)) {
-      const merged = mergeAssistantRows([copyPresentationRow(tail), copyPresentationRow(live)])[0];
+      const saved = copyPresentationRow(tail);
+      const savedAnswer = chatAnswerText(saved);
+      const liveAnswer = chatAnswerText(live);
+      if (sameTurn && savedAnswer && liveAnswer.startsWith(savedAnswer) && saved.blocks) {
+        saved.blocks = saved.blocks.filter((block: XopcChatBlock): boolean => !chatIsAnswerBlock(block));
+        refreshChatRow(saved);
+      }
+      const merged = mergeAssistantRows([saved, copyPresentationRow(live)])[0];
       merged.live = live.live; merged.progress = live.progress;
       merged.activity = live.activity; merged.activityUpdatedAtMs = live.activityUpdatedAtMs;
       merged.activityTools = live.activityTools;

@@ -198,6 +198,7 @@ export struct XopcChatView {
   @Local sheetMode: string = 'actions';
   @Local referenceKind: string = 'note';
   @Local draft: string = '';
+  @Local draftComposing: boolean = false;
   @Local editingQueuedId: string = '';
   @Local editingTurnId: string = '';
   @Local showVoice: boolean = false;
@@ -207,6 +208,21 @@ export struct XopcChatView {
   @Local voiceDestination: XopcVoiceRecordingDestination = 'send';
   @Computed get expandedComposer(): boolean {
     return composerExpanded(this.draft, this.attachments.length, this.refs.length, !!this.palette.range);
+  }
+  @Computed get nextTurnEligible(): boolean {
+    return this.activePage && this.layout.foreground && this.phonePage === 0 && !this.panelOpen && !this.sheetOpen
+      && !this.restoringDraft && !this.chat.loading && !this.chat.cachedHistory && !this.chat.localDraft
+      && this.chat.connection === 'connected' && !this.chat.sending && !this.chat.runId && !!this.chat.transcriptId
+      && this.draft.length === 0 && !this.draftComposing && !this.attachments.length && !this.refs.length
+      && !this.pickingAttachment && !this.showVoice && this.voice.state === 'idle'
+      && !this.editingQueuedId && !this.editingTurnId && !this.options.queued.length
+      && !this.prompt.prompt && !this.connectionWait.snapshot?.wait;
+  }
+  @Computed get nextTurnLocale(): string { return appSettings.effectiveLanguage().startsWith('zh') ? 'zh' : 'en'; }
+  @Computed get nextTurnPrompt(): string {
+    const item = this.chat.nextTurnSuggestion;
+    return this.nextTurnEligible && item && item.conversationId === this.chat.selectedId
+      && item.transcriptId === this.chat.transcriptId && item.locale === this.nextTurnLocale ? item.prompt : '';
   }
   @Computed get hasPayload(): boolean { return composerHasPayload(this.draft, this.attachments.length, this.refs.length); }
   @Computed get sheetHeight(): number {
@@ -417,6 +433,20 @@ export struct XopcChatView {
     this.drafts.save(this.draftScope, { text: this.draft, refs: this.refs, files: this.attachments, intakeReceipts: this.intakeReceipts })
       .catch((_error: Error): void => { if (this.visible) this.chat.error = 'DRAFT_SAVE_FAILED'; });
   }
+  @Monitor('nextTurnEligible', 'nextTurnLocale', 'chat.selectedId', 'chat.transcriptId', 'chat.agentId',
+    'chat.suggestionRevision', 'options.modelId')
+  onNextTurnTarget(): void { this.chat.observeNextTurnSuggestion(this.nextTurnEligible ? this.nextTurnLocale : ''); }
+
+  private fillNextTurnSuggestion(): void {
+    const item = this.chat.nextTurnSuggestion;
+    if (!this.nextTurnPrompt || !item) return;
+    const text = this.chat.acceptNextTurnSuggestion(item.id);
+    if (!text) return;
+    this.draft = text;
+    this.cursor = text.length;
+    this.editor.caretPosition(this.cursor);
+  }
+
   @Monitor('draft', 'refs', 'attachments')
   onDraftChange(): void {
     this.voice.dismissError(); this.reader.dismissError(); this.composerNotice.clear();
@@ -435,7 +465,7 @@ export struct XopcChatView {
     this.resetMessagePosition(); this.palette.close();
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     const generation = ++this.draftGeneration;
-    this.restoringDraft = true; this.draftScope = scope; this.intakeReceipts = []; this.draft = ''; this.refs = []; this.attachments = [];
+    this.restoringDraft = true; this.draftScope = scope; this.intakeReceipts = []; this.draftComposing = false; this.draft = ''; this.refs = []; this.attachments = [];
     this.editingQueuedId = ''; this.editingTurnId = '';
     try {
       const saved = await this.drafts.read(scope);
@@ -1842,20 +1872,42 @@ export struct XopcChatView {
           }.id('chat-voice-pad').layoutWeight(1)
         } else {
           // Keep one editor node across compact/expanded states so the IME and caret survive the first keystroke.
-          TextArea({ text: this.draft, placeholder: this.personalConversation
-            ? $r('app.string.chat_ask_personal', this.personalAgent?.displayName ?? '') : this.scopedProjectName ? $r('app.string.project_chat_placeholder') : $r('app.string.message_hint'),
-            controller: this.editor })
-            .id('chat-composer').layoutWeight(1).constraintSize({ minHeight: COMPOSER_INPUT_MIN, maxHeight: this.expandedComposer ? COMPOSER_INPUT_MAX : COMPOSER_INPUT_MIN })
-            .padding({ left: 4, right: 4, top: this.expandedComposer ? 5 : 10, bottom: this.expandedComposer ? 5 : 10 }).lineHeight(20)
-            .enabled(!this.restoringDraft).backgroundColor(Color.Transparent)
-            .fontSize(16).fontColor(this.colors.foreground)
-            .placeholderColor(this.colors.light && !this.panelOpen ? this.colors.tertiary : this.colors.chat.secondary)
-            .onAppear((): void => { this.focusMountedComposer(); })
-            .onEditChange((editing: boolean): void => { if (editing) { this.setPanel(false); this.taskOverviewOpen = false; } })
-            .onChange((value: string): void => { this.draft = value; this.cursor = value.length; this.palette.update(value, this.cursor, this.chat.selectedId, appSettings.effectiveLanguage()); })
-            .onTextSelectionChange((start: number, end: number): void => {
-              this.cursor = end; if (start === end) this.palette.update(this.draft, end, this.chat.selectedId, appSettings.effectiveLanguage()); else this.palette.close();
-            })
+          Stack({ alignContent: Alignment.Start }) {
+            TextArea({ text: this.draft, placeholder: this.nextTurnPrompt ? '' : this.personalConversation
+              ? $r('app.string.chat_ask_personal', this.personalAgent?.displayName ?? '') : this.scopedProjectName ? $r('app.string.project_chat_placeholder') : $r('app.string.message_hint'),
+              controller: this.editor })
+              .id('chat-composer').width('100%').constraintSize({ minHeight: COMPOSER_INPUT_MIN, maxHeight: this.expandedComposer ? COMPOSER_INPUT_MAX : COMPOSER_INPUT_MIN })
+              .padding({ left: 4, right: 4, top: this.expandedComposer ? 5 : 10, bottom: this.expandedComposer ? 5 : 10 }).lineHeight(20)
+              .enabled(!this.restoringDraft).backgroundColor(Color.Transparent)
+              .fontSize(16).fontColor(this.colors.foreground)
+              .placeholderColor(this.colors.light && !this.panelOpen ? this.colors.tertiary : this.colors.chat.secondary)
+              .onAppear((): void => { this.focusMountedComposer(); })
+              .onEditChange((editing: boolean): void => {
+                if (editing) { this.setPanel(false); this.taskOverviewOpen = false; }
+                else this.draftComposing = false;
+              })
+              .onChange((value: string, preview?: PreviewText): void => {
+                this.draftComposing = !!preview?.value;
+                if (!value && !this.draftComposing) this.chat.clearAcceptedSuggestion();
+                this.draft = value; this.cursor = value.length;
+                this.palette.update(value, this.cursor, this.chat.selectedId, appSettings.effectiveLanguage());
+              })
+              .onTextSelectionChange((start: number, end: number): void => {
+                this.cursor = end; if (start === end) this.palette.update(this.draft, end, this.chat.selectedId, appSettings.effectiveLanguage()); else this.palette.close();
+              })
+            if (this.nextTurnPrompt) {
+              Button({ type: ButtonType.Normal }) {
+                Row({ space: 4 }) {
+                  Text(this.nextTurnPrompt).layoutWeight(1).fontSize(16).fontColor(this.colors.secondary)
+                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  Text('↳').fontSize(14).fontColor(this.colors.secondary)
+                }
+              }.id('chat-next-turn-suggestion').width('87%').height(44).padding({ left: 4, right: 4 })
+                .backgroundColor(Color.Transparent)
+                .accessibilityText($r('app.string.chat_fill_suggestion', this.nextTurnPrompt))
+                .onClick((): void => { this.fillNextTurnSuggestion(); })
+            }
+          }.layoutWeight(1)
         }
         if (!this.expandedComposer) { this.composerRightActions() }
       }.width('100%').padding({ left: this.expandedComposer ? 12 : 4, right: this.expandedComposer ? 12 : 4,

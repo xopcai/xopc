@@ -18,6 +18,17 @@ final class AssistantState {
     private(set) var isSending = false
     private(set) var runID: String?
     private(set) var musicJobsRevision = 0
+    private(set) var suggestionRevision = 0
+    private(set) var nextTurnSuggestion: NextTurnSuggestion?
+    private var suggestionImpression: SuggestionImpression?
+    var acceptedSuggestion: SuggestionImpression?
+
+    struct SuggestionImpression {
+        let suggestion: NextTurnSuggestion
+        let id = UUID()
+        let gateway: GatewayClient
+        var acceptance: Task<Void, Never>?
+    }
     private(set) var contextSummary: ConversationContextSummary?
     private(set) var isLoadingContext = false
     private(set) var contextError: String?
@@ -84,6 +95,9 @@ final class AssistantState {
         contextGeneration += 1
         messages = []
         failedSend = nil
+        nextTurnSuggestion = nil
+        suggestionImpression = nil
+        acceptedSuggestion = nil
         streamBuffer.reset()
         streamGap = false
         executionActivity = []
@@ -635,5 +649,65 @@ private extension AssistantState {
     func appendActivity(id: String, title: String, status: String) {
         guard !executionActivity.contains(where: { $0.id == id }) else { return }
         executionActivity.append(.init(id: id, title: title, status: status))
+    }
+}
+
+extension AssistantState {
+    func invalidateNextTurnSuggestion() {
+        nextTurnSuggestion = nil
+        suggestionRevision += 1
+    }
+
+    func observeNextTurnSuggestion(in conversation: ConversationSelection?, transcriptID: String?,
+                                   locale: String, using gateway: GatewayClient) async {
+        guard !Task.isCancelled else { return }
+        nextTurnSuggestion = nil
+        guard let conversation, let transcriptID else { return }
+        let revision = suggestionRevision
+        do {
+            for _ in 0..<8 {
+                try Task.checkCancellation()
+                let response = try await gateway.fetchNextTurnSuggestion(conversationID: conversation.id, locale: locale)
+                try Task.checkCancellation()
+                guard isCurrentConversation(conversation.id), historyTranscriptID(for: conversation) == transcriptID,
+                      suggestionRevision == revision else { return }
+                if response.status == "ready", let suggestion = response.suggestion,
+                   suggestion.conversationId == conversation.id, suggestion.transcriptId == transcriptID,
+                   suggestion.agentId == conversation.agentId, suggestion.locale == locale, suggestion.isCurrent,
+                   !suggestion.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if suggestionImpression?.suggestion.id != suggestion.id ||
+                        suggestionImpression?.gateway.configuration != gateway.configuration {
+                        let impression = SuggestionImpression(suggestion: suggestion, gateway: gateway)
+                        suggestionImpression = impression
+                        Task { await gateway.reportNextTurnSuggestion(suggestion, impressionID: impression.id, event: "shown") }
+                    }
+                    nextTurnSuggestion = suggestion
+                    let now = Int64(Date.now.timeIntervalSince1970 * 1000)
+                    try await Task.sleep(for: .milliseconds(max(0, suggestion.expiresAt - now)))
+                    nextTurnSuggestion = nil
+                    return
+                }
+                guard response.status == "pending" else { return }
+                try await Task.sleep(for: .milliseconds(600))
+            }
+        } catch { /* The ordinary placeholder also covers unavailable Gateways. */ }
+    }
+
+    func visibleNextTurnSuggestion(using configuration: GatewayConfiguration) -> NextTurnSuggestion? {
+        guard suggestionImpression?.gateway.configuration == configuration else { return nil }
+        return nextTurnSuggestion
+    }
+
+    func acceptNextTurnSuggestion(_ suggestion: NextTurnSuggestion, using configuration: GatewayConfiguration) -> String? {
+        guard suggestion == visibleNextTurnSuggestion(using: configuration), suggestion.isCurrent,
+              var impression = suggestionImpression, impression.suggestion.id == suggestion.id else { return nil }
+        let gateway = impression.gateway
+        let id = impression.id
+        impression.acceptance = Task {
+            await gateway.reportNextTurnSuggestion(suggestion, impressionID: id, event: "accepted")
+        }
+        acceptedSuggestion = impression
+        nextTurnSuggestion = nil
+        return suggestion.prompt
     }
 }

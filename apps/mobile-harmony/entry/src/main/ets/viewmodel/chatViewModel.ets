@@ -1,10 +1,11 @@
 import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
-import { XopcAgentReaction, XopcChatRow, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload } from '../model/chat';
+import { gatewaySession } from '../service/gatewaySession';
+import { XopcAgentReaction, XopcChatRow, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory, XopcStreamPayload, XopcNextTurnSuggestion } from '../model/chat';
 import { dedupeChatHistory, chatHistoryOverlap } from '../common/chatHistory';
 import { XopcEvent } from '../model/realtime';
 import { historyRows } from '../common/chatProtocol';
-import { mergeAssistantRows, chatAttachments, refreshChatRow } from '../common/chatRichContent';
+import { mergeAssistantRows, chatAnswerText, chatAttachments, refreshChatRow } from '../common/chatRichContent';
 import { reduceChatStream } from '../common/chatStream';
 import { XopcChatStreamBuffer } from '../common/chatStreamBuffer';
 import { reduceChatSnapshotActivity } from '../common/chatLiveActivity';
@@ -18,6 +19,14 @@ interface XopcPendingChatSend {
   refs: XopcContextRef[];
   delivery: string;
   queuedWhileRunning: boolean;
+  suggestion?: XopcSuggestionImpression;
+}
+
+interface XopcSuggestionImpression {
+  suggestion: XopcNextTurnSuggestion;
+  scope: string;
+  id: string;
+  acceptance?: Promise<void>;
 }
 
 interface XopcChatHttpFailure { status?: number; }
@@ -52,6 +61,12 @@ export class XopcChatViewModel {
   @Trace localDraft: boolean = false;
   @Trace hasOlder: boolean = false;
   @Trace auxiliaryRevision: number = 0;
+  @Trace suggestionRevision: number = 0;
+  @Trace nextTurnSuggestion?: XopcNextTurnSuggestion;
+  private suggestionGeneration: number = 0;
+  private suggestionTimer: number = -1;
+  private suggestionImpression?: XopcSuggestionImpression;
+  private acceptedSuggestion?: XopcSuggestionImpression;
   @Trace musicJobsRevision: number = 0;
   private repository: XopcChatRepository = new XopcChatRepository();
   private selection: number = 0;
@@ -91,6 +106,10 @@ export class XopcChatViewModel {
     };
     realtimeClient.onEvent = (event: XopcEvent): void => { this.event(event); };
     realtimeClient.onGap = (topic: string): void => {
+      if (topic === 'sessions') {
+        this.observeNextTurnSuggestion('');
+        this.suggestionRevision++;
+      }
       if (!this.loading) this.recover(topic === 'run:' + this.runId);
     };
     try { realtimeClient.turnClaim(); this.connection = 'connected'; } catch (_) {}
@@ -102,6 +121,7 @@ export class XopcChatViewModel {
   deactivate(): void {
     this.flushStream();
     clearTimeout(this.refreshTimer); this.refreshTimer = -1;
+    this.observeNextTurnSuggestion('');
     if (XopcChatViewModel.owner !== this) return;
     if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
     realtimeClient.onState = (_state: string): void => {};
@@ -146,9 +166,12 @@ export class XopcChatViewModel {
   async open(id: string): Promise<void> {
     this.flushStream();
     if (this.sending || this.disposed || !id) return;
+    clearTimeout(this.refreshTimer); this.refreshTimer = -1;
     this.prefetchKey = ''; this.prefetchedHistory = undefined;
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
+    this.clearAcceptedSuggestion();
+    this.observeNextTurnSuggestion('');
     this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
     this.liveReaction = undefined; this.animatedReactionEntry = ''; this.firstAnswerRun = '';
     this.reactionsAvailable = undefined; this.reactionsAllowed = true;
@@ -214,7 +237,7 @@ export class XopcChatViewModel {
         this.completedActivityRunId = previousRun;
         this.snapshotMode = true;
         this.trackRun('');
-        await this.loadHistory(false);
+        await this.refreshCompletedHistory(previousRun);
       } else {
         if (run.active && run.runId !== previousRun) {
           this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = '';
@@ -234,6 +257,18 @@ export class XopcChatViewModel {
     this.error = '';
     this.loading = true;
     try { await this.recover(); } finally { this.loading = false; }
+  }
+
+  private async refreshCompletedHistory(runId: string, attempt: number = 0): Promise<void> {
+    const selection = this.selection;
+    clearTimeout(this.refreshTimer); this.refreshTimer = -1;
+    await this.loadHistory(false);
+    if (this.disposed || selection !== this.selection || this.runId || this.completedActivityRunId !== runId || attempt >= 3) return;
+    this.refreshTimer = setTimeout((): void => {
+      if (selection === this.selection && !this.runId && this.completedActivityRunId === runId) {
+        void this.refreshCompletedHistory(runId, attempt + 1);
+      } else this.refreshTimer = -1;
+    }, 250 * (attempt + 1));
   }
 
   private olderPageKey(): string {
@@ -273,11 +308,11 @@ export class XopcChatViewModel {
         this.reactionsAvailable = result.session.agentReactions?.available;
         this.reactionsAllowed = result.session.agentReactions?.enabled ?? true;
       }
-      if (!older && this.hasNetworkHistory && !this.runId) this.repository.rememberHistory(this.selectedId, result).catch((_error: Error): void => {});
       const sameTranscript = !!this.transcriptId && this.transcriptId === result.session.transcriptId;
       if (!older && this.transcriptId && !sameTranscript) {
         this.executionInputIds.clear(); this.executionAssistantIds.clear();
         this.liveReaction = undefined; this.animatedReactionEntry = '';
+        if (this.completedActivityRunId && !this.runId) this.completedActivityRunId = '';
       }
       if (result.session.transcriptId) {
         this.outbox.forEach((input: XopcPendingChatSend, id: string): void => {
@@ -311,17 +346,21 @@ export class XopcChatViewModel {
         }
       });
       if (!older && this.completedActivityRunId) {
-        let completedIndex = confirmed.findIndex((row: XopcChatRow): boolean =>
-          row.role === 'assistant' && row.turnId === this.completedActivityRunId);
-        if (completedIndex < 0) {
-          const lastUserIndex = confirmed.map((row: XopcChatRow): string => row.role).lastIndexOf('user');
-          for (let index = confirmed.length - 1; index > lastUserIndex; index--) {
-            if (confirmed[index].role === 'assistant') { completedIndex = index; break; }
-          }
-        }
-        if (completedIndex >= 0) {
-          confirmed[completedIndex].executionActivity = true;
-          this.executionAssistantIds.add(confirmed[completedIndex].id);
+        const liveAnswer = this.liveRow ? chatAnswerText(this.liveRow) : '';
+        const completed = confirmed.find((row: XopcChatRow): boolean =>
+          row.role === 'assistant' && (row.turnId === this.completedActivityRunId || row.outcome?.runId === this.completedActivityRunId));
+        const tail = confirmed[confirmed.length - 1];
+        const saved = completed ?? (tail?.role === 'assistant' && !tail.turnId && !tail.outcome?.runId
+          && (!liveAnswer || chatAnswerText(tail).startsWith(liveAnswer)) ? tail : undefined);
+        const savedAnswer = saved ? chatAnswerText(saved) : '';
+        // A snapshot may only contain activity or a prefix of the answer when the run ends.
+        const partial = !!liveAnswer && savedAnswer !== liveAnswer && liveAnswer.startsWith(savedAnswer);
+        const hasCompletion = !!savedAnswer || this.liveRow?.runStatus === 'cancelled' || this.liveRow?.runStatus === 'suspended'
+          || !!saved?.outcome || !!saved?.media?.length || !!saved?.deliveries?.length || !!saved?.generatedMediaIds?.length
+          || !!saved?.blocks?.some((block): boolean => block.kind === 'review');
+        if (saved && hasCompletion && !partial) {
+          saved.executionActivity = true;
+          this.executionAssistantIds.add(saved.id);
           this.completedActivityRunId = '';
         }
       }
@@ -341,6 +380,9 @@ export class XopcChatViewModel {
         });
         this.liveRow.blocks = this.liveRow.blocks.filter((block): boolean => !block.segmentId || !savedIds.has(block.segmentId));
         this.liveRow = refreshChatRow(this.liveRow); this.streaming = this.liveRow.text;
+      }
+      if (!older && this.hasNetworkHistory && !this.runId && !this.completedActivityRunId) {
+        this.repository.rememberHistory(this.selectedId, result).catch((_error: Error): void => {});
       }
       this.title = result.session.name ?? '';
       // A local draft can be reconciled between the initial identity read and this history read.
@@ -425,6 +467,72 @@ export class XopcChatViewModel {
     }
   }
 
+  private suggestionScope(): string {
+    const profile = gatewaySession.currentProfile();
+    return profile ? JSON.stringify([profile.gatewayId, profile.deviceId]) : '';
+  }
+
+  observeNextTurnSuggestion(locale: string): void {
+    this.suggestionGeneration++;
+    clearTimeout(this.suggestionTimer);
+    this.nextTurnSuggestion = undefined;
+    if (locale && this.selectedId && this.transcriptId) {
+      void this.loadNextTurnSuggestion(this.selectedId, this.transcriptId, locale,
+        this.suggestionScope(), this.suggestionGeneration, 0);
+    }
+  }
+
+  private async loadNextTurnSuggestion(id: string, transcriptId: string, locale: string,
+    scope: string, generation: number, attempt: number): Promise<void> {
+    if (this.disposed || generation !== this.suggestionGeneration || scope !== this.suggestionScope()) return;
+    try {
+      const result = await this.repository.nextTurnSuggestion(id, locale);
+      if (this.disposed || generation !== this.suggestionGeneration || scope !== this.suggestionScope()
+        || id !== this.selectedId || transcriptId !== this.transcriptId || this.connection !== 'connected'
+        || this.sending || this.runId) return;
+      const item = result.suggestion;
+      if (result.status === 'ready' && item && item.conversationId === id && item.transcriptId === transcriptId
+        && item.locale === locale && (!this.agentId || item.agentId === this.agentId)
+        && item.expiresAt > Date.now() && item.prompt.trim()) {
+        if (this.suggestionImpression?.suggestion.id !== item.id || this.suggestionImpression.scope !== scope) {
+          const impression: XopcSuggestionImpression = { suggestion: item, id: this.repository.uuid(), scope };
+          this.suggestionImpression = impression;
+          void this.reportSuggestion(impression, 'shown');
+        }
+        this.nextTurnSuggestion = item;
+        this.suggestionTimer = setTimeout((): void => { this.nextTurnSuggestion = undefined; }, item.expiresAt - Date.now());
+      } else if (result.status === 'pending' && attempt < 7) {
+        this.suggestionTimer = setTimeout((): void => {
+          void this.loadNextTurnSuggestion(id, transcriptId, locale, scope, generation, attempt + 1);
+        }, 600);
+      }
+    } catch (_error) { /* The ordinary placeholder covers unavailable Gateways. */ }
+  }
+
+  acceptNextTurnSuggestion(id: string): string {
+    const item = this.nextTurnSuggestion;
+    const impression = this.suggestionImpression;
+    if (!item || !impression || item.id !== id || impression.suggestion.id !== id
+      || item.expiresAt <= Date.now() || item.conversationId !== this.selectedId
+      || item.transcriptId !== this.transcriptId || impression.scope !== this.suggestionScope()) return '';
+    this.acceptedSuggestion = {
+      suggestion: item, scope: impression.scope, id: impression.id,
+      acceptance: this.reportSuggestion(impression, 'accepted')
+    };
+    this.nextTurnSuggestion = undefined;
+    return item.prompt;
+  }
+
+  clearAcceptedSuggestion(): void { this.acceptedSuggestion = undefined; }
+
+  private async reportSuggestion(impression: XopcSuggestionImpression, event: string, edited?: boolean): Promise<void> {
+    if (impression.acceptance) await impression.acceptance;
+    if (impression.scope !== this.suggestionScope()) return;
+    try {
+      await this.repository.reportNextTurnSuggestion(impression.suggestion, impression.id, event, edited);
+    } catch (_error) { /* Feedback is optional. */ }
+  }
+
   async send(content: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = [],
     onEnqueued: (rowId: string) => void = (_rowId: string): void => {}): Promise<boolean> {
     if (this.disposed || this.loading || this.sending || this.cachedHistory || !this.selectedId || (!content.trim() && !attachments.length && !refs.length)) return false;
@@ -435,8 +543,13 @@ export class XopcChatViewModel {
       size: file.size, uri: file.uri || '', data: file.data, workspaceRelativePath: file.workspaceRelativePath, duration: file.duration }));
     const row: XopcChatRow = { id, role: 'user', text: content, media: chatAttachments(media, id), refs: refs.slice(), sendState: 'sending' };
     const queuedWhileRunning = !!this.runId && delivery === 'next';
+    const accepted = this.acceptedSuggestion;
+    const suggestion = accepted && accepted.scope === this.suggestionScope() && content.trim()
+      && accepted.suggestion.conversationId === this.selectedId && accepted.suggestion.transcriptId === this.transcriptId
+      ? accepted : undefined;
+    if (suggestion) this.clearAcceptedSuggestion();
     const input: XopcPendingChatSend = { conversationId: this.selectedId, transcriptId: this.transcriptId,
-      row, attachments: attachments.slice(), refs: refs.slice(), delivery, queuedWhileRunning };
+      row, attachments: attachments.slice(), refs: refs.slice(), delivery, queuedWhileRunning, suggestion };
     this.outbox.set(id, input);
     if (!queuedWhileRunning) this.rows = this.rows.concat([row]);
     this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
@@ -480,6 +593,8 @@ export class XopcChatViewModel {
       const alreadyRunning = !!this.runId;
       const run = await this.repository.send(input.conversationId, input.row.text, input.row.id, input.transcriptId,
         input.attachments, input.delivery, input.refs, this.taskId);
+      if (input.suggestion) void this.reportSuggestion(input.suggestion, 'submitted',
+        input.row.text.trim() !== input.suggestion.suggestion.prompt);
       if (selection !== this.selection) return false;
       // In-flight reads predate this acceptance and must not roll back the visible input or run.
       this.historyRequest++; this.recoveryRequest++; this.olderPending = false;
@@ -518,6 +633,11 @@ export class XopcChatViewModel {
   private event(event: XopcEvent): void {
     if (event.topic === 'gateway' || event.topic === 'sessions') {
       const state = event.data as XopcStreamEvent;
+      if (event.event === 'session.next-turn-suggestion.changed' && state.conversationId === this.selectedId) {
+        this.observeNextTurnSuggestion('');
+        this.suggestionRevision++;
+        return;
+      }
       if (event.event === 'session.agent-reaction' && state.conversationId === this.selectedId) {
         const reaction = event.data as XopcAgentReaction;
         if (!reaction.emoji || !reaction.entryId || !reaction.transcriptId || !reaction.clientMessageId
@@ -566,7 +686,7 @@ export class XopcChatViewModel {
       this.trackRun(''); this.streaming = ''; this.thinking = ''; this.tool = '';
       this.auxiliaryRevision++;
       this.snapshotMode = true;
-      this.loadHistory(false);
+      void this.refreshCompletedHistory(this.completedActivityRunId);
     } else if (event.event === 'error') {
       this.error = payload.message ?? 'RUN_FAILED';
       this.liveRow = reduceChatStream(this.liveRow || this.liveActivityRow, event.event, payload, this.runId);

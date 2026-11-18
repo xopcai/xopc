@@ -239,8 +239,13 @@ struct AssistantView<Dock: View>: View {
                 restoreComposerDraft()
                 isActionPanelExpanded = false
             }
-            .onChange(of: configuration) { attachmentError = nil; restoreComposerDraft() }
+            .onChange(of: configuration) {
+                attachmentError = nil
+                state.acceptedSuggestion = nil
+                restoreComposerDraft()
+            }
             .onChange(of: draft) {
+                if draft.isEmpty { state.acceptedSuggestion = nil }
                 attachmentError = nil
                 if readAloud.state == .failed {
                     readAloud.stop()
@@ -270,7 +275,13 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var chatObservation: some View {
-        chatLayout
+        let key = suggestionKey
+        return chatLayout
+            .task(id: key) {
+                await state.observeNextTurnSuggestion(in: key.conversationID == nil ? nil : conversation,
+                                                      transcriptID: key.transcriptID, locale: key.locale,
+                                                      using: GatewayClient(configuration: key.configuration))
+            }
             .task(id: configuration) {
                 await state.load(using: GatewayClient(configuration: configuration))
                 if let agent = state.agents.first(where: { $0.id == conversation?.agentId }) {
@@ -975,11 +986,38 @@ struct AssistantView<Dock: View>: View {
         .frame(maxWidth: .infinity)
     }
 
+    private var suggestionKey: NextTurnObservationKey {
+        let eligible = isActive && scenePhase == .active && !sidebarOpen && !showingPhone && !startingVoice
+            && !voiceMode && !isActionPanelExpanded && !state.isLoadingHistory && !state.isSending && !state.isRunActive
+            && state.clarification == nil && state.pendingInputs.isEmpty && draft.isEmpty
+            && attachments.isEmpty && references.isEmpty && !showingPhotoPicker && !showingFilePicker
+            && !showingCameraPicker && !showingReferencePicker
+        let target = conversation.flatMap {
+            !$0.isDraft && state.isCurrentConversation($0.id) &&
+            composerDraftScope == ComposerDraftStore.scope(configuration, conversationID: $0.id) ? $0 : nil
+        }
+        return .init(configuration: configuration, conversationID: eligible ? target?.id : nil,
+                     transcriptID: eligible ? state.historyTranscriptID(for: target) : nil,
+                     locale: locale.language.languageCode?.identifier == "zh" ? "zh" : "en",
+                     revision: state.suggestionRevision)
+    }
+
     private var composer: AssistantComposer {
-        AssistantComposer(
+        let key = suggestionKey
+        let suggestion = state.visibleNextTurnSuggestion(using: configuration).flatMap { item in
+            item.conversationId == key.conversationID && item.transcriptId == key.transcriptID &&
+                item.locale == key.locale && item.isCurrent ? item : nil
+        }
+        return AssistantComposer(
             configuration: configuration,
             focusAllowed: !sidebarOpen && !showingPhone && !startingVoice && !state.isLoadingHistory && state.clarification?.kind != "approval",
             personalName: isPersonalConversation ? personalAgent?.displayName : nil,
+            suggestion: suggestion,
+            onAcceptSuggestion: { item in
+                guard draft.isEmpty, suggestionKey == key, item == suggestion,
+                      let text = state.acceptNextTurnSuggestion(item, using: configuration) else { return }
+                draft = text
+            },
             draft: $draft,
             attachments: $attachments,
             references: $references,
@@ -1536,6 +1574,14 @@ private struct ConversationLoadKey: Equatable {
     let transcriptID: String?
     let isDraft: Bool?
     let isForeground: Bool
+}
+
+private struct NextTurnObservationKey: Equatable {
+    let configuration: GatewayConfiguration
+    let conversationID: String?
+    let transcriptID: String?
+    let locale: String
+    let revision: Int
 }
 
 private struct TaskResultObservationKey: Equatable {

@@ -184,6 +184,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.semantics
@@ -386,6 +388,8 @@ fun MainScreen(
   onDismissComposerErrors: (String?, String?) -> Unit = { _, _ -> },
   onChatNavigationHandled: (String) -> Unit = {},
   onDraftChange: (String) -> Unit = {},
+  onObserveSuggestion: (String?) -> Unit = {},
+  onAcceptSuggestion: (String) -> String? = { null },
   onAddDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onAddCapturedDraftAttachment: (String, String, Uri) -> Unit = { _, _, _ -> },
   onRemoveDraftAttachment: (String) -> Unit = {},
@@ -697,7 +701,8 @@ fun MainScreen(
     onRevokeConversationShare = onRevokeConversationShare,
     onScheduleDelete = onScheduleDelete, onUndoDelete = onUndoDelete,
     onDismissComposerErrors = onDismissComposerErrors,
-    onDraftChange = onDraftChange, onRemoveDraftRef = onRemoveDraftRef,
+    onDraftChange = onDraftChange, onObserveSuggestion = onObserveSuggestion,
+    onAcceptSuggestion = onAcceptSuggestion, onRemoveDraftRef = onRemoveDraftRef,
     onPickDraftAttachment = { kind ->
       val gatewayId = connection.profile?.gatewayId
       val conversationId = connection.selectedConversationId
@@ -905,6 +910,8 @@ internal fun MainContent(
   onUndoDelete: () -> Unit = {},
   onDismissComposerErrors: (String?, String?) -> Unit = { _, _ -> },
   onDraftChange: (String) -> Unit = {},
+  onObserveSuggestion: (String?) -> Unit = {},
+  onAcceptSuggestion: (String) -> String? = { null },
   onPickDraftAttachment: (String) -> Unit = {},
   onRemoveDraftAttachment: (String) -> Unit = {},
   onPreviewDraftImage: suspend (String, ChatAttachment) -> Bitmap? = { _, _ -> null },
@@ -1556,7 +1563,8 @@ internal fun MainContent(
                 inputVoice.cancel(); inputVoiceNotice.clear(); inputVoiceHeld = false
               }, onVoiceRetry = { deliverInputVoice(inputVoiceRetryDestination) },
               onDismissVoiceError = inputVoiceNotice::clear,
-              onDismissError = { onDismissComposerErrors(gatewayId, conversationId) })
+              onDismissError = { onDismissComposerErrors(gatewayId, conversationId) },
+              onObserveSuggestion = onObserveSuggestion, onAcceptSuggestion = onAcceptSuggestion)
             AnimatedVisibility(visible = assistantActionsOpen,
               enter = expandVertically(animationSpec = tween(220), expandFrom = Alignment.Bottom) +
                 fadeIn(animationSpec = tween(220)),
@@ -2249,12 +2257,36 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
   onVoiceToggle: () -> Unit, onVoiceStart: () -> Boolean,
   onVoiceMove: (Float, Float) -> Unit, onVoiceFinish: (String) -> Unit,
   onVoiceCancel: () -> Unit, onVoiceRetry: () -> Unit,
-  onDismissVoiceError: () -> Unit, onDismissError: () -> Unit) {
+  onDismissVoiceError: () -> Unit, onDismissError: () -> Unit,
+  onObserveSuggestion: (String?) -> Unit, onAcceptSuggestion: (String) -> String?) {
   val focusManager = LocalFocusManager.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val expandedComposer = composerValue.text.isNotEmpty() || connection.draftRefs.isNotEmpty() ||
     connection.draftAttachments.isNotEmpty()
   val showVoicePad = voiceMode || voicePhase != "idle"
+  val lifecycleOwner = LocalLifecycleOwner.current
+  var foreground by remember(lifecycleOwner) {
+    mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+  }
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, _ ->
+      foreground = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
+  val locale = if (LocalConfiguration.current.locales[0]?.language == "zh") "zh" else "en"
+  val canSuggest = foreground && connection.canSuggestNextTurn() && !showVoicePad && !actionsOpen &&
+    composerValue.text.isEmpty() && composerValue.composition == null
+  DisposableEffect(canSuggest, connection.profile?.gatewayId, connection.selectedConversationId,
+    connection.historyTranscriptId, connection.selectedModelId, connection.selectedAgentId, locale) {
+    if (canSuggest) onObserveSuggestion(locale)
+    onDispose { if (canSuggest) onObserveSuggestion(null) }
+  }
+  val suggestion = connection.nextTurnSuggestion?.takeIf {
+    canSuggest && it.conversationId == connection.selectedConversationId &&
+      it.transcriptId == connection.historyTranscriptId && it.locale == locale
+  }
   val toggleActions: () -> Unit = {
     if (!actionsOpen) {
       focusManager.clearFocus(force = true)
@@ -2329,11 +2361,25 @@ private fun AssistantComposer(connection: ConnectionUiState, composerValue: Text
             connection.pendingDeleteId != connection.selectedConversationId,
           decorationBox = { innerTextField ->
             Box {
-              if (composerValue.text.isEmpty()) Text(if (personalAgent == null) stringResource(R.string.assistant_input_hint)
+              if (composerValue.text.isEmpty() && suggestion == null) Text(if (personalAgent == null) stringResource(R.string.assistant_input_hint)
                 else stringResource(R.string.chat_ask_personal, personalAgent.displayName),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
               innerTextField()
+              if (suggestion != null) {
+                val label = stringResource(R.string.assistant_fill_suggestion, suggestion.prompt)
+                Row(Modifier.align(Alignment.CenterStart).padding(end = 24.dp)
+                  .clickable(role = Role.Button) {
+                    onAcceptSuggestion(suggestion.id)?.let { onComposerValueChange(TextFieldValue(it, TextRange(it.length))) }
+                  }
+                  .semantics { contentDescription = label }
+                  .testTag("assistant-next-turn-suggestion"), verticalAlignment = Alignment.CenterVertically) {
+                  Text(suggestion.prompt, Modifier.weight(1f, fill = false).clearAndSetSemantics {},
+                    style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                  Text(" ↳", Modifier.clearAndSetSemantics {}, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+              }
             }
           })
         if (!expandedComposer) {

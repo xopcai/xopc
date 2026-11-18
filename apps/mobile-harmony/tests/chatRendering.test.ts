@@ -6,6 +6,7 @@ import { XopcMarkdownProjection, XopcMarkdownInlineProjection } from '../entry/s
 import { XopcMarkdownStreamParser, markdownCodePreview } from '../entry/src/main/ets/common/markdownStreamParser.ets';
 import { markdownBlocks } from '../entry/src/main/ets/common/markdown.ets';
 import { XopcChatRenderKeys } from '../entry/src/main/ets/common/chatRenderKeys.ets';
+import { markdownTableWidths } from '../entry/src/main/ets/common/markdownLayout.ets';
 
 describe('mobile chat rendering', () => {
   it('matches full parsing at every streaming boundary and after edits', () => {
@@ -47,6 +48,17 @@ describe('mobile chat rendering', () => {
     buffer.append('a', 'hi', { messageId: 'a', delta: 'A', offset: 2 });
     buffer.append('b', '', { messageId: 'b', delta: 'B', offset: 0 });
     expect(buffer.drain().map(part => part.messageId)).toEqual(['a', 'b']);
+  });
+  it('fits compact columns and wraps prose before scrolling a dense number table', () => {
+    const measure = (text: string) => Array.from(text).reduce((width, char) => width + (char.charCodeAt(0) > 255 ? 16 : 8), 0);
+    const [table] = markdownBlocks('| # | Rate | 说明 |\n| --- | --- | --- |\n| 1 | **99.98%** | 中文说明可以在可用宽度内正常换行。 |');
+    const widths = markdownTableWidths(table.rows!, 240, measure);
+    expect(widths[0]).toBeLessThan(widths[1]);
+    expect(widths[1]).toBeGreaterThan(measure('99.98%'));
+    expect(widths[2]).toBeGreaterThan(widths[1]);
+    expect(widths.reduce((total, width) => total + width, 0)).toBeLessThanOrEqual(240);
+    const dense = markdownBlocks('| A | B | C |\n| --- | --- | --- |\n| 2026-11-18 | 99.98% | v1.16.21 |')[0];
+    expect(markdownTableWidths(dense.rows!, 130, measure).reduce((total, width) => total + width, 0)).toBeGreaterThan(130);
   });
   it('retains prefix and tail identities while content and syntax change', () => {
     const projection = new XopcMarkdownProjection();

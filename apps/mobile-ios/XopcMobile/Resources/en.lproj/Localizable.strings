@@ -1341,3 +1341,5 @@
 "回复语言" = "Reply Language";
 "默认模型失败时，按顺序尝试。" = "If the default model fails, these are tried in order.";
 "工作台" = "Workbench";
+
+"填入建议：%@" = "Fill suggestion: %@";

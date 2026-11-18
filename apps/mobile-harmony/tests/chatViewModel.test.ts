@@ -3,27 +3,68 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
   return { history: vi.fn(), list: vi.fn(), activeRun: vi.fn(), send: vi.fn(), uuid: vi.fn(),
-    replaceLatest: vi.fn(),
+    replaceLatest: vi.fn(), nextTurnSuggestion: vi.fn(), reportSuggestion: vi.fn(),
     create: vi.fn(), draft: vi.fn(), pendingInput: vi.fn(), reconcile: vi.fn(),
     subscribe: vi.fn(), unsubscribe: vi.fn(), cachedHistory: vi.fn(), rememberHistory: vi.fn() };
 });
 vi.mock('../entry/src/main/ets/repository/chatRepository.ets', () => ({ XopcChatRepository: class {
   history = mocks.history; list = mocks.list; activeRun = mocks.activeRun; send = mocks.send; uuid = mocks.uuid;
-  replaceLatest = mocks.replaceLatest;
+  replaceLatest = mocks.replaceLatest; nextTurnSuggestion = mocks.nextTurnSuggestion;
+  reportNextTurnSuggestion = mocks.reportSuggestion;
   create = mocks.create; draft = mocks.draft; pendingInput = mocks.pendingInput; reconcile = mocks.reconcile;
   cachedHistory = mocks.cachedHistory; rememberHistory = mocks.rememberHistory;
 } }));
 vi.mock('../entry/src/main/ets/service/realtimeClient.ets', () => ({ realtimeClient: {
   subscribe: mocks.subscribe, unsubscribe: mocks.unsubscribe, start() {}, turnClaim() {},
 } }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: {
+  currentProfile: () => ({ gatewayId: 'gateway', deviceId: 'device' }),
+} }));
 import { XopcChatViewModel } from '../entry/src/main/ets/viewmodel/chatViewModel.ets';
 import { realtimeClient } from '../entry/src/main/ets/service/realtimeClient.ets';
+import { chatPresentationRows } from '../entry/src/main/ets/common/chatPresentation.ets';
 
 const page = (id: string, text: string, before = '') => ({
   session: { key: id, name: id, transcriptId: id + '-transcript', messages: [{ role: 'assistant', content: text }] },
   pagination: { hasMore: !!before, nextBeforeCursor: before },
 });
 describe('chat history isolation', () => {
+  it('accepts a suggestion as text and reports submission only after the edited message is sent', async () => {
+    const chat = new XopcChatViewModel();
+    chat.selectedId = 'one'; chat.transcriptId = 't'; chat.connection = 'connected';
+    const suggestion = { id: 'suggestion', conversationId: 'one', transcriptId: 't', agentId: 'main',
+      locale: 'en', prompt: 'Follow up', expiresAt: Date.now() + 30_000 };
+    mocks.nextTurnSuggestion.mockResolvedValue({ status: 'ready', suggestion });
+    mocks.reportSuggestion.mockResolvedValue(undefined);
+    mocks.uuid.mockReturnValueOnce('impression').mockReturnValueOnce('send');
+    mocks.send.mockResolvedValue('run');
+    try {
+      chat.observeNextTurnSuggestion('en'); await Promise.resolve();
+      expect(chat.acceptNextTurnSuggestion('suggestion')).toBe('Follow up');
+      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.reportSuggestion).toHaveBeenLastCalledWith(suggestion, 'impression', 'accepted', undefined);
+      expect(await chat.send('Follow up with detail')).toBe(true);
+      expect(mocks.reportSuggestion).toHaveBeenLastCalledWith(suggestion, 'impression', 'submitted', true);
+    } finally { chat.dispose(); }
+  });
+
+  it('discards a late suggestion when the transcript changes for the same conversation', async () => {
+    const chat = new XopcChatViewModel();
+    chat.selectedId = 'one'; chat.transcriptId = 'old'; chat.connection = 'connected';
+    const suggestion = { id: 'stale', conversationId: 'one', transcriptId: 'old', agentId: 'main',
+      locale: 'en', prompt: 'Old next turn', expiresAt: Date.now() + 30_000 };
+    let finish!: (response: { status: string; suggestion: typeof suggestion }) => void;
+    mocks.nextTurnSuggestion.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    try {
+      chat.observeNextTurnSuggestion('en');
+      chat.transcriptId = 'new';
+      finish({ status: 'ready', suggestion }); await Promise.resolve();
+      expect(chat.nextTurnSuggestion).toBeUndefined();
+      expect(chat.acceptNextTurnSuggestion('stale')).toBe('');
+      expect(mocks.reportSuggestion).not.toHaveBeenCalled();
+    } finally { chat.dispose(); }
+  });
+
   it('invalidates music jobs as soon as the current run finishes the generation tool', () => {
     const chat = new XopcChatViewModel();
     chat.selectedId = 'one'; chat.runId = 'run'; chat.loading = true; chat.activate(); chat.loading = false;
@@ -561,6 +602,37 @@ describe('chat history isolation', () => {
     expect(chat.rows[0].runStatus).toBe('cancelled');
     expect(chat.rows[0].blocks?.[0].presentation).toBe('narration');
     chat.dispose();
+  });
+  it('preserves the full streamed answer until a stale and a partial completion snapshot catch up', async () => {
+    vi.useFakeTimers();
+    const chat = new XopcChatViewModel();
+    try {
+      chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+      const snapshot = (id: string, turnId: string, content: string) => ({ session: {
+        key: 'one', transcriptId: 't', messages: [{ id, role: 'assistant', turnId, content }],
+      }, pagination: { hasMore: false } });
+      const full = '已完成\n\n| 项目 | 数量 |\n| --- | --- |\n| A | 12 |\n\n最后一段';
+      mocks.history.mockResolvedValueOnce(snapshot('old', 'old-run', '上一条回复'))
+        .mockResolvedValueOnce(snapshot('saved', 'run', '已完成'))
+        .mockResolvedValueOnce(snapshot('saved', 'run', full));
+      const emit = (event: string, payload: object) => realtimeClient.onEvent({ topic: 'run:run', seq: 1, event,
+        data: { conversationId: 'one', runId: 'run', payload } });
+      emit('assistant_delta', { messageId: 'live-answer', delta: full, offset: 0 });
+      emit('assistant_message_end', { messageId: 'live-answer', presentation: 'answer' });
+      emit('run_end', { status: 'success' });
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(chat.rows[0].executionActivity).toBeUndefined();
+      expect(chat.liveRow?.text).toBe(full);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(chat.liveRow?.text).toBe(full);
+      expect(chatPresentationRows(chat.rows, chat.liveRow, chat.runId).map(row => row.text)).toEqual([full]);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(chat.liveRow).toBeUndefined();
+      expect(chat.rows).toMatchObject([{ text: full, executionActivity: true, runStatus: 'success' }]);
+      expect(mocks.history).toHaveBeenCalledTimes(3);
+      expect(mocks.rememberHistory).toHaveBeenCalledExactlyOnceWith('one', snapshot('saved', 'run', full));
+    } finally { chat.dispose(); vi.useRealTimers(); }
   });
   it('recovers ordered rich history on a gap without appending replayed deltas twice', async () => {
     vi.useFakeTimers();

@@ -56,6 +56,11 @@ actor RealtimeRunSocket {
             }
             let frame = try JSONDecoder().decode(RealtimeServerFrame.self, from: data)
             try validate(frame)
+            if conversationID != nil, frame.kind == "realtime.subscribed", frame.payload.topic == topic {
+                continuation.yield(RunStreamEvent(name: frame.kind, sequence: 0, messageId: nil, delta: nil,
+                                                  offset: nil, status: nil, errorMessage: nil, toolName: nil, stage: nil))
+                continue
+            }
             guard frame.kind == "realtime.event",
                   frame.payload.topic == topic,
                   let sequence = frame.payload.seq,
@@ -67,7 +72,8 @@ actor RealtimeRunSocket {
             lastSequence = sequence
             let eventData = frame.payload.data
             if let conversationID {
-                guard ["session.task-result", "session.agent-reaction", "session.agent-reaction.preference"].contains(eventName),
+                guard ["session.task-result", "session.agent-reaction", "session.agent-reaction.preference",
+                       "session.next-turn-suggestion.changed"].contains(eventName),
                       eventData?.conversationId == conversationID else { continue }
             }
             guard let event = frame.runEvent else { continue }

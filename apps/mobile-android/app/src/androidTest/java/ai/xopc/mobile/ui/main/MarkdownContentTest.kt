@@ -7,16 +7,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -72,6 +77,33 @@ class MarkdownContentTest {
     }
     composeTestRule.onNodeWithTag("preview").assertTextContains("Heading", substring = true)
     composeTestRule.onNodeWithTag("preview").assertTextContains("A bold answer", substring = true)
+  }
+
+  @Test fun narrowMarkdownTablesScrollOnlyWhenTheirContentsNeedMoreRoom() {
+    composeTestRule.setContent {
+      Box(Modifier.width(288.dp)) {
+        MarkdownContent("""
+          | # | Rate | Details |
+          | --- | ---: | --- |
+          | 1 | 99.98% | A longer explanation that wraps within the conversation. |
+
+          | Date | Count | Rate | Latency | Version | In | Out |
+          | --- | --- | --- | --- | --- | --- | --- |
+          | 2026-11-18 | 12,345 | 98.95% | 180ms | v1.16.21 | 23.94 MB | 11.5 MB |
+        """.trimIndent(), selectable = false)
+      }
+    }
+    val tables = composeTestRule.onAllNodesWithTag("markdown-table")
+    val compact = tables[0].fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange]
+    assertEquals(0f, compact.maxValue(), 0f)
+    val details = composeTestRule.onNodeWithText("A longer explanation that wraps within the conversation.")
+      .getUnclippedBoundsInRoot()
+    val ordinal = composeTestRule.onNodeWithText("1").getUnclippedBoundsInRoot()
+    assertTrue(details.right - details.left > ordinal.right - ordinal.left)
+    val wide = tables[1].fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange]
+    assertTrue(wide.maxValue() > 0f)
+    tables[1].performTouchInput { swipeLeft() }
+    composeTestRule.runOnIdle { assertTrue(wide.value() > 0f) }
   }
 
   @Test fun assistantMessageUsesReusableMarkdownComponent() {

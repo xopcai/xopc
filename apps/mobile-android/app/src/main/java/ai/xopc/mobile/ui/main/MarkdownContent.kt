@@ -5,11 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -361,38 +362,83 @@ private fun MarkdownList(node: Node, linkColor: Color,
   }
 }
 
+private val compactTableNumber = Regex(
+  """[+−-]?(?:\p{Sc}\s?|v)?\p{Nd}+(?:[.,:/\u00a0\u202f-]\p{Nd}+)*(?:\s?(?:[%％‰]|\p{Sc}|ms|s|KB|MB|GB|TB))?""",
+  RegexOption.IGNORE_CASE,
+)
+
+private data class MarkdownTableCell(val content: AnnotatedString, val header: Boolean, val alignment: TextAlign) {
+  val weight: FontWeight get() = if (header) FontWeight.SemiBold else FontWeight.Normal
+}
+
 @Composable
-private fun MarkdownTable(node: TableBlock, linkColor: Color,
-  onOpenLink: ((String) -> Unit)?) {
+private fun MarkdownTable(node: TableBlock, linkColor: Color, onOpenLink: ((String) -> Unit)?) {
   var expanded by remember { mutableStateOf(false) }
   val rows = remember(node) { node.children().flatMap { it.children() } }
-  Column {
-  Column(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-    .testTag("markdown-table")) {
-    (if (expanded) rows else rows.take(40)).forEach { row ->
-      Row {
-        row.children().filterIsInstance<TableCell>().forEach { cell ->
-          val content = remember(cell, linkColor, onOpenLink) {
-            buildAnnotatedString { cell.children().forEach { appendInline(it, linkColor, onOpenLink) } }
-          }
-          MarkdownSelection {
-            Text(content, modifier = Modifier.widthIn(min = 168.dp, max = 168.dp)
-              .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
-              .padding(8.dp), style = MaterialTheme.typography.bodySmall,
-              textAlign = when (cell.alignment) {
-                TableCell.Alignment.CENTER -> TextAlign.Center
-                TableCell.Alignment.RIGHT -> TextAlign.End
-                else -> TextAlign.Start
-              },
-              fontWeight = if (cell.isHeader) FontWeight.SemiBold else null)
-          }
+  val visibleRows = remember(rows, expanded, linkColor, onOpenLink) {
+    (if (expanded) rows else rows.take(40)).map { row ->
+      row.children().filterIsInstance<TableCell>().map { cell ->
+        val content = buildAnnotatedString { cell.children().forEach { appendInline(it, linkColor, onOpenLink) } }
+        val alignment = when (cell.alignment) {
+          TableCell.Alignment.CENTER -> TextAlign.Center
+          TableCell.Alignment.RIGHT -> TextAlign.End
+          else -> TextAlign.Start
         }
+        MarkdownTableCell(content, cell.isHeader, alignment)
       }
     }
   }
-  if (rows.size > 40) TextButton(onClick = { expanded = !expanded }) {
-    Text(stringResource(if (expanded) R.string.message_collapse_content else R.string.assistant_view_more))
-  }
+  val measure = rememberTextMeasurer()
+  val density = LocalDensity.current
+  val style = MaterialTheme.typography.bodySmall
+  val inset = 6.dp
+  BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val viewport = constraints.maxWidth
+    val widths = remember(visibleRows, viewport, measure, density, style) {
+      val count = visibleRows.maxOfOrNull { it.size } ?: 0
+      val minimum = IntArray(count)
+      val preferred = IntArray(count)
+      val insetPx = with(density) { inset.roundToPx() }
+      val smallest = with(density) { 28.dp.roundToPx() }
+      val wrapWidth = with(density) { 64.dp.roundToPx() }
+      val largest = with(density) { 320.dp.roundToPx() }
+      visibleRows.forEach { row ->
+        row.forEachIndexed { column, cell ->
+          val sample = cell.content.subSequence(0, minOf(cell.content.length, 64))
+          val textWidth = measure.measure(sample, style.copy(fontWeight = cell.weight), softWrap = false, maxLines = 1).size.width
+          val width = maxOf(smallest, textWidth + 2 * insetPx + 1)
+          val compact = !cell.header && cell.content.length <= 16 && compactTableNumber.matches(cell.content.text)
+          minimum[column] = maxOf(minimum[column], if (compact) width else minOf(width, wrapWidth))
+          preferred[column] = maxOf(preferred[column], if (compact) width else minOf(width, largest))
+        }
+      }
+      val minTotal = minimum.sum()
+      val extra = preferred.sum() - minTotal
+      val fraction = if (extra > 0) ((viewport - minTotal).toFloat() / extra).coerceIn(0f, 1f) else 0f
+      minimum.indices.map { column ->
+        val width = minimum[column] + ((preferred[column] - minimum[column]) * fraction).toInt()
+        with(density) { width.toDp() }
+      }
+    }
+    Column {
+      Column(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("markdown-table")) {
+        visibleRows.forEach { row ->
+          Row {
+            row.forEachIndexed { column, cell ->
+              MarkdownSelection {
+                Text(cell.content, modifier = Modifier.width(widths[column])
+                  .border(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                  .padding(horizontal = inset, vertical = 8.dp), style = style,
+                  textAlign = cell.alignment, fontWeight = cell.weight)
+              }
+            }
+          }
+        }
+      }
+      if (rows.size > 40) TextButton(onClick = { expanded = !expanded }) {
+        Text(stringResource(if (expanded) R.string.message_collapse_content else R.string.assistant_view_more))
+      }
+    }
   }
 }
 

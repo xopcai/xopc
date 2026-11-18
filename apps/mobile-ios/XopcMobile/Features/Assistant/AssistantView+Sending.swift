@@ -8,7 +8,12 @@ extension AssistantView {
         let selectedAttachments = voice.map { [$0] } ?? attachments
         let selectedReferences = voice == nil ? references : []
         let queueing = state.isRunActive
+        let candidate = state.acceptedSuggestion
+        let impression = voice == nil && candidate?.gateway.configuration == configuration &&
+            candidate?.suggestion.conversationId == conversation.id &&
+            candidate?.suggestion.transcriptId == state.historyTranscriptID(for: conversation) ? candidate : nil
         if voice == nil {
+            state.acceptedSuggestion = nil
             draft = ""
             attachments = []
             references = []
@@ -17,7 +22,7 @@ extension AssistantView {
         Task {
             let gateway = GatewayClient(configuration: configuration)
             if queueing {
-                if await !state.queueMessage(
+                if await state.queueMessage(
                     text,
                     attachments: selectedAttachments,
                     references: selectedReferences,
@@ -25,6 +30,9 @@ extension AssistantView {
                     in: conversation,
                     using: gateway
                 ) {
+                    reportSuggestedSend(impression, text: text)
+                } else {
+                    restoreSuggestionAfterFailure(impression, scope: scope)
                     restoreDraft(text, attachments: selectedAttachments, references: selectedReferences, scope: scope, voice: voice)
                 }
                 return
@@ -39,9 +47,28 @@ extension AssistantView {
                 onMaterialized: onConversationUpdated,
                 onEnqueued: { _ in followLatestAfterSend() }
             )
-            if materialized == nil {
+            if materialized != nil {
+                reportSuggestedSend(impression, text: text)
+            } else {
+                restoreSuggestionAfterFailure(impression, scope: scope)
                 restoreDraft(text, attachments: selectedAttachments, references: selectedReferences, scope: scope, voice: voice)
             }
+        }
+    }
+
+    private func restoreSuggestionAfterFailure(_ impression: AssistantState.SuggestionImpression?, scope: String) {
+        if let impression, composerDraftScope == scope, draft.isEmpty {
+            state.acceptedSuggestion = impression
+        }
+    }
+
+    private func reportSuggestedSend(_ impression: AssistantState.SuggestionImpression?, text: String) {
+        guard let impression else { return }
+        let edited = text.trimmingCharacters(in: .whitespacesAndNewlines) != impression.suggestion.prompt
+        Task {
+            await impression.acceptance?.value
+            await impression.gateway.reportNextTurnSuggestion(impression.suggestion, impressionID: impression.id,
+                                                                event: "submitted", edited: edited)
         }
     }
 
