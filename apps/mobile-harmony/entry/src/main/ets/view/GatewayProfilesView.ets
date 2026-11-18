@@ -114,6 +114,7 @@ export struct XopcGatewayProfilesView {
         }.width('100%').constraintSize({ minHeight: 24 })
       }.width('100%').padding(14)
     }.id('gateway-select-' + profile.gatewayId).width('100%').padding(0).backgroundColor(Color.Transparent)
+      .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
       .accessibilitySelected(profile.gatewayId === this.connection.activeGatewayId)
       .onClick((): void => {
         this.expandedId = this.expandedId === profile.gatewayId ? '' : profile.gatewayId;

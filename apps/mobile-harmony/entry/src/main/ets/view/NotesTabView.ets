@@ -113,7 +113,7 @@ export struct XopcNotesTabView {
             .fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
         }.width('100%').height(56).padding({ left: 16, right: 16 })
-      }.id('notes-create-text').width('100%').padding(0).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.input)
+      }.id('notes-create-text').width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.input)
         .onClick((): void => { this.pendingCreation = 'text'; this.creationSheetOpen = false; })
       Button({ type: ButtonType.Normal }) {
         Row({ space: 14 }) {
@@ -125,7 +125,7 @@ export struct XopcNotesTabView {
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
         }.width('100%').height(64).padding({ left: 16, right: 16 })
-      }.id('notes-create-voice').width('100%').padding(0).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.input)
+      }.id('notes-create-voice').width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.input)
         .onClick((): void => { this.pendingCreation = 'voice'; this.creationSheetOpen = false; })
       XopcHubRow({ heading: $r('app.string.upload'), symbol: $r('sys.symbol.arrow_up'),
         onOpen: (): void => { this.pendingCreation = 'file'; this.creationSheetOpen = false; } })
@@ -189,7 +189,7 @@ export struct XopcNotesTabView {
           .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
       }.width('100%').height(133).alignItems(HorizontalAlign.Start).padding(10)
     }.id('library-tile-' + page + '-' + id).width('100%').padding(0).backgroundColor(this.colors.panel)
-      .borderRadius(this.colors.corner(16))
+      .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
       .onClick((): void => {
         if (page === 'notes') this.openNote(id);
         else if (page === 'files') this.onNavigate({ page, itemId: id });
@@ -328,7 +328,7 @@ export struct XopcNotesTabView {
                   SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
               }.width('100%').constraintSize({ minHeight: 96 }).padding(0)
-                .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
+                .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
                 .onClick((): void => { this.openNote(item.id); }, SEGMENTED_PAGE_TAP_SLOP_VP)
             }
           }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
@@ -367,7 +367,7 @@ export struct XopcNotesTabView {
                         .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                     }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   }.width('100%').padding(14)
-                }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
+                }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
                   .onClick((): void => { this.onNavigate({ page: 'files', itemId: file.id }); }, SEGMENTED_PAGE_TAP_SLOP_VP)
               }
             }, (file: XopcFile): string => file.id)

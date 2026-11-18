@@ -1,6 +1,11 @@
 // swiftlint:disable file_length
 import CoreImage.CIFilterBuiltins
+import Photos
 import SwiftUI
+
+private let capabilityQrContext = CIContext()
+private let capabilityCompactDetent = PresentationDetent.height(420)
+private let capabilityExpandedDetent = PresentationDetent.fraction(0.82)
 
 private enum CapabilityCategory: String, CaseIterable, Identifiable {
     case plugins, skills, connections, agents, channels
@@ -69,43 +74,36 @@ struct CapabilitiesView: View {
     var onPersonalChanged: () -> Void = {}
 
     @Environment(\.locale) private var locale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("navigation.capabilities") private var category = CapabilityCategory.plugins
-    @State private var query = ""
+    @State private var queries: [CapabilityCategory: String] = [:]
+    @State private var positions: [CapabilityCategory: String] = [:]
     @State private var pages: [CapabilityCategory: CapabilityCatalogPage] = [:]
-    @State private var failed = false
-    @State private var loading = true
-    @State private var revision = 0
+    @State private var failures: Set<CapabilityCategory> = []
+    @State private var requests: [CapabilityCategory: Task<Void, Never>] = [:]
     @State private var detail: CapabilityCatalogItem?
     @State private var pendingChatPrompt: String?
     @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollViewReader { scroll in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        Color.clear.frame(height: 0).id("capability-top").accessibilityHidden(true)
-                        catalogContent
-                    }
-                    .padding(.horizontal, 18)
+            SegmentedTabs(options: CapabilityCategory.allCases.map {
+                SegmentOption(id: $0, title: $0.title, accessibilityID: "capability-category-\($0.id)", minimumWidth: 44)
+            }, selected: category, label: "capability_title", minimumSegmentWidth: 44, onSelect: selectCategory)
+            .padding(.horizontal, 18)
+            .accessibilityIdentifier("capability-categories")
+
+            TabView(selection: $category) {
+                ForEach(CapabilityCategory.allCases) { kind in
+                    catalogPage(kind).tag(kind)
                 }
-                .onChange(of: query) { _, _ in scroll.scrollTo("capability-top") }
-                .onChange(of: category) { _, _ in scroll.scrollTo("capability-top") }
-                .scrollDismissesKeyboard(.interactively)
             }
-        }
-        .background {
-            if detail == nil {
-                HorizontalSwipeCapture(reserveBackEdge: true, onEnd: { distance, _ in swipeCategory(distance) })
-            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .accessibilityIdentifier("capability-pager")
         }
         .background(mobileTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) { searchField }
-        .mobilePageTitle(Text("capability_title")) {
-            MobilePageTitleMenu(options: CapabilityCategory.allCases.map {
-                SegmentOption(id: $0, title: $0.title, accessibilityID: "capability-category-\($0.id)")
-            }, selected: category, identifier: "capability-title", onSelect: selectCategory)
-        }
+        .mobilePageTitle(Text("capability_title"))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if category == .skills {
@@ -123,7 +121,13 @@ struct CapabilitiesView: View {
                 }
             }
         }
-        .task(id: "\(category.id):\(revision):\(locale.identifier)") { await load() }
+        .onChange(of: category, initial: true) {
+            searchFocused = false
+            loadNearby()
+        }
+        .onChange(of: locale.identifier) { reloadCatalog() }
+        .onChange(of: configuration) { reloadCatalog() }
+        .onDisappear { cancelRequests() }
         .sheet(item: $detail, onDismiss: {
             guard let prompt = pendingChatPrompt else { return }
             pendingChatPrompt = nil
@@ -157,37 +161,60 @@ struct CapabilitiesView: View {
                     category == .agents ? (locale.identifier.hasPrefix("zh") ? "zh-CN" : "en") : nil)
     }
 
-    private func selectCategory(_ option: CapabilityCategory) {
-        guard option != category else { return }
-        searchFocused = false
-        query = ""
-        loading = true
-        failed = false
-        category = option
+    private var query: Binding<String> {
+        Binding(get: { queries[category, default: ""] },
+                set: { queries[category] = String($0.prefix(160)) })
     }
 
-    private func swipeCategory(_ distance: CGFloat) {
-        guard abs(distance) >= 40 else { return }
-        let categories = CapabilityCategory.allCases
-        guard let index = categories.firstIndex(of: category) else { return }
-        let next = index + (distance < 0 ? 1 : -1)
-        if categories.indices.contains(next) {
-            selectCategory(categories[next])
+    private func selectCategory(_ option: CapabilityCategory) {
+        let cases = CapabilityCategory.allCases
+        guard option != category, let from = cases.firstIndex(of: category),
+              let to = cases.firstIndex(of: option) else { return }
+        withAnimation(!reduceMotion && abs(to - from) == 1 ? .easeOut(duration: 0.23) : nil) {
+            category = option
         }
     }
 
-    @ViewBuilder private var catalogContent: some View {
-        let page = pages[category]
-        let groups = Dictionary(grouping: matches, by: \.group)
+    private func catalogPage(_ kind: CapabilityCategory) -> some View {
+        let query = queries[kind, default: ""]
+        return ScrollViewReader { scroll in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    Color.clear.frame(height: 0).id("capability-top").accessibilityHidden(true)
+                    catalogContent(kind, query: query)
+                }
+                .scrollTargetLayout()
+                .padding(.horizontal, 18)
+            }
+            .scrollPosition(id: Binding(get: { positions[kind] }, set: { positions[kind] = $0 }))
+            .onChange(of: query) { _, _ in
+                positions[kind] = "capability-top"
+                scroll.scrollTo("capability-top", anchor: .top)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .accessibilityHidden(kind != category)
+    }
+
+    @ViewBuilder private func catalogContent(_ kind: CapabilityCategory, query: String) -> some View {
+        let page = pages[kind]
+        let failed = failures.contains(kind)
+        let loading = requests[kind] != nil || (page == nil && !failed)
+        let groups = Dictionary(grouping: matches(kind, query: query), by: \.group)
         if loading, page == nil {
-            ProgressListSkeleton()
+            VStack(alignment: .leading, spacing: 10) {
+                ProgressListSkeleton()
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("加载中")
+            .accessibilityIdentifier("capability-loading")
         }
         if failed || page?.incomplete == true {
             HStack {
                 Text(failed ? "capability_load_failed" : "capability_partial")
                     .foregroundStyle(mobileTheme.secondary)
                 Spacer()
-                Button("capability_retry") { revision += 1 }
+                Button("capability_retry") { load(kind, refresh: true) }
             }
         }
         if groups.isEmpty, !loading, !failed {
@@ -195,7 +222,7 @@ struct CapabilitiesView: View {
                 Label(query.isEmpty ? "capability_empty" : "capability_no_matches", systemImage: "magnifyingglass")
             } actions: {
                 if !query.isEmpty {
-                    Button("capability_clear") { query = "" }
+                    Button("capability_clear") { queries[kind] = "" }
                 }
             }
             .accessibilityIdentifier("capability-empty")
@@ -209,22 +236,23 @@ struct CapabilitiesView: View {
                     .padding(.top, 14)
                     .padding(.bottom, 2)
                     .padding(.leading, 4)
+                    .id("capability-group-\(group)")
                 ForEach(rows) { item in
-                    catalogRow(item)
+                    catalogRow(item, kind: kind).id("capability-item-\(item.id)")
                 }
             }
         }
     }
 
-    private var matches: [CapabilityCatalogItem] {
-        guard var rows = pages[category]?.items else { return [] }
-        if category == .agents {
+    private func matches(_ kind: CapabilityCategory, query: String) -> [CapabilityCatalogItem] {
+        guard var rows = pages[kind]?.items else { return [] }
+        if kind == .agents {
             rows = rows.map { item in
                 CapabilityCatalogItem(id: item.id, name: item.agent.localizedName(locale),
                                       description: item.agent.localizedDescription(locale), group: item.group, avatar: item.avatar)
             }
         }
-        if category == .agents, let personal, personal.state == "ready" {
+        if kind == .agents, let personal, personal.state == "ready" {
             rows.removeAll { $0.id == personal.agentId }
             rows.insert(CapabilityCatalogItem(id: personal.agentId, name: personal.displayName,
                                               description: AppLocalization.string("capability_personal_description", locale: locale),
@@ -243,20 +271,21 @@ struct CapabilitiesView: View {
             : String(format: AppLocalization.string("capability_search", locale: locale), localizedCategory)
         return HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-            TextField(placeholder, text: $query)
+            TextField(placeholder, text: query)
                 .focused($searchFocused)
                 .submitLabel(.search)
                 .onSubmit { searchFocused = false }
-                .onChange(of: query) { _, value in
-                    if value.count > 160 {
-                        query = String(value.prefix(160))
-                    }
-                }
                 .accessibilityIdentifier("capability-search")
-            if !query.isEmpty {
-                Button("capability_clear", systemImage: "xmark.circle.fill") { query = "" }
-                    .labelStyle(.iconOnly)
-                    .frame(width: 44, height: 44)
+            if !query.wrappedValue.isEmpty {
+                Button { query.wrappedValue = "" } label: {
+                    Label("capability_clear", systemImage: "xmark.circle.fill")
+                        .labelStyle(.iconOnly)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.circle)
+                        .hoverEffect(.highlight)
+                }
+                .buttonStyle(MobilePressStyle(radius: 22))
+                .accessibilityIdentifier("capability-search-clear")
             }
         }
         .padding(.horizontal, 16)
@@ -273,18 +302,18 @@ struct CapabilitiesView: View {
         detail = item
     }
 
-    private func catalogRow(_ item: CapabilityCatalogItem) -> some View {
+    private func catalogRow(_ item: CapabilityCatalogItem, kind: CapabilityCategory) -> some View {
         HStack(spacing: 0) {
             Button {
                 searchFocused = false
-                if category == .agents {
+                if kind == .agents {
                     onOpenAgent(item.id, personal?.agentId == item.id)
                 } else {
                     openDetails(item)
                 }
             } label: {
                 HStack(spacing: 14) {
-                    icon(item)
+                    icon(item, kind: kind)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(verbatim: item.name).font(.body.weight(.medium)).lineLimit(1)
                         if let description = item.description, !description.isEmpty {
@@ -292,11 +321,11 @@ struct CapabilitiesView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    if category == .connections, item.group == "available" || item.group == "attention" {
+                    if kind == .connections, item.group == "available" || item.group == "attention" {
                         Text("capability_connect").font(.subheadline.weight(.medium))
                             .foregroundStyle(mobileTheme.action).padding(.trailing, 8)
                     }
-                    if category != .agents {
+                    if kind != .agents {
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                             .foregroundStyle(mobileTheme.secondary).accessibilityHidden(true)
                     }
@@ -305,19 +334,23 @@ struct CapabilitiesView: View {
                 .padding(.vertical, 12)
                 .frame(minHeight: 76)
                 .contentShape(.rect)
+                .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(18)))
+                .hoverEffect(.highlight, isEnabled: kind != .agents || item.group != "disabled")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(18)))
             .accessibilityIdentifier("capability-row-\(item.id)")
-            .disabled(category == .agents && item.group == "disabled")
+            .disabled(kind == .agents && item.group == "disabled")
 
-            if category == .agents {
+            if kind == .agents {
                 Button {
                     openDetails(item)
                 } label: {
                     Image(systemName: "ellipsis").font(.body.weight(.semibold))
                         .foregroundStyle(mobileTheme.secondary).frame(width: 44, height: 44).contentShape(.rect)
+                        .contentShape(.hoverEffect, .circle)
+                        .hoverEffect(.highlight)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MobilePressStyle(radius: 22))
                 .accessibilityLabel("设置")
                 .accessibilityValue(item.name)
                 .accessibilityIdentifier("capability-settings-\(item.id)")
@@ -327,15 +360,15 @@ struct CapabilitiesView: View {
         .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(18)))
     }
 
-    @ViewBuilder private func icon(_ item: CapabilityCatalogItem, extent: CGFloat = 48) -> some View {
-        if category == .agents, personal?.agentId == item.id {
+    @ViewBuilder private func icon(_ item: CapabilityCatalogItem, kind: CapabilityCategory, extent: CGFloat = 48) -> some View {
+        if kind == .agents, personal?.agentId == item.id {
             PersonalAgentAvatar(configuration: configuration, agent: personal, size: extent, active: false)
-        } else if category == .agents {
+        } else if kind == .agents {
             ConfiguredAgentAvatar(configuration: configuration, agent: item.agent, size: extent, active: false)
         } else {
             CapabilityLogo(reference: item.iconUrl, origin: configuration.baseURL,
                            label: ["marketplace:search", "mcp:setup"].contains(item.id) ? "" : item.name,
-                           symbol: category.symbol, extent: extent)
+                           symbol: kind.symbol, extent: extent)
         }
     }
 
@@ -343,7 +376,7 @@ struct CapabilitiesView: View {
         CapabilitySettingsPanel(configuration: configuration, category: category.id,
                                 itemID: category == .connections ? item.id : item.targetId ?? item.id, name: item.name,
                                 summary: item.description ?? "", onChanged: {
-                                    revision += 1
+                                    load(category, refresh: true)
                                     if item.id == personal?.agentId {
                                         onPersonalChanged()
                                     }
@@ -352,7 +385,7 @@ struct CapabilitiesView: View {
                                 onUseInChat: { prompt in
                                     pendingChatPrompt = prompt
                                     detail = nil
-                                }) { icon(item, extent: 44) }
+                                }) { icon(item, kind: category, extent: 44) }
     }
 
     // swiftlint:disable:next identifier_name
@@ -373,27 +406,42 @@ struct CapabilitiesView: View {
         }
     }
 
-    @MainActor private func load() async {
-        let requested = category
-        failed = false
-        loading = true
-        defer {
-            if !Task.isCancelled {
-                loading = false
+    private func loadNearby() {
+        let cases = CapabilityCategory.allCases
+        guard let index = cases.firstIndex(of: category) else { return }
+        load(category)
+        if index > 0 { load(cases[index - 1]) }
+        if index + 1 < cases.count { load(cases[index + 1]) }
+    }
+
+    private func cancelRequests() {
+        requests.values.forEach { $0.cancel() }
+        requests.removeAll()
+    }
+
+    private func reloadCatalog() {
+        cancelRequests()
+        pages.removeAll()
+        failures.removeAll()
+        loadNearby()
+    }
+
+    private func load(_ kind: CapabilityCategory, refresh: Bool = false) {
+        guard requests[kind] == nil, refresh || (pages[kind] == nil && !failures.contains(kind)) else { return }
+        failures.remove(kind)
+        requests[kind] = Task { @MainActor in
+            do {
+                let response: GatewayEnvelope<CapabilityCatalogPage> = try await GatewayClient(configuration: configuration).request(
+                    path: "/api/capabilities/mobile-catalog",
+                    queryItems: [URLQueryItem(name: "category", value: kind.id), URLQueryItem(name: "locale", value: locale.identifier)]
+                )
+                guard response.isSuccessful, let page = response.payload else { throw GatewayClientError.invalidResponse }
+                try Task.checkCancellation()
+                pages[kind] = page
+            } catch {
+                if !Task.isCancelled { failures.insert(kind) }
             }
-        }
-        do {
-            let response: GatewayEnvelope<CapabilityCatalogPage> = try await GatewayClient(configuration: configuration).request(
-                path: "/api/capabilities/mobile-catalog",
-                queryItems: [URLQueryItem(name: "category", value: requested.id), URLQueryItem(name: "locale", value: locale.identifier)]
-            )
-            guard response.isSuccessful, let page = response.payload else { throw GatewayClientError.invalidResponse }
-            try Task.checkCancellation()
-            pages[requested] = page
-        } catch is CancellationError {} catch {
-            if !Task.isCancelled {
-                failed = true
-            }
+            if !Task.isCancelled { requests[kind] = nil }
         }
     }
 }
@@ -440,7 +488,9 @@ private struct CapabilityPanelPayload: Decodable {
     let message: String?
     let details: String?
     let authorizationUrl: URL?
+    let deviceVerificationCode: String?
     let qrUrl: String?
+    let expiresAt: Double?
     let flow: String?
     let revision: Int?
     let pollAction: String?
@@ -523,6 +573,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     @Environment(\.mobileTheme) private var theme
     @Environment(\.locale) private var locale
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var panel: CapabilityPanelPayload?
     @State private var values: [String: String] = [:]
     @State private var busy = false
@@ -532,6 +583,11 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     @State private var newGroup = ""
     @State private var openWhenReady = false
     @State private var openedURL: URL?
+    @State private var pollingNow = false
+    @State private var showQr = false
+    @State private var drawerDetent = capabilityCompactDetent
+    @State private var savingQr = false
+    @State private var qrFeedback: String?
     @State private var confirmation: CapabilityPanelPayload.Action?
     @State private var confirmationOpen = false
     @State private var requestRevision = 0
@@ -582,13 +638,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                             Button(t("刷新状态", "Refresh status")) { Task { await load(action) } }
                         }
                     }
-                    if let qrCodeURL = panel?.qrUrl, let image = qrImage(qrCodeURL) {
-                        Image(uiImage: image)
-                            .interpolation(.none).resizable().scaledToFit()
-                            .frame(width: 180, height: 180).padding(12).background(.white, in: .rect(cornerRadius: 16))
-                            .frame(maxWidth: .infinity)
-                            .accessibilityLabel(t("通道配对二维码", "Channel pairing QR code"))
-                    }
+                    setupOptions
                     if let details = panel?.details, !details.isEmpty {
                         DisclosureGroup(t("查看详情", "View details"), isExpanded: $detailsOpen) {
                             Text(verbatim: details).font(.footnote).foregroundStyle(theme.secondary)
@@ -605,7 +655,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         .padding(14)
                         .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
                     }
-                    ForEach(mainActions.filter { $0.id != primaryAction?.id }) { action in
+                    ForEach(mainActions.filter { $0.id != primaryAction?.id && $0.id != cancelPairing?.id }) { action in
                         actionButton(action, prominent: false)
                     }
                     ForEach(panel?.results ?? []) { result in
@@ -656,7 +706,8 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                 Button(t("取消", "Cancel"), role: .cancel) {}
             } message: { action in Text(verbatim: action.confirmation ?? "") }
         }
-        .presentationDetents([.large])
+        .presentationDetents([capabilityCompactDetent, capabilityExpandedDetent, .large], selection: $drawerDetent)
+        .presentationContentInteraction(.scrolls)
         .presentationDragIndicator(.visible)
         .presentationBackground(theme.canvas)
         .onDisappear {
@@ -664,7 +715,16 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             values.removeAll()
         }
         .task { await load() }
-        .task(id: panel?.pollAction) {
+        .onChange(of: scenePhase) {
+            guard scenePhase == .active, let action = panel?.pollAction else { return }
+            Task { await load(action, polling: true) }
+        }
+        .onChange(of: panel?.qrUrl) { qrFeedback = nil }
+        .onChange(of: verifiedURL) { showQr = false }
+        .onChange(of: needsExpandedDrawer, initial: true) {
+            drawerDetent = needsExpandedDrawer ? capabilityExpandedDetent : capabilityCompactDetent
+        }
+        .task(id: (panel?.pollAction ?? "") + ":" + (panel?.flow ?? "")) {
             guard let action = panel?.pollAction else { return }
             for _ in 0 ..< 75 {
                 do { try await Task.sleep(for: .seconds(4)) } catch { return }
@@ -677,6 +737,84 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         }
     }
 
+    @ViewBuilder private var setupOptions: some View {
+        if verifiedURL != nil, let code = panel?.deviceVerificationCode {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(t("验证码", "Verification code")).font(.caption).foregroundStyle(theme.secondary)
+                    Text(verbatim: code).font(.headline.monospaced()).foregroundStyle(theme.foreground)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    UIPasteboard.general.setItems([["public.utf8-plain-text": code]], options: [.localOnly: true])
+                } label: {
+                    Label(t("复制", "Copy"), systemImage: "document.on.document").frame(minHeight: 34)
+                }
+                .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(theme.action)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
+            .overlay { RoundedRectangle(cornerRadius: theme.corner(16)).strokeBorder(theme.secondary.opacity(0.18)) }
+        }
+        if verifiedURL != nil, panel?.qrUrl != nil {
+            Button { showQr.toggle() } label: {
+                HStack {
+                    Text(showQr ? t("收起二维码", "Hide QR code") : t("其他方式", "Other ways"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: showQr ? "chevron.up" : "chevron.down").accessibilityHidden(true)
+                }
+                .font(.subheadline.weight(.medium)).foregroundStyle(theme.action)
+                .padding(.horizontal, 14).frame(minHeight: 44)
+                .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("capability-panel-other-methods")
+        }
+        if let code = panel?.qrUrl, verifiedURL == nil || showQr, let image = qrImage(code) {
+            VStack(spacing: 12) {
+                Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
+                    .frame(width: 180, height: 180).padding(4)
+                    .background(.white).clipShape(.rect(cornerRadius: 16))
+                    .accessibilityLabel(t("授权二维码", "Authorization QR code"))
+                    .accessibilityIdentifier("capability-panel-qr")
+                Text(t("从扫一扫的相册入口选图，或用另一台设备扫码。",
+                       "Select the saved image if the scanner supports Photos, or scan with another device."))
+                    .font(.footnote).foregroundStyle(theme.secondary)
+                    .multilineTextAlignment(.center)
+                if verifiedURL != nil { qrSaveAction(code, prominent: false) }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(16)
+            .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
+        }
+    }
+
+    @ViewBuilder private func qrSaveAction(_ code: String, prominent: Bool) -> some View {
+        let button = Button {
+            guard let image = qrImage(code) else {
+                qrFeedback = t("无法生成二维码。", "Could not generate the QR code.")
+                return
+            }
+            Task { await saveQr(image, code: code) }
+        } label: {
+            Label(savingQr ? t("正在保存…", "Saving…") : t("保存二维码", "Save QR code"),
+                  systemImage: "square.and.arrow.down")
+                .font(.headline).foregroundStyle(prominent ? theme.onAction : theme.action)
+                .frame(maxWidth: .infinity, minHeight: 40)
+        }
+        .disabled(savingQr)
+        .accessibilityIdentifier("capability-panel-save-qr")
+        if prominent {
+            button.buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+        } else {
+            button.buttonStyle(.bordered).buttonBorderShape(.capsule).tint(theme.action)
+        }
+        if let qrFeedback {
+            Text(verbatim: qrFeedback).font(.footnote).foregroundStyle(theme.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
     private var readyPrompt: String? {
         guard panel?.pollAction == nil, errorMessage == nil, let prompt = panel?.chatPrompt, !prompt.isEmpty else { return nil }
         let changed = (panel?.fields ?? []).contains { field in
@@ -686,15 +824,19 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     private var primaryAction: CapabilityPanelPayload.Action? {
-        guard readyPrompt == nil, verifiedURL == nil, panel?.pollAction == nil else { return nil }
+        guard readyPrompt == nil, verifiedURL == nil, panel?.qrUrl == nil, panel?.pollAction == nil else { return nil }
         return mainActions.first
+    }
+
+    private var cancelPairing: CapabilityPanelPayload.Action? {
+        mainActions.first { $0.id == "pair-cancel" }
     }
 
     @ViewBuilder private var panelStatus: some View {
         if panel?.message != nil || readyPrompt != nil || panel?.pollAction != nil {
             HStack(spacing: 10) {
                 if panel?.pollAction != nil {
-                    ProgressView()
+                    Circle().fill(theme.action).frame(width: 8, height: 8).accessibilityHidden(true)
                 } else if readyPrompt != nil {
                     Image(systemName: "checkmark.circle").foregroundStyle(.green).accessibilityHidden(true)
                 }
@@ -702,8 +844,8 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                     .font(.subheadline).foregroundStyle(theme.foreground)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(14)
-            .background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
             .accessibilityIdentifier("capability-panel-status")
         } else if panel != nil, !summary.isEmpty, category != "agents" {
             Text(verbatim: summary).font(.subheadline).foregroundStyle(theme.secondary)
@@ -711,8 +853,8 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     @ViewBuilder private var panelFooter: some View {
-        if readyPrompt != nil || primaryAction != nil || verifiedURL != nil {
-            Group {
+        if readyPrompt != nil || primaryAction != nil || verifiedURL != nil || panel?.qrUrl != nil || cancelPairing != nil {
+            VStack(spacing: 4) {
                 if let prompt = readyPrompt {
                     Button {
                         focusedField = nil
@@ -721,25 +863,34 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         Label(t(itemID.hasPrefix("conversation:") ? "返回对话" : "通过对话使用",
                                 itemID.hasPrefix("conversation:") ? "Back to chat" : "Use in chat"),
                               systemImage: "bubble.left")
+                            .font(.headline).foregroundStyle(theme.onAction)
                             .frame(maxWidth: .infinity, minHeight: 40)
                     }
                     .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
                     .accessibilityIdentifier("capability-use-in-chat")
                 } else if let url = verifiedURL {
-                    Button { openURL(url) } label: {
-                        Text(t("继续授权", "Continue sign-in")).frame(maxWidth: .infinity, minHeight: 40)
+                    Button { openAuthorization(url) } label: {
+                        Label(authorizationLabel, systemImage: "arrow.up.right")
+                            .font(.headline).foregroundStyle(theme.onAction).frame(maxWidth: .infinity, minHeight: 40)
                     }
                     .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+                    .accessibilityIdentifier("capability-panel-open-authorization")
+                } else if let code = panel?.qrUrl {
+                    qrSaveAction(code, prominent: true)
                 } else if let action = primaryAction {
                     actionButton(action, prominent: true)
+                }
+                if let cancel = cancelPairing, cancel.id != primaryAction?.id {
+                    actionButton(cancel, prominent: false)
                 }
             }
             .tint(theme.action)
             .disabled(busy)
             .padding(.horizontal, 20)
-            .padding(.top, 6)
+            .padding(.top, 10)
             .padding(.bottom, 12)
             .background(theme.canvas)
+            .overlay(alignment: .top) { Divider().accessibilityHidden(true) }
         }
     }
 
@@ -758,6 +909,16 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         visibleFields.filter { $0.advanced == true }
     }
 
+    private var needsExpandedDrawer: Bool {
+        let shownFields = advanced ? visibleFields : mainFields
+        return (panel?.qrUrl != nil && (verifiedURL == nil || showQr))
+            || (advanced && (!extraFields.isEmpty || !extraActions.isEmpty))
+            || (detailsOpen && panel?.details?.isEmpty == false)
+            || shownFields.count >= 3
+            || shownFields.contains { $0.type == "multiline" || $0.type == "list" }
+            || (panel?.results?.count ?? 0) >= 3
+    }
+
     private var mainActions: [CapabilityPanelPayload.Action] {
         (panel?.actions ?? []).filter { $0.advanced != true }
     }
@@ -771,6 +932,19 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         return url
     }
 
+    private var authorizationLabel: String {
+        if let openedURL, openedURL == verifiedURL { return t("重新打开授权页", "Reopen authorization") }
+        if panel?.deviceVerificationCode != nil { return t("打开验证页", "Open verification page") }
+        return t("前往授权", "Open authorization")
+    }
+
+    private func openAuthorization(_ url: URL) {
+        openURL(url) { accepted in
+            if accepted { openedURL = url }
+            else { errorMessage = t("无法打开授权页面，请重试。", "Could not open authorization. Try again.") }
+        }
+    }
+
     private func perform(_ action: CapabilityPanelPayload.Action) {
         focusedField = nil
         if action.confirmation != nil, action.inlineReview != true {
@@ -782,7 +956,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
 
     @ViewBuilder private func actionButton(_ action: CapabilityPanelPayload.Action, prominent: Bool) -> some View {
         let button = Button { perform(action) } label: {
-            Text(verbatim: action.label).frame(maxWidth: .infinity, minHeight: 36)
+            Text(verbatim: action.label)
+                .foregroundStyle(prominent ? theme.onAction : (action.id == "pair-cancel" ? theme.secondary : theme.action))
+                .frame(maxWidth: .infinity, minHeight: 36)
         }.accessibilityIdentifier("capability-panel-\(action.id)")
         if prominent {
             button.buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
@@ -874,12 +1050,45 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(value.utf8)
         guard let output = filter.outputImage else { return nil }
-        return UIImage(ciImage: output.transformed(by: CGAffineTransform(scaleX: 8, y: 8)))
+        let bounds = output.extent.insetBy(dx: -4, dy: -4)
+        let scale = CGAffineTransform(scaleX: 8, y: 8)
+        let padded = output.composited(over: CIImage(color: .white).cropped(to: bounds)).transformed(by: scale)
+        return capabilityQrContext.createCGImage(padded, from: bounds.applying(scale)).map { UIImage(cgImage: $0) }
+    }
+
+    @MainActor private func saveQr(_ image: UIImage, code: String) async {
+        guard !savingQr, panel?.qrUrl == code else { return }
+        if let expiresAt = panel?.expiresAt, Date().timeIntervalSince1970 * 1000 >= expiresAt {
+            qrFeedback = t("二维码已过期，请刷新状态。", "The QR code expired. Refresh its status.")
+            return
+        }
+        savingQr = true
+        defer { savingQr = false }
+        let failure = t("未能保存二维码，请检查相册权限后重试。", "Could not save the QR code. Check photo access and try again.")
+        let access = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard panel?.qrUrl == code else { return }
+        guard access == .authorized || access == .limited else {
+            qrFeedback = failure
+            return
+        }
+        guard let data = image.pngData() else {
+            qrFeedback = failure
+            return
+        }
+        do {
+            try await PHPhotoLibrary.shared().performChanges { @Sendable in
+                PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
+            }
+            if panel?.qrUrl == code { qrFeedback = t("已保存到相册。", "Saved to Photos.") }
+        } catch {
+            if panel?.qrUrl == code { qrFeedback = failure }
+        }
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func load(_ action: String? = nil, polling: Bool = false) async {
-        guard !busy else { return }
+        guard !busy, !polling || !pollingNow else { return }
+        if polling { pollingNow = true }
         busy = !polling
         if !polling {
             errorMessage = nil
@@ -891,9 +1100,8 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         let revision = requestRevision
         let before = panel?.pollAction
         defer {
-            if !polling {
-                busy = false
-            }
+            if polling { pollingNow = false }
+            else { busy = false }
         }
         do {
             let client = GatewayClient(configuration: configuration)
@@ -918,7 +1126,8 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                                 uniquingKeysWith: { first, _ in first })
             errorMessage = nil
             if openWhenReady, let url = verifiedURL, url != openedURL {
-                openedURL = url; openWhenReady = false; openURL(url)
+                openWhenReady = false
+                openAuthorization(url)
             }
             if !polling && action != "search" && action != nil || polling && before != nil && result.pollAction == nil {
                 onChanged()

@@ -288,6 +288,8 @@ struct ConversationsView: View {
         } label: {
             ConversationRow(conversation: conversation)
                 .frame(maxWidth: .infinity, minHeight: 64)
+                .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(16)))
+                .hoverEffect(.highlight, isEnabled: state.operatingConversationID == nil)
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
@@ -352,6 +354,8 @@ struct ConversationsView: View {
                         }
                         .padding(.horizontal, 24).frame(minHeight: 52)
                         .background(mobileTheme.grouped, in: .rect(cornerRadius: mobileTheme.corner(16)))
+                        .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(16)))
+                        .hoverEffect(.highlight)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("conversation-child-\(child.id)")

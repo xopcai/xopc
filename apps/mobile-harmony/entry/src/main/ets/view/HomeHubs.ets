@@ -7,9 +7,8 @@ import { dispatchHomeAction } from '../common/homeProtocol';
 
 export const WORK_PAGE_OPTIONS: XopcPageTitleOption[] = [
   { key: 'progress', label: $r('app.string.progress'), id: 'work-page-progress' },
-  { key: 'automations', label: $r('app.string.automations'), id: 'work-page-automations' },
-  { key: 'projects', label: $r('app.string.projects'), id: 'work-page-projects' },
-  { key: 'tasks', label: $r('app.string.tasks'), id: 'work-page-tasks' }
+  { key: 'tasks', label: $r('app.string.tasks'), id: 'work-page-tasks' },
+  { key: 'projects', label: $r('app.string.projects'), id: 'work-page-projects' }
 ];
 
 @ComponentV2
@@ -119,7 +118,7 @@ export struct XopcProgressView {
         Button(trailing, { type: ButtonType.Normal }).fontSize(13).fontColor(this.colors.accent)
           .height(44).padding({ left: 8, right: 8 }).backgroundColor(Color.Transparent)
           .onClick((): void => {
-            if (page === 'automations') this.onSelectWorkPage(page);
+            if (page === 'tasks' || page === 'projects') this.onSelectWorkPage(page);
             else this.openPage(page);
           })
       } else if (trailing !== '') {

@@ -1,17 +1,32 @@
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
-import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
 import { agentDisplayDescription, agentDisplayName } from '../common/agentPresentation';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatAgent } from '../model/chat';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { loadCapabilities, XopcCapabilityItem, XopcCapabilityPage } from '../repository/capabilitiesRepository';
-import { XopcListSkeleton, XopcPageTitleMenu, XopcPageTitleOption } from './MobileComponents';
+import { XopcListSkeleton } from './MobileComponents';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
-import { XopcCapabilityPanelView } from './CapabilityPanelView';
+import { capabilityDrawerHeight, XopcCapabilityPanelView } from './CapabilityPanelView';
 import { XopcCapabilityLogo } from './CapabilityLogo';
 
 const categories: string[] = ['plugins', 'skills', 'connections', 'agents', 'channels'];
 const groups: string[] = ['attention', 'assistant', 'expert', 'connected', 'installed', 'configured', 'disabled', 'available'];
+
+@ObservedV2
+class XopcCapabilityTabState {
+  readonly key: string;
+  readonly scroller: Scroller = new Scroller();
+  @Trace query: string = '';
+  @Trace loading: boolean = false;
+  @Trace failed: boolean = false;
+  @Trace catalog?: XopcCapabilityPage;
+
+  constructor(key: string) {
+    this.key = key;
+  }
+}
 
 @ComponentV2
 export struct XopcCapabilitiesView {
@@ -21,54 +36,80 @@ export struct XopcCapabilitiesView {
   @Event onPersonalChanged: () => void = (): void => {};
   @Event onSetupChat: (prompt: string, agentSetup: boolean) => void = (_prompt: string, _agentSetup: boolean): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
   @Local category: string = 'plugins';
-  @Local query: string = '';
-  @Local loading: boolean = true;
-  @Local failed: boolean = false;
-  @Local catalog?: XopcCapabilityPage;
   @Local detail?: XopcCapabilityItem;
   @Local detailOpen: boolean = false;
+  @Local detailExpanded: boolean = false;
+  @Local hoveredItemId: string = '';
+  @Local clearHovered: boolean = false;
   private pendingChatPrompt: string = '';
-  private pages: Map<string, XopcCapabilityPage> = new Map<string, XopcCapabilityPage>();
-  private scroller: Scroller = new Scroller();
+  private tabs: XopcCapabilityTabState[] = categories.map((key: string): XopcCapabilityTabState => new XopcCapabilityTabState(key));
+  private swiper: SwiperController = new SwiperController();
+  private initialIndex: number = 0;
+  private active: boolean = false;
   private generation: number = 0;
 
-  aboutToAppear(): void {
-    this.category = appSettings.pageSelection('capabilities', categories, 'plugins');
-    void this.load();
+  @Computed get activeTab(): XopcCapabilityTabState {
+    return this.tabs[Math.max(0, categories.indexOf(this.category))];
   }
-  aboutToDisappear(): void { this.generation++; }
 
-  private async load(): Promise<void> {
-    const revision = ++this.generation;
-    const requested = this.category;
-    this.loading = true; this.failed = false;
+  aboutToAppear(): void {
+    this.active = true;
+    this.category = appSettings.pageSelection('capabilities', categories, 'plugins');
+    this.initialIndex = Math.max(0, categories.indexOf(this.category));
+    this.loadNearby(this.initialIndex);
+  }
+
+  aboutToDisappear(): void {
+    this.active = false;
+    this.generation++;
+    this.tabs.forEach((tab: XopcCapabilityTabState): void => { tab.loading = false; });
+  }
+
+  private async load(tab: XopcCapabilityTabState, refresh: boolean = false): Promise<void> {
+    if (!this.active || tab.loading || (!refresh && (tab.catalog !== undefined || tab.failed))) return;
+    const generation = this.generation;
+    tab.loading = true;
+    tab.failed = false;
     try {
-      const result = await loadCapabilities(requested);
-      if (revision !== this.generation) return;
-      this.catalog = result;
-      this.pages.set(requested, result);
+      const result = await loadCapabilities(tab.key);
+      if (generation === this.generation) tab.catalog = result;
     } catch (_) {
-      if (revision === this.generation) this.failed = true;
-    } finally { if (revision === this.generation) this.loading = false; }
+      if (generation === this.generation) tab.failed = true;
+    } finally {
+      if (generation === this.generation) tab.loading = false;
+    }
+  }
+
+  private loadNearby(index: number): void {
+    void this.load(this.tabs[index]);
+    if (index > 0) void this.load(this.tabs[index - 1]);
+    if (index + 1 < this.tabs.length) void this.load(this.tabs[index + 1]);
   }
 
   private select(category: string): void {
-    if (this.category === category) return;
-    this.getUIContext().getFocusController().clearFocus();
-    this.query = '';
-    this.category = category;
-    appSettings.rememberPageSelection('capabilities', category);
-    this.catalog = this.pages.get(category);
-    this.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
-    void this.load();
+    const target = categories.indexOf(category);
+    if (target < 0 || this.detailOpen) return;
+    const distance = Math.abs(target - categories.indexOf(this.category));
+    this.swiper.changeIndex(target, !this.layout.reduceMotion && distance === 1);
   }
 
-  private swipeCategory(event: GestureEvent): void {
-    if (this.detailOpen || Math.abs(event.offsetX) < 40
-      || Math.abs(event.offsetX) < Math.abs(event.offsetY) * 1.25) return;
-    const next = categories[categories.indexOf(this.category) + (event.offsetX < 0 ? 1 : -1)];
-    if (next) this.select(next);
+  private commitPage(index: number): void {
+    const next = categories[index];
+    if (!next || next === this.category) return;
+    this.getUIContext().getFocusController().clearFocus();
+    this.hoveredItemId = '';
+    this.clearHovered = false;
+    this.category = next;
+    appSettings.rememberPageSelection('capabilities', next);
+    this.loadNearby(index);
+  }
+
+  private updateQuery(tab: XopcCapabilityTabState, value: string): void {
+    if (tab.query === value) return;
+    tab.query = value;
+    tab.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
   }
 
   private title(category: string): Resource {
@@ -98,6 +139,7 @@ export struct XopcCapabilitiesView {
   private openSkillMarket(): void {
     this.getUIContext().getFocusController().clearFocus();
     this.detail = { id: 'marketplace:search', name: this.getLabel($r('app.string.cap_native_skill')), group: 'available' };
+    this.detailExpanded = false;
     this.detailOpen = true;
   }
 
@@ -118,58 +160,59 @@ export struct XopcCapabilitiesView {
     this.onSetupChat(this.getLabel(prompt), this.category === 'agents');
   }
 
-  @Computed get matches(): XopcCapabilityItem[] {
-    if (!this.catalog) return [];
-    let rows = this.catalog.items;
+  private matches(tab: XopcCapabilityTabState): XopcCapabilityItem[] {
+    if (!tab.catalog) return [];
+    let rows = tab.catalog.items;
     const personal = this.personal;
-    if (this.category === 'agents') {
+    if (tab.key === 'agents') {
       rows = rows.map((item: XopcCapabilityItem): XopcCapabilityItem => {
         const agent: XopcChatAgent = { id: item.id, name: item.name, description: item.description, avatar: item.avatar };
         return { id: item.id, name: this.getLabel(agentDisplayName(agent)),
           description: this.getLabel(agentDisplayDescription(agent)), group: item.group, avatar: item.avatar, iconUrl: item.iconUrl };
       });
     }
-    if (this.category === 'agents' && personal?.state === 'ready') {
+    if (tab.key === 'agents' && personal?.state === 'ready') {
       const own: XopcCapabilityItem = { id: personal.agentId, name: personal.displayName,
         description: this.getLabel($r('app.string.capability_personal_description')), group: 'assistant' };
       rows = [own].concat(rows.filter((item: XopcCapabilityItem): boolean => item.id !== own.id));
     }
-    const query = this.query.trim().toLowerCase();
+    const query = tab.query.trim().toLowerCase();
     return rows.filter((item: XopcCapabilityItem): boolean =>
       [item.name, item.id, item.description ?? ''].some((value: string): boolean => value.toLowerCase().includes(query)));
   }
 
-  private rows(group: string): XopcCapabilityItem[] {
-    return this.matches.filter((item: XopcCapabilityItem): boolean => item.group === group);
+  private rows(tab: XopcCapabilityTabState, group: string): XopcCapabilityItem[] {
+    return this.matches(tab).filter((item: XopcCapabilityItem): boolean => item.group === group);
   }
 
-  private categoryOptions(): XopcPageTitleOption[] {
-    return categories.map((key: string): XopcPageTitleOption => ({
-      key, label: this.title(key), id: 'capability-category-' + key
+  private categoryOptions(): XopcSegmentOption[] {
+    return categories.map((key: string): XopcSegmentOption => ({
+      key, label: this.title(key), testId: 'capability-category-' + key
     }));
   }
 
   @Builder
-  icon(item: XopcCapabilityItem) {
-    if (this.category === 'agents') {
+  icon(item: XopcCapabilityItem, kind: string) {
+    if (kind === 'agents') {
       XopcPersonalAgentAvatar({ agentId: item.id, extent: 48, compact: true, activePage: false,
         appearance: this.personal?.agentId === item.id ? this.personal?.appearance ?? 'loopi' : 'configured',
         revision: this.personal?.agentId === item.id ? this.personal?.revision ?? 0 : 0,
         avatarReference: item.avatar ?? '', fallbackLabel: item.name })
     } else {
-      XopcCapabilityLogo({ category: this.category, iconUrl: item.iconUrl ?? '', label: item.name })
+      XopcCapabilityLogo({ category: kind, iconUrl: item.iconUrl ?? '', label: item.name })
     }
   }
 
   private showDetail(item: XopcCapabilityItem): void {
     this.getUIContext().getFocusController().clearFocus();
     this.detail = item;
+    this.detailExpanded = false;
     this.detailOpen = true;
   }
 
   @Builder
-  private itemContent(item: XopcCapabilityItem) {
-    this.icon(item)
+  private itemContent(item: XopcCapabilityItem, kind: string) {
+    this.icon(item, kind)
     Column({ space: 4 }) {
       Text(item.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -179,34 +222,47 @@ export struct XopcCapabilitiesView {
   }
 
   @Builder
-  itemRow(item: XopcCapabilityItem) {
+  itemRow(item: XopcCapabilityItem, kind: string) {
     Row() {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 14 }) {
-          this.itemContent(item)
-          if (this.category === 'connections' && (item.group === 'available' || item.group === 'attention')) {
+          this.itemContent(item, kind)
+          if (kind === 'connections' && (item.group === 'available' || item.group === 'attention')) {
             Text($r('app.string.capability_connect')).fontSize(14).fontColor(this.colors.chat.action)
-          } else if (this.category !== 'agents') {
+          } else if (kind !== 'agents') {
             SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
           }
         }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
-      }.layoutWeight(1).padding(0).backgroundColor(Color.Transparent).id('capability-row-' + item.id)
-        .enabled(this.category !== 'agents' || item.group !== 'disabled')
+      }.layoutWeight(1).padding(0)
+        .backgroundColor(this.hoveredItemId === item.id && (kind !== 'agents' || item.group !== 'disabled')
+          ? this.colors.hoverOverlay : Color.Transparent)
+        .animation({ duration: this.layout.reduceMotion ? 0 : 120, curve: Curve.EaseOut })
+        .id('capability-row-' + item.id)
+        .borderRadius(this.colors.corner(18)).clipShape(this.colors.cornerClip(18))
+        .hoverEffect(HoverEffect.None).stateEffect(true)
+        .onHover((hovering: boolean): void => {
+          if (hovering) this.hoveredItemId = item.id;
+          else if (this.hoveredItemId === item.id) this.hoveredItemId = '';
+        })
+        .enabled(kind !== 'agents' || item.group !== 'disabled')
         .onClick((): void => {
-          if (this.category === 'agents') {
+          if (kind !== this.category) return;
+          if (kind === 'agents') {
             this.getUIContext().getFocusController().clearFocus();
             this.onOpenAgent(item.id, item.id === this.personal?.agentId);
           } else this.showDetail(item);
         }, SEGMENTED_PAGE_TAP_SLOP_VP)
-      if (this.category === 'agents') {
+      if (kind === 'agents') {
         Button({ type: ButtonType.Circle }) {
           Text('⋯').fontSize(22).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
         }.width(44).height(44).padding(0).margin({ right: 8 }).backgroundColor(Color.Transparent)
           .id('capability-settings-' + item.id)
           .accessibilityText(this.getLabel($r('app.string.settings')) + ' · ' + item.name)
-          .onClick((): void => { this.showDetail(item); }, SEGMENTED_PAGE_TAP_SLOP_VP)
+          .stateEffect(true).onClick((): void => {
+            if (kind === this.category) this.showDetail(item);
+          }, SEGMENTED_PAGE_TAP_SLOP_VP)
       }
-    }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18))
+    }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18)).clipShape(this.colors.cornerClip(18))
   }
 
   @Builder
@@ -218,8 +274,9 @@ export struct XopcCapabilitiesView {
         appearance: this.detail.id === this.personal?.agentId ? this.personal?.appearance ?? 'loopi' : 'configured',
         avatarRevision: this.detail.id === this.personal?.agentId ? this.personal?.revision ?? 0 : 0,
         onClose: (): void => { this.detailOpen = false; },
+        onExpandedChange: (expanded: boolean): void => { this.detailExpanded = expanded; },
         onChanged: (): void => {
-          void this.load();
+          void this.load(this.activeTab, true);
           if (this.detail?.id && this.detail.id === this.personal?.agentId) this.onPersonalChanged();
         },
         onUseInChat: (prompt: string): void => {
@@ -258,23 +315,30 @@ export struct XopcCapabilitiesView {
             .accessibilityText(this.setupLabel()).onClick((): void => { this.startSetup(); })
         }
       }.width('100%').height(44)
-      XopcPageTitleMenu({ heading: this.title(this.category), selected: this.category,
-        options: this.categoryOptions(), menuId: 'capability-title',
-        onSelect: (key: string): void => { this.select(key); } }).constraintSize({ maxWidth: '48%' })
+      Text($r('app.string.capability_title')).id('capability-title').fontSize(17)
+        .fontColor(this.colors.foreground).fontWeight(FontWeight.Medium).maxLines(1)
+        .constraintSize({ maxWidth: '48%' }).hitTestBehavior(HitTestMode.None)
     }.width('100%').padding({ top: 8, bottom: 8 })
   }
 
   build() {
     Column() {
       this.header()
-      Column() {
-        this.catalogList()
-      }.width('100%').layoutWeight(1)
-        .priorityGesture(PanGesture({ direction: PanDirection.Horizontal, distance: 8 })
-          .onActionEnd((event: GestureEvent): void => { this.swipeCategory(event); }))
+      XopcSegmentedTabs({ options: this.categoryOptions(), selectedKey: this.category, segmentMin: 44,
+        onSelect: (key: string): void => { this.select(key); } })
+      Swiper(this.swiper) {
+        ForEach(this.tabs, (tab: XopcCapabilityTabState) => {
+          Column() {
+            this.catalogList(tab)
+          }.width('100%').height('100%').accessibilityLevel(tab.key === this.category ? 'auto' : 'no-hide-descendants')
+        }, (tab: XopcCapabilityTabState): string => tab.key)
+      }.id('capability-pager').index(this.initialIndex).loop(false).indicator(false).cachedCount(4)
+        .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(this.detailOpen)
+        .onChange((index: number): void => { this.commitPage(index); })
+        .width('100%').layoutWeight(1)
       this.searchField()
     }.width('100%').height('100%').padding({ left: 18, right: 18 }).backgroundColor(this.colors.surface)
-      .bindSheet($$this.detailOpen, this.detailSheet, { height: '88%', dragBar: true,
+      .bindSheet($$this.detailOpen, this.detailSheet, { height: capabilityDrawerHeight(this.detailExpanded), dragBar: true,
         showClose: false, backgroundColor: this.colors.surface, onDisappear: (): void => {
           const prompt = this.pendingChatPrompt;
           this.pendingChatPrompt = '';
@@ -283,39 +347,39 @@ export struct XopcCapabilitiesView {
   }
 
   @Builder
-  catalogList() {
-    List({ space: 10, scroller: this.scroller }) {
-      if (this.loading && !this.catalog) { ListItem() { XopcListSkeleton() } }
-      if (this.failed || this.catalog?.incomplete) {
+  catalogList(tab: XopcCapabilityTabState) {
+    List({ space: 10, scroller: tab.scroller }) {
+      if (!tab.failed && !tab.catalog) { ListItem() { XopcListSkeleton() }.id('capability-loading') }
+      if (tab.failed || tab.catalog?.incomplete) {
         ListItem() {
           Row() {
-            Text(this.failed ? $r('app.string.capability_load_failed') : $r('app.string.capability_partial'))
+            Text(tab.failed ? $r('app.string.capability_load_failed') : $r('app.string.capability_partial'))
               .fontSize(14).fontColor(this.colors.secondary).layoutWeight(1)
             Button($r('app.string.capability_retry')).height(44).backgroundColor(this.colors.accentSoft)
-              .fontColor(this.colors.chat.action).enabled(!this.loading).onClick((): void => { void this.load(); })
+              .fontColor(this.colors.chat.action).enabled(!tab.loading).onClick((): void => { void this.load(tab, true); })
           }.width('100%').padding({ left: 14, right: 12, top: 8, bottom: 8 })
             .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
         }
       }
-      if (!this.loading && !this.failed && !this.matches.length) {
+      if (tab.catalog && !tab.loading && !tab.failed && !this.matches(tab).length) {
         ListItem() {
           Column({ space: 10 }) {
             SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(24).fontColor([this.colors.secondary])
-            Text(this.query.trim() ? $r('app.string.capability_no_matches') : $r('app.string.capability_empty'))
+            Text(tab.query.trim() ? $r('app.string.capability_no_matches') : $r('app.string.capability_empty'))
               .fontSize(16).fontColor(this.colors.foreground)
-            if (this.query) Button($r('app.string.capability_clear')).height(44).backgroundColor(this.colors.accentSoft)
-              .fontColor(this.colors.chat.action).onClick((): void => { this.query = ''; })
+            if (tab.query) Button($r('app.string.capability_clear')).height(44).backgroundColor(this.colors.accentSoft)
+              .fontColor(this.colors.chat.action).onClick((): void => { this.updateQuery(tab, ''); })
           }.id('capability-empty').width('100%').padding({ top: 56 })
         }
       }
       ForEach(groups, (group: string) => {
-        if (this.rows(group).length) {
+        if (this.rows(tab, group).length) {
           ListItem() {
             Text(this.groupTitle(group)).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
               .padding({ left: 4, top: 14, bottom: 2 })
           }
-          ForEach(this.rows(group), (item: XopcCapabilityItem) => {
-            ListItem() { this.itemRow(item) }
+          ForEach(this.rows(tab, group), (item: XopcCapabilityItem) => {
+            ListItem() { this.itemRow(item, tab.key) }
           }, (item: XopcCapabilityItem): string => item.id + ':' + item.name + ':' + (item.description ?? '')
             + ':' + (item.avatar ?? '') + ':' + (item.iconUrl ?? '').slice(-64))
         }
@@ -327,17 +391,20 @@ export struct XopcCapabilitiesView {
   searchField() {
     Row({ space: 8 }) {
       SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(19).fontColor([this.colors.secondary])
-      TextInput({ text: this.query, placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
+      TextInput({ text: this.activeTab.query, placeholder: this.category === 'skills' ? $r('app.string.capability_search_installed_skills')
         : $r('app.string.capability_search', this.getLabel(this.title(this.category))) })
         .id('capability-search').layoutWeight(1).height(48).padding(0).backgroundColor(Color.Transparent)
         .fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
         .maxLength(160).enterKeyType(EnterKeyType.Search)
-        .onChange((value: string): void => { this.query = value; this.scroller.scrollTo({ xOffset: 0, yOffset: 0 }); })
+        .onChange((value: string): void => { this.updateQuery(this.activeTab, value); })
         .onSubmit((): void => { this.getUIContext().getFocusController().clearFocus(); })
-      if (this.query) Button({ type: ButtonType.Circle }) {
+      if (this.activeTab.query) Button({ type: ButtonType.Circle }) {
         SymbolGlyph($r('sys.symbol.xmark')).fontSize(17).fontColor([this.colors.secondary])
-      }.id('capability-search-clear').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-        .accessibilityText($r('app.string.capability_clear')).onClick((): void => { this.query = ''; })
+      }.id('capability-search-clear').width(44).height(44).padding(0)
+        .backgroundColor(this.clearHovered ? this.colors.hoverOverlay : Color.Transparent)
+        .hoverEffect(HoverEffect.None).stateEffect(true)
+        .onHover((hovering: boolean): void => { this.clearHovered = hovering; })
+        .accessibilityText($r('app.string.capability_clear')).onClick((): void => { this.updateQuery(this.activeTab, ''); })
     }.width('100%').padding({ left: 16, right: 6 })
       .backgroundColor(this.colors.input).borderRadius(this.colors.corner(24))
       .margin({ top: 14, bottom: 10 })

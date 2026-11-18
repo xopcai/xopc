@@ -3,6 +3,7 @@
     <string name="app_name">xopc</string>
     <string name="tab_assistant">Assistant</string>
     <string name="tab_conversations">Chats</string>
+    <string name="tab_workbench">Workbench</string>
     <string name="tab_progress">Progress</string>
     <string name="progress_attention_count">%1$d items need attention</string>
     <string name="library_title">Library</string>

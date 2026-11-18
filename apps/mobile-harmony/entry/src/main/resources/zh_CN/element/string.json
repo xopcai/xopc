@@ -982,6 +982,7 @@
       "name": "disconnect_help",
       "value": "删除本机 Gateway 凭据，需要重新配对。不会删除服务端的会话和文件。"
     },
+    { "name": "workbench", "value": "工作台" },
     {
       "name": "progress",
       "value": "进展"

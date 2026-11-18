@@ -258,6 +258,8 @@ struct SpaceLibraryView: View {
         .frame(minHeight: 64)
         .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
         .contentShape(.rect)
+        .contentShape(.hoverEffect, .rect(cornerRadius: theme.corner(16)))
+        .hoverEffect(.highlight)
     }
 
     private func originLabel(_ origin: LibraryOrigin) -> String {

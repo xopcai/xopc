@@ -18,10 +18,15 @@ async function begin(signal: AbortSignal): Promise<EnterpriseRegistration> {
   if (!string(init.nonce)) throw new Error('DingTalk did not issue a registration nonce');
   const result = await registration('begin', { nonce: init.nonce }, signal);
   const code = string(result.device_code);
-  const qrPayload = string(result.verification_uri_complete);
-  if (!code || new URL(qrPayload).protocol !== 'https:') throw new Error('DingTalk did not issue a setup QR');
+  const url = string(result.verification_uri_complete);
+  const verification = new URL(url);
+  if (!code || verification.protocol !== 'https:' || verification.username || verification.password) {
+    throw new Error('DingTalk did not issue a valid verification URL');
+  }
   return {
-    qrPayload,
+    qrPayload: url,
+    ...(verification.origin === 'https://open-dev.dingtalk.com'
+      ? { deviceVerification: { url, userCode: string(result.user_code) || undefined } } : {}),
     expiresInSec: Math.min(600, Math.max(1, Number(result.expires_in) || 300)),
     intervalMs: Math.min(15_000, Math.max(1000, (Number(result.interval) || 3) * 1000)),
     async poll(pollSignal) {

@@ -43,7 +43,7 @@ import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { accessibility } from '@kit.AccessibilityKit';
 import { XopcContextRef } from '../model/chat';
 import { chatDraftIntake } from '../service/chatDraftIntake';
-import { XopcBrandLoading, XopcErrorState, XopcPageHeader } from './MobileComponents';
+import { XopcBrandLoading, XopcErrorState, XopcPageHeader, XopcPageTitleOption } from './MobileComponents';
 import { common } from '@kit.AbilityKit';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
 import { XopcDiscussionRecordingPanel } from '../viewmodel/discussionRecordingPanel';
@@ -114,7 +114,7 @@ export struct XopcHomeView {
       if (route.target.kind === 'home') { this.navigationRevision++; this.closeSidebar(); this.pathStack.clear(); }
       else if (route.target.kind === 'task' && route.target.taskId) {
         this.pathStack.clear();
-        this.navigate({ page: 'progress', itemId: '' }, false);
+        this.navigate({ page: 'progress', itemId: '' });
         this.navigate({ page: 'tasks', itemId: route.target.taskId });
       } else if (route.target.conversationId) this.openConversationFromList(route.target.conversationId, false);
       else if (route.target.automationId) this.navigate({ page: 'automations', itemId: route.target.automationId });
@@ -144,7 +144,7 @@ export struct XopcHomeView {
     notificationNavigation.onTarget = undefined; clearInterval(this.attentionTimer); this.attention.dispose();
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
   }
-  private navigate(route: XopcMobileRoute, restoreWorkPage: boolean = true): void {
+  private navigate(route: XopcMobileRoute): void {
     if (route.page === 'automation-setup' && this.automationOpening) return;
     this.navigationRevision++;
     this.closeSidebar();
@@ -159,22 +159,12 @@ export struct XopcHomeView {
       if (route.itemId) this.openConversationFromList(route.itemId);
       return;
     }
-    const workPages = WORK_PAGE_OPTIONS.map((option): string => option.key);
-    if (restoreWorkPage && !route.itemId && workPages.includes(route.page)) {
-      const page = appSettings.pageSelection('work.' + route.page, workPages, route.page);
-      const restored: XopcMobileRoute = { page, itemId: '', workEntry: route.page };
-      this.pathStack.pushPath({ name: page, param: restored });
-    } else {
-      this.pathStack.pushPath({ name: route.page, param: route });
-    }
+    this.pathStack.pushPath({ name: route.page, param: route });
   }
 
-  private selectWorkPage(current: string, page: string, entry: string): void {
-    if (current === page) return;
-    this.navigationRevision++;
-    appSettings.rememberPageSelection('work.' + entry, page);
-    const route: XopcMobileRoute = { page, itemId: '', workEntry: entry };
-    this.pathStack.replacePath({ name: page, param: route }, false);
+  private exitWorkDestination(route: XopcMobileRoute): void {
+    this.pathStack.pop();
+    if (route.returnToSidebar) this.openSidebar();
   }
 
   private async openAutomationChat(route: XopcMobileRoute): Promise<void> {
@@ -477,11 +467,9 @@ export struct XopcHomeView {
         onNew: (id: string): void => { this.openConversationFromList(id); },
         onDelete: (id: string): void => { this.onConversationUnavailable(id); } })
     } else if (page === 'progress') {
-      NavDestination() {
-        XopcProgressView({ activePage: true, model: this.attention, onExit: (): void => { this.pathStack.pop(); },
-          onSelectWorkPage: (selection: string): void => { this.selectWorkPage(page, selection, (param as XopcMobileRoute).workEntry ?? page); },
-          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-      }.hideTitleBar(true).backgroundColor(this.colors.surface)
+      XopcWorkbenchView({ progress: this.attention,
+        onExit: (): void => { this.exitWorkDestination(param as XopcMobileRoute); },
+        onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
     } else if (page === 'capability-mcp-setup') {
       NavDestination() {
         Column() {
@@ -596,15 +584,13 @@ export struct XopcHomeView {
         heading: page === 'tasks' || page === 'task-create' ? $r('app.string.tasks')
           : page === 'projects' || page === 'project-settings' || page === 'project-create' ? $r('app.string.projects') : $r('app.string.automations'),
         initialId: (param as XopcMobileRoute).itemId, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
-        showWorkPageMenu: (page === 'tasks' || page === 'projects' || page === 'automations') && !(param as XopcMobileRoute).itemId,
-        onSelectWorkPage: (selection: string): void => { this.selectWorkPage(page, selection, (param as XopcMobileRoute).workEntry ?? page); },
         createOnAppear: page === 'task-create' || page === 'project-create',
         projectId: (param as XopcMobileRoute).projectId ?? '',
         onCreated: (target: string, id: string): void => {
           this.pathStack.pop();
           this.navigate({ page: target, itemId: id });
         },
-        onExit: (): void => { this.pathStack.pop(); } })
+        onExit: (): void => { this.exitWorkDestination(param as XopcMobileRoute); } })
     } else if (page === 'files' || page === 'session-files' || page === 'file-upload') {
       XopcFilesView({ uploadOnAppear: page === 'file-upload', initialId: page === 'files' ? (param as XopcMobileRoute).itemId : '',
         conversationId: page === 'session-files' ? (param as XopcMobileRoute).itemId : '', onExit: (): void => { this.pathStack.pop(); } })
@@ -698,7 +684,12 @@ export struct XopcHomeView {
                 onPersonal: (): void => { void this.openPersonalChat(); },
                 onNew: (): void => { void this.openOrdinaryChat(); },
                 onConversation: (id: string): void => { this.openConversationFromList(id); },
-                onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+                onNavigate: (route: XopcMobileRoute): void => {
+                  if (route.page === 'workbench' || route.page === 'automations') {
+                    this.navigate({ page: route.page === 'workbench' ? 'progress' : route.page,
+                      itemId: '', returnToSidebar: true });
+                  } else this.navigate(route);
+                } })
             }
           }.width('100%').height(LayoutPolicy.matchParent)
             .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.TOP])
@@ -721,5 +712,53 @@ export struct XopcHomeView {
     }.width('100%').height('100%')
       .onAreaChange((_previous: Area,current: Area): void => { this.recordingViewportWidth = Number(current.width); this.recordingViewportHeight = Number(current.height); })
 
+  }
+}
+
+@ComponentV2
+struct XopcWorkbenchView {
+  @Param progress: XopcProgressViewModel = new XopcProgressViewModel();
+  @Event onExit: () => void = (): void => {};
+  @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
+  @Local selectedIndex: number = 0;
+  @Local refreshRevision: number = 0;
+  private pager: SwiperController = new SwiperController();
+  private shown: boolean = false;
+
+  private selectPage(page: string): void {
+    const index = WORK_PAGE_OPTIONS.findIndex((option: XopcPageTitleOption): boolean => option.key === page);
+    if (index < 0 || index === this.selectedIndex) return;
+    this.pager.changeIndex(index, !this.layout.reduceMotion && Math.abs(index - this.selectedIndex) === 1);
+  }
+
+  build() {
+    NavDestination() {
+      Swiper(this.pager) {
+        XopcProgressView({ activePage: true, model: this.progress, onExit: this.onExit,
+          onSelectWorkPage: (page: string): void => { this.selectPage(page); }, onNavigate: this.onNavigate })
+        XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.tasks'), embeddedInWorkbench: true,
+          workbenchRefresh: this.refreshRevision, onExit: this.onExit, onNavigate: this.onNavigate,
+          onSelectWorkPage: (page: string): void => { this.selectPage(page); } })
+        XopcWorkspaceView({ section: 'projects', heading: $r('app.string.projects'), embeddedInWorkbench: true,
+          workbenchRefresh: this.refreshRevision, onExit: this.onExit, onNavigate: this.onNavigate,
+          onSelectWorkPage: (page: string): void => { this.selectPage(page); } })
+      }.id('work-page-pager').index(0).loop(false).indicator(false).cachedCount(2)
+        .duration(this.layout.reduceMotion ? 0 : 230)
+        .width('100%').height('100%')
+        .onChange((index: number): void => {
+          this.selectedIndex = index;
+          this.getUIContext().getFocusController().clearFocus();
+        })
+    }.hideTitleBar(true).backgroundColor(this.colors.surface)
+      .onShown((): void => {
+        if (this.shown) {
+          this.refreshRevision++;
+          void this.progress.refresh();
+        }
+        this.shown = true;
+      })
+      .onBackPressed((): boolean => { this.onExit(); return true; })
   }
 }

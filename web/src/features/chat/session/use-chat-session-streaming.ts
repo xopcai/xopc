@@ -121,12 +121,9 @@ export function useChatSessionStreaming(deps: {
   const clearShellError = () => store().setShellError(null);
 
   const finalizeMessage = useCallback(
-    (targetConversationId?: string, terminalStatus?: AgentStreamRunStatus) => {
-      const cacheKey = targetConversationId ?? conversationIdRef.current;
-      if (cacheKey && !shouldApplyStreamUpdate(cacheKey)) {
-        return;
-      }
-      const cachedBubble = cacheKey ? readStreamingBubbleFromStore(cacheKey) : null;
+    (chatId: string, terminalStatus?: AgentStreamRunStatus) => {
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      const cachedBubble = readStreamingBubbleFromStore(chatId);
       let finalMsg: Message | null = null;
       if (cachedBubble) {
         const msg = ensureAssistantMessage(cachedBubble, Date.now());
@@ -138,29 +135,25 @@ export function useChatSessionStreaming(deps: {
         msg.completedAt = terminalStatus && terminalStatus !== 'suspended' ? Date.now() : undefined;
         finalMsg = cloneMessageForRender(msg);
       }
-      if (finalMsg && hasRenderableAssistantContent(finalMsg) && cacheKey) {
-        store().finalizeStreamingTurn(cacheKey, finalMsg);
-      } else if (cacheKey) {
-        store().clearStreamingState(cacheKey);
+      if (finalMsg && hasRenderableAssistantContent(finalMsg)) {
+        store().finalizeStreamingTurn(chatId, finalMsg);
+      } else {
+        store().clearStreamingState(chatId);
       }
       sendingRef.current = false;
       streamingRef.current = false;
-      if (cacheKey) chatRunManager.resetRunTracking(cacheKey);
+      chatRunManager.resetRunTracking(chatId);
       if (!terminalStatus || shouldDismissClarificationForTerminal(terminalStatus)) fq.dismissClarify();
       void pollSessionNameAfterTurn();
-      const syncKey = conversationIdRef.current;
-      if (syncKey) {
-        window.setTimeout(() => {
-          if (conversationIdRef.current !== syncKey) return;
-          if (sendingRef.current || streamingRef.current) return;
-          void loadSessionById(syncKey, 0);
-        }, 400);
-      }
+      // The task details can close while this run's callbacks are still subscribed.
+      window.setTimeout(() => {
+        if (!shouldApplyStreamUpdate(chatId) || sendingRef.current || streamingRef.current) return;
+        void loadSessionById(chatId, 0);
+      }, 400);
     },
     [
       sendingRef,
       streamingRef,
-      conversationIdRef,
       fq.dismissClarify,
       fq.pendingFollowUpsRef,
       pollSessionNameAfterTurn,

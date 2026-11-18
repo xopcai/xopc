@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { uniformTypeDescriptor as utd } from '@kit.ArkData';
 import { systemShare } from '@kit.ShareKit';
+import { UIContext } from '@kit.ArkUI';
 import { XopcHistoryMedia } from '../model/chat';
 import { gatewaySession } from './gatewaySession';
 import { XopcShareResult } from '../model/share';
@@ -55,6 +56,20 @@ export function shareReachabilityText(share: XopcShareResult, chinese: boolean):
 export async function shareChatLink(context: common.UIAbilityContext, share: XopcShareResult): Promise<void> {
   const title = share.title.trim() || 'xopc';
   const content = title + '\n' + share.shareUrl;
+  await sharePlainText(context, content, title);
+}
+
+export async function shareSelectedChatText(ui: UIContext, content: string): Promise<void> {
+  const context = ui.getHostContext() as common.UIAbilityContext | undefined;
+  if (!context || !content) return;
+  try {
+    await sharePlainText(context, content, 'xopc');
+  } catch (_) {
+    ui.getPromptAction().showToast({ message: $r('app.string.chat_share_failed') });
+  }
+}
+
+async function sharePlainText(context: common.UIAbilityContext, content: string, title: string): Promise<void> {
   if (content.length * 3 > 190000) throw new Error('SHARE_TOO_LARGE');
   const data = new systemShare.SharedData({ utd: utd.UniformDataType.PLAIN_TEXT, content, title });
   await new systemShare.ShareController(data).show(context,

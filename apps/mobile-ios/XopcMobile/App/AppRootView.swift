@@ -254,7 +254,9 @@ struct AppRootView: View {
             recentRevision += 1
         }
         .onChange(of: appState.homePath) { old, current in
-            if old == [.conversations] || old == [.conversationSearch], current.isEmpty, reopenSidebar {
+            if old == [.conversations] || old == [.conversationSearch] || old == [.progress] || old == [.automations],
+               current.isEmpty, reopenSidebar
+            {
                 setSidebar(true)
             }
             if current.isEmpty {
@@ -324,7 +326,7 @@ struct AppRootView: View {
         case .projects:
             WorkPagesView(configuration: configuration, initialPage: .projects, onOpenConversation: appState.openConversation)
         case .automations:
-            WorkPagesView(configuration: configuration, initialPage: .automations, onOpenConversation: appState.openConversation)
+            AutomationsView(configuration: configuration, onOpenConversation: appState.openConversation)
         case .library:
             SpaceLibraryView(configuration: configuration, onOpenSource: { source in
                 if source.kind == "task", let taskID = source.taskId {
@@ -389,7 +391,7 @@ struct AppRootView: View {
     }
 
     private func navigate(_ route: HomeDestination) {
-        reopenSidebar = route == .conversations || route == .conversationSearch
+        reopenSidebar = route == .conversations || route == .conversationSearch || route == .progress || route == .automations
         setSidebar(false)
         appState.homePath.append(route)
     }

@@ -82,6 +82,7 @@ export struct XopcGeneratedMediaRow {
           Button({ type: ButtonType.Normal }) { this.cardLabel() }
             .id('generated-' + this.card.kind + '-open-' + this.card.item.id).layoutWeight(1)
             .height(48).padding(0).backgroundColor(Color.Transparent)
+            .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
             .accessibilityText($r('app.string.music_expand', mediaTitle(this.card, this.zh)))
             .onClick((): void => { this.onOpen(); })
         } else {

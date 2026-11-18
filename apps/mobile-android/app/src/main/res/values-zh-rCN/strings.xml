@@ -3,6 +3,7 @@
     <string name="app_name">xopc</string>
     <string name="tab_assistant">助手</string>
     <string name="tab_conversations">对话</string>
+    <string name="tab_workbench">工作台</string>
     <string name="tab_progress">进展</string>
     <string name="progress_attention_count">%1$d 项待处理</string>
     <string name="library_title">资料库</string>

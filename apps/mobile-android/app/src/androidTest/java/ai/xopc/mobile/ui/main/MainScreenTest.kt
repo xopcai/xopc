@@ -4,6 +4,11 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.content.ContentValues
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.content.ContentUris
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.PatternMatcher
 import android.provider.MediaStore
 import android.view.accessibility.AccessibilityNodeInfo
 import ai.xopc.mobile.R
@@ -113,6 +118,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.filters.SdkSuppress
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.RGBLuminanceSource
+import com.google.zxing.common.HybridBinarizer
+import com.google.zxing.qrcode.QRCodeReader
 import org.junit.Rule
 import org.junit.Test
 import org.junit.Assert.assertEquals
@@ -1465,7 +1475,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("library-delivery-${delivery.id}").assertExists()
   }
 
-  @Test fun workPageMenuSwitchesDirectlyAndBackReturnsToChat() {
+  @Test fun workbenchMenuAndSwipesStayInSync() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val selectedTab = mutableStateOf(HomeTab.Progress)
     composeTestRule.setContent {
@@ -1481,16 +1491,13 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
     composeTestRule.onNodeWithTag("work-page-menu").performClick()
     composeTestRule.onNodeWithTag("work-page-tasks").assertIsSelected()
-    composeTestRule.onNodeWithTag("work-page-projects").performClick()
-    composeTestRule.onNodeWithTag("projects-open-search").assertExists()
-    composeTestRule.onNodeWithTag("project-create").assertExists()
+    composeTestRule.onNodeWithTag("work-page-automations").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("work-page-tasks").performClick()
+    composeTestRule.onNodeWithTag("work-page-pager").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("projects-open-search").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("project-create").assertIsDisplayed()
     composeTestRule.onNodeWithTag("work-page-menu").performClick()
     composeTestRule.onNodeWithTag("work-page-projects").assertIsSelected()
-    composeTestRule.onNodeWithTag("work-page-automations").performClick()
-    composeTestRule.onNodeWithTag("automation-open-search").assertExists()
-    composeTestRule.onNodeWithTag("automation-create").assertExists()
-    composeTestRule.onNodeWithTag("work-page-menu").performClick()
-    composeTestRule.onNodeWithTag("work-page-automations").assertIsSelected()
     composeTestRule.onNodeWithTag("work-page-progress").performClick()
     composeTestRule.onNodeWithTag("progress-back").performClick()
     composeTestRule.runOnIdle { assertEquals(HomeTab.Assistant, selectedTab.value) }
@@ -2017,7 +2024,7 @@ class MainScreenTest {
     assert(opens == 2)
   }
 
-  @Test fun sidebarOpensProjectsAndAutomationsAndReturnsToChat() {
+  @Test fun sidebarOpensWorkbenchAndIndependentAutomations() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     var projectReads = 0
     var automationReads = 0
@@ -2026,22 +2033,31 @@ class MainScreenTest {
         onLoadProgressProjects = { projectReads++ }, onLoadAutomations = { automationReads++ })
     }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
-    composeTestRule.onNodeWithTag("chat-sidebar-projects").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-projects").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("chat-sidebar-workbench").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-progress").assertIsSelected()
+    composeTestRule.onNodeWithTag("work-page-projects").performClick()
     composeTestRule.onNodeWithTag("progress-project-search").assertDoesNotExist()
     composeTestRule.onNodeWithTag("projects-open-search").performClick()
     composeTestRule.onNodeWithTag("progress-project-search").assertIsFocused()
     composeTestRule.onNodeWithTag("projects-open-search-close").performClick()
     composeTestRule.runOnIdle { assertEquals(1, projectReads) }
     composeTestRule.onNodeWithTag("progress-back").performClick()
-    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-workbench").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").performClick()
+    composeTestRule.onNodeWithTag("work-page-progress").assertIsSelected()
+    composeTestRule.onNodeWithTag("work-page-progress").performClick()
+    composeTestRule.onNodeWithTag("progress-back").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar-automations").performClick()
+    composeTestRule.onNodeWithTag("work-page-menu").assertDoesNotExist()
     composeTestRule.onNodeWithTag("automation-search").assertDoesNotExist()
     composeTestRule.onNodeWithTag("automation-open-search").performClick()
     composeTestRule.onNodeWithTag("automation-search").assertIsFocused()
     composeTestRule.onNodeWithTag("automation-open-search-close").performClick()
     composeTestRule.runOnIdle { assertEquals(1, automationReads) }
     Espresso.pressBack()
-    composeTestRule.onNodeWithTag("chat-header-sidebar").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("chat-sidebar-workbench").assertIsDisplayed()
   }
 
   @Test fun conversationTargetsOpenTheirDetailsAndReturnToTheSameChat() {
@@ -2184,7 +2200,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("conversations-search").assertExists()
   }
 
-  @Test fun capabilityCatalogDefaultsToPluginsAndSearchStaysInItsCategory() {
+  @Test fun capabilityCatalogActionsAndSearchStayInTheirCategory() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#19aa71"/></svg>"""
     val logo = "data:image/svg+xml;base64," + java.util.Base64.getEncoder().encodeToString(svg.toByteArray())
@@ -2247,23 +2263,22 @@ class MainScreenTest {
       }
     }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
-    composeTestRule.onNodeWithTag("chat-sidebar-progress").performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("chat-sidebar-workbench").performTouchInput { swipeLeft() }
     composeTestRule.waitUntil(5000) {
       composeTestRule.onAllNodesWithTag("chat-sidebar").fetchSemanticsNodes().isEmpty()
     }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
+    composeTestRule.onNodeWithTag("capability-category-plugins").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").performTouchInput { swipeLeft() }
     composeTestRule.onNodeWithTag("capability-row-skills").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-panel-close").assertDoesNotExist()
     composeTestRule.onNodeWithTag("capability-row-skills").performTouchInput { swipeRight() }
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("capability-title").performClick()
     composeTestRule.onNodeWithTag("capability-category-skills").performClick()
     composeTestRule.onNodeWithTag("capability-row-skills").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("capability-title").performClick()
-    composeTestRule.onNodeWithTag("capability-category-plugins").performClick()
+    composeTestRule.onNodeWithTag("capability-category-plugins").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-refresh").assertDoesNotExist()
     composeTestRule.waitUntil(5000) {
@@ -2278,8 +2293,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertDoesNotExist()
     composeTestRule.onNodeWithTag("capability-discover").assertDoesNotExist()
     for (kind in listOf("skills", "connections", "agents", "channels")) {
-      composeTestRule.onNodeWithTag("capability-title").performClick()
-      composeTestRule.onNodeWithTag("capability-category-$kind").performClick()
+      composeTestRule.onNodeWithTag("capability-category-$kind").performScrollTo().performClick()
       composeTestRule.onNodeWithTag("capability-row-$kind").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertDoesNotExist()
       if (kind == "skills") {
@@ -2318,11 +2332,144 @@ class MainScreenTest {
       if (kind == "channels") composeTestRule.onNodeWithTag("capability-panel-pair").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-panel-close").performClick()
     }
-    composeTestRule.onNodeWithTag("capability-title").performClick()
-    composeTestRule.onNodeWithTag("capability-category-plugins").performClick()
+    composeTestRule.onNodeWithTag("capability-category-plugins").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("capability-search").assertTextContains("Meeting")
+    composeTestRule.onNodeWithTag("capability-search-clear").performClick()
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertIsDisplayed()
     composeTestRule.runOnIdle {
       assertTrue(chatSetups.map { it.second } == listOf(false, true))
+    }
+  }
+
+  @SdkSuppress(minSdkVersion = 29)
+  @Test fun capabilitySetupOpensExplicitAuthorizationAndSavesScanOnlyQr() {
+    val authorization = "https://example.com/authorize-device"
+    val qrPayload = "https://example.com/scan/" + UUID.randomUUID()
+    composeTestRule.setContent {
+      XopcTheme {
+        CapabilitiesScreen(androidx.compose.foundation.layout.PaddingValues(), PersonalUiState(), emptyMap(),
+          onLoad = { category ->
+            ai.xopc.mobile.gateway.CapabilityPage(if (category == "channels") listOf(
+              ai.xopc.mobile.gateway.CapabilityItem("direct", "Direct setup", group = "available"),
+              ai.xopc.mobile.gateway.CapabilityItem("scan", "Scan setup", group = "available"),
+              ai.xopc.mobile.gateway.CapabilityItem("form", "Long setup form", group = "available"),
+            ) else emptyList())
+          },
+          onOpenAgent = {}, onExit = {}, onSetupChat = { _, _ -> },
+          onPanel = { _, id, _ ->
+            when (id) {
+              "direct" -> JSONObject().put("qrUrl", qrPayload)
+                .put("authorizationUrl", authorization).put("deviceVerificationCode", "123456")
+              "form" -> JSONObject().put("fields", JSONArray((1..10).map { field ->
+                JSONObject().put("id", "option-$field").put("type", "text").put("label", "Option $field")
+              })).put("actions", JSONArray().put(JSONObject().put("id", "save").put("label", "Save")))
+              else -> JSONObject().put("qrUrl", qrPayload)
+            }
+          })
+      }
+    }
+    composeTestRule.onNodeWithTag("capability-category-channels").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("capability-row-direct").performClick()
+    composeTestRule.onNodeWithTag("capability-panel-qr").assertDoesNotExist()
+    val close = composeTestRule.onNodeWithTag("capability-panel-close")
+    val compactTop = close.fetchSemanticsNode().boundsInRoot.top
+    fun drawerTop() = close.fetchSemanticsNode().boundsInRoot.top
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val filter = IntentFilter(Intent.ACTION_VIEW).apply {
+      addDataScheme("https")
+      addDataAuthority("example.com", null)
+      addDataPath("/authorize-device", PatternMatcher.PATTERN_LITERAL)
+    }
+    val monitor = instrumentation.addMonitor(filter, null, true)
+    try {
+      composeTestRule.onNodeWithTag("capability-panel-open-authorization").performClick()
+      composeTestRule.waitUntil(5000) { monitor.hits == 1 }
+    } finally {
+      instrumentation.removeMonitor(monitor)
+    }
+    val otherMethods = composeTestRule.onNodeWithTag("capability-panel-other-methods")
+    otherMethods.performClick()
+    composeTestRule.onNodeWithTag("capability-panel-qr").assertExists()
+    composeTestRule.waitUntil(5000) { drawerTop() < compactTop - 48f }
+    otherMethods.performClick()
+    composeTestRule.waitUntil(5000) { drawerTop() >= compactTop - 8f }
+    close.performClick()
+
+    composeTestRule.onNodeWithTag("capability-row-scan").performClick()
+    composeTestRule.onNodeWithTag("capability-panel-open-authorization").assertDoesNotExist()
+    val resolver = composeTestRule.activity.contentResolver
+    val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+    val idColumn = MediaStore.Images.Media._ID
+    fun qrIds(): Set<Long> = resolver.query(collection, arrayOf(idColumn),
+      "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ? AND ${MediaStore.Images.Media.IS_PENDING} = 0",
+      arrayOf("xopc-qr-%"), null)?.use { rows ->
+      buildSet { while (rows.moveToNext()) add(rows.getLong(0)) }
+    }.orEmpty()
+    val before = qrIds()
+    composeTestRule.onNodeWithTag("capability-panel-save-qr").assertIsDisplayed().performClick()
+    composeTestRule.waitUntil(5000) { (qrIds() - before).isNotEmpty() }
+    val uri = ContentUris.withAppendedId(collection, (qrIds() - before).single())
+    try {
+      val bitmap = requireNotNull(resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) })
+      val pixels = IntArray(bitmap.width * bitmap.height)
+      bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+      val data = BinaryBitmap(HybridBinarizer(RGBLuminanceSource(bitmap.width, bitmap.height, pixels)))
+      assertEquals(qrPayload, QRCodeReader().decode(data).text)
+    } finally {
+      resolver.delete(uri, null, null)
+    }
+    close.performClick()
+    composeTestRule.onNodeWithTag("capability-row-form").performClick()
+    composeTestRule.waitUntil(5000) { drawerTop() < compactTop - 48f }
+    val save = composeTestRule.onNodeWithTag("capability-panel-save")
+    save.assertIsDisplayed()
+    composeTestRule.onNodeWithTag("capability-field-option-10").performScrollTo().assertIsDisplayed()
+    save.assertIsDisplayed()
+  }
+
+  @Test fun capabilityPagerRestoresListWhileSlowCategoryLoads() {
+    val slow = kotlinx.coroutines.CompletableDeferred<Unit>()
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    composeTestRule.setContent {
+      XopcTheme {
+        MainScreen(connection = ConnectionUiState(profile = profile), onLoadCapabilities = { category ->
+          if (category == "skills") slow.await()
+          ai.xopc.mobile.gateway.CapabilityPage((0..24).map { index ->
+            ai.xopc.mobile.gateway.CapabilityItem("$category-$index", "Result $index", group = "installed")
+          })
+        })
+      }
+    }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
+    val pager = composeTestRule.onNodeWithTag("capability-pager")
+    val plugin = composeTestRule.onNodeWithTag("capability-category-plugins")
+    plugin.performScrollTo().performClick()
+    pager.performTouchInput {
+      swipe(center, center.copy(x = center.x - width * 0.12f), durationMillis = 480)
+    }
+    plugin.assertIsSelected()
+    pager.performTouchInput { swipeUp() }
+    composeTestRule.onNodeWithTag("capability-row-plugins-0").assertIsNotDisplayed()
+    pager.performTouchInput { swipeLeft() }
+    composeTestRule.onNodeWithTag("capability-category-skills").assertIsSelected()
+    composeTestRule.onNodeWithTag("capability-loading").assertIsDisplayed()
+    pager.performTouchInput { swipeRight() }
+    plugin.assertIsSelected()
+    composeTestRule.onNodeWithTag("capability-row-plugins-0").assertIsNotDisplayed()
+    composeTestRule.onNodeWithTag("capability-category-skills").performClick()
+    slow.complete(Unit)
+    composeTestRule.waitUntil(5000) {
+      composeTestRule.onAllNodesWithTag("capability-row-skills-0").fetchSemanticsNodes().isNotEmpty()
+    }
+    val device = InstrumentationRegistry.getInstrumentation().uiAutomation
+    val display = composeTestRule.activity.resources.displayMetrics
+    val y = display.heightPixels / 2
+    android.os.ParcelFileDescriptor.AutoCloseInputStream(
+      device.executeShellCommand("input swipe 1 $y ${display.widthPixels * 3 / 4} $y 350"),
+    ).use { it.readBytes() }
+    composeTestRule.waitUntil(5000) {
+      composeTestRule.onAllNodesWithTag("capability-pager").fetchSemanticsNodes().isEmpty()
     }
   }
 
@@ -2742,7 +2889,7 @@ class MainScreenTest {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val state = mutableStateOf(ConnectionUiState(profile = profile, selectedConversationId = "source",
       progress = ProgressUiState(gatewayId = "gateway", automations = AutomationUiState(listLoaded = true))))
-    val tab = mutableStateOf(HomeTab.Projects)
+    val tab = mutableStateOf(HomeTab.Automations)
     var sends = 0
     var automationReads = 0
     composeTestRule.setContent {
@@ -2760,8 +2907,6 @@ class MainScreenTest {
           }, onSendMessage = { sends++ })
       }
     }
-    composeTestRule.onNodeWithTag("work-page-menu").performClick()
-    composeTestRule.onNodeWithTag("work-page-automations").performClick()
     composeTestRule.onNodeWithTag("automation-idea-morning").performClick()
     composeTestRule.onNodeWithTag("automation-configuration-close").assertExists()
     composeTestRule.onNodeWithTag("assistant-input").assertTextContains(
@@ -3133,6 +3278,28 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("message-assistant-card-message-1").performTouchInput { longClick() }
     composeTestRule.onNodeWithTag("message-copy-action").performScrollTo().performClick()
     composeTestRule.runOnIdle { assert(copied == listOf("val x = 1\n\necho ok", answer)) }
+  }
+
+  @Test fun assistantSelectTextOpensInlineAndCopiesTheWholeRenderedAnswer() {
+    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
+    val answer = "A **useful** answer with several words."
+    val copied = mutableListOf<String>()
+    composeTestRule.setContent {
+      MainContent(selectedTab = HomeTab.Assistant, onSelectTab = {},
+        connection = ConnectionUiState(profile = profile, selectedConversationId = "11111111-2222-3333-4444-555555555555",
+          messages = listOf(ConversationMessage("message-selection", "assistant", answer))),
+        onCopyMessageText = { copied += it })
+    }
+    composeTestRule.onNodeWithTag("message-assistant-card-message-selection").performTouchInput { longClick() }
+    composeTestRule.onNodeWithTag("message-select-text-action").performClick()
+    composeTestRule.onNodeWithTag("message-inline-selection").assertExists()
+    composeTestRule.onNodeWithTag("message-detail-panel").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("message-selection-toolbar").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("message-selection-share").assertExists()
+    composeTestRule.onNodeWithTag("message-selection-select-all").performClick()
+    composeTestRule.onNodeWithTag("message-selection-copy").performClick()
+    composeTestRule.runOnIdle { assertEquals(listOf("A useful answer with several words."), copied) }
+    composeTestRule.onNodeWithTag("message-inline-selection").assertDoesNotExist()
   }
 
   @Test fun assistantMessageMenuOmitsCopyCodeWithoutFencedCode() {

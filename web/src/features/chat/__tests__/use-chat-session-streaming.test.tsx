@@ -4,13 +4,18 @@ import { setPendingAgentRun } from '../messages/message-sender';
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter, useSearchParams } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Message } from '@/features/chat/messages/messages.types';
+import { useChatSessionShell } from '@/features/chat/rendering/use-chat-render-state';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { getChatSessionSnapshot, useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { resolveResumeRunId } from '@/features/chat/session/resolve-resume-run-id';
-import type { SessionManager } from '@/features/chat/session/session-manager';
+import { SessionManager } from '@/features/chat/session/session-manager';
+import { useChatSessionLoad } from '@/features/chat/session/use-chat-session-load';
+import { focusedConversationIdRef, useChatSessionRoute } from '@/features/chat/session/use-chat-session-route';
 import { useChatSessionStreaming } from '@/features/chat/session/use-chat-session-streaming';
 import type { ChatFollowUpClarifyApi } from '@/features/chat/session/use-chat-follow-up-clarify';
 
@@ -83,6 +88,95 @@ describe('useChatSessionStreaming run lookup', () => {
     ]);
     act(() => streaming.finalizeMessage(conversationId, status));
     expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(1);
+  });
+
+  it('keeps task history out of Ada when the run ends after closing task details', async () => {
+    const adaId = 'ada-main';
+    const workerId = 'task-execution';
+    const taskId = 'news-task';
+    const runId = 'news-run';
+    const adaMessage: Message = { role: 'user', content: [{ type: 'text', text: 'Hello Ada' }] };
+    const taskBrief: Message = { role: 'user', turnId: runId, content: [{ type: 'text', text: '<task_brief>Find news</task_brief>' }] };
+    const taskReply: Message = { role: 'assistant', turnId: runId, content: [{ type: 'text', text: 'Saved task result' }] };
+    const store = useChatSessionStore.getState();
+    store.setCommittedSnapshot(adaId, { messages: [adaMessage], hasMore: false, name: 'Ada' });
+    store.setCommittedSnapshot(workerId, { messages: [taskBrief], hasMore: false, name: 'Task execution' });
+
+    const manager = new SessionManager();
+    const loadSession = vi.spyOn(manager, 'loadSession')
+      .mockResolvedValueOnce({ messages: [taskBrief], hasMore: false })
+      .mockResolvedValueOnce({ messages: [taskBrief, taskReply], hasMore: false });
+    vi.spyOn(manager, 'loadSessionAgentConfig').mockResolvedValue({
+      model: '', thinkingLevel: 'off', activityDetail: { default: 'off', override: null, effective: 'off', source: 'default' },
+      effectiveWorkspacePath: '', workingDirectoryLocked: false, workspaceSource: 'agent_workspace', userContextMode: 'enabled',
+    });
+    vi.mocked(resolveResumeRunId).mockResolvedValue(runId);
+    let finishRun!: () => void;
+    vi.spyOn(chatRunManager.senderFor(workerId), 'resume').mockImplementation((resumedRunId, resumedConversationId, callbacks) =>
+      new Promise(resolve => {
+        callbacks?.onStreamStart(resumedRunId);
+        callbacks?.onToken('Live task result');
+        finishRun = () => {
+          callbacks?.onResult({ runId: resumedRunId, conversationId: resumedConversationId, status: 'success' });
+          resolve(true);
+        };
+      }));
+
+    function Ada() {
+      const { viewConversationId } = useChatSessionRoute(adaId);
+      const session = useChatSessionShell(viewConversationId);
+      return <div data-ada-history>{session?.messages.flatMap(message => message.content.map(part => part.type === 'text' ? part.text : ''))}</div>;
+    }
+
+    let resumeTask!: ReturnType<typeof useChatSessionStreaming>['tryResumeAgentRun'];
+    function TaskDetails({ onClose }: { onClose: () => void }) {
+      const { routeConversationIdRef } = useChatSessionRoute(workerId);
+      const refs = { sessionMgrRef: { current: manager }, sendingRef: { current: false }, streamingRef: { current: false } };
+      const load = useChatSessionLoad({
+        ...refs, routeConversationIdRef, taskId, conversationId: workerId,
+        loadingSessionRef: { current: false }, messagesLenRef: { current: 0 }, thinkingSupportGenRef: { current: 0 },
+        navigateToSession: vi.fn(), resolveAgentIdForPost: () => 'worker', detachForNewConversation: vi.fn(),
+        sessionAgentId: 'worker', currentProjectId: null, hasMore: false,
+      });
+      ({ tryResumeAgentRun: resumeTask } = useChatSessionStreaming({
+        ...refs, ...load, conversationId: workerId, taskId, thinkingLevel: 'off', modelSupportsThinking: false,
+        conversationIdRef: focusedConversationIdRef, sendMessageRef: { current: async () => {} },
+        shouldApplyStreamUpdate: id => id === routeConversationIdRef.current,
+        fq: { dismissClarify: vi.fn(), makeOnClarifyRequest: () => vi.fn() } as unknown as ChatFollowUpClarifyApi,
+      }));
+      return <div role="dialog"><button type="button" onClick={onClose}>Close task details</button></div>;
+    }
+
+    function PersonalRoute() {
+      const [params, setParams] = useSearchParams();
+      return <><Ada />{params.has('task') ? <TaskDetails onClose={() => setParams({})} /> : null}</>;
+    }
+
+    vi.useFakeTimers();
+    try {
+      act(() => root.render(<MemoryRouter initialEntries={[`/personal?task=${taskId}`]}><PersonalRoute /></MemoryRouter>));
+      let run!: Promise<void>;
+      await act(async () => { run = resumeTask(workerId); });
+      act(() => container.querySelector<HTMLButtonElement>('[role="dialog"] button')!.click());
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+      expect(focusedConversationIdRef.current).toBe(adaId);
+      expect(getChatSessionSnapshot(workerId)?.streaming).toBe(true);
+
+      await act(async () => {
+        finishRun();
+        await run;
+        await vi.advanceTimersByTimeAsync(400);
+      });
+
+      expect(container.querySelector('[data-ada-history]')?.textContent).toBe('Hello Ada');
+      expect(loadSession).toHaveBeenCalledTimes(2);
+      expect(loadSession).toHaveBeenLastCalledWith(workerId, 0, undefined, taskId, expect.any(Array));
+      expect(getChatSessionSnapshot(workerId)?.messages).toMatchObject([taskBrief, taskReply]);
+      expect(getChatSessionSnapshot(workerId)?.streaming).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      chatRunManager.abort(workerId, false);
+    }
   });
 
   it('shows a rejected thinking configuration instead of a generic network error', async () => {

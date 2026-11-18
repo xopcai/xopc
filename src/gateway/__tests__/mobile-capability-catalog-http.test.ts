@@ -153,6 +153,7 @@ it('serves only category metadata to a signed mobile device through the authenti
   const mcpInteract = vi.fn(async (_id: string, action: string) =>
     action === 'token' ? { ...setupGoal, phase: 'ready', version: 4 } : setupGoal);
   let setupAvailable = true;
+  const enterprisePending = new Set<string>();
   const persistWeChat = vi.fn(() => {
     const accountsDir = join(resolveStateDir(), 'weixin', 'accounts');
     mkdirSync(accountsDir, { recursive: true });
@@ -210,7 +211,11 @@ it('serves only category metadata to a signed mobile device through the authenti
       if (channel === 'telegram') return { ok: false, message: 'Could not verify bot token' };
       if (['dingtalk', 'wecom'].includes(channel) && actionId === 'setup.start') return { ok: true, payload: {
         type: 'qr', conversationId: channel + '-pair', qrPayload: 'https://example.com/' + channel,
+        ...(channel === 'dingtalk' ? { deviceVerification: { url: 'https://example.com/verify', userCode: 'ABCD-1234' } } : {}),
       } };
+      if (actionId === 'setup.status' && enterprisePending.delete(channel)) {
+        return { ok: true, payload: { type: 'poll', phase: 'pending' } };
+      }
       if (['dingtalk', 'wecom'].includes(channel) && actionId === 'setup.status') return { ok: true,
         nextConfig: { ...config, channels: { ...config.channels, [channel]: channel === 'dingtalk'
           ? { enabled: true, clientId: 'test-client', clientSecret: 'test-enterprise-secret' }
@@ -529,6 +534,7 @@ it('serves only category metadata to a signed mobile device through the authenti
     const weChat = panel('channels', 'weixin');
     const qr = (await (await signed(weChat, 'POST', { action: 'pair' })).json()).payload;
     expect(qr).toMatchObject({ qrUrl: 'https://example.com/pair', pollAction: 'pair-status' });
+    expect(qr.authorizationUrl).toBeUndefined();
     expect((await (await signed(weChat)).json()).payload).toMatchObject({
       flow: qr.flow, qrUrl: qr.qrUrl, pollAction: 'pair-status',
     });
@@ -555,7 +561,7 @@ it('serves only category metadata to a signed mobile device through the authenti
     }));
     const feishu = panel('channels', 'feishu');
     const feishuStart = (await (await signed(feishu)).json()).payload;
-    expect(feishuStart.actions[0]).toEqual({ id: 'pair', label: 'Scan to connect' });
+    expect(feishuStart.actions[0]).toEqual({ id: 'pair', label: 'Start connection' });
     expect(feishuStart.fields.every((field: { advanced?: boolean }) => field.advanced)).toBe(true);
     expect((await (await signed(feishu, 'POST', { action: 'manual' })).json()).payload.fields)
       .toContainEqual(expect.objectContaining({ id: 'appId', advanced: false }));
@@ -578,9 +584,20 @@ it('serves only category metadata to a signed mobile device through the authenti
     for (const id of ['dingtalk', 'wecom']) {
       const route = panel('channels', id);
       const beforePair = (await (await signed(route)).json()).payload;
-      expect(beforePair.actions).toContainEqual({ id: 'pair', label: 'Scan to connect' });
+      expect(beforePair.actions).toContainEqual({ id: 'pair', label: 'Start connection' });
       const qr = (await (await signed(route, 'POST', { action: 'pair' })).json()).payload;
       expect(qr).toMatchObject({ qrUrl: 'https://example.com/' + id, pollAction: 'pair-status' });
+      if (id === 'dingtalk') {
+        const verification = { authorizationUrl: 'https://example.com/verify', deviceVerificationCode: 'ABCD-1234' };
+        expect(qr).toMatchObject(verification);
+        expect(qr.expiresAt).toBeGreaterThan(Date.now());
+        expect((await (await signed(route)).json()).payload).toMatchObject({ ...verification, flow: qr.flow });
+        enterprisePending.add(id);
+        expect((await (await signed(route, 'POST', { action: 'pair-status', flow: qr.flow })).json()).payload)
+          .toMatchObject({ ...verification, flow: qr.flow, qrUrl: qr.qrUrl, expiresAt: qr.expiresAt });
+      } else {
+        expect(qr.authorizationUrl).toBeUndefined();
+      }
       expect((await (await signed(route, 'POST', { action: 'pair-status', flow: qr.flow })).json()).payload)
         .toMatchObject({ message: 'Channel paired and saved.' });
       const reloaded = await (await signed(route)).text();

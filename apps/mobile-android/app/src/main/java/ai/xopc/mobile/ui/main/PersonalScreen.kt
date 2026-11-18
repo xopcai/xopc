@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -287,10 +288,11 @@ private fun PersonalGoals(summary: PersonalSummary, onOpenGoal: (PersonalGoal?) 
 @Composable
 private fun PersonalCard(onClick: (() -> Unit)? = null, tag: String? = null,
   content: @Composable () -> Unit) {
+  val shape = themedCorners(16)
   val modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
     .then(if (tag != null) Modifier.testTag(tag) else Modifier)
-    .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-  Card(modifier, shape = themedCorners(16),
+    .then(if (onClick != null) Modifier.clip(shape).clickable(onClick = onClick) else Modifier)
+  Card(modifier, shape = shape,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
   }

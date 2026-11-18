@@ -950,6 +950,8 @@
 "查看任务" = "View task";
 
 "选择文本" = "Select text";
+"全选" = "Select All";
+"分享" = "Share";
 "长按显示消息操作" = "Touch and hold for message actions";
 
 "变更记录" = "Change log";
@@ -1337,3 +1339,4 @@
 "系统通知设置" = "System Notification Settings";
 "回复语言" = "Reply Language";
 "默认模型失败时，按顺序尝试。" = "If the default model fails, these are tried in order.";
+"工作台" = "Workbench";

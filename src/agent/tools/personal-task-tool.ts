@@ -62,7 +62,7 @@ const PersonalTaskSchema = Type.Object({
   expectedVersion: Type.Optional(Type.Integer({ minimum: 1 })),
   supersedesEntryIds: Type.Optional(Type.Array(Type.String({ description: 'Only actual earlier instruction/answer entry IDs from collaboration. Omit for original-contract changes or the first revision; never use task/result/run IDs.' }), { maxItems: 40 })),
   instruction: Type.Optional(Type.String({ description: 'The user’s new direction for this delegated Task.' })),
-  taskReference: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: 'For instruct with multiple candidate tasks, quote the shortest distinctive task reference from the latest user message, such as 华东. If a reference fits several tasks, ask which one.' })),
+  taskReference: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: 'For instruct, omit for an implicit follow-up to the only open task. For a named task or when several open tasks exist, quote a distinctive reference from the latest user message, such as 华东 or 新闻任务. If the target is still ambiguous, ask which task the user means.' })),
   entryId: Type.Optional(Type.String({ description: 'Read one complete collaboration entry, including its question or instruction body.' })),
   afterSequence: Type.Optional(Type.Integer({ minimum: 0 })),
   bodyOffset: Type.Optional(Type.Integer({ minimum: 0, description: 'Character offset for an entry body; follow nextBodyOffset until absent.' })),
@@ -338,19 +338,29 @@ export function createPersonalTaskTool(deps: PersonalTaskToolDeps): AgentTool<ty
         if (command === 'instruct' && !requestResolved) {
           const activeInputId = getSessionInputState(conversationId).activeInputId;
           const activeInput = activeInputId ? getSessionInputById(conversationId, activeInputId) : undefined;
-          const directory = new TaskOriginRepository();
           const workerUpdate = activeInput?.origin.type === 'system' && activeInput.origin.source === 'task_update';
-          if (activeInput?.kind === 'message' && !workerUpdate && directory.list(conversationId, 1).total > 1) {
+          if (activeInput?.kind === 'message' && !workerUpdate) {
+            const directory = new TaskOriginRepository();
             const reference = input.taskReference?.trim();
-            if (!reference || !activeInput.content.toLowerCase().includes(reference.toLowerCase())) {
-              throw new Error('Provide taskReference quoted from the latest user message. If the user did not identify one task, ask which task they mean without retrying the update.');
-            }
-            const candidates = directory.list(conversationId, 2, { query: reference.replace(/(?:那|这)[份个项条]$/u, '') || reference });
-            if (candidates.total > 1) {
-              throw new Error('The taskReference does not identify this task uniquely. Ask which task the user means without retrying this reference.');
-            }
-            if (candidates.items[0]?.id !== taskId) {
-              throw new Error('The taskReference does not identify the selected task. Use a distinctive part of its title quoted from the user’s message, or ask which task they mean.');
+            if (!reference) {
+              if (directory.list(conversationId, 1, { excludeClosed: true }).total > 1) {
+                throw new Error('Several tasks are still open. Provide taskReference quoted from the latest user message, or ask which task they mean.');
+              }
+            } else {
+              if (!activeInput.content.toLowerCase().includes(reference.toLowerCase())) {
+                throw new Error('Provide taskReference quoted from the latest user message, or omit it for an implicit follow-up to the only open task.');
+              }
+              let matches = directory.list(conversationId, 1, { query: reference });
+              const shortReference = reference.replace(/(?:[这那][份个项条](?:任务)?|(?:的)?任务|\s+task)$/iu, '').trimEnd();
+              if (!matches.total && shortReference && shortReference !== reference) {
+                matches = directory.list(conversationId, 1, { query: shortReference });
+              }
+              if (matches.total > 1) {
+                throw new Error('The taskReference does not identify this task uniquely. Ask which task the user means without retrying this reference.');
+              }
+              if (matches.items[0]?.id !== taskId) {
+                throw new Error('The taskReference does not identify the selected task. Use a distinctive quote from the user’s message that matches its title or objective, or ask which task they mean.');
+              }
             }
           }
         }

@@ -1,7 +1,12 @@
 import { common } from '@kit.AbilityKit';
+import { pasteboard } from '@kit.BasicServicesKit';
+import { fileIo as fs, fileUri } from '@kit.CoreFileKit';
+import { image } from '@kit.ImageKit';
+import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { markdownLink } from '../common/markdown';
 import { gatewaySession } from '../service/gatewaySession';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
 import { XopcHttpError } from '../service/transport';
 import { XopcCapabilityLogo } from './CapabilityLogo';
@@ -19,10 +24,15 @@ interface CapabilitySearchResult { id: string; name: string; summary?: string; s
 interface CapabilityPanelPayload {
   fields?: CapabilityField[]; actions?: CapabilityAction[]; message?: string; details?: string;
   authorizationUrl?: string; qrUrl?: string; flow?: string; revision?: number;
+  deviceVerificationCode?: string; expiresAt?: number;
   pollAction?: string; results?: CapabilitySearchResult[]; chatPrompt?: string;
 }
 interface CapabilityPanelEnvelope { ok: boolean; payload?: CapabilityPanelPayload; error?: string; }
 interface CapabilityPanelCommand { action: string; values: Record<string, string>; flow?: string; revision?: number; }
+
+export function capabilityDrawerHeight(expanded: boolean): number | string {
+  return expanded ? '82%' : 420;
+}
 
 @ComponentV2
 export struct XopcCapabilityPanelView {
@@ -36,8 +46,10 @@ export struct XopcCapabilityPanelView {
   @Param avatarRevision: number = 0;
   @Event onClose: () => void = (): void => {};
   @Event onChanged: () => void = (): void => {};
+  @Event onExpandedChange: (expanded: boolean) => void = (_expanded: boolean): void => {};
   @Event onUseInChat: (prompt: string) => void = (_prompt: string): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
   @Local panel?: CapabilityPanelPayload;
   @Local values: Map<string, string> = new Map<string, string>();
   @Local busy: boolean = false;
@@ -45,11 +57,17 @@ export struct XopcCapabilityPanelView {
   @Local advanced: boolean = false;
   @Local detailsOpen: boolean = false;
   @Local newGroup: string = '';
+  @Local openedUrl: string = '';
+  @Local showQr: boolean = false;
+  @Local savingQr: boolean = false;
+  @Local qrFeedback: string = '';
   private generation: number = 0;
   private alive: boolean = false;
   private pollTimer: number = -1;
   private deadline: number = 0;
   private openWhenReady: boolean = false;
+  private pollingNow: boolean = false;
+  private reportedExpanded: boolean = false;
 
   aboutToAppear(): void { this.alive = true; void this.request(); }
   aboutToDisappear(): void {
@@ -57,6 +75,31 @@ export struct XopcCapabilityPanelView {
     ++this.generation;
     this.clearPoll();
     this.values.clear();
+  }
+
+  @Monitor('layout.foreground')
+  onForegroundChange(): void {
+    if (!this.layout.foreground) {
+      this.clearPoll();
+      return;
+    }
+    const action = this.panel?.pollAction;
+    if (action) void this.request(action, true);
+  }
+
+  @Monitor('panel', 'values', 'showQr', 'advanced', 'detailsOpen')
+  onDrawerContentChange(): void {
+    if (!this.alive) return;
+    const extraFields = this.fields(true);
+    const shownFields = this.advanced ? this.fields(false).concat(extraFields) : this.fields(false);
+    const expanded = (Boolean(this.panel?.qrUrl) && (!this.panel?.authorizationUrl || this.showQr)) ||
+      (this.advanced && (extraFields.length > 0 || this.actions(true).length > 0)) ||
+      (this.detailsOpen && Boolean(this.panel?.details)) || shownFields.length >= 3 ||
+      shownFields.some((field: CapabilityField): boolean => field.type === 'multiline' || field.type === 'list') ||
+      (this.panel?.results?.length ?? 0) >= 3;
+    if (expanded === this.reportedExpanded) return;
+    this.reportedExpanded = expanded;
+    this.onExpandedChange(expanded);
   }
 
   private t(zh: string, en: string): string { return appSettings.effectiveLanguage().startsWith('zh') ? zh : en; }
@@ -75,7 +118,7 @@ export struct XopcCapabilityPanelView {
   private schedulePoll(): void {
     this.clearPoll();
     const action = this.panel?.pollAction;
-    if (!action || !this.alive) return;
+    if (!action || !this.alive || !this.layout.foreground) return;
     if (Date.now() >= this.deadline) {
       this.errorMessage = this.t('等待时间过长，可以刷新状态或重新开始。', 'This is taking longer than expected. Refresh or start again.');
       return;
@@ -84,7 +127,8 @@ export struct XopcCapabilityPanelView {
   }
 
   private async request(action: string = '', polling: boolean = false): Promise<void> {
-    if (this.busy || !this.alive) return;
+    if (this.busy || !this.alive || (polling && this.pollingNow)) return;
+    if (polling) this.pollingNow = true;
     this.clearPoll();
     const generation = ++this.generation;
     const previous = this.panel?.pollAction;
@@ -108,6 +152,8 @@ export struct XopcCapabilityPanelView {
       const result = JSON.parse(raw) as CapabilityPanelEnvelope;
       if (!result.ok || !result.payload) throw new Error(result.error ?? 'CAPABILITY_UNAVAILABLE');
       if (generation !== this.generation) return;
+      if (this.panel?.qrUrl !== result.payload.qrUrl) this.qrFeedback = '';
+      if (this.panel?.authorizationUrl !== result.payload.authorizationUrl) this.showQr = false;
       this.panel = result.payload;
       const next = new Map<string, string>();
       for (const field of result.payload.fields ?? []) {
@@ -139,6 +185,7 @@ export struct XopcCapabilityPanelView {
         }
       }
     } finally {
+      if (polling) this.pollingNow = false;
       if (generation === this.generation) {
         this.busy = false;
         this.schedulePoll();
@@ -164,9 +211,74 @@ export struct XopcCapabilityPanelView {
 
   private async authorize(raw: string): Promise<void> {
     const url = raw.startsWith('https://') ? markdownLink(raw) : '';
-    if (!url || !raw.startsWith('https://')) return;
-    try { await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(url, { appLinkingOnly: false }); }
+    if (!url) return;
+    try {
+      await (this.getUIContext().getHostContext() as common.UIAbilityContext).openLink(url, { appLinkingOnly: false });
+      this.openedUrl = url;
+    }
     catch (_) { this.errorMessage = this.t('无法打开授权页面，请重试。', 'Could not open sign-in. Try again.'); }
+  }
+
+  private authorizationLabel(): string {
+    if (this.openedUrl && this.openedUrl === this.panel?.authorizationUrl) {
+      return this.t('重新打开授权页', 'Reopen authorization');
+    }
+    return this.panel?.deviceVerificationCode ? this.t('打开验证页', 'Open verification page') : this.t('前往授权', 'Open authorization');
+  }
+
+  private async copyVerificationCode(): Promise<void> {
+    const code = this.panel?.deviceVerificationCode;
+    if (!code) return;
+    try {
+      await pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, code));
+    } catch (_) { this.errorMessage = this.t('无法复制验证码。', 'Could not copy the verification code.'); }
+  }
+
+  private async saveQr(): Promise<void> {
+    const qrUrl = this.panel?.qrUrl;
+    if (!qrUrl || this.savingQr || !this.alive) return;
+    if (this.panel?.expiresAt && Date.now() >= this.panel.expiresAt) {
+      this.qrFeedback = this.t('二维码已过期，请刷新状态。', 'The QR code expired. Refresh its status.');
+      return;
+    }
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    const title = 'xopc-qr-' + Date.now();
+    const path = context.cacheDir + '/' + title + '.png';
+    this.savingQr = true;
+    try {
+      const snapshot = await this.getUIContext().getComponentSnapshot().createFromBuilder((): void => {
+        this.qrTile(qrUrl);
+      });
+      const packer = image.createImagePacker();
+      let data: ArrayBuffer;
+      try {
+        data = await packer.packToData(snapshot, { format: 'image/png', quality: 100 });
+      } finally {
+        await snapshot.release();
+        await packer.release();
+      }
+      if (!this.alive || this.panel?.qrUrl !== qrUrl) return;
+      await this.writeQr(path, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC, data);
+      const destination = await photoAccessHelper.getPhotoAccessHelper(context).showAssetsCreationDialog(
+        [fileUri.getUriFromPath(path)], [{ title, fileNameExtension: 'png', photoType: photoAccessHelper.PhotoType.IMAGE }]);
+      if (destination.length === 0) return;
+      await this.writeQr(destination[0], fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC, data);
+      if (this.alive && this.panel?.qrUrl === qrUrl) this.qrFeedback = this.t('已保存到相册。', 'Saved to Photos.');
+    } catch (_) {
+      if (this.alive && this.panel?.qrUrl === qrUrl) {
+        this.qrFeedback = this.t('未能保存二维码，请重试。', 'Could not save the QR code. Try again.');
+      }
+    } finally {
+      try { await fs.unlink(path); } catch (_) {}
+      this.savingQr = false;
+    }
+  }
+
+  private async writeQr(path: string, mode: number, data: ArrayBuffer): Promise<void> {
+    const file = await fs.open(path, mode);
+    try {
+      if (await fs.write(file.fd, data) !== data.byteLength) throw new Error('INCOMPLETE_QR_WRITE');
+    } finally { await fs.close(file); }
   }
 
   private selectedOption(field: CapabilityField): number {
@@ -263,7 +375,8 @@ export struct XopcCapabilityPanelView {
   actionButton(action: CapabilityAction, primary: boolean) {
     Button(action.label).id('capability-panel-' + action.id).width('100%').height(46)
       .backgroundColor(primary ? this.colors.accent : Color.Transparent)
-      .fontColor(primary ? this.colors.onAccent : this.colors.chat.action).enabled(!this.busy)
+      .fontColor(primary ? this.colors.onAccent : action.id === 'pair-cancel' ? this.colors.secondary : this.colors.chat.action)
+      .enabled(!this.busy)
       .onClick((): void => { void this.perform(action); })
   }
 
@@ -316,14 +429,19 @@ export struct XopcCapabilityPanelView {
   }
 
   private primaryAction(): CapabilityAction | undefined {
-    if (this.readyPrompt() || this.panel?.authorizationUrl || this.panel?.pollAction) return undefined;
+    if (this.readyPrompt() || this.panel?.authorizationUrl || this.panel?.qrUrl || this.panel?.pollAction) return undefined;
     return this.actions(false)[0];
+  }
+
+  private cancelPairing(): CapabilityAction | undefined {
+    return this.actions(false).find((action: CapabilityAction): boolean => action.id === 'pair-cancel');
   }
 
   @Builder
   private panelFooter() {
-    if (this.readyPrompt() || this.primaryAction() || this.panel?.authorizationUrl) {
-      Column() {
+    if (this.readyPrompt() || this.primaryAction() || this.panel?.authorizationUrl || this.panel?.qrUrl || this.cancelPairing()) {
+      Divider().color(this.colors.border)
+      Column({ space: 4 }) {
         if (this.readyPrompt()) {
           Button(this.itemId.startsWith('conversation:') ? this.t('返回对话', 'Back to chat') : this.t('通过对话使用', 'Use in chat'))
             .id('capability-use-in-chat').width('100%').height(48).fontSize(16)
@@ -335,13 +453,76 @@ export struct XopcCapabilityPanelView {
               else this.onUseInChat(prompt);
             })
         } else if (this.panel?.authorizationUrl) {
-          Button(this.t('继续授权', 'Continue sign-in')).width('100%').height(48)
+          Button(this.authorizationLabel()).id('capability-panel-open-authorization').width('100%').height(48)
             .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).enabled(!this.busy)
             .onClick((): void => { void this.authorize(this.panel?.authorizationUrl ?? ''); })
+        } else if (this.panel?.qrUrl) {
+          this.qrSaveAction(true)
         } else if (this.primaryAction()) {
           this.actionButton(this.primaryAction()!, true)
         }
-      }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 }).backgroundColor(this.colors.surface)
+        if (this.cancelPairing() && this.cancelPairing()?.id !== this.primaryAction()?.id) {
+          this.actionButton(this.cancelPairing()!, false)
+        }
+      }.width('100%').padding({ left: 20, right: 20, top: 10, bottom: 12 }).backgroundColor(this.colors.surface)
+    }
+  }
+
+  @Builder
+  private qrTile(payload: string) {
+    Row() {
+      QRCode(payload).width(156).height(156).color(Color.Black).backgroundColor(Color.White)
+    }.padding(16).backgroundColor(Color.White).borderRadius(this.colors.corner(16))
+  }
+
+  @Builder
+  private qrSaveAction(primary: boolean) {
+    Button(this.savingQr ? this.t('正在保存…', 'Saving…') : this.t('保存二维码', 'Save QR code'))
+      .id('capability-panel-save-qr').width('100%').height(48)
+      .backgroundColor(primary ? this.colors.accent : this.colors.input)
+      .fontColor(primary ? this.colors.onAccent : this.colors.chat.action)
+      .enabled(!this.busy && !this.savingQr).onClick((): void => { void this.saveQr(); })
+    if (this.qrFeedback) {
+      Text(this.qrFeedback).fontSize(13).fontColor(this.colors.secondary).width('100%').textAlign(TextAlign.Center)
+    }
+  }
+
+  @Builder
+  private setupOptions() {
+    if (this.panel?.authorizationUrl && this.panel?.deviceVerificationCode) {
+      Row({ space: 12 }) {
+        Column({ space: 4 }) {
+          Text(this.t('验证码', 'Verification code')).fontSize(12).fontColor(this.colors.secondary)
+          Text(this.panel.deviceVerificationCode).fontFamily('monospace')
+            .fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Button(this.t('复制', 'Copy')).height(44).backgroundColor(this.colors.input).fontColor(this.colors.chat.action)
+          .enabled(!this.busy).onClick((): void => { void this.copyVerificationCode(); })
+      }.width('100%').padding({ left: 14, right: 14, top: 8, bottom: 8 }).backgroundColor(this.colors.panel)
+        .borderRadius(this.colors.corner(16)).border({ width: 1, color: this.colors.border })
+    }
+    if (this.panel?.authorizationUrl && this.panel?.qrUrl) {
+      Button() {
+        Row({ space: 10 }) {
+          Text(this.showQr ? this.t('收起二维码', 'Hide QR code') : this.t('其他方式', 'Other ways'))
+            .layoutWeight(1).fontSize(14).fontColor(this.colors.chat.action)
+          SymbolGlyph(this.showQr ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+            .fontSize(14).fontColor([this.colors.chat.action]).accessibilityLevel('no')
+        }.width('100%').padding({ left: 14, right: 14 })
+      }.id('capability-panel-other-methods').width('100%').height(44).padding(0)
+        .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel).accessibilitySelected(this.showQr)
+        .enabled(!this.busy).onClick((): void => { this.showQr = !this.showQr; })
+    }
+    if (this.panel?.qrUrl && (!this.panel.authorizationUrl || this.showQr)) {
+      Column({ space: 12 }) {
+        Row() {
+          this.qrTile(this.panel.qrUrl)
+        }.id('capability-panel-qr').accessibilityText(this.t('授权二维码', 'Authorization QR code'))
+        Text(this.t('从扫一扫的相册入口选图，或用另一台设备扫码。',
+          'Select the saved image if the scanner supports Photos, or scan with another device.'))
+          .fontSize(13).fontColor(this.colors.secondary).width('100%').textAlign(TextAlign.Center)
+        if (this.panel.authorizationUrl) this.qrSaveAction(false)
+      }.width('100%').padding(16).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
     }
   }
 
@@ -352,14 +533,14 @@ export struct XopcCapabilityPanelView {
         if (this.panel?.message || this.readyPrompt() || this.panel?.pollAction) {
           Row({ space: 10 }) {
             if (this.panel?.pollAction) {
-              LoadingProgress().width(20).height(20).color(this.colors.accent)
+              Text('').width(8).height(8).borderRadius(4).backgroundColor(this.colors.accent).accessibilityLevel('no')
             } else if (this.readyPrompt()) {
               SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([this.colors.success])
             }
             Text(this.panel?.message || this.t('可在对话中使用', 'Ready to use in chat')).fontSize(14)
               .fontColor(this.colors.foreground).layoutWeight(1)
-          }.id('capability-panel-status').width('100%').padding(14)
-            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
+          }.id('capability-panel-status').width('100%').padding({ left: 14, right: 14, top: 12, bottom: 12 })
+            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
         } else if (this.panel && this.description && this.category !== 'agents') {
           Text(this.description).fontSize(14).fontColor(this.colors.secondary).width('100%')
         }
@@ -371,11 +552,7 @@ export struct XopcCapabilityPanelView {
           if (this.panel?.pollAction) Button(this.t('刷新状态', 'Refresh status')).enabled(!this.busy)
             .onClick((): void => { if (this.panel?.pollAction) void this.request(this.panel.pollAction); })
         }
-        if (this.panel?.qrUrl) {
-          Row() {
-            QRCode(this.panel!.qrUrl!).width(176).height(176).color('#111318').backgroundColor(Color.White)
-          }.padding(12).backgroundColor(Color.White).borderRadius(16).alignSelf(ItemAlign.Center)
-        }
+        this.setupOptions()
         if (this.panel?.details) {
           Column({ space: 6 }) {
             Button(this.detailsOpen ? this.t('收起详情', 'Hide details') : this.t('查看详情', 'View details'))
@@ -391,7 +568,8 @@ export struct XopcCapabilityPanelView {
               (entry: CapabilityField): string => entry.id)
           }.width('100%').padding(14).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
         }
-        ForEach(this.actions(false).filter((action: CapabilityAction): boolean => action.id !== this.primaryAction()?.id),
+        ForEach(this.actions(false).filter((action: CapabilityAction): boolean =>
+          action.id !== this.primaryAction()?.id && action.id !== this.cancelPairing()?.id),
           (action: CapabilityAction) => { this.actionButton(action, false) }, (action: CapabilityAction): string => action.id)
         ForEach(this.panel?.results ?? [], (entry: CapabilitySearchResult) => { this.resultRow(entry) },
           (entry: CapabilitySearchResult): string => entry.id)

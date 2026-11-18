@@ -1,5 +1,5 @@
 import { XopcConversationShare } from './ConversationShare';
-import { LengthMetrics } from '@kit.ArkUI';
+import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { XopcTaskChatHeader } from './TaskChatHeader';
 import { XopcPhoneViewModel } from '../viewmodel/phoneViewModel';
@@ -45,6 +45,8 @@ import { XopcChatContext } from './ChatContext';
 import { XopcChatContextViewModel } from '../viewmodel/chatContextViewModel';
 import { MAX_ATTACHMENTS, validateAttachmentSize } from '../common/attachments';
 import { copyChatMessage, saveChatMessage } from '../service/chatMessageActions';
+import { XopcChatMenuTouch } from './ChatSelectableText';
+import { shareSelectedChatText } from '../service/chatMediaShare';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
 import { XopcChatPromptViewModel } from '../viewmodel/chatPromptViewModel';
 import { XopcConnectionWaitViewModel } from '../viewmodel/connectionWaitViewModel';
@@ -250,29 +252,33 @@ export struct XopcChatView {
   @Local messageDetailRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Local messageDetailContentReady: boolean = false;
   private messageDetailContentTimer: number = -1;
-  @Local assistantMenuOpen: boolean = false;
-  @Local assistantMenuRow: XopcChatRow = { id: '', role: 'assistant', text: '' };
+  @Local selectingMessageId: string = '';
   private pendingAssistantMenuAction: string = '';
-  @Computed get assistantMenuHasCode(): boolean {
-    return !!extractMarkdownCodeBlocks(chatAnswerText(this.assistantMenuRow));
-  }
-  @Computed get assistantMenuActions(): XopcChatMessageMenuAction[] {
+  private assistantMenuTouch: XopcChatMenuTouch = { rowId: '', x: 0, y: 0 };
+  @Local selectionOrigin: XopcChatMenuTouch = { rowId: '', x: 0, y: 0 };
+  private assistantMenuActions(row: XopcChatRow): XopcChatMessageMenuAction[] {
     const actions: XopcChatMessageMenuAction[] = [];
-    if (chatAnswerText(this.assistantMenuRow)) {
+    const answer = chatAnswerText(row);
+    if (answer) {
       actions.push({ id: 'copy', label: $r('app.string.chat_copy'), symbol: $r('sys.symbol.doc_plaintext'), enabled: true });
       actions.push({ id: 'select', label: $r('app.string.chat_select_text'), symbol: $r('sys.symbol.doc_text'), enabled: true });
-      actions.push({ id: 'save', label: $r('app.string.chat_save_note'), symbol: $r('sys.symbol.bookmark'), enabled: !this.savingNote });
-      if (!(this.assistantMenuRow.media || []).some((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/'))) {
-        actions.push({ id: 'read', label: this.reader.sourceId === this.assistantMenuRow.id && this.reader.state === 'playing'
-          ? $r('app.string.pause') : this.reader.sourceId === this.assistantMenuRow.id && this.reader.state === 'paused'
+    }
+    if (!this.chat.runId && !this.chat.sending) {
+      actions.push({ id: 'regenerate', label: $r('app.string.chat_regenerate'), symbol: $r('sys.symbol.arrow_clockwise'), enabled: true });
+    }
+    if (answer) {
+      if (!(row.media || []).some((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/'))) {
+        actions.push({ id: 'read', label: this.reader.sourceId === row.id && this.reader.state === 'playing'
+          ? $r('app.string.pause') : this.reader.sourceId === row.id && this.reader.state === 'paused'
           ? $r('app.string.resume') : $r('app.string.chat_read_aloud'), symbol: $r('sys.symbol.speaker_wave_2'),
           enabled: this.reader.state !== 'loading' });
       }
+      actions.push({ id: 'share', label: $r('app.string.chat_share'), symbol: $r('sys.symbol.share'), enabled: true });
+      actions.push({ id: 'save', label: $r('app.string.chat_save_note'), symbol: $r('sys.symbol.bookmark'), enabled: !this.savingNote });
     }
     actions.push({ id: 'detail', label: $r('app.string.chat_message_detail'), symbol: $r('sys.symbol.doc_text'), enabled: true });
     actions.push({ id: 'execution', label: $r('app.string.chat_steps'), symbol: $r('sys.symbol.list_bullet'), enabled: true });
-    if (!this.chat.runId && !this.chat.sending) actions.push({ id: 'regenerate', label: $r('app.string.chat_regenerate'), symbol: $r('sys.symbol.arrow_clockwise'), enabled: true });
-    if (this.assistantMenuHasCode) actions.push({ id: 'copy-code', label: $r('app.string.chat_copy_code'), symbol: $r('sys.symbol.doc_plaintext'), enabled: true });
+    if (extractMarkdownCodeBlocks(answer)) actions.push({ id: 'copy-code', label: $r('app.string.chat_copy_code'), symbol: $r('sys.symbol.doc_plaintext'), enabled: true });
     return actions;
   }
   @Local executionOpen: boolean = false;
@@ -835,6 +841,7 @@ export struct XopcChatView {
   }
   private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
   private dismissOverlay(): boolean {
+    if (this.selectingMessageId) { this.selectingMessageId = ''; return true; }
     if (this.taskOverviewOpen) { this.taskOverviewOpen = false; return true; }
     if (this.phonePage === 1) { this.phonePage = 0; return true; }
     if (this.personalSettingsOpen) { this.personalSettingsOpen = false; return true; }
@@ -898,6 +905,7 @@ export struct XopcChatView {
   onAuxiliaryState(): void { if (this.visible) { this.options.refreshQueue(); this.prompt.refresh(); void this.connectionWait.refresh(); } }
   @Monitor('chat.selectedId')
   onConnectionWaitTarget(): void {
+    this.selectingMessageId = '';
     this.voice.dismissError(); this.reader.leaveForeground(); this.composerNotice.clear();
     this.connectionWait.start(this.chat.selectedId);
     if (!this.visible || !this.layout.foreground) this.connectionWait.pause();
@@ -911,7 +919,7 @@ export struct XopcChatView {
   }
   @Monitor('activePage')
   onActivityChange(): void {
-    if (!this.activePage) this.composerNotice.clear();
+    if (!this.activePage) { this.composerNotice.clear(); this.selectingMessageId = ''; }
     this.visible = this.activePage;
     if (!this.activePage) { clearTimeout(this.scrollTimer); this.scrollTimer = -1; }
     if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.saveDraft(); this.palette.close(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.connectionWait.pause(); this.chat.deactivate(); }
@@ -1253,52 +1261,34 @@ export struct XopcChatView {
     }
   }
 
-  private assistantMessageMore(row: XopcChatRow): void {
-    this.assistantMenuRow = row;
+  private beginMessageMenu(): void {
+    this.pauseAutomaticScroll();
+    this.selectingMessageId = '';
     this.pendingAssistantMenuAction = '';
-    this.assistantMenuOpen = true;
   }
 
-  private chooseAssistantMenuAction(action: string): void {
-    this.pendingAssistantMenuAction = action;
-    this.assistantMenuOpen = false;
-  }
-
-  private finishAssistantMenu(): void {
+  private finishAssistantMenu(row: XopcChatRow): void {
     const action = this.pendingAssistantMenuAction;
     this.pendingAssistantMenuAction = '';
-    if (action === 'detail' || action === 'select') this.openMessageDetail(this.assistantMenuRow);
-    else if (action === 'execution') this.openExecutionDetail(this.assistantMenuRow);
-    else if (action) void this.messageAction(action, this.assistantMenuRow);
+    if (action === 'select') {
+      this.selectionOrigin = this.assistantMenuTouch;
+      this.selectingMessageId = row.id;
+    }
+    else if (action === 'detail') this.openMessageDetail(row);
+    else if (action === 'execution') this.openExecutionDetail(row);
+    else if (action === 'share') void shareSelectedChatText(this.getUIContext(), chatAnswerText(row));
+    else if (action) void this.messageAction(action, row);
   }
 
   @Builder
-  assistantMessageMenuSheet() {
-    Column({ space: 8 }) {
-      Row() {
-        Text($r('app.string.more')).fontSize(20).fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.foreground).layoutWeight(1)
-        Button({ type: ButtonType.Circle }) {
-          SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([this.colors.secondary])
-        }.width(36).height(36).padding(0).backgroundColor(this.colors.input)
-          .accessibilityText($r('app.string.chat_close'))
-          .onClick((): void => { this.assistantMenuOpen = false; })
-      }.width('100%').height(44).alignItems(VerticalAlign.Center).margin({ bottom: 4 })
-      Scroll() {
-        Column({ space: 8 }) {
-          ForEach(this.assistantMenuActions, (action: XopcChatMessageMenuAction) => {
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 14 }) {
-                SymbolGlyph(action.symbol).fontSize(21).fontColor([this.colors.accent])
-                Text(action.label).fontSize(16).fontColor(this.colors.foreground).layoutWeight(1)
-              }.width('100%').padding({ left: 16, right: 16 })
-            }.id('chat-assistant-menu-' + action.id).width('100%').height(56).padding(0)
-              .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input).enabled(action.enabled)
-              .onClick((): void => { this.chooseAssistantMenuAction(action.id); })
-          }, (action: XopcChatMessageMenuAction): string => action.id)
-        }.width('100%')
-      }.layoutWeight(1).width('100%').scrollBar(BarState.Auto)
-    }.id('chat-assistant-menu').width('100%').height('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 })
+  assistantMessageMenu(row: XopcChatRow) {
+    Menu() {
+      ForEach(this.assistantMenuActions(row), (action: XopcChatMessageMenuAction) => {
+        MenuItem({ content: action.label, symbolStartIcon: new SymbolGlyphModifier(action.symbol) })
+          .id('chat-assistant-menu-' + action.id).enabled(action.enabled)
+          .onClick((): void => { this.pendingAssistantMenuAction = action.id; })
+      }, (action: XopcChatMessageMenuAction): string => action.id)
+    }.id('chat-assistant-menu').width(232)
   }
 
   private playGeneratedMedia(card: XopcGeneratedMediaCard, openPlayer: boolean = false): void {
@@ -1447,7 +1437,10 @@ export struct XopcChatView {
                   .padding(this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }
                     : { left: 14, right: 14, top: 10, bottom: 10 }).alignItems(HorizontalAlign.Start)
                   .borderRadius(this.colors.corner(18)).backgroundColor(this.colors.chat.bubble)
-                  .bindContextMenu(item.item.text ? this.userMessageMenu(item.item) : undefined, ResponseType.LongPress)
+                  .bindContextMenu(item.item.text ? this.userMessageMenu(item.item) : undefined, ResponseType.LongPress, {
+                    hapticFeedbackMode: HapticFeedbackMode.ENABLED,
+                    aboutToAppear: (): void => { this.beginMessageMenu(); }
+                  })
                   if (this.reactionFor(item.item)) {
                     Stack({ alignContent: Alignment.TopStart }) {
                       Text(this.reactionFor(item.item)?.emoji ?? '').id('chat-agent-reaction-' + item.item.id)
@@ -1476,6 +1469,9 @@ export struct XopcChatView {
               Column() {
                 Column() {
                   XopcChatMessageContent({ row: item.item, onReading: (): void => { this.pauseAutomaticScroll(); }, animateStreaming: item.item.live === true && this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion, conversationId: this.chat.selectedId,
+                    selectingText: this.selectingMessageId === item.item.id,
+                    selectionOrigin: this.selectionOrigin,
+                    onEndSelection: (): void => { if (this.selectingMessageId === item.item.id) this.selectingMessageId = ''; },
                     previewEligible: item.item.id !== this.latestMessageId,
                     onShowMore: (row: XopcChatRow): void => { this.openMessageDetail(row); },
                     onShowExecution: (row: XopcChatRow): void => { this.openExecutionDetail(row); },
@@ -1488,14 +1484,21 @@ export struct XopcChatView {
                   .padding({ left: 14, right: 14, top: 12, bottom: 12 })
                   .backgroundColor(this.colors.assistantBubble).borderRadius(this.colors.corner(20))
                   .onClick((): void => {
-                    if (item.item.id !== this.latestMessageId && chatMessageNeedsPreview(item.item)) this.openMessageDetail(item.item);
+                    if (this.selectingMessageId !== item.item.id
+                      && item.item.id !== this.latestMessageId && chatMessageNeedsPreview(item.item)) this.openMessageDetail(item.item);
                   })
-                  .gesture(LongPressGesture({ repeat: false, duration: 500 }).onAction((): void => {
-                    if (!item.item.live) {
-                      this.pauseAutomaticScroll();
-                      this.assistantMessageMore(item.item);
+                  .onTouch((event: TouchEvent): void => {
+                    const touch = event.touches[0];
+                    if (event.type === TouchType.Down && touch) {
+                      this.assistantMenuTouch = { rowId: item.item.id, x: touch.windowX, y: touch.windowY };
                     }
-                  }))
+                  })
+                  .bindContextMenu(!item.item.live && this.selectingMessageId !== item.item.id
+                    ? this.assistantMessageMenu(item.item) : undefined, ResponseType.LongPress, {
+                    hapticFeedbackMode: HapticFeedbackMode.ENABLED,
+                    aboutToAppear: (): void => { this.beginMessageMenu(); },
+                    onDisappear: (): void => { this.finishAssistantMenu(item.item); }
+                  })
               }.width('92%').constraintSize({ maxWidth: 640 }).alignItems(HorizontalAlign.Start)
               }
               if (!this.personalConversation && (item.item.live || !!chatStageStatus(item.item))) {
@@ -1615,7 +1618,7 @@ export struct XopcChatView {
           }
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary])
         }.width('100%').padding({ left: 12, right: 12 })
-      }.id('chat-queue').width('92%').height(44).padding(0).borderRadius(this.colors.corner(14))
+      }.id('chat-queue').width('92%').height(44).padding(0).borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
         .backgroundColor(this.colors.input).margin({ bottom: 8 })
         .onClick((): void => { this.options.refreshQueue(); this.openSheet('queue'); })
     }
@@ -1650,7 +1653,7 @@ export struct XopcChatView {
                 SymbolGlyph($r('sys.symbol.xmark')).fontSize(11).fontColor([this.colors.tertiary])
               }.height('100%').alignItems(VerticalAlign.Center)
             }.id('chat-composer-reference-' + ref.kind + '-' + ref.sourceId).height(36)
-              .padding({ left: 10, right: 9 }).borderRadius(this.colors.corner(10)).backgroundColor(this.colors.panel)
+              .padding({ left: 10, right: 9 }).borderRadius(this.colors.corner(10)).clipShape(this.colors.cornerClip(10)).backgroundColor(this.colors.panel)
               .accessibilityText($r('app.string.chat_remove_reference'))
               .responseRegion({ x: 0, y: -4, width: '100%', height: 44 })
               .onClick((): void => { this.refs = this.refs.filter((item: XopcContextRef): boolean => item !== ref); })
@@ -2066,7 +2069,7 @@ export struct XopcChatView {
             }.constraintSize({ minHeight: 48, maxWidth: 220 })
               .padding({ left: 14, right: 14, top: 5, bottom: 5 })
           }.id('chat-personal-attention').padding(0)
-            .backgroundColor(this.colors.attentionFill).borderRadius(this.colors.corner(17))
+            .backgroundColor(this.colors.attentionFill).borderRadius(this.colors.corner(17)).clipShape(this.colors.cornerClip(17))
             .onClick((): void => { this.dismissComposer(); this.onNavigate({ page: 'progress', itemId: '' }); })
         } else {
           Text(this.personalAgent?.displayName ?? '').id('chat-personal-name').fontSize(17)
@@ -2147,12 +2150,6 @@ export struct XopcChatView {
             this.messageDetailContentTimer = -1;
             this.messageDetailContentReady = false;
           } })
-      Column().id('chat-assistant-menu-sheet-host').width('100%').height(0)
-        .bindSheet($$this.assistantMenuOpen, this.assistantMessageMenuSheet, {
-          height: '50%',
-          dragBar: true, showClose: false, backgroundColor: this.colors.panel,
-          onDisappear: (): void => { this.finishAssistantMenu(); }
-        })
     }.width('100%').height('100%').backgroundColor(this.colors.chat.canvas)
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: this.sheetHeight, dragBar: true, showClose: false, backgroundColor: this.colors.panel })
     if (this.chatTopInset > 0) {
@@ -2350,7 +2347,7 @@ export struct XopcChatView {
             ListItem() {
               Text(this.messageSearchContent(row)).fontSize(16).fontColor(this.colors.foreground)
                 .maxLines(4).textOverflow({ overflow: TextOverflow.Ellipsis }).padding(16)
-                .width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
+                .width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
                 .onClick((): void => { this.closeMessageSearch(); this.openMessageDetail(row); }, SEGMENTED_PAGE_TAP_SLOP_VP)
             }
           }, (row: XopcChatRow): string => row.id)

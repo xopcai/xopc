@@ -336,7 +336,7 @@ export struct XopcCapabilitySetupView {
   private action(label: ResourceStr, accessibilityId: string, enabled: boolean, handler: () => void) {
     Button(label).id(accessibilityId).width('100%').height(48)
       .enabled(enabled && !this.busy).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
-      .borderRadius(this.colors.corner(15)).onClick(handler)
+      .borderRadius(this.colors.corner(15)).clipShape(this.colors.cornerClip(15)).onClick(handler)
   }
 
   @Builder
@@ -348,7 +348,7 @@ export struct XopcCapabilitySetupView {
       .onSubmit((): void => { void this.search(); })
     Button($r('app.string.cap_native_search')).id('cap-native-skill-submit').width('100%').height(48)
       .enabled(!this.busy && this.query.trim().length >= 2).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
-      .borderRadius(this.colors.corner(15)).onClick((): void => { void this.search(); })
+      .borderRadius(this.colors.corner(15)).clipShape(this.colors.cornerClip(15)).onClick((): void => { void this.search(); })
     if (this.incomplete) Text($r('app.string.capability_partial')).fontSize(13).fontColor(this.colors.secondary)
     if (this.searched && !this.skills.length && !this.busy) Text($r('app.string.cap_native_skill_empty')).fontSize(15).fontColor(this.colors.secondary)
     ForEach(this.skills, (item: NativeSkillEntry) => {
@@ -384,7 +384,7 @@ export struct XopcCapabilitySetupView {
       Button($r('app.string.cap_native_agent_save')).id('cap-native-agent-save').height(48).width('100%')
         .enabled(!this.busy && !!this.agentName.trim() && (this.agentName.trim() !== this.agent.name ||
           this.agentDescription.trim() !== this.agent.description))
-        .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).borderRadius(this.colors.corner(15))
+        .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent).borderRadius(this.colors.corner(15)).clipShape(this.colors.cornerClip(15))
         .onClick((): void => {
           this.getUIContext().getFocusController().clearFocus();
           void this.saveAgent();
@@ -419,7 +419,7 @@ export struct XopcCapabilitySetupView {
     } else {
       Button($r('app.string.cap_native_test')).id('cap-native-mcp-test').width('100%').height(48)
         .enabled(!this.busy && !!this.mcpId.trim() && !!this.mcpUrl.trim()).backgroundColor(this.colors.accent)
-        .fontColor(this.colors.onAccent).borderRadius(this.colors.corner(15)).onClick((): void => { void this.runMcp('probe'); })
+        .fontColor(this.colors.onAccent).borderRadius(this.colors.corner(15)).clipShape(this.colors.cornerClip(15)).onClick((): void => { void this.runMcp('probe'); })
     }
     if (this.draftId && this.mcpState !== 'saved') {
       Button($r('app.string.cap_native_edit_mcp')).id('cap-native-mcp-edit').height(44).width('100%').enabled(!this.busy)
@@ -436,7 +436,7 @@ export struct XopcCapabilitySetupView {
       .onChange((value: string): void => { this.redirectUrl = value; })
     Button($r('app.string.cap_native_submit_redirect')).id('cap-native-redirect').width('100%').height(48)
       .enabled(!this.busy && !!this.redirectUrl.trim()).backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
-      .borderRadius(this.colors.corner(15)).onClick(onSubmit)
+      .borderRadius(this.colors.corner(15)).clipShape(this.colors.cornerClip(15)).onClick(onSubmit)
   }
 
   @Builder

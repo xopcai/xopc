@@ -55,6 +55,7 @@ import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
 import org.commonmark.ext.gfm.tables.TableBlock
 import org.commonmark.ext.gfm.tables.TableCell
+import org.commonmark.ext.gfm.tables.TableRow
 import org.commonmark.ext.gfm.tables.TablesExtension
 import org.commonmark.node.BlockQuote
 import org.commonmark.node.BulletList
@@ -436,26 +437,40 @@ private fun AnnotatedString.Builder.appendInline(node: Node, linkColor: Color,
   }
 }
 
+internal fun markdownSelectableText(markdown: String): AnnotatedString = buildAnnotatedString {
+  val document = projectMarkdown(markdown)
+  document.forEachIndexed { index, block ->
+    if (index + 1 == document.size || !redundantMarkdownImageLink(block.node, document[index + 1].node)) {
+      appendPreview(block.node, Color.Unspecified, null, forSelection = true)
+    }
+  }
+}.let { it.subSequence(0, it.text.trimEnd().length) }
+
 private fun AnnotatedString.Builder.appendPreview(node: Node, linkColor: Color,
-  onOpenLink: ((String) -> Unit)?) {
+  onOpenLink: ((String) -> Unit)?, forSelection: Boolean = false) {
   when (node) {
     is FencedCodeBlock -> append(node.literal.trim())
     is IndentedCodeBlock -> append(node.literal.trim())
     is OrderedList -> node.children().forEachIndexed { index, child ->
       append("${(node.markerStartNumber ?: 1) + index}. ")
-      appendPreview(child, linkColor, onOpenLink)
+      appendPreview(child, linkColor, onOpenLink, forSelection)
     }
     is BulletList -> node.children().forEach { child ->
-      append("• "); appendPreview(child, linkColor, onOpenLink)
+      append("• "); appendPreview(child, linkColor, onOpenLink, forSelection)
     }
     is Heading -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
       node.children().forEach { appendInline(it, linkColor, onOpenLink) }
     }
+    is TableCell -> if (forSelection) {
+      node.children().forEach { appendInline(it, linkColor, onOpenLink) }
+      append("  ")
+    }
     is Paragraph -> node.children().forEach { appendInline(it, linkColor, onOpenLink) }
-    else -> node.children().forEach { appendPreview(it, linkColor, onOpenLink) }
+    else -> node.children().forEach { appendPreview(it, linkColor, onOpenLink, forSelection) }
   }
   if (node is Paragraph || node is Heading || node is FencedCodeBlock || node is IndentedCodeBlock)
     append('\n')
+  if (forSelection && node is TableRow) append('\n')
 }
 
 private fun safeMarkdownLink(url: String): Boolean = externalMessageLink(url) || messageLinkTarget(url) != null

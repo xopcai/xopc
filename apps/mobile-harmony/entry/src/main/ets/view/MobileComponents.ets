@@ -80,6 +80,7 @@ export struct XopcPageTitleMenu {
         SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(13).fontColor([this.colors.secondary])
       }.constraintSize({ maxWidth: '100%' }).justifyContent(FlexAlign.Center)
     }.id(this.menuId).height(44).padding({ left: 8, right: 8 }).backgroundColor(Color.Transparent)
+      .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
       .bindMenu(this.menu, { placement: Placement.Bottom })
   }
 }
@@ -229,8 +230,9 @@ export struct XopcHubRow {
           top: this.compact ? 6 : 12, bottom: this.compact ? 6 : 12 })
     }.width('100%').padding(0)
       .backgroundColor(this.attention ? this.colors.attentionFill : this.colors.panel)
-      .borderRadius(this.colors.corner(this.compact ? 12 : 16))
+      .borderRadius(this.colors.corner(this.compact ? 12 : 16)).clipShape(this.colors.cornerClip(this.compact ? 12 : 16))
       .margin({ bottom: 8 })
+      .hoverEffect(this.navigable ? HoverEffect.Auto : HoverEffect.None)
       .onClick((): void => { if (this.navigable) this.onOpen(); })
   }
 }

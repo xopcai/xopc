@@ -144,8 +144,8 @@ describe('chat message layout parity', () => {
     expect(chat).not.toContain('assistantMessageActions(row: XopcChatRow)');
     expect(chat).not.toContain('assistantReplyActions');
     expect(chat).not.toMatch(/chat-reply-(copy|read|more)-/);
-    expect(assistantCard).toMatch(/LongPressGesture\(\{ repeat: false, duration: 500 \}\)[\s\S]*if \(!item\.item\.live\)[\s\S]*this\.assistantMessageMore\(item\.item\)/);
-    expect(chat).toContain('.bindSheet($$this.assistantMenuOpen, this.assistantMessageMenuSheet');
+    expect(assistantCard).toMatch(/\.bindContextMenu\(!item\.item\.live[\s\S]*this\.assistantMessageMenu\(item\.item\)[\s\S]*ResponseType\.LongPress/);
+    expect(chat).toContain("MenuItem({ content: action.label, symbolStartIcon: new SymbolGlyphModifier(action.symbol) })");
   });
 
 });

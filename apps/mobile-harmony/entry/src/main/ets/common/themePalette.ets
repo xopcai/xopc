@@ -1,4 +1,4 @@
-import { CustomColors, CustomTheme } from '@kit.ArkUI';
+import { CustomColors, CustomTheme, RectShape } from '@kit.ArkUI';
 
 export type XopcColorScheme = 'default' | 'porcelain' | 'dawn' | 'emerald' | 'clay';
 
@@ -79,6 +79,14 @@ export class XopcThemeColors {
       case 'dawn': return Math.round(base * 1.25);
       default: return base;
     }
+  }
+
+  get hoverOverlay(): string {
+    return xopcHoverOverlay(!this.light);
+  }
+
+  cornerClip(base: number): RectShape {
+    return xopcRoundedClip(this.corner(base));
   }
 
   get onAccent(): Resource {
@@ -378,7 +386,15 @@ function xopcChatThemeColors(scheme: XopcColorScheme, dark: boolean, canvas: Res
 
 export const appThemeColors: XopcThemeColors = new XopcThemeColors(xopcThemeTokens('default', false));
 
-function xopcThemeColors(tokens: XopcThemeTokens): CustomColors {
+export function xopcRoundedClip(radius: number): RectShape {
+  return new RectShape({ width: '100%', height: '100%', radius });
+}
+
+function xopcHoverOverlay(dark: boolean): string {
+  return dark ? '#14FFFFFF' : '#0A000000';
+}
+
+function xopcThemeColors(tokens: XopcThemeTokens, dark: boolean): CustomColors {
   return {
     brand: tokens.accent,
     alert: tokens.danger,
@@ -407,7 +423,7 @@ function xopcThemeColors(tokens: XopcThemeTokens): CustomColors {
     compEmphasizeSecondary: tokens.accentSoft,
     compEmphasizeTertiary: tokens.accentSoft,
     compDivider: tokens.border,
-    interactiveHover: tokens.input,
+    interactiveHover: xopcHoverOverlay(dark),
     interactivePressed: tokens.grouped,
     interactiveActive: tokens.active,
     interactiveSelect: tokens.active,
@@ -416,8 +432,8 @@ function xopcThemeColors(tokens: XopcThemeTokens): CustomColors {
 
 export function xopcCustomTheme(scheme: XopcColorScheme): CustomTheme {
   return {
-    colors: xopcThemeColors(xopcThemeTokens(scheme, false)),
-    darkColors: xopcThemeColors(xopcThemeTokens(scheme, true)),
+    colors: xopcThemeColors(xopcThemeTokens(scheme, false), false),
+    darkColors: xopcThemeColors(xopcThemeTokens(scheme, true), true),
   };
 }
 

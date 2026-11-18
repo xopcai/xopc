@@ -169,7 +169,7 @@ struct XopcIndex {
             SymbolGlyph($r('sys.symbol.qrcode')).fontSize(22).fontColor([Color.White])
             Text($r('app.string.pair_scan')).fontSize(16).fontWeight(FontWeight.Medium).fontColor(Color.White)
           }.justifyContent(FlexAlign.Center).width('100%')
-        }.id('pairing-scan').height(52).width('100%').borderRadius(this.colors.corner(16)).backgroundColor(this.colors.accent)
+        }.id('pairing-scan').height(52).width('100%').borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.accent)
           .enabled(!this.scanning).accessibilityText($r('app.string.pair_scan')).onClick((): void => { this.scan(); })
         Button($r('app.string.pair_manual')).id('pairing-manual').height(48).width('100%').fontSize(15)
           .backgroundColor(Color.Transparent).fontColor(this.colors.secondary).enabled(!this.scanning)

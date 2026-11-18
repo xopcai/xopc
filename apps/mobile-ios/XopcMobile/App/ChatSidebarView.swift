@@ -34,10 +34,8 @@ struct ChatSidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     personalRow
-                    row("进展", symbol: "checkmark.circle", badge: attention) { onNavigate(.progress) }
-                        .accessibilityIdentifier("chat-sidebar-progress")
-                    row("项目", symbol: "folder") { onNavigate(.projects) }
-                        .accessibilityIdentifier("chat-sidebar-projects")
+                    row("工作台", symbol: "square.grid.2x2", badge: attention) { onNavigate(.progress) }
+                        .accessibilityIdentifier("chat-sidebar-workbench")
                     row("自动化", symbol: "clock") { onNavigate(.automations) }
                         .accessibilityIdentifier("chat-sidebar-automations")
                     row("资料库", symbol: "doc") { onNavigate(.library) }

@@ -116,6 +116,7 @@ export struct XopcMusicMiniPlayer {
             }.layoutWeight(1).alignItems(HorizontalAlign.Start)
           }.width('100%')
         }.id('music-expand').layoutWeight(1).height(48).padding({ left: 6, right: 4 })
+          .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
           .backgroundColor(Color.Transparent).accessibilityText($r('app.string.music_expand', this.music.track?.title ?? ''))
           .onClick((): void => { this.onOpen(); this.music.open(); })
         XopcMusicPlayButton({ buttonId: 'music-mini-toggle' })

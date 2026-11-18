@@ -48,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -228,7 +229,8 @@ private fun sourceLabel(source: LibraryOrigin?, zh: Boolean): String? = source?.
 private fun LibraryRow(file: LibraryItem, date: String, zh: Boolean, onOpen: () -> Unit) {
   val extension = file.currentVersion.fileName.substringAfterLast('.', "").uppercase()
   val metadata = listOfNotNull(extension.takeIf(String::isNotBlank), sourceLabel(file.origin, zh), date).joinToString(" · ")
-  Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.large)
+  Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(MaterialTheme.shapes.large)
+    .background(MaterialTheme.colorScheme.surface)
     .clickable(onClick = onOpen).padding(12.dp).testTag("space-item-${file.id}"),
     horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
     Box(Modifier.size(40.dp).background(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.shapes.medium),

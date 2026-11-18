@@ -196,7 +196,7 @@ export struct XopcTaskChatHeader {
                 SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
               }.width('100%').padding({ left: 12, right: 10 })
             }.id('task-chat-summary-toggle').constraintSize({ maxWidth: '85%' }).height(48).padding(0)
-              .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(16))
+              .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
               .onClick((): void => { this.onToggle(); })
           }.layoutWeight(1)
           Button({ type: ButtonType.Circle }) {

@@ -2,12 +2,11 @@
 import SwiftUI
 
 enum WorkPage: String, CaseIterable {
-    case progress, automations, projects, tasks
+    case progress, tasks, projects
 
     var title: LocalizedStringResource {
         switch self {
         case .progress: "进展"
-        case .automations: "自动化"
         case .projects: "项目"
         case .tasks: "任务"
         }
@@ -17,29 +16,28 @@ enum WorkPage: String, CaseIterable {
 struct WorkPagesView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
-    @AppStorage private var page: WorkPage
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var page: WorkPage
 
-    init(configuration: GatewayConfiguration, initialPage: WorkPage,
+    init(configuration: GatewayConfiguration, initialPage: WorkPage = .progress,
          onOpenConversation: @escaping (String, String, String) -> Void)
     {
         self.configuration = configuration
         self.onOpenConversation = onOpenConversation
-        _page = AppStorage(wrappedValue: initialPage, "navigation.work.\(initialPage.rawValue)")
+        _page = State(initialValue: initialPage)
     }
 
     var body: some View {
-        Group {
-            switch page {
-            case .progress:
-                ProgressHubView(configuration: configuration, onOpenConversation: onOpenConversation, onSelectPage: selectPage)
-            case .automations:
-                AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
-            case .projects:
-                ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation)
-            case .tasks:
-                TasksView(configuration: configuration)
-            }
+        TabView(selection: $page) {
+            ProgressHubView(configuration: configuration, onOpenConversation: onOpenConversation, onSelectPage: selectPage)
+                .tag(WorkPage.progress)
+            TasksView(configuration: configuration)
+                .tag(WorkPage.tasks)
+            ProjectsView(configuration: configuration, onOpenConversation: onOpenConversation, isActive: page == .projects)
+                .tag(WorkPage.projects)
         }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .accessibilityIdentifier("work-page-pager")
         .mobilePageTitle(Text(page.title)) {
             MobilePageTitleMenu(options: WorkPage.allCases.map {
                 SegmentOption(id: $0, title: $0.title, accessibilityID: "work-page-\($0.rawValue)")
@@ -48,7 +46,7 @@ struct WorkPagesView: View {
     }
 
     private func selectPage(_ selection: WorkPage) {
-        page = selection
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.23)) { page = selection }
     }
 }
 
@@ -132,8 +130,8 @@ private struct ProgressHubView: View {
                             onSelectPage(.projects)
                         } label: { toolRow("项目", symbol: "folder") }
                     }.buttonStyle(.plain)
-                    Button {
-                        onSelectPage(.automations)
+                    NavigationLink {
+                        AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
                     } label: { toolRow("自动化", symbol: "clock") }.buttonStyle(.plain)
                     if let error {
                         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
@@ -275,6 +273,8 @@ private struct ProgressHubView: View {
         case let .project(id):
             ProjectDetailView(configuration: configuration, projectID: id,
                               onOpenConversation: onOpenConversation)
+        case .automations:
+            AutomationsView(configuration: configuration, onOpenConversation: onOpenConversation)
         case let .automation(id):
             AutomationDetailView(configuration: configuration, automationID: id,
                                  onOpenConversation: onOpenConversation)
@@ -287,7 +287,7 @@ private struct ProgressHubView: View {
             NoteDetailView(configuration: configuration, noteID: id, onOpenConversation: onOpenConversation)
         case .files:
             FilesView(configuration: configuration)
-        case .chat, .tasks, .projects, .automations:
+        case .chat, .tasks, .projects:
             EmptyView()
         }
     }
@@ -312,6 +312,8 @@ private extension ProgressHubView {
         }.padding(.horizontal, 14).frame(minHeight: 64)
             .background(mobileTheme.panel, in: .rect(cornerRadius: mobileTheme.corner(14)))
             .foregroundStyle(.primary)
+            .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(14)))
+            .hoverEffect(.highlight)
     }
 
     func compactRow(title: String, subtitle: String, symbol: String) -> some View {
@@ -429,7 +431,6 @@ enum HomeOpenRoute: Equatable {
         switch self {
         case .tasks: .tasks
         case .projects: .projects
-        case .automations: .automations
         default: nil
         }
     }
@@ -539,6 +540,8 @@ struct ProjectsView: View {
     let configuration: GatewayConfiguration
     let onOpenConversation: (String, String, String) -> Void
 
+    var isActive = true
+
     @State private var items: [ProjectRecord] = []
     @State private var filter = "active"
     @State private var searchText = ""
@@ -600,12 +603,17 @@ struct ProjectsView: View {
         .refreshable { await load() }
         .task { await load() }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                PageSearchButton("搜索项目", isOpen: $searchOpen, query: $searchText,
-                                 accessibilityID: "projects-open-search")
-                Button("新建项目", systemImage: "plus") { creating = true }
-                    .accessibilityIdentifier("project-create")
+            if isActive {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    PageSearchButton("搜索项目", isOpen: $searchOpen, query: $searchText,
+                                     accessibilityID: "projects-open-search")
+                    Button("新建项目", systemImage: "plus") { creating = true }
+                        .accessibilityIdentifier("project-create")
+                }
             }
+        }
+        .onChange(of: isActive) { _, active in
+            if !active { isSearchFocused = false }
         }
         .sheet(isPresented: $creating) {
             ProjectManageView(configuration: configuration) { project in

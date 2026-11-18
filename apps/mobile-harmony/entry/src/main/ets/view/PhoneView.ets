@@ -205,7 +205,7 @@ export struct XopcPhoneView {
       }
       if (this.canControl) {
         Button(this.primaryTitle)
-          .id('phone-control').width('100%').height(52).borderRadius(this.colors.corner(26)).fontSize(17).fontWeight(FontWeight.Medium)
+          .id('phone-control').width('100%').height(52).borderRadius(this.colors.corner(26)).clipShape(this.colors.cornerClip(26)).fontSize(17).fontWeight(FontWeight.Medium)
           .fontColor(this.colors.onAccent)
           .backgroundColor(this.colors.accent)
           .enabled(!this.phone.busy && (this.phone.state?.ownControl || this.phone.state?.report.reconnectRequired || this.phone.phase === 'playing' || this.phone.phase === 'fallback' && this.phone.snapshotReady()))

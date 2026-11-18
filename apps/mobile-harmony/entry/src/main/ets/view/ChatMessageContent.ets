@@ -2,6 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatRow, XopcArtifact, XopcChatBlock, XopcHistoryMedia, XopcReviewFinding, XopcContextRef } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { XopcMarkdownView } from './MarkdownView';
+import { XopcChatMenuTouch, XopcChatSelectableText } from './ChatSelectableText';
 import { XopcChatStepsView } from './ChatStepsView';
 import { XopcChatImageGrid } from './ChatImageGrid';
 import { XopcChatMediaView } from './ChatMediaView';
@@ -23,6 +24,9 @@ export struct XopcChatMessageContent {
   @Param showFailure: boolean = true;
   @Param textSelectable: boolean = false;
   @Param previewEligible: boolean = false;
+  @Param selectingText: boolean = false;
+  @Param selectionOrigin: XopcChatMenuTouch = { rowId: '', x: 0, y: 0 };
+  @Event onEndSelection: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onFillDraft: (text: string) => void = (_text: string): void => {};
   @Event onShowMore: (row: XopcChatRow) => void = (_row: XopcChatRow): void => {};
@@ -85,7 +89,7 @@ export struct XopcChatMessageContent {
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.chat.secondary])
       }.width('100%').height('100%').alignItems(VerticalAlign.Center)
     }.id('chat-reference-' + ref.kind + '-' + ref.sourceId).width('100%').height(40)
-      .padding({ left: 10, right: 8 }).borderRadius(this.colors.corner(10)).backgroundColor(this.colors.chat.card)
+      .padding({ left: 10, right: 8 }).borderRadius(this.colors.corner(10)).clipShape(this.colors.cornerClip(10)).backgroundColor(this.colors.chat.card)
       .onClick((): void => {
         this.onNavigate({ page: ref.kind === 'task' ? 'tasks' : ref.kind === 'user_assertion' ? 'about-you' : 'notes', itemId: ref.sourceId });
       })
@@ -100,7 +104,10 @@ export struct XopcChatMessageContent {
       if (this.showFailure && this.row.outcome?.status === 'failed') {
         Text($r('app.string.chat_response_failed')).fontSize(13).fontColor(this.colors.danger)
       }
-      if (this.showPreview) {
+      if (this.selectingText) {
+        XopcChatSelectableText({ source: this.previewMarkdown, rowId: this.row.id,
+          origin: this.selectionOrigin, onEndSelection: this.onEndSelection })
+      } else if (this.showPreview) {
         Stack({ alignContent: Alignment.Bottom }) {
           if (this.row.role === 'assistant') {
             XopcMarkdownView({ textSelectable: this.textSelectable, content: this.previewMarkdown, conversationId: this.conversationId, compactReading: true,

@@ -119,7 +119,7 @@ export struct XopcChatWelcome {
             }.width('100%')
           }.id('chat-starter-' + this.model.model.recommendation.id).width('100%')
             .constraintSize({ minHeight: 68, maxWidth: 380 }).padding({ left: 16, right: 14, top: 12, bottom: 12 })
-            .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.panel)
+            .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).backgroundColor(this.colors.panel)
             .accessibilityText(this.recommendationAccessibility())
             .onClick((): void => { this.chooseRecommendation(); })
         }

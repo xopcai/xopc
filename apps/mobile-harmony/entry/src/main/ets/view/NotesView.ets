@@ -252,7 +252,7 @@ export struct XopcNotesView {
                   }
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
               }.width('100%').constraintSize({ minHeight: 96 }).padding(0).backgroundColor(this.colors.panel)
-                .borderRadius(this.colors.corner(16))
+                .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
                 .onClick((): void => {
                   if (this.model.selecting) this.model.toggleSelection(item.id); else void this.model.open(item.id);
                 }, SEGMENTED_PAGE_TAP_SLOP_VP)
@@ -378,7 +378,7 @@ export struct XopcNotesView {
                   Text($r('app.string.note_manage_tags')).layoutWeight(1).fontSize(13).fontColor(this.colors.tertiary)
                 }
                 Button() { SymbolGlyph($r('sys.symbol.flag')).fontSize(18).fontColor([this.colors.secondary]) }
-                  .width(38).height(38).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
+                  .width(38).height(38).padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.input)
                   .accessibilityText($r('app.string.note_manage_tags')).onClick((): void => {
                     this.tagsText = this.model.selected?.tags?.join(', ') ?? ''; this.openSheet('tags');
                   })
@@ -444,7 +444,7 @@ export struct XopcNotesView {
           SymbolGlyph($r('sys.symbol.trash')).fontSize(19).fontColor([this.colors.danger])
           Text($r('app.string.delete')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.danger)
         }.width('100%').padding({ left: 12, right: 12 })
-      }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(Color.Transparent)
+      }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(Color.Transparent)
         .onClick((): void => { this.sheetOpen = false; void this.confirmDelete(); })
     }.width('100%').padding({ left: 20, right: 20, top: 4, bottom: 20 })
       .backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)

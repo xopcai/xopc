@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('@kit.ArkUI', () => ({ RectShape: class {} }));
+
 vi.hoisted(() => {
   Object.assign(globalThis, { $r: (name: string) => name, ObservedV2: (value: unknown) => value, Trace: () => undefined });
 });

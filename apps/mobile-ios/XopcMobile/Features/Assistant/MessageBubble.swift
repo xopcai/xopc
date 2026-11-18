@@ -28,6 +28,7 @@ struct MessageBubble: View {
     @ScaledMetric(relativeTo: .body) private var assistantTextSize = MobileTextStyle.body.size
     @State private var isActionsPresented = false
     @State private var isDetailPresented = false
+    @State private var isSelectingText = false
     @State private var isExecutionPresented = false
     @State private var isSavingNote = false
     @State private var isSaveFeedbackPresented = false
@@ -89,16 +90,15 @@ struct MessageBubble: View {
                 }
             }
             .environment(\.chatTextSelectionEnabled, false)
+            .modifier(MessageContextMenu(enabled: hasMessageActions && !isSelectingText, onOpen: { isActionsPresented = true }) {
+                messageMenuActions
+            })
         }
         // Keep accessibility bounds on the bubble before expanding its alignment frame.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat-message-\(message.role)-\(message.id)")
         .frame(maxWidth: .infinity, alignment: message.role == "user" ? .trailing : .leading)
-        .modifier(MessageContextMenu(enabled: hasMessageActions, onOpen: { isActionsPresented = true }) {
-            messageMenuActions
-        })
-        // Leave long-press recognition to the system context menu.
-        .onChange(of: isDetailPresented || isExecutionPresented || isActionsPresented) { _, presented in
+        .onChange(of: isDetailPresented || isExecutionPresented || isActionsPresented || isSelectingText) { _, presented in
             if presented {
                 onReading()
             }
@@ -201,7 +201,7 @@ struct MessageBubble: View {
         if !message.text.isEmpty {
             Button("复制", systemImage: "doc.on.doc") { UIPasteboard.general.string = message.text }
                 .accessibilityIdentifier("chat-copy-\(message.id)")
-            Button("选择文本", systemImage: "text.cursor") { isDetailPresented = true }
+            Button("选择文本", systemImage: "text.cursor") { isSelectingText = true }
                 .accessibilityIdentifier("chat-select-text-\(message.id)")
             Button("保存到笔记", systemImage: "bookmark") { Task { await saveAsNote() } }
                 .disabled(isSavingNote)
@@ -223,6 +223,7 @@ struct MessageBubble: View {
                 .disabled(!canReadAloud || (readAloud.sourceID == message.id && readAloud.state == .loading))
                 .accessibilityIdentifier("chat-read-aloud-\(message.id)")
             }
+            ShareLink(item: message.text) { Label("分享", systemImage: "square.and.arrow.up") }
         }
         Button("消息详情", systemImage: "info.circle") { isDetailPresented = true }
         if conversationID != nil {
@@ -238,7 +239,9 @@ struct MessageBubble: View {
     @ViewBuilder
     private var messageText: some View {
         if !message.text.isEmpty {
-            if showsPreview {
+            if isSelectingText {
+                ChatSelectableText(message: message) { isSelectingText = false }
+            } else if showsPreview {
                 Button {
                     isDetailPresented = true
                 } label: {

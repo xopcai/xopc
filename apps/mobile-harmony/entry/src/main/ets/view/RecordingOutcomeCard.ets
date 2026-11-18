@@ -33,6 +33,7 @@ export struct RecordingOutcomeCard {
           SymbolGlyph(this.detailsOpen ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([this.colors.secondary])
         }.width('100%')
       }.id('recording-outcome-details').width('100%').constraintSize({ minHeight: 44 }).padding(0).backgroundColor(Color.Transparent)
+        .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
         .onClick((): void => { this.detailsOpen = !this.detailsOpen; })
       if (this.detailsOpen) {
       if (this.noteContext) Text(recordingOutcomePhrase('leave_' + projectRecordingOutcome(this.input).leave)).fontSize(12).lineHeight(19).fontColor(this.colors.secondary).width('100%')

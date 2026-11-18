@@ -279,7 +279,7 @@ export struct XopcAboutYouView {
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
         }.width('100%').padding(16)
       }.id('about-you-work-memory').width('100%').padding(0).margin({ top: 12 })
-        .borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel)
+        .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.panel)
         .onClick((): void => { this.selectSection('work'); })
 
       XopcSectionLabel({ heading: $r('app.string.about_you_recent') })
@@ -364,7 +364,7 @@ export struct XopcAboutYouView {
           }
         }
       }.width('100%').alignItems(HorizontalAlign.Start).padding(16)
-    }.id('work-memory-' + item.id).width('100%').padding(0).borderRadius(this.colors.corner(16))
+    }.id('work-memory-' + item.id).width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
       .backgroundColor(this.colors.panel)
       .onClick((): void => { this.expandedWorkId = this.expandedWorkId === item.id ? '' : item.id; })
   }
@@ -418,7 +418,7 @@ export struct XopcAboutYouView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([this.colors.tertiary])
       }.width('100%').padding(16)
-    }.width('100%').padding(0).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel).margin({ bottom: 8 })
+    }.width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.panel).margin({ bottom: 8 })
       .onClick((): void => { this.openItem(item); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
@@ -446,7 +446,7 @@ export struct XopcAboutYouView {
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.accent])
         }.width('100%').height('100%').padding({ left: 14, right: 12 })
       }.id('about-you-chat-modify').width('100%').height(48).padding(0)
-        .borderRadius(this.colors.corner(24)).backgroundColor(this.colors.accentSoft)
+        .borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24)).backgroundColor(this.colors.accentSoft)
         .onClick((): void => { this.openConversation(); })
     }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 16 })
       .backgroundColor(this.colors.surface)
@@ -513,10 +513,10 @@ export struct XopcAboutYouView {
       }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
       if (this.editingStatement) {
         Row({ space: 10 }) {
-          Button($r('app.string.cancel')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24))
+          Button($r('app.string.cancel')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24))
             .backgroundColor(this.colors.input).fontColor(this.colors.foreground)
             .onClick((): void => { this.statement = item.statement; this.editingStatement = false; })
-          Button($r('app.string.save')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24))
+          Button($r('app.string.save')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24))
             .backgroundColor(this.colors.accent).fontColor(this.colors.onAccent)
             .enabled(!this.model.saving && !!this.statement.trim()).onClick((): void => { this.saveStatement(); })
         }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 20 })
@@ -527,13 +527,13 @@ export struct XopcAboutYouView {
               SymbolGlyph($r('sys.symbol.ellipsis_bubble')).fontSize(18).fontColor([this.colors.accent])
               Text($r('app.string.about_you_chat_modify')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
             }.width('100%').height('100%').justifyContent(FlexAlign.Center)
-          }.id('about-you-detail-chat').width('100%').height(48).padding(0).borderRadius(this.colors.corner(24))
+          }.id('about-you-detail-chat').width('100%').height(48).padding(0).borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24))
             .backgroundColor(this.colors.accentSoft).onClick((): void => { this.openConversation(item); })
           Row({ space: 10 }) {
-            Button($r('app.string.edit')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24))
+            Button($r('app.string.edit')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24))
               .backgroundColor(this.colors.foreground).fontColor(this.colors.surface)
               .onClick((): void => { this.editingStatement = true; })
-            Button($r('app.string.delete')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24))
+            Button($r('app.string.delete')).layoutWeight(1).height(48).borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24))
               .backgroundColor(this.colors.panel).fontColor(this.colors.danger)
               .enabled(!this.model.saving).onClick((): void => { this.confirmDelete(); })
           }.width('100%')

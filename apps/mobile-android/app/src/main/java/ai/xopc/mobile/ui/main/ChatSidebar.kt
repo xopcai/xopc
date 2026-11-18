@@ -172,11 +172,8 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
         val attention = connection.progress.needsUser.size.takeIf {
           connection.progress.gatewayId == connection.profile?.gatewayId
         } ?: 0
-        SidebarRow(R.string.tab_progress, R.drawable.tab_progress, "chat-sidebar-progress", badge = attention) {
+        SidebarRow(R.string.tab_workbench, R.drawable.tab_progress, "chat-sidebar-workbench", badge = attention) {
           onDestination(HomeTab.Progress)
-        }
-        SidebarRow(R.string.progress_projects, R.drawable.action_folder, "chat-sidebar-projects") {
-          onDestination(HomeTab.Projects)
         }
         SidebarRow(R.string.progress_automations, R.drawable.action_clock, "chat-sidebar-automations") {
           onDestination(HomeTab.Automations)

@@ -101,7 +101,7 @@ export struct XopcFilesView {
             SymbolGlyph($r('sys.symbol.plus')).fontSize(17).fontColor([this.colors.accent])
             Text($r('app.string.upload')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
           }
-        }.height(40).padding({ left: 13, right: 13 }).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.accentSoft)
+        }.height(40).padding({ left: 13, right: 13 }).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.accentSoft)
           .enabled(!this.model.busy).onClick((): void => {
             const context = this.getUIContext().getHostContext(); if (context) this.model.upload(context);
           })

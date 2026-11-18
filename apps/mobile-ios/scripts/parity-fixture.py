@@ -113,10 +113,12 @@ class Handler(BaseHTTPRequestHandler):
   keyboard_fixture = path.startswith('/keyboard/')
   bubble_fixture = path.startswith('/bubble-width/')
   music_fixture = path.startswith('/music/')
+  slow_capabilities = path.startswith('/slow-capabilities/')
   live_music_fixture = path.startswith('/music-live/')
   if keyboard_fixture: path = path.removeprefix('/keyboard')
   if bubble_fixture: path = path.removeprefix('/bubble-width')
   if music_fixture: path = path.removeprefix('/music')
+  if slow_capabilities: path = path.removeprefix('/slow-capabilities')
   if live_music_fixture: path = path.removeprefix('/music-live')
   length=int(self.headers.get('Content-Length','0')); body=self.rfile.read(length) if length else b''
   data=None; status=200
@@ -196,7 +198,19 @@ class Handler(BaseHTTPRequestHandler):
    data=envelope({'fields':[{'id':'name','label':'名称','type':'text','value':'Coding Expert'}],
                   'actions':[{'id':'save','label':'保存'}]})
   elif path=='/api/capabilities/mobile-actions/panel/channels':
-   data=envelope({'message':'可在此管理消息通道。','actions':[{'id':'pair','label':'配对通道'}]})
+   action=json.loads(body).get('action') if body else None
+   if query.get('id')==['form-channel']:
+    data=envelope({'fields':[{'id':f'option-{i}','label':f'配置项 {i}','type':'text'} for i in range(1, 11)],
+                   'actions':[{'id':'save','label':'保存配置'}]})
+   elif action in ('pair', 'pair-status'):
+    direct=query.get('id')==['mail-channel']
+    data=envelope({'qrUrl':'https://example.com/scan-only', 'flow':'setup-preview', 'pollAction':'pair-status',
+                   'message':'在验证页完成授权后返回，连接状态会自动更新。' if direct else '等待扫码确认',
+                   'actions':[{'id':'pair-cancel','label':'取消配对'}],
+                   **({'authorizationUrl':'https://example.com/', 'deviceVerificationCode':'ABCD-1234'}
+                      if direct else {})})
+   else:
+    data=envelope({'message':'可在此管理消息通道。','actions':[{'id':'pair','label':'配对通道'}]})
   elif path in capability_brands:
    logo = capability_brands[path]
    self.send_response(200)
@@ -214,7 +228,14 @@ class Handler(BaseHTTPRequestHandler):
     'agents': [{'id':'coder','name':'Coding Expert','group':'expert'}],
     'channels': [{'id':'mail-channel','name':'Mail Channel','group':'configured','iconUrl':'/channel-icons/telegram.svg'}],
    }
-   data=envelope({'items':catalog[query.get('category',['plugins'])[0]]})
+   category = query.get('category',['plugins'])[0]
+   if category == 'channels':
+    catalog['channels'].append({'id':'scan-channel','name':'扫码连接示例','group':'available'})
+    catalog['channels'].append({'id':'form-channel','name':'长表单示例','group':'available'})
+   if slow_capabilities and category == 'channels': time.sleep(12)
+   if slow_capabilities and category == 'plugins':
+    catalog['plugins'] += [{'id':f'meeting-{i}','name':f'Meeting Plugin {i}','group':'installed'} for i in range(24)]
+   data=envelope({'items':catalog[category]})
   elif path=='/api/personal-agent': data=envelope(record)
   elif path=='/api/personal-agent/activity':
    if query.get('view') == ['deliverables']:

@@ -6,9 +6,21 @@ import ai.xopc.mobile.gateway.CapabilityItem
 import ai.xopc.mobile.gateway.CapabilityPage
 import ai.xopc.mobile.gateway.ConversationAgent
 import ai.xopc.mobile.gateway.GatewayHttpException
+import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.ContentValues
+import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,14 +29,19 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,9 +52,11 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Text
@@ -45,16 +64,21 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -63,10 +87,17 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import androidx.compose.foundation.Image
 import androidx.compose.material3.AlertDialog
@@ -74,7 +105,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -109,65 +139,69 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   onExit: () -> Unit, onSetupChat: (String, Boolean) -> Unit,
   onPanel: suspend (String, String, JSONObject?) -> JSONObject) {
   val navigation = rememberNavigationPreferences()
-  var category by remember(navigation) {
+  val initialCategory = remember(navigation) {
     val key = navigation.selection("capabilities", CapabilityCategory.entries.map { it.key }, CapabilityCategory.Plugins.key)
-    mutableStateOf(CapabilityCategory.entries.first { it.key == key })
+    CapabilityCategory.entries.first { it.key == key }
   }
-  var pages by remember { mutableStateOf(emptyMap<CapabilityCategory, CapabilityPage>()) }
-  var failed by remember { mutableStateOf(false) }
-  var loading by remember { mutableStateOf(true) }
-  var retry by remember { mutableStateOf(0) }
-  var query by remember(category) { mutableStateOf("") }
-  var detail by remember(category) { mutableStateOf<CapabilityItem?>(null) }
-  val list = rememberLazyListState()
+  val categories = CapabilityCategory.entries
+  val pager = rememberPagerState(initialPage = initialCategory.ordinal) { categories.size }
+  val category = categories[pager.settledPage]
+  val scope = rememberCoroutineScope()
+  val currentLoad by rememberUpdatedState(onLoad)
+  val pages = remember { mutableStateMapOf<CapabilityCategory, CapabilityPage>() }
+  val loading = remember { mutableStateMapOf<CapabilityCategory, Boolean>() }
+  val failures = remember { mutableStateMapOf<CapabilityCategory, Boolean>() }
+  val queries = remember { mutableStateMapOf<CapabilityCategory, String>() }
+  val lists = remember { categories.associateWith { LazyListState() } }
+  var detail by remember { mutableStateOf<CapabilityItem?>(null) }
   val keyboard = LocalSoftwareKeyboardController.current
   val focus = LocalFocusManager.current
   val searchFocus = remember { FocusRequester() }
-
-  LaunchedEffect(category, retry) {
-    val requested = category
-    loading = true
-    failed = false
-    try {
-      val page = onLoad(requested.key)
-      pages = pages + (requested to page)
-    } catch (error: CancellationException) { throw error }
-    catch (_: Exception) { failed = true }
-    finally { loading = false }
-  }
-  LaunchedEffect(category, query) { list.requestScrollToItem(0) }
-  val page = pages[category]
-  val agent = personal.agent?.takeIf { it.state == "ready" && category == CapabilityCategory.Agents }
-  val rows = page?.items.orEmpty().filterNot { it.id == agent?.agentId }.map { item ->
-    if (category != CapabilityCategory.Agents) item
-    else {
-      val profile = ConversationAgent(item.id, item.name, item.description)
-      item.copy(name = agentDisplayName(profile), description = agentDisplayDescription(profile))
-    }
-  }
-  val entries = rows.let {
-    if (agent == null) rows else listOf(CapabilityItem(
-      agent.agentId, agent.displayName, stringResource(R.string.capability_personal_description), "assistant", personal = true,
-    )) + rows
-  }
-  val search = query.trim()
-  val groups = entries.filter { row ->
-    search.isEmpty() || listOf(row.name, row.id, row.description).any { it.contains(search, ignoreCase = true) }
-  }.groupBy { it.group }
   val colors = MaterialTheme.colorScheme
+  val page = pages[category]
   val origin = page?.origin
+  val query = queries[category].orEmpty()
   val skills = category == CapabilityCategory.Skills
   val agents = category == CapabilityCategory.Agents
   val connections = category == CapabilityCategory.Connections
   val plugins = category == CapabilityCategory.Plugins
   val skillMarketTitle = stringResource(R.string.capability_skill_market)
-  val pageSwipeDistance = with(LocalDensity.current) { 40.dp.toPx() }
-  val selectCategory: (CapabilityCategory) -> Unit = {
-    if (it != category) {
-      focus.clearFocus()
-      keyboard?.hide()
-      category = it
-      navigation.rememberSelection("capabilities", it.key)
+
+  fun load(requested: CapabilityCategory, refresh: Boolean = false) {
+    if (loading[requested] == true || (!refresh && (pages.containsKey(requested) || failures[requested] == true))) return
+    loading[requested] = true
+    failures.remove(requested)
+    scope.launch {
+      try {
+        pages[requested] = currentLoad(requested.key)
+      } catch (error: CancellationException) {
+        throw error
+      } catch (_: Exception) {
+        failures[requested] = true
+      } finally {
+        loading.remove(requested)
+      }
+    }
+  }
+
+  fun updateQuery(value: String) {
+    if (queries[category].orEmpty() == value) return
+    queries[category] = value
+    lists.getValue(category).requestScrollToItem(0)
+  }
+
+  LaunchedEffect(pager) {
+    var previous = pager.settledPage
+    snapshotFlow { pager.settledPage }.collect { index ->
+      if (index != previous) {
+        focus.clearFocus()
+        keyboard?.hide()
+        navigation.rememberSelection("capabilities", categories[index].key)
+        previous = index
+      }
+      load(categories[index])
+      categories.getOrNull(index - 1)?.let { load(it) }
+      categories.getOrNull(index + 1)?.let { load(it) }
     }
   }
 
@@ -212,29 +246,46 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
           }
         }
       }
-      PageTitleMenu(CapabilityCategory.entries.map {
-        SegmentOption(it, stringResource(it.title), "capability-category-${it.key}")
-      }, category, "capability-title", Modifier.fillMaxWidth(0.48f), selectCategory)
+      Text(stringResource(R.string.capability_title), style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.testTag("capability-title"))
     }
-    Column(Modifier.weight(1f).fillMaxWidth().horizontalSwipe(enabled = detail == null, onRelease = { distance, _ ->
-      if (distance <= -pageSwipeDistance) CapabilityCategory.entries.getOrNull(category.ordinal + 1)?.let(selectCategory)
-      if (distance >= pageSwipeDistance) CapabilityCategory.entries.getOrNull(category.ordinal - 1)?.let(selectCategory)
-    })) {
-      LazyColumn(state = list, modifier = Modifier.weight(1f), contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
+    SegmentedTabs(
+      categories.map { SegmentOption(it, stringResource(it.title), "capability-category-${it.key}") },
+      category, minimumSegmentWidth = 44.dp, onSelect = { target ->
+        scope.launch {
+          if (kotlin.math.abs(pager.currentPage - target.ordinal) == 1) pager.animateScrollToPage(target.ordinal)
+          else pager.scrollToPage(target.ordinal)
+        }
+      },
+    )
+    HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("capability-pager"),
+      key = { categories[it].key }, userScrollEnabled = detail == null,
+      flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
+    ) { index ->
+      val kind = categories[index]
+      val catalog = pages[kind]
+      val failed = failures[kind] == true
+      val pending = loading[kind] == true || (catalog == null && !failed)
+      val groups = capabilityRows(kind, catalog, personal, queries[kind].orEmpty())
+      val search = queries[kind].orEmpty().trim()
+      val list = lists.getValue(kind)
+      LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (loading && page == null) item { BrandLoadingPanel() }
-        if (failed || page?.incomplete == true) item {
+        if (pending && catalog == null) item { CapabilityListSkeleton() }
+        if (failed || catalog?.incomplete == true) item {
           Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(if (failed) R.string.capability_load_failed else R.string.capability_partial), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = { retry++ }) { Text(stringResource(R.string.capability_retry)) }
+            TextButton(onClick = { load(kind, refresh = true) }) { Text(stringResource(R.string.capability_retry)) }
           }
         }
-        if (!loading && !failed && groups.isEmpty()) item {
+        if (!pending && !failed && groups.isEmpty()) item {
           Column(Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             ActionIcon(R.drawable.action_search)
             Text(stringResource(if (search.isEmpty()) R.string.capability_empty else R.string.capability_no_matches),
               modifier = Modifier.padding(top = 8.dp).testTag("capability-empty"))
-            if (search.isNotEmpty()) TextButton(onClick = { query = "" }) { Text(stringResource(R.string.capability_clear)) }
+            if (search.isNotEmpty()) TextButton(onClick = {
+              if (pager.settledPage == index) updateQuery("")
+            }) { Text(stringResource(R.string.capability_clear)) }
           }
         }
         capabilityGroups.forEach { group ->
@@ -245,16 +296,18 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
           }
           items(rows, key = { it.id }) { row ->
             Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(themedCorners(18)).background(colors.surface)
-              .clickable { focus.clearFocus(); keyboard?.hide(); detail = row }.testTag("capability-row-${row.id}")
+              .clickable { if (pager.settledPage == index && !pager.isScrollInProgress) {
+                focus.clearFocus(); keyboard?.hide(); detail = row
+              } }.testTag("capability-row-${row.id}")
               .padding(horizontal = 14.dp, vertical = 12.dp),
               verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-              CapabilityItemIcon(row, category, origin, personal, agentAvatars)
+              CapabilityItemIcon(row, kind, catalog?.origin, personal, agentAvatars)
               Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(row.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (row.description.isNotBlank()) Text(row.description, style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
               }
-              if (connections && (row.group == "available" || row.group == "attention")) {
+              if (kind == CapabilityCategory.Connections && (row.group == "available" || row.group == "attention")) {
                 Text(stringResource(R.string.capability_connect), style = MaterialTheme.typography.labelLarge, color = colors.primary)
               } else {
                 ActionIcon(R.drawable.action_chevron_right, color = colors.onSurfaceVariant, size = 14.dp)
@@ -264,7 +317,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
         }
       }
     }
-    TextField(query, { query = it.take(160) }, Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp)
+    TextField(query, { updateQuery(it.take(160)) }, Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp)
       .focusRequester(searchFocus).testTag("capability-search"),
       placeholder = { Text(if (skills) stringResource(R.string.capability_search_installed_skills)
         else stringResource(R.string.capability_search, stringResource(category.title))) },
@@ -273,7 +326,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
       colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
         focusedContainerColor = colors.surfaceContainer, unfocusedContainerColor = colors.surfaceContainer),
       leadingIcon = { ActionIcon(R.drawable.action_search) }, trailingIcon = {
-        if (query.isNotEmpty()) IconButton(onClick = { query = "" }, modifier = Modifier.testTag("capability-search-clear")) {
+        if (query.isNotEmpty()) IconButton(onClick = { updateQuery("") }, modifier = Modifier.testTag("capability-search-clear")) {
           ActionIcon(R.drawable.action_close, contentDescription = stringResource(R.string.capability_clear))
         }
       })
@@ -282,14 +335,56 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
     val chat = if (category == CapabilityCategory.Agents && row.group != "disabled") {
       { detail = null; onOpenAgent(row) }
     } else null
-    ModalBottomSheet(onDismissRequest = { detail = null }, containerColor = colors.surface) {
+    ModalBottomSheet(onDismissRequest = { detail = null }, containerColor = colors.surface,
+      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
       CapabilitySettingsPanel(row.name, row.description, origin, icon = {
         CapabilityItemIcon(row, category, origin, personal, agentAvatars, 44.dp)
       }, request = { body ->
         onPanel(category.key, if (category == CapabilityCategory.Connections) row.id else row.targetId ?: row.id, body)
-      }, onChanged = { retry++ }, onChat = chat, onClose = { detail = null })
+      }, onChanged = { load(category, refresh = true) }, onChat = chat, onClose = { detail = null })
     }
   }
+}
+
+@Composable
+private fun CapabilityListSkeleton() {
+  val colors = MaterialTheme.colorScheme
+  val label = stringResource(R.string.brand_loading)
+  val placeholder = colors.surfaceContainerHighest
+  Column(Modifier.fillMaxWidth().semantics { contentDescription = label }.testTag("capability-loading"),
+    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    repeat(3) {
+      Row(Modifier.fillMaxWidth().height(76.dp).background(colors.surface, themedCorners(18))
+        .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.size(48.dp).background(placeholder, themedCorners(12)))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+          Box(Modifier.fillMaxWidth(.55f).height(12.dp).background(placeholder, CircleShape))
+          Box(Modifier.fillMaxWidth(.72f).height(8.dp).background(placeholder, CircleShape))
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun capabilityRows(kind: CapabilityCategory, page: CapabilityPage?, personal: PersonalUiState, query: String):
+  Map<String, List<CapabilityItem>> {
+  val agent = personal.agent?.takeIf { it.state == "ready" && kind == CapabilityCategory.Agents }
+  val rows = page?.items.orEmpty().filterNot { it.id == agent?.agentId }.map { item ->
+    if (kind != CapabilityCategory.Agents) item
+    else {
+      val profile = ConversationAgent(item.id, item.name, item.description)
+      item.copy(name = agentDisplayName(profile), description = agentDisplayDescription(profile))
+    }
+  }
+  val entries = if (agent == null) rows else listOf(CapabilityItem(
+    agent.agentId, agent.displayName, stringResource(R.string.capability_personal_description), "assistant", personal = true,
+  )) + rows
+  val search = query.trim()
+  return entries.filter { row ->
+    search.isEmpty() || listOf(row.name, row.id, row.description).any { it.contains(search, ignoreCase = true) }
+  }.groupBy { it.group }
 }
 
 @Composable
@@ -332,7 +427,8 @@ internal fun ConversationMcpAction(conversationId: String, activeRun: Boolean,
   }
   if (show) {
     val close: () -> Unit = { show = false; revision++ }
-    ModalBottomSheet(onDismissRequest = close) {
+    ModalBottomSheet(onDismissRequest = close, containerColor = MaterialTheme.colorScheme.surface,
+      sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
       CapabilitySettingsPanel(title, "", null, icon = {
         CapabilityLogo(null, null, "", R.drawable.action_capabilities, 44.dp)
       }, request = { body -> onPanel("connections", key, body) }, onChanged = {}, onChat = null, onClose = close)
@@ -362,6 +458,7 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
   var detailsOpen by remember { mutableStateOf(false) }
   var openWhenReady by remember { mutableStateOf(false) }
   var openedUrl by remember { mutableStateOf<String?>(null) }
+  var pollingNow by remember { mutableStateOf(false) }
   var confirm by remember { mutableStateOf<JSONObject?>(null) }
 
   fun authorizationUrl(value: JSONObject?): String? = value?.value("authorizationUrl")?.takeIf { raw ->
@@ -370,7 +467,8 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
   }
 
   suspend fun load(action: String? = null, polling: Boolean = false) {
-    if (busy) return
+    if (busy || (polling && pollingNow)) return
+    if (polling) pollingNow = true
     if (!polling) {
       busy = true
       errorMessage = null
@@ -381,6 +479,7 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
     }
     val previous = values
     val priorPoll = panel?.value("pollAction")
+    val priorFlow = panel?.value("flow")
     try {
       val result = request(action?.let {
         JSONObject().put("action", it).put("values", if (polling) JSONObject() else JSONObject(values)).apply {
@@ -388,7 +487,7 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
           panel?.opt("revision")?.let { revision -> put("revision", revision) }
         }
       })
-      if (polling && (busy || panel?.value("pollAction") != action)) return
+      if (polling && (busy || panel?.value("pollAction") != action || panel?.value("flow") != priorFlow)) return
       panel = result
       values = result.objects("fields").associate { field ->
         val id = field.getString("id")
@@ -406,12 +505,16 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
     catch (error: Exception) {
       if (!polling) errorMessage = (error as? GatewayHttpException)?.detail ?: requestFailure
     }
-    finally { if (!polling) busy = false }
+    finally { if (polling) pollingNow = false else busy = false }
   }
 
   LaunchedEffect(Unit) { load() }
   val pollAction = panel?.value("pollAction")
-  LaunchedEffect(pollAction) {
+  val flow = panel?.value("flow")
+  LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+    panel?.value("pollAction")?.let { action -> scope.launch { load(action, polling = true) } }
+  }
+  LaunchedEffect(pollAction, flow) {
     val action = pollAction ?: return@LaunchedEffect
     repeat(75) {
       delay(4000)
@@ -430,8 +533,23 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
     condition == null || values[condition.getString("field")] == condition.getString("value")
   }
   val allActions = panel?.objects("actions").orEmpty()
+  val mainActions = allActions.filter { !it.optBoolean("advanced") }
   val hasAdvanced = allFields.any { it.optBoolean("advanced") } || allActions.any { it.optBoolean("advanced") }
-  Column(Modifier.fillMaxWidth()) {
+  val authUrl = authorizationUrl(panel)
+  val qrValue = panel?.value("qrUrl")
+  var showQr by remember(authUrl) { mutableStateOf(false) }
+  val qrOnly = if (authUrl == null) qrValue else null
+  val visibleFields = allFields.filter { advanced || !it.optBoolean("advanced") }
+  val results = panel?.objects("results").orEmpty()
+  val expanded = (qrValue != null && (qrOnly != null || showQr)) ||
+    (hasAdvanced && advanced) || (detailsOpen && panel?.value("details") != null) ||
+    visibleFields.size >= 3 || visibleFields.any { it.value("type") in setOf("multiline", "list") } || results.size >= 3
+  val drawerHeight = if (expanded) Modifier.fillMaxHeight(.82f) else Modifier.heightIn(max = 420.dp).fillMaxHeight()
+  val expiresAt = panel?.optLong("expiresAt") ?: 0L
+  val primary = mainActions.firstOrNull()?.takeIf { authUrl == null && qrOnly == null && pollAction == null }
+  val cancel = mainActions.find { it.value("id") == "pair-cancel" }
+  val colors = MaterialTheme.colorScheme
+  Column(Modifier.fillMaxWidth().then(drawerHeight)) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
       horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
       icon()
@@ -447,12 +565,16 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         ActionIcon(R.drawable.action_close, contentDescription = stringResource(R.string.assistant_close))
       }
     }
-    Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState())
-      .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
-      verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+      .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp)) {
       val status = panel?.value("message")
-      if (status != null) Text(status, Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer,
-        themedCorners(14)).padding(14.dp).testTag("capability-panel-status"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (status != null) Row(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, themedCorners(16))
+        .padding(horizontal = 14.dp, vertical = 12.dp).testTag("capability-panel-status"),
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (pollAction != null) Box(Modifier.size(8.dp).background(colors.primary, CircleShape))
+        Text(status, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+      }
       else if (summary.isNotEmpty()) Text(summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
       if (busy) BrandLoadingIndicator(extent = 24.dp)
       errorMessage?.let {
@@ -464,17 +586,8 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
           Text(capabilityLabel("刷新状态", "Refresh status"))
         }
       }
-      panel?.value("qrUrl")?.let { value ->
-        val qr = remember(value) { runCatching { shareQrBitmap(value) }.getOrNull() }
-        if (qr != null) Image(qr.asImageBitmap(), capabilityLabel("通道配对二维码", "Channel pairing QR code"),
-          Modifier.align(Alignment.CenterHorizontally).background(androidx.compose.ui.graphics.Color.White, themedCorners(16))
-            .padding(12.dp).size(176.dp))
-      }
-      authorizationUrl(panel)?.let { raw ->
-        TextButton(onClick = { try { browser.openUri(raw) } catch (_: RuntimeException) { errorMessage = requestFailure } }, enabled = !busy) {
-          Text(capabilityLabel("继续授权", "Continue sign-in"))
-        }
-      }
+      CapabilitySetupOptions(authUrl, panel?.value("deviceVerificationCode"), qrValue, expiresAt, busy,
+        showQr, onToggleQr = { showQr = !showQr })
       panel?.value("details")?.let { details ->
         TextButton(onClick = { detailsOpen = !detailsOpen }, modifier = Modifier.testTag("capability-panel-review-details")) {
           Text(if (detailsOpen) capabilityLabel("收起详情", "Hide details") else capabilityLabel("查看详情", "View details"))
@@ -485,10 +598,10 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         CapabilityInput(field, values, busy, { id, text -> values = values + (id to text) },
           onSearch = { keyboard?.hide(); scope.launch { load("search") } })
       }
-      allActions.filter { !it.optBoolean("advanced") }.forEachIndexed { index, action ->
-        CapabilityActionButton(action, index == 0 && pollAction == null, busy) { perform(action) }
+      for (action in mainActions.filter { it != primary && it != cancel }) {
+        CapabilityActionButton(action, false, busy) { perform(action) }
       }
-      for (result in panel?.objects("results").orEmpty()) {
+      for (result in results) {
         Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)).padding(12.dp),
           verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
           CapabilityLogo(result.value("iconUrl"), origin, result.optString("name"), R.drawable.action_task_list, 40.dp)
@@ -517,6 +630,27 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         }
       }
     }
+    if (authUrl != null || qrOnly != null || primary != null || cancel != null) {
+      HorizontalDivider(color = colors.outlineVariant.copy(alpha = .5f))
+      Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 8.dp)) {
+        when {
+          authUrl != null -> Button(onClick = {
+            runCatching { browser.openUri(authUrl) }.onSuccess { openedUrl = authUrl }
+              .onFailure { errorMessage = requestFailure }
+          }, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .testTag("capability-panel-open-authorization")) {
+            Text(when {
+              openedUrl == authUrl -> capabilityLabel("重新打开授权页", "Reopen authorization")
+              panel?.value("deviceVerificationCode") != null -> capabilityLabel("打开验证页", "Open verification page")
+              else -> capabilityLabel("前往授权", "Open authorization")
+            })
+          }
+          qrOnly != null -> CapabilityQrSaveButton(qrOnly, expiresAt, busy, primary = true)
+          primary != null -> CapabilityActionButton(primary, true, busy) { perform(primary) }
+        }
+        if (cancel != null && cancel != primary) CapabilityActionButton(cancel, false, busy) { perform(cancel) }
+      }
+    }
   }
   confirm?.let { action ->
     AlertDialog(onDismissRequest = { confirm = null },
@@ -528,10 +662,131 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
 }
 
 @Composable
+private fun CapabilitySetupOptions(authorizationUrl: String?, userCode: String?, qrValue: String?,
+  expiresAt: Long, busy: Boolean, showQr: Boolean, onToggleQr: () -> Unit) {
+  val context = LocalContext.current
+  val colors = MaterialTheme.colorScheme
+  val card = themedCorners(16)
+  if (authorizationUrl != null && userCode != null) {
+    Row(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, card).border(1.dp, colors.outlineVariant, card)
+      .padding(horizontal = 14.dp, vertical = 8.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+      Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(capabilityLabel("验证码", "Verification code"), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+        Text(userCode, style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace)
+      }
+      FilledTonalButton(onClick = {
+        context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("", userCode))
+      }, enabled = !busy, modifier = Modifier.heightIn(min = 44.dp)) {
+        ActionIcon(R.drawable.message_copy, contentDescription = null, size = 16.dp)
+        Spacer(Modifier.size(6.dp))
+        Text(capabilityLabel("复制", "Copy"))
+      }
+    }
+  }
+  if (authorizationUrl != null && qrValue != null) {
+    TextButton(onClick = onToggleQr, enabled = !busy,
+      modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).background(colors.surfaceContainerLow, card)
+        .testTag("capability-panel-other-methods")) {
+      Text(if (showQr) capabilityLabel("收起二维码", "Hide QR code") else capabilityLabel("其他方式", "Other ways"),
+        Modifier.weight(1f))
+      ActionIcon(R.drawable.action_chevron_down, contentDescription = null, size = 16.dp,
+        modifier = Modifier.rotate(if (showQr) 180f else 0f))
+    }
+  }
+  if (qrValue != null && (authorizationUrl == null || showQr)) {
+    val qr = remember(qrValue) { runCatching { shareQrBitmap(qrValue, size = 512, margin = 4) }.getOrNull() }
+    if (qr != null) Column(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, card).padding(16.dp),
+      horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+      Image(qr.asImageBitmap(), capabilityLabel("授权二维码", "Authorization QR code"),
+        Modifier.size(188.dp).clip(themedCorners(16)).background(Color.White).padding(4.dp).testTag("capability-panel-qr"))
+      Text(capabilityLabel("从扫一扫的相册入口选图，或用另一台设备扫码。",
+        "Select the saved image if the scanner supports Photos, or scan with another device."),
+        style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, textAlign = TextAlign.Center)
+      if (authorizationUrl != null) CapabilityQrSaveButton(qrValue, expiresAt, busy, primary = false)
+    }
+  }
+}
+
+@Composable
+private fun CapabilityQrSaveButton(qrValue: String, expiresAt: Long, busy: Boolean, primary: Boolean) {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  var saving by remember(qrValue) { mutableStateOf(false) }
+  var saveMessage by remember(qrValue) { mutableStateOf<Pair<Boolean, String>?>(null) }
+  val expired = capabilityLabel("二维码已过期，请刷新状态。", "The QR code expired. Refresh its status.")
+  val failure = capabilityLabel("未能保存二维码，请检查相册权限后重试。", "Could not save the QR code. Check photo access and try again.")
+  val saved = capabilityLabel("已保存到相册。", "Saved to Photos.")
+  fun save() {
+    if (saving) return
+    if (expiresAt > 0 && System.currentTimeMillis() >= expiresAt) {
+      saveMessage = false to expired
+      return
+    }
+    saving = true
+    scope.launch {
+      try {
+        withContext(Dispatchers.IO) { saveCapabilityQr(context, shareQrBitmap(qrValue, size = 512, margin = 4)) }
+        saveMessage = true to saved
+      } catch (cancelled: CancellationException) {
+        throw cancelled
+      } catch (_: Exception) {
+        saveMessage = false to failure
+      } finally {
+        saving = false
+      }
+    }
+  }
+  val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    if (granted) save() else saveMessage = false to failure
+  }
+  Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    val saveLabel = if (saving) capabilityLabel("正在保存…", "Saving…") else capabilityLabel("保存二维码", "Save QR code")
+    val modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("capability-panel-save-qr")
+    val onSave = {
+      if (Build.VERSION.SDK_INT < 29 && ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        != PackageManager.PERMISSION_GRANTED) permission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+      else save()
+    }
+    if (primary) Button(onClick = onSave, enabled = !busy && !saving, modifier = modifier) { Text(saveLabel) }
+    else TextButton(onClick = onSave, enabled = !busy && !saving, modifier = modifier) { Text(saveLabel) }
+    saveMessage?.let { (success, message) ->
+      Text(message, color = if (success) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+    }
+  }
+}
+
+private fun saveCapabilityQr(context: Context, qr: Bitmap) {
+  val resolver = context.contentResolver
+  val values = ContentValues().apply {
+    put(MediaStore.Images.Media.DISPLAY_NAME, "xopc-qr-${System.currentTimeMillis()}.png")
+    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+    if (Build.VERSION.SDK_INT >= 29) {
+      put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
+      put(MediaStore.Images.Media.IS_PENDING, 1)
+    }
+  }
+  val destination = checkNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values))
+  try {
+    checkNotNull(resolver.openOutputStream(destination)).use { check(qr.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+    if (Build.VERSION.SDK_INT >= 29) {
+      val complete = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }
+      check(resolver.update(destination, complete, null, null) == 1)
+    }
+  } catch (error: Exception) {
+    runCatching { resolver.delete(destination, null, null) }
+    throw error
+  }
+}
+
+@Composable
 private fun CapabilityActionButton(action: JSONObject, primary: Boolean, busy: Boolean, onClick: () -> Unit) {
   val modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).testTag("capability-panel-" + action.getString("id"))
   if (primary) Button(onClick = onClick, modifier = modifier, enabled = !busy) { Text(action.getString("label")) }
-  else TextButton(onClick = onClick, modifier = modifier, enabled = !busy) { Text(action.getString("label")) }
+  else TextButton(onClick = onClick, modifier = modifier, enabled = !busy) {
+    Text(action.getString("label"),
+      color = if (action.value("id") == "pair-cancel") MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
+  }
 }
 
 @Composable

@@ -1231,7 +1231,7 @@ internal fun MainContent(
   fun closeAutomationConfiguration() {
     automationReturnConversation?.let(onRestoreConversation) ?: onOpenPersonalAgent()
     when (automationReturnTab) {
-      HomeTab.Progress, HomeTab.Projects, HomeTab.Automations -> {
+      HomeTab.Progress, HomeTab.Projects -> {
         automationReturnProjectId?.let(onOpenProgressProject) ?: onLoadAutomations()
       }
       else -> Unit
@@ -1494,7 +1494,7 @@ internal fun MainContent(
       onSelectTab(linkedDetail.source)
     } else {
       onSelectTab(HomeTab.Assistant)
-      if (selectedTab == HomeTab.Conversations && returnToSidebar) openSidebar()
+      if (returnToSidebar && selectedTab in listOf(HomeTab.Conversations, HomeTab.Progress, HomeTab.Automations)) openSidebar()
       returnToSidebar = false
     }
   }
@@ -1958,7 +1958,8 @@ internal fun MainContent(
       onDestination = { destination ->
         sidebar.open = false
         linkedDetails = emptyList()
-        returnToSidebar = destination == HomeTab.Conversations
+        returnToSidebar = destination in listOf(HomeTab.Conversations, HomeTab.Progress, HomeTab.Automations)
+        if (destination == HomeTab.Progress) tabStateHolder.removeState("${gatewayId}:${destination.name}")
         if (destination == HomeTab.Me) personalPage = "settings"
         onSelectTab(destination)
       },
@@ -2175,9 +2176,9 @@ private fun DraftAttachmentStrip(items: List<ChatAttachment>, scopeKey: String?,
             }
           }
         } else {
-          Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh,
-            themedCorners(12)).padding(start = 12.dp)
-            .clickable { previewId = item.id }
+          Row(modifier = Modifier.clip(themedCorners(12))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable { previewId = item.id }.padding(start = 12.dp)
             .testTag("$tagPrefix-attachment-${item.id}"),
             verticalAlignment = Alignment.CenterVertically) {
             Text(item.name, modifier = Modifier.size(width = 130.dp, height = 48.dp)
@@ -2483,7 +2484,7 @@ private fun AssistantActionPanel(canRecord: Boolean, canReference: Boolean, onOp
               else -> onPick(id)
             }
           }, enabled = enabled, modifier = Modifier.weight(1f).height(84.dp).testTag("assistant-action-$id"),
-            contentPadding = PaddingValues(0.dp)) {
+            shape = themedCorners(14), contentPadding = PaddingValues(0.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
               Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest, themedCorners(14)),
                 contentAlignment = Alignment.Center) {
@@ -2758,6 +2759,8 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   }
   val externalLinkFailure = stringResource(R.string.message_open_link_failed)
   var messageActionsId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  var selectingMessageId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
+  BackHandler(selectingMessageId != null) { selectingMessageId = null }
   var messageDetailId by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
   val messageDetailScroll = remember(connection.selectedConversationId, messageDetailId) { ScrollState(0) }
   var previewRequest by remember(connection.selectedConversationId) { mutableStateOf<MessagePreviewRequest?>(null) }
@@ -3022,7 +3025,90 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         items(displayMessages, key = { it.renderId }) { message ->
           Column(Modifier.then(if (connection.liveMessages.any { it.id in message.sourceIds })
             Modifier.testTag("assistant-live-output") else Modifier)) {
-          ChatMessageCard(message, onReading = { followBottom = false }, streaming = followBottom && !messageListState.isScrollInProgress && connection.activeRunId != null && connection.liveMessages.any { it.id in message.sourceIds }, actionsEnabled = connection.messages.any { it.id == message.id }, onMore = { messageActionsId = message.id },
+          ChatMessageCard(message, onReading = { followBottom = false }, streaming = followBottom && !messageListState.isScrollInProgress && connection.activeRunId != null && connection.liveMessages.any { it.id in message.sourceIds }, actionsEnabled = connection.messages.any { it.id == message.id },
+            onMore = {
+              selectingMessageId = null
+              messageActionsId = message.id
+            },
+            selectingText = selectingMessageId == message.id,
+            onEndSelection = { if (selectingMessageId == message.id) selectingMessageId = null },
+            onDismissMenu = { messageActionsId = null },
+            menuContent = connection.messages.firstOrNull { it.id == messageActionsId && it.id == message.id }?.let { actionsMessage ->
+              {
+                val hasText = actionsMessage.text.isNotBlank()
+                val codeText = remember(actionsMessage.text) { extractMarkdownCodeBlocks(actionsMessage.text) }
+                if (hasText) {
+                  MessageMenuItem(R.string.assistant_copy, R.drawable.message_copy, "copy") {
+                    messageActionsId = null
+                    onCopyMessageText(actionsMessage.text)
+                  }
+                  MessageMenuItem(R.string.assistant_select_text, R.drawable.message_select_text, "select-text") {
+                    messageActionsId = null
+                    selectingMessageId = actionsMessage.id
+                  }
+                }
+                if (actionsMessage.role == "assistant") {
+                  val assistantIndex = connection.messages.indexOfFirst { it.id == actionsMessage.id }
+                  val source = connection.messages.take(assistantIndex.coerceAtLeast(0)).lastOrNull { it.role == "user" }
+                  if (source != null && source.text.isNotBlank() && !source.hasNonTextContent) {
+                    MessageMenuItem(R.string.assistant_regenerate, R.drawable.action_refresh, "regenerate",
+                      enabled = connection.activeRunId == null && !connection.sending && connection.pendingInput == null &&
+                        connection.realtimeStatus == "connected") {
+                      if (onRegenerateMessage(actionsMessage.id)) messageActionsId = null
+                    }
+                  }
+                  if (hasText && actionsMessage.media.none { it.mimeType.startsWith("audio/") }) {
+                    val phase = if (reader.state.sourceId == actionsMessage.id) reader.state.phase else "idle"
+                    val label = when (phase) {
+                      "playing" -> R.string.assistant_pause
+                      "paused" -> R.string.assistant_resume
+                      else -> R.string.assistant_read_aloud
+                    }
+                    MessageMenuItem(label, if (phase == "playing") R.drawable.message_pause else R.drawable.action_speaker,
+                      "read-aloud", enabled = phase != "loading") {
+                      messageActionsId = null
+                      if (phase == "playing" || phase == "paused") reader.toggle()
+                      else reader.speak(actionsMessage.text, actionsMessage.id, Locale.getDefault().toLanguageTag())
+                    }
+                  }
+                  if (hasText) {
+                    MessageMenuItem(R.string.conversations_share, R.drawable.message_share, "share") {
+                      messageActionsId = null
+                      shareMessageText(context, actionsMessage.text)
+                    }
+                    MessageMenuItem(R.string.assistant_save_note, R.drawable.message_bookmark, "save-note",
+                      enabled = connection.savingMessageNoteId == null) {
+                      messageActionsId = null
+                      onSaveMessageAsNote(actionsMessage.id)
+                    }
+                  }
+                  MessageMenuItem(R.string.assistant_message_detail, R.drawable.tab_notes, "detail") {
+                    messageActionsId = null
+                    messageDetailId = actionsMessage.id
+                  }
+                  MessageMenuItem(R.string.assistant_execution, R.drawable.action_task_list, "execution") {
+                    messageActionsId = null
+                    onOpenExecution(actionsMessage.id)
+                  }
+                  if (codeText.isNotEmpty()) MessageMenuItem(R.string.assistant_copy_code, R.drawable.message_copy, "copy-code") {
+                    messageActionsId = null
+                    onCopyMessageText(codeText)
+                  }
+                }
+                if (actionsMessage.role == "user" && hasText && actionsMessage.text.length <= 32_000 &&
+                  !actionsMessage.hasNonTextContent) {
+                  MessageMenuItem(R.string.assistant_reuse, android.R.drawable.ic_menu_edit, "reuse",
+                    enabled = !connection.sending && connection.pendingInput == null &&
+                      !connection.attachmentLoading && connection.draftAttachments.isEmpty() && connection.draftRefs.isEmpty()) {
+                    if (onReuseMessage(actionsMessage.id)) {
+                      messageActionsId = null
+                      onActionsOpenChange(false)
+                      onFocusDraft()
+                    }
+                  }
+                }
+              }
+            },
             onOpenTarget = onOpenMessageTarget,
             onOpenPreview = { media, gallery ->
               previewRequest = MessagePreviewRequest(connection.selectedConversationId, media, gallery)
@@ -3512,99 +3598,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
         }
       }
     }
-    }
-  }
-  val actionsMessage = connection.messages.firstOrNull { it.id == messageActionsId }
-  if (actionsMessage != null) ModalBottomSheet(onDismissRequest = { messageActionsId = null },
-    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-    val codeText = extractMarkdownCodeBlocks(actionsMessage.text)
-    Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.5f)
-      .padding(horizontal = 20.dp, vertical = 12.dp)) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.assistant_message_more), style = MaterialTheme.typography.titleMedium,
-          modifier = Modifier.weight(1f))
-        TextButton(onClick = { messageActionsId = null }) { Text(stringResource(R.string.assistant_close)) }
-      }
-      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      if (actionsMessage.text.isNotBlank()) TextButton(onClick = {
-        messageActionsId = null
-        onCopyMessageText(actionsMessage.text)
-      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-action")) {
-        Text(stringResource(R.string.assistant_copy), modifier = Modifier.fillMaxWidth())
-      }
-      if (actionsMessage.text.isNotBlank()) TextButton(onClick = {
-        messageActionsId = null
-        messageDetailId = actionsMessage.id
-      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-select-text-action")) {
-        Text(stringResource(R.string.assistant_select_text), modifier = Modifier.fillMaxWidth())
-      }
-      if (actionsMessage.role == "assistant") TextButton(onClick = {
-        messageActionsId = null
-        messageDetailId = actionsMessage.id
-      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-detail-action")) {
-        Text(stringResource(R.string.assistant_message_detail), modifier = Modifier.fillMaxWidth())
-      }
-      if (actionsMessage.role == "assistant") TextButton(onClick = {
-        messageActionsId = null
-        onOpenExecution(actionsMessage.id)
-      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-execution-action")) {
-        Text(stringResource(R.string.assistant_execution), modifier = Modifier.fillMaxWidth())
-      }
-      if (actionsMessage.role == "assistant" && actionsMessage.text.isNotBlank() &&
-        actionsMessage.media.none { it.mimeType.startsWith("audio/") }) {
-        val phase = if (reader.state.sourceId == actionsMessage.id) reader.state.phase else "idle"
-        TextButton(onClick = {
-          messageActionsId = null
-          if (phase == "playing" || phase == "paused") reader.toggle()
-          else reader.speak(actionsMessage.text, actionsMessage.id, Locale.getDefault().toLanguageTag())
-        }, enabled = phase != "loading", modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-          .testTag("message-read-aloud-action")) {
-          Text(stringResource(when (phase) {
-            "playing" -> R.string.assistant_pause
-            "paused" -> R.string.assistant_resume
-            else -> R.string.assistant_read_aloud
-          }), modifier = Modifier.fillMaxWidth())
-        }
-      }
-      if (actionsMessage.role == "assistant" && actionsMessage.text.isNotBlank()) TextButton(onClick = {
-        messageActionsId = null
-        onSaveMessageAsNote(actionsMessage.id)
-      }, enabled = connection.savingMessageNoteId == null,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-save-note-action")) {
-        Text(stringResource(R.string.assistant_save_note), modifier = Modifier.fillMaxWidth())
-      }
-      if (actionsMessage.role == "assistant") {
-        val assistantIndex = connection.messages.indexOfFirst { it.id == actionsMessage.id }
-        val source = connection.messages.take(assistantIndex.coerceAtLeast(0)).lastOrNull { it.role == "user" }
-        if (source != null && source.text.isNotBlank() && !source.hasNonTextContent) TextButton(onClick = {
-          if (onRegenerateMessage(actionsMessage.id)) messageActionsId = null
-        }, enabled = connection.activeRunId == null && !connection.sending && connection.pendingInput == null &&
-          connection.realtimeStatus == "connected",
-          modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-regenerate-action")) {
-          Text(stringResource(R.string.assistant_regenerate), modifier = Modifier.fillMaxWidth())
-        }
-      }
-      if (actionsMessage.role == "assistant" && codeText.isNotEmpty()) TextButton(onClick = {
-        messageActionsId = null
-        onCopyMessageText(codeText)
-      }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-copy-code-action")) {
-        Text(stringResource(R.string.assistant_copy_code), modifier = Modifier.fillMaxWidth())
-      }
-      if (actionsMessage.role == "user" && actionsMessage.text.isNotBlank() &&
-        actionsMessage.text.length <= 32_000 &&
-        !actionsMessage.hasNonTextContent) TextButton(onClick = {
-        if (onReuseMessage(actionsMessage.id)) {
-          messageActionsId = null
-          onActionsOpenChange(false)
-          onFocusDraft()
-        }
-      }, enabled = !connection.sending && connection.pendingInput == null &&
-        !connection.attachmentLoading && connection.draftAttachments.isEmpty() && connection.draftRefs.isEmpty(),
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("message-reuse-action")) {
-        Text(stringResource(R.string.assistant_reuse), modifier = Modifier.fillMaxWidth())
-      }
-      }
     }
   }
   val detailMessage = connection.messages.firstOrNull { it.id == messageDetailId }
@@ -4294,7 +4287,8 @@ private fun ConversationCard(conversation: ConversationSummary, showTime: Boolea
   val contextMenuLabel = stringResource(R.string.conversations_more_actions)
   val taskExpandLabel = stringResource(R.string.conversations_expand_tasks)
   val taskCollapseLabel = stringResource(R.string.conversations_collapse_tasks)
-  Card(modifier = modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("conversation-row-${conversation.id}")
+  val shape = themedCorners(16)
+  Card(modifier = modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape).testTag("conversation-row-${conversation.id}")
     .semantics {
       if (selectionMode) this.selected = selectionSelected
       if (onMenu != null) customActions = listOf(CustomAccessibilityAction(contextMenuLabel) {
@@ -4303,7 +4297,7 @@ private fun ConversationCard(conversation: ConversationSummary, showTime: Boolea
     }.combinedClickable(onClick = onClick,
     onLongClick = onMenu?.let { action -> { haptics.performHapticFeedback(HapticFeedbackType.LongPress); action() } },
     onLongClickLabel = if (onMenu != null) stringResource(R.string.conversations_more_actions) else null),
-    shape = themedCorners(16),
+    shape = shape,
     colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
       else MaterialTheme.colorScheme.surfaceContainer)) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -4356,7 +4350,7 @@ private fun ConversationTaskRow(child: ConversationTaskChild, onOpen: (String) -
     else -> status
   }
   Row(modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-    .background(MaterialTheme.colorScheme.surfaceContainerLow, themedCorners(12))
+    .clip(themedCorners(12)).background(MaterialTheme.colorScheme.surfaceContainerLow)
     .clickable(enabled = child.activeConversationId != null) {
       child.activeConversationId?.let(onOpen)
     }.testTag("conversation-task-${child.taskId}")

@@ -9,6 +9,7 @@ export type EnterpriseCredentials = { id: string; secret: string; identity?: str
 
 export type EnterpriseRegistration = {
   qrPayload: string;
+  deviceVerification?: { url: string; userCode?: string };
   expiresInSec: number;
   intervalMs: number;
   poll: (signal: AbortSignal) => Promise<EnterpriseCredentials | 'expired' | undefined>;
@@ -136,6 +137,7 @@ export function createEnterpriseSetup(options: {
           }, registration.expiresInSec * 1000).unref();
           return { ok: true, payload: {
             type: 'qr', conversationId: active.id, qrPayload: registration.qrPayload,
+            ...(registration.deviceVerification ? { deviceVerification: registration.deviceVerification } : {}),
             expiresInSec: registration.expiresInSec, pollIntervalMs: registration.intervalMs,
             statusAction: 'setup.status', cancelAction: 'setup.cancel',
           } };
@@ -159,7 +161,7 @@ export function createEnterpriseSetup(options: {
         if (!active || active.id !== id || Date.now() >= active.expiresAt ||
             !isDeepStrictEqual(active.originalConfig, cfg.channels?.[channel])) {
           return { ok: true, payload: { type: 'poll', phase: 'unknown', ok: false,
-            message: copy('配置已变更或二维码已过期，请重新连接。', 'Settings changed or the QR code expired. Start setup again.') } };
+            message: copy('配置已变更或授权已过期，请重新连接。', 'Settings changed or authorization expired. Start setup again.') } };
         }
         if (!active.polling && Date.now() < active.nextPollAt) {
           return { ok: true, payload: { type: 'poll', phase: 'pending' } };
@@ -174,7 +176,7 @@ export function createEnterpriseSetup(options: {
             active.controller.abort();
             session = undefined;
             return { ok: true, payload: { type: 'poll', phase: 'done', ok: false,
-              message: copy('扫码授权已结束，请重新扫码或手动填写凭据。', 'QR authorization ended. Scan again or enter credentials.') } };
+              message: copy('授权已结束，请重新连接或填写凭据。', 'Authorization ended. Reconnect or enter credentials.') } };
           }
           if (!credentials) {
             active.polling = undefined;
