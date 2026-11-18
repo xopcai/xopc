@@ -658,7 +658,9 @@ struct MobileShare: Decodable, Identifiable, Sendable {
     let revoked: Bool
     let expired: Bool
 
-    var isActive: Bool { !revoked && !expired }
+    var isActive: Bool {
+        !revoked && !expired
+    }
 }
 
 struct MobileShareListEnvelope: Decodable, Sendable {

@@ -119,7 +119,10 @@ struct UserUnderstandingView: View {
     let configuration: GatewayConfiguration
     @State private var summary: MobileUserSummary?
     @AppStorage("navigation.privacy-memory") private var savedSection = 0
-    private var section: Int { (0 ... 2).contains(savedSection) ? savedSection : 0 }
+    private var section: Int {
+        (0 ... 2).contains(savedSection) ? savedSection : 0
+    }
+
     @State private var filter = "all"
     @State private var query = ""
     @State private var searchOpen = false
@@ -189,7 +192,9 @@ struct UserUnderstandingView: View {
             }
         }
         .task(id: section) {
-            if section == 2 { await loadWork() }
+            if section == 2 {
+                await loadWork()
+            }
         }
         .refreshable { await refreshCurrentSection() }
         .sheet(isPresented: $editingProfile) {
@@ -355,7 +360,9 @@ struct UserUnderstandingView: View {
     }
 
     @MainActor private func loadWork(cursor: String? = nil) async {
-        if cursor != nil, workLoading || cursor != workCursor { return }
+        if cursor != nil, workLoading || cursor != workCursor {
+            return
+        }
         workLoading = true
         workFailed = false
         defer { workLoading = false }
@@ -367,7 +374,9 @@ struct UserUnderstandingView: View {
         } catch is CancellationError {
             return
         } catch {
-            if !Task.isCancelled { workFailed = true }
+            if !Task.isCancelled {
+                workFailed = true
+            }
         }
     }
 

@@ -292,7 +292,7 @@ struct CapabilitiesView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    if category == .connections && (item.group == "available" || item.group == "attention") {
+                    if category == .connections, item.group == "available" || item.group == "attention" {
                         Text("capability_connect").font(.subheadline.weight(.medium))
                             .foregroundStyle(mobileTheme.action).padding(.trailing, 8)
                     }

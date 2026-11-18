@@ -3002,14 +3002,18 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertLessThan(decision.frame.minY, app.frame.midY)
         decision.tap()
         let loadMore = app.buttons["加载更多"]
-        if !loadMore.isHittable { app.swipeUp() }
+        if !loadMore.isHittable {
+            app.swipeUp()
+        }
         loadMore.tap()
         XCTAssertTrue(app.staticTexts["验收经验：先使用独立数据。"].waitForExistence(timeout: 6))
         capture("work-memory")
 
         app.navigationBars.buttons.firstMatch.tap()
         let history = app.buttons["settings-share-history"]
-        if !history.isHittable { app.swipeUp() }
+        if !history.isHittable {
+            app.swipeUp()
+        }
         history.tap()
         XCTAssertTrue(app.staticTexts["已过期的对话链接"].waitForExistence(timeout: 6))
         XCTAssertTrue(app.staticTexts["已撤销的笔记链接"].exists)

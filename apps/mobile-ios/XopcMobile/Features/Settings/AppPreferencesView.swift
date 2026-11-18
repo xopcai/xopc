@@ -139,7 +139,9 @@ private struct ShareCenterView: View {
         .task(id: configuration) { await load() }
         .refreshable { await load() }
         .confirmationDialog("撤销链接", isPresented: Binding(get: { revokeTarget != nil }, set: {
-            if !$0 { revokeTarget = nil }
+            if !$0 {
+                revokeTarget = nil
+            }
         }), titleVisibility: .visible, presenting: revokeTarget) { share in
             Button("撤销", role: .destructive) {
                 Task { await update(share) { client in try await client.revokeShare(id: share.id) } }
@@ -220,7 +222,9 @@ private struct ShareCenterView: View {
             loaded = true
             failed = false
         } catch {
-            if !Task.isCancelled { failed = true }
+            if !Task.isCancelled {
+                failed = true
+            }
         }
     }
 
@@ -232,7 +236,9 @@ private struct ShareCenterView: View {
             try await action(GatewayClient(configuration: configuration))
             await fetch()
         } catch {
-            if !Task.isCancelled { failed = true }
+            if !Task.isCancelled {
+                failed = true
+            }
         }
     }
 }
