@@ -28,6 +28,7 @@ import { automationApi } from '@/features/automations/automation-api';
 
 import { allProjectOptions } from '@/features/sessions/session-filter-projects';
 import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
+import { SessionRenameDialog } from '@/features/sessions/session-rename-dialog';
 
 import { SidebarExpertList } from '@/components/shell/sidebar-expert-list';
 import { SidebarCreateSectionHeader, sidebarSectionLabelClass } from '@/components/shell/sidebar-create-section-header';
@@ -59,7 +60,6 @@ import {
   fetchSidebarChatList,
   listSessions,
   pinSession,
-  renameSession,
   saveSidebarLayout,
   unpinSession,
 } from '@/features/sessions/session-api';
@@ -339,7 +339,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   session,
   isActive,
   onNavigate,
-  mutate,
   onRequestRename,
   onRequestDelete,
   sb,
@@ -353,7 +352,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   isActive: boolean;
   contextLabel?: string;
   onNavigate?: () => void;
-  mutate: () => void;
   onRequestRename: (session: SessionMetadata) => void;
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
@@ -404,7 +402,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         await pinSession(session.key);
       }
       setMenuOpen(false);
-      void mutate();
     } catch {
       // Preserve the current sidebar state when the action fails.
     } finally {
@@ -756,7 +753,6 @@ function SidebarProjectSection({
   onArchiveProject,
   onRequestProjectRemove,
   onNavigate,
-  mutate,
   onRequestRename,
   onRequestDelete,
   sb,
@@ -779,7 +775,6 @@ function SidebarProjectSection({
   onArchiveProject: (project: Project) => void;
   onRequestProjectRemove: (project: Project) => void;
   onNavigate?: () => void;
-  mutate: () => void;
   onRequestRename: (session: SessionMetadata) => void;
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
@@ -855,7 +850,6 @@ function SidebarProjectSection({
               session={session}
               isActive={activeConversationId === session.key}
               onNavigate={onNavigate}
-              mutate={mutate}
               onRequestRename={onRequestRename}
               onRequestDelete={onRequestDelete}
               sb={sb}
@@ -910,7 +904,6 @@ function SidebarInboxSection({
   onLoadMore,
   activeConversationId,
   onNavigate,
-  mutate,
   onRequestRename,
   onRequestDelete,
   sb,
@@ -930,7 +923,6 @@ function SidebarInboxSection({
   onLoadMore: () => void;
   activeConversationId?: string;
   onNavigate?: () => void;
-  mutate: () => void;
   onRequestRename: (session: SessionMetadata) => void;
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
@@ -990,7 +982,6 @@ function SidebarInboxSection({
             session={session}
             isActive={activeConversationId === session.key}
             onNavigate={onNavigate}
-            mutate={mutate}
             onRequestRename={onRequestRename}
             onRequestDelete={onRequestDelete}
             sb={sb}
@@ -1030,7 +1021,6 @@ function SidebarPinnedSection({
   sessions,
   activeConversationId,
   onNavigate,
-  mutate,
   onRequestRename,
   onRequestDelete,
   sb,
@@ -1043,7 +1033,6 @@ function SidebarPinnedSection({
   sessions: SessionMetadata[];
   activeConversationId?: string;
   onNavigate?: () => void;
-  mutate: () => void;
   onRequestRename: (session: SessionMetadata) => void;
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
@@ -1068,7 +1057,6 @@ function SidebarPinnedSection({
             contextLabel={session.projectId ? projectNames?.get(session.projectId) : undefined}
             isActive={activeConversationId === session.key}
             onNavigate={onNavigate}
-            mutate={mutate}
             onRequestRename={onRequestRename}
             onRequestDelete={onRequestDelete}
             sb={sb}
@@ -1137,8 +1125,7 @@ function SidebarTaskListContent({
     [],
   );
 
-  const [renameKey, setRenameKey] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState('');
+  const [renameTarget, setRenameTarget] = useState<{ key: string; name: string } | null>(null);
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
   const [renameProjectId, setRenameProjectId] = useState<string | null>(null);
   const [renameProjectDraft, setRenameProjectDraft] = useState('');
@@ -1439,22 +1426,8 @@ function SidebarTaskListContent({
   }, [activeConversationId, data, items, token, view]);
 
   const openRename = useCallback((session: SessionMetadata) => {
-    setRenameKey(session.key);
-    setRenameDraft(sessionTitle(session, m.chat.newSession));
+    setRenameTarget({ key: session.key, name: sessionTitle(session, m.chat.newSession) });
   }, [m.chat.newSession]);
-
-  const runRename = async () => {
-    if (!renameKey) return;
-    const name = renameDraft.trim();
-    if (!name) return;
-    try {
-      await renameSession(renameKey, name);
-      setRenameKey(null);
-      refreshSidebar();
-    } catch {
-      // Preserve the current sidebar state when the action fails.
-    }
-  };
 
   const runDelete = async (key: string) => {
     try {
@@ -1699,7 +1672,6 @@ function SidebarTaskListContent({
   ) : null;
   const sessionRowProps = {
     onNavigate,
-    mutate: refreshSidebar,
     onRequestRename: openRename,
     onRequestDelete: setDeleteKey,
     sb,
@@ -1886,7 +1858,6 @@ function SidebarTaskListContent({
                           onArchiveProject={(project) => void runProjectArchive(project)}
                           onRequestProjectRemove={(project) => setRemoveProjectId(project.id)}
                           onNavigate={onNavigate}
-                          mutate={refreshSidebar}
                           onRequestRename={openRename}
                           onRequestDelete={setDeleteKey}
                           sb={sb}
@@ -1918,7 +1889,6 @@ function SidebarTaskListContent({
                 onLoadMore={loadMoreInbox}
                 activeConversationId={activeConversationId}
                 onNavigate={onNavigate}
-                mutate={refreshSidebar}
                 onRequestRename={openRename}
                 onRequestDelete={setDeleteKey}
                 sb={sb}
@@ -1942,7 +1912,6 @@ function SidebarTaskListContent({
                 onLoadMore={loadMoreInbox}
                 activeConversationId={activeConversationId}
                 onNavigate={onNavigate}
-                mutate={refreshSidebar}
                 onRequestRename={openRename}
                 onRequestDelete={setDeleteKey}
                 sb={sb}
@@ -2067,43 +2036,14 @@ function SidebarTaskListContent({
         />
       ) : null}
 
-      <Dialog.Root open={renameKey !== null} onOpenChange={(o) => !o && setRenameKey(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover dark:border-edge">
-            <Dialog.Title className="text-base font-semibold text-fg">{sb.taskRenameTitle}</Dialog.Title>
-            <label className="mt-3 block text-xs font-medium text-fg-subtle" htmlFor="sidebar-rename-input">
-              {sb.taskRenamePlaceholder}
-            </label>
-            <input
-              id="sidebar-rename-input"
-              type="text"
-              value={renameDraft}
-              onChange={(e) => setRenameDraft(e.target.value)}
-              className={cn(
-                'mt-1.5 w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg',
-                formControlBorderFocusClass,
-                'dark:border-edge',
-              )}
-              placeholder={m.chat.newSession}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void runRename();
-                }
-              }}
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setRenameKey(null)}>
-                {sb.taskRenameCancel}
-              </Button>
-              <Button type="button" variant="primary" onClick={() => void runRename()} disabled={!renameDraft.trim()}>
-                {sb.taskRenameSave}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      {renameTarget ? (
+        <SessionRenameDialog
+          key={renameTarget.key}
+          conversationId={renameTarget.key}
+          initialName={renameTarget.name}
+          onClose={() => setRenameTarget(null)}
+        />
+      ) : null}
 
       <Dialog.Root open={deleteKey !== null} onOpenChange={(o) => !o && setDeleteKey(null)}>
         <Dialog.Portal>
