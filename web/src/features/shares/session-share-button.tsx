@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ExternalLink, Loader2, MessageSquareShare, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
@@ -24,11 +24,12 @@ import { ReachabilityHint, ShareUrlCopyRows } from '@/features/shares/share-link
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function SessionShareButton({ conversationId, dialogOpen, onDialogOpenChange, hideTrigger = false }: {
+export function SessionShareButton({ conversationId, dialogOpen, onDialogOpenChange, hideTrigger = false, returnFocusRef }: {
   conversationId: string;
   dialogOpen?: boolean;
   onDialogOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const language = useLocaleStore((state) => state.language);
   const t = language === 'zh' ? LABELS_ZH : LABELS_EN;
@@ -171,9 +172,9 @@ export function SessionShareButton({ conversationId, dialogOpen, onDialogOpenCha
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
         <Dialog.Content
           onCloseAutoFocus={(event) => {
-            if (!hideTrigger) return;
+            if (!hideTrigger || !returnFocusRef?.current) return;
             event.preventDefault();
-            document.querySelector<HTMLElement>('[data-chat-menu-trigger]')?.focus();
+            returnFocusRef.current.focus();
           }}
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 z-[71] flex h-[min(35rem,calc(100dvh-2rem))] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col',

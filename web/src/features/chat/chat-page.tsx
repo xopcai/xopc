@@ -1104,6 +1104,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
         chatAgentDisabled={projectComposer.busy || updatingContext || (isSessionTransitioning && !session.projectPreparation)}
         conversationId={session.conversationId}
         hasMessages={!isSessionTransitioning && msgSlice.items.length > 0}
+        pinned={!readOnly && session.conversationId === chatConversationId ? sessionMetadata?.pinned : undefined}
         workspacePath={session.effectiveWorkspacePath}
         userContextMode={session.userContextMode}
         projectId={scopedProject?.id}

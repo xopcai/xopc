@@ -31,6 +31,11 @@ function HeaderEnd() {
   return <>{end}</>;
 }
 
+function HeaderMain() {
+  const main = usePageHeaderStore((state) => state.main);
+  return <>{main}</>;
+}
+
 describe('ChatPageHeaderRegistration', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
@@ -77,8 +82,7 @@ describe('ChatPageHeaderRegistration', () => {
     act(() => root.render(<MemoryRouter><ChatPageHeaderRegistration inline conversationId="task-chat"
       chatHeadline="Task conversation" chatAgents={[]} showChatAgentSelector={false} chatAgentId="main"
       onChatAgentChange={() => {}} chatAgentDisabled={false} hasMessages /></MemoryRouter>));
-    expect(container.querySelector('header')?.textContent).toContain('Task conversation');
-    expect(container.querySelector('[aria-label="Chat menu"]')).not.toBeNull();
+    expect(container.querySelector('header h1 button[aria-haspopup="menu"]')?.textContent).toBe('Task conversation');
     expect(container.querySelector('[aria-label="Open workspace tools"]')).not.toBeNull();
     expect(usePageHeaderStore.getState().main).toBe(pageTitle);
     act(() => (container.querySelector('[aria-label="Open workspace tools"]') as HTMLButtonElement).click());
@@ -355,9 +359,10 @@ describe('ChatPageHeaderRegistration', () => {
       <ChatPageHeaderRegistration chatHeadline="Search" chatAgents={[]} showChatAgentSelector={false}
         chatAgentId="main" onChatAgentChange={() => {}} chatAgentDisabled={false}
         conversationId="session-1" hasMessages onFindOpen={find} />
-      <HeaderEnd />
+      <HeaderMain />
     </MemoryRouter>));
-    const menu = container.querySelector<HTMLButtonElement>('[aria-label="Chat menu"]')!;
+    const menu = container.querySelector<HTMLButtonElement>('h1 button[aria-haspopup="menu"]')!;
+    expect(menu.textContent).toBe('Search');
     await act(async () => menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
     const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(el => el.textContent?.includes('Find in conversation'))!;
     expect(item).toBeDefined();
@@ -367,7 +372,27 @@ describe('ChatPageHeaderRegistration', () => {
     expect(document.activeElement).toBe(menu);
   });
 
-  it('keeps only menu, context and tools while retaining the side chat shortcut', () => {
+  it.each([
+    { pinned: undefined, actions: [] },
+    { pinned: false, actions: ['Rename', 'Pin'] },
+    { pinned: true, actions: ['Rename', 'Unpin'] },
+  ])('shows the editing actions for the current pin state ($pinned)', async ({ pinned, actions }) => {
+    await act(async () => root.render(<MemoryRouter>
+      <ChatPageHeaderRegistration chatHeadline="Project planning" chatAgents={[]} showChatAgentSelector={false}
+        chatAgentId="main" onChatAgentChange={() => {}} chatAgentDisabled={false}
+        conversationId="session-1" pinned={pinned} />
+      <HeaderMain />
+    </MemoryRouter>));
+
+    const trigger = container.querySelector<HTMLButtonElement>('h1 button[aria-haspopup="menu"]')!;
+    await act(async () => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    expect(items.slice(0, -2).map(item => item.textContent)).toEqual(actions);
+    expect(items.at(-2)?.textContent).toContain('Find in conversation');
+    expect(items.at(-1)?.textContent).toBe('Share conversation');
+  });
+
+  it('keeps context and tools beside the title menu while retaining the side chat shortcut', () => {
     const renderHeader = (hasMessages: boolean) => {
       act(() => {
         root.render(
@@ -393,8 +418,7 @@ describe('ChatPageHeaderRegistration', () => {
 
     renderHeader(true);
     expect(container.querySelector('[aria-label="Open side chat"]')).toBeNull();
-    expect(container.querySelectorAll('button')).toHaveLength(3);
-    expect(container.querySelector('[aria-label="Chat menu"]')).not.toBeNull();
+    expect(container.querySelectorAll('button')).toHaveLength(2);
     expect(container.querySelector('[aria-label="Session info"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Open workspace tools"]')).not.toBeNull();
 

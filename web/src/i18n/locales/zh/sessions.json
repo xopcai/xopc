@@ -33,6 +33,8 @@
     "unarchive": "取消归档",
     "pin": "置顶",
     "unpin": "取消置顶",
+    "pinFailed": "无法更新对话的置顶状态。",
+    "renameFailed": "无法重命名对话。",
     "export": "导出 JSON",
     "delete": "删除",
     "deleteSessionTitle": "删除会话？",

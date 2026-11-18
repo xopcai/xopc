@@ -159,12 +159,14 @@ export async function pinSession(key: string): Promise<void> {
   parseSessionActionResponse(
     await fetchJson<unknown>(apiUrl(buildSessionActionPath(key, 'pin')), { method: 'POST' }),
   );
+  window.dispatchEvent(new CustomEvent('session-updated', { detail: { key, pinned: true } }));
 }
 
 export async function unpinSession(key: string): Promise<void> {
   parseSessionActionResponse(
     await fetchJson<unknown>(apiUrl(buildSessionActionPath(key, 'unpin')), { method: 'POST' }),
   );
+  window.dispatchEvent(new CustomEvent('session-updated', { detail: { key, pinned: false } }));
 }
 
 export async function exportSessionJson(key: string): Promise<string> {

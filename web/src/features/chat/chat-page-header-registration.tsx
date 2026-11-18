@@ -1,6 +1,5 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { MoreHorizontal, Plus, Search, Share2 } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -29,7 +28,7 @@ import { useMediaQuery } from '@/lib/use-media-query';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 import { NewChatLink } from '@/features/chat/session/new-chat-navigation';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
-import { SessionShareButton } from '@/features/shares/session-share-button';
+import { ChatTitleMenu } from '@/features/chat/chat-title-menu';
 
 const MAX_MD = '(max-width: 767px)';
 
@@ -43,6 +42,7 @@ type ChatPageHeaderRegistrationProps = {
   chatAgentDisabled: boolean;
   conversationId?: string | null;
   hasMessages?: boolean;
+  pinned?: boolean;
   workspacePath?: string | null;
   userContextMode?: 'enabled' | 'off' | 'temporary';
   canChangeWorkspace?: boolean;
@@ -69,6 +69,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   chatAgentDisabled,
   conversationId,
   hasMessages = false,
+  pinned,
   workspacePath,
   userContextMode = 'enabled',
   canChangeWorkspace = false,
@@ -95,8 +96,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const setSideChatOpen = useSideChatStore((s) => s.setOpen);
   const toggleTerminalPanel = useTerminalPanelStore((s) => s.toggle);
   const openTerminalPanel = useTerminalPanelStore((s) => s.open);
-  const [shareOpen, setShareOpen] = useState(false);
-  const findRequested = useRef(false);
   const [terminalPreparing, setTerminalPreparing] = useState(false);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -185,15 +184,15 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
       ) : null,
       main: (
         <div className="flex w-full min-w-0 max-w-(--max-width-chat-frame) items-center gap-3 px-3 sm:px-5 xl:px-6">
-          <h1
-            className={cn(
-              'min-w-0 flex-1 truncate text-[0.9375rem] font-semibold leading-5 tracking-tight text-fg',
-              showNewChatLink ? 'text-left md:text-center' : 'text-left',
-            )}
+          <ChatTitleMenu
+            key={activeConversationId}
             title={chatHeadline}
-          >
-            {chatHeadline}
-          </h1>
+            centered={showNewChatLink}
+            conversationId={activeConversationId}
+            hasMessages={hasMessages}
+            pinned={pinned}
+            onFindOpen={onFindOpen}
+          />
         </div>
       ),
       end: (
@@ -204,30 +203,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
           )}
         >
           {showChatAgentSelector ? <ChatAgentSelector items={chatAgents} value={chatAgentId} disabled={chatAgentDisabled} placeholder={m.chat.agentPlaceholder} newChatLabel={activeConversationId ? m.chat.agentStartNewChat : undefined} searchPlaceholder={m.chat.agentSearchPlaceholder} noMatches={m.chat.agentNoMatches} compact contentSide="bottom" contentAlign="end" onChange={onChatAgentChange} /> : null}
-          <DropdownMenu.Root modal={false}>
-            <DropdownMenu.Trigger asChild>
-              <button type="button" data-chat-menu-trigger aria-label={language === 'zh' ? '聊天菜单' : 'Chat menu'} title={language === 'zh' ? '聊天菜单' : 'Chat menu'} className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover data-[state=open]:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                <MoreHorizontal className="size-4" aria-hidden />
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content onCloseAutoFocus={(event) => {
-                if (!findRequested.current) return;
-                event.preventDefault();
-                findRequested.current = false;
-                document.querySelector<HTMLElement>('[data-chat-menu-trigger]')?.focus();
-                onFindOpen?.();
-              }} align="end" sideOffset={8} className="workspace-menu z-[125] min-w-60 rounded-xl border border-edge bg-surface-overlay p-1.5 text-sm shadow-popover outline-none">
-                <DropdownMenu.Item disabled={!hasMessages || !onFindOpen} onSelect={() => { findRequested.current = true; }} className="flex cursor-default items-center gap-3 rounded-lg px-3 py-2 text-fg outline-none data-[highlighted]:bg-surface-hover data-[disabled]:opacity-40">
-                  <Search className="size-4 text-fg-muted" aria-hidden /><span className="flex-1">{m.chat.find.input}</span><span className="text-xs text-fg-muted">{terminalPlatform === 'darwin' ? '⌘F' : 'Ctrl+F'}</span>
-                </DropdownMenu.Item>
-                <DropdownMenu.Item disabled={!activeConversationId || !hasMessages} onSelect={() => setShareOpen(true)} className="flex cursor-default items-center gap-3 rounded-lg px-3 py-2 text-fg outline-none data-[highlighted]:bg-surface-hover data-[disabled]:opacity-40">
-                  <Share2 className="size-4 text-fg-muted" aria-hidden /><span>{language === 'zh' ? '分享对话' : 'Share conversation'}</span>
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-          {activeConversationId && hasMessages ? <SessionShareButton key={`share:${activeConversationId}`} conversationId={activeConversationId} hideTrigger dialogOpen={shareOpen} onDialogOpenChange={setShareOpen} /> : null}
           {showContextControls ? <SessionContextPanel
             key={`context:${activeConversationId ?? context?.project?.id ?? 'new'}`}
             {...context}
@@ -262,9 +237,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
         </div>
       ),
   }), [
-    shareOpen,
-    language,
-    terminalPlatform,
     chatHeadline,
     chatAgents,
     showChatAgentSelector,
@@ -275,7 +247,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentPlaceholder,
     m.chat.agentSearchPlaceholder,
     m.chat.agentNoMatches,
-    m.chat.find.input,
     m.chat.terminal.open,
     m.sidebar.newTask,
     projectId,
@@ -287,6 +258,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     terminalPreparing,
     activeConversationId,
     hasMessages,
+    pinned,
     onFindOpen,
     setSideChatOpen,
     workspacePath,

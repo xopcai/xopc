@@ -165,7 +165,7 @@
     "taskCopyChatId": "Copy chat ID",
     "taskChatIdCopied": "Chat ID copied",
     "taskDeleteTask": "Delete task",
-    "taskRenameTitle": "Rename task",
+    "taskRenameTitle": "Rename conversation",
     "taskRenamePlaceholder": "Session name",
     "taskRenameSave": "Save",
     "taskRenameCancel": "Cancel",

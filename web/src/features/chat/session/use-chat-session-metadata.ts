@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import useSWR from 'swr';
 import type { SessionIdentityInput } from '@xopcai/gateway-contract';
 
@@ -7,6 +8,7 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export interface ChatSessionMetadata {
+  pinned: boolean;
   identity?: SessionIdentityInput;
   ownerAgentId: string | null;
   sessionType: string | null;
@@ -22,7 +24,7 @@ export function useChatSessionMetadata(conversationId: string | null | undefined
   const trimmedKey = conversationId?.trim() || null;
   const localDraft = useChatSessionStore((s) => trimmedKey ? s.sessions[trimmedKey]?.localDraft : undefined);
 
-  return useSWR(
+  const metadata = useSWR(
     token && trimmedKey && !localDraft ? ['chat-session-meta', trimmedKey, token, localDraft === false ? 'persisted' : 'unknown'] : null,
     async (): Promise<ChatSessionMetadata | undefined> => {
       if (await readLocalSessionDraft(trimmedKey!)) return undefined;
@@ -49,6 +51,7 @@ export function useChatSessionMetadata(conversationId: string | null | undefined
           : null;
       const rawForkedFromSessionName = detail.customData?.forkedFromSessionName;
       return {
+        pinned: detail.status === 'pinned',
         identity: { sourceChannel: detail.sourceChannel, sessionType: detail.sessionType, customData: detail.customData },
         ownerAgentId,
         sessionType,
@@ -63,4 +66,19 @@ export function useChatSessionMetadata(conversationId: string | null | undefined
     },
     { revalidateOnFocus: false },
   );
+
+  const { mutate } = metadata;
+  useEffect(() => {
+    if (!trimmedKey) return;
+    const onSessionUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string; pinned?: boolean }>).detail;
+      if (detail?.key !== trimmedKey || typeof detail.pinned !== 'boolean') return;
+      const { pinned } = detail;
+      void mutate(current => current ? { ...current, pinned } : current, { revalidate: current => !current });
+    };
+    window.addEventListener('session-updated', onSessionUpdated);
+    return () => window.removeEventListener('session-updated', onSessionUpdated);
+  }, [trimmedKey, mutate]);
+
+  return metadata;
 }

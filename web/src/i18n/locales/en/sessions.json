@@ -33,6 +33,8 @@
     "unarchive": "Unarchive",
     "pin": "Pin",
     "unpin": "Unpin",
+    "pinFailed": "Could not update the conversation’s pinned status.",
+    "renameFailed": "Could not rename the conversation.",
     "export": "Export JSON",
     "delete": "Delete",
     "deleteSessionTitle": "Delete session?",
