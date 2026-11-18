@@ -2353,7 +2353,8 @@ final class MobileLayoutParityUITests: XCTestCase {
                 XCTAssertTrue(app.textFields["capability-field-query"].waitForExistence(timeout: 5))
                 close.tap()
             }
-            XCTAssertEqual(app.buttons["capability-chat-setup-\(category)"].exists, category != "channels")
+            XCTAssertEqual(app.buttons["capability-chat-setup-\(category)"].exists, category == "skills" || category == "agents")
+            XCTAssertEqual(app.buttons["capability-add-mcp"].exists, category == "connections")
             if category == "connections" {
                 let deadline = Date().addingTimeInterval(5)
                 var brandRendered = hasRedCapabilityLogo(in: row.frame)
@@ -2415,15 +2416,26 @@ final class MobileLayoutParityUITests: XCTestCase {
     }
 
     func testCapabilityCreationOpensAnUnsentConversationDraft() {
-        for (category, expected) in [("agents", "创建一个助手或专家"), ("skills", "创建一个技能"), ("connections", "添加一个 MCP 连接")] {
+        for (category, expected) in [("agents", "创建一个助手或专家"), ("skills", "创建一个技能")] {
             tab("capabilities")
             app.selectPageOption("capability-category-\(category)", from: "capability-title")
             app.buttons["capability-chat-setup-\(category)"].tap()
             let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
             XCTAssertTrue(composer.waitForExistence(timeout: 5))
             XCTAssertTrue((composer.value as? String)?.contains(expected) == true)
-            XCTAssertFalse((composer.value as? String)?.contains("mcp:setup") == true)
         }
+    }
+
+    func testCustomMcpConnectionOpensFormAndShowsSuccess() {
+        tab("capabilities")
+        app.selectPageOption("capability-category-connections", from: "capability-title")
+        app.buttons["capability-add-mcp"].tap()
+        let address = app.textFields["capability-field-url"]
+        XCTAssertTrue(address.waitForExistence(timeout: 5))
+        address.tap()
+        address.typeText("https://example.com/mcp")
+        app.buttons["capability-panel-create"].tap()
+        XCTAssertTrue(app.staticTexts["连接已添加"].waitForExistence(timeout: 5))
     }
 
     private func hasRedCapabilityLogo(in row: CGRect) -> Bool {

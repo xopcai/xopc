@@ -11,12 +11,15 @@ import { expect, it, vi } from 'vitest';
 import { initializeTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { getMcpAuthorization, probeMcpConnection } from '../../agent/mcp/connection-setup.js';
 import { createCapabilityCatalogTool } from '../../agent/tools/capability-catalog-tool.js';
+import { CredentialResolver } from '../../auth/credentials.js';
 import { buildChannelCatalogForConfig, getChannelSetupStatus } from '../../channels/catalog/channel-catalog-service.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { validateChannelPluginConfigs } from '../../config/validate-channel-configs.js';
 import { startConnectorAuthorization } from '../../connectors/auth-provider-registry.js';
 import { listComposioConnections } from '../../connectors/composio.js';
+import { assertComposioAccessConfigured } from '../../connectors/composio-sessions.js';
+import { listConnectorInstances } from '../../connectors/instances.js';
 import { AgentPluginStore } from '../../extensions/agent-plugins/store.js';
 import { withAgentPluginSource } from '../../extensions/agent-plugins/sources.js';
 import { personalAgentId } from '../../personal-agent/repository.js';
@@ -51,6 +54,11 @@ vi.mock('../../connectors/auth-provider-registry.js', () => ({
 vi.mock('../../connectors/composio.js', async importActual => ({
   ...await importActual<typeof import('../../connectors/composio.js')>(),
   listComposioConnections: vi.fn(async () => []),
+}));
+
+vi.mock('../../connectors/composio-sessions.js', async importActual => ({
+  ...await importActual<typeof import('../../connectors/composio-sessions.js')>(),
+  assertComposioAccessConfigured: vi.fn(async () => 'managed'),
 }));
 
 vi.mock('../../agent/mcp/connection-setup.js', async importActual => ({
@@ -127,7 +135,10 @@ it('serves only category metadata to a signed mobile device through the authenti
   const credential = issueDeviceTokenPair(device.id).accessToken;
   const gatewayId = getOrCreateGatewayIdentity().id;
   let config = ConfigSchema.parse({ gateway: { auth: { mode: 'token', token: ownerToken } },
-    mcp: { servers: { calendar: { type: 'http', url: 'https://calendar.example/mcp', headers: { Authorization: 'private-secret' } } } },
+    mcp: { servers: {
+      calendar: { type: 'http', url: 'https://calendar.example/mcp', headers: { Authorization: 'private-secret' } },
+      setup: { type: 'http', url: 'https://example.com/setup', enabled: false },
+    } },
     channels: { telegram: { enabled: true, defaultAccount: 'default',
       accounts: { default: { botToken: 'fixture-bot-secret', groupPolicy: 'allowlist' } } } },
   });
@@ -279,6 +290,7 @@ it('serves only category metadata to a signed mobile device through the authenti
       id: 'sample-service', name: '示例服务', description: 'Example service', group: 'available', iconUrl: 'https://example.com/connector.svg',
     });
     expect(connectionBody.payload.items).toContainEqual({ id: 'mcp:calendar', targetId: 'calendar', name: 'calendar', group: 'configured' });
+    expect(connectionBody.payload.items).toContainEqual({ id: 'mcp:server:setup', targetId: 'setup', name: 'setup', group: 'disabled' });
     expect(JSON.stringify(connectionBody)).not.toMatch(/private-secret|calendar\.example/);
     const tool = createCapabilityCatalogTool(() => ({ config, skills: [] }));
     const result = await tool.execute('inspect', { category: 'connections', id: 'mcp:calendar' });
@@ -388,7 +400,13 @@ it('serves only category metadata to a signed mobile device through the authenti
     expect((await signed(connection, 'POST', { action: 'save', values: { enabled: 'false' } })).status).toBe(200);
     expect(config.mcp?.servers?.calendar?.enabled).toBe(false);
     expect((await (await signed(connection)).json()).payload.chatPrompt).toBeUndefined();
+    expect((await (await signed(panel('connections', 'mcp:server:setup'))).json()).payload.fields)
+      .toContainEqual(expect.objectContaining({ id: 'enabled', value: 'false' }));
     const custom = panel('connections', 'mcp:setup');
+    expect((await (await signed(custom)).json()).payload).toMatchObject({
+      fields: expect.arrayContaining([expect.objectContaining({ id: 'url' }), expect.objectContaining({ id: 'token', type: 'secret' })]),
+      actions: [{ id: 'create', label: 'Test and connect' }],
+    });
     expect((await signed(custom, 'POST', { action: 'create', values: { url: 'https://127.0.0.1/mcp' } })).status).toBe(400);
     expect((await (await signed(custom, 'POST', { action: 'create', values: {
       url: 'https://example.com/mcp', id: 'Calendar notes',
@@ -396,7 +414,48 @@ it('serves only category metadata to a signed mobile device through the authenti
     expect(Object.values(config.mcp?.servers ?? {})).toContainEqual(expect.objectContaining({
       url: 'https://example.com/mcp', enabled: true, displayName: 'Calendar notes', xopcPublicOnly: true,
     }));
+    vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'token_required' });
+    const rejected = await signed(custom, 'POST', { action: 'create', values: {
+      url: 'https://example.com/bearer', id: 'Token service', token: 'rejected-fixture-token',
+    } });
+    const rejectedBody = await rejected.text();
+    expect(rejectedBody).not.toContain('rejected-fixture-token');
+    expect(JSON.parse(rejectedBody).payload).toMatchObject({
+      fields: expect.arrayContaining([expect.objectContaining({ id: 'url', value: 'https://example.com/bearer' })]),
+      actions: [{ id: 'create', label: 'Test and connect' }],
+    });
+    const bearer = await signed(custom, 'POST', { action: 'create', values: {
+      url: 'https://example.com/bearer', id: 'Token service', token: 'accepted-fixture-token',
+    } });
+    expect(bearer.status).toBe(200);
+    expect(await bearer.text()).not.toContain('accepted-fixture-token');
+    const bearerServer = Object.values(config.mcp?.servers ?? {}).find(server => server.displayName === 'Token service');
+    expect(JSON.stringify(bearerServer)).not.toContain('accepted-fixture-token');
+    const [bearerProbeConfig, , bearerServerId] = vi.mocked(probeMcpConnection).mock.lastCall!;
+    expect(bearerProbeConfig.mcp?.servers?.[bearerServerId]?.headers?.Authorization).toBe('Bearer accepted-fixture-token');
+    const header = bearerServer?.headers?.Authorization;
+    expect(header).toMatchObject({ xopcSecretRef: { prefix: 'Bearer ' } });
+    if (!header || typeof header === 'string') throw new Error('Missing bearer credential reference');
+    expect(await new CredentialResolver().resolveApiKey(header.xopcSecretRef.provider)).toBe('accepted-fixture-token');
+    vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'oauth_required' });
+    const oauthDraft = (await (await signed(custom, 'POST', { action: 'create', values: {
+      url: 'https://example.com/oauth', id: 'OAuth service',
+    } })).json()).payload;
+    expect(oauthDraft.actions).toContainEqual({ id: 'authorize', label: 'Connect account' });
+    const waitingForOAuth = (await (await signed(custom, 'POST', { action: 'authorize', flow: oauthDraft.flow })).json()).payload;
+    expect(waitingForOAuth.pollAction).toBe('status');
+    vi.mocked(getMcpAuthorization).mockReturnValueOnce({ id: 'test-authorization', serverId: 'test', state: 'connected', toolCount: 1 });
+    // The commit rechecks authorization after the status request observed success.
+    vi.mocked(getMcpAuthorization).mockReturnValueOnce({ id: 'test-authorization', serverId: 'test', state: 'connected', toolCount: 1 });
+    expect((await (await signed(custom, 'POST', { action: 'status', flow: oauthDraft.flow })).json()).payload)
+      .toMatchObject({ message: 'Connection added', chatPrompt: expect.stringContaining('OAuth service') });
     const signIn = panel('connections', 'composio-gmail');
+    expect((await (await signed(signIn)).json()).payload.actions).toContainEqual({ id: 'authorize', label: 'Connect account' });
+    vi.mocked(assertComposioAccessConfigured).mockRejectedValueOnce(new Error('Missing connection service'));
+    const missingService = await signed(signIn, 'POST', { action: 'authorize' });
+    expect(missingService.status).toBe(400);
+    expect((await missingService.json()).error).toContain('Set up Composio');
+    expect(startConnectorAuthorization).not.toHaveBeenCalled();
     const auth = await signed(signIn, 'POST', { action: 'authorize' });
     expect(auth.status).toBe(200);
     const pending = (await auth.json()).payload;
@@ -405,6 +464,7 @@ it('serves only category metadata to a signed mobile device through the authenti
       actions: [{ id: 'cancel-sign-in', label: 'Cancel sign-in' }],
     });
     expect(startConnectorAuthorization).toHaveBeenCalledWith(expect.objectContaining({ id: 'composio-gmail' }), config);
+    expect(listConnectorInstances(config)).toContainEqual(expect.objectContaining({ connectorId: 'composio-gmail', enabled: true }));
     vi.mocked(listComposioConnections).mockImplementationOnce(async () => {
       upsertConnectorConnection({
         id: 'fixture-connection', principalId: 'local-owner', connectorId: 'composio-gmail', provider: 'composio',
@@ -416,6 +476,8 @@ it('serves only category metadata to a signed mobile device through the authenti
     expect(connected.message).toBe('Connected');
     expect(connected.pollAction).toBeUndefined();
     expect(connected.chatPrompt).toContain('composio-gmail');
+    const afterSignIn = (await (await signed(path + '?category=connections')).json()).payload;
+    expect(afterSignIn.items).toContainEqual(expect.objectContaining({ id: 'composio-gmail', group: 'connected' }));
     const marketPlugin = panel('plugins', 'meeting-plugin');
     const review = (await (await signed(marketPlugin)).json()).payload;
     expect(review).toMatchObject({ flow: expect.any(String), message: expect.stringContaining('Adds skills to the assistant'),

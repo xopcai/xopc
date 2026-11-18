@@ -382,11 +382,11 @@
 "library_scope_trash" = "回收站";
 "capability_create_agent" = "创建助手";
 "capability_create_skill" = "创建技能";
-"capability_add_mcp" = "添加 MCP 连接";
+"capability_add_mcp" = "添加自定义 MCP 连接";
+"capability_connect" = "连接";
 "capability_search_plugins" = "检索并安装插件";
 "capability_skill_market" = "技能市场";
 "capability_search_installed_skills" = "搜索已安装技能";
 "capability_agent_setup_prompt" = "帮我创建一个助手或专家，先问我要做什么。";
 "capability_skill_setup_prompt" = "帮我创建一个技能，先问我它要处理什么。";
-"capability_mcp_setup_prompt" = "帮我添加一个 MCP 连接，先问我要连接哪个服务。";
 "capability_mcp_continue" = "继续连接";

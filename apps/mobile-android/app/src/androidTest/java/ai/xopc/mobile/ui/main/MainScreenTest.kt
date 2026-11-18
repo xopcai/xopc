@@ -2230,6 +2230,11 @@ class MainScreenTest {
           onCapabilityPanel = { category, id, input ->
           when {
             id == "marketplace:search" -> form("query", "Search skills", "search")
+            id == "mcp:setup" -> {
+              if (input?.optString("action") == "create" && input.optJSONObject("values")?.optString("url") == "https://example.com/mcp") {
+                JSONObject().put("message", "Connection added")
+              } else form("url", "MCP server URL", "create")
+            }
             category == "connections" -> form("account", "Account", "authorize")
             category == "agents" -> form("name", "Name", "save")
             category == "channels" -> form("scope", "Scope", "pair")
@@ -2302,7 +2307,14 @@ class MainScreenTest {
         composeTestRule.onNodeWithTag("capability-field-query").assertIsDisplayed()
         composeTestRule.onNodeWithTag("capability-panel-close").performClick()
       }
-      if (kind != "channels") {
+      if (kind == "connections") {
+        composeTestRule.onNodeWithTag("capability-add-mcp").performClick()
+        composeTestRule.onNodeWithTag("capability-field-url").performTextInput("https://example.com/mcp")
+        composeTestRule.onNodeWithTag("capability-panel-create").performClick()
+        composeTestRule.onNodeWithText("Connection added").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("capability-panel-close").performClick()
+      }
+      if (kind == "skills" || kind == "agents") {
         composeTestRule.onNodeWithTag("capability-chat-setup-$kind").performClick()
       }
       if (kind != "agents") {
@@ -2318,6 +2330,7 @@ class MainScreenTest {
         composeTestRule.runOnIdle { assert(savedSkill == "false") }
       }
       composeTestRule.onNodeWithTag("capability-open-chat").assertDoesNotExist()
+      if (kind == "connections") composeTestRule.onNodeWithTag("capability-panel-authorize").assertIsDisplayed()
       if (kind == "agents") composeTestRule.onNodeWithTag("capability-start-chat").assertExists()
       if (kind == "channels") composeTestRule.onNodeWithTag("capability-panel-pair").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-panel-close").performClick()
@@ -2326,9 +2339,7 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("capability-category-plugins").performClick()
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertIsDisplayed()
     composeTestRule.runOnIdle {
-      assertTrue(chatSetups.map { it.second } == listOf(false, false, true))
-      assertTrue(chatSetups[1].first.contains("MCP"))
-      assertTrue(chatSetups.none { it.first.contains("mcp:setup") })
+      assertTrue(chatSetups.map { it.second } == listOf(false, true))
     }
   }
 

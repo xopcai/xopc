@@ -117,9 +117,9 @@ struct CapabilitiesView: View {
                         .accessibilityIdentifier("capability-add-plugins")
                 }
                 if category == .skills || category == .agents || category == .connections {
-                    Button(setupLabel, systemImage: "plus") { startSetupChat() }
+                    Button(setupLabel, systemImage: "plus") { startSetup() }
                         .labelStyle(.iconOnly).foregroundStyle(mobileTheme.action)
-                        .accessibilityIdentifier("capability-chat-setup-\(category.id)")
+                        .accessibilityIdentifier(category == .connections ? "capability-add-mcp" : "capability-chat-setup-\(category.id)")
                 }
             }
         }
@@ -145,13 +145,14 @@ struct CapabilitiesView: View {
                                        description: nil, group: "available", avatar: nil)
     }
 
-    private func startSetupChat() {
+    private func startSetup() {
         searchFocused = false
-        let key = switch category {
-        case .agents: "capability_agent_setup_prompt"
-        case .skills: "capability_skill_setup_prompt"
-        default: "capability_mcp_setup_prompt"
+        if category == .connections {
+            detail = CapabilityCatalogItem(id: "mcp:setup", name: AppLocalization.string("capability_add_mcp", locale: locale),
+                                           description: nil, group: "available", avatar: nil)
+            return
         }
+        let key = category == .agents ? "capability_agent_setup_prompt" : "capability_skill_setup_prompt"
         onSetupChat(AppLocalization.string(key, locale: locale),
                     category == .agents ? (locale.identifier.hasPrefix("zh") ? "zh-CN" : "en") : nil)
     }
@@ -291,6 +292,10 @@ struct CapabilitiesView: View {
                         }
                     }
                     Spacer(minLength: 0)
+                    if category == .connections && (item.group == "available" || item.group == "attention") {
+                        Text("capability_connect").font(.subheadline.weight(.medium))
+                            .foregroundStyle(mobileTheme.action).padding(.trailing, 8)
+                    }
                     if category != .agents {
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                             .foregroundStyle(mobileTheme.secondary).accessibilityHidden(true)

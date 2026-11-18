@@ -183,8 +183,12 @@ class Handler(BaseHTTPRequestHandler):
     data=envelope({'actions':[{'id':'start','label':'启用插件'}]})
   elif path=='/api/capabilities/mobile-actions/panel/connections':
    if query.get('id')==['mcp:setup']:
-    data=envelope({'fields':[{'id':'url','label':'服务地址','type':'text','hint':'https://'}],
-                   'actions':[{'id':'prepare','label':'添加连接'}]})
+    request=json.loads(body) if body else {}
+    if request.get('action')=='create' and request.get('values',{}).get('url')=='https://example.com/mcp':
+     data=envelope({'message':'连接已添加','chatPrompt':'请使用此连接帮我：'})
+    else:
+     data=envelope({'fields':[{'id':'url','label':'MCP 服务地址','type':'text','hint':'https://'}],
+                    'actions':[{'id':'create','label':'测试并连接'}]})
    else:
     data=envelope({'message':'账号已连接','chatPrompt':'请使用「Drive Connection」帮我：',
                    'actions':[{'id':'authorize','label':'重新授权','advanced':True}]})

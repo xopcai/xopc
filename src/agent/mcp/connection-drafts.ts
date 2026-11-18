@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import { CredentialResolver } from '../../auth/credentials.js';
 import { McpServerSchema, type Config, type McpServerConfig } from '../../config/schema.js';
 import { getWorkspacePath } from '../../config/workspace-path-helpers.js';
 import { isManagedConnectorServer } from '../../connectors/materialize.js';
+import { createConnectorSecretReference } from '../../connectors/secret-store.js';
 import { loadMergedMcpConfig } from './config.js';
 import { createNativeMcpCredentials, type NativeMcpCredentials } from './credential-store.js';
 import { cancelMcpAuthorization, getMcpAuthorization, probeMcpConnection, startMcpAuthorization, submitMcpRedirect,
@@ -27,6 +29,7 @@ type Draft = {
   server: McpServerConfig; config: Config; credentials: NativeMcpCredentials; controller: AbortController;
   expiresAt: number; timer: ReturnType<typeof setTimeout>; probe?: McpConnectionProbe; authorizationId?: string;
   running: boolean; committing: boolean; checkedAt?: string;
+  bearerToken?: string;
   toolsPending?: ReturnType<typeof discoverMcpTools>;
 };
 export type McpDraftInput = { serverId: string; sourceServerId?: string; expectedServer?: unknown; server: unknown };
@@ -40,7 +43,7 @@ export class McpConnectionDrafts {
     saveConfig: (config: Config, expectedConfig?: Config) => Promise<{ saved: boolean; error?: string; persisted?: boolean; conflict?: boolean }>;
   }) {}
 
-  async create(owner: string, input: McpDraftInput) {
+  async create(owner: string, input: McpDraftInput, bearerToken?: string) {
     const current = this.options.readConfig();
     if (!/^[a-zA-Z0-9_-]+$/.test(input.serverId) || input.sourceServerId && input.sourceServerId !== input.serverId) throw new McpDraftError(400, 'Invalid or changed MCP server ID.');
     const source = Object.hasOwn(current.mcp?.servers ?? {}, input.serverId) ? current.mcp?.servers?.[input.serverId] : undefined;
@@ -54,7 +57,9 @@ export class McpConnectionDrafts {
     for (const internal of ['xopcConnector', 'xopcPlugin', 'xopcOAuthCredentialId', 'xopcConnectionCheck']) delete server[internal];
     const workspace = getWorkspacePath(current) || process.cwd();
     const config = structuredClone(current);
-    config.mcp = { servers: { [input.serverId]: { ...server, enabled: true } } };
+    config.mcp = { servers: { [input.serverId]: { ...server, enabled: true,
+      ...(bearerToken ? { headers: { Authorization: `Bearer ${bearerToken}` } } : {}),
+    } } };
     const credentials = await createNativeMcpCredentials(true);
     if (this.drafts.size >= 100 || [...this.drafts.values()].filter(draft => draft.owner === owner).length >= 8) throw new McpDraftError(429, 'Too many unsaved MCP connection tests.');
     const id = randomUUID();
@@ -64,7 +69,7 @@ export class McpConnectionDrafts {
     }, TTL_MS);
     timer.unref();
     const draft: Draft = { id, owner, serverId: input.serverId, sourceServerId: input.sourceServerId,
-      revision, workspace, server, config, credentials, controller: new AbortController(),
+      revision, workspace, server, config, credentials, bearerToken, controller: new AbortController(),
       timer, expiresAt: Date.now() + TTL_MS, running: false, committing: false };
     this.drafts.set(id, draft);
     return { id, serverId: draft.serverId, expiresAt: draft.expiresAt };
@@ -137,10 +142,17 @@ export class McpConnectionDrafts {
     draft.committing = true;
     let alias: string | undefined;
     let durable: NativeMcpCredentials | undefined;
+    let bearerProvider: string | undefined;
     let published = false;
     try {
       const server = structuredClone(draft.server);
       if (enable) server.enabled = true;
+      if (draft.bearerToken) {
+        const reference = createConnectorSecretReference(`mcp-draft-${id}`, 'token', { prefix: 'Bearer ' });
+        bearerProvider = reference.xopcSecretRef.provider;
+        await new CredentialResolver().saveApiKey(bearerProvider, draft.bearerToken);
+        server.headers = { Authorization: reference };
+      }
       if (typeof server.url === 'string') {
         const state = await draft.credentials.forServer(draft.serverId, server.url).load();
         // An empty native state is intentional: without it pi could adopt historical
@@ -175,6 +187,7 @@ export class McpConnectionDrafts {
       draft.committing = false;
       if (alias && this.options.readConfig().mcp?.servers?.[draft.serverId]?.xopcOAuthCredentialId === alias) published = true;
       if (!published && alias && durable && typeof draft.server.url === 'string') durable.remove(alias, draft.server.url);
+      if (!published && bearerProvider) await new CredentialResolver().deleteProfile(`${bearerProvider}:default`);
       if (this.drafts.has(id) && draft.expiresAt <= Date.now()) this.dispose(draft);
     }
   }

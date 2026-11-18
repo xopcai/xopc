@@ -1678,7 +1678,7 @@
     {"name": "capability_search_plugins", "value": "Find and install plugins"},
     {"name": "capability_agent_setup_prompt", "value": "Help me create an assistant or expert. Ask what it should do."},
     {"name": "capability_skill_setup_prompt", "value": "Help me create a reusable skill. Ask what it should do."},
-    {"name": "capability_mcp_setup_prompt", "value": "Help me add an MCP connection. Ask which service to connect."},
+    {"name": "capability_connect", "value": "Connect"},
     {"name": "capability_mcp_continue", "value": "Continue setup"}
   ]
 }

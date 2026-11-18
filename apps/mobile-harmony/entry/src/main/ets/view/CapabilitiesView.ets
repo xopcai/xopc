@@ -107,10 +107,14 @@ export struct XopcCapabilitiesView {
     return $r('app.string.cap_native_mcp');
   }
 
-  private startSetupChat(): void {
+  private startSetup(): void {
+    if (this.category === 'connections') {
+      this.showDetail({ id: 'mcp:setup', name: this.getLabel(this.setupLabel()), group: 'available' });
+      return;
+    }
     this.getUIContext().getFocusController().clearFocus();
     const prompt = this.category === 'agents' ? $r('app.string.capability_agent_setup_prompt')
-      : this.category === 'skills' ? $r('app.string.capability_skill_setup_prompt') : $r('app.string.capability_mcp_setup_prompt');
+      : $r('app.string.capability_skill_setup_prompt');
     this.onSetupChat(this.getLabel(prompt), this.category === 'agents');
   }
 
@@ -180,7 +184,9 @@ export struct XopcCapabilitiesView {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 14 }) {
           this.itemContent(item)
-          if (this.category !== 'agents') {
+          if (this.category === 'connections' && (item.group === 'available' || item.group === 'attention')) {
+            Text($r('app.string.capability_connect')).fontSize(14).fontColor(this.colors.chat.action)
+          } else if (this.category !== 'agents') {
             SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
           }
         }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
@@ -247,8 +253,9 @@ export struct XopcCapabilitiesView {
         if (this.category === 'skills' || this.category === 'agents' || this.category === 'connections') {
           Button({ type: ButtonType.Circle }) {
             SymbolGlyph($r('sys.symbol.plus')).fontSize(21).fontColor([this.colors.chat.action])
-          }.id('capability-chat-setup-' + this.category).width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
-            .accessibilityText(this.setupLabel()).onClick((): void => { this.startSetupChat(); })
+          }.id(this.category === 'connections' ? 'capability-add-mcp' : 'capability-chat-setup-' + this.category)
+            .width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft)
+            .accessibilityText(this.setupLabel()).onClick((): void => { this.startSetup(); })
         }
       }.width('100%').height(44)
       XopcPageTitleMenu({ heading: this.title(this.category), selected: this.category,
