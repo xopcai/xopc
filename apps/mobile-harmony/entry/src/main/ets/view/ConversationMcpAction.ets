@@ -1,6 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { hasConversationMcpSetup } from '../repository/capabilitiesRepository';
-import { XopcCapabilityPanelView } from './CapabilityPanelView';
+import { capabilityDrawerHeight, XopcCapabilityPanelView } from './CapabilityPanelView';
 
 @ComponentV2
 export struct XopcConversationMcpAction {
@@ -10,6 +10,7 @@ export struct XopcConversationMcpAction {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local available: boolean = false;
   @Local panelOpen: boolean = false;
+  @Local panelExpanded: boolean = false;
   @Local panelConversationId: string = '';
   private generation: number = 0;
 
@@ -40,6 +41,7 @@ export struct XopcConversationMcpAction {
   panel() {
     XopcCapabilityPanelView({ category: 'connections', itemId: 'conversation:' + this.panelConversationId,
       itemName: this.getUIContext().getHostContext()?.resourceManager.getStringSync($r('app.string.capability_mcp_continue').id) ?? '',
+      onExpandedChange: (expanded: boolean): void => { this.panelExpanded = expanded; },
       onClose: (): void => { this.panelOpen = false; } })
   }
 
@@ -52,14 +54,15 @@ export struct XopcConversationMcpAction {
             Text($r('app.string.capability_mcp_continue')).fontColor(this.colors.chat.action).fontSize(14)
           }
         }.id('chat-mcp-setup').height(44).backgroundColor(this.colors.accentSoft)
-          .borderRadius(this.colors.corner(14)).onClick((): void => {
+          .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).onClick((): void => {
             this.getUIContext().getFocusController().clearFocus();
             this.panelConversationId = this.conversationId;
+            this.panelExpanded = false;
             this.panelOpen = true;
           })
       }
     }.width('100%').margin({ bottom: this.available ? 8 : 0 })
-      .bindSheet($$this.panelOpen, this.panel, { height: '86%', dragBar: true, showClose: false,
+      .bindSheet($$this.panelOpen, this.panel, { height: capabilityDrawerHeight(this.panelExpanded), dragBar: true, showClose: false,
         backgroundColor: this.colors.surface, onDisappear: (): void => { void this.refresh(); } })
   }
 }

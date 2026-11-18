@@ -32,7 +32,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -52,6 +54,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -76,6 +79,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -93,10 +98,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import java.io.File
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -115,7 +122,8 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
   previewEligible: Boolean = false, onViewMore: () -> Unit = onMore,
   revealAnswer: Boolean = false,
   loadMedia: (suspend (ConversationMedia) -> ByteArray)? = null, streaming: Boolean = false,
-  onReading: () -> Unit = {}) {
+  onReading: () -> Unit = {}, selectingText: Boolean = false, onEndSelection: () -> Unit = {},
+  onDismissMenu: () -> Unit = {}, menuContent: (@Composable ColumnScope.() -> Unit)? = null) {
   val pauseFollowing by rememberUpdatedState(onReading)
   val isUser = message.role == "user"
   val chat = LocalChatColors.current
@@ -126,7 +134,7 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       ConversationMedia(it.artifactId, it.title, "image", it.mimeType.orEmpty(), it.sizeBytes ?: 0,
         it.uri!!, it.workspaceRelativePath)
     }).distinctBy { it.uri }
-  val showPreview = previewEligible && messageNeedsPreview(message.role, message.text)
+  val showPreview = !selectingText && previewEligible && messageNeedsPreview(message.role, message.text)
   val voiceOnly = isUser && message.text.isBlank() && message.references.isEmpty() &&
     message.media.size == 1 && mediaPreviewKind(message.media.first()) == "audio"
   BoxWithConstraints(modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
@@ -167,12 +175,17 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment =
       if (isUser) Alignment.End else Alignment.Start,
       verticalArrangement = Arrangement.spacedBy(2.dp)) {
-    Box(Modifier.width(bubbleWidth)) {
+    var pressPosition by remember(message.id) { mutableStateOf(Offset.Zero) }
+    var bubbleCoordinates by remember(message.id) { mutableStateOf<LayoutCoordinates?>(null) }
+    Box(Modifier.width(bubbleWidth).onGloballyPositioned { bubbleCoordinates = it }
+      .pointerInput(message.id) {
+        awaitEachGesture { pressPosition = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).position }
+      }) {
     Column(modifier = Modifier.width(bubbleWidth)
       .clip(themedCorners(if (isUser) 18 else 20))
       .background(bubbleColor)
-      .then(if (actionsEnabled) Modifier.combinedClickable(
-        onClick = { if (showPreview) onViewMore() }, onLongClick = onMore,
+      .then(if (actionsEnabled && !selectingText) Modifier.combinedClickable(
+        onClick = { if (showPreview) onViewMore() }, onLongClick = onMore, hapticFeedbackEnabled = true,
         onLongClickLabel = stringResource(R.string.assistant_message_more))
         .then(if (isUser) Modifier.testTag("message-more-${message.id}") else Modifier)
         else Modifier)
@@ -183,7 +196,11 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
       verticalArrangement = Arrangement.spacedBy(8.dp)) {
       if (!isUser) MessageReferences(message.references, onOpenTarget)
       if (message.text.isNotBlank()) {
-        if (isUser) {
+        if (selectingText) {
+          val origin = remember { bubbleCoordinates?.takeIf { it.isAttached }?.localToWindow(pressPosition) }
+          ChatSelectableText(message.text, markdown = !isUser, pressInWindow = origin,
+            onCopy = onCopy, onDone = onEndSelection)
+        } else if (isUser) {
           ChatTextSelection(textSelectable) {
           Text(message.text, style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 25.sp),
             modifier = Modifier.fillMaxWidth().then(if (showPreview)
@@ -222,6 +239,15 @@ internal fun ChatMessageCard(message: ConversationMessage, onMore: () -> Unit,
             onOpenPreview(item, if (mediaPreviewKind(item) == "image") messageImages else gallery)
           }, onOpenLink)
         MessageTargets(message.targets, onOpenTarget)
+      }
+    }
+
+    if (menuContent != null) {
+      Box(Modifier.absoluteOffset { IntOffset(pressPosition.x.roundToInt(), pressPosition.y.roundToInt()) }) {
+        DropdownMenu(expanded = true, onDismissRequest = onDismissMenu,
+          modifier = Modifier.widthIn(min = 216.dp, max = 280.dp).heightIn(max = 480.dp),
+          shape = themedCorners(18), containerColor = MaterialTheme.colorScheme.surfaceContainer,
+          content = menuContent)
       }
     }
 

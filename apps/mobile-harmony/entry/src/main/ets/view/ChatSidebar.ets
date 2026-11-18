@@ -94,7 +94,7 @@ export struct XopcChatSidebar {
             .backgroundColor(this.colors.attentionFill)
         }
       }.width('100%').constraintSize({ minHeight: 44 }).padding({ left: 10, right: 10 })
-    }.id('chat-sidebar-' + page).width('100%').padding(0).borderRadius(this.colors.corner(12))
+    }.id('chat-sidebar-' + page).width('100%').padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
       .backgroundColor(page === 'personal' && this.currentId && this.personalAgent?.conversationId === this.currentId
         ? this.colors.active : Color.Transparent)
       .enabled(page !== 'personal' || !this.personalBusy).onClick((): void => {
@@ -125,13 +125,12 @@ export struct XopcChatSidebar {
           }.width('100%').height(44).padding({ left: 12, right: 12 })
         }.id('chat-sidebar-search').width('100%').padding(0)
           .backgroundColor(this.colors.input)
-          .borderRadius(this.colors.corner(22))
+          .borderRadius(this.colors.corner(22)).clipShape(this.colors.cornerClip(22))
           .onClick((): void => { this.go('sessions-search'); }, SIDEBAR_TAP_SLOP_VP)
         Scroll() {
           Column({ space: 2 }) {
             this.shortcut($r('app.string.chat_personal_agent'), undefined, 'personal')
-            this.shortcut($r('app.string.progress'), $r('sys.symbol.checkmark_circle'), 'progress', this.pendingAttention)
-            this.shortcut($r('app.string.projects'), $r('sys.symbol.folder'), 'projects')
+            this.shortcut($r('app.string.workbench'), $r('sys.symbol.square_grid_2x2'), 'workbench', this.pendingAttention)
             this.shortcut($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
             this.shortcut($r('app.string.library_title'), $r('sys.symbol.doc'), 'library')
             this.shortcut($r('app.string.capability_title'), $r('sys.symbol.square_grid_2x2'), 'capabilities')
@@ -152,7 +151,7 @@ export struct XopcChatSidebar {
                     .width('100%').maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis }).textAlign(TextAlign.Start)
                 }.id('chat-sidebar-session-' + item.key).width('100%').constraintSize({ minHeight: 44 })
-                  .padding({ left: 10, right: 10 }).borderRadius(this.colors.corner(12))
+                  .padding({ left: 10, right: 10 }).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12))
                   .backgroundColor(item.key === this.currentId ? this.colors.active : Color.Transparent)
                   .accessibilitySelected(item.key === this.currentId)
                   .onClick((): void => { this.onConversation(item.key); }, SIDEBAR_TAP_SLOP_VP)

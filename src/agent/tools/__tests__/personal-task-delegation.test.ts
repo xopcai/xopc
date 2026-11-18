@@ -10,7 +10,10 @@ import { closeXopcDatabase, getSqliteDatabase } from '../../../storage/sqlite/in
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
 import { TaskOriginRepository } from '../../../tasks/task-origin-repository.js';
+import { TaskApplicationService } from '../../../tasks/task-application-service.js';
+import { TaskCollaborationDelivery } from '../../../tasks/task-collaboration-delivery.js';
 import { TaskCollaborationRepository } from '../../../tasks/task-collaboration-repository.js';
+import { TaskConversationRepository } from '../../../tasks/task-conversation-repository.js';
 import { buildDelegatedTaskDirective } from '../../../tasks/task-context-assembler.js';
 import { createPersonalTaskTool } from '../personal-task-tool.js';
 
@@ -141,6 +144,45 @@ describe('Personal AI durable delegation', () => {
     expect(tasks.flatMap(task => board.coordination(task.id))).toMatchObject([
       { taskId: east, kind: 'instruction', body: 'Keep original units.' },
     ]);
+  });
+
+  it.each([
+    { content: '先查科技和AI方面的有趣新闻就行', taskReference: undefined },
+    { content: '那把科技和 AI 的范围重新提交给新闻任务', taskReference: '新闻任务' },
+  ])('steers the existing news task for "$content"', async ({ content, taskReference }) => {
+    const agentId = personalAgentId('local-owner');
+    initializeTestAgentCatalog({ agents: [{ id: agentId }, { id: 'researcher' }] });
+    const conversation = createConversation({ agentId, customData: { personalAgent: true } }, '/tmp');
+    const tool = createPersonalTaskTool({ getCurrentConversationId: () => conversation.key,
+      getCurrentAgentId: () => agentId, dispatchTaskRuns: vi.fn() });
+    const tasks = new TaskOriginRepository();
+    await tool.execute('old-task', { command: 'submit', objective: '整理预算报告', description: '列出经费。' });
+    const [oldSummary] = tasks.list(conversation.key).items;
+    const oldTask = new TaskRepository().require(oldSummary.id);
+    expect(new TaskApplicationService().execute({ taskId: oldTask.id, expectedVersion: oldTask.version,
+      idempotencyKey: 'close-old-task', command: { type: 'close', resolution: 'cancelled' } }).ok).toBe(true);
+
+    const title = '调研最近有趣的新闻并用简体中文简要汇总';
+    await tool.execute('news-task', { command: 'create', agentId: 'researcher', objective: title, description: '附可靠来源和发布日期。' });
+    const [{ id: taskId }] = tasks.list(conversation.key, 1).items;
+    const run = new TaskRunRepository().getActiveRoot(taskId)!;
+    const worker = createConversation({ agentId: 'researcher' }, '/tmp');
+    new TaskConversationRepository().activateExecutionSession({ taskId, runId: run.id, agentId: 'researcher', conversationId: worker.key });
+
+    insertSessionInput({ id: 'news-follow-up', conversationId: conversation.key, clientMessageId: 'news-follow-up',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content, origin: { type: 'system', source: 'cli' } });
+    claimNextSessionInput(conversation.key, 'news-follow-up-run');
+    const instruction = '只查科技和 AI 方面的有趣新闻。';
+    await tool.execute('focus-news', { command: 'instruct', taskId, instruction, taskReference });
+
+    const delivery = vi.fn(async () => true);
+    expect(await new TaskCollaborationDelivery().drain(delivery)).toBe(1);
+    expect(delivery).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      conversationId: worker.key, delivery: 'steer', content: expect.stringContaining(instruction),
+    }));
+    expect(new TaskCollaborationRepository().coordination(oldTask.id)).toEqual([]);
+    expect(tasks.list(conversation.key).total).toBe(2);
+    expect(new TaskRunRepository().listByTask(taskId).map(taskRun => taskRun.id)).toEqual([run.id]);
   });
 
   it('advertises a plain required command enum and rejects an omitted command before execution', () => {

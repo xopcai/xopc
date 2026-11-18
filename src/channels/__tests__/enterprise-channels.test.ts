@@ -95,7 +95,8 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
         expect(body).toEqual({ source: 'DING_DWS_CLAW' });
         return Response.json({ errcode: allowRegistration ? 0 : 1, nonce: 'nonce' });
       case '/app/registration/begin':
-        return Response.json({ errcode: 0, device_code: 'device', verification_uri_complete: 'https://dingtalk.com/scan', interval: 1 });
+        return Response.json({ errcode: 0, device_code: 'device', user_code: 'TEST-CODE',
+          verification_uri_complete: 'https://open-dev.dingtalk.com/scan', interval: 1 });
       case '/app/registration/poll':
         expect(body).toEqual({ device_code: 'device' });
         return Response.json({ errcode: 0, status: registrationPending ? 'WAITING' : 'SUCCESS', client_id: 'bot', client_secret: 'fixture-secret' });
@@ -140,6 +141,11 @@ it.each([dingtalkPlugin, wecomPlugin])('$id sets up, replies, reconnects, and re
     const qr = (await action('setup.start')).payload;
     expect(qr).toMatchObject({ type: 'qr', statusAction: 'setup.status' });
     if (qr?.type !== 'qr') throw new Error('Missing setup QR');
+    if (channel === 'dingtalk') {
+      expect(qr.deviceVerification).toEqual({ url: qr.qrPayload, userCode: 'TEST-CODE' });
+    } else {
+      expect(qr.deviceVerification).toBeUndefined();
+    }
     const input = { conversationId: qr.conversationId };
     const time = Date.now();
     const now = vi.spyOn(Date, 'now').mockReturnValue(time + qr.pollIntervalMs!);

@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -64,7 +65,7 @@ internal fun ChatMessageSearch(messages: List<ConversationMessage>, hasOlder: Bo
       LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("chat-search-results"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(results, key = { it.first.id }) { (message, text) ->
-          Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, themedCorners(16))
+          Column(Modifier.fillMaxWidth().clip(themedCorners(16)).background(MaterialTheme.colorScheme.surface)
             .clickable { keyboard?.hide(); onSelect(message.id) }.padding(16.dp)
             .testTag("chat-search-result-${message.id}")) {
             Text(text, maxLines = 4, overflow = TextOverflow.Ellipsis,

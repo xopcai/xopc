@@ -1,7 +1,7 @@
 import { XopcPreviewHeader } from './MusicPlaybackView';
 import { XopcChatResultCapsule } from './ChatResultCapsule';
 import { XopcChatImagePager } from './ChatImagePager';
-import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { appThemeColors, xopcRoundedClip, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
 import { image } from '@kit.ImageKit';
 import { common } from '@kit.AbilityKit';
@@ -71,6 +71,9 @@ export struct XopcChatMediaView {
   @Local pictureRatio: number = 1;
   @Local pictureWidth: number = 320;
   @Local readingAvailableWidth: number = 320;
+  @Computed get compactCardRadius(): number {
+    return this.embedded ? 0 : this.conversationCard ? 18 : 10;
+  }
   @Computed get readingWidth(): number {
     return Math.min(this.readingAvailableWidth, this.pictureWidth, 320, 280 * this.pictureRatio);
   }
@@ -494,7 +497,7 @@ export struct XopcChatMediaView {
               right: this.compactMetadata ? 12 : this.compactThumbnail ? 0 : 4 })
         }.id('chat-preview-' + this.file.id).width('100%').padding(0)
           .backgroundColor(this.embedded ? Color.Transparent : this.conversationCard ? this.colors.chat.card : this.colors.input)
-          .borderRadius(this.embedded ? 0 : this.conversationCard ? 18 : 10)
+          .borderRadius(this.compactCardRadius).clipShape(xopcRoundedClip(this.compactCardRadius))
           .enabled(!this.busy && this.previewable())
           .accessibilityText($r('app.string.chat_preview_file', this.file.name)).onClick((): void => { this.openPreview(); })
       } else if (this.picture) {

@@ -87,7 +87,7 @@ export struct XopcPersonalGoalsView {
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         SymbolGlyph($r('sys.symbol.pencil_line')).fontSize(17).fontColor([this.colors.tertiary])
       }.width('100%').padding(16).alignItems(VerticalAlign.Center)
-    }.width('100%').padding(0).borderRadius(this.colors.corner(16)).backgroundColor(this.colors.panel).margin({ bottom: 8 })
+    }.width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.panel).margin({ bottom: 8 })
       .onClick((): void => { this.openGoalEditor(goal); })
   }
 

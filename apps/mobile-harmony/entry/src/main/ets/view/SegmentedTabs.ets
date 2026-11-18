@@ -1,6 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { curves } from '@kit.ArkUI';
-import { appThemeColors, XopcThemeColors } from '../common/themePalette';
+import { appThemeColors, xopcRoundedClip, XopcThemeColors } from '../common/themePalette';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 
 export interface XopcSegmentOption {
@@ -127,7 +127,7 @@ export struct XopcSegmentedTabs {
                   }
                 }.padding({ left: 6, right: 6 }).justifyContent(FlexAlign.Center)
               }.id(option.testId ?? '').width(this.segmentWidth(option)).height(44 * this.fontScale).padding(0)
-                .borderRadius(this.segmentRadius).backgroundColor(Color.Transparent)
+                .borderRadius(this.segmentRadius).clipShape(xopcRoundedClip(this.segmentRadius)).backgroundColor(Color.Transparent)
                 .accessibilitySelected(option.key === this.selectedKey)
                 .onClick((): void => { this.onSelect(option.key); }, SEGMENTED_PAGE_TAP_SLOP_VP)
             }, (option: XopcSegmentOption): string => option.key + ':' + (option.count ?? ''))

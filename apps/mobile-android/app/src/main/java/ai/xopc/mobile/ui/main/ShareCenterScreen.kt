@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -131,8 +132,8 @@ internal fun ShareCenterScreen(state: ShareCenterUiState, connected: Boolean, in
             .testTag("shares-empty"), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         items(visible, key = ShareItem::id) { item ->
-          Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow,
-            themedCorners(16)).clickable { previewId = item.id }
+          Row(Modifier.fillMaxWidth().clip(themedCorners(16))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow).clickable { previewId = item.id }
             .padding(14.dp).testTag("share-${item.id}"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -289,9 +290,9 @@ private fun SharePreviewSheet(item: ShareItem, onClose: () -> Unit) {
   }
 }
 
-internal fun shareQrBitmap(url: String): Bitmap {
-  val bits = QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, 260, 260,
-    mapOf(EncodeHintType.MARGIN to 1))
+internal fun shareQrBitmap(url: String, size: Int = 260, margin: Int = 1): Bitmap {
+  val bits = QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, size, size,
+    mapOf(EncodeHintType.MARGIN to margin))
   val pixels = IntArray(bits.width * bits.height) { index ->
     if (bits[index % bits.width, index / bits.width]) AndroidColor.BLACK else AndroidColor.WHITE
   }

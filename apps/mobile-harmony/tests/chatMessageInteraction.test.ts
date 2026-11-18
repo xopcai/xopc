@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
 const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
+const selection = readFileSync(new URL('../entry/src/main/ets/view/ChatSelectableText.ets', import.meta.url), 'utf8');
 const markdown = readFileSync(new URL('../entry/src/main/ets/view/MarkdownView.ets', import.meta.url), 'utf8');
 
 describe('chat message interactions', () => {
@@ -19,15 +20,21 @@ describe('chat message interactions', () => {
     expect(content).toContain('.onClick((): void => { this.onShowMore(this.row); })');
   });
 
-  it('keeps actions behind a single long-press menu and delegates native selection to details', () => {
+  it('opens anchored long-press menus with haptics and selects assistant text inline', () => {
     expect(chat).not.toContain('assistantMessageActions(');
-    expect(chat).toContain('LongPressGesture({ repeat: false, duration: 500 })');
+    expect(chat).toContain('this.assistantMessageMenu(item.item) : undefined, ResponseType.LongPress');
+    expect(chat).toContain('this.userMessageMenu(item.item) : undefined, ResponseType.LongPress');
+    expect(chat.match(/hapticFeedbackMode: HapticFeedbackMode.ENABLED/g)).toHaveLength(2);
     for (const id of ['copy', 'select', 'save', 'read', 'detail', 'execution', 'regenerate', 'copy-code']) {
       expect(chat).toContain(`id: '${id}'`);
     }
     expect(chat).toContain(".id('chat-assistant-menu-' + action.id)");
-    expect(chat).toContain("height: '50%'");
-    expect(chat).toContain("action === 'detail' || action === 'select'");
+    expect(chat).toMatch(/if \(action === 'select'\) \{[\s\S]*?this.selectingMessageId = row.id;/);
+    expect(chat).toContain("else if (action === 'detail') this.openMessageDetail(row);");
+    expect(content).toContain('XopcChatSelectableText({ source: this.previewMarkdown, rowId: this.row.id,');
+    expect(selection).toContain('this.controller.setTextSelection(start, start + initial.length, { menuPolicy: MenuPolicy.SHOW })');
+    expect(selection).toContain('TextMenuItemId.SELECT_ALL');
+    expect(selection).toContain('shareSelectedChatText');
     expect(chat).toContain('textSelectable: true');
     expect(content).toContain('@Param textSelectable: boolean = false;');
     expect(markdown).toContain('.copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)');

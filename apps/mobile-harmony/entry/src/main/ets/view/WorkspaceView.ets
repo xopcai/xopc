@@ -76,7 +76,8 @@ export struct XopcWorkspaceView {
   @Param initialTaskAction: string = '';
   @Param createOnAppear: boolean = false;
   @Param projectId: string = '';
-  @Param showWorkPageMenu: boolean = false;
+  @Param embeddedInWorkbench: boolean = false;
+  @Param workbenchRefresh: number = 0;
   @Event onExit: () => void = (): void => {};
   @Event onSelectWorkPage: (page: string) => void = (_page: string): void => {};
   @Event onCreated: (page: string, id: string) => void = (_page: string, _id: string): void => {};
@@ -111,6 +112,11 @@ export struct XopcWorkspaceView {
     if (this.section === 'tasks') this.loadAgents();
     if (this.section === 'tasks' || this.section === 'automations') this.loadProjects();
   }
+  @Monitor('workbenchRefresh')
+  private refreshWorkbenchList(): void {
+    if (this.embeddedInWorkbench) void this.model.list(this.section === 'tasks' ? this.search : '');
+  }
+
   private async openTaskAction(): Promise<void> {
     await this.model.open(this.initialId);
     if (this.initialTaskAction === 'edit' && this.model.selected) this.model.editing = true;
@@ -171,7 +177,7 @@ export struct XopcWorkspaceView {
                   SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([this.colors.accent])
                 }
               }.width('100%').padding(14)
-            }.width('100%').padding(0).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
+            }.width('100%').padding(0).borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).backgroundColor(this.colors.input)
               .onClick((): void => { this.agentId = agent.id; this.sheetOpen = false; this.agentQuery = ''; })
           }
         }, (agent: XopcChatAgent): string => agent.id)
@@ -495,7 +501,7 @@ export struct XopcWorkspaceView {
                   SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([this.colors.accent])
                 }
               }.width('100%').padding({ left: 16, right: 16 })
-            }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
+            }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.input)
               .enabled(!this.model.busy && !!taskPhaseAction(item, phase))
               .onClick((): void => { this.applySheetAction(taskPhaseAction(item, phase)); })
           }
@@ -627,7 +633,7 @@ export struct XopcWorkspaceView {
           }.width('100%').padding({ top: 5 })
         }.width('100%').padding({ left: 16, right: 55, top: 14, bottom: 16 }).alignItems(HorizontalAlign.Start)
       }.id('automation-' + item.id).width('100%').padding(0)
-        .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18))
+        .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18)).clipShape(this.colors.cornerClip(18))
         .onClick((): void => { void this.model.open(item.id); }, SEGMENTED_PAGE_TAP_SLOP_VP)
       if (item.editable || item.actions.some((action: string): boolean => ['pause', 'resume', 'delete'].includes(action))) {
         this.automationMore(item, true)
@@ -679,9 +685,10 @@ export struct XopcWorkspaceView {
           }.width('100%')
         }
       }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-    }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18))
+    }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18)).clipShape(this.colors.cornerClip(18))
       .onClick((): void => {
         if (this.section === 'projects') this.onNavigate({ page: 'project-detail', itemId: item.id });
+        else if (this.embeddedInWorkbench) this.onNavigate({ page: 'tasks', itemId: item.id });
         else { this.model.open(item.id); }
       }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
@@ -876,7 +883,7 @@ export struct XopcWorkspaceView {
               }
             }.width('100%').alignItems(HorizontalAlign.Start).padding(16)
           }.id('automation-instruction-toggle').width('100%').padding(0)
-            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(17))
+            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(17)).clipShape(this.colors.cornerClip(17))
             .accessibilityDescription(this.expandedInstructionId === item.id
               ? $r('app.string.chat_collapse_content') : $r('app.string.chat_view_more'))
             .onClick((): void => { this.expandedInstructionId = this.expandedInstructionId === item.id ? '' : item.id; })
@@ -911,7 +918,7 @@ export struct XopcWorkspaceView {
               Text(this.taskStatusLabel(item)).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
               SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(13).fontColor([this.colors.accent])
             }.padding({ left: 12, right: 12 })
-          }.height(44).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.accentSoft)
+          }.height(44).padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.accentSoft)
             .accessibilityText($r('app.string.task_adjust_status')).enabled(!this.model.busy)
             .onClick((): void => { this.openSheet('status'); })
           Text(item.title || $r('app.string.untitled')).fontSize(21).lineHeight(29).fontWeight(FontWeight.Bold)
@@ -1076,7 +1083,7 @@ export struct XopcWorkspaceView {
                       .fontSize(14).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
                     SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary])
                   }.width('100%').padding({ left: 12, right: 12 })
-                }.width('100%').height(44).padding(0).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
+                }.width('100%').height(44).padding(0).borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.input)
                   .onClick((): void => {
                     if (session.conversationId === info.activeConversationId) {
                       this.onNavigate({ page: 'task-chat', itemId: item.id, title: item.title, projectId: item.projectId });
@@ -1322,11 +1329,11 @@ export struct XopcWorkspaceView {
                   Text($r('app.string.task_open_conversation')).fontSize(14).fontWeight(FontWeight.Medium)
                     .fontColor(this.colors.accent)
                 }
-              }.layoutWeight(1).height(48).backgroundColor(this.colors.accentSoft).borderRadius(this.colors.corner(14))
+              }.layoutWeight(1).height(48).backgroundColor(this.colors.accentSoft).borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
                 .onClick((): void => { this.onNavigate({ page: 'task-chat', itemId: item.id, title: item.title, projectId: item.projectId }); })
               if (item.editable) {
                 Button($r('app.string.edit')).height(48).backgroundColor(this.colors.input)
-                  .fontColor(this.colors.foreground).borderRadius(this.colors.corner(14))
+                  .fontColor(this.colors.foreground).borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
                   .onClick((): void => { this.model.editing = true; })
               }
             }.width('100%')
@@ -1347,7 +1354,7 @@ export struct XopcWorkspaceView {
                     .fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
                   SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
                 }.width('100%').padding({ left: 16, right: 16 })
-              }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
+              }.width('100%').height(48).padding(0).borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).backgroundColor(this.colors.input)
                 .enabled(!this.agentsLoading && this.agents.length > 0)
                 .onClick((): void => { this.agentQuery = ''; this.openSheet('agent'); })
               if (this.agentsError) {
@@ -1362,7 +1369,7 @@ export struct XopcWorkspaceView {
         }
         ForEach(this.supportedActions(item), (action: string) => {
           ListItem() {
-            Button(this.label(action)).width('100%').height(action === 'close' ? 52 : 46).borderRadius(this.colors.corner(14))
+            Button(this.label(action)).width('100%').height(action === 'close' ? 52 : 46).borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
               .backgroundColor(action === 'start' || action === 'mark_ready' || action === 'request_review' || action === 'close'
                 ? this.colors.accent : action === 'delete' ? Color.Transparent : this.colors.input)
               .fontColor(action === 'start' || action === 'mark_ready' || action === 'request_review' || action === 'close'
@@ -1412,18 +1419,19 @@ export struct XopcWorkspaceView {
           this.automationMore(this.model.selected, false)
         }
       }.width('100%').height(44)
-      if (this.showWorkPageMenu && !this.model.selected && !this.model.openingId) {
+      if (this.embeddedInWorkbench) {
         XopcPageTitleMenu({ heading: this.heading, options: WORK_PAGE_OPTIONS, selected: this.section,
-          menuId: 'work-page-menu', onSelect: (page: string): void => {
-            if (page !== this.section && this.searchOpen) this.toggleSearch();
-            this.onSelectWorkPage(page);
-          } }).constraintSize({ maxWidth: '54%' })
+          menuId: 'work-page-menu', onSelect: this.onSelectWorkPage }).constraintSize({ maxWidth: '54%' })
+      } else if (!this.model.selected && !this.model.openingId) {
+        Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '54%' })
+          .accessibilityGroup(true).hitTestBehavior(HitTestMode.None)
       }
     }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
   }
 
-  build() {
-    NavDestination() {
+  @Builder
+  workspaceContent() {
     Column() {
       this.header()
       if (this.model.error) {
@@ -1447,7 +1455,7 @@ export struct XopcWorkspaceView {
         if (this.section === 'automations') {
           Column() {
             Button(this.createLabel()).id('automation-create').width('100%').height(48)
-              .borderRadius(this.colors.corner(24)).backgroundColor(this.colors.chat.action).fontColor(this.colors.chat.onAction)
+              .borderRadius(this.colors.corner(24)).clipShape(this.colors.cornerClip(24)).backgroundColor(this.colors.chat.action).fontColor(this.colors.chat.onAction)
               .enabled(!this.model.busy).onClick((): void => { this.openCreate(); })
           }.width('100%').padding({ left: 20, right: 20, top: 4, bottom: 10 })
         }
@@ -1457,10 +1465,20 @@ export struct XopcWorkspaceView {
         height: '70%', dragBar: true, showClose: true, backgroundColor: this.colors.panel,
         onDisappear: (): void => { this.agentQuery = ''; this.projectQuery = ''; }
       })
-    }.hideTitleBar(true).onShown((): void => {
-      if (this.section === 'automations' && !this.model.selected && !this.model.openingId) void this.model.list('');
-    }).onBackPressed((): boolean => {
-      if (!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen)) this.goBack(); return true;
-    })
+  }
+
+  build() {
+    if (this.embeddedInWorkbench) {
+      this.workspaceContent()
+    } else {
+      NavDestination() {
+        this.workspaceContent()
+      }.hideTitleBar(true).onShown((): void => {
+        if (this.section === 'automations' && !this.model.selected && !this.model.openingId) void this.model.list('');
+      }).onBackPressed((): boolean => {
+        if (!this.model.busy || !!this.model.openingId || (!this.model.selected && this.searchOpen)) this.goBack();
+        return true;
+      })
+    }
   }
 }

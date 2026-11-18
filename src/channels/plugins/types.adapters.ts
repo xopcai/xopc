@@ -94,6 +94,7 @@ export type ChannelRuntimeActionPayload =
       conversationId: string;
       qrcodeUrl?: string;
       qrPayload?: string;
+      deviceVerification?: { url: string; userCode?: string };
       statusAction?: string;
       pollIntervalMs?: number;
       expiresInSec?: number;

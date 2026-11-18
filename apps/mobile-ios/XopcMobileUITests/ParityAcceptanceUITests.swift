@@ -385,7 +385,7 @@ final class ParityAcceptanceUITests: XCTestCase {
 
     func testProgressDestinationsAccessibilityAudit() throws {
         openTab("进展")
-        for (page, destination) in [("tasks", "任务"), ("projects", "项目"), ("automations", "自动化")] {
+        for (page, destination) in [("tasks", "任务"), ("projects", "项目")] {
             app.selectPageOption("work-page-\(page)", from: "work-page-menu")
             XCTAssertTrue(app.navigationBars[destination].waitForExistence(timeout: 8), "Missing page: \(destination)")
             try app.performAccessibilityAudit(for: [
@@ -1863,7 +1863,7 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testTopNavigationChoicesRestoreAfterAppRelaunch() {
         tab("capabilities")
-        app.selectPageOption("capability-category-skills", from: "capability-title")
+        app.selectCapability("capability-category-skills")
         XCTAssertTrue(app.buttons["capability-row-meeting-skill"].waitForExistence(timeout: 6))
         tab("profile")
         app.buttons["settings-models"].tap()
@@ -1883,15 +1883,15 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(modelMenu.label.contains("按任务选模型"))
     }
 
-    func testWorkAndLibraryNavigationChoicesRestoreIndependently() {
-        tab("progress")
-        app.selectPageOption("work-page-automations", from: "work-page-menu")
+    func testAutomationAndLibraryFiltersRestoreIndependently() {
+        tab("automations")
+        XCTAssertFalse(app.buttons["work-page-menu"].exists)
         XCTAssertTrue(app.buttons["automation-filter-menu"].waitForExistence(timeout: 6))
         app.selectPageOption("automation-filter-paused", from: "automation-filter-menu")
 
         tab("library")
         app.selectPageOption("library-scope-favorites", from: "space-scope-menu")
-        tab("progress")
+        tab("automations")
         let filter = app.buttons["automation-filter-menu"]
         XCTAssertTrue(filter.waitForExistence(timeout: 6))
         filter.tap()
@@ -2296,7 +2296,7 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testSidebarAndCapabilitySwipesDoNotOpenRows() {
         XCTAssertTrue(app.openHomeSidebar())
-        let progress = app.buttons["chat-sidebar-progress"]
+        let progress = app.buttons["chat-sidebar-workbench"]
         XCTAssertTrue(progress.waitForExistence(timeout: 5))
         progress.swipeLeft()
         XCTAssertTrue(progress.waitForNonExistence(timeout: 5))
@@ -2311,12 +2311,109 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertFalse(app.buttons["capability-panel-close"].exists)
         skill.swipeRight()
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
-        app.selectPageOption("capability-category-skills", from: "capability-title")
+        app.selectCapability("capability-category-skills")
         XCTAssertTrue(skill.waitForExistence(timeout: 5))
-        app.selectPageOption("capability-category-plugins", from: "capability-title")
+        app.selectCapability("capability-category-plugins")
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
         plugin.tap()
         XCTAssertTrue(app.buttons["capability-panel-close"].waitForExistence(timeout: 5))
+    }
+
+    func testCapabilityPagerKeepsSearchDuringSlowLoadAndAllowsEdgeBack() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/slow-capabilities"
+        app.launch()
+        tab("capabilities")
+        let plugin = app.buttons["capability-row-meeting-plugin"]
+        XCTAssertTrue(plugin.waitForExistence(timeout: 5))
+        let search = app.textFields["capability-search"]
+        search.tap()
+        search.typeText("Meeting")
+        let shortStart = plugin.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+        shortStart.press(forDuration: 0.25, thenDragTo: shortStart.withOffset(CGVector(dx: -25, dy: 0)),
+                         withVelocity: .slow, thenHoldForDuration: 0.2)
+        XCTAssertTrue(plugin.isHittable, "A short drag should return to the plugin category")
+        plugin.swipeUp()
+        XCTAssertFalse(plugin.isHittable, "The long filtered list should scroll past its first row")
+        app.selectCapability("capability-category-channels")
+        XCTAssertTrue(app.descendants(matching: .any)["capability-loading"].firstMatch.waitForExistence(timeout: 3))
+        app.selectCapability("capability-category-plugins")
+        XCTAssertEqual(search.value as? String, "Meeting")
+        XCTAssertFalse(plugin.isHittable, "Returning to plugins should restore its scroll position")
+        XCTAssertFalse(app.buttons["capability-row-document-plugin"].exists)
+        app.selectCapability("capability-category-skills")
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.45)).withOffset(CGVector(dx: 2, dy: 0))
+        let finish = app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.45))
+        start.press(forDuration: 0.04, thenDragTo: finish)
+        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 5),
+                      "The system edge gesture should leave the capabilities page")
+    }
+
+    func testCapabilitySetupPrefersAuthorizationAndSavesScanOnlyQr() {
+        tab("capabilities")
+        app.selectCapability("capability-category-channels")
+        let direct = app.buttons["capability-row-mail-channel"]
+        XCTAssertTrue(direct.waitForExistence(timeout: 8))
+        direct.tap()
+        let pair = app.buttons["capability-panel-pair"]
+        XCTAssertTrue(pair.waitForExistence(timeout: 5))
+        pair.tap()
+        XCTAssertTrue(app.buttons["capability-panel-open-authorization"].waitForExistence(timeout: 5))
+        let close = app.buttons["capability-panel-close"]
+        let compactTop = close.frame.minY
+        capture("capability-drawer-authorization")
+        let qr = app.images["capability-panel-qr"]
+        XCTAssertFalse(qr.exists)
+        let otherMethods = app.buttons["capability-panel-other-methods"]
+        otherMethods.tap()
+        XCTAssertTrue(qr.exists)
+        let expanded = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in close.frame.minY < compactTop - 80 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 5), .completed)
+        capture("capability-drawer-authorization-expanded")
+        otherMethods.tap()
+        let collapsed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in close.frame.minY >= compactTop - 8 }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [collapsed], timeout: 5), .completed)
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 5))
+
+        app.buttons["capability-row-scan-channel"].tap()
+        XCTAssertTrue(pair.waitForExistence(timeout: 5))
+        pair.tap()
+        let save = app.buttons["capability-panel-save-qr"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["capability-panel-open-authorization"].exists)
+        capture("capability-drawer-qr")
+        save.tap()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "允许"])).firstMatch
+        if allow.waitForExistence(timeout: 3) { allow.tap() }
+        XCTAssertTrue(app.staticTexts["已保存到相册。"].waitForExistence(timeout: 8))
+    }
+
+    func testCapabilityLongFormExpandsAndKeepsSaveVisible() {
+        tab("capabilities")
+        app.selectCapability("capability-category-channels")
+        let form = app.buttons["capability-row-form-channel"]
+        XCTAssertTrue(form.waitForExistence(timeout: 5))
+        form.tap()
+        let save = app.buttons["capability-panel-save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        let close = app.buttons["capability-panel-close"]
+        let expanded = XCTNSPredicateExpectation(predicate: NSPredicate { [app] _, _ in
+            guard let app else { return false }
+            return close.frame.minY < app.frame.height * 0.34
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 5), .completed)
+        let lastField = app.textFields["capability-field-option-10"]
+        let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0))
+        let scrollStart = top.withOffset(CGVector(dx: 0, dy: save.frame.minY - app.frame.minY - 30))
+        let scrollEnd = top.withOffset(CGVector(dx: 0, dy: close.frame.maxY - app.frame.minY + 30))
+        for _ in 0..<4 where !lastField.isHittable {
+            scrollStart.press(forDuration: 0.05, thenDragTo: scrollEnd)
+        }
+        XCTAssertTrue(lastField.isHittable)
+        XCTAssertTrue(save.isHittable)
+        capture("capability-drawer-long-form")
     }
 
     // swiftlint:disable:next function_body_length
@@ -2342,7 +2439,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         for (category, id) in [
             ("skills", "meeting-skill"), ("connections", "drive-connection"), ("agents", "coder"), ("channels", "mail-channel")
         ] {
-            app.selectPageOption("capability-category-\(category)", from: "capability-title")
+            app.selectCapability("capability-category-\(category)")
             XCTAssertTrue(header.exists)
             let row = app.buttons["capability-row-\(id)"]
             XCTAssertTrue(row.waitForExistence(timeout: 5))
@@ -2351,7 +2448,7 @@ final class MobileLayoutParityUITests: XCTestCase {
             let add = app.buttons["capability-add-\(category)"]
             if category == "skills" {
                 XCTAssertTrue(add.exists)
-                XCTAssertGreaterThan(add.frame.midX, app.buttons["capability-title"].frame.midX)
+                XCTAssertGreaterThan(add.frame.midX, header.frame.midX)
                 add.tap()
                 XCTAssertTrue(app.textFields["capability-field-query"].waitForExistence(timeout: 5))
                 close.tap()
@@ -2386,7 +2483,7 @@ final class MobileLayoutParityUITests: XCTestCase {
             XCTAssertFalse(app.buttons["capability-open-chat"].exists)
             close.tap()
         }
-        app.selectPageOption("capability-category-skills", from: "capability-title")
+        app.selectCapability("capability-category-skills")
         app.buttons["capability-row-meeting-skill"].tap()
         let skill = app.switches["启用技能"]
         XCTAssertTrue(skill.waitForExistence(timeout: 5))
@@ -2403,7 +2500,7 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testCapabilityAgentRowAndSettingsHaveSeparateActions() {
         tab("capabilities")
-        app.selectPageOption("capability-category-agents", from: "capability-title")
+        app.selectCapability("capability-category-agents")
         let expert = app.buttons["capability-row-coder"]
         let settings = app.buttons["capability-settings-coder"]
         XCTAssertTrue(expert.waitForExistence(timeout: 5))
@@ -2421,7 +2518,7 @@ final class MobileLayoutParityUITests: XCTestCase {
     func testCapabilityCreationOpensAnUnsentConversationDraft() {
         for (category, expected) in [("agents", "创建一个助手或专家"), ("skills", "创建一个技能")] {
             tab("capabilities")
-            app.selectPageOption("capability-category-\(category)", from: "capability-title")
+            app.selectCapability("capability-category-\(category)")
             app.buttons["capability-chat-setup-\(category)"].tap()
             let composer = app.descendants(matching: .any)["assistant-chat-composer"].firstMatch
             XCTAssertTrue(composer.waitForExistence(timeout: 5))
@@ -2431,7 +2528,7 @@ final class MobileLayoutParityUITests: XCTestCase {
 
     func testCustomMcpConnectionOpensFormAndShowsSuccess() {
         tab("capabilities")
-        app.selectPageOption("capability-category-connections", from: "capability-title")
+        app.selectCapability("capability-category-connections")
         app.buttons["capability-add-mcp"].tap()
         let address = app.textFields["capability-field-url"]
         XCTAssertTrue(address.waitForExistence(timeout: 5))
@@ -2479,7 +2576,7 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(disable.exists)
         app.buttons["capability-panel-close"].tap()
 
-        app.selectPageOption("capability-category-skills", from: "capability-title")
+        app.selectCapability("capability-category-skills")
         app.buttons["capability-add-skills"].tap()
         let query = app.textFields["例如：会议纪要、PDF"]
         XCTAssertTrue(query.waitForExistence(timeout: 5))
@@ -2895,6 +2992,27 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertEqual(voice.label, "播放语音")
     }
 
+    func testAssistantSelectTextOpensInline() {
+        openChat()
+        let answer = app.descendants(matching: .any)["chat-message-assistant-ai-1"].firstMatch
+        XCTAssertTrue(answer.waitForExistence(timeout: 5))
+        answer.press(forDuration: 1)
+        let select = app.buttons["选择文本"].firstMatch
+        XCTAssertTrue(select.waitForExistence(timeout: 5))
+        select.tap()
+        let selection = app.descendants(matching: .any)["chat-inline-text-selection"].firstMatch
+        XCTAssertTrue(selection.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["message-detail-content"].exists)
+        capture("message-inline-text-selection")
+        let copy = app.menuItems["复制"].firstMatch
+        XCTAssertTrue(copy.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.menuItems["分享"].exists)
+        app.menuItems["全选"].tap()
+        XCTAssertTrue(copy.waitForExistence(timeout: 5))
+        copy.tap()
+        XCTAssertFalse(selection.exists)
+    }
+
     func testMessageLongPressDetailOptionsAndJump() {
         openChat()
         let user = app.staticTexts["请整理移动端布局"].firstMatch
@@ -3099,23 +3217,33 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["automation-menu-delete"].waitForExistence(timeout: 5))
     }
 
-    func testWorkPageMenuSwitchesDirectlyAndBackReturnsToChat() {
+    func testWorkbenchMenuAndSwipesStayInSync() {
         tab("progress")
         let menu = app.buttons["work-page-menu"]
+        let pager = app.descendants(matching: .any)["work-page-pager"].firstMatch
         XCTAssertTrue(menu.waitForExistence(timeout: 5))
         menu.tap()
         XCTAssertTrue(app.buttons["work-page-progress"].isSelected)
-        app.buttons["work-page-automations"].tap()
-        XCTAssertTrue(app.buttons["automation-create-in-chat"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["work-page-automations"].exists)
+        app.buttons["work-page-progress"].tap()
+        pager.swipeLeft()
+        XCTAssertTrue(app.buttons["tasks-filter-open"].waitForExistence(timeout: 5))
         app.selectPageOption("work-page-projects", from: "work-page-menu")
         XCTAssertTrue(app.buttons["projects-open-search"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["project-create"].exists)
-        app.selectPageOption("work-page-tasks", from: "work-page-menu")
+        pager.swipeRight()
         XCTAssertTrue(app.buttons["tasks-filter-open"].waitForExistence(timeout: 5))
-        app.selectPageOption("work-page-progress", from: "work-page-menu")
-        XCTAssertTrue(app.staticTexts["需要验收"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["projects-open-search"].exists)
         app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["chat-sidebar-workbench"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["chat-sidebar-projects"].exists)
+        app.buttons["chat-sidebar-workbench"].tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        menu.tap()
+        XCTAssertTrue(app.buttons["work-page-progress"].isSelected)
+        app.buttons["work-page-progress"].tap()
+        tab("automations")
+        XCTAssertTrue(app.buttons["automation-filter-menu"].waitForExistence(timeout: 5))
+        XCTAssertFalse(menu.exists)
     }
 }
 
@@ -3141,6 +3269,17 @@ private extension MobileLayoutParityUITests {
 
 @MainActor
 extension XCUIApplication {
+    func selectCapability(_ identifier: String) {
+        let option = buttons[identifier]
+        XCTAssertTrue(option.waitForExistence(timeout: 5))
+        if !option.isHittable {
+            let categories = descendants(matching: .any)["capability-categories"].firstMatch
+            if option.frame.midX > categories.frame.midX { categories.swipeLeft() }
+            else { categories.swipeRight() }
+        }
+        option.tap()
+    }
+
     func selectPageOption(_ identifier: String, from menu: String) {
         let switcher = buttons[menu]
         XCTAssertTrue(switcher.waitForExistence(timeout: 5))
@@ -3176,7 +3315,7 @@ extension XCUIApplication {
             buttons["chat-sidebar-close"].tap()
             return
         }
-        let identifier = ["conversations": "history", "notes": "library"][destination] ?? destination
+        let identifier = ["conversations": "history", "notes": "library", "progress": "workbench"][destination] ?? destination
         let button = buttons["chat-sidebar-\(identifier)"]
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()

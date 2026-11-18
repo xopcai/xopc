@@ -210,7 +210,7 @@ export struct XopcModelSettingsView {
         }
       }.width('100%').constraintSize({ minHeight: 50 }).padding({ left: 12, right: 12 })
     }.width('100%').padding(0).backgroundColor(this.selected === ref ? this.colors.accentSoft : Color.Transparent)
-      .borderRadius(this.colors.corner(12)).enabled(!this.saving).accessibilitySelected(this.selected === ref)
+      .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).enabled(!this.saving).accessibilitySelected(this.selected === ref)
       .onClick((): void => { this.selected = ref; })
   }
 

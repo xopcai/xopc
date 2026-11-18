@@ -174,7 +174,7 @@ describe('chat bottom region composition', () => {
     expect(ordinary).toContain('this.conversationActions()');
     expect(home).toContain('pendingAttention: this.pendingAttention');
     expect(home).toContain('return this.attention.pendingCount;');
-    expect(home).toContain('XopcProgressView({ activePage: true, model: this.attention');
+    expect(home).toContain('XopcWorkbenchView({ progress: this.attention');
     expect(options).toContain("heading: $r('app.string.chat_model')");
     expect(options).toContain("onOpen: (): void => { this.onMode('model'); }");
   });

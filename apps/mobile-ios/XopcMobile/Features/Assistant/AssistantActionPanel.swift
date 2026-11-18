@@ -279,13 +279,17 @@ struct AssistantActionPanel: View {
     var body: some View {
         LazyVGrid(columns: columns, spacing: 4) {
             ForEach(AssistantAction.allCases.filter { $0 != .switchAgent || canSwitchAgent }) { action in
+                let enabled = action != .fileReference || canReferenceFiles
                 Button {
                     onSelect(action)
                 } label: {
                     tile(title: Text(action.title), image: action.systemImage)
+                        .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(14)))
+                        .hoverEffect(.highlight, isEnabled: enabled)
+                        .opacity(enabled ? 1 : 0.5)
                 }
-                .buttonStyle(.plain)
-                .disabled(action == .fileReference && !canReferenceFiles)
+                .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(14)))
+                .disabled(!enabled)
                 .accessibilityLabel(action.title)
                 .accessibilityIdentifier("assistant-action-\(action.rawValue)")
                 .accessibilityHint(action == .fileReference && !canReferenceFiles

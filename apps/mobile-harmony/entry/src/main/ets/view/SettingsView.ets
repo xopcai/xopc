@@ -33,7 +33,7 @@ struct XopcPreferenceOption {
       }.width('100%').height(56).padding({ left: 16, right: 16 })
     }.id(this.optionId).width('100%').padding(0)
       .backgroundColor(this.selected ? this.colors.accentSoft : this.colors.panel)
-      .borderRadius(this.colors.corner(14)).margin({ bottom: 8 })
+      .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).margin({ bottom: 8 })
       .accessibilitySelected(this.selected)
       .onClick(this.onSelect)
   }
@@ -131,7 +131,7 @@ export struct XopcSettingsView {
       }.width('100%').alignItems(HorizontalAlign.Start)
     }.id(id).width('100%').height(84).padding(8)
       .backgroundColor(this.selectedScheme === scheme ? this.colors.accentSoft : this.colors.panel)
-      .borderRadius(this.colors.corner(12)).accessibilitySelected(this.selectedScheme === scheme)
+      .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).accessibilitySelected(this.selectedScheme === scheme)
       .onClick((): void => { this.choose(this.selectedLanguage, this.selectedTheme, scheme); })
   }
   private async openAboutLink(path: string = ''): Promise<void> {
@@ -172,7 +172,7 @@ export struct XopcSettingsView {
             .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.secondary])
         }.width('100%').constraintSize({ minHeight: 64 }).padding({ left: 14, right: 14 })
-      }.id('settings-personal-agent').width('100%').padding(0).borderRadius(this.colors.corner(16))
+      }.id('settings-personal-agent').width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
         .backgroundColor(this.colors.panel).margin({ bottom: 8 }).enabled(!!this.personalAgent)
         .onClick((): void => { this.onNavigate({ page: 'personal-agent-profile', itemId: '' }); })
       XopcHubRow({ heading: $r('app.string.settings_privacy_memory'), symbol: $r('sys.symbol.lock'),

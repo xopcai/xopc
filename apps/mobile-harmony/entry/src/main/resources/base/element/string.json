@@ -983,6 +983,7 @@
       "name": "disconnect_help",
       "value": "Remove local Gateway credentials? You will need to pair again. Server conversations and files are not deleted."
     },
+    { "name": "workbench", "value": "Workbench" },
     {
       "name": "progress",
       "value": "Progress"

@@ -78,7 +78,9 @@ type Panel = {
   flow?: string;
   revision?: number;
   authorizationUrl?: string;
+  deviceVerificationCode?: string;
   qrUrl?: string;
+  expiresAt?: number;
   pollAction?: string;
   results?: SkillResult[];
   chatPrompt?: string;
@@ -171,6 +173,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
   const setupOwner = 'gateway-owner';
   const flows = new Map<string, {
     principal: string; channel: string; accountId?: string; expires: number; qrUrl: string;
+    authorizationUrl?: string; deviceVerificationCode?: string;
     message?: string; needsCode?: boolean;
   }>();
   const inspected = new Map<string, { principal: string; packageName: string; hash: string; expires: number; autoEnable: boolean; locale: string; panel: Panel }>();
@@ -722,6 +725,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
     const directServers = Object.keys(pkg.servers).filter(name => !declarations.some(account => account.servers.includes(name)));
     let authorizationUrl: string | undefined;
     let authorizationQrUrl: string | undefined;
+    let signInExpiresAt: number | undefined;
     let signInState: string | undefined;
     let signInAction: string | undefined;
     let redirectAction: string | undefined;
@@ -781,6 +785,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
             const challengeUrl = safeLink(auth.challenge?.url);
             if (auth.challenge?.type === 'qr') authorizationQrUrl = challengeUrl;
             if (auth.challenge?.type === 'url') authorizationUrl = challengeUrl;
+            signInExpiresAt = auth.expiresAt;
             signInInstruction = auth.challenge?.message;
           } else if (auth && 'authorizationUrl' in auth) {
             authorizationUrl = safeLink(auth.authorizationUrl);
@@ -809,8 +814,10 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       return { message: t('此插件暂不可用。请返回列表刷新后重试。', 'This plugin is unavailable. Refresh the list and try again.') };
     }
     if (signInState && ['starting', 'authorizing', 'awaiting_user', 'preparing'].includes(signInState)) {
-      return { authorizationUrl, qrUrl: authorizationQrUrl, revision: job?.revision, pollAction: signInAction,
-        message: signInInstruction ?? t('请在服务商页面完成授权，返回后会自动更新。', 'Finish signing in with the provider. This panel updates automatically.'),
+      return { authorizationUrl, qrUrl: authorizationQrUrl, expiresAt: signInExpiresAt, revision: job?.revision, pollAction: signInAction,
+        message: signInInstruction ?? (authorizationQrUrl
+          ? t('请用对应应用扫描二维码。', 'Scan this QR code with the service’s app.')
+          : t('请在服务商页面完成授权，返回后会自动更新。', 'Finish signing in with the provider. This panel updates automatically.')),
         ...(redirectAction ? { fields: [{ ...text('callback', t('浏览器最后打开的地址', 'Address shown in your browser')), advanced: true }],
           actions: [{ id: redirectAction, label: t('完成授权', 'Finish authorization'), advanced: true }] } : {}) };
     }
@@ -923,6 +930,9 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
         return channelPairPanel({
           flow,
           qrUrl: pending.needsCode ? undefined : pending.qrUrl,
+          authorizationUrl: pending.needsCode ? undefined : pending.authorizationUrl,
+          deviceVerificationCode: pending.needsCode ? undefined : pending.deviceVerificationCode,
+          expiresAt: pending.expires,
           message: pending.message,
           fields: pending.needsCode ? [text('code', t('微信验证码', 'WeChat verification code'))] : undefined,
         }, t);
@@ -937,7 +947,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       const flow = command.flow;
       const stored = flow ? flows.get(flow) : undefined;
       if (command.action !== 'pair' && (!stored || stored.channel !== id || stored.principal !== principal || stored.expires <= Date.now())) {
-        return { ...await channel(c, id, t), message: t('二维码已过期，请重新配对。', 'The QR code expired. Pair again.') };
+        return { ...await channel(c, id, t), message: t('配置已过期，请重新连接。', 'Setup expired. Connect again.') };
       }
       const adapter = await service.ensureChannelRuntimePlugin(id);
       if (!adapter?.runtimeActions) throw new McpDraftError(404, 'Channel is unavailable.');
@@ -966,15 +976,16 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           if (value.expires <= Date.now() || (value.principal === principal && value.channel === id)) flows.delete(key);
         }
         if (flows.size >= 128) flows.delete(flows.keys().next().value!);
-        qr = { flow: payload.conversationId, qrUrl,
-          message: id === 'weixin'
-            ? t('用微信扫一扫完成配对。同一部手机可截图后在微信扫一扫中从相册选择。', 'Scan this code with WeChat. On this phone, take a screenshot and choose it from WeChat’s scanner.')
-            : id === 'feishu'
-              ? t('用飞书扫一扫完成连接。同一部手机可截图后从相册选择。', 'Scan this code in Feishu. On this phone, take a screenshot and choose it from the scanner.')
-              : t('用对应应用扫码授权。也可以截图后从该应用的相册入口选择。', 'Scan the code with the channel’s app, or choose a screenshot from its scanner.') };
+        const authorizationUrl = safeLink(payload.deviceVerification?.url);
+        const deviceVerificationCode = authorizationUrl ? payload.deviceVerification?.userCode : undefined;
+        const expiresAt = Date.now() + Math.min(payload.expiresInSec ?? 300, 300) * 1000;
+        qr = { flow: payload.conversationId, qrUrl, authorizationUrl, deviceVerificationCode, expiresAt,
+          message: authorizationUrl
+            ? t('请在验证页完成授权，返回后会自动更新。', 'Complete authorization on the verification page. The status updates when you return.')
+            : t('请用对应应用扫描二维码。', 'Scan this QR code with the service’s app.') };
         flows.set(payload.conversationId, { principal, channel: id,
           accountId: typeof payload.accountId === 'string' ? payload.accountId : accountId,
-          expires: Date.now() + Math.min(payload.expiresInSec ?? 300, 300) * 1000, qrUrl, message: qr.message });
+          expires: expiresAt, qrUrl, authorizationUrl, deviceVerificationCode, message: qr.message });
       }
       if (payload?.type === 'poll' && payload.phase === 'pending' && flow && !action.nextConfig) {
         const updatedUrl = safeLink(payload.qrPayload ?? payload.qrcodeUrl);
@@ -983,7 +994,10 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
           stored.needsCode = Boolean(payload.pinAction);
           stored.message = payload.message ?? stored.message;
         }
-        qr = { flow, qrUrl: payload.pinAction ? undefined : stored?.qrUrl, message: payload.message,
+        qr = { flow, qrUrl: payload.pinAction ? undefined : stored?.qrUrl,
+          authorizationUrl: payload.pinAction ? undefined : stored?.authorizationUrl,
+          deviceVerificationCode: payload.pinAction ? undefined : stored?.deviceVerificationCode,
+          expiresAt: stored?.expires, message: payload.message ?? stored?.message,
           fields: payload.pinAction ? [text('code', t('微信验证码', 'WeChat verification code'))] : [] };
       } else if (payload?.type === 'poll' && !paired) {
         if (flow) flows.delete(flow);
@@ -1131,7 +1145,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       if (pairable && command?.action !== 'manual') return {
         fields: preferences,
         message: t('先连接账号，之后可以设置接收范围。', 'Connect an account first, then choose what it receives.'),
-        actions: [{ id: 'pair', label: t('扫码连接', 'Scan to connect') }, { id: 'manual', label: t('手动连接', 'Connect manually') },
+        actions: [{ id: 'pair', label: t('开始连接', 'Start connection') }, { id: 'manual', label: t('手动连接', 'Connect manually') },
           { ...save, advanced: true }],
       };
       return {

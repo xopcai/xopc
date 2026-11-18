@@ -7,10 +7,16 @@ const CHAT_ACTION_GRID_HEIGHT: number = 184;
 @ComponentV2
 export struct XopcChatActionPanel {
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local hoveredId: string = '';
   @Param open: boolean = false;
   @Param canSwitchAgent: boolean = false;
   @Param disabledIds: string[] = [];
   @Event onSelect: (id: string) => void = (_id: string): void => {};
+
+  @Monitor('open')
+  clearHover(): void {
+    if (!this.open) this.hoveredId = '';
+  }
 
   @Builder
   private actionTile(id: string, label: Resource, symbol: Resource) {
@@ -21,8 +27,15 @@ export struct XopcChatActionPanel {
         }.width(48).height(48).justifyContent(FlexAlign.Center).borderRadius(this.colors.corner(14)).backgroundColor(this.colors.input)
         Text(label).fontSize(12).fontColor(this.colors.secondary).maxLines(2)
           .textAlign(TextAlign.Center).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%')
-    }.id('chat-action-' + id).width('25%').height(84).padding(2).backgroundColor(Color.Transparent)
+      }.width('100%').opacity(this.disabledIds.includes(id) ? 0.5 : 1)
+    }.id('chat-action-' + id).width('25%').height(84).padding(2)
+      .backgroundColor(this.hoveredId === id && !this.disabledIds.includes(id) ? this.colors.hoverOverlay : Color.Transparent)
+      .hoverEffect(HoverEffect.None).stateEffect(true)
+      .onHover((hovering: boolean): void => {
+        if (hovering && this.open && !this.disabledIds.includes(id)) this.hoveredId = id;
+        else if (this.hoveredId === id) this.hoveredId = '';
+      })
+      .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
       .accessibilityText(label).enabled(!this.disabledIds.includes(id))
       .onClick((): void => { this.onSelect(id); })
   }

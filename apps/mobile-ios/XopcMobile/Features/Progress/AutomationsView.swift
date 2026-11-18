@@ -76,6 +76,7 @@ struct AutomationsView: View {
         .refreshable { await load() }
         .task { await load() }
         .navigationBarTitleDisplayMode(.inline)
+        .mobilePageTitle(Text("自动化"))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PageSearchButton("搜索", isOpen: $searchOpen, query: $searchText,

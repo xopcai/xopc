@@ -97,7 +97,7 @@ export struct XopcChatOptions {
         }
       }.width('100%').padding(10)
     }.id('chat-agent-option-' + agent.id).width('100%').constraintSize({ minHeight: 60 }).padding(0)
-      .borderRadius(this.colors.corner(14)).backgroundColor(this.colors.chat.card)
+      .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14)).backgroundColor(this.colors.chat.card)
       .onClick((): void => { if (agent.id === this.model.agentId) this.onClose(); else this.onAgent(agent.id); })
   }
 

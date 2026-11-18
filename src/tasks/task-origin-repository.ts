@@ -57,13 +57,14 @@ export class TaskOriginRepository {
     return row?.conversation_id;
   }
 
-  list(conversationId: string, limit = 20, options: { offset?: number; order?: 'active-first' | 'recent'; query?: string } = {}): { items: DelegatedTaskSummary[]; total: number } {
+  list(conversationId: string, limit = 20, options: { offset?: number; order?: 'active-first' | 'recent'; query?: string; excludeClosed?: boolean } = {}): { items: DelegatedTaskSummary[]; total: number } {
     const db = getSqliteDatabase();
     const query = options.query?.trim() ?? '';
     const selection = `FROM task_origin_links origin JOIN tasks task ON task.task_id = origin.task_id
       LEFT JOIN task_contracts contract ON contract.task_id = task.task_id AND contract.version = task.latest_contract_version
       WHERE origin.conversation_id = ? AND (? = '' OR instr(lower(task.title), lower(?)) > 0
-        OR instr(lower(coalesce(contract.objective, '')), lower(?)) > 0)`;
+        OR instr(lower(coalesce(contract.objective, '')), lower(?)) > 0)
+      ${options.excludeClosed ? "AND task.phase <> 'closed'" : ''}`;
     const bindings = [conversationId, query, query, query];
     const total = (db.prepare(`SELECT count(*) AS count ${selection}`).get(...bindings) as { count: number }).count;
     const rows = db.prepare(`SELECT task.task_id AS id, task.title, contract.objective, task.phase, task.created_at AS createdAt,

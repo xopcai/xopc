@@ -367,7 +367,7 @@ export struct XopcSpaceLibraryView {
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary])
     }.id('space-item-' + item.id).width('100%').constraintSize({ minHeight: 56 }).padding(12)
-      .borderRadius(this.colors.corner(12)).backgroundColor(this.colors.panel)
+      .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.panel)
       .onClick((): void => { void this.open(item.id, item); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 

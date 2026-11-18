@@ -68,7 +68,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
     data: { messages: Message[]; hasMore: boolean; name?: string },
     request?: SessionSnapshotRequest,
   ) => boolean | void;
-  finalizeMessage: (conversationId?: string, terminalStatus?: AgentStreamRunStatus) => void;
+  finalizeMessage: (conversationId: string, terminalStatus?: AgentStreamRunStatus) => void;
   fq: AgentStreamFqCallbacks;
 }): MessagingCallbacks {
   const {
