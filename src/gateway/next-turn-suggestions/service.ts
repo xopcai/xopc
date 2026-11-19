@@ -4,8 +4,10 @@ import type { NextTurnSuggestionResponse } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
 import { resolveModelIntentRef, resolveModelSelector } from '../../config/agent-model-intents.js';
+import { onMediaGenerationChanged } from '../../media/generation-changes.js';
 import { getSessionConfig } from '../../storage/sqlite/config-repository.js';
 import { readNextTurnSuggestion, saveNextTurnSuggestion } from '../../storage/sqlite/next-turn-suggestion-repository.js';
+import { getCurrentTranscriptId } from '../../storage/sqlite/session-repository.js';
 import { createLogger } from '../../utils/logger.js';
 import { onUserContextChange } from '../../user-context/changes.js';
 import { generateNextTurnSuggestion } from './generator.js';
@@ -16,22 +18,31 @@ const TTL_MS = 30 * 60_000;
 
 export class NextTurnSuggestionService {
   private readonly running = new Map<string, { key: string; controller: AbortController }>();
-  private readonly unsubscribe: () => void;
+  private readonly unsubscribeUserContext: () => void;
+  private readonly unsubscribeMedia: () => void;
   constructor(private readonly deps: {
     getConfig: () => Config; emit: (conversationId: string) => void; isAcceptingInput: (conversationId: string) => boolean;
     generate?: typeof generateNextTurnSuggestion; resolveModel?: (snapshot: SuggestionSnapshot) => string | undefined; timeoutMs?: number;
   }) {
-    this.unsubscribe = onUserContextChange(change => { if (change.id && change.kind !== 'policy') this.changed(change.id); });
+    this.unsubscribeUserContext = onUserContextChange(change => { if (change.id && change.kind !== 'policy') this.changed(change.id); });
+    this.unsubscribeMedia = onMediaGenerationChanged((conversationId, transcriptId) => {
+      if (getCurrentTranscriptId(conversationId) === transcriptId) this.changed(conversationId);
+    });
   }
 
   /** Only a composer GET schedules prediction; completion/invalidation announces the new state. */
   changed(conversationId: string): void {
-    for (const [id, job] of this.running) if (id.startsWith(`${conversationId}:`)) job.controller.abort();
+    for (const [id, job] of this.running) {
+      if (!id.startsWith(`${conversationId}:`)) continue;
+      this.running.delete(id);
+      job.controller.abort();
+    }
     this.deps.emit(conversationId);
   }
 
   dispose(): void {
-    this.unsubscribe();
+    this.unsubscribeUserContext();
+    this.unsubscribeMedia();
     for (const job of this.running.values()) job.controller.abort();
     this.running.clear();
   }
@@ -56,7 +67,7 @@ export class NextTurnSuggestionService {
     const previous = this.running.get(id);
     if (previous?.key === current.key && !previous.controller.signal.aborted) return { status: 'pending' };
     previous?.controller.abort();
-    if (this.running.size >= 2) return { status: 'none' };
+    if (!previous && this.running.size >= 2) return { status: 'none' };
     const job = { key: current.key, controller: new AbortController() };
     this.running.set(id, job);
     void this.generate(id, locale, current, job);

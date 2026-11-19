@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { estimateVideoCostFen, VIDEO_MODELS, type VideoGenerationDraft, type VideoGenerationJob, type VideoGenerationState } from '@xopcai/gateway-contract';
 
 import { getVideoModel } from './settings.js';
+import { mediaGenerationPhase, notifyMediaGenerationAfterCommit } from '../media/generation-changes.js';
 import { DurableState } from '../storage/sqlite/durable-state.js';
 import { archiveSpaceGeneratedMedia } from '../space/ingest.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
@@ -96,6 +97,7 @@ export function enqueueVideoJob(conversationId: string, request: VideoRequest, r
     if (placement) {
       jobPlacements.set(conversationId, { ...jobPlacements.get(conversationId), [request.id]: placement });
     }
+    notifyMediaGenerationAfterCommit(conversationId, request.transcriptId);
     return { job: publicVideoJob(getVideoJob(conversationId, request.id)!, placement) };
   });
 }
@@ -103,9 +105,11 @@ export function enqueueVideoJob(conversationId: string, request: VideoRequest, r
 export function claimVideoJob(now = Date.now()) {
   return runSqliteWriteTransaction(db => {
     // A lost submit response can represent a paid request. Resume only work with a known remote ID.
-    db.prepare(`UPDATE video_generation_jobs SET state = 'submission_unknown', image_bytes = NULL,
+    const expired = db.prepare(`UPDATE video_generation_jobs SET state = 'submission_unknown', image_bytes = NULL,
       error = 'The provider may have accepted the request. Check its console before generating again.',
-      lease_token = NULL, lease_until = NULL WHERE state = 'submitting' AND lease_until <= ?`).run(now);
+      lease_token = NULL, lease_until = NULL WHERE state = 'submitting' AND lease_until <= ?
+      RETURNING conversation_id, transcript_id`).all(now) as Array<Pick<JobRow, 'conversation_id' | 'transcript_id'>>;
+    for (const job of expired) notifyMediaGenerationAfterCommit(job.conversation_id, job.transcript_id);
     const row = db.prepare(`SELECT * FROM video_generation_jobs
       WHERE state IN ('queued','submitted','running','saving') AND next_attempt_at <= ?
       AND (lease_until IS NULL OR lease_until <= ?) ORDER BY next_attempt_at, rowid LIMIT 1`)
@@ -133,13 +137,16 @@ export function updateVideoJob(id: string, token: string, state: VideoGeneration
     lease_token = CASE WHEN ? THEN lease_token ELSE NULL END,
     lease_until = CASE WHEN ? THEN lease_until ELSE NULL END,
     image_bytes = CASE WHEN ? = 'queued' THEN image_bytes ELSE NULL END
-    WHERE id = ? AND lease_token = ? AND lease_until > ?`).run(state, options.error ?? null,
+    WHERE id = ? AND lease_token = ? AND lease_until > ?
+    RETURNING conversation_id, transcript_id`).get(state, options.error ?? null,
     options.providerTaskId ?? null, now + (options.delayMs ?? 0), Number(options.keepLease ?? false),
-    Number(options.keepLease ?? false), state, id, token, now).changes === 1;
-  if (state !== 'completed') return update(getSqliteDatabase());
+    Number(options.keepLease ?? false), state, id, token, now) as Pick<JobRow, 'conversation_id' | 'transcript_id'> | undefined;
+  if (mediaGenerationPhase(state) === 'pending') return Boolean(update(getSqliteDatabase()));
   return runSqliteWriteTransaction(db => {
     const updated = update(db);
-    if (updated) archiveSpaceGeneratedMedia(db, 'video', id);
-    return updated;
+    if (!updated) return false;
+    if (state === 'completed') archiveSpaceGeneratedMedia(db, 'video', id);
+    notifyMediaGenerationAfterCommit(updated.conversation_id, updated.transcript_id);
+    return true;
   });
 }

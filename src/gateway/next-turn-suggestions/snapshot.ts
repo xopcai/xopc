@@ -2,17 +2,51 @@ import { createHash } from 'node:crypto';
 
 import { PERSONAL_PROACTIVE_MESSAGE_TYPE, TASK_RESULT_DELIVERY_TYPE } from '@xopcai/gateway-contract';
 
+import { mediaGenerationPhase } from '../../media/generation-changes.js';
 import { getSessionMetadata, getCurrentTranscriptId } from '../../storage/sqlite/session-repository.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { getActiveConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
 import { getActiveClarification } from '../../storage/sqlite/clarification-wait-repository.js';
 import { buildSessionContextForLlm, buildSessionDisplayMessages, isTranscriptCustomMessageEntry, type TranscriptStoredRow } from '../../session/session-context-for-llm.js';
+import { getVideoDraft } from '../../video-generation/drafts.js';
+
+type MediaJob = { id: string; state: Parameters<typeof mediaGenerationPhase>[0] };
+type SuggestionMedia = {
+  id: string;
+  kind: 'music' | 'video';
+  phase: ReturnType<typeof mediaGenerationPhase> | 'draft';
+  title?: string;
+  version?: number;
+  draftRevision?: number;
+};
 
 export type SuggestionSnapshot = {
   conversationId: string; transcriptId: string; sourceRunId: string; inputRevision: number;
   transcriptCursor: number; agentId: string; messages: Array<{ role: 'user' | 'assistant'; text: string }>;
+  media: SuggestionMedia[];
 };
+
+function readSuggestionMedia(conversationId: string, transcriptId: string): SuggestionMedia[] {
+  const db = getSqliteDatabase();
+  const music = db.prepare(`SELECT id, state, title, version_number FROM music_generation_jobs
+    WHERE conversation_id = ? AND transcript_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 3`)
+    .all(conversationId, transcriptId) as Array<MediaJob & { title: string; version_number: number }>;
+  const videos = db.prepare(`SELECT id, state FROM video_generation_jobs
+    WHERE conversation_id = ? AND transcript_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 3`)
+    .all(conversationId, transcriptId) as MediaJob[];
+  const media: SuggestionMedia[] = [
+    ...music.map((job): SuggestionMedia => ({
+      id: job.id, kind: 'music', phase: mediaGenerationPhase(job.state), title: job.title, version: job.version_number,
+    })),
+    ...videos.map((job): SuggestionMedia => ({ id: job.id, kind: 'video', phase: mediaGenerationPhase(job.state) })),
+  ];
+  const draft = getVideoDraft(conversationId, transcriptId);
+  if (draft && !db.prepare('SELECT 1 FROM video_generation_jobs WHERE conversation_id = ? AND id = ?').get(conversationId, draft.id)) {
+    media.push({ id: draft.id, kind: 'video', phase: 'draft', draftRevision: draft.revision });
+  }
+  return media;
+}
 
 /** Reads only this conversation; shared memory and tool results never enter the predictor. */
 export function readSuggestionSnapshot(conversationId: string): SuggestionSnapshot | null {
@@ -52,10 +86,10 @@ export function readSuggestionSnapshot(conversationId: string): SuggestionSnapsh
   if (messages.at(-1)?.role !== 'assistant' || !messages.some(message => message.role === 'user')) return null;
   while (messages.length > 2 && JSON.stringify(messages).length > 6000) messages.shift();
   return { conversationId, transcriptId, sourceRunId: last.run_id, inputRevision: state.revision,
-    transcriptCursor: cursor.seq, agentId: metadata.agentId, messages };
+    transcriptCursor: cursor.seq, agentId: metadata.agentId, messages, media: readSuggestionMedia(conversationId, transcriptId) };
 }
 
 export function suggestionSnapshotKey(snapshot: SuggestionSnapshot, locale: string, modelRef: string | undefined): string {
   const { messages: _messages, ...identity } = snapshot;
-  return createHash('sha256').update(JSON.stringify({ ...identity, locale, modelRef, version: 2 })).digest('hex');
+  return createHash('sha256').update(JSON.stringify({ ...identity, locale, modelRef, version: 3 })).digest('hex');
 }

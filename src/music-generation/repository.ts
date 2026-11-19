@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { MusicGenerationJob, MusicJobErrorCode, MusicJobState, MusicMode } from '@xopcai/gateway-contract';
 
+import { mediaGenerationPhase, notifyMediaGenerationAfterCommit } from '../media/generation-changes.js';
 import { archiveSpaceGeneratedMedia } from '../space/ingest.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { configuredMusicModel } from './providers.js';
@@ -118,6 +119,7 @@ export async function enqueueMusicJob(conversationId: string, transcriptId: stri
       id, conversationId, transcriptId, workId, parent?.id ?? null, version, route.ref, hash,
       title, mode, prompt, lyrics, now, now,
     );
+    notifyMediaGenerationAfterCommit(conversationId, transcriptId);
     return { job: publicMusicJob(getMusicJob(conversationId, id)!) };
   });
 }
@@ -125,9 +127,11 @@ export async function enqueueMusicJob(conversationId: string, transcriptId: stri
 export function claimMusicJob() {
   return runSqliteWriteTransaction(db => {
     const now = Date.now();
-    db.prepare(`UPDATE music_generation_jobs SET state = 'submission_unknown', error = NULL, error_code = NULL,
+    const expired = db.prepare(`UPDATE music_generation_jobs SET state = 'submission_unknown', error = NULL, error_code = NULL,
       lease_token = NULL, lease_until = NULL
-      WHERE state = 'submitting' AND lease_until <= ?`).run(now);
+      WHERE state = 'submitting' AND lease_until <= ? RETURNING conversation_id, transcript_id`)
+      .all(now) as Array<Pick<MusicJobRow, 'conversation_id' | 'transcript_id'>>;
+    for (const job of expired) notifyMediaGenerationAfterCommit(job.conversation_id, job.transcript_id);
     const row = db.prepare(`SELECT * FROM music_generation_jobs WHERE state IN ('queued', 'submitted', 'running', 'saving')
       AND next_attempt_at <= ? AND (lease_until IS NULL OR lease_until <= ?) ORDER BY next_attempt_at, rowid LIMIT 1`)
       .get(now, now) as unknown as MusicJobRow | undefined;
@@ -147,15 +151,18 @@ export function updateMusicJob(id: string, token: string, state: MusicJobState, 
   const update = (db: ReturnType<typeof getSqliteDatabase>) => db.prepare(`UPDATE music_generation_jobs SET state = ?, error = ?, error_code = ?,
     provider_task_id = COALESCE(?, provider_task_id), duration_ms = COALESCE(?, duration_ms), next_attempt_at = ?,
     lease_token = CASE WHEN ? THEN lease_token END, lease_until = CASE WHEN ? THEN lease_until END
-    WHERE id = ? AND lease_token = ? AND lease_until > ?`).run(
+    WHERE id = ? AND lease_token = ? AND lease_until > ?
+    RETURNING conversation_id, transcript_id`).get(
     state, options.error ?? null, options.errorCode ?? null,
     options.taskId ?? null, options.durationMs ?? null, now + (options.delayMs ?? 0),
     Number(options.keepLease ?? false), Number(options.keepLease ?? false), id, token, now,
-  ).changes === 1;
-  if (state !== 'completed') return update(getSqliteDatabase());
+  ) as Pick<MusicJobRow, 'conversation_id' | 'transcript_id'> | undefined;
+  if (mediaGenerationPhase(state) === 'pending') return Boolean(update(getSqliteDatabase()));
   return runSqliteWriteTransaction(db => {
     const updated = update(db);
-    if (updated) archiveSpaceGeneratedMedia(db, 'music', id);
-    return updated;
+    if (!updated) return false;
+    if (state === 'completed') archiveSpaceGeneratedMedia(db, 'music', id);
+    notifyMediaGenerationAfterCommit(updated.conversation_id, updated.transcript_id);
+    return true;
   });
 }

@@ -6,6 +6,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { getActiveTranscriptUserMedia, type TranscriptUserMessage } from '../agent/inbound/attachment-pipeline.js';
+import { notifyMediaGenerationAfterCommit } from '../media/generation-changes.js';
 import type { MediaRef } from '../media/types.js';
 import { getCloudMediaModels } from '../providers/xopc-cloud-media.js';
 import { DurableState } from '../storage/sqlite/durable-state.js';
@@ -96,6 +97,7 @@ export function prepareVideoDraft(conversationId: string, input: {
       ...(estimatedCreditMicro ? { estimatedCreditMicro } : {}),
       createdAt: updating ? base!.createdAt : Date.now(),
     };
+    notifyMediaGenerationAfterCommit(conversationId, transcriptId);
     return { value: draft, result: draft };
   });
 }

@@ -4,17 +4,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TASK_RESULT_DELIVERY_TYPE, TaskResultDeliverySchema } from '@xopcai/gateway-contract';
+import { TASK_RESULT_DELIVERY_TYPE, TaskResultDeliverySchema, WAN_VIDEO_MODEL_REF } from '@xopcai/gateway-contract';
 
 import { NextTurnSuggestionService } from '../service.js';
 import { readSuggestionSnapshot } from '../snapshot.js';
 import { parseSuggestionOutput, generateNextTurnSuggestion } from '../generator.js';
 import { ConfigSchema } from '../../../config/schema.js';
+import { claimMusicJob, enqueueMusicJob, updateMusicJob } from '../../../music-generation/repository.js';
 import { appendTranscriptEntry, claimNextSessionInput, closeXopcDatabase, ensureSessionRecord, finishSessionInputRun,
   getCurrentTranscriptId, insertSessionInput, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/index.js';
 import { deleteSessionRecord, resetSessionRecord } from '../../../storage/sqlite/session-repository.js';
-import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
 import { recordNextTurnSuggestionFeedback } from '../../../storage/sqlite/next-turn-suggestion-repository.js';
+import { prepareVideoDraft } from '../../../video-generation/drafts.js';
+import { beginVideoSubmission, claimVideoJob, enqueueVideoJob, updateVideoJob } from '../../../video-generation/repository.js';
+import { setVideoModel } from '../../../video-generation/settings.js';
 
 describe('next turn suggestions', () => {
   let dir: string;
@@ -45,6 +49,7 @@ describe('next turn suggestions', () => {
   });
   afterEach(() => {
     service.dispose();
+    vi.unstubAllEnvs();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(dir, { recursive: true, force: true });
@@ -107,6 +112,91 @@ describe('next turn suggestions', () => {
     });
     appendTranscriptEntry(conversationId, { role: 'assistant', content: [{ type: 'text', text: '补充：范围已调整。' }] } as never);
     expect(service.get(conversationId, 'zh').status).toBe('pending');
+  });
+
+  it('replaces a cached music wait-time suggestion once the track is playable', async () => {
+    vi.stubEnv('XOPC_STATE_DIR', dir);
+    vi.stubEnv('XOPC_MUSIC_MODEL', 'mureka-cn/mureka-9.5');
+    vi.stubEnv('MUREKA_API_KEY', 'fixture-key');
+    vi.stubEnv('XOPC_MUSIC_DAILY_LIMIT', '3');
+    completed();
+    appendTranscriptEntry(conversationId, { role: 'user', content: '生成这首歌', timestamp: 2 });
+    appendTranscriptEntry(conversationId, { role: 'assistant', content: '正在排队生成。', timestamp: 3 });
+    const transcriptId = getCurrentTranscriptId(conversationId)!;
+    const { job } = await enqueueMusicJob(conversationId, transcriptId, 'music-call', {
+      title: '循环', mode: 'song', prompt: 'PRIVATE_MUSIC_PROMPT', lyrics: 'PRIVATE_LYRICS',
+    });
+    expect(job).toBeDefined();
+    generate.mockResolvedValueOnce('大概多久能生成好？');
+    await vi.waitFor(() => expect(service.get(conversationId, 'zh').suggestion?.prompt).toBe('大概多久能生成好？'));
+    const claim = claimMusicJob()!;
+    emit.mockClear();
+    expect(updateMusicJob(job!.id, claim.token, 'saving', { keepLease: true })).toBe(true);
+    expect(emit).not.toHaveBeenCalled();
+    expect(service.get(conversationId, 'zh').status).toBe('ready');
+    expect(generate).toHaveBeenCalledOnce();
+
+    expect(updateMusicJob(job!.id, claim.token, 'completed')).toBe(true);
+    expect(emit).toHaveBeenCalledExactlyOnceWith(conversationId);
+    generate.mockResolvedValueOnce('帮我整理这首歌的风格和编曲思路');
+    expect(service.get(conversationId, 'zh')).toEqual({ status: 'pending' });
+    await vi.waitFor(() => expect(service.get(conversationId, 'zh').suggestion?.prompt).toBe('帮我整理这首歌的风格和编曲思路'));
+    const snapshot = generate.mock.calls[1][0];
+    expect(snapshot.messages.at(-1)?.text).toBe('正在排队生成。');
+    expect(snapshot.media).toEqual([{ id: job!.id, kind: 'music', phase: 'completed', title: '循环', version: 1 }]);
+    expect(JSON.stringify(snapshot)).not.toMatch(/PRIVATE_MUSIC_PROMPT|PRIVATE_LYRICS/);
+  });
+
+  it('refreshes after video confirmation and terminal state changes, discarding an in-flight draft prediction', async () => {
+    completed();
+    const transcriptId = getCurrentTranscriptId(conversationId)!;
+    setVideoModel(WAN_VIDEO_MODEL_REF);
+    const draft = prepareVideoDraft(conversationId, { action: 'create', prompt: 'PRIVATE_VIDEO_PROMPT' });
+    expect(readSuggestionSnapshot(conversationId)?.media).toEqual([
+      { id: draft.id, kind: 'video', phase: 'draft', draftRevision: 1 },
+    ]);
+    let resolve!: (value: string) => void;
+    generate.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    expect(service.get(conversationId, 'zh').status).toBe('pending');
+
+    emit.mockClear();
+    expect(() => runSqliteWriteTransaction(() => {
+      enqueueVideoJob(conversationId, { ...draft, imageName: null }, 'confirm-video', undefined, draft);
+      throw new Error('rollback confirmation');
+    })).toThrow('rollback confirmation');
+    expect(emit).not.toHaveBeenCalled();
+    expect(enqueueVideoJob(conversationId, { ...draft, imageName: null }, 'confirm-video', undefined, draft).job?.state).toBe('queued');
+    expect(emit).toHaveBeenCalledExactlyOnceWith(conversationId);
+    expect(generate.mock.calls[0][3].aborted).toBe(true);
+    resolve('就按这个生成');
+    expect(service.get(conversationId, 'zh').status).toBe('pending');
+    expect(generate.mock.calls[1][0].media).toEqual([{ id: draft.id, kind: 'video', phase: 'pending' }]);
+    await vi.waitFor(() => expect(service.get(conversationId, 'zh').status).toBe('ready'));
+
+    const claim = claimVideoJob()!;
+    expect(beginVideoSubmission(draft.id, claim.token)).toBe(true);
+    emit.mockClear();
+    expect(claimVideoJob(Date.now() + 61_000)).toBeNull();
+    expect(emit).toHaveBeenCalledExactlyOnceWith(conversationId);
+    expect(service.get(conversationId, 'zh').status).toBe('pending');
+    expect(generate.mock.calls[2][0].media).toEqual([{ id: draft.id, kind: 'video', phase: 'submission_unknown' }]);
+    expect(generate.mock.calls[2][0].transcriptId).toBe(transcriptId);
+    expect(JSON.stringify(generate.mock.calls[2][0])).not.toContain('PRIVATE_VIDEO_PROMPT');
+  });
+
+  it('ignores a video failure from an archived transcript', async () => {
+    completed();
+    setVideoModel(WAN_VIDEO_MODEL_REF);
+    const draft = prepareVideoDraft(conversationId, { action: 'create', prompt: 'A paper boat' });
+    expect(enqueueVideoJob(conversationId, { ...draft, imageName: null }, 'confirm-video').job).toBeDefined();
+    const claim = claimVideoJob()!;
+    resetSessionRecord(conversationId, '');
+    await Promise.resolve();
+    completed();
+    emit.mockClear();
+    expect(updateVideoJob(draft.id, claim.token, 'failed')).toBe(true);
+    expect(emit).not.toHaveBeenCalled();
+    expect(readSuggestionSnapshot(conversationId)?.media).toEqual([]);
   });
 
   it('bounds even a provider that ignores abort and caches timeout as none', async () => {
