@@ -120,6 +120,9 @@ jobs:
       - name: Build Electron app
         shell: bash
         env:
+          # Hosted runners can download and verify upstream release assets directly.
+          ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
           # Avoid hard-link issues on some Windows runners when packaging.
           USE_HARD_LINKS: false
           # Signing: only export CSC_* when BOTH secrets are set. Partial config (e.g. CSC_LINK
