@@ -110,13 +110,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import kotlinx.coroutines.launch
 
-private enum class CapabilityCategory(val key: String, val title: Int, val icon: Int, val tabWidth: Int = 56) {
+private enum class CapabilityCategory(val key: String, val title: Int, val icon: Int) {
   Plugins("plugins", R.string.capability_plugins, R.drawable.action_capabilities),
   Skills("skills", R.string.capability_skills, R.drawable.action_task_list),
   Connections("connections", R.string.capability_connections, R.drawable.action_phone),
   Devices("devices", R.string.capability_devices, R.drawable.action_phone),
-  Agents("agents", R.string.capability_agents, R.drawable.tab_assistant, 86),
-  Channels("channels", R.string.capability_channels, R.drawable.tab_conversations, 74),
+  Agents("agents", R.string.capability_agents, R.drawable.tab_assistant),
+  Channels("channels", R.string.capability_channels, R.drawable.tab_conversations),
 }
 
 private val capabilityGroups = listOf("attention", "assistant", "expert", "connected", "installed", "configured", "disabled", "available")
@@ -254,18 +254,18 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
           }
         }
       }
-      Text(stringResource(R.string.capability_title), style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.testTag("capability-title"))
-    }
-    SegmentedTabs(
-      categories.map { SegmentOption(it, stringResource(it.title), "capability-category-${it.key}") },
-      category, minimumSegmentWidth = 44.dp, onSelect = { target ->
-        scope.launch {
-          if (kotlin.math.abs(pager.currentPage - target.ordinal) == 1) pager.animateScrollToPage(target.ordinal)
-          else pager.scrollToPage(target.ordinal)
+      Box(Modifier.padding(horizontal = if (skills) 100.dp else 48.dp)) {
+        PageTitleMenu(
+          categories.map { SegmentOption(it, stringResource(it.title), "capability-category-${it.key}") },
+          category, "capability-page-menu",
+        ) { target ->
+          scope.launch {
+            if (kotlin.math.abs(pager.currentPage - target.ordinal) == 1) pager.animateScrollToPage(target.ordinal)
+            else pager.scrollToPage(target.ordinal)
+          }
         }
-      },
-    )
+      }
+    }
     HorizontalPager(pager, modifier = Modifier.weight(1f).fillMaxWidth().testTag("capability-pager"),
       key = { categories[it].key }, userScrollEnabled = detail == null,
       flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
@@ -316,18 +316,10 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
                   color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 2.dp, start = 4.dp))
               }
               items(rows, key = { it.id }) { row ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(themedCorners(18)).background(colors.surface)
-                  .clickable { if (pager.settledPage == index && !pager.isScrollInProgress) {
+                CapabilityCard(row.name, row.description, modifier = Modifier.testTag("capability-row-${row.id}"),
+                  onClick = { if (pager.settledPage == index && !pager.isScrollInProgress) {
                     focus.clearFocus(); keyboard?.hide(); detail = row
-                  } }.testTag("capability-row-${row.id}")
-                  .padding(horizontal = 14.dp, vertical = 12.dp),
-                  verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                  CapabilityItemIcon(row, kind, catalog?.origin, personal, agentAvatars)
-                  Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(row.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (row.description.isNotBlank()) Text(row.description, style = MaterialTheme.typography.bodySmall,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                  }
+                  } }, leading = { CapabilityItemIcon(row, kind, catalog?.origin, personal, agentAvatars) }) {
                   if (kind == CapabilityCategory.Connections && (row.group == "available" || row.group == "attention")) {
                     Text(stringResource(R.string.capability_connect), style = MaterialTheme.typography.labelLarge, color = colors.primary)
                   } else {
@@ -370,7 +362,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
 }
 
 @Composable
-private fun CapabilityListSkeleton() {
+internal fun CapabilityListSkeleton() {
   val colors = MaterialTheme.colorScheme
   val label = stringResource(R.string.brand_loading)
   val placeholder = colors.surfaceContainerHighest
@@ -387,6 +379,26 @@ private fun CapabilityListSkeleton() {
         }
       }
     }
+  }
+}
+
+@Composable
+internal fun CapabilityCard(
+  title: String, description: String, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null,
+  leading: @Composable () -> Unit, trailing: (@Composable () -> Unit)? = null,
+) {
+  val colors = MaterialTheme.colorScheme
+  val press = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+  Row(modifier.fillMaxWidth().heightIn(min = 76.dp).clip(themedCorners(18)).background(colors.surface)
+    .then(press).padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    leading()
+    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      if (description.isNotBlank()) Text(description, style = MaterialTheme.typography.bodySmall,
+        color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+    trailing?.invoke()
   }
 }
 

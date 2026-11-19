@@ -7,6 +7,35 @@ private let capabilityQrContext = CIContext()
 private let capabilityCompactDetent = PresentationDetent.height(420)
 private let capabilityExpandedDetent = PresentationDetent.fraction(0.82)
 
+struct CapabilityCardLabel<Leading: View, Trailing: View>: View {
+    @Environment(\.mobileTheme) private var theme
+    let title: String
+    let description: String?
+    var hoverEnabled = true
+    @ViewBuilder let leading: () -> Leading
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        HStack(spacing: 14) {
+            leading()
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: title).font(.body.weight(.medium)).lineLimit(1)
+                if let description, !description.isEmpty {
+                    Text(verbatim: description).font(.footnote).foregroundStyle(theme.secondary).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+            trailing()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(minHeight: 76)
+        .contentShape(.rect)
+        .contentShape(.hoverEffect, .rect(cornerRadius: theme.corner(18)))
+        .hoverEffect(.highlight, isEnabled: hoverEnabled)
+    }
+}
+
 private enum CapabilityCategory: String, CaseIterable, Identifiable {
     case plugins, skills, connections, devices, agents, channels
 
@@ -33,14 +62,6 @@ private enum CapabilityCategory: String, CaseIterable, Identifiable {
         case .devices: "iphone"
         case .agents: "person.2"
         case .channels: "bubble.left"
-        }
-    }
-
-    var tabWidth: CGFloat {
-        switch self {
-        case .agents: 86
-        case .channels: 74
-        default: 56
         }
     }
 }
@@ -90,37 +111,33 @@ struct CapabilitiesView: View {
     @FocusState private var searchFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            SegmentedTabs(options: CapabilityCategory.allCases.map {
-                SegmentOption(id: $0, title: $0.title, accessibilityID: "capability-category-\($0.id)", minimumWidth: 44)
-            }, selected: category, label: "capability_title", minimumSegmentWidth: 44, onSelect: selectCategory)
-                .padding(.horizontal, 18)
-                .accessibilityIdentifier("capability-categories")
-
-            TabView(selection: $category) {
-                ForEach(CapabilityCategory.allCases) { kind in
-                    Group {
-                        if kind == .devices {
-                            DeviceConnectionsView(configuration: configuration, active: category == .devices,
-                                                  onOpenChat: onOpenDeviceChat, onShareFile: onShareDeviceFile,
-                                                  onLocalTool: openDeviceTool, onPair: onPairDevice)
-                                .id(ComposerDraftStore.accountScope(configuration))
-                        } else {
-                            catalogPage(kind)
-                        }
-                    }.tag(kind)
-                }
+        TabView(selection: $category) {
+            ForEach(CapabilityCategory.allCases) { kind in
+                Group {
+                    if kind == .devices {
+                        DeviceConnectionsView(configuration: configuration, active: category == .devices,
+                                              onOpenChat: onOpenDeviceChat, onShareFile: onShareDeviceFile,
+                                              onLocalTool: openDeviceTool, onPair: onPairDevice)
+                            .id(ComposerDraftStore.accountScope(configuration))
+                    } else {
+                        catalogPage(kind)
+                    }
+                }.tag(kind)
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .accessibilityIdentifier("capability-pager")
         }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .accessibilityIdentifier("capability-pager")
         .background(mobileTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if category != .devices {
                 searchField
             }
         }
-        .mobilePageTitle(Text("capability_title"))
+        .mobilePageTitle(Text(category.title)) {
+            MobilePageTitleMenu(options: CapabilityCategory.allCases.map {
+                SegmentOption(id: $0, title: $0.title, accessibilityID: "capability-category-\($0.id)")
+            }, selected: category, identifier: "capability-page-menu", onSelect: selectCategory)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if category == .skills {
@@ -339,15 +356,10 @@ struct CapabilitiesView: View {
                     openDetails(item)
                 }
             } label: {
-                HStack(spacing: 14) {
+                CapabilityCardLabel(title: item.name, description: item.description,
+                                    hoverEnabled: kind != .agents || item.group != "disabled") {
                     icon(item, kind: kind)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(verbatim: item.name).font(.body.weight(.medium)).lineLimit(1)
-                        if let description = item.description, !description.isEmpty {
-                            Text(verbatim: description).font(.footnote).foregroundStyle(mobileTheme.secondary).lineLimit(2)
-                        }
-                    }
-                    Spacer(minLength: 0)
+                } trailing: {
                     if kind == .connections, item.group == "available" || item.group == "attention" {
                         Text("capability_connect").font(.subheadline.weight(.medium))
                             .foregroundStyle(mobileTheme.action).padding(.trailing, 8)
@@ -357,12 +369,6 @@ struct CapabilitiesView: View {
                             .foregroundStyle(mobileTheme.secondary).accessibilityHidden(true)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .frame(minHeight: 76)
-                .contentShape(.rect)
-                .contentShape(.hoverEffect, .rect(cornerRadius: mobileTheme.corner(18)))
-                .hoverEffect(.highlight, isEnabled: kind != .agents || item.group != "disabled")
             }
             .buttonStyle(MobilePressStyle(radius: mobileTheme.corner(18)))
             .accessibilityIdentifier("capability-row-\(item.id)")

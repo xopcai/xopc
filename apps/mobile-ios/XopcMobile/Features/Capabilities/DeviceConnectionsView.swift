@@ -79,8 +79,8 @@ struct DeviceConnectionsView: View {
                 }
                 if catalog == nil, !loadFailed {
                     ForEach(0 ..< 3) { _ in
-                        RoundedRectangle(cornerRadius: theme.corner(12)).fill(theme.panel)
-                            .frame(height: 56).redacted(reason: .placeholder)
+                        RoundedRectangle(cornerRadius: theme.corner(18)).fill(theme.panel)
+                            .frame(height: 76).redacted(reason: .placeholder)
                     }
                 } else if let selected {
                     detail(selected)
@@ -131,17 +131,16 @@ struct DeviceConnectionsView: View {
     @ViewBuilder
     private func localDevice(_ device: ConnectedDevice) -> some View {
         Text(word("当前设备", "Current device")).font(.subheadline.weight(.semibold)).foregroundStyle(theme.secondary)
-        VStack(spacing: 0) {
-            row(device.name, word("本机", "This phone"), "iphone", actionable: false)
+        VStack(spacing: 10) {
+            card(device.name, word("本机", "This phone"), "iphone", actionable: false)
             let tools = [
                 ("mobile.file.pick", word("文件", "Files"), word("从系统文件中选择", "Choose from system files"), "folder"),
-                ("mobile.media.pick", word("照片", "Photos"), word("从系统相册中选择", "Choose a photo"), "photo"),
+                ("mobile.media.pick", word("照片", "Photos"), word("从系统相册中选择", "Choose a photo"), "photo.on.rectangle.angled"),
                 ("mobile.contacts.pick", word("联系人", "Contacts"), word("选择一个电话或邮箱", "Choose a number or email"), "person.crop.rectangle"),
                 ("mobile.calendar.query_events", word("日历", "Calendar"), word("使用时请求授权", "Asks for access when used"), "calendar"),
-                ("mobile.device.get_location", word("位置", "Location"), word("按次共享位置", "Share your location once"), "location")
+                ("mobile.device.get_location", word("位置", "Location"), word("按次共享位置", "Share your location once"), "mappin.and.ellipse")
             ]
             ForEach(tools.filter { device.tools.contains($0.0) }, id: \.0) { tool in
-                Divider().padding(.leading, 46)
                 Button {
                     if tool.0 == "mobile.file.pick" {
                         showFile = true
@@ -151,11 +150,13 @@ struct DeviceConnectionsView: View {
                         onLocalTool(tool.0)
                     }
                 } label: {
-                    row(tool.1, tool.2, tool.3)
-                }.buttonStyle(.plain).disabled(requestRunning).accessibilityIdentifier("device-tool-\(tool.0)")
+                    card(tool.1, tool.2, tool.3)
+                }
+                .buttonStyle(MobilePressStyle(radius: theme.corner(18)))
+                .disabled(requestRunning)
+                .accessibilityIdentifier("device-tool-\(tool.0)")
             }
         }
-        .background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
     }
 
     @ViewBuilder
@@ -166,22 +167,20 @@ struct DeviceConnectionsView: View {
             Button(word("配对设备", "Pair device"), systemImage: "plus", action: onPair)
                 .font(.footnote.weight(.semibold)).foregroundStyle(theme.action).frame(minHeight: 44)
         }
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             if devices.isEmpty {
                 Text(word("在电脑上打开 xopc，然后扫描配对码。", "Open xopc on your computer, then scan its pairing code."))
                     .font(.footnote).foregroundStyle(theme.secondary).padding(12)
             }
             ForEach(devices) { device in
-                if device.id != devices.first?.id {
-                    Divider().padding(.leading, 46)
-                }
                 Button { selectedID = device.id; errorMessage = nil } label: {
-                    row(device.name, "\(device.platform) · \(status(device))", device.platform == "darwin" ? "laptopcomputer" : "desktopcomputer")
-                }.buttonStyle(.plain).accessibilityIdentifier("connected-device-\(device.id)")
+                    card(device.name, "\(device.platform) · \(status(device))", computerSymbol(device))
+                }
+                .buttonStyle(MobilePressStyle(radius: theme.corner(18)))
+                .accessibilityIdentifier("connected-device-\(device.id)")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
     }
 
     @ViewBuilder
@@ -189,8 +188,7 @@ struct DeviceConnectionsView: View {
         Button { selectedID = nil; errorMessage = nil } label: {
             Label(word("返回设备连接", "Back to devices"), systemImage: "chevron.left")
         }.foregroundStyle(theme.action).frame(minHeight: 44)
-        Text(device.name).font(.title2.weight(.semibold))
-        Text("\(device.platform) · \(status(device))").font(.subheadline).foregroundStyle(theme.secondary)
+        card(device.name, "\(device.platform) · \(status(device))", computerSymbol(device), actionable: false)
         if device.offline {
             Label(word("在这台电脑上打开 xopc 并检查网络连接。", "Open xopc on this computer and check its connection."), systemImage: "wifi.slash")
                 .font(.subheadline).foregroundStyle(theme.secondary).padding(12)
@@ -200,9 +198,8 @@ struct DeviceConnectionsView: View {
             folderPermissions(device)
             if device.platform == "darwin" || device.platform == "win32" {
                 Text(word("电脑控制", "Computer use")).font(.subheadline.weight(.semibold))
-                row(word("操作应用窗口", "Operate application windows"), word("在电脑的设置中授权", "Authorize in settings on the computer"),
-                    "cursorarrow", actionable: false)
-                    .background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
+                card(word("操作应用窗口", "Operate application windows"), word("在电脑的设置中授权", "Authorize in settings on the computer"),
+                     "macwindow", actionable: false)
             }
             Button {
                 guard let endpoint = device.endpointId else { return }
@@ -225,42 +222,38 @@ struct DeviceConnectionsView: View {
     }
 
     private func folderPermissions(_ device: ConnectedDevice) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             let presets = [("desktop", word("桌面", "Desktop"), "desktopcomputer"),
-                           ("documents", word("文稿", "Documents"), "folder"),
+                           ("documents", word("文稿", "Documents"), "doc.text"),
                            ("downloads", word("下载", "Downloads"), "arrow.down.to.line")]
             ForEach(presets, id: \.0) { kind, title, symbol in
-                if kind != "desktop" {
-                    Divider().padding(.leading, 46)
-                }
-                row(title, device.folders.contains { $0.kind == kind } ? word("已授权 · 只读", "Authorized · Read-only")
+                card(title, device.folders.contains { $0.kind == kind } ? word("已授权 · 只读", "Authorized · Read-only")
                     : word("需在电脑上授权", "Authorize on computer"), symbol, actionable: false)
             }
             ForEach(device.folders.filter { $0.kind == "custom" }) { folder in
-                Divider().padding(.leading, 46)
-                row(folder.label, word("已授权 · 只读", "Authorized · Read-only"), "folder", actionable: false)
+                card(folder.label, word("已授权 · 只读", "Authorized · Read-only"), "folder", actionable: false)
             }
-        }.background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
+        }
     }
 
     private func status(_ device: ConnectedDevice) -> String {
         device.offline ? word("离线", "Offline") : word("在线", "Online")
     }
 
-    private func row(_ title: String, _ subtitle: String, _ symbol: String, actionable: Bool = true) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol).frame(width: 26).foregroundStyle(theme.secondary).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.subheadline.weight(.medium))
-                Text(subtitle).font(.footnote).foregroundStyle(theme.secondary)
-            }
-            Spacer(minLength: 0)
+    private func computerSymbol(_ device: ConnectedDevice) -> String {
+        device.platform == "darwin" ? "laptopcomputer" : "desktopcomputer"
+    }
+
+    private func card(_ title: String, _ subtitle: String, _ symbol: String, actionable: Bool = true) -> some View {
+        CapabilityCardLabel(title: title, description: subtitle, hoverEnabled: actionable) {
+            CapabilityLogo(reference: nil, origin: configuration.baseURL, label: "", symbol: symbol)
+        } trailing: {
             if actionable {
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(theme.secondary).accessibilityHidden(true)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.secondary).accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .frame(minHeight: 50).contentShape(.rect)
+        .background(theme.panel, in: .rect(cornerRadius: theme.corner(18)))
     }
 
     private func run(_ operation: @escaping @MainActor () async throws -> Void) {

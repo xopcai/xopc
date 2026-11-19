@@ -2228,6 +2228,15 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("conversations-search").assertExists()
   }
 
+  private fun selectCapability(category: String) {
+    composeTestRule.onNodeWithTag("capability-page-menu").performClick()
+    composeTestRule.onNodeWithTag("capability-category-$category").performClick()
+  }
+
+  private fun assertCapabilityTitle(title: Int) {
+    composeTestRule.onNodeWithTag("capability-page-menu").assertTextContains(composeTestRule.activity.getString(title))
+  }
+
   @Test fun capabilityCatalogActionsAndSearchStayInTheirCategory() {
     val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
     val svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#19aa71"/></svg>"""
@@ -2297,16 +2306,16 @@ class MainScreenTest {
     }
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
-    composeTestRule.onNodeWithTag("capability-category-plugins").performScrollTo().performClick()
+    selectCapability("plugins")
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").performTouchInput { swipeLeft() }
     composeTestRule.onNodeWithTag("capability-row-skills").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-panel-close").assertDoesNotExist()
     composeTestRule.onNodeWithTag("capability-row-skills").performTouchInput { swipeRight() }
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("capability-category-skills").performClick()
+    selectCapability("skills")
     composeTestRule.onNodeWithTag("capability-row-skills").assertIsDisplayed()
-    composeTestRule.onNodeWithTag("capability-category-plugins").performScrollTo().performClick()
+    selectCapability("plugins")
     composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertIsDisplayed()
     composeTestRule.onNodeWithTag("capability-refresh").assertDoesNotExist()
     composeTestRule.waitUntil(5000) {
@@ -2321,13 +2330,13 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertDoesNotExist()
     composeTestRule.onNodeWithTag("capability-discover").assertDoesNotExist()
     for (kind in listOf("skills", "connections", "agents", "channels")) {
-      composeTestRule.onNodeWithTag("capability-category-$kind").performScrollTo().performClick()
+      selectCapability(kind)
       composeTestRule.onNodeWithTag("capability-row-$kind").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-row-meeting-plugin").assertDoesNotExist()
       if (kind == "skills") {
         val setup = composeTestRule.onNodeWithTag("capability-add-$kind").assertIsDisplayed()
         assertTrue(setup.fetchSemanticsNode().boundsInRoot.right >=
-          composeTestRule.onNodeWithTag("capability-title").fetchSemanticsNode().boundsInRoot.right)
+          composeTestRule.onNodeWithTag("capability-page-menu").fetchSemanticsNode().boundsInRoot.right)
         setup.performClick()
         composeTestRule.onNodeWithTag("capability-field-query").assertIsDisplayed()
         composeTestRule.onNodeWithTag("capability-panel-close").performClick()
@@ -2360,7 +2369,7 @@ class MainScreenTest {
       if (kind == "channels") composeTestRule.onNodeWithTag("capability-panel-pair").assertIsDisplayed()
       composeTestRule.onNodeWithTag("capability-panel-close").performClick()
     }
-    composeTestRule.onNodeWithTag("capability-category-plugins").performScrollTo().performClick()
+    selectCapability("plugins")
     composeTestRule.onNodeWithTag("capability-search").assertTextContains("Meeting")
     composeTestRule.onNodeWithTag("capability-search-clear").performClick()
     composeTestRule.onNodeWithTag("capability-row-document-plugin").assertIsDisplayed()
@@ -2384,7 +2393,10 @@ class MainScreenTest {
           onLoadDevices = { DeviceConnections(own.id, listOf(own, online, offline)) }, onUseComputer = { target.set(it) })
       }
     }
-    composeTestRule.onNodeWithTag("capability-category-devices").performScrollTo().performClick()
+    selectCapability("connections")
+    assertCapabilityTitle(R.string.capability_connections)
+    composeTestRule.onNodeWithTag("capability-pager").performTouchInput { swipeLeft() }
+    assertCapabilityTitle(R.string.capability_devices)
     composeTestRule.waitUntil(5_000) { composeTestRule.onAllNodesWithText("Offline PC").fetchSemanticsNodes().isNotEmpty() }
     composeTestRule.onNodeWithTag("capability-search").assertDoesNotExist()
     composeTestRule.onNodeWithText("Offline PC").performScrollTo().performClick()
@@ -2422,7 +2434,7 @@ class MainScreenTest {
           })
       }
     }
-    composeTestRule.onNodeWithTag("capability-category-channels").performScrollTo().performClick()
+    selectCapability("channels")
     composeTestRule.onNodeWithTag("capability-row-direct").performClick()
     composeTestRule.onNodeWithTag("capability-panel-qr").assertDoesNotExist()
     val close = composeTestRule.onNodeWithTag("capability-panel-close")
@@ -2497,21 +2509,20 @@ class MainScreenTest {
     composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
     composeTestRule.onNodeWithTag("chat-sidebar-capabilities").performClick()
     val pager = composeTestRule.onNodeWithTag("capability-pager")
-    val plugin = composeTestRule.onNodeWithTag("capability-category-plugins")
-    plugin.performScrollTo().performClick()
+    selectCapability("plugins")
     pager.performTouchInput {
       swipe(center, center.copy(x = center.x - width * 0.12f), durationMillis = 480)
     }
-    plugin.assertIsSelected()
+    assertCapabilityTitle(R.string.capability_plugins)
     pager.performTouchInput { swipeUp() }
     composeTestRule.onNodeWithTag("capability-row-plugins-0").assertIsNotDisplayed()
     pager.performTouchInput { swipeLeft() }
-    composeTestRule.onNodeWithTag("capability-category-skills").assertIsSelected()
+    assertCapabilityTitle(R.string.capability_skills)
     composeTestRule.onNodeWithTag("capability-loading").assertIsDisplayed()
     pager.performTouchInput { swipeRight() }
-    plugin.assertIsSelected()
+    assertCapabilityTitle(R.string.capability_plugins)
     composeTestRule.onNodeWithTag("capability-row-plugins-0").assertIsNotDisplayed()
-    composeTestRule.onNodeWithTag("capability-category-skills").performClick()
+    selectCapability("skills")
     slow.complete(Unit)
     composeTestRule.waitUntil(5000) {
       composeTestRule.onAllNodesWithTag("capability-row-skills-0").fetchSemanticsNodes().isNotEmpty()

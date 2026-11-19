@@ -7,20 +7,23 @@ import { pickChatAttachment } from '../service/chatAttachmentPicker';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
 import { connectionModel } from '../viewmodel/connectionViewModel';
 import { XopcListSkeleton } from './MobileComponents';
+import { CAPABILITY_CARD_CORNER, CAPABILITY_CARD_GAP, CAPABILITY_CARD_HEIGHT, CAPABILITY_CARD_PADDING,
+  XopcCapabilityCardText } from './CapabilityCard';
+import { XopcCapabilityLogo } from './CapabilityLogo';
 
 interface XopcConnectionToolLabel { key: string; title: Resource; description: Resource; icon: Resource; }
-interface XopcConnectionPresetLabel { key: string; title: Resource; }
+interface XopcConnectionPresetLabel { key: string; title: Resource; icon: Resource; }
 const presets: XopcConnectionPresetLabel[] = [
-  { key: 'desktop', title: $r('app.string.device_connection_desktop') },
-  { key: 'documents', title: $r('app.string.device_connection_documents') },
-  { key: 'downloads', title: $r('app.string.device_connection_downloads') }
+  { key: 'desktop', title: $r('app.string.device_connection_desktop'), icon: $r('sys.symbol.desktop') },
+  { key: 'documents', title: $r('app.string.device_connection_documents'), icon: $r('sys.symbol.doc_text') },
+  { key: 'downloads', title: $r('app.string.device_connection_downloads'), icon: $r('sys.symbol.arrow_down_to_line') }
 ];
 const tools: XopcConnectionToolLabel[] = [
   { key: 'mobile.file.pick', title: $r('app.string.device_connection_files'), description: $r('app.string.device_connection_pick_file'), icon: $r('sys.symbol.folder') },
   { key: 'mobile.media.pick', title: $r('app.string.device_connection_photos'), description: $r('app.string.device_connection_pick_photo'), icon: $r('sys.symbol.picture') },
-  { key: 'mobile.contacts.pick', title: $r('app.string.device_connection_contacts'), description: $r('app.string.device_connection_pick_contact'), icon: $r('sys.symbol.person') },
-  { key: 'mobile.calendar.query_events', title: $r('app.string.device_connection_calendar'), description: $r('app.string.device_connection_calendar_scope'), icon: $r('sys.symbol.doc_text') },
-  { key: 'mobile.device.get_location', title: $r('app.string.device_connection_location'), description: $r('app.string.device_connection_once'), icon: $r('sys.symbol.magnifyingglass') }
+  { key: 'mobile.contacts.pick', title: $r('app.string.device_connection_contacts'), description: $r('app.string.device_connection_pick_contact'), icon: $r('sys.symbol.contacts_book') },
+  { key: 'mobile.calendar.query_events', title: $r('app.string.device_connection_calendar'), description: $r('app.string.device_connection_calendar_scope'), icon: $r('sys.symbol.calendar') },
+  { key: 'mobile.device.get_location', title: $r('app.string.device_connection_location'), description: $r('app.string.device_connection_once'), icon: $r('sys.symbol.position') }
 ];
 
 @ComponentV2
@@ -119,47 +122,57 @@ export struct XopcDeviceConnectionsView {
   }
 
   @Builder
-  row(title: ResourceStr, description: ResourceStr, icon: Resource, onActivate?: () => void) {
-    Row({ space: 10 }) {
-      SymbolGlyph(icon).fontSize(18).fontColor([this.colors.secondary])
-        .width(34).height(34).backgroundColor(this.colors.surface).borderRadius(this.colors.corner(8))
-        .accessibilityLevel('no')
-      Column({ space: 3 }) {
-        Text(title).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-        Text(description).fontSize(12).fontColor(this.colors.secondary)
-      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      if (onActivate) {
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.secondary]).accessibilityLevel('no')
+  cardContent(title: ResourceStr, description: ResourceStr, icon: Resource, actionable: boolean) {
+    Row({ space: CAPABILITY_CARD_GAP }) {
+      XopcCapabilityLogo({ symbol: icon })
+      XopcCapabilityCardText({ title, description }).layoutWeight(1)
+      if (actionable) {
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary]).accessibilityLevel('no')
       }
-    }.width('100%').constraintSize({ minHeight: 54 }).padding({ left: 12, right: 12, top: 7, bottom: 7 })
-      .onClick((): void => { if (onActivate) onActivate(); })
+    }.width('100%').alignItems(VerticalAlign.Center).constraintSize({ minHeight: CAPABILITY_CARD_HEIGHT })
+      .padding(CAPABILITY_CARD_PADDING)
+  }
+
+  @Builder
+  card(title: ResourceStr, description: ResourceStr, icon: Resource, onActivate?: () => void) {
+    Column() {
+      if (onActivate) {
+        Button({ type: ButtonType.Normal }) {
+          this.cardContent(title, description, icon, true)
+        }.width('100%').padding(0).backgroundColor(Color.Transparent).stateEffect(true)
+          .onClick((): void => { if (onActivate) onActivate(); })
+      } else {
+        this.cardContent(title, description, icon, false)
+      }
+    }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(CAPABILITY_CARD_CORNER))
+      .clipShape(this.colors.cornerClip(CAPABILITY_CARD_CORNER))
   }
 
   @Builder
   mainList() {
     if (this.currentDevice) {
       Text($r('app.string.device_connection_current')).fontSize(13).fontColor(this.colors.secondary)
-      Column() {
-        this.row(this.currentDevice.name, $r('app.string.device_connection_this_phone'), $r('sys.symbol.phone'))
+      Column({ space: 10 }) {
+        this.card(this.currentDevice.name, $r('app.string.device_connection_this_phone'), $r('sys.symbol.phone'))
         ForEach(this.localTools, (tool: XopcConnectionToolLabel): void => {
-          this.row(tool.title, tool.description, tool.icon, (): void => { void this.useTool(tool.key); })
+          this.card(tool.title, tool.description, tool.icon, (): void => { void this.useTool(tool.key); })
         }, (tool: XopcConnectionToolLabel): string => tool.key)
-      }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
+      }.width('100%')
     }
     Row() {
       Text($r('app.string.device_connection_computers')).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
       Button($r('app.string.device_connection_pair')).height(44).fontSize(13)
         .fontColor(this.colors.chat.action).backgroundColor(Color.Transparent).onClick((): void => { connectionModel.openGateways(); })
     }.width('100%')
-    Column() {
+    Column({ space: 10 }) {
       if (!this.computerRows.length) {
         Text($r('app.string.device_connection_pair_help')).fontSize(13).fontColor(this.colors.secondary).padding(12)
       }
       ForEach(this.computerRows, (device: XopcConnectedDevice): void => {
-        this.row(device.name, this.status(device), $r('sys.symbol.link'),
+        this.card(device.name, this.status(device), $r('sys.symbol.computer'),
           (): void => { this.selectedKey = device.id; this.actionFailed = false; })
       }, (device: XopcConnectedDevice): string => device.id + ':' + device.availability)
-    }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
+    }.width('100%')
   }
 
   @Builder
@@ -167,27 +180,24 @@ export struct XopcDeviceConnectionsView {
     Button($r('app.string.device_connection_return')).height(44).fontSize(13)
       .backgroundColor(this.colors.accentSoft).fontColor(this.colors.chat.action)
       .onClick((): void => { this.selectedKey = ''; this.actionFailed = false; })
-    Text(this.selectedDevice?.name ?? '').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
-    Text(this.status(this.selectedDevice)).fontSize(13).fontColor(this.colors.secondary)
+    this.card(this.selectedDevice?.name ?? '', this.status(this.selectedDevice), $r('sys.symbol.computer'))
     if (this.selectedDevice?.availability === 'offline') {
       Text($r('app.string.device_connection_offline_help')).fontSize(14).fontColor(this.colors.secondary).padding(12)
         .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(12))
     } else {
       Text($r('app.string.device_connection_local_files')).fontSize(13).fontColor(this.colors.secondary)
-      Column() {
+      Column({ space: 10 }) {
         ForEach(presets, (preset: XopcConnectionPresetLabel): void => {
-          this.row(preset.title, this.folderStatus(preset.key), $r('sys.symbol.folder'))
+          this.card(preset.title, this.folderStatus(preset.key), preset.icon)
         }, (preset: XopcConnectionPresetLabel): string => preset.key)
         ForEach(this.selectedDevice?.folders.filter((folder: XopcConnectionFolder): boolean => folder.kind === 'custom') ?? [],
           (folder: XopcConnectionFolder): void => {
-            this.row(folder.label, $r('app.string.device_connection_readonly'), $r('sys.symbol.folder'))
+            this.card(folder.label, $r('app.string.device_connection_readonly'), $r('sys.symbol.folder'))
           }, (folder: XopcConnectionFolder): string => folder.id)
-      }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
+      }.width('100%')
       if (this.selectedDevice?.platform === 'darwin' || this.selectedDevice?.platform === 'win32') {
         Text($r('app.string.device_connection_computer_control')).fontSize(13).fontColor(this.colors.secondary)
-        Column() {
-          this.row($r('app.string.device_connection_operate_window'), $r('app.string.device_connection_on_computer'), $r('sys.symbol.link'))
-        }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
+        this.card($r('app.string.device_connection_operate_window'), $r('app.string.device_connection_on_computer'), $r('sys.symbol.mouse'))
       }
       Button($r('app.string.device_connection_use_chat')).width('100%').height(48)
         .backgroundColor(this.colors.chat.action).fontColor(this.colors.chat.onAction)

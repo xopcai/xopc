@@ -2321,17 +2321,24 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-sidebar"].isHittable)
 
         tab("capabilities")
+        let menu = app.buttons["capability-page-menu"]
+        XCTAssertTrue(menu.label.contains("插件"))
         let plugin = app.buttons["capability-row-meeting-plugin"]
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
         plugin.swipeLeft()
         let skill = app.buttons["capability-row-meeting-skill"]
         XCTAssertTrue(skill.waitForExistence(timeout: 5))
+        XCTAssertTrue(menu.label.contains("技能"))
         XCTAssertFalse(app.buttons["capability-panel-close"].exists)
         skill.swipeRight()
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
         app.selectCapability("capability-category-skills")
         XCTAssertTrue(skill.waitForExistence(timeout: 5))
-        app.selectCapability("capability-category-plugins")
+        XCTAssertTrue(menu.label.contains("技能"))
+        menu.tap()
+        XCTAssertTrue(app.buttons["capability-category-devices"].waitForExistence(timeout: 5))
+        capture("capability-header-menu")
+        app.buttons["capability-category-plugins"].tap()
         XCTAssertTrue(plugin.waitForExistence(timeout: 5))
         plugin.tap()
         XCTAssertTrue(app.buttons["capability-panel-close"].waitForExistence(timeout: 5))
@@ -2442,10 +2449,17 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.launch()
         tab("capabilities")
         app.selectCapability("capability-category-connections")
-        XCTAssertTrue(app.buttons["capability-row-drive-connection"].waitForExistence(timeout: 6))
+        let connection = app.buttons["capability-row-drive-connection"]
+        XCTAssertTrue(connection.waitForExistence(timeout: 6))
+        let connectionFrame = connection.frame
         app.selectCapability("capability-category-devices")
 
-        XCTAssertTrue(app.buttons["device-tool-mobile.file.pick"].waitForExistence(timeout: 6))
+        let files = app.buttons["device-tool-mobile.file.pick"]
+        XCTAssertTrue(files.waitForExistence(timeout: 6))
+        XCTAssertEqual(files.frame.minX, connectionFrame.minX, accuracy: 1)
+        XCTAssertEqual(files.frame.width, connectionFrame.width, accuracy: 1)
+        XCTAssertEqual(files.frame.height, connectionFrame.height, accuracy: 1)
+        capture("device-connection-cards")
         let offline = app.buttons["connected-device-test-offline-pc"]
         if !offline.isHittable {
             app.swipeUp()
@@ -3326,17 +3340,7 @@ private extension MobileLayoutParityUITests {
 @MainActor
 extension XCUIApplication {
     func selectCapability(_ identifier: String) {
-        let option = buttons[identifier]
-        XCTAssertTrue(option.waitForExistence(timeout: 5))
-        if !option.isHittable {
-            let categories = descendants(matching: .any)["capability-categories"].firstMatch
-            if option.frame.midX > categories.frame.midX {
-                categories.swipeLeft()
-            } else {
-                categories.swipeRight()
-            }
-        }
-        option.tap()
+        selectPageOption(identifier, from: "capability-page-menu")
     }
 
     func selectPageOption(_ identifier: String, from menu: String) {

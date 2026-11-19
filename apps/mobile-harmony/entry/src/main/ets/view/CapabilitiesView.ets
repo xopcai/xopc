@@ -10,6 +10,8 @@ import { XopcListSkeleton, XopcPageTitleMenu, XopcPageTitleOption } from './Mobi
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { capabilityDrawerHeight, XopcCapabilityPanelView } from './CapabilityPanelView';
 import { XopcCapabilityLogo } from './CapabilityLogo';
+import { CAPABILITY_CARD_CORNER, CAPABILITY_CARD_GAP, CAPABILITY_CARD_HEIGHT, CAPABILITY_CARD_PADDING,
+  XopcCapabilityCardText } from './CapabilityCard';
 import { XopcDeviceConnectionsView } from './DeviceConnectionsView';
 
 const categories: string[] = ['plugins', 'skills', 'connections', 'devices', 'agents', 'channels'];
@@ -215,32 +217,27 @@ export struct XopcCapabilitiesView {
   @Builder
   private itemContent(item: XopcCapabilityItem, kind: string) {
     this.icon(item, kind)
-    Column({ space: 4 }) {
-      Text(item.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      if (item.description) Text(item.description).fontSize(13).lineHeight(18).fontColor(this.colors.secondary)
-        .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+    XopcCapabilityCardText({ title: item.name, description: item.description ?? '' }).layoutWeight(1)
   }
 
   @Builder
   itemRow(item: XopcCapabilityItem, kind: string) {
     Row() {
       Button({ type: ButtonType.Normal }) {
-        Row({ space: 14 }) {
+        Row({ space: CAPABILITY_CARD_GAP }) {
           this.itemContent(item, kind)
           if (kind === 'connections' && (item.group === 'available' || item.group === 'attention')) {
             Text($r('app.string.capability_connect')).fontSize(14).fontColor(this.colors.chat.action)
           } else if (kind !== 'agents') {
             SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(14).fontColor([this.colors.tertiary])
           }
-        }.width('100%').constraintSize({ minHeight: 76 }).padding({ left: 14, right: 14, top: 12, bottom: 12 })
+        }.width('100%').constraintSize({ minHeight: CAPABILITY_CARD_HEIGHT }).padding(CAPABILITY_CARD_PADDING)
       }.layoutWeight(1).padding(0)
         .backgroundColor(this.hoveredItemId === item.id && (kind !== 'agents' || item.group !== 'disabled')
           ? this.colors.hoverOverlay : Color.Transparent)
         .animation({ duration: this.layout.reduceMotion ? 0 : 120, curve: Curve.EaseOut })
         .id('capability-row-' + item.id)
-        .borderRadius(this.colors.corner(18)).clipShape(this.colors.cornerClip(18))
+        .borderRadius(this.colors.corner(CAPABILITY_CARD_CORNER)).clipShape(this.colors.cornerClip(CAPABILITY_CARD_CORNER))
         .hoverEffect(HoverEffect.None).stateEffect(true)
         .onHover((hovering: boolean): void => {
           if (hovering) this.hoveredItemId = item.id;
@@ -264,7 +261,8 @@ export struct XopcCapabilitiesView {
             if (kind === this.category) this.showDetail(item);
           }, SEGMENTED_PAGE_TAP_SLOP_VP)
       }
-    }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18)).clipShape(this.colors.cornerClip(18))
+    }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(CAPABILITY_CARD_CORNER))
+      .clipShape(this.colors.cornerClip(CAPABILITY_CARD_CORNER))
   }
 
   @Builder

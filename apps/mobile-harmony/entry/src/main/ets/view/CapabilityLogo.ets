@@ -7,6 +7,7 @@ export struct XopcCapabilityLogo {
   @Param iconUrl: string = '';
   @Param label: string = '';
   @Param extent: number = 48;
+  @Param symbol: Resource | null = null;
   @Local colors: XopcThemeColors = appThemeColors;
   @Local loaded: boolean = false;
 
@@ -32,6 +33,7 @@ export struct XopcCapabilityLogo {
   }
 
   private fallback(): Resource {
+    if (this.symbol) return this.symbol;
     if (this.category === 'skills') return $r('sys.symbol.checkmark_circle');
     if (this.category === 'connections') return $r('sys.symbol.link');
     if (this.category === 'channels') return $r('sys.symbol.ellipsis_bubble');
@@ -39,7 +41,7 @@ export struct XopcCapabilityLogo {
   }
 
   build() {
-    Stack() {
+    Stack({ alignContent: Alignment.Center }) {
       if (!this.loaded) {
         if (this.initial) {
           Text(this.initial).fontSize(this.extent * 0.39).fontWeight(FontWeight.Medium).fontColor(this.colors.chat.action)
