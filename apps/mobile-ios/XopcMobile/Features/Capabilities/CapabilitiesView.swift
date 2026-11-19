@@ -701,7 +701,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         }
                     }
                     setupOptions
-                    if itemID != "mcp:setup" { panelDetails }
+                    if itemID != "mcp:setup" {
+                        panelDetails
+                    }
                     if !mainFields.isEmpty {
                         VStack(spacing: 14) {
                             ForEach(mainFields) { field in input(field) }
@@ -709,7 +711,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         .padding(14)
                         .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
                     }
-                    if itemID == "mcp:setup" { panelDetails }
+                    if itemID == "mcp:setup" {
+                        panelDetails
+                    }
                     ForEach(mainActions.filter { $0.id != primaryAction?.id && $0.id != cancelPairing?.id }) { action in
                         actionButton(action, prominent: false)
                     }
@@ -746,7 +750,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         }
                         .padding(12).background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
                         .onChange(of: advanced) {
-                            if itemID == "mcp:setup" { focusedField = nil }
+                            if itemID == "mcp:setup" {
+                                focusedField = nil
+                            }
                         }
                     }
                 }
@@ -1073,8 +1079,12 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     @ViewBuilder private func input(_ field: CapabilityPanelPayload.Field) -> some View {
         let value = Binding(get: { values[field.id] ?? "" }, set: {
             values[field.id] = $0
-            if field.retain == true { retainedValues[field.id] = $0 }
-            if field.presentation == "segmented" { focusedField = nil; errorMessage = nil }
+            if field.retain == true {
+                retainedValues[field.id] = $0
+            }
+            if field.presentation == "segmented" {
+                focusedField = nil; errorMessage = nil
+            }
         })
         if field.type == "toggle" {
             Toggle(isOn: Binding(get: { value.wrappedValue == "true" }, set: { value.wrappedValue = String($0) })) {
@@ -1084,82 +1094,94 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             Picker(selection: value) {
                 ForEach(field.options ?? []) { option in Text(verbatim: option.label).tag(option.id) }
             } label: { Text(verbatim: field.label) }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("capability-field-\(field.id)")
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("capability-field-\(field.id)")
         } else if field.type == "select" {
-            let picker = Picker(selection: value) {
-                ForEach(field.options ?? []) { option in Text(verbatim: option.label).tag(option.id) }
-            } label: { Text(verbatim: field.label) }
-            if itemID == "mcp:setup" {
-                HStack(spacing: 8) {
-                    Text(verbatim: field.label)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(theme.foreground)
-                        .accessibilityHidden(true)
-                    Spacer(minLength: 0)
-                    picker
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .accessibilityLabel(Text(verbatim: field.label))
-                        .accessibilityIdentifier("capability-field-\(field.id)")
-                }
-                .padding(.horizontal, 12)
-                .frame(minHeight: 44)
-                .background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
-            } else {
-                picker
-            }
+            selectInput(field, value: value)
         } else if field.type == "list" {
             groupList(field, selection: value)
         } else if field.type == "headers" {
             CapabilityKeyValueEditor(encoded: value, focus: $focusedField, isEnvironment: field.id == "mcp-env")
         } else if field.id == "mcp-json" {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: field.label).font(.subheadline.weight(.medium))
-                ZStack(alignment: .topLeading) {
-                    if value.wrappedValue.isEmpty, let hint = field.hint {
-                        Text(verbatim: hint).foregroundStyle(theme.secondary)
-                            .padding(.top, 8).padding(.leading, 5)
-                            .accessibilityHidden(true)
-                    }
-                    TextEditor(text: value)
-                        .scrollContentBackground(.hidden)
-                        .focused($focusedField, equals: field.id)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityLabel(Text(verbatim: field.label))
-                        .accessibilityIdentifier("capability-field-mcp-json")
-                }
-                .font(.system(.footnote, design: .monospaced))
-                .frame(height: 144)
-            }
-            .padding(12).background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
+            jsonInput(field, value: value)
         } else {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: field.label).font(.subheadline.weight(.medium))
-                if field.type == "secret" {
-                    SecureField(field.hint ?? field.label, text: value).textContentType(nil)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .focused($focusedField, equals: field.id)
-                } else {
-                    TextField(field.hint ?? field.label, text: value, axis: field.type == "multiline" ? .vertical : .horizontal)
-                        .lineLimit(field.type == "multiline" ? 3 ... 6 : 1 ... 1)
-                        .keyboardType(itemID == "mcp:setup" && field.id == "url" ? .URL : .default)
-                        .textInputAutocapitalization(itemID == "mcp:setup" ? .never : nil)
-                        .autocorrectionDisabled(itemID == "mcp:setup")
-                        .submitLabel(field.id == "query" ? .search : .done)
-                        .focused($focusedField, equals: field.id)
-                        .onSubmit {
-                            if field.id == "query" {
-                                Task { await load("search") }
-                            }
-                        }
-                }
-            }
-            .textFieldStyle(.plain)
-            .padding(12).background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
-            .accessibilityIdentifier("capability-field-\(field.id)")
+            textInput(field, value: value)
         }
+    }
+
+    @ViewBuilder private func selectInput(_ field: CapabilityPanelPayload.Field, value: Binding<String>) -> some View {
+        let picker = Picker(selection: value) {
+            ForEach(field.options ?? []) { option in Text(verbatim: option.label).tag(option.id) }
+        } label: { Text(verbatim: field.label) }
+        if itemID == "mcp:setup" {
+            HStack(spacing: 8) {
+                Text(verbatim: field.label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(theme.foreground)
+                    .accessibilityHidden(true)
+                Spacer(minLength: 0)
+                picker
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .accessibilityLabel(Text(verbatim: field.label))
+                    .accessibilityIdentifier("capability-field-\(field.id)")
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 44)
+            .background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
+        } else {
+            picker
+        }
+    }
+
+    private func jsonInput(_ field: CapabilityPanelPayload.Field, value: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: field.label).font(.subheadline.weight(.medium))
+            ZStack(alignment: .topLeading) {
+                if value.wrappedValue.isEmpty, let hint = field.hint {
+                    Text(verbatim: hint).foregroundStyle(theme.secondary)
+                        .padding(.top, 8).padding(.leading, 5)
+                        .accessibilityHidden(true)
+                }
+                TextEditor(text: value)
+                    .scrollContentBackground(.hidden)
+                    .focused($focusedField, equals: field.id)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel(Text(verbatim: field.label))
+                    .accessibilityIdentifier("capability-field-mcp-json")
+            }
+            .font(.system(.footnote, design: .monospaced))
+            .frame(height: 144)
+        }
+        .padding(12).background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
+    }
+
+    private func textInput(_ field: CapabilityPanelPayload.Field, value: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: field.label).font(.subheadline.weight(.medium))
+            if field.type == "secret" {
+                SecureField(field.hint ?? field.label, text: value).textContentType(nil)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .focused($focusedField, equals: field.id)
+            } else {
+                TextField(field.hint ?? field.label, text: value, axis: field.type == "multiline" ? .vertical : .horizontal)
+                    .lineLimit(field.type == "multiline" ? 3 ... 6 : 1 ... 1)
+                    .keyboardType(itemID == "mcp:setup" && field.id == "url" ? .URL : .default)
+                    .textInputAutocapitalization(itemID == "mcp:setup" ? .never : nil)
+                    .autocorrectionDisabled(itemID == "mcp:setup")
+                    .submitLabel(field.id == "query" ? .search : .done)
+                    .focused($focusedField, equals: field.id)
+                    .onSubmit {
+                        if field.id == "query" {
+                            Task { await load("search") }
+                        }
+                    }
+            }
+        }
+        .textFieldStyle(.plain)
+        .padding(12).background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
+        .accessibilityIdentifier("capability-field-\(field.id)")
     }
 
     private func groupList(_ field: CapabilityPanelPayload.Field, selection: Binding<String>) -> some View {
@@ -1304,7 +1326,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                 openAuthorization(url)
             }
             if itemID == "mcp:setup" {
-                if action == "save", result.actions?.contains(where: { $0.dismiss == true }) == true { onChanged() }
+                if action == "save", result.actions?.contains(where: { $0.dismiss == true }) == true {
+                    onChanged()
+                }
             } else if !polling && action != "search" && action != nil || polling && before != nil && result.pollAction == nil {
                 onChanged()
             }
@@ -1328,9 +1352,17 @@ private struct CapabilityKeyValueEditor: View {
     @Environment(\.locale) private var locale
     @Environment(\.mobileTheme) private var theme
 
-    private var prefix: String { isEnvironment ? "mcp-env" : "mcp-header" }
-    private var nameLabel: String { isEnvironment ? t("变量名", "Variable name") : t("请求头名称", "Header name") }
-    private var valueLabel: String { isEnvironment ? t("变量值", "Variable value") : t("请求头值", "Header value") }
+    private var prefix: String {
+        isEnvironment ? "mcp-env" : "mcp-header"
+    }
+
+    private var nameLabel: String {
+        isEnvironment ? t("变量名", "Variable name") : t("请求头名称", "Header name")
+    }
+
+    private var valueLabel: String {
+        isEnvironment ? t("变量值", "Variable value") : t("请求头值", "Header value")
+    }
 
     private var rows: [[String]] {
         let decoded = try? JSONDecoder().decode([[String]].self, from: Data(encoded.utf8))
@@ -1397,11 +1429,12 @@ private struct CapabilityKeyValueEditor: View {
     }
 
     private func write(_ pairs: [[String]]) {
-        guard let data = try? JSONEncoder().encode(pairs) else { return }
-        encoded = String(decoding: data, as: UTF8.self)
+        guard let data = try? JSONEncoder().encode(pairs),
+              let json = String(bytes: data, encoding: .utf8) else { return }
+        encoded = json
     }
 
-    private func t(_ zh: String, _ en: String) -> String {
-        locale.identifier.hasPrefix("zh") ? zh : en
+    private func t(_ chinese: String, _ english: String) -> String {
+        locale.identifier.hasPrefix("zh") ? chinese : english
     }
 }
