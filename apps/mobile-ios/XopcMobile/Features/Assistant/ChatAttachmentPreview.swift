@@ -77,7 +77,9 @@ struct PreviewVideo: View {
                 VideoPlayer(player: player)
                     .clipShape(.rect(cornerRadius: theme.corner(16)))
                     .onReceive(item.publisher(for: \.status, options: [.initial, .new]).receive(on: DispatchQueue.main)) { status in
-                        if status == .failed { onError?() }
+                        if status == .failed {
+                            onError?()
+                        }
                     }
                     .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.failedToPlayToEndTimeNotification,
                                                                     object: item)) { _ in onError?() }
@@ -89,7 +91,9 @@ struct PreviewVideo: View {
         .task(id: url) {
             let media = AVPlayer(url: url)
             player = media
-            if autoplay { media.play() }
+            if autoplay {
+                media.play()
+            }
         }
         .onDisappear { player?.pause(); player = nil }
     }

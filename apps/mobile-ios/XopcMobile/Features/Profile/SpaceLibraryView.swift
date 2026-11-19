@@ -512,8 +512,10 @@ private struct SpaceLibraryDetail: View {
             }
         }
     }
+}
 
-    private func clearPreview() {
+private extension SpaceLibraryDetail {
+    func clearPreview() {
         text = nil
         if let preview, preview.isFileURL {
             try? FileManager.default.removeItem(at: preview.deletingLastPathComponent())
@@ -535,7 +537,8 @@ private struct SpaceLibraryDetail: View {
         let request = Request(spaceVersion: Version(itemId: item.id, versionId: version.id))
         run {
             let response: ChatManagedShareEnvelope = try await client.request(
-                path: "/api/shares/auto", method: "POST", body: JSONEncoder().encode(request))
+                path: "/api/shares/auto", method: "POST", body: JSONEncoder().encode(request)
+            )
             guard response.ok, let share = response.payload?.share,
                   ["public", "lan", "local-only"].contains(share.reachability),
                   let url = URL(string: share.shareUrl), let scheme = url.scheme,

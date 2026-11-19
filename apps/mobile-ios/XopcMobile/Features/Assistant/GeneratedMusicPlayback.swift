@@ -55,7 +55,8 @@ final class GeneratedMusicPlayback {
     private init() {}
 
     func play(_ track: GeneratedMusicTrack, streaming: @escaping () async throws -> URL,
-              downloading: @escaping () async throws -> URL) {
+              downloading: @escaping () async throws -> URL)
+    {
         if self.track?.key == track.key {
             toggle(); return
         }
@@ -68,7 +69,8 @@ final class GeneratedMusicPlayback {
     }
 
     func openPreview(_ track: GeneratedMusicTrack, streaming: @escaping () async throws -> URL,
-                     downloading: @escaping () async throws -> URL) {
+                     downloading: @escaping () async throws -> URL)
+    {
         previewTrack = track
         previewStream = streaming
         previewDownloader = downloading
@@ -162,26 +164,16 @@ final class GeneratedMusicPlayback {
                 let item = AVPlayerItem(url: url)
                 let audio = AVPlayer(playerItem: item)
                 player = audio
-                let center = NotificationCenter.default
-                observers.append(center.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification,
-                                                     object: item, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated {
-                        self?.finish()
-                    }
-                })
-                observers.append(center.addObserver(forName: AVPlayerItem.failedToPlayToEndTimeNotification,
-                                                     object: item, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated {
-                        self?.fail()
-                    }
-                })
+                observeCompletion(of: item)
                 // Readiness includes remote metadata, which may require a request near the end of the file.
                 while item.status == .unknown {
                     try await Task.sleep(for: .milliseconds(100))
                 }
                 guard item.status == .readyToPlay else { throw GatewayClientError.invalidResponse }
                 let seconds = item.duration.seconds
-                if seconds.isFinite, seconds > 0 { duration = seconds }
+                if seconds.isFinite, seconds > 0 {
+                    duration = seconds
+                }
                 let saved = UserDefaults.standard.double(forKey: "music.position.\(track.key)")
                 position = saved < duration ? saved : 0
                 if position > 0 {
@@ -189,11 +181,26 @@ final class GeneratedMusicPlayback {
                 }
                 try Task.checkCancellation()
                 phase = .paused
-                if playWhenReady { resume() }
+                if playWhenReady {
+                    resume()
+                }
             } catch {
-                if !Task.isCancelled { fail() }
+                if !Task.isCancelled {
+                    fail()
+                }
             }
         }
+    }
+
+    private func observeCompletion(of item: AVPlayerItem) {
+        let center = NotificationCenter.default
+        let ended = center.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.finish() }
+        }
+        let failed = center.addObserver(forName: AVPlayerItem.failedToPlayToEndTimeNotification, object: item, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.fail() }
+        }
+        observers.append(contentsOf: [ended, failed])
     }
 
     private func resume() {
@@ -277,7 +284,9 @@ final class GeneratedMusicPlayback {
 
     private func releasePlayer() {
         updates?.cancel()
-        for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        for observer in observers {
+            NotificationCenter.default.removeObserver(observer)
+        }
         observers.removeAll()
         player?.pause()
         player = nil

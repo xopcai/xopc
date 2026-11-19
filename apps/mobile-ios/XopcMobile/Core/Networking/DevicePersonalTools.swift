@@ -57,9 +57,7 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         case "mobile.calendar.query_events", "mobile.calendar.query_free_busy":
             guard try await EKEventStore().requestFullAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
         case "mobile.calendar.create_event":
-            if EKEventStore.authorizationStatus(for: .event) != .fullAccess {
-                guard try await EKEventStore().requestWriteOnlyAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
-            }
+            try await allowCalendarWriteAccess(EKEventStore())
         case "mobile.contacts.find_by_name":
             guard try await CNContactStore().requestAccess(for: .contacts) else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
         case "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album":
@@ -372,9 +370,7 @@ extension DevicePersonalTools {
         let end = Date(timeIntervalSince1970: Double(endAt) / 1000)
         try Task.checkCancellation()
         let store = EKEventStore()
-        if EKEventStore.authorizationStatus(for: .event) != .fullAccess {
-            guard try await store.requestWriteOnlyAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
-        }
+        try await allowCalendarWriteAccess(store)
         try Task.checkCancellation()
         guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
         guard let calendar = store.defaultCalendarForNewEvents else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
@@ -385,6 +381,12 @@ extension DevicePersonalTools {
         event.endDate = end
         try store.save(event, span: .thisEvent)
         return try JSONSerialization.data(withJSONObject: ["type": "json", "value": ["id": event.eventIdentifier ?? event.calendarItemIdentifier]])
+    }
+
+    private func allowCalendarWriteAccess(_ store: EKEventStore) async throws {
+        if EKEventStore.authorizationStatus(for: .event) != .fullAccess {
+            guard try await store.requestWriteOnlyAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        }
     }
 
     private func calendarContent(_ request: PersonalDeviceRequest) async throws -> Data {

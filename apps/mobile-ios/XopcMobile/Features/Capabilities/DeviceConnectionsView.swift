@@ -27,7 +27,9 @@ private struct ReportedDeviceCapability: Decodable, Identifiable {
     let title: String
     let titleZh: String
     let allowed: Bool
-    var id: String { name }
+    var id: String {
+        name
+    }
 }
 
 private struct DeviceCapabilityChange: Codable {
@@ -137,7 +139,9 @@ struct DeviceConnectionsView: View {
             run { try await onShareFile(attachment) }
         }
     }
+}
 
+extension DeviceConnectionsView {
     private func word(_ chinese: String, _ english: String) -> String {
         usesChinese ? chinese : english
     }
@@ -166,8 +170,12 @@ struct DeviceConnectionsView: View {
                     let local = tools.first { $0.0 == capability.name }
                     let row = capabilityRow(capability, symbol: local?.3 ?? capabilitySymbol(capability.name))
                     if local != nil {
-                        row.onTapGesture { if !requestRunning { useLocal(capability.name) } }
-                            .accessibilityAction(named: Text(word("在本机使用", "Use on this device"))) { useLocal(capability.name) }
+                        row.onTapGesture {
+                            if !requestRunning {
+                                useLocal(capability.name)
+                            }
+                        }
+                        .accessibilityAction(named: Text(word("在本机使用", "Use on this device"))) { useLocal(capability.name) }
                     } else {
                         row
                     }
@@ -192,10 +200,18 @@ struct DeviceConnectionsView: View {
     }
 
     private func capabilitySymbol(_ name: String) -> String {
-        if name.hasPrefix("mobile.calendar.") { return "calendar" }
-        if name.hasPrefix("mobile.contacts.") { return "person.crop.rectangle" }
-        if name.hasPrefix("mobile.media.") { return "photo.on.rectangle.angled" }
-        if name == "mobile.camera.capture" { return "camera" }
+        if name.hasPrefix("mobile.calendar.") {
+            return "calendar"
+        }
+        if name.hasPrefix("mobile.contacts.") {
+            return "person.crop.rectangle"
+        }
+        if name.hasPrefix("mobile.media.") {
+            return "photo.on.rectangle.angled"
+        }
+        if name == "mobile.camera.capture" {
+            return "camera"
+        }
         return name == "mobile.device.get_power" ? "battery.75percent" : "iphone"
     }
 
@@ -207,18 +223,20 @@ struct DeviceConnectionsView: View {
         } trailing: {
             Toggle(word("允许 Gateway 使用" + title, "Allow Gateway to use " + title),
                    isOn: Binding(get: { capability.allowed }, set: { allowed in
-                run {
-                    if allowed { try await DevicePersonalTools.shared.prepareCapabilityPermission(capability.name) }
-                    let payload = DeviceCapabilityChange(toolName: capability.name, allowed: allowed)
-                    let result: GatewayEnvelope<DeviceCapabilityChange> = try await GatewayClient(configuration: configuration)
-                        .request(path: "/api/endpoint-tools/device-connections", method: "PATCH", body: JSONEncoder().encode(payload))
-                    guard result.isSuccessful else { throw DeviceConnectionUnavailable() }
-                    retry += 1
-                }
-            }))
-            .labelsHidden().toggleStyle(.switch).tint(theme.action)
-            .disabled(loadFailed || requestRunning)
-            .accessibilityIdentifier("device-grant-\(capability.name)")
+                       run {
+                           if allowed {
+                               try await DevicePersonalTools.shared.prepareCapabilityPermission(capability.name)
+                           }
+                           let payload = DeviceCapabilityChange(toolName: capability.name, allowed: allowed)
+                           let result: GatewayEnvelope<DeviceCapabilityChange> = try await GatewayClient(configuration: configuration)
+                               .request(path: "/api/endpoint-tools/device-connections", method: "PATCH", body: JSONEncoder().encode(payload))
+                           guard result.isSuccessful else { throw DeviceConnectionUnavailable() }
+                           retry += 1
+                       }
+                   }))
+                   .labelsHidden().toggleStyle(.switch).tint(theme.action)
+                   .disabled(loadFailed || requestRunning)
+                   .accessibilityIdentifier("device-grant-\(capability.name)")
         }
         .background(theme.panel, in: .rect(cornerRadius: theme.corner(18)))
     }

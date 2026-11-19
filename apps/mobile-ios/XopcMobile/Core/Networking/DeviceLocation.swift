@@ -24,7 +24,9 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
 
     func preparePermission() async throws {
         guard pending == nil, authorization == nil else { throw LocationFailure(code: "TOOL_BUSY") }
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways { return }
+        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+            return
+        }
         guard manager.authorizationStatus == .notDetermined else { throw LocationFailure(code: "PERMISSION_DENIED") }
         let id = UUID()
         try await withTaskCancellationHandler {
@@ -36,7 +38,9 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
             }
         } onCancel: {
             Task { @MainActor in
-                if self.authorizationID == id { self.finishAuthorization(.failure(CancellationError())) }
+                if self.authorizationID == id {
+                    self.finishAuthorization(.failure(CancellationError()))
+                }
             }
         }
     }

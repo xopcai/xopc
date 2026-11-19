@@ -364,7 +364,9 @@ struct GeneratedVideoDrawer: View {
             streamURL = url
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         } catch {
-            if !Task.isCancelled { self.error = error.localizedDescription }
+            if !Task.isCancelled {
+                self.error = error.localizedDescription
+            }
         }
     }
 

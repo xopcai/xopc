@@ -428,9 +428,8 @@ private extension DeviceEndpointHost {
                 }
             }
             defer { timeout.cancel() }
-            let capabilityScope = pairedDeviceID.map {
-                (client.configuration.localIdentity ?? client.configuration.baseURL.absoluteString) + "." + $0
-            }
+            let gatewayIdentity = client.configuration.localIdentity ?? client.configuration.baseURL.absoluteString
+            let capabilityScope = pairedDeviceID.map { gatewayIdentity + "." + $0 }
             let selected = try await DevicePersonalTools.shared.acquire(request, capabilityScope: capabilityScope)
             try Task.checkCancellation()
             let contentData: Data
