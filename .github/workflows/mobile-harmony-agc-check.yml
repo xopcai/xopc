@@ -1,0 +1,26 @@
+name: Check HarmonyOS AGC Access
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: harmony-testing
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26.12.1
+      - name: Read xopc version metadata from Huawei
+        env:
+          HUAWEI_AGC_APP_ID: '6917618744771171142'
+          HUAWEI_AGC_SERVICE_ACCOUNT_JSON: ${{ secrets.HUAWEI_AGC_SERVICE_ACCOUNT_JSON }}
+        run: node apps/mobile-harmony/scripts/check-agc-access.mjs
