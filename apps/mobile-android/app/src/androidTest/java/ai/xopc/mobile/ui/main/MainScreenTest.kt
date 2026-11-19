@@ -20,6 +20,9 @@ import ai.xopc.mobile.gateway.ConversationShareAttachment
 import ai.xopc.mobile.gateway.ConversationSharePreview
 import ai.xopc.mobile.gateway.ConversationShare
 import ai.xopc.mobile.gateway.GatewayProfile
+import ai.xopc.mobile.gateway.ConnectedDevice
+import ai.xopc.mobile.gateway.DeviceConnections
+import ai.xopc.mobile.gateway.DeviceConnectionFolder
 import ai.xopc.mobile.gateway.NextTurnSuggestion
 import ai.xopc.mobile.gateway.PendingInput
 import ai.xopc.mobile.gateway.ConversationModel
@@ -2364,6 +2367,32 @@ class MainScreenTest {
     composeTestRule.runOnIdle {
       assertTrue(chatSetups.map { it.second } == listOf(false, true))
     }
+  }
+
+  @Test fun deviceConnectionsOpenOnlyTheAuthorizedComputer() {
+    val target = AtomicReference<String?>(null)
+    val own = ConnectedDevice("phone", "Test phone", "mobile", "android", "phone-endpoint", "foreground",
+      setOf("mobile.file.pick"), emptyList())
+    val online = ConnectedDevice("mac", "Work MacBook", "desktop", "darwin", "laptop-endpoint", "background",
+      setOf("desktop.folder.search"), listOf(DeviceConnectionFolder("downloads", "downloads", "Downloads")))
+    val offline = ConnectedDevice("windows", "Offline PC", "desktop", "win32", null, "offline", emptySet(), emptyList())
+    composeTestRule.setContent {
+      XopcTheme {
+        CapabilitiesScreen(androidx.compose.foundation.layout.PaddingValues(), PersonalUiState(), emptyMap(),
+          onLoad = { ai.xopc.mobile.gateway.CapabilityPage(emptyList()) }, onOpenAgent = {}, onExit = {},
+          onSetupChat = { _, _ -> }, onPanel = { _, _, _ -> JSONObject() },
+          onLoadDevices = { DeviceConnections(own.id, listOf(own, online, offline)) }, onUseComputer = { target.set(it) })
+      }
+    }
+    composeTestRule.onNodeWithTag("capability-category-devices").performScrollTo().performClick()
+    composeTestRule.waitUntil(5_000) { composeTestRule.onAllNodesWithText("Offline PC").fetchSemanticsNodes().isNotEmpty() }
+    composeTestRule.onNodeWithTag("capability-search").assertDoesNotExist()
+    composeTestRule.onNodeWithText("Offline PC").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("device-use-in-chat").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("device-connections-back").performClick()
+    composeTestRule.onNodeWithText("Work MacBook").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("device-use-in-chat").performScrollTo().assertIsEnabled().performClick()
+    composeTestRule.waitUntil(5_000) { target.get() == online.endpointId }
   }
 
   @SdkSuppress(minSdkVersion = 29)

@@ -627,6 +627,10 @@ export interface ElectronAPI {
     stop(): Promise<{ ok: boolean }>;
     reenroll(): Promise<Awaited<ReturnType<NonNullable<ElectronAPI['computer']>['status']>>>;
   };
+  deviceFolders?: {
+    status(): Promise<({ endpointId?: string; ready: boolean } & import('@xopcai/endpoint-tools-protocol').DeviceFolderSnapshot) | undefined>;
+    change(input: import('@xopcai/endpoint-tools-protocol').DeviceFolderChange): Promise<import('@xopcai/endpoint-tools-protocol').DeviceFolderSnapshot | undefined>;
+  };
   clipboard?: ElectronClipboardAPI;
   shell?: ElectronShellAPI;
   file: ElectronFileAPI;

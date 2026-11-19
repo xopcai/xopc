@@ -12,9 +12,8 @@ import { taskCriterionState, taskPhaseAction, taskReviewAction, taskSignoffResul
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
 import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField, XopcPageTitleMenu,
+import { XopcBrandLoading, XopcHubRow, XopcListSkeleton, XopcPageSearchButton, XopcPageSearchField,
   XopcPaginationFooter } from './MobileComponents';
-import { WORK_PAGE_OPTIONS } from './HomeHubs';
 import { automationCronLabel } from '../common/workspaceProtocol';
 import { XopcMobileRoute } from '../model/home';
 import { userErrorMessage } from '../common/userError';
@@ -77,9 +76,9 @@ export struct XopcWorkspaceView {
   @Param createOnAppear: boolean = false;
   @Param projectId: string = '';
   @Param embeddedInWorkbench: boolean = false;
+  @Param workbenchSearchOpen: boolean = false;
   @Param workbenchRefresh: number = 0;
   @Event onExit: () => void = (): void => {};
-  @Event onSelectWorkPage: (page: string) => void = (_page: string): void => {};
   @Event onCreated: (page: string, id: string) => void = (_page: string, _id: string): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local model: XopcWorkspaceViewModel = new XopcWorkspaceViewModel();
@@ -104,6 +103,7 @@ export struct XopcWorkspaceView {
   @Local automationAdvancedSchedule: boolean = false;
 
   aboutToAppear(): void {
+    if (this.embeddedInWorkbench) this.searchOpen = this.workbenchSearchOpen;
     if (this.section === 'automations') {
       this.filter = appSettings.pageSelection('automation-filter', ['all', 'primary', 'secondary', 'attention'], 'all');
     }
@@ -115,6 +115,13 @@ export struct XopcWorkspaceView {
   @Monitor('workbenchRefresh')
   private refreshWorkbenchList(): void {
     if (this.embeddedInWorkbench) void this.model.list(this.section === 'tasks' ? this.search : '');
+  }
+
+  @Monitor('workbenchSearchOpen')
+  private updateWorkbenchSearch(): void {
+    if (!this.embeddedInWorkbench) return;
+    this.searchOpen = this.workbenchSearchOpen;
+    if (!this.searchOpen) this.search = '';
   }
 
   private async openTaskAction(): Promise<void> {
@@ -1419,10 +1426,7 @@ export struct XopcWorkspaceView {
           this.automationMore(this.model.selected, false)
         }
       }.width('100%').height(44)
-      if (this.embeddedInWorkbench) {
-        XopcPageTitleMenu({ heading: this.heading, options: WORK_PAGE_OPTIONS, selected: this.section,
-          menuId: 'work-page-menu', onSelect: this.onSelectWorkPage }).constraintSize({ maxWidth: '54%' })
-      } else if (!this.model.selected && !this.model.openingId) {
+      if (!this.model.selected && !this.model.openingId) {
         Text(this.heading).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).constraintSize({ maxWidth: '54%' })
           .accessibilityGroup(true).hitTestBehavior(HitTestMode.None)
@@ -1433,7 +1437,7 @@ export struct XopcWorkspaceView {
   @Builder
   workspaceContent() {
     Column() {
-      this.header()
+      if (!this.embeddedInWorkbench) { this.header() }
       if (this.model.error) {
         Text(userErrorMessage(this.model.error, 'collection')).fontColor(this.colors.secondary).padding(12)
         if (!this.model.busy && !this.model.selected && !this.model.openingId && !this.model.hasMore) {

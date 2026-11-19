@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import type { MobileDeviceChatTool } from '@xopcai/endpoint-tools-protocol';
+
 import type { EndpointConnectionSnapshot } from './registry.js';
 import type { EndpointRegistry } from './registry.js';
 
@@ -13,6 +15,7 @@ export interface EndpointExecutionTarget {
   expiresAt: number;
   transcriptId?: string;
   actorPrincipalId?: string;
+  mobileTool?: MobileDeviceChatTool;
 }
 
 interface TaskTargetStore {
@@ -37,13 +40,13 @@ export class EndpointTaskTargetService {
     return () => { this.listeners.delete(listener); };
   }
 
-  select(conversationId: string, endpointId: string, now = Date.now(), actorPrincipalId?: string): EndpointExecutionTarget {
+  select(conversationId: string, endpointId: string, now = Date.now(), actorPrincipalId?: string, mobileTool?: MobileDeviceChatTool): EndpointExecutionTarget {
     const key = this.key(conversationId), endpoint = this.registry.get(endpointId);
     if (!endpoint) throw new Error('TARGET_OFFLINE');
     actorPrincipalId ??= this.actorPrincipalId(key);
     const current = this.get(key);
     if (current && current.endpointId === endpointId && current.principalId === endpoint.principalId && current.connectionId === endpoint.connectionId
-      && current.actorPrincipalId === actorPrincipalId && current.expiresAt > now) return current;
+      && current.actorPrincipalId === actorPrincipalId && current.mobileTool === mobileTool && current.expiresAt > now) return current;
     this.assertReleased(key);
     if (!current) {
       const stored = [...this.targets.entries()];
@@ -56,7 +59,7 @@ export class EndpointTaskTargetService {
     }
     const target: EndpointExecutionTarget = { conversationId: key, endpointId, principalId: endpoint.principalId,
       connectionId: endpoint.connectionId, executionRef: randomUUID(), selectedAt: now, expiresAt: now + 30 * 60_000,
-      transcriptId: this.transcriptId(key), actorPrincipalId };
+      transcriptId: this.transcriptId(key), actorPrincipalId, ...(mobileTool && { mobileTool }) };
     this.targets.set(key, target);
     for (const listener of this.listeners) listener(key);
     return { ...target };

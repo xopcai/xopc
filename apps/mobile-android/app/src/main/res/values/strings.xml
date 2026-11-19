@@ -1024,6 +1024,7 @@
     <string name="capability_plugins">Plugins</string>
     <string name="capability_skills">Skills</string>
     <string name="capability_connections">Connections</string>
+    <string name="capability_devices">Device connections</string>
     <string name="capability_agents">Assistants &amp; Experts</string>
     <string name="capability_channels">Messaging Channels</string>
     <string name="capability_my_assistants">My Assistants</string>
@@ -1109,4 +1110,8 @@
     <string name="session_share_revoke_help">People with this link will lose access.</string>
     <string name="session_share_error">Unable to complete the share action.</string>
     <string name="assistant_fill_suggestion">Fill suggestion: %1$s</string>
+    <string name="device_execution_target">Execution device · %1$s</string>
+    <string name="device_execution_offline">Offline</string>
+    <string name="device_execution_authorization">Needs authorization</string>
+    <string name="device_execution_reselect">Select again</string>
 </resources>

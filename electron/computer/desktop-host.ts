@@ -1,13 +1,13 @@
-import { release } from 'node:os';
+import { hostname, release } from 'node:os';
 import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, stat, realpath } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, clipboard, dialog, safeStorage, shell, systemPreferences, type BrowserWindow } from 'electron';
 import WebSocket from 'ws';
 import { EndpointToolHostController, EndpointToolRegistry } from '@xopcai/endpoint-tools-client';
 import { createDesktopEndpointToolDefinitions } from '@xopcai/endpoint-tools-client/desktop-tools';
-import { endpointHelloSigningPayload, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
+import { deviceFolderChangeSchema, deviceFolderSigningPayload, endpointHelloSigningPayload, type DeviceConnections, type DeviceFolderSnapshot, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { COMPUTER_DESCRIPTOR, ComputerCommandSchema } from '@xopcai/computer-control-contract';
@@ -27,10 +27,11 @@ import { ComputerWorkspaceVisibility } from './workspace-visibility.js';
 import { ComputerAccessPolicy } from './access-policy.js';
 import { ComputerPreviewManager } from './preview-manager.js';
 import { startPreviewCapture } from './preview-capture.js';
+import { DesktopFolderStore } from '../files/device-folders.js';
 import { localGatewayOrigin } from '../gateway/local-connection.js';
 import type { DesktopGatewayTarget } from '../gateway/desktop-transport.js';
 
-type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
+type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string; displayName?: string };
 const log = createLogger('DesktopEndpointHost');
 
 export function resolveComputerDriverPath(options: { packaged: boolean; resourcesPath: string; mainDir: string; platform?: NodeJS.Platform; arch?: string; useLocalBuild?: boolean }): string {
@@ -64,6 +65,8 @@ export class DesktopEndpointHost {
   private reenrollmentRequired = false;
   private reenrolling = false;
   private readonly lifetime = new AbortController();
+  private folders?: DesktopFolderStore;
+  private publishFolders?: (snapshot: DeviceFolderSnapshot) => Promise<void>;
   private readonly accessPolicy = new ComputerAccessPolicy();
   private readonly workspaceVisibility = new ComputerWorkspaceVisibility();
   private stopBrokerInBackground(errorCode?: 'COMPUTER_LOCAL_UI_REQUIRED'): void {
@@ -160,6 +163,59 @@ export class DesktopEndpointHost {
     if (!allowed && this.broker.snapshot().appId === appId) await this.broker.stop();
     return { authorizedAppIds, apps };
   }
+  async deviceFolders() {
+    if (!this.folders) return;
+    return { endpointId: this.claim?.endpointId, ready: !!this.publishFolders && !!this.claim, ...await this.folders.snapshot() };
+  }
+
+  async changeDeviceFolder(value: unknown): Promise<DeviceFolderSnapshot | undefined> {
+    const input = deviceFolderChangeSchema.parse(value);
+    const publish = this.publishFolders;
+    const origin = this.claim;
+    const folders = this.folders;
+    const window = this.options.window();
+    const connection = this.options.connection();
+    if (!publish || !origin || !folders || !window || !this.visible() || !connection) throw new Error('DESKTOP_FOLDER_CONNECTION_REQUIRED');
+    const previous = 'id' in input ? (await folders.snapshot()).folders.find(folder => folder.id === input.id) : undefined;
+    if ('id' in input && !previous) throw new Error('FOLDER_AUTHORIZATION_CHANGED');
+    if ('revoke' in input) return folders.change({ id: input.id, mobileIds: [], revoke: true }, publish);
+    const zh = getElectronShellLanguage().startsWith('zh');
+    let path: string | undefined;
+    if ('kind' in input) {
+      const selection = await dialog.showOpenDialog(window, {
+        title: zh ? '选择要授权的文件夹' : 'Choose a folder to authorize',
+        properties: ['openDirectory'],
+        ...(input.kind === 'custom' ? {} : { defaultPath: app.getPath(input.kind) }),
+      });
+      if (selection.canceled || !selection.filePaths[0]) return;
+      path = await realpath(selection.filePaths[0]);
+    }
+    const base = 'origin' in connection ? connection.origin : localGatewayOrigin(connection);
+    const response = await fetch(base + '/api/endpoint-tools/device-connections', {
+      headers: { Authorization: `Bearer ${connection.token}` }, redirect: 'error', signal: this.lifetime.signal,
+    });
+    if (!response.ok) throw new Error('DEVICE_CONNECTIONS_UNAVAILABLE');
+    const data = await response.json() as { payload: DeviceConnections };
+    const mobiles = [...new Set(input.mobileIds)].map(id => data.payload.devices.find(device => device.id === id && device.kind === 'mobile'));
+    if (mobiles.some(device => !device)) throw new Error('FOLDER_AUDIENCE_CHANGED');
+    const name = path ? basename(path) : previous!.label;
+    const audience = mobiles.map(device => device!.name).join('、');
+    const confirmation = await dialog.showMessageBox(window, {
+      type: 'question', title: zh ? '目录授权' : 'Folder access',
+      message: zh ? `允许 Agent 搜索和读取「${name}」？` : `Allow the agent to search and read “${name}”?`,
+      detail: (path ? path + '\n\n' : '') + (zh
+        ? (audience ? `只读访问范围为本机和 ${audience}。` : '只读访问范围为本机。')
+        : (audience ? `Read-only access from this computer and ${audience}.` : 'Read-only access from this computer.')),
+      buttons: zh ? ['取消', '允许只读访问'] : ['Cancel', 'Allow read-only access'], defaultId: 0, cancelId: 0, noLink: true, signal: this.lifetime.signal,
+    });
+    if (confirmation.response !== 1 || this.claim !== origin || !this.visible() || this.stopped) return;
+    if ('kind' in input && input.kind !== 'custom') {
+      const preset = await realpath(app.getPath(input.kind)).catch(() => undefined);
+      return folders.change({ ...input, kind: path === preset ? input.kind : 'custom', path }, publish);
+    }
+    return folders.change({ ...input, path }, publish);
+  }
+
   async start(): Promise<void> {
     if (this.stopped || this.connecting || this.client || this.reenrollmentRequired) return;
     clearTimeout(this.retry);
@@ -179,7 +235,7 @@ export class DesktopEndpointHost {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('Desktop identity requires the OS keychain');
     const pair = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const privateKey = pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
-    const data: Identity = { principalId: randomUUID(), publicKey: pair.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'), encryptedPrivateKey: safeStorage.encryptString(privateKey).toString('base64') };
+    const data: Identity = { principalId: randomUUID(), displayName: hostname().replace(/\.local$/i, '').slice(0, 120) || 'xopc Desktop', publicKey: pair.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'), encryptedPrivateKey: safeStorage.encryptString(privateKey).toString('base64') };
     return { data, privateKey };
   }
   /** Identity rotation never grants permission to observe or operate applications. */
@@ -245,17 +301,24 @@ export class DesktopEndpointHost {
       return result.json();
     };
     const identity = await this.identity();
+    const folderPath = join(dirname(this.identityPath()), 'desktop-folder-grants', identity.data.principalId + '.json');
+    const folders = new DesktopFolderStore(() => folderPath,
+      extension => MIME_TYPE_BY_EXTENSION[extension] ?? 'application/octet-stream');
+    const displayName = identity.data.displayName ?? 'xopc Desktop';
     const registerIdentity = async () => {
       await assertGatewayCompatibility(connection, this.lifetime.signal);
-      return request('/api/endpoint-tools/principals', { principalId: identity.data.principalId, publicKey: identity.data.publicKey, kind: 'desktop', platform: process.platform, displayName: 'xopc Desktop' });
+      return request('/api/endpoint-tools/principals', { principalId: identity.data.principalId, publicKey: identity.data.publicKey, kind: 'desktop', platform: process.platform, displayName });
     };
     await registerIdentity();
     if (this.stopped) return;
     const compatibilityResponse = await fetch(base + '/api/endpoint-tools/compatibility', { headers, redirect: 'error', signal: this.lifetime.signal });
     if (!compatibilityResponse.ok) throw new Error('Gateway compatibility is unavailable');
-    const compatibility = await compatibilityResponse.json() as { payload?: { deviceStateToolsV1?: boolean } };
+    const compatibility = await compatibilityResponse.json() as { payload?: { deviceStateToolsV1?: boolean; deviceFolderConnectionsV1?: boolean } };
     const endpointId = `${identity.data.principalId}:${randomUUID()}`;
+    const foldersSupported = compatibility.payload?.deviceFolderConnectionsV1 === true;
+    if (foldersSupported) this.folders = folders;
     const registry = new EndpointToolRegistry([
+      ...(foldersSupported ? folders.definitions() : []),
       ...createDesktopEndpointToolDefinitions(() => ({
         device: { readState: async () => ({ platform: process.platform, systemVersion: release(), locale: app.getLocale(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }) },
         file: {
@@ -314,15 +377,30 @@ export class DesktopEndpointHost {
       await registerIdentity();
       if (this.stopped || this.reenrollmentRequired) throw new Error('Desktop endpoint is unavailable');
       const hello: EndpointHelloPayload = { principalId: identity.data.principalId, endpointId, connectionInstanceId: randomUUID(),
-        kind: 'desktop', platform: process.platform, displayName: 'xopc Desktop', appVersion: app.getVersion(),
+        kind: 'desktop', platform: process.platform, displayName, appVersion: app.getVersion(),
         availability: this.options.window()?.isFocused() ? 'foreground' : 'background', nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: registry.descriptors() };
       hello.signature = sign('sha256', Buffer.from(endpointHelloSigningPayload(hello)), { key: identity.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
       return hello;
     }, onReady: ({ endpointId, turnToken }) => {
       if (this.stopped || this.reenrollmentRequired || this.client !== realtime) return;
-      this.claim = { type: 'endpoint', endpointId, token: turnToken }; controller.connect(message => realtime.sendEndpointMessage(message)); },
+      const claim: EndpointTurnClaim = { type: 'endpoint', endpointId, token: turnToken };
+      this.claim = claim;
+      controller.connect(message => realtime.sendEndpointMessage(message));
+      if (foldersSupported) {
+        const publish = async (snapshot: DeviceFolderSnapshot) => {
+          if (this.claim !== claim) throw new Error('DESKTOP_FOLDER_CONNECTION_CHANGED');
+          const signature = sign('sha256', Buffer.from(deviceFolderSigningPayload(claim, snapshot)),
+            { key: identity.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+          await request('/api/endpoint-tools/device-connections/folders', { origin: claim, snapshot, signature });
+        };
+        this.publishFolders = publish;
+        void folders.snapshot().then(publish).catch(() => {
+          if (this.claim === claim) log.warn('Desktop folder authorization sync failed');
+        });
+      }
+    },
       onMessage: message => { void controller.handleMessage(message); },
-      onDisconnected: () => { this.claim = undefined; controller.disconnect(); this.stopBrokerInBackground(); },
+      onDisconnected: () => { this.claim = undefined; this.publishFolders = undefined; controller.disconnect(); this.stopBrokerInBackground(); },
     });
     this.client = realtime; this.controller = controller; realtime.connect();
   }

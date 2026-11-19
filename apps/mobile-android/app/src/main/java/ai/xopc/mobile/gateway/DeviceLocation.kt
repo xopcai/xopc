@@ -1,7 +1,6 @@
 package ai.xopc.mobile.gateway
 
 import android.Manifest
-import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
@@ -13,6 +12,7 @@ import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.withResumed
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -40,7 +40,7 @@ internal object DeviceLocation {
     val precision = args?.optString("precision")
     val category = args?.optString("category")
     if (request.optString("descriptorRevision") != DeviceToolCatalog.revisions[2]) { fail("TOOL_REVISION_MISMATCH"); return }
-    if (!request.optBoolean("confirmationRequired") || purpose !in listOf("weather", "nearby")
+    if (request.optBoolean("confirmationRequired") || purpose !in listOf("weather", "nearby")
       || precision !in listOf("approximate", "precise") || args == null || args.length() != (if (purpose == "weather") 2 else 3)
       || (purpose == "nearby" && category !in listOf("restaurant", "cafe", "pharmacy", "park"))) { fail("INVALID_ARGUMENTS"); return }
     val remaining = request.optLong("deadlineAt") - System.currentTimeMillis()
@@ -52,18 +52,7 @@ internal object DeviceLocation {
         try {
           val value = withTimeout(remaining) {
             val owner = activity ?: throw LocationFailure("ENDPOINT_NOT_FOREGROUND")
-            if (owner.isFinishing || owner.isDestroyed) throw LocationFailure("ENDPOINT_NOT_FOREGROUND")
-            val service = if (purpose == "weather") "Open-Meteo" else "OpenStreetMap"
-            val text = "使用此手机的${if (precision == "precise") "精确" else "大致"}位置，${if (purpose == "weather") "查询天气" else "查询附近地点"}。\n坐标将发送给 $service，仅用于本次查询，原始坐标不进入聊天历史。"
-            val allowed = suspendCancellableCoroutine<Boolean> { continuation ->
-              val dialog = AlertDialog.Builder(owner).setTitle("允许本次使用位置？").setMessage(text)
-                .setNegativeButton("拒绝") { _, _ -> if (continuation.isActive) continuation.resume(false) }
-                .setPositiveButton("允许一次") { _, _ -> if (continuation.isActive) continuation.resume(true) }
-                .setOnCancelListener { if (continuation.isActive) continuation.resume(false) }.create()
-              continuation.invokeOnCancellation { owner.runOnUiThread { dialog.dismiss() } }; dialog.show()
-            }
-            if (!allowed) throw LocationFailure("USER_DENIED")
-            if (activity !== owner) throw LocationFailure("ENDPOINT_NOT_FOREGROUND")
+            if (!isForeground() || owner.isFinishing || owner.isDestroyed) throw LocationFailure("ENDPOINT_NOT_FOREGROUND")
             val coarse = Manifest.permission.ACCESS_COARSE_LOCATION
             val fine = Manifest.permission.ACCESS_FINE_LOCATION
             fun granted(name: String) = ContextCompat.checkSelfPermission(owner, name) == PackageManager.PERMISSION_GRANTED
@@ -73,16 +62,17 @@ internal object DeviceLocation {
               try { requests.launch(if (precision == "precise") arrayOf(fine, coarse) else arrayOf(coarse)) }
               catch (error: Exception) { permission = null; throw error }
               waiting.await()
+              owner.lifecycle.withResumed { Unit }
             }
             if (!granted(coarse) && !granted(fine)) throw LocationFailure("PERMISSION_DENIED")
-            if (activity !== owner) throw LocationFailure("ENDPOINT_NOT_FOREGROUND")
+            if (activity !== owner || !isForeground()) throw LocationFailure("ENDPOINT_NOT_FOREGROUND")
             val manager = owner.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             val provider = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
               .firstOrNull { manager.isProviderEnabled(it) } ?: throw LocationFailure("PERMISSION_DENIED")
             val sample = withTimeout(20_000) { sample(manager, provider, owner) }
             if (sample.time < System.currentTimeMillis() - 30_000 || sample.accuracy < 0) throw LocationFailure("PROTOCOL_ERROR")
             if (!granted(coarse) && !granted(fine)) throw LocationFailure("PERMISSION_DENIED")
-            if (activity !== owner) throw LocationFailure("ENDPOINT_NOT_FOREGROUND")
+            if (activity !== owner || !isForeground()) throw LocationFailure("ENDPOINT_NOT_FOREGROUND")
             val approximate = precision == "approximate" || !granted(fine) || sample.accuracy > 1000
             JSONObject().put("latitude", if (approximate) kotlin.math.round(sample.latitude * 50) / 50 else sample.latitude)
               .put("longitude", if (approximate) kotlin.math.round(sample.longitude * 50) / 50 else sample.longitude)

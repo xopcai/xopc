@@ -360,6 +360,10 @@ fun MainScreen(
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
   onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
+  onLoadCapabilityDevices: suspend () -> ai.xopc.mobile.gateway.DeviceConnections = { ai.xopc.mobile.gateway.DeviceConnections(null, emptyList()) },
+  onUseConnectedComputer: suspend (String) -> Unit = {},
+  onShareDeviceConnectionFile: suspend (Uri) -> Unit = {},
+  onReselectConnectedComputer: () -> Unit = {},
   onCreateAgentConversation: (String) -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onLoadOlderHistory: () -> Unit = {},
@@ -681,6 +685,8 @@ fun MainScreen(
     onRefreshRecentConversations = onRefreshRecentConversations,
     onLoadCapabilities = onLoadCapabilities, onCapabilityPanel = onCapabilityPanel,
     onCapabilitySetupChat = onCapabilitySetupChat,
+    onLoadCapabilityDevices = onLoadCapabilityDevices, onUseConnectedComputer = onUseConnectedComputer,
+    onShareDeviceConnectionFile = onShareDeviceConnectionFile, onReselectConnectedComputer = onReselectConnectedComputer,
     onCreateAgentConversation = onCreateAgentConversation,
     onLoadMoreConversations = onLoadMoreConversations, onLoadOlderHistory = onLoadOlderHistory,
     onSelectConversation = onSelectConversation,
@@ -885,6 +891,10 @@ internal fun MainContent(
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
   onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
+  onLoadCapabilityDevices: suspend () -> ai.xopc.mobile.gateway.DeviceConnections = { ai.xopc.mobile.gateway.DeviceConnections(null, emptyList()) },
+  onUseConnectedComputer: suspend (String) -> Unit = {},
+  onShareDeviceConnectionFile: suspend (Uri) -> Unit = {},
+  onReselectConnectedComputer: () -> Unit = {},
   onCreateAgentConversation: (String) -> Unit = {},
   onLoadMoreConversations: () -> Unit = {},
   onLoadOlderHistory: () -> Unit = {},
@@ -1707,6 +1717,7 @@ internal fun MainContent(
             }),
           canStartVoiceCall = voiceCall.phase == "idle" && pendingVoiceMode == null &&
             !connection.creatingConversation && conversationId != null && !connection.sending,
+          onReselectConnectedComputer = onReselectConnectedComputer,
           onStartVoiceCall = {
             assistantActionsOpen = false
             requestVoice("auto")
@@ -1810,7 +1821,10 @@ internal fun MainContent(
           if (item.personal) onOpenPersonalAgent() else onCreateAgentConversation(item.id)
           onSelectTab(HomeTab.Assistant)
         }, onExit = exitDestination,
-        onPanel = onCapabilityPanel, onSetupChat = onCapabilitySetupChat)
+        onPanel = onCapabilityPanel, onSetupChat = onCapabilitySetupChat,
+        onLoadDevices = onLoadCapabilityDevices, onUseComputer = onUseConnectedComputer,
+        onShareDeviceFile = onShareDeviceConnectionFile, onPairDevice = onScanPairing,
+        deviceScope = connection.profile?.let { it.gatewayId + ':' + it.deviceId })
       HomeTab.Notes -> if (!isPaired) PairingScreen(
         stringResource(R.string.library_title), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
@@ -2650,6 +2664,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   onMessageSearchOpenChange: (Boolean) -> Unit,
   canStartVoiceCall: Boolean,
   onStartVoiceCall: () -> Unit,
+  onReselectConnectedComputer: () -> Unit = {},
   onOpenSidebar: () -> Unit,
   onRetryHomeChat: () -> Unit,
   onCloseAutomationConfiguration: () -> Unit = {},
@@ -3293,6 +3308,22 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               }
             }
           }
+        }
+        connection.desktopChatTarget?.let { target ->
+          val label = stringResource(R.string.device_execution_target, target.name)
+          val status = when (target.state) {
+            "offline" -> stringResource(R.string.device_execution_offline)
+            "authorization_required" -> stringResource(R.string.device_execution_authorization)
+            "reselect" -> stringResource(R.string.device_execution_reselect)
+            else -> ""
+          }
+          val text = if (status.isBlank()) label else "$label · $status"
+          if (target.reselectEndpointId != null) TextButton(onClick = onReselectConnectedComputer,
+            enabled = !connection.sending && connection.activeRunId == null,
+            modifier = Modifier.testTag("chat-execution-device")) { Text(text, maxLines = 2) }
+          else Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2, modifier = Modifier.testTag("chat-execution-device").background(LocalChatColors.current.card, themedCorners(12))
+              .padding(horizontal = 10.dp, vertical = 5.dp))
         }
         if (personalAgent != null) {
           val attention = connection.progress.needsUser.size

@@ -65,6 +65,7 @@
       }]
     }],
     "requestPermissions": [
+      { "name": "ohos.permission.WRITE_CALENDAR", "reason": "$string:device_calendar_write_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
       { "name": "ohos.permission.READ_CALENDAR", "reason": "$string:calendar_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
       { "name": "ohos.permission.APPROXIMATELY_LOCATION", "reason": "$string:location_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },
       { "name": "ohos.permission.LOCATION", "reason": "$string:location_reason", "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" } },

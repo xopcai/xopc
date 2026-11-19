@@ -393,3 +393,13 @@
 "capability_mcp_continue" = "继续连接";
 
 "填入建议：%@" = "填入建议：%@";
+
+"device_connection_services" = "服务连接";
+"device_connection_devices" = "设备连接";
+"device_connection_contact_prompt" = "请打开本机通讯录，让我选择一个联系人。";
+"device_connection_calendar_prompt" = "查看今天手机日历的日程。";
+"device_connection_location_prompt" = "获取我当前的位置。";
+"device_execution_target" = "执行设备";
+"device_execution_offline" = "离线";
+"device_execution_authorization" = "需授权";
+"device_execution_reselect" = "重新选择";

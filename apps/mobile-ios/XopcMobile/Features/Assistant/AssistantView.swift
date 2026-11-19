@@ -87,6 +87,9 @@ struct AssistantView<Dock: View>: View {
     @State private var userScrollingMessages = false
     @State private var bottomScrollTask: Task<Void, Never>?
 
+    @State private var desktopChatTarget: DesktopChatTarget?
+    @State private var desktopTargetRetry = 0
+    @State private var reselectingDesktop = false
     @State private var phone = PhoneWorkspaceModel()
     @State private var showingPhone = false
 
@@ -99,12 +102,71 @@ struct AssistantView<Dock: View>: View {
                 guard isActive, scenePhase == .active, let conversation, !conversation.isDraft else { phone.leave(); return }
                 await phone.observe(configuration: configuration, conversationID: conversation.id, visible: showingPhone)
             }
+            .task(id: desktopTargetObservationKey) { await observeDesktopTarget() }
             .onChange(of: showingPhone) {
                 phone.setVisible(showingPhone)
                 onPhoneVisibilityChanged(showingPhone)
             }
             .onChange(of: conversation?.id) { showingPhone = false }
             .onDisappear { phone.leave(); onPhoneVisibilityChanged(false) }
+    }
+
+    private var desktopTargetObservationKey: String {
+        "\(ComposerDraftStore.accountScope(configuration))|\(conversation?.id ?? "")|\(isActive && scenePhase == .active)|\(desktopTargetRetry)"
+    }
+
+    private func observeDesktopTarget() async {
+        desktopChatTarget = nil
+        guard isActive, scenePhase == .active, let conversation, !conversation.isDraft else { return }
+        let client = GatewayClient(configuration: configuration)
+        while !Task.isCancelled {
+            do {
+                let response: GatewayEnvelope<DesktopChatTarget> = try await client
+                    .request(path: "/api/endpoint-tools/targets/\(conversation.id)")
+                guard !Task.isCancelled, let target = response.payload, target.deviceName != nil else { return }
+                desktopChatTarget = target
+                try await Task.sleep(for: .seconds(5))
+            } catch { return }
+        }
+    }
+
+    private func reselectDesktopTarget(_ endpointID: String) async {
+        guard let conversation, !reselectingDesktop else { return }
+        reselectingDesktop = true
+        defer { reselectingDesktop = false }
+        do {
+            let _: IgnoredResponse = try await GatewayClient(configuration: configuration)
+                .request(path: "/api/endpoint-tools/targets/\(conversation.id)", method: "PUT",
+                         body: JSONEncoder().encode(DesktopChatTargetSelection(endpointId: endpointID)))
+        } catch {}
+        desktopTargetRetry += 1
+    }
+
+    @ViewBuilder
+    private func desktopTargetBadge(_ target: DesktopChatTarget, name: String) -> some View {
+        let label = AppLocalization.string("device_execution_target", locale: locale)
+        let statusKey = switch target.deviceState {
+        case "offline": "device_execution_offline"
+        case "authorization_required": "device_execution_authorization"
+        case "reselect": "device_execution_reselect"
+        default: ""
+        }
+        let suffix = statusKey.isEmpty ? "" : " · " + AppLocalization.string(statusKey, locale: locale)
+        let title = label + " · " + name + suffix
+        Group {
+            if let endpointID = target.reselectEndpointId {
+                Button { Task { await reselectDesktopTarget(endpointID) } } label: {
+                    Label(title, systemImage: "laptopcomputer").lineLimit(2)
+                }.buttonStyle(.plain).disabled(reselectingDesktop || state.isRunActive || state.isSending)
+                    .accessibilityLabel(Text(verbatim: title)).accessibilityIdentifier("chat-execution-device")
+            } else {
+                Label(title, systemImage: "laptopcomputer").lineLimit(2)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: title)).accessibilityIdentifier("chat-execution-device")
+            }
+        }
+        .font(.caption.weight(.medium)).foregroundStyle(mobileTheme.secondary)
+        .padding(.horizontal, 8).frame(minHeight: 44)
     }
 
     private var chatLayout: some View {
@@ -1119,6 +1181,9 @@ struct AssistantView<Dock: View>: View {
                 if phone.summary?.available == true, isPersonalConversation {
                     phoneWorkspaceButton
                 }
+                if !isPersonalConversation, let target = desktopChatTarget, let name = target.deviceName {
+                    desktopTargetBadge(target, name: name)
+                }
                 Spacer(minLength: 0)
                 if phone.summary?.available == true, !isPersonalConversation {
                     phoneWorkspaceButton
@@ -1773,4 +1838,14 @@ private struct PhoneObservationKey: Equatable {
     let configuration: GatewayConfiguration
     let conversationID: String?
     let active: Bool
+}
+
+private struct DesktopChatTarget: Decodable {
+    let deviceName: String?
+    let deviceState: String?
+    let reselectEndpointId: String?
+}
+
+private struct DesktopChatTargetSelection: Encodable {
+    let endpointId: String
 }

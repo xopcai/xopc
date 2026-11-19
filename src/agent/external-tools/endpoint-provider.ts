@@ -1,6 +1,6 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { createHash } from 'node:crypto';
-import type { EndpointToolContent } from '@xopcai/endpoint-tools-protocol';
+import { isDeviceFolderTool, type EndpointToolContent } from '@xopcai/endpoint-tools-protocol';
 import { REMOTE_BROWSER_CONTROL_TOOL } from '@xopcai/browser-control-contract/remote';
 import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
 import { COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
@@ -14,6 +14,7 @@ import { getEndpointDeviceSettings } from '../../storage/sqlite/endpoint-device-
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { getDeviceInteractionForRun } from '../../storage/sqlite/clarification-wait-repository.js';
+import { deviceFoldersFor, permitsFolderInvocation } from '../../endpoint-tools/folder-connections.js';
 import { DeviceTargetResolver } from '../../endpoint-tools/target-resolver.js';
 import { currentDeviceExecutionActor } from '../../endpoint-tools/execution-actor.js';
 import { getEmbeddedExecutionRunId } from '../embedded/execution-context.js';
@@ -62,6 +63,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     }
     const resolver = this.targetResolver(true);
     const checkpoint = getDeviceInteractionForRun(context.conversationId, getEmbeddedExecutionRunId());
+    const selectedMobileTool = this.deps.runtime.targets.get(context.conversationId)?.mobileTool;
     return resolver.candidates(context.conversationId, context.origin).flatMap(endpoint => endpoint.tools.filter(({ descriptor, provider }) => ![BROWSER_CONTROL_ENDPOINT_TOOL_NAME, REMOTE_BROWSER_CONTROL_TOOL, COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL].includes(descriptor.name)
       && (!provider || this.deps.runtime.providers.isReady(provider))
       && (!checkpoint || endpoint.endpointId === checkpoint.endpointId && descriptor.name === checkpoint.toolName
@@ -71,7 +73,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
       source: this.source,
       namespace: endpoint.endpointId,
       title: descriptor.title,
-      summary: `${descriptor.description} (${getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName})`,
+      summary: `${selectedMobileTool ? descriptor.title : descriptor.description} (${getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName})`,
     })));
   }
 
@@ -102,13 +104,17 @@ export class EndpointToolProvider implements ExternalToolProvider {
   }
 
   private describeResolved(toolRef: string, resolved: NonNullable<ReturnType<EndpointToolProvider['resolve']>>): ExternalToolDescriptor {
+    const folders = resolved.folders?.map(({ id, kind, label }) => ({ id, kind, label }));
+    const toolDescription = resolved.selectedMobileTool
+      ? resolved.tool.descriptor.description.replace('Uses the device that sent this message,', 'Runs on the phone selected for this chat,')
+      : resolved.tool.descriptor.description;
     return {
       toolRef,
       source: this.source,
       namespace: resolved.endpointId,
       title: resolved.tool.descriptor.title,
-      summary: `${resolved.tool.descriptor.description} (${resolved.displayName})`,
-      description: `${resolved.tool.descriptor.description} Device: ${JSON.stringify(resolved.displayName)}; endpoint: ${JSON.stringify(resolved.endpointId)}. Do not substitute another device.${resolved.tool.provider ? ` Provider: ${JSON.stringify(resolved.tool.provider.summary)}. Usage: ${JSON.stringify(resolved.tool.provider.instructions ?? '')}.` : ''}${resolved.approvedArguments ? ` Single-call cross-device consent requires exactly these arguments: ${JSON.stringify(resolved.approvedArguments)}.` : ""}`,
+      summary: `${toolDescription} (${resolved.displayName})`,
+      description: `${toolDescription} Device: ${JSON.stringify(resolved.displayName)}; endpoint: ${JSON.stringify(resolved.endpointId)}. Do not substitute another device.${resolved.tool.provider ? ` Provider: ${JSON.stringify(resolved.tool.provider.summary)}. Usage: ${JSON.stringify(resolved.tool.provider.instructions ?? '')}.` : ''}${resolved.approvedArguments ? ` Single-call cross-device consent requires exactly these arguments: ${JSON.stringify(resolved.approvedArguments)}.` : ""}${folders ? ` Authorized folders: ${JSON.stringify(folders)}.` : ''}`,
       inputSchema: resolved.tool.descriptor.inputSchema,
       outputSchema: { type: 'object', properties: { content: resolved.tool.descriptor.name.endsWith('.device.get_location') ? { type: 'array', minItems: 1, maxItems: 1, items: { type: 'object', required: ['type', 'value'], properties: { type: { const: 'json' }, value: { type: 'object', required: ['source', 'purpose', 'data'] } } } } : resolved.tool.descriptor.outputSchema }, required: ['content'], additionalProperties: false },
       contractRevision: resolved.contractRevision,
@@ -132,12 +138,23 @@ export class EndpointToolProvider implements ExternalToolProvider {
       throw new ExternalEffectNotAppliedError('The delegated device arguments do not match the owner authorization');
     }
     const revision = context.contractRevision ?? resolved.contractRevision;
+    const assertFolderAccess = () => {
+      if (!isDeviceFolderTool(resolved.tool.descriptor.name)) return;
+      const turn = this.deps.getCurrentContext();
+      const endpoint = this.deps.runtime.registry.get(resolved.endpointId);
+      if (!turn || !endpoint || !permitsFolderInvocation(endpoint,
+        currentDeviceExecutionActor(turn.conversationId, getEmbeddedExecutionRunId()), turn.origin,
+        this.deps.runtime.registry, resolved.tool.descriptor.name, args)) {
+        throw new ExternalEffectNotAppliedError('The selected computer folder is no longer authorized');
+      }
+    };
     let grantLease: ReturnType<NonNullable<EndpointToolRuntime['grants']>['reserve']> | undefined;
     const invoke = (operationId?: string) => {
       if (context.signal?.aborted) throw new ExternalEffectNotAppliedError('Device invocation cancelled before dispatch');
       if (this.resolve(toolRef)?.contractRevision !== revision) {
         throw new ExternalEffectNotAppliedError('Endpoint connection, binding or tool contract changed');
       }
+      assertFolderAccess();
       const turn = this.deps.getCurrentContext()!;
       const actor = currentDeviceExecutionActor(turn.conversationId, getEmbeddedExecutionRunId());
       const transcriptId = actor && getSessionMetadata(turn.conversationId)?.transcriptId;
@@ -213,6 +230,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
       return { content: [{ type: 'text', text: JSON.stringify(summary) }], structuredContent: JSON.parse(JSON.stringify({ content: [{ type: 'json', value: summary }] })),
         details: { endpointId: resolved.endpointId, endpointToolName: resolved.tool.descriptor.name, deviceObservation: summary } };
     }
+    assertFolderAccess();
     const observation = projectDeviceReading(resolved.tool.descriptor.name, resolved.endpointId, resolved.principalId, result.content, Date.now());
     const files = result.content.filter((item) => item.type === 'file');
     const modelContent: AgentToolResult<Record<string, unknown>>['content'] = observation
@@ -256,6 +274,9 @@ export class EndpointToolProvider implements ExternalToolProvider {
         throw new Error('Authorized device result source changed during processing');
       }
     } else if (this.resolve(toolRef)?.contractRevision !== revision) throw new Error('Device authorization or result source changed during processing');
+    assertFolderAccess();
+    const folder = resolved.folders?.find(entry => entry.id === args.folderId);
+    if (folder) modelContent.unshift({ type: 'text', text: `File source: ${JSON.stringify({ device: resolved.displayName, folder: folder.label })}` });
     return {
       content: modelContent,
       structuredContent: JSON.parse(JSON.stringify({ content: result.content })),
@@ -287,7 +308,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const context = this.deps.getCurrentContext();
     if (!context) return undefined;
     const delegated = this.delegation(context.conversationId);
-    if (delegated && (delegated.grant?.toolName !== parsed.toolName || delegated.endpoint?.endpointId !== parsed.namespace)) return undefined;
+    if (delegated && (isDeviceFolderTool(parsed.toolName) || delegated.grant?.toolName !== parsed.toolName || delegated.endpoint?.endpointId !== parsed.namespace)) return undefined;
     const endpoint = delegated ? delegated.endpoint : resolver.resolve(context.conversationId, context.origin, parsed.namespace, parsed.toolName);
     if (!endpoint || endpoint.endpointId !== parsed.namespace) return undefined;
     const tool = this.deps.runtime.registry.getTool(endpoint.endpointId, parsed.toolName);
@@ -296,9 +317,13 @@ export class EndpointToolProvider implements ExternalToolProvider {
     if (checkpoint && (parsed.toolName !== checkpoint.toolName || endpoint.endpointId !== checkpoint.endpointId
       || !this.deps.runtime.canResumeDeviceInteraction(context.conversationId, checkpoint))) return undefined;
     if (tool && [BROWSER_CONTROL_ENDPOINT_TOOL_NAME, REMOTE_BROWSER_CONTROL_TOOL, COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL].includes(tool.descriptor.name)) return undefined;
-    return tool ? { delegation: delegated?.grant, approvedArguments: this.deps.runtime.grants.find(context.conversationId, context.origin, endpoint.endpointId, parsed.toolName)?.arguments, connectionId: endpoint.connectionId, endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName, tool,
-      contractRevision: createHash('sha256').update(JSON.stringify([endpoint.principalId, endpoint.connectionId, tool.revision, tool.provider?.digest ?? null,
-        this.deps.runtime.targets.get(this.deps.getCurrentContext()!.conversationId)?.selectedAt ?? null,
+    const folders = isDeviceFolderTool(parsed.toolName) ? deviceFoldersFor(endpoint,
+      currentDeviceExecutionActor(context.conversationId, getEmbeddedExecutionRunId()), context.origin, this.deps.runtime.registry) : undefined;
+    if (folders && !folders.length) return undefined;
+    const target = this.deps.runtime.targets.get(context.conversationId);
+    return tool ? { folders, selectedMobileTool: target?.mobileTool, delegation: delegated?.grant, approvedArguments: this.deps.runtime.grants.find(context.conversationId, context.origin, endpoint.endpointId, parsed.toolName)?.arguments, connectionId: endpoint.connectionId, endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName, tool,
+      contractRevision: createHash('sha256').update(JSON.stringify([endpoint.principalId, endpoint.connectionId, tool.revision, tool.provider?.digest ?? null, folders?.map(folder => folder.id) ?? null,
+        target?.selectedAt ?? null,
         delegated?.grant?.id ?? this.deps.runtime.grants?.find(context.conversationId, context.origin, endpoint.endpointId, parsed.toolName)?.id ?? null])).digest('hex'),
     } : undefined;
   }

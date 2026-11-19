@@ -63,6 +63,7 @@
       "capabilities-agents": "助手与专家",
       "capabilities-skills": "技能",
       "capabilities-connectors": "连接",
+      "capabilities-devices": "设备连接",
       "capabilities-channels": "消息通道",
       "capabilities-extensions": "插件",
       "apps-library": "应用工坊",

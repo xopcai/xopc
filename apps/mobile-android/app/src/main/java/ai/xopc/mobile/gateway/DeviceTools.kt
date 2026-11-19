@@ -11,7 +11,16 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 internal class DeviceTools(private val context: Context, private val gateway: GatewaySession) {
-  fun catalog(location: Boolean = false, personal: Boolean = false): JSONArray = JSONArray(if (personal) DeviceToolCatalog.personalJson else if (location) DeviceToolCatalog.json else DeviceToolCatalog.stateJson)
+  fun catalog(location: Boolean = false, personal: Boolean = false, extended: Boolean = false): JSONArray {
+    val tools = JSONArray(when {
+      personal && extended -> DeviceToolCatalog.personalJson
+      personal -> DeviceToolCatalog.basePersonalJson
+      location && extended -> DeviceToolCatalog.json
+      else -> DeviceToolCatalog.stateJson
+    })
+    if (personal && extended && Build.VERSION.SDK_INT < 29) tools.remove(tools.length() - 1)
+    return tools
+  }
 
   fun invoke(request: JSONObject, appProviderReady: Boolean, send: (String, JSONObject) -> Unit) {
     val id = request.getString("invocationId")
@@ -28,7 +37,7 @@ internal class DeviceTools(private val context: Context, private val gateway: Ga
       return
     }
     if (request.optString("toolName") == "mobile.device.get_location") { DeviceLocation.invoke(request, send); return }
-    if (request.optString("toolName").startsWith("mobile.calendar.") || request.optString("toolName") in listOf("mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick")) { DevicePersonalTools.invoke(request, gateway, send); return }
+    if (request.optString("toolName").startsWith("mobile.calendar.") || request.optString("toolName") in listOf("mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick", "mobile.contacts.find_by_name", "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album")) { DevicePersonalTools.invoke(request, gateway, send); return }
     val index = when (request.optString("toolName")) {
       "mobile.device.get_state" -> 0
       "mobile.device.get_power" -> 1

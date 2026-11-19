@@ -114,6 +114,7 @@ private enum class CapabilityCategory(val key: String, val title: Int, val icon:
   Plugins("plugins", R.string.capability_plugins, R.drawable.action_capabilities),
   Skills("skills", R.string.capability_skills, R.drawable.action_task_list),
   Connections("connections", R.string.capability_connections, R.drawable.action_phone),
+  Devices("devices", R.string.capability_devices, R.drawable.action_phone),
   Agents("agents", R.string.capability_agents, R.drawable.tab_assistant, 86),
   Channels("channels", R.string.capability_channels, R.drawable.tab_conversations, 74),
 }
@@ -137,7 +138,13 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   agentAvatars: Map<String, Bitmap>,
   onLoad: suspend (String) -> CapabilityPage, onOpenAgent: (CapabilityItem) -> Unit,
   onExit: () -> Unit, onSetupChat: (String, Boolean) -> Unit,
-  onPanel: suspend (String, String, JSONObject?) -> JSONObject) {
+  onPanel: suspend (String, String, JSONObject?) -> JSONObject,
+  onLoadDevices: suspend () -> ai.xopc.mobile.gateway.DeviceConnections = { ai.xopc.mobile.gateway.DeviceConnections(null, emptyList()) },
+  onUseComputer: suspend (String) -> Unit = {},
+  onShareDeviceFile: suspend (android.net.Uri) -> Unit = {},
+  onPairDevice: () -> Unit = {},
+  deviceScope: String? = null,
+) {
   val navigation = rememberNavigationPreferences()
   val initialCategory = remember(navigation) {
     val key = navigation.selection("capabilities", CapabilityCategory.entries.map { it.key }, CapabilityCategory.Plugins.key)
@@ -164,11 +171,12 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   val skills = category == CapabilityCategory.Skills
   val agents = category == CapabilityCategory.Agents
   val connections = category == CapabilityCategory.Connections
+  val zh = androidx.compose.ui.platform.LocalConfiguration.current.locales[0].language == "zh"
   val plugins = category == CapabilityCategory.Plugins
   val skillMarketTitle = stringResource(R.string.capability_skill_market)
 
   fun load(requested: CapabilityCategory, refresh: Boolean = false) {
-    if (loading[requested] == true || (!refresh && (pages.containsKey(requested) || failures[requested] == true))) return
+    if (requested == CapabilityCategory.Devices || loading[requested] == true || (!refresh && (pages.containsKey(requested) || failures[requested] == true))) return
     loading[requested] = true
     failures.remove(requested)
     scope.launch {
@@ -263,61 +271,76 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
       flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.33f),
     ) { index ->
       val kind = categories[index]
-      val catalog = pages[kind]
-      val failed = failures[kind] == true
-      val pending = loading[kind] == true || (catalog == null && !failed)
-      val groups = capabilityRows(kind, catalog, personal, queries[kind].orEmpty())
-      val search = queries[kind].orEmpty().trim()
-      val list = lists.getValue(kind)
-      LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (pending && catalog == null) item { CapabilityListSkeleton() }
-        if (failed || catalog?.incomplete == true) item {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(if (failed) R.string.capability_load_failed else R.string.capability_partial), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = { load(kind, refresh = true) }) { Text(stringResource(R.string.capability_retry)) }
-          }
-        }
-        if (!pending && !failed && groups.isEmpty()) item {
-          Column(Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            ActionIcon(R.drawable.action_search)
-            Text(stringResource(if (search.isEmpty()) R.string.capability_empty else R.string.capability_no_matches),
-              modifier = Modifier.padding(top = 8.dp).testTag("capability-empty"))
-            if (search.isNotEmpty()) TextButton(onClick = {
-              if (pager.settledPage == index) updateQuery("")
-            }) { Text(stringResource(R.string.capability_clear)) }
-          }
-        }
-        capabilityGroups.forEach { group ->
-          val rows = groups[group] ?: return@forEach
-          item("group-$group") {
-            Text(stringResource(capabilityGroup(group)), style = MaterialTheme.typography.labelLarge,
-              color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 2.dp, start = 4.dp))
-          }
-          items(rows, key = { it.id }) { row ->
-            Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(themedCorners(18)).background(colors.surface)
-              .clickable { if (pager.settledPage == index && !pager.isScrollInProgress) {
-                focus.clearFocus(); keyboard?.hide(); detail = row
-              } }.testTag("capability-row-${row.id}")
-              .padding(horizontal = 14.dp, vertical = 12.dp),
-              verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-              CapabilityItemIcon(row, kind, catalog?.origin, personal, agentAvatars)
-              Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(row.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (row.description.isNotBlank()) Text(row.description, style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+      Column(Modifier.fillMaxSize()) {
+        if (kind == CapabilityCategory.Devices) {
+          androidx.compose.runtime.key(deviceScope) {
+            DeviceConnectionsScreen(onLoadDevices, onUseComputer, onShareDeviceFile, { tool ->
+              val prompt = when (tool) {
+                "mobile.contacts.pick" -> if (zh) "请打开本机通讯录，让我选择一个联系人。" else "Let me select a contact from this phone."
+                "mobile.calendar.query_events" -> if (zh) "查看今天手机日历的日程。" else "Check today's events on this phone."
+                else -> if (zh) "获取我当前的位置。" else "Get my current location."
               }
-              if (kind == CapabilityCategory.Connections && (row.group == "available" || row.group == "attention")) {
-                Text(stringResource(R.string.capability_connect), style = MaterialTheme.typography.labelLarge, color = colors.primary)
-              } else {
-                ActionIcon(R.drawable.action_chevron_right, color = colors.onSurfaceVariant, size = 14.dp)
+              onSetupChat(prompt, false)
+            }, onPairDevice, active = category == CapabilityCategory.Devices)
+          }
+        } else {
+          val catalog = pages[kind]
+          val failed = failures[kind] == true
+          val pending = loading[kind] == true || (catalog == null && !failed)
+          val groups = capabilityRows(kind, catalog, personal, queries[kind].orEmpty())
+          val search = queries[kind].orEmpty().trim()
+          val list = lists.getValue(kind)
+          LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (pending && catalog == null) item { CapabilityListSkeleton() }
+            if (failed || catalog?.incomplete == true) item {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(if (failed) R.string.capability_load_failed else R.string.capability_partial), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { load(kind, refresh = true) }) { Text(stringResource(R.string.capability_retry)) }
+              }
+            }
+            if (!pending && !failed && groups.isEmpty()) item {
+              Column(Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                ActionIcon(R.drawable.action_search)
+                Text(stringResource(if (search.isEmpty()) R.string.capability_empty else R.string.capability_no_matches),
+                  modifier = Modifier.padding(top = 8.dp).testTag("capability-empty"))
+                if (search.isNotEmpty()) TextButton(onClick = {
+                  if (pager.settledPage == index) updateQuery("")
+                }) { Text(stringResource(R.string.capability_clear)) }
+              }
+            }
+            capabilityGroups.forEach { group ->
+              val rows = groups[group] ?: return@forEach
+              item("group-$group") {
+                Text(stringResource(capabilityGroup(group)), style = MaterialTheme.typography.labelLarge,
+                  color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 14.dp, bottom = 2.dp, start = 4.dp))
+              }
+              items(rows, key = { it.id }) { row ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).clip(themedCorners(18)).background(colors.surface)
+                  .clickable { if (pager.settledPage == index && !pager.isScrollInProgress) {
+                    focus.clearFocus(); keyboard?.hide(); detail = row
+                  } }.testTag("capability-row-${row.id}")
+                  .padding(horizontal = 14.dp, vertical = 12.dp),
+                  verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                  CapabilityItemIcon(row, kind, catalog?.origin, personal, agentAvatars)
+                  Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(row.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (row.description.isNotBlank()) Text(row.description, style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                  }
+                  if (kind == CapabilityCategory.Connections && (row.group == "available" || row.group == "attention")) {
+                    Text(stringResource(R.string.capability_connect), style = MaterialTheme.typography.labelLarge, color = colors.primary)
+                  } else {
+                    ActionIcon(R.drawable.action_chevron_right, color = colors.onSurfaceVariant, size = 14.dp)
+                  }
+                }
               }
             }
           }
         }
       }
     }
-    TextField(query, { updateQuery(it.take(160)) }, Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp)
+    if (category != CapabilityCategory.Devices) TextField(query, { updateQuery(it.take(160)) }, Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp)
       .focusRequester(searchFocus).testTag("capability-search"),
       placeholder = { Text(if (skills) stringResource(R.string.capability_search_installed_skills)
         else stringResource(R.string.capability_search, stringResource(category.title))) },

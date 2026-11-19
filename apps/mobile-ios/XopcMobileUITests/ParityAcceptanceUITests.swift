@@ -2437,6 +2437,36 @@ final class MobileLayoutParityUITests: XCTestCase {
     }
 
     // swiftlint:disable:next function_body_length
+    func testDeviceConnectionsShowFolderPermissionsAndOpenTheSelectedComputerChat() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/device-connections"
+        app.launch()
+        tab("capabilities")
+        app.selectCapability("capability-category-connections")
+        XCTAssertTrue(app.buttons["capability-row-drive-connection"].waitForExistence(timeout: 6))
+        app.selectCapability("capability-category-devices")
+
+        XCTAssertTrue(app.buttons["device-tool-mobile.file.pick"].waitForExistence(timeout: 6))
+        let offline = app.buttons["connected-device-test-offline-pc"]
+        if !offline.isHittable { app.swipeUp() }
+        offline.tap()
+        XCTAssertTrue(app.staticTexts["在这台电脑上打开 xopc 并检查网络连接。"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["device-use-in-chat"].exists)
+        app.buttons["返回设备连接"].tap()
+        let computer = app.buttons["connected-device-test-mac"]
+        if !computer.isHittable { app.swipeUp() }
+        computer.tap()
+        XCTAssertTrue(app.staticTexts["下载"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["已授权 · 只读"].exists)
+        let use = app.buttons["device-use-in-chat"]
+        if !use.isHittable { app.swipeUp() }
+        use.tap()
+        let target = app.descendants(matching: .any).matching(identifier: "chat-execution-device").firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout: 8))
+        XCTAssertTrue(target.label.contains("工作 MacBook"))
+        capture("device-connection-chat")
+    }
+
     func testCapabilityCatalogDefaultsToPluginsAndSearchStaysInItsCategory() {
         tab("capabilities")
         let header = app.navigationBars["能力"]

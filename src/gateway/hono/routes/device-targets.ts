@@ -3,7 +3,10 @@ import { bodyLimit } from 'hono/body-limit';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
+import { deviceFoldersFor } from '../../../endpoint-tools/folder-connections.js';
 import { deviceExecutionPrincipalId } from '../../../endpoint-tools/execution-actor.js';
+import { getEndpointDeviceSettings } from '../../../storage/sqlite/endpoint-device-settings-repository.js';
+import { getEndpointPrincipal } from '../../../storage/sqlite/endpoint-principal-repository.js';
 import { getSessionMetadata } from '../../../storage/sqlite/session-repository.js';
 
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
@@ -24,9 +27,20 @@ export function registerDeviceTargetRoutes(app: Hono, deps: AuthenticatedRouteDe
       if (target && actor.kind === 'device' && target.actorPrincipalId !== actor.principalId) {
         return c.json({ ok: false, error: { code: 'FORBIDDEN' } }, 403);
       }
-      return target
-        ? c.json({ ok: true, payload: target })
-        : c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Endpoint target not found' } }, 404);
+      if (!target) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Endpoint target not found' } }, 404);
+      if (actor.kind !== 'device') return c.json({ ok: true, payload: target });
+      const principal = getEndpointPrincipal(target.principalId);
+      if (principal?.kind !== 'desktop') return c.json({ ok: true, payload: target });
+      const endpoint = deps.service.endpointTools.registry.get(target.endpointId);
+      const candidates = deps.service.endpointTools.registry.list().filter(item => item.principalId === target.principalId);
+      const ready = endpoint && endpoint.connectionId === target.connectionId && target.expiresAt > Date.now()
+        && deviceFoldersFor(endpoint, actor).length > 0;
+      const replacement = !ready && candidates.find(item => deviceFoldersFor(item, actor).length > 0);
+      return c.json({ ok: true, payload: {
+        ...target, deviceName: getEndpointDeviceSettings(target.principalId)?.nickname ?? principal.displayName,
+        deviceState: ready ? 'ready' : replacement ? 'reselect' : candidates.length ? 'authorization_required' : 'offline',
+        ...(replacement && { reselectEndpointId: replacement.endpointId }),
+      } });
     } catch {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session key' } }, 400);
     }
@@ -40,8 +54,13 @@ export function registerDeviceTargetRoutes(app: Hono, deps: AuthenticatedRouteDe
     const gatewayPrincipal = getGatewayPrincipal(c);
     const endpoint = deps.service.endpointTools.registry.get(parsed.data.endpointId);
     if (gatewayPrincipal.kind === 'device'
-      && (!endpoint || !gatewayPrincipal.deviceId || endpoint.principalId !== gatewayPrincipal.deviceId)) {
+      && (!endpoint || !gatewayPrincipal.deviceId || endpoint.principalId !== gatewayPrincipal.deviceId
+        && !deviceFoldersFor(endpoint, gatewayPrincipal).length)) {
       return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint does not belong to this device' } }, 403);
+    }
+    const existing = deps.service.endpointTools.targets.get(c.req.param('conversationId'));
+    if (existing && gatewayPrincipal.kind === 'device' && existing.actorPrincipalId !== gatewayPrincipal.principalId) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN' } }, 403);
     }
     try {
       const target = deps.service.endpointTools.targets.select(

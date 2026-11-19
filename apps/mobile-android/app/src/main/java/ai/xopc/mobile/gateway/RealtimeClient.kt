@@ -110,6 +110,7 @@ internal class RealtimeClient(
       .put("kind", "mobile").put("platform", "android").put("publicKey", identity.publicKeyDer())
     val compatibility = runInterruptible(Dispatchers.IO) { JSONObject(gateway.request("/api/endpoint-tools/compatibility")) }
     val supportsPersonalTools = compatibility.optJSONObject("payload")?.optBoolean("mobilePersonalToolsV1") == true
+    val supportsExtendedTools = compatibility.optJSONObject("payload")?.optBoolean("mobileExtendedPersonalToolsV1") == true
     val supportsLocationTools = compatibility.optJSONObject("payload")?.optBoolean("deviceLocationTasksV1") == true
     val supportsDeviceTools = compatibility.optJSONObject("payload")?.optBoolean("deviceStateToolsV1") == true
     val supportsDeviceContext = compatibility.optJSONObject("payload")?.optBoolean("turnDeviceContextV1") == true
@@ -130,7 +131,7 @@ internal class RealtimeClient(
       ticketPayload.getJSONObject("realtime").getInt("maxVersion") >= 2) { "INVALID_REALTIME_TICKET" }
     val ticketCapabilities = ticketPayload.getJSONObject("realtime").optJSONArray("capabilities") ?: JSONArray()
     require((0 until ticketCapabilities.length()).any { ticketCapabilities.optString(it) == "endpoint.tools.v3" }) { "GATEWAY_UPDATE_REQUIRED" }
-    val endpoint = runInterruptible(Dispatchers.IO) { endpointHello(profile.deviceId, clientId, displayName, supportsDeviceTools, supportsLocationTools, supportsPersonalTools) }
+    val endpoint = runInterruptible(Dispatchers.IO) { endpointHello(profile.deviceId, clientId, displayName, supportsDeviceTools, supportsLocationTools, supportsPersonalTools, supportsExtendedTools) }
     val origin = runInterruptible(Dispatchers.IO) { gateway.activeVerifiedOrigin() }
     val events = Channel<String>(Channel.BUFFERED)
     val listener = object : WebSocketListener() {
@@ -304,12 +305,12 @@ internal class RealtimeClient(
     }
   }
 
-  private fun endpointHello(principalId: String, endpointId: String, displayName: String, supportsDeviceTools: Boolean, supportsLocationTools: Boolean, supportsPersonalTools: Boolean): JSONObject {
+  private fun endpointHello(principalId: String, endpointId: String, displayName: String, supportsDeviceTools: Boolean, supportsLocationTools: Boolean, supportsPersonalTools: Boolean, supportsExtendedTools: Boolean): JSONObject {
     val unsigned = JSONObject().put("appVersion", "1.0").put("availability", "foreground")
       .put("connectionInstanceId", UUID.randomUUID().toString()).put("displayName", displayName)
       .put("endpointId", endpointId).put("kind", "mobile").put("nonce", UUID.randomUUID().toString())
       .put("platform", "android").put("principalId", principalId).put("signedAt", System.currentTimeMillis())
-      .put("tools", if (supportsDeviceTools) deviceTools?.catalog(supportsLocationTools, supportsPersonalTools) ?: JSONArray() else JSONArray())
+      .put("tools", if (supportsDeviceTools) deviceTools?.catalog(supportsLocationTools, supportsPersonalTools, supportsExtendedTools) ?: JSONArray() else JSONArray())
     val canonical = canonicalEndpointJson(unsigned)
     return unsigned.put("signature", identity.sign(canonical))
   }

@@ -63,6 +63,7 @@
       "capabilities-agents": "Assistants and experts",
       "capabilities-skills": "Skills",
       "capabilities-connectors": "Connections",
+      "capabilities-devices": "Device connections",
       "capabilities-channels": "Channels",
       "capabilities-extensions": "Plugins",
       "apps-library": "App Studio",

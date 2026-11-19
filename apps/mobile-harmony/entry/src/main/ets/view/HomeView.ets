@@ -483,6 +483,8 @@ export struct XopcHomeView {
         XopcCapabilitiesView({ personal: this.personalAgent.record, onExit: (): void => { this.pathStack.pop(); },
           onPersonalChanged: (): void => { void this.personalAgent.refresh(); },
           onSetupChat: (prompt: string, agentSetup: boolean): void => { void this.openOrdinaryChat('', prompt, agentSetup); },
+          onDeviceChat: (id: string): void => { this.openConversationFromList(id); },
+          onDeviceFile: (attachment: XopcChatAttachment): Promise<void> => this.useLibraryFile(attachment),
           onOpenAgent: (id: string, personal: boolean): void => {
             if (personal) void this.openPersonalChat(); else void this.openOrdinaryChat(id);
           } })
@@ -723,6 +725,7 @@ struct XopcWorkbenchView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Local layout: XopcLayoutState = layoutState;
   @Local selectedIndex: number = 0;
+  @Local projectSearchOpen: boolean = false;
   @Local refreshRevision: number = 0;
   private pager: SwiperController = new SwiperController();
   private shown: boolean = false;
@@ -733,24 +736,46 @@ struct XopcWorkbenchView {
     this.pager.changeIndex(index, !this.layout.reduceMotion && Math.abs(index - this.selectedIndex) === 1);
   }
 
+  private goBack(): void {
+    if (this.selectedIndex === 2 && this.projectSearchOpen) {
+      this.projectSearchOpen = false;
+      this.getUIContext().getFocusController().clearFocus();
+    } else this.onExit();
+  }
+
+  private toggleProjectSearch(): void {
+    this.projectSearchOpen = !this.projectSearchOpen;
+    if (!this.projectSearchOpen) this.getUIContext().getFocusController().clearFocus();
+  }
+
   build() {
     NavDestination() {
-      Swiper(this.pager) {
-        XopcProgressView({ activePage: true, model: this.progress, onExit: this.onExit,
-          onSelectWorkPage: (page: string): void => { this.selectPage(page); }, onNavigate: this.onNavigate })
-        XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.tasks'), embeddedInWorkbench: true,
-          workbenchRefresh: this.refreshRevision, onExit: this.onExit, onNavigate: this.onNavigate,
-          onSelectWorkPage: (page: string): void => { this.selectPage(page); } })
-        XopcWorkspaceView({ section: 'projects', heading: $r('app.string.projects'), embeddedInWorkbench: true,
-          workbenchRefresh: this.refreshRevision, onExit: this.onExit, onNavigate: this.onNavigate,
-          onSelectWorkPage: (page: string): void => { this.selectPage(page); } })
-      }.id('work-page-pager').index(0).loop(false).indicator(false).cachedCount(2)
-        .duration(this.layout.reduceMotion ? 0 : 230)
-        .width('100%').height('100%')
-        .onChange((index: number): void => {
-          this.selectedIndex = index;
-          this.getUIContext().getFocusController().clearFocus();
-        })
+      Column() {
+        XopcPageHeader({ heading: WORK_PAGE_OPTIONS[this.selectedIndex].label, titleOptions: WORK_PAGE_OPTIONS,
+          selectedTitle: WORK_PAGE_OPTIONS[this.selectedIndex].key, titleMenuId: 'work-page-menu',
+          onSelectTitle: (page: string): void => { this.selectPage(page); }, backVisible: true,
+          onBack: (): void => { this.goBack(); }, searchId: this.selectedIndex === 2 ? 'projects-open-search' : '',
+          searchOpen: this.projectSearchOpen, onSearch: (): void => { this.toggleProjectSearch(); },
+          actionLabel: this.selectedIndex === 0 ? '' : this.selectedIndex === 1 ? $r('app.string.new_task') : $r('app.string.new_project'),
+          actionIcon: $r('sys.symbol.plus'), onAction: (): void => {
+            this.onNavigate({ page: this.selectedIndex === 1 ? 'task-create' : 'project-create', itemId: '' });
+          } }).id('workbench-header')
+        Swiper(this.pager) {
+          XopcProgressView({ activePage: true, model: this.progress, onExit: this.onExit,
+            onSelectWorkPage: (page: string): void => { this.selectPage(page); }, onNavigate: this.onNavigate })
+          XopcWorkspaceView({ section: 'tasks', heading: $r('app.string.tasks'), embeddedInWorkbench: true,
+            workbenchRefresh: this.refreshRevision, onExit: this.onExit, onNavigate: this.onNavigate })
+          XopcWorkspaceView({ section: 'projects', heading: $r('app.string.projects'), embeddedInWorkbench: true,
+            workbenchRefresh: this.refreshRevision, workbenchSearchOpen: this.projectSearchOpen,
+            onExit: this.onExit, onNavigate: this.onNavigate })
+        }.id('work-page-pager').index(this.selectedIndex).loop(false).indicator(false).cachedCount(2)
+          .duration(this.layout.reduceMotion ? 0 : 230)
+          .width('100%').layoutWeight(1).clip(true)
+          .onChange((index: number): void => {
+            this.selectedIndex = index;
+            this.getUIContext().getFocusController().clearFocus();
+          })
+      }.width('100%').height('100%')
     }.hideTitleBar(true).backgroundColor(this.colors.surface)
       .onShown((): void => {
         if (this.shown) {
@@ -759,6 +784,6 @@ struct XopcWorkbenchView {
         }
         this.shown = true;
       })
-      .onBackPressed((): boolean => { this.onExit(); return true; })
+      .onBackPressed((): boolean => { this.goBack(); return true; })
   }
 }

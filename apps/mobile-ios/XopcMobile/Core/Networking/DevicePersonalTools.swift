@@ -2,12 +2,13 @@ import Contacts
 import ContactsUI
 import EventKit
 import Foundation
+import Photos
 import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 
 struct PersonalDeviceRequest: Decodable, Sendable {
-    struct Arguments: Decodable, Sendable { let field: String?; let startAt: Int64?; let endAt: Int64? }
+    struct Arguments: Decodable, Sendable { let field: String?; let startAt: Int64?; let endAt: Int64?; let query: String?; let title: String?; let id: String?; let album: String? }
     struct UploadGrant: Decodable, Sendable { let path: String; let token: String; let maxBytes: Int; let expiresAt: Int64 }
     let invocationId: String
     let toolName: String
@@ -61,18 +62,33 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         }
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
+            if request.toolName == "mobile.contacts.find_by_name" {
+                return try await findContacts(request.arguments.query)
+            }
+            if request.toolName == "mobile.calendar.create_event" {
+                return try await createEvent(request.arguments)
+            }
+            if request.toolName == "mobile.media.list_recent" {
+                return try await listPhotos()
+            }
+            if request.toolName == "mobile.media.read_image" {
+                try await allowPhotoAccess()
+                let asset = try photo(request.arguments.id)
+                let image = try await loadPhoto(asset)
+                return try JSONEncoder().encode(SelectionWire(name: "photo.jpg", mimeType: "image/jpeg", data: image))
+            }
+            if request.toolName == "mobile.media.add_to_album" {
+                return try await addPhotoToAlbum(request.arguments)
+            }
             let calendar = request.toolName.hasPrefix("mobile.calendar.")
-            let startDate = Date(timeIntervalSince1970: Double(request.arguments.startAt ?? 0) / 1000)
-            let endDate = Date(timeIntervalSince1970: Double(request.arguments.endAt ?? 0) / 1000)
-            let calendarDetail = request.toolName.hasSuffix("free_busy") ? "忙闲时间（不含标题）" : "时间和标题"
-            let scope = calendar
-                ? "读取本机可访问日历中 \(startDate) 至 \(endDate) 的\(calendarDetail)，最多 50 条。"
-                : "请在接下来的系统页面选择本次要提供给 Agent 的文件、照片或联系人字段。"
-            guard await confirm(scope + "所选内容会发送给 Agent，并可能保存在聊天历史中。") else { throw PersonalDeviceFailure(code: "USER_DENIED") }
-            try await Task.sleep(for: .milliseconds(350))
-            try Task.checkCancellation()
             if calendar {
                 return try await calendarContent(request)
+            }
+            if ["mobile.file.pick", "mobile.camera.capture"].contains(request.toolName) {
+                let scope = "请在接下来的系统页面选择本次要提供给 Agent 的文件、照片或联系人字段。"
+                guard await confirm(scope + "所选内容会发送给 Agent，并可能保存在聊天历史中。") else { throw PersonalDeviceFailure(code: "USER_DENIED") }
+                try await Task.sleep(for: .milliseconds(350))
+                try Task.checkCancellation()
             }
             if request.toolName == "mobile.contacts.pick" {
                 field = request.arguments.field ?? "phone"
@@ -101,10 +117,10 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         presented = controller; presenter.present(controller, animated: true)
     }
 
-    private func confirm(_ message: String) async -> Bool {
+    private func confirm(_ message: String, title: String = "允许本次提供设备信息？") async -> Bool {
         await withCheckedContinuation { continuation in
             confirmation = continuation
-            let alert = UIAlertController(title: "允许本次提供设备信息？", message: message, preferredStyle: .alert)
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "拒绝", style: .cancel) { _ in self.confirmation?.resume(returning: false); self.confirmation = nil; self.presented = nil })
             alert.addAction(UIAlertAction(title: "继续", style: .default) { _ in self.confirmation?.resume(returning: true); self.confirmation = nil; self.presented = nil })
             present(alert)
@@ -200,6 +216,131 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         do { try continuation.resume(returning: JSONSerialization.data(withJSONObject: ["type": "json", "value": value])) }
         catch { continuation.resume(throwing: error) }
         contactSelection = nil; presented = nil
+    }
+
+    private func allowPhotoAccess() async throws {
+        var status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if status == .notDetermined {
+            status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        }
+        guard status == .authorized || status == .limited else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        try Task.checkCancellation()
+        guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+    }
+
+    private func listPhotos() async throws -> Data {
+        try await allowPhotoAccess()
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.fetchLimit = 20
+        let assets = PHAsset.fetchAssets(with: .image, options: options)
+        let result: [[String: Any]] = (0..<assets.count).map { index in
+            let asset = assets.object(at: index)
+            return ["id": asset.localIdentifier, "capturedAt": Int64(max(0, (asset.creationDate?.timeIntervalSince1970 ?? 0) * 1000))]
+        }
+        return try JSONSerialization.data(withJSONObject: ["type": "json", "value": result])
+    }
+
+    private func photo(_ id: String?) throws -> PHAsset {
+        guard let id, !id.isEmpty, id.utf16.count <= 512 else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
+        guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject, asset.mediaType == .image else {
+            throw PersonalDeviceFailure(code: "PERMISSION_DENIED")
+        }
+        return asset
+    }
+
+    private func loadPhoto(_ asset: PHAsset) async throws -> Data {
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .exact
+        options.isNetworkAccessAllowed = false
+        return try await withCheckedThrowingContinuation { continuation in
+            PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 2048, height: 2048), contentMode: .aspectFit, options: options) { image, info in
+                if (info?[PHImageResultIsDegradedKey] as? Bool) == true { return }
+                guard let data = image?.jpegData(compressionQuality: 0.85), data.count <= 10 * 1024 * 1024 else {
+                    continuation.resume(throwing: PersonalDeviceFailure(code: "RESULT_TOO_LARGE"))
+                    return
+                }
+                continuation.resume(returning: data)
+            }
+        }
+    }
+
+    private func addPhotoToAlbum(_ arguments: PersonalDeviceRequest.Arguments) async throws -> Data {
+        guard let album = arguments.album?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !album.isEmpty, album.utf16.count <= 100 else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
+        try await allowPhotoAccess()
+        let asset = try photo(arguments.id)
+        let date = asset.creationDate?.formatted() ?? "拍摄时间未知"
+        guard await confirm("将拍摄于 " + date + " 的照片加入相册「" + album + "」？", title: "整理照片？") else {
+            throw PersonalDeviceFailure(code: "USER_DENIED")
+        }
+        try Task.checkCancellation()
+        guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        let options = PHFetchOptions()
+        options.predicate = NSPredicate(format: "title == %@", album)
+        let albums = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: options)
+        guard albums.count <= 1 else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
+        let existing = albums.firstObject
+        if let existing, !existing.canPerform(.addContent) { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        try await PHPhotoLibrary.shared().performChanges {
+            if let existing, let change = PHAssetCollectionChangeRequest(for: existing) {
+                change.addAssets([asset] as NSArray)
+            } else if existing == nil {
+                let change = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: album)
+                change.addAssets([asset] as NSArray)
+            }
+        }
+        return try JSONSerialization.data(withJSONObject: ["type": "json", "value": ["id": asset.localIdentifier]])
+    }
+
+    private func findContacts(_ input: String?) async throws -> Data {
+        guard let query = input?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty, query.utf16.count <= 100 else {
+            throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS")
+        }
+        let store = CNContactStore()
+        guard try await store.requestAccess(for: .contacts) else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        try Task.checkCancellation()
+        guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        let keys = [CNContactFormatter.descriptorForRequiredKeys(for: .fullName), CNContactPhoneNumbersKey as CNKeyDescriptor,
+                    CNContactEmailAddressesKey as CNKeyDescriptor, CNContactIdentifierKey as CNKeyDescriptor]
+        let predicate = CNContact.predicateForContacts(matchingName: query)
+        let contacts = try store.unifiedContacts(matching: predicate, keysToFetch: keys)
+        let matches: [[String: Any]] = contacts.prefix(20).compactMap { contact in
+            guard let name = CNContactFormatter.string(from: contact, style: .fullName), !name.isEmpty else { return nil }
+            return ["id": String(contact.identifier.prefix(512)), "name": String(name.prefix(500)),
+                    "phones": contact.phoneNumbers.prefix(20).map { String($0.value.stringValue.prefix(100)) },
+                    "emails": contact.emailAddresses.prefix(20).map { String(($0.value as String).prefix(320)) }]
+        }
+        return try JSONSerialization.data(withJSONObject: ["type": "json", "value": matches])
+    }
+
+    private func createEvent(_ arguments: PersonalDeviceRequest.Arguments) async throws -> Data {
+        guard let title = arguments.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty, title.utf16.count <= 500,
+              let startAt = arguments.startAt, let endAt = arguments.endAt else {
+            throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS")
+        }
+        let start = Date(timeIntervalSince1970: Double(startAt) / 1000)
+        let end = Date(timeIntervalSince1970: Double(endAt) / 1000)
+        let range = start.formatted() + " 至 " + end.formatted()
+        guard await confirm("创建日程「" + title + "」？\n" + range, title: "创建此日程？") else {
+            throw PersonalDeviceFailure(code: "USER_DENIED")
+        }
+        try Task.checkCancellation()
+        let store = EKEventStore()
+        if EKEventStore.authorizationStatus(for: .event) != .fullAccess {
+            guard try await store.requestWriteOnlyAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        }
+        try Task.checkCancellation()
+        guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
+        guard let calendar = store.defaultCalendarForNewEvents else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        let event = EKEvent(eventStore: store)
+        event.calendar = calendar
+        event.title = title
+        event.startDate = start
+        event.endDate = end
+        try store.save(event, span: .thisEvent)
+        return try JSONSerialization.data(withJSONObject: ["type": "json", "value": ["id": event.eventIdentifier ?? event.calendarItemIdentifier]])
     }
 
     private func calendarContent(_ request: PersonalDeviceRequest) async throws -> Data {

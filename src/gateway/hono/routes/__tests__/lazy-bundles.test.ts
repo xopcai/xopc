@@ -90,6 +90,10 @@ describe('lazy route bundles', () => {
   });
   it('maps task target routes without capturing adjacent routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/targets/id')?.id).toBe('device-targets');
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/device-connections')?.id).toBe('device-connections');
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/device-connections/folders')?.id).toBe('device-connections');
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/device-connections/chat')?.id).toBe('device-connections');
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/device-connections/folders/other')).toBeUndefined();
     for (const path of ['/api/endpoint-tools/targets', '/api/endpoint-tools/targets/id/extra', '/api/endpoint-tools/targets-other/id']) expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
   });
   it('routes provider catalogs and admission without capturing adjacent endpoint routes', () => {

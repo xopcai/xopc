@@ -8,27 +8,30 @@ vi.mock('@kit.LocationKit', () => ({ geoLocationManager: { on: mocks.on, off: mo
 vi.mock('../entry/src/main/ets/service/layoutState', () => ({ layoutState: mocks }));
 import { attachDeviceLocation, invokeDeviceLocation, cancelDeviceLocation, cancelAllDeviceLocations } from '../entry/src/main/ets/service/deviceLocation';
 import { DEVICE_TOOL_REVISIONS } from '../entry/src/main/ets/common/deviceToolCatalog';
-function request(overrides = {}) { return { invocationId: 'once', descriptorRevision: DEVICE_TOOL_REVISIONS[2], confirmationRequired: true,
+function request(overrides = {}) { return { invocationId: 'once', descriptorRevision: DEVICE_TOOL_REVISIONS[2], confirmationRequired: false,
   arguments: { purpose: 'weather', precision: 'approximate' }, deadlineAt: Date.now() + 90000, ...overrides }; }
 beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); mocks.foreground = true; mocks.dialog.mockResolvedValue({ index: 1 }); mocks.permissions.mockResolvedValue({ authResults: [0, 0] });
   attachDeviceLocation({} as any, { getPromptAction: () => ({ showDialog: mocks.dialog }) } as any); });
 afterEach(() => { cancelAllDeviceLocations(); vi.useRealTimers(); });
 describe('Harmony single-use location', () => {
-  it('requires new consent, rounds approximate samples before upload and stops sensors', async () => {
+  it('skips app confirmation, rounds approximate samples before upload and stops sensors', async () => {
     const send = vi.fn(); invokeDeviceLocation(request(), send); await vi.advanceTimersByTimeAsync(0);
-    expect(mocks.dialog).toHaveBeenCalledOnce(); expect(mocks.permissions.mock.calls[0][1]).toEqual(['ohos.permission.APPROXIMATELY_LOCATION']);
+    expect(mocks.dialog).not.toHaveBeenCalled(); expect(mocks.permissions.mock.calls[0][1]).toEqual(['ohos.permission.APPROXIMATELY_LOCATION']);
     mocks.on.mock.calls[0][2]({ latitude: 31.234567, longitude: 121.456789, accuracy: 8, timeStamp: Date.now() });
     expect(send.mock.calls.at(-1)).toMatchObject(['tool.result', { content: [{ value: { latitude: 31.24, longitude: 121.46, accuracyMeters: 3000, precision: 'approximate' } }] }]);
     expect(mocks.off).toHaveBeenCalledOnce();
-    invokeDeviceLocation(request({ invocationId: 'second' }), send); await vi.advanceTimersByTimeAsync(0); expect(mocks.dialog).toHaveBeenCalledTimes(2);
+    invokeDeviceLocation(request({ invocationId: 'second' }), send); await vi.advanceTimersByTimeAsync(0); expect(mocks.dialog).not.toHaveBeenCalled();
   });
-  it('does not ask OS permissions after denial or cancelled consent', async () => {
-    const send = vi.fn(); mocks.dialog.mockResolvedValueOnce({ index: 0 });
-    invokeDeviceLocation(request(), send); await vi.advanceTimersByTimeAsync(0);
-    expect(send.mock.calls.at(-1)).toMatchObject(['tool.error', { code: 'USER_DENIED' }]); expect(mocks.permissions).not.toHaveBeenCalled();
-    let answer: any; mocks.dialog.mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }));
-    invokeDeviceLocation(request(), send); cancelDeviceLocation('once'); expect(mocks.close).toHaveBeenCalled(); answer({ index: 1 }); await vi.advanceTimersByTimeAsync(0);
-    expect(send.mock.calls.at(-1)).toMatchObject(['tool.cancelled', { invocationId: 'once' }]); expect(mocks.permissions).not.toHaveBeenCalled();
+  it('does not start location after cancellation during the OS permission request', async () => {
+    const send = vi.fn();
+    let grant: (result: { authResults: number[] }) => void = () => {};
+    mocks.permissions.mockImplementationOnce(() => new Promise(resolve => { grant = resolve; }));
+    invokeDeviceLocation(request(), send);
+    cancelDeviceLocation('once');
+    grant({ authResults: [0] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send.mock.calls.at(-1)).toMatchObject(['tool.cancelled', { invocationId: 'once' }]);
+    expect(mocks.on).not.toHaveBeenCalled();
   });
   it('rejects missing foreground, expiry and permission denial; ignores stale callbacks', async () => {
     const send = vi.fn(); mocks.foreground = false; invokeDeviceLocation(request(), send);

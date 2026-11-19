@@ -28,7 +28,7 @@ interface AppAvailability { availability: string; }
 interface XopcDeviceEndpointFrame { protocolVersion: number; messageId: string; type: string; sentAt: number; payload: Object; }
 class XopcEmptyPayload {}
 interface XopcClarificationHealth { clarificationVersions?: number[]; }
-interface XopcDeviceCompatibility { turnDeviceContextV1?: boolean; endpointEnvironmentV1?: boolean; deviceStateToolsV1?: boolean; deviceLocationTasksV1?: boolean; mobilePersonalToolsV1?: boolean; }
+interface XopcDeviceCompatibility { turnDeviceContextV1?: boolean; endpointEnvironmentV1?: boolean; deviceStateToolsV1?: boolean; deviceLocationTasksV1?: boolean; mobilePersonalToolsV1?: boolean; mobileExtendedPersonalToolsV1?: boolean; }
 
 export class XopcRealtimeClient {
   private crypto: XopcDeviceCrypto = new XopcDeviceCrypto('endpoint-key');
@@ -164,7 +164,7 @@ export class XopcRealtimeClient {
       const endpoint: XopcEndpointHello = {
         principalId: profile.deviceId, endpointId: clientId, connectionInstanceId: this.crypto.uuid(),
         displayName: registration.displayName, kind: 'mobile', platform: 'harmonyos', appVersion: xopcAppVersion(),
-        availability: 'foreground', nonce: this.crypto.uuid(), signedAt: Date.now(), signature: '', tools: compatibility.payload?.deviceStateToolsV1 === true ? deviceToolCatalog(compatibility.payload?.deviceLocationTasksV1 === true, compatibility.payload?.mobilePersonalToolsV1 === true) : []
+        availability: 'foreground', nonce: this.crypto.uuid(), signedAt: Date.now(), signature: '', tools: compatibility.payload?.deviceStateToolsV1 === true ? deviceToolCatalog(compatibility.payload?.deviceLocationTasksV1 === true, compatibility.payload?.mobilePersonalToolsV1 === true, compatibility.payload?.mobileExtendedPersonalToolsV1 === true) : []
       };
       phase = 'sign';
       endpoint.signature = await this.crypto.sign(endpointProof(endpoint));

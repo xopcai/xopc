@@ -3,12 +3,18 @@ package ai.xopc.mobile.gateway
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.CalendarContract
 import android.provider.ContactsContract
 import android.provider.OpenableColumns
+import android.provider.MediaStore
+import android.os.Build
+import android.os.Environment
+import androidx.annotation.RequiresApi
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.content.ContextCompat
@@ -31,7 +37,7 @@ internal object DevicePersonalTools {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
   private var owner: ComponentActivity? = null
   private var picker: ActivityResultLauncher<Intent>? = null
-  private var permissions: ActivityResultLauncher<String>? = null
+  private var permissions: ActivityResultLauncher<Array<String>>? = null
   private var selection: CompletableDeferred<Uri?>? = null
   private var permission: CompletableDeferred<Unit>? = null
   private var resumed = CompletableDeferred<Unit>()
@@ -41,7 +47,7 @@ internal object DevicePersonalTools {
   private var cameraUri: Uri? = null
   private val http = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build()
 
-  fun attach(activity: ComponentActivity, launcher: ActivityResultLauncher<Intent>, permissionLauncher: ActivityResultLauncher<String>) {
+  fun attach(activity: ComponentActivity, launcher: ActivityResultLauncher<Intent>, permissionLauncher: ActivityResultLauncher<Array<String>>) {
     owner = activity; picker = launcher; permissions = permissionLauncher
     resumed.complete(Unit)
   }
@@ -66,18 +72,30 @@ internal object DevicePersonalTools {
     val id = request.getString("invocationId")
     fun fail(code: String) { send("tool.error", JSONObject().put("invocationId", id).put("code", code).put("message", "Personal device request failed: $code")) }
     val name = request.optString("toolName")
-    val names = listOf("mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick", "mobile.calendar.query_events", "mobile.calendar.query_free_busy")
+    val names = listOf("mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick", "mobile.calendar.query_events", "mobile.calendar.query_free_busy", "mobile.contacts.find_by_name", "mobile.calendar.create_event", "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album")
     val index = names.indexOf(name)
     if (index < 0) { fail("TOOL_NOT_FOUND"); return }
     if (request.optString("descriptorRevision") != DeviceToolCatalog.revisions[index + 3]) { fail("TOOL_REVISION_MISMATCH"); return }
     val args = request.optJSONObject("arguments") ?: run { fail("INVALID_ARGUMENTS"); return }
     val calendar = name.startsWith("mobile.calendar.")
     val contact = name == "mobile.contacts.pick"
+    val search = name == "mobile.contacts.find_by_name"
+    val organize = name == "mobile.media.add_to_album"
+    val photo = name == "mobile.media.read_image" || organize
+    val album = args.optString("album").trim()
+    if (organize && Build.VERSION.SDK_INT < 29) { fail("TOOL_NOT_FOUND"); return }
+    val create = name == "mobile.calendar.create_event"
+    val query = args.optString("query").trim()
+    val title = args.optString("title").trim()
     val start = args.optLong("startAt", -1); val end = args.optLong("endAt", -1)
-    if (request.optBoolean("confirmationRequired") != calendar ||
-      (calendar && (args.length() != 2 || start < 0 || end <= start || end - start > 7 * 86400000L)) ||
+    if (request.optBoolean("confirmationRequired") != (create || organize) ||
+      (calendar && (args.length() != (if (create) 3 else 2) || start < 0 || end <= start || end - start > 7 * 86400000L)) ||
       (contact && (args.length() != 1 || args.optString("field") !in listOf("phone", "email"))) ||
-      (!calendar && !contact && args.length() != 0)) { fail("INVALID_ARGUMENTS"); return }
+      (create && (args.opt("title") !is String || title.isEmpty() || title.length > 500)) ||
+      (search && (args.length() != 1 || args.opt("query") !is String || query.isEmpty() || query.length > 100)) ||
+      (photo && (args.length() != (if (organize) 2 else 1) || args.opt("id") !is String || args.optString("id").toLongOrNull()?.let { it > 0 } != true)) ||
+      (organize && (args.opt("album") !is String || album.isEmpty() || album.length > 100 || album.startsWith(".") || album.any { it == '/' || it == '\\' || it.isISOControl() })) ||
+      (!calendar && !contact && !search && !photo && args.length() != 0)) { fail("INVALID_ARGUMENTS"); return }
     if (owner == null) { fail("ENDPOINT_NOT_FOREGROUND"); return }
     if (job?.isActive == true || selection != null || permission != null) { fail("TOOL_BUSY"); return }
     val remaining = request.optLong("deadlineAt") - System.currentTimeMillis()
@@ -89,10 +107,28 @@ internal object DevicePersonalTools {
     job = scope.launch {
       try {
         withTimeout(remaining.coerceAtMost(120000)) {
-          val message = if (calendar) "读取本机可访问日历中 ${java.util.Date(start)} 至 ${java.util.Date(end)} 的${if (name.endsWith("free_busy")) "忙闲时间（不含标题）" else "时间和标题"}，最多 50 条。" else "请在接下来的系统页面选择本次要提供给 Agent 的${if (contact) "${if (args.getString("field") == "phone") "电话号码" else "邮箱"}" else "文件或照片"}。"
-          if (!confirm(message + "所选内容会发送给 Agent，并可能保存在聊天历史中。")) { fail("USER_DENIED"); return@withTimeout }
+          if (name == "mobile.file.pick" || name == "mobile.camera.capture") {
+            val message = "请在接下来的系统页面选择本次要提供给 Agent 的文件或照片。"
+            if (!confirm(message + "所选内容会发送给 Agent，并可能保存在聊天历史中。")) { fail("USER_DENIED"); return@withTimeout }
+          }
           if (gateway.currentProfile() != sourceProfile) throw SecurityException()
           val content = when {
+            create -> {
+              if (!confirm("创建日程「${title}」？\n${java.util.Date(start)} 至 ${java.util.Date(end)}")) {
+                fail("USER_DENIED"); return@withTimeout
+              }
+              if (gateway.currentProfile() != sourceProfile) throw SecurityException()
+              createEvent(start, end, title)
+            }
+            search -> findContacts(query)
+            name == "mobile.media.list_recent" -> listPhotos()
+            organize && Build.VERSION.SDK_INT >= 29 -> {
+              if (!confirm("将这张照片复制到相册「${album}」？")) {
+                fail("USER_DENIED"); return@withTimeout
+              }
+              if (gateway.currentProfile() != sourceProfile) throw SecurityException()
+              addPhotoToAlbum(args.getString("id").toLong(), album)
+            }
             calendar -> readCalendar(start, end, name.endsWith("free_busy"))
             contact -> readContact(args.getString("field"))
             else -> uploadSelection(name, request, gateway, sourceProfile)
@@ -122,10 +158,87 @@ internal object DevicePersonalTools {
   private suspend fun allow(permissionName: String) {
     val activity = owner ?: throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
     if (ContextCompat.checkSelfPermission(activity, permissionName) != PackageManager.PERMISSION_GRANTED) {
-      val wait = CompletableDeferred<Unit>(); permission = wait; permissions!!.launch(permissionName); wait.await(); resumed.await()
+      requestPermissions(arrayOf(permissionName))
       if (ContextCompat.checkSelfPermission(activity, permissionName) != PackageManager.PERMISSION_GRANTED) throw SecurityException()
     }
   }
+  private suspend fun requestPermissions(names: Array<String>) {
+    val wait = CompletableDeferred<Unit>()
+    permission = wait
+    try { permissions!!.launch(names) } catch (error: Exception) { permission = null; throw error }
+    wait.await()
+    resumed.await()
+    currentCoroutineContext().ensureActive()
+  }
+  private suspend fun allowPhotoAccess() {
+    val activity = owner ?: throw IllegalStateException("ENDPOINT_NOT_FOREGROUND")
+    val full = if (android.os.Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+    val limited = Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+    fun granted(): Boolean = ContextCompat.checkSelfPermission(activity, full) == PackageManager.PERMISSION_GRANTED ||
+      (android.os.Build.VERSION.SDK_INT >= 34 && ContextCompat.checkSelfPermission(activity, limited) == PackageManager.PERMISSION_GRANTED)
+    if (!granted()) requestPermissions(if (android.os.Build.VERSION.SDK_INT >= 34) arrayOf(full, limited) else arrayOf(full))
+    if (!granted()) throw SecurityException()
+  }
+  private suspend fun listPhotos(): JSONObject {
+    allowPhotoAccess()
+    val resolver = owner!!.contentResolver
+    val photos = withContext(Dispatchers.IO) {
+      val results = JSONArray()
+      val images = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+      val fields = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_TAKEN)
+      resolver.query(images, fields, null, null, "${MediaStore.Images.Media.DATE_TAKEN} DESC, ${MediaStore.Images.Media._ID} DESC")?.use { cursor ->
+        while (results.length() < 20 && cursor.moveToNext()) {
+          ensureActive()
+          results.put(JSONObject().put("id", cursor.getString(0)).put("capturedAt", cursor.getLong(1).coerceAtLeast(0)))
+        }
+      } ?: throw SecurityException()
+      results
+    }
+    return JSONObject().put("type", "json").put("value", photos)
+  }
+
+  @RequiresApi(29)
+  private suspend fun addPhotoToAlbum(id: Long, album: String): JSONObject {
+    allowPhotoAccess()
+    val resolver = owner!!.contentResolver
+    val addedId = withContext(Dispatchers.IO) {
+      val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+      val source = ContentUris.withAppendedId(collection, id)
+      val displayName = resolver.query(source, arrayOf(MediaStore.Images.Media.DISPLAY_NAME), null, null, null)
+        ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: throw SecurityException()
+      val mimeType = resolver.getType(source)?.takeIf { it.startsWith("image/") } ?: throw SecurityException()
+      val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+        put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/" + album)
+        put(MediaStore.Images.Media.IS_PENDING, 1)
+      }
+      ensureActive()
+      val destination = resolver.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values) ?: throw SecurityException()
+      try {
+        resolver.openInputStream(source)?.use { input ->
+          resolver.openOutputStream(destination)?.use { output ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+              ensureActive()
+              val count = input.read(buffer)
+              if (count < 0) break
+              output.write(buffer, 0, count)
+            }
+          } ?: throw SecurityException()
+        } ?: throw SecurityException()
+        ensureActive()
+        val completed = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }
+        if (resolver.update(destination, completed, null, null) != 1) throw SecurityException()
+        ContentUris.parseId(destination)
+      } catch (error: Exception) {
+        runCatching { resolver.delete(destination, null, null) }
+        throw error
+      }
+    }
+    return JSONObject().put("type", "json").put("value", JSONObject().put("id", addedId.toString()))
+  }
+
   private suspend fun pick(intent: Intent): Uri {
     val wait = CompletableDeferred<Uri?>(); selection = wait
     try { picker!!.launch(intent) } catch (error: Exception) { selection = null; throw error }
@@ -148,6 +261,64 @@ internal object DevicePersonalTools {
     } ?: throw SecurityException()
     return JSONObject().put("type", "json").put("value", value)
   }
+  private suspend fun findContacts(query: String): JSONObject {
+    allow(Manifest.permission.READ_CONTACTS)
+    val resolver = owner!!.contentResolver
+    val matches = withContext(Dispatchers.IO) {
+      val contacts = ContactsContract.Contacts.CONTENT_FILTER_URI.buildUpon().appendPath(query).build()
+      val data = ContactsContract.Data.CONTENT_URI
+      val results = JSONArray()
+      resolver.query(contacts, arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        while (results.length() < 20 && cursor.moveToNext()) {
+          ensureActive()
+          val id = cursor.getString(0)
+          val name = cursor.getString(1)?.take(500) ?: continue
+          if (!name.contains(query, ignoreCase = true)) continue
+          val phones = JSONArray()
+          val emails = JSONArray()
+          resolver.query(data, arrayOf(ContactsContract.Data.MIMETYPE, ContactsContract.Data.DATA1),
+            "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} IN (?, ?)",
+            arrayOf(id, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE), null)?.use { fields ->
+            while (fields.moveToNext()) {
+              val value = fields.getString(1) ?: continue
+              if (fields.getString(0) == ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE) {
+                if (phones.length() < 20) phones.put(value.take(100))
+              } else if (emails.length() < 20) emails.put(value.take(320))
+            }
+          }
+          results.put(JSONObject().put("id", id).put("name", name).put("phones", phones).put("emails", emails))
+        }
+      } ?: throw SecurityException()
+      results
+    }
+    return JSONObject().put("type", "json").put("value", matches)
+  }
+
+  private suspend fun createEvent(start: Long, end: Long, title: String): JSONObject {
+    allow(Manifest.permission.READ_CALENDAR)
+    allow(Manifest.permission.WRITE_CALENDAR)
+    val resolver = owner!!.contentResolver
+    val id = withContext(Dispatchers.IO) {
+      val calendars = CalendarContract.Calendars.CONTENT_URI
+      val calendarId = resolver.query(calendars, arrayOf(CalendarContract.Calendars._ID),
+        "${CalendarContract.Calendars.VISIBLE} = 1 AND ${CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL} >= ?",
+        arrayOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR.toString()),
+        "${CalendarContract.Calendars.IS_PRIMARY} DESC, ${CalendarContract.Calendars._ID} ASC")?.use {
+        if (it.moveToFirst()) it.getLong(0) else null
+      } ?: throw SecurityException()
+      ensureActive()
+      val values = ContentValues().apply {
+        put(CalendarContract.Events.CALENDAR_ID, calendarId)
+        put(CalendarContract.Events.TITLE, title)
+        put(CalendarContract.Events.DTSTART, start)
+        put(CalendarContract.Events.DTEND, end)
+        put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+      }
+      resolver.insert(CalendarContract.Events.CONTENT_URI, values)?.lastPathSegment ?: throw SecurityException()
+    }
+    return JSONObject().put("type", "json").put("value", JSONObject().put("id", id))
+  }
+
   private suspend fun readCalendar(start: Long, end: Long, busyOnly: Boolean): JSONObject {
     allow(Manifest.permission.READ_CALENDAR)
     val resolver = owner!!.contentResolver
@@ -173,7 +344,11 @@ internal object DevicePersonalTools {
   }
   private suspend fun uploadSelection(name: String, request: JSONObject, gateway: GatewaySession, sourceProfile: GatewayProfile): JSONObject {
     val activity = owner!!
-    val intent = when (name) {
+    val uri = if (name == "mobile.media.read_image") {
+      allowPhotoAccess()
+      val id = request.getJSONObject("arguments").getString("id").toLong()
+      ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+    } else pick(when (name) {
       "mobile.media.pick" -> if (android.os.Build.VERSION.SDK_INT >= 33) Intent("android.provider.action.PICK_IMAGES").setType("image/*") else Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
       "mobile.camera.capture" -> {
         allow(Manifest.permission.CAMERA)
@@ -184,8 +359,7 @@ internal object DevicePersonalTools {
           .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
       }
       else -> Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
-    }
-    val uri = pick(intent)
+    })
     val resolver = activity.contentResolver
     val grant = request.optJSONObject("uploadGrant") ?: throw SecurityException()
     val maxBytes = minOf(grant.getLong("maxBytes"), 10 * 1024 * 1024L)

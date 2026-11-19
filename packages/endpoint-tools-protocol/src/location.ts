@@ -29,10 +29,11 @@ export const LOCATION_OUTPUT_SCHEMA = { type: 'array', minItems: 1, maxItems: 1,
   } },
 } as const;
 export function locationDescriptor(kind: EndpointKind): EndpointToolDescriptor {
+  const mobile = kind === 'mobile';
   return { name: `${kind}.device.get_location`, title: 'Use location once',
-    description: 'With on-device consent, use one fresh WGS84 location for current weather (Open-Meteo) or nearby places (OpenStreetMap). Raw coordinates are consumed transiently by Gateway, never returned to the Agent or saved in history. Select approximate or precise; nearby requires a category. Each call requires new consent.',
+    description: (mobile ? 'With system location authorization, ' : 'With on-device consent, ') + 'use one fresh WGS84 location for current weather (Open-Meteo) or nearby places (OpenStreetMap). Raw coordinates are consumed transiently by Gateway, never returned to the Agent or saved in history. Select approximate or precise; nearby requires a category.' + (mobile ? '' : ' Each call requires new consent.'),
     inputSchema: LOCATION_INPUT_SCHEMA, outputSchema: LOCATION_OUTPUT_SCHEMA,
-    policyId: 'personal.foreground-read', sensitivity: 'personal', effect: 'read', confirmation: 'always',
+    policyId: mobile ? 'personal.mobile-authorized-read' : 'personal.foreground-read', sensitivity: 'personal', effect: 'read', confirmation: mobile ? 'never' : 'always',
     requiresForeground: true, requiredPermissions: ['location-read-once'], timeoutMs: 90_000, maxConcurrency: 1,
     supportsCancellation: true, idempotent: true, resultKinds: ['json'] };
 }

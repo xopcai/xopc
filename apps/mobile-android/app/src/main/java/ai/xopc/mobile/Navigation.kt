@@ -50,6 +50,10 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onRefreshConversations = { gateway.loadConversations() },
             onRefreshRecentConversations = gateway::loadRecentConversations,
             onLoadCapabilities = { gateway.loadCapabilities(it, catalogLocale) },
+            onLoadCapabilityDevices = gateway::loadCapabilityDevices,
+            onUseConnectedComputer = gateway::useConnectedComputer,
+            onShareDeviceConnectionFile = gateway::useLocalConnectionFile,
+            onReselectConnectedComputer = gateway::reselectConnectedComputer,
             onCapabilitySetupChat = { prompt, agentSetup ->
               gateway.startCapabilityChat(prompt, if (agentSetup) if (catalogLocale.startsWith("zh")) "zh-CN" else "en" else null)
             },

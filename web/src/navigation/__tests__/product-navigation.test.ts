@@ -28,6 +28,7 @@ describe('product navigation', () => {
       'capabilities-extensions',
       'capabilities-skills',
       'capabilities-connectors',
+      'capabilities-devices',
       'capabilities-agents',
       'capabilities-channels',
     ]);

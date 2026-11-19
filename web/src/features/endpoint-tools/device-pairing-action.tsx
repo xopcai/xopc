@@ -8,7 +8,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import type { DevicePairingTargetKind } from '@xopcai/gateway-contract';
 import { DevicePairingWizard } from './device-pairing-wizard';
 
-export function DevicePairingAction({ onPaired }: { onPaired: () => void }) {
+export function DevicePairingAction({ onPaired, label }: { onPaired: () => void; label?: string }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).endpointToolsSettings.deviceAccess;
@@ -32,7 +32,7 @@ export function DevicePairingAction({ onPaired }: { onPaired: () => void }) {
         onClick={() => setDialog({ open: true })}
       >
         <Plus className="size-4" aria-hidden />
-        {copy.addDevice}
+        {label ?? copy.addDevice}
       </Button>
       <DevicePairingWizard
         open={dialog.open}

@@ -405,7 +405,7 @@ actor DeviceEndpointHost {
 }
 
 private extension DeviceEndpointHost {
-    private static let personalNames = ["mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick", "mobile.calendar.query_events", "mobile.calendar.query_free_busy"]
+    private static let personalNames = ["mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick", "mobile.calendar.query_events", "mobile.calendar.query_free_busy", "mobile.contacts.find_by_name", "mobile.calendar.create_event", "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album"]
 
     private func invokePersonal(_ data: Data, id: String) async throws {
         do {
@@ -424,7 +424,7 @@ private extension DeviceEndpointHost {
             let selected = try await DevicePersonalTools.shared.acquire(request)
             try Task.checkCancellation()
             let contentData: Data
-            if calendar || request.toolName == "mobile.contacts.pick" {
+            if calendar || request.toolName.hasPrefix("mobile.contacts.") || ["mobile.media.list_recent", "mobile.media.add_to_album"].contains(request.toolName) {
                 contentData = selected
             } else {
                 let file = try JSONDecoder().decode(DevicePersonalTools.SelectionWire.self, from: selected)
@@ -456,7 +456,7 @@ private extension DeviceEndpointHost {
               request.descriptorRevision == DeviceToolCatalog.revisions[index + 3]
         else { throw PersonalDeviceFailure(code: "TOOL_REVISION_MISMATCH") }
         let calendar = request.toolName.hasPrefix("mobile.calendar.")
-        guard request.confirmationRequired == calendar else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
+        guard request.confirmationRequired == (["mobile.calendar.create_event", "mobile.media.add_to_album"].contains(request.toolName)) else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
         if calendar {
             guard let start = request.arguments.startAt, let end = request.arguments.endAt,
                   start >= 0, end > start, end - start <= 7 * 86_400_000
@@ -473,7 +473,7 @@ private extension DeviceEndpointHost {
             try await send("tool.error", ["invocationId": id, "code": code, "message": "Device reading unavailable: \(code)"])
         }
         guard request["descriptorRevision"] as? String == DeviceToolCatalog.revisions[2] else { try await fail("TOOL_REVISION_MISMATCH"); return }
-        guard request["confirmationRequired"] as? Bool == true,
+        guard request["confirmationRequired"] as? Bool == false,
               let args = request["arguments"] as? [String: Any], let purpose = args["purpose"] as? String,
               let precision = args["precision"] as? String, ["weather", "nearby"].contains(purpose), ["approximate", "precise"].contains(precision),
               args.count == (purpose == "weather" ? 2 : 3), purpose == "weather" || ["restaurant", "cafe", "pharmacy", "park"].contains(args["category"] as? String ?? ""),
@@ -481,7 +481,7 @@ private extension DeviceEndpointHost {
         guard deadline > Double(Self.now()) else { try await fail("TOOL_TIMEOUT"); return }
         try await send("tool.received", ["invocationId": id])
         do {
-            let reading = try await DeviceLocation.shared.acquire(purpose: purpose, precision: precision, deadline: deadline)
+            let reading = try await DeviceLocation.shared.acquire(precision: precision, deadline: deadline)
             try Task.checkCancellation()
             guard deadline > Double(Self.now()) else { try await fail("TOOL_TIMEOUT"); return }
             try await send("tool.result", ["invocationId": id, "content": [["type": "json", "value": JSONSerialization.jsonObject(with: reading)]]])

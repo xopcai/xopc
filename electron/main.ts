@@ -1337,6 +1337,14 @@ app.whenReady().then(async () => {
       throw new Error('Computer IPC requires the main frame');
     }
   };
+  ipcMain.handle('device-folders:status', (event) => {
+    assertMainComputerRenderer(event);
+    return desktopEndpointHost?.deviceFolders();
+  });
+  ipcMain.handle('device-folders:change', (event, input: unknown) => {
+    assertMainComputerRenderer(event);
+    return desktopEndpointHost?.changeDeviceFolder(input);
+  });
   ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
   registerComputerPreviewIpc(() => desktopEndpointHost, assertMainComputerRenderer);
   ipcMain.handle('computer:access', async (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.computerAccess(); });

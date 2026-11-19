@@ -1,6 +1,6 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { userErrorMessage } from '../common/userError';
-import { XopcPageHeader, XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcPageTitleOption } from './MobileComponents';
+import { XopcHubRow, XopcListSkeleton, XopcEmptyHint, XopcPageTitleOption } from './MobileComponents';
 import { XopcProgressViewModel } from '../viewmodel/homeViewModel';
 import { XopcHomeAction, XopcHomeDelivery, XopcHomeItem, XopcMobileRoute } from '../model/home';
 import { dispatchHomeAction } from '../common/homeProtocol';
@@ -129,9 +129,6 @@ export struct XopcProgressView {
 
   build() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.progress'), titleOptions: WORK_PAGE_OPTIONS, selectedTitle: 'progress',
-        titleMenuId: 'work-page-menu', onSelectTitle: this.onSelectWorkPage,
-        backVisible: true, onBack: (): void => { this.onExit(); } })
       if (this.model.actionError) {
         Text(this.model.actionError === 'UNSUPPORTED_ROUTE' ? $r('app.string.unsupported_route')
           : this.model.actionError === 'TASK_RETRY_UNAVAILABLE' ? $r('app.string.progress_retry_unavailable')

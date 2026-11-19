@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
     ai.xopc.mobile.gateway.DeviceLocation.permissionsChanged()
   }
   private val personalPicker = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { ai.xopc.mobile.gateway.DevicePersonalTools.result(it.resultCode, it.data) }
-  private val personalPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ai.xopc.mobile.gateway.DevicePersonalTools.permissionResult() }
+  private val personalPermission = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) { ai.xopc.mobile.gateway.DevicePersonalTools.permissionResult() }
   override fun onResume() { super.onResume(); ai.xopc.mobile.gateway.DeviceLocation.attach(this, locationPermissions); ai.xopc.mobile.gateway.DevicePersonalTools.attach(this, personalPicker, personalPermission) }
   override fun onStop() { ai.xopc.mobile.gateway.DeviceLocation.detach(this); ai.xopc.mobile.gateway.DevicePersonalTools.detach(this); super.onStop() }
   override fun onNewIntent(intent: Intent) {

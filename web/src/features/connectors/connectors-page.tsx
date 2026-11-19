@@ -19,6 +19,7 @@ import {
   type CapabilityHeaderActionChange,
 } from '@/features/capabilities/capability-header-actions';
 import { ConnectorCard } from '@/features/connectors/components/connector-card';
+import { CONNECTION_CARD_GRID_CLASS } from '@/features/connectors/components/connection-summary-card';
 import { connectorIsInstalled, CONNECTOR_SKELETON_KEYS } from '@/features/connectors/components/connector-card-data';
 import { ConnectorCardSkeleton } from '@/features/connectors/components/connector-card-skeletons';
 import { InstalledConnectorRowSkeleton } from '@/features/connectors/components/installed-connector-row-skeleton';
@@ -632,7 +633,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
           {tab === 'connected' && hasToken ? (
             <div className="flex flex-col gap-6">
               {state.loading ? (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label={cs.loading}>
+                <div className={CONNECTION_CARD_GRID_CLASS} aria-busy="true" aria-label={cs.loading}>
                   {CONNECTOR_SKELETON_KEYS.slice(0, 3).map((key) => <InstalledConnectorRowSkeleton key={key} />)}
                 </div>
               ) : installedCount === 0 ? (
@@ -650,7 +651,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                         <h2 className="text-sm font-semibold text-fg">{cs.needsAttentionTitle}</h2>
                         <span className="text-xs tabular-nums text-amber-700 dark:text-amber-300">{attentionInstances.length}</span>
                       </div>
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className={CONNECTION_CARD_GRID_CLASS}>
                         {attentionInstances.map((instance) => (
                           <InstalledConnectorRow
                             key={instance.instanceId}
@@ -671,7 +672,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
 
                   {availableInstances.length || visiblePluginConnections.length ? (
                     <section>
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className={CONNECTION_CARD_GRID_CLASS}>
                         {availableInstances.map((instance) => (
                           <InstalledConnectorRow
                             key={instance.instanceId}
@@ -763,7 +764,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
               {discoverSource === DISCOVERY_SOURCE_RECOMMENDED ? (
                 <ServiceRecommendationList layout="cards" showAll query={discoverSearchQuery} onChanged={async () => { await load(); await mutateConfig(); }} />
               ) : (state.loading || registryLoading) && discoveryCatalog.length === 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label={cs.loading}>
+                <div className={CONNECTION_CARD_GRID_CLASS} aria-busy="true" aria-label={cs.loading}>
                   {CONNECTOR_SKELETON_KEYS.map((key) => <ConnectorCardSkeleton key={key} />)}
                 </div>
               ) : discoveryCatalog.length === 0 ? (
@@ -775,7 +776,7 @@ export function ConnectorsPage({ embedded = false, onHeaderActionChange }: { emb
                       <Loader2 className="size-8 shrink-0 animate-spin text-accent motion-reduce:animate-none" strokeWidth={2} aria-hidden />
                     </div>
                   ) : null}
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className={CONNECTION_CARD_GRID_CLASS}>
                     {discoveryCatalog.map((connector) => (
                       <ConnectorCard
                         key={connector.id}

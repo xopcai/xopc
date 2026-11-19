@@ -1024,6 +1024,7 @@
     <string name="capability_plugins">插件</string>
     <string name="capability_skills">技能</string>
     <string name="capability_connections">连接</string>
+    <string name="capability_devices">设备连接</string>
     <string name="capability_agents">助手与专家</string>
     <string name="capability_channels">消息通道</string>
     <string name="capability_my_assistants">我的助手</string>
@@ -1109,4 +1110,8 @@
     <string name="session_share_revoke_help">撤销后，持有此链接的人将无法打开分享。</string>
     <string name="session_share_error">暂时无法完成分享操作。</string>
     <string name="assistant_fill_suggestion">填入建议：%1$s</string>
+    <string name="device_execution_target">执行设备 · %1$s</string>
+    <string name="device_execution_offline">离线</string>
+    <string name="device_execution_authorization">需授权</string>
+    <string name="device_execution_reselect">重新选择</string>
 </resources>

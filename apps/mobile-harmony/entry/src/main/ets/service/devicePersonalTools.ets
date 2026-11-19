@@ -14,14 +14,15 @@ import { pickChatAttachment } from './chatAttachmentPicker';
 import { pickChatPhoto } from './chatPhotoPicker';
 import { openDeviceLocationConsent, XopcLocationConsentHandle } from './deviceLocationConsent';
 
-interface XopcPersonalArgs { field?: string; startAt?: number; endAt?: number; }
+interface XopcPersonalArgs { field?: string; startAt?: number; endAt?: number; title?: string; }
 interface XopcPersonalGrant { path: string; token: string; maxBytes: number; expiresAt: number; }
 interface XopcPersonalInvocation { invocationId: string; toolName: string; arguments: XopcPersonalArgs; descriptorRevision: string; confirmationRequired: boolean; deadlineAt: number; uploadGrant?: XopcPersonalGrant; }
 interface XopcPersonalStatus { invocationId: string; code?: string; message?: string; }
 interface XopcPersonalContact { id: string; name: string; phones: string[]; emails: string[]; }
 interface XopcPersonalEvent { startAt: number; endAt: number; allDay: boolean; busy: boolean; title?: string; }
 interface XopcPersonalCalendar { capturedAt: number; startAt: number; endAt: number; timeZone: string; accessScope: string; truncated: boolean; events: XopcPersonalEvent[]; }
-interface XopcPersonalJson { type: string; value: XopcPersonalContact | XopcPersonalCalendar; }
+interface XopcCreatedEvent { id: string; }
+interface XopcPersonalJson { type: string; value: XopcPersonalContact | XopcPersonalCalendar | XopcCreatedEvent; }
 interface XopcPersonalFile { type: string; fileId: string; name: string; mimeType: string; size: number; sha256: string; }
 interface XopcPersonalFileEnvelope { ok: boolean; payload?: XopcPersonalFile; }
 interface XopcPersonalResult { invocationId: string; content: (XopcPersonalJson | XopcPersonalFile)[]; }
@@ -38,18 +39,20 @@ export function cancelDevicePersonalTool(id: string): void { xopcPersonalPending
 export function cancelAllDevicePersonalTools(): void { xopcPersonalPending.forEach((pending: XopcPersonalPending): void => { pending.cancel(); }); }
 export function invokeDevicePersonalTool(payload: Object, send: (kind: string, body: Object) => void): void {
   const request = payload as XopcPersonalInvocation;
-  const names: string[] = ['mobile.file.pick', 'mobile.media.pick', 'mobile.camera.capture', 'mobile.contacts.pick', 'mobile.calendar.query_events', 'mobile.calendar.query_free_busy'];
+  const names: string[] = ['mobile.file.pick', 'mobile.media.pick', 'mobile.camera.capture', 'mobile.contacts.pick', 'mobile.calendar.query_events', 'mobile.calendar.query_free_busy', 'mobile.calendar.create_event'];
   const index: number = names.indexOf(request.toolName);
   const fail = (code: string): void => { const status: XopcPersonalStatus = { invocationId: request.invocationId, code, message: 'Personal device request failed: ' + code }; send('tool.error', status); };
   if (index < 0) { fail('TOOL_NOT_FOUND'); return; }
   if (request.descriptorRevision !== DEVICE_TOOL_REVISIONS[index + 3]) { fail('TOOL_REVISION_MISMATCH'); return; }
-  const calendar: boolean = index >= 4;
+  const calendar: boolean = index === 4 || index === 5;
+  const create: boolean = index === 6;
   const contactPick: boolean = index === 3;
   const args: XopcPersonalArgs = request.arguments;
-  if (!args || request.confirmationRequired !== calendar
-    || (calendar && (Object.keys(args).length !== 2 || !Number.isSafeInteger(args.startAt) || !Number.isSafeInteger(args.endAt) || args.startAt! < 0 || args.endAt! <= args.startAt! || args.endAt! - args.startAt! > 7 * 86400000))
+  if (!args || request.confirmationRequired !== create
+    || ((calendar || create) && (Object.keys(args).length !== (create ? 3 : 2) || !Number.isSafeInteger(args.startAt) || !Number.isSafeInteger(args.endAt) || args.startAt! < 0 || args.endAt! <= args.startAt! || args.endAt! - args.startAt! > 7 * 86400000))
     || (contactPick && (Object.keys(args).length !== 1 || ['phone', 'email'].indexOf(args.field ?? '') < 0))
-    || (!calendar && !contactPick && Object.keys(args).length !== 0)) { fail('INVALID_ARGUMENTS'); return; }
+    || (create && (typeof args.title !== 'string' || !args.title.trim() || args.title.length > 500))
+    || (!create && !calendar && !contactPick && Object.keys(args).length !== 0)) { fail('INVALID_ARGUMENTS'); return; }
   if (request.deadlineAt <= Date.now()) { fail('TOOL_TIMEOUT'); return; }
   if (!layoutState.foreground || !xopcPersonalContext || !xopcPersonalUi) { fail('ENDPOINT_NOT_FOREGROUND'); return; }
   if (xopcPersonalBusy) { fail('TOOL_BUSY'); return; }
@@ -65,18 +68,27 @@ export function invokeDevicePersonalTool(payload: Object, send: (kind: string, b
   const received: XopcPersonalStatus = { invocationId: request.invocationId }; send('tool.received', received);
   const assertActive = (): void => { if (!alive) throw new Error('TOOL_CANCELLED'); gatewaySession.assertConnection(revision); if (!layoutState.foreground) throw new Error('ENDPOINT_NOT_FOREGROUND'); };
   const waitForeground = async (): Promise<void> => { while (alive && !layoutState.foreground) { await new Promise<void>((resolve): void => { setTimeout(resolve, 30); }); } assertActive(); };
+  const requestCalendarPermissions = async (permissions: Permissions[]): Promise<void> => {
+    xopcPersonalPicker = true;
+    try {
+      const grant = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(xopcPersonalContext!, permissions);
+      await waitForeground();
+      if (grant.authResults.length !== permissions.length || grant.authResults.some((value: number): boolean => value !== 0)) {
+        throw new Error('PERMISSION_DENIED');
+      }
+    } finally { xopcPersonalPicker = false; }
+  };
   const work = async (): Promise<void> => {
     try {
-      const scope: string = calendar ? '读取 xopc 应用可访问的日历（不代表你的全部日历），范围 ' + new Date(args.startAt!).toLocaleString() + ' 至 ' + new Date(args.endAt!).toLocaleString() + '，最多 50 条' + (index === 5 ? '忙闲时间，不含标题。' : '时间和标题。') : '请在系统页面选择本次要提供给 Agent 的' + (contactPick ? (args.field === 'phone' ? '联系人电话号码' : '联系人邮箱') : '文件或照片') + '。';
-      consent = openDeviceLocationConsent(xopcPersonalUi!, scope + '所选内容会发送给 Agent，并可能保存在聊天历史中。', '允许本次提供设备信息？');
-      if (!await consent.answer) { if (alive) { finish(); fail('USER_DENIED'); } return; }
+      if (index === 0 || index === 2) {
+        const scope: string = '请在系统页面选择本次要提供给 Agent 的文件或照片。';
+        consent = openDeviceLocationConsent(xopcPersonalUi!, scope + '所选内容会发送给 Agent，并可能保存在聊天历史中。', '允许本次提供设备信息？');
+        if (!await consent.answer) { if (alive) { finish(); fail('USER_DENIED'); } return; }
+      }
       assertActive();
       let content: XopcPersonalJson | XopcPersonalFile;
       if (calendar) {
-        const permissions: Permissions[] = ['ohos.permission.READ_CALENDAR'];
-        const granted = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(xopcPersonalContext!, permissions);
-        await waitForeground();
-        if (granted.authResults[0] !== 0) throw new Error('PERMISSION_DENIED');
+        await requestCalendarPermissions(['ohos.permission.READ_CALENDAR']);
         const calendars: calendarManager.Calendar[] = await calendarManager.getCalendarManager(xopcPersonalContext!).getAllCalendars();
         assertActive();
         const entries: XopcPersonalEvent[] = [];
@@ -99,6 +111,18 @@ export function invokeDevicePersonalTool(payload: Object, send: (kind: string, b
         }
         entries.sort((a: XopcPersonalEvent, b: XopcPersonalEvent): number => a.startAt - b.startAt);
         const value: XopcPersonalCalendar = { capturedAt: Date.now(), startAt: args.startAt!, endAt: args.endAt!, timeZone: i18n.getTimeZone().getID(), accessScope: 'app_only', truncated, events: entries };
+        content = { type: 'json', value };
+      } else if (create) {
+        const range: string = new Date(args.startAt!).toLocaleString() + ' 至 ' + new Date(args.endAt!).toLocaleString();
+        consent = openDeviceLocationConsent(xopcPersonalUi!, args.title! + '\n' + range, '创建此日程？');
+        if (!await consent.answer) { if (alive) { finish(); fail('USER_DENIED'); } return; }
+        assertActive();
+        await requestCalendarPermissions(['ohos.permission.READ_CALENDAR', 'ohos.permission.WRITE_CALENDAR']);
+        const target: calendarManager.Calendar = await calendarManager.getCalendarManager(xopcPersonalContext!).getCalendar();
+        assertActive();
+        const event: calendarManager.Event = { type: calendarManager.EventType.NORMAL, title: args.title!.trim(), startTime: args.startAt!, endTime: args.endAt! };
+        const id: number = await target.addEvent(event);
+        const value: XopcCreatedEvent = { id: id.toString() };
         content = { type: 'json', value };
       } else if (contactPick) {
         xopcPersonalPicker = true;

@@ -14,11 +14,14 @@ import {
   capabilityPath,
   type CapabilitySection,
 } from '@/navigation/product-navigation';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 const SkillsPage = lazy(() => import('@/features/skills/skills-page').then(module => ({ default: module.SkillsPage })));
 const ConnectorsPage = lazy(() => import('@/features/connectors/connectors-page').then(module => ({ default: module.ConnectorsPage })));
+const DeviceConnectionsPanel = lazy(() => import('@/features/endpoint-tools/device-connections-panel').then(module => ({ default: module.DeviceConnectionsPanel })));
+const ConnectDeviceButton = lazy(() => import('@/features/endpoint-tools/device-connections-panel').then(module => ({ default: module.ConnectDeviceButton })));
 const PluginDetailsDialog = lazy(() => import('@/features/extensions/plugin-details-dialog').then(module => ({ default: module.PluginDetailsDialog })));
 const ExtensionsPage = lazy(() => import('@/pages/apps-page').then(module => ({ default: module.ExtensionsPage })));
 const AgentsPage = lazy(() => import('@/features/settings/agents').then(module => ({ default: module.AgentsSettingsPanel })));
@@ -38,6 +41,7 @@ function CapabilityContentFallback({ label }: { label: string }) {
 
 export function CapabilitiesPage() {
   const language = useLocaleStore(state => state.language);
+  const hasToken = useGatewayStore(state => Boolean(state.conversationId));
   const messageBundle = messages(language);
   const copy = messageBundle.capabilitiesHub;
   const { section: sectionParam, detailId } = useParams<{ section?: string; detailId?: string }>();
@@ -65,13 +69,20 @@ export function CapabilitiesPage() {
     setPageHeader({
       startExtra: null,
       main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{sectionTitle}</h1>,
-      end: <CapabilityHeaderActions contribution={currentContribution} />,
+      end: section === 'devices'
+        ? hasToken ? <Suspense fallback={null}><ConnectDeviceButton zh={language === 'zh'} /></Suspense> : null
+        : <CapabilityHeaderActions contribution={currentContribution} />,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, currentContribution, sectionTitle, setPageHeader]);
+  }, [clearPageHeader, currentContribution, hasToken, language, section, sectionTitle, setPageHeader]);
 
   if (section === 'extensions' && detailId) return <Navigate replace to={pluginDetailPath(detailId, searchParams.get('from') === 'connections' ? 'connections' : searchParams.get('from') === 'skills' ? 'skills' : 'installed', searchParams.get('connect') === '1', searchParams.get('returnTo') ?? undefined)} />;
   if (!parsedSection) return <Navigate to={capabilityPath(CAPABILITY_SECTIONS[0])} replace />;
+  if (section === 'connectors' && searchParams.get('tab') === 'devices') {
+    const next = new URLSearchParams(searchParams);
+    next.delete('tab');
+    return <Navigate replace to={{ pathname: capabilityPath('devices'), search: next.toString() }} />;
+  }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -80,6 +91,13 @@ export function CapabilitiesPage() {
         {section === 'agents' ? <AgentsPage agentId={detailId} onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'skills' ? <SkillsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'connectors' ? <ConnectorsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
+        {section === 'devices' ? (
+          <section aria-label={sectionTitle} className="mx-auto w-full max-w-7xl px-4 pb-7 sm:px-6 lg:px-8 lg:pb-9">
+            {hasToken ? <DeviceConnectionsPanel zh={language === 'zh'} /> : (
+              <p className="mt-3 rounded-xl bg-surface-panel px-4 py-3 text-sm text-fg-muted lg:mt-4">{messageBundle.connectorsSettings.tokenHint}</p>
+            )}
+          </section>
+        ) : null}
         {section === 'channels' ? <ChannelsPage channelId={detailId} onHeaderActionChange={onHeaderActionChange} /> : null}
         {section === 'extensions' ? <ExtensionsPage embedded onHeaderActionChange={onHeaderActionChange} /> : null}
       </Suspense>

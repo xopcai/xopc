@@ -21,6 +21,7 @@ enum AttachmentPolicy {
 
 struct AttachmentPickerModifier: ViewModifier {
     var scopeID = ""
+    var singleSelection = false
     @Binding var attachments: [MessageAttachment]
     @Binding var errorMessage: String?
     @Binding var showingPhotoPicker: Bool
@@ -36,13 +37,13 @@ struct AttachmentPickerModifier: ViewModifier {
             .photosPicker(
                 isPresented: $showingPhotoPicker,
                 selection: $photoItems,
-                maxSelectionCount: max(AttachmentPolicy.maximumCount - attachments.count, 1),
+                maxSelectionCount: singleSelection ? 1 : max(AttachmentPolicy.maximumCount - attachments.count, 1),
                 matching: .images
             )
             .fileImporter(
                 isPresented: $showingFilePicker,
                 allowedContentTypes: [.item],
-                allowsMultipleSelection: true,
+                allowsMultipleSelection: !singleSelection,
                 onCompletion: importFiles
             )
             .fullScreenCover(isPresented: $showingCameraPicker) {

@@ -652,7 +652,8 @@ export struct XopcChatMediaView {
             onError: (): void => { this.error = 'MEDIA_PLAYBACK_FAILED'; } })
         }.width('100%').layoutWeight(1)
       } else if (this.previewKind() === 'markdown') {
-        Scroll() { XopcMarkdownView({ content: this.previewText, conversationId: this.conversationId }) }.layoutWeight(1).width('100%')
+        Scroll() { XopcMarkdownView({ content: this.previewText, conversationId: this.conversationId }) }
+          .id('chat-media-markdown-scroll').layoutWeight(1).width('100%').align(Alignment.TopStart)
       } else if (this.previewKind() === 'html') {
         Stack({ alignContent: Alignment.Center }) {
           if (this.previewText) {
@@ -710,11 +711,14 @@ export struct XopcChatMediaView {
           }.width('100%').padding(16).borderRadius(this.colors.corner(12)).backgroundColor(this.colors.input)
           if (this.previewText) {
             Scroll() { Text(this.previewText).id('chat-media-extracted-text').fontSize(14).fontFamily('monospace')
-              .fontColor(this.colors.foreground).copyOption(CopyOptions.InApp).width('100%') }.layoutWeight(1).width('100%')
+              .fontColor(this.colors.foreground).copyOption(CopyOptions.InApp).width('100%').textAlign(TextAlign.Start) }
+              .layoutWeight(1).width('100%').align(Alignment.TopStart)
           }
         }.layoutWeight(1).width('100%')
       } else {
-        Scroll() { Text(this.previewText).id('chat-media-text').fontSize(14).fontFamily('monospace').fontColor(this.colors.foreground).copyOption(CopyOptions.InApp) }.layoutWeight(1).width('100%')
+        Scroll() { Text(this.previewText).id('chat-media-text').fontSize(14).fontFamily('monospace')
+          .fontColor(this.colors.foreground).copyOption(CopyOptions.InApp).width('100%').textAlign(TextAlign.Start) }
+          .id('chat-media-text-scroll').layoutWeight(1).width('100%').align(Alignment.TopStart)
       }
     }.id('chat-media-preview').width('100%').height('100%')
       .padding(this.previewKind() === 'html' ? { top: 16 } : 16)

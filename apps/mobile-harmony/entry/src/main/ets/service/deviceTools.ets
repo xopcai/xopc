@@ -2,7 +2,7 @@ import { batteryInfo, deviceInfo } from '@kit.BasicServicesKit';
 import { i18n } from '@kit.LocalizationKit';
 import { invokeDevicePersonalTool } from './devicePersonalTools';
 import { invokeDeviceLocation } from './deviceLocation';
-import { APP_TOOL_NAME, APP_TOOL_REVISION, DEVICE_PERSONAL_TOOL_CATALOG_JSON, DEVICE_STATE_TOOL_CATALOG_JSON, DEVICE_TOOL_CATALOG_JSON, DEVICE_TOOL_REVISIONS } from '../common/deviceToolCatalog';
+import { APP_TOOL_NAME, APP_TOOL_REVISION, DEVICE_BASE_PERSONAL_TOOL_CATALOG_JSON, DEVICE_PERSONAL_TOOL_CATALOG_JSON, DEVICE_STATE_TOOL_CATALOG_JSON, DEVICE_TOOL_CATALOG_JSON, DEVICE_TOOL_REVISIONS } from '../common/deviceToolCatalog';
 
 interface DeviceInvocation {
   invocationId: string; toolName: string; arguments: Object; descriptorRevision: string;
@@ -16,7 +16,7 @@ interface DeviceResult { invocationId: string; content: Reading[]; }
 interface DeviceError { invocationId: string; code: string; message: string; }
 interface DeviceReceived { invocationId: string; }
 
-export function deviceToolCatalog(location: boolean = false, personal: boolean = false): Object[] { return JSON.parse(personal ? DEVICE_PERSONAL_TOOL_CATALOG_JSON : location ? DEVICE_TOOL_CATALOG_JSON : DEVICE_STATE_TOOL_CATALOG_JSON) as Object[]; }
+export function deviceToolCatalog(location: boolean = false, personal: boolean = false, extended: boolean = false): Object[] { return JSON.parse(personal ? (extended ? DEVICE_PERSONAL_TOOL_CATALOG_JSON : DEVICE_BASE_PERSONAL_TOOL_CATALOG_JSON) : location && extended ? DEVICE_TOOL_CATALOG_JSON : DEVICE_STATE_TOOL_CATALOG_JSON) as Object[]; }
 
 export function invokeDeviceTool(payload: Object, send: (kind: string, body: Object) => void, appProviderReady: boolean): void {
   const request = payload as DeviceInvocation;

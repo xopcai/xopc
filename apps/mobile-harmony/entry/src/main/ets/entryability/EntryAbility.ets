@@ -1,5 +1,5 @@
 import { attachDevicePersonalTools, cancelAllDevicePersonalTools, hasActivePersonalPicker } from '../service/devicePersonalTools';
-import { attachDeviceLocation, cancelAllDeviceLocations } from '../service/deviceLocation';
+import { attachDeviceLocation, cancelAllDeviceLocations, hasActiveDeviceLocationPermissionRequest } from '../service/deviceLocation';
 import { Configuration, UIAbility, Want } from '@kit.AbilityKit';
 import { KeyboardAvoidMode, window } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -61,7 +61,19 @@ export default class EntryAbility extends UIAbility {
   onNewWant(want: Want): void { this.receiveWant(want); }
   onConfigurationUpdate(configuration: Configuration): void { appSettings.syncSystemColorMode(configuration.colorMode); }
   onForeground(): void { gatewaySession.setForeground(true); layoutState.foreground = true; generatedMusicPlayback.onForeground(); voiceCall.onForeground(); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
-  onBackground(): void { generatedMusicPlayback.checkpoint(); cancelAllDeviceLocations(); if (!hasActivePersonalPicker()) cancelAllDevicePersonalTools(); layoutState.foreground = false; gatewaySession.setForeground(false); voiceCall.onBackground(); if (!hasActivePersonalPicker()) realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
+  onBackground(): void {
+    generatedMusicPlayback.checkpoint();
+    const locationPermission: boolean = hasActiveDeviceLocationPermissionRequest();
+    const personalInteraction: boolean = hasActivePersonalPicker();
+    if (!locationPermission) cancelAllDeviceLocations();
+    if (!personalInteraction) cancelAllDevicePersonalTools();
+    layoutState.foreground = false;
+    gatewaySession.setForeground(false);
+    voiceCall.onBackground();
+    if (!personalInteraction && !locationPermission) realtimeClient.stop();
+    voiceCapture.cancel();
+    chatReadAloud.leaveForeground();
+  }
   onDestroy(): void {
     void generatedMusicPlayback.shutdown();
     voiceCall.end(); realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.stop();

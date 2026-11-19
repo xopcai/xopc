@@ -1343,3 +1343,13 @@
 "工作台" = "Workbench";
 
 "填入建议：%@" = "Fill suggestion: %@";
+
+"device_connection_services" = "Services";
+"device_connection_devices" = "Device connections";
+"device_connection_contact_prompt" = "Let me select a contact from this phone.";
+"device_connection_calendar_prompt" = "Check today's events on this phone.";
+"device_connection_location_prompt" = "Get my current location.";
+"device_execution_target" = "Execution device";
+"device_execution_offline" = "Offline";
+"device_execution_authorization" = "Needs authorization";
+"device_execution_reselect" = "Select again";

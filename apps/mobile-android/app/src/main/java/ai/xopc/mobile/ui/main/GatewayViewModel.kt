@@ -1,5 +1,8 @@
 package ai.xopc.mobile.ui.main
 
+import ai.xopc.mobile.gateway.DesktopChatTarget
+import ai.xopc.mobile.gateway.loadDesktopChatTarget
+import ai.xopc.mobile.gateway.loadDeviceConnections
 import org.json.JSONObject
 
 import ai.xopc.mobile.gateway.ProgressTaskEdit
@@ -271,6 +274,7 @@ data class ConnectionUiState(
   val conversationTaskGroups: Map<String, ConversationTaskGroup> = emptyMap(),
   val conversationSearch: String = "",
   val selectedConversationId: String? = null,
+  val desktopChatTarget: DesktopChatTarget? = null,
   val taskConversationTaskId: String? = null,
   val automationConfigurationChat: Boolean = false,
   val taskScopeLoading: Boolean = false,
@@ -467,6 +471,7 @@ class GatewayViewModel internal constructor(application: Application, private va
   private var historyRevision = 0
   private var contextRevision = 0
   private var historyJob: Job? = null
+  private var desktopTargetJob: Job? = null
   private var olderHistoryJob: Job? = null
   private var executionJob: Job? = null
   private var executionRevision = 0
@@ -3173,7 +3178,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     referenceRevision++
     realtime.watchRun(null)
     val revision = ++historyRevision
-    mutableState.update { it.copy(selectedConversationId = id, taskConversationTaskId = taskId, restoringHomeChat = false,
+    mutableState.update { it.copy(selectedConversationId = id, desktopChatTarget = null, taskConversationTaskId = taskId, restoringHomeChat = false,
       automationConfigurationChat = automationConfiguration,
       clarification = null, clarificationBusy = false, clarificationError = null,
       taskScopeLoading = taskId == null, messages = emptyList(), draftText = "", draftRefs = emptyList(),
@@ -3197,6 +3202,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     mutableState.update { it.copy(context = null, contextLoading = false, contextError = false,
       connectionWait = ConnectionWaitUiState(it.profile?.gatewayId, id),
       taskWelcome = null, projectWelcome = null) }
+    refreshDesktopTarget(id)
     historyJob = viewModelScope.launch {
       try {
         draftWriteJob?.join()
@@ -4284,6 +4290,86 @@ class GatewayViewModel internal constructor(application: Application, private va
     return runInterruptible(Dispatchers.IO) {
       ai.xopc.mobile.gateway.CapabilityRepository(session).load(category, locale)
     }
+  }
+
+  private fun refreshDesktopTarget(conversationId: String) {
+    desktopTargetJob?.cancel()
+    val profile = mutableState.value.profile ?: return
+    desktopTargetJob = viewModelScope.launch {
+      while (mutableState.value.selectedConversationId == conversationId && mutableState.value.profile == profile) {
+        val target = try {
+          runInterruptible(Dispatchers.IO) { session.loadDesktopChatTarget(conversationId) }
+        } catch (error: CancellationException) {
+          throw error
+        } catch (_: Exception) {
+          null
+        }
+        if (mutableState.value.selectedConversationId != conversationId || mutableState.value.profile != profile) return@launch
+        mutableState.update { it.copy(desktopChatTarget = target) }
+        if (target == null) return@launch
+        delay(5_000)
+      }
+    }
+  }
+
+  internal fun reselectConnectedComputer() {
+    val state = mutableState.value
+    val id = state.selectedConversationId ?: return
+    val endpoint = state.desktopChatTarget?.reselectEndpointId ?: return
+    viewModelScope.launch {
+      try {
+        runInterruptible(Dispatchers.IO) {
+          check(session.currentProfile() == state.profile)
+          session.request("/api/endpoint-tools/targets/$id", "PUT", JSONObject().put("endpointId", endpoint).toString())
+        }
+      } catch (error: CancellationException) {
+        throw error
+      } catch (_: Exception) {
+        // The next status refresh retains the recovery action if the device is still available.
+      }
+      if (mutableState.value.selectedConversationId == id && mutableState.value.profile == state.profile) refreshDesktopTarget(id)
+    }
+  }
+
+  internal suspend fun loadCapabilityDevices() = runInterruptible(Dispatchers.IO) { session.loadDeviceConnections() }
+
+  internal suspend fun useConnectedComputer(endpointId: String) {
+    val profile = checkNotNull(mutableState.value.profile)
+    val id = runInterruptible(Dispatchers.IO) {
+      val active = session.currentProfile()
+      check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId)
+      val result = JSONObject(session.request("/api/endpoint-tools/device-connections/chat", "POST",
+        JSONObject().put("endpointId", endpointId).toString()))
+      result.getJSONObject("payload").getString("conversationId")
+    }
+    openCapabilityConversation(profile, id)
+  }
+
+  internal suspend fun useLocalConnectionFile(uri: Uri) {
+    val state = mutableState.value
+    val profile = checkNotNull(state.profile)
+    val id = runInterruptible(Dispatchers.IO) {
+      synchronized(session) {
+        val active = session.currentProfile()
+        check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId)
+        val draft = conversations.createDraft(state.defaultAgentId.ifBlank { "main" })
+        try {
+          conversations.addComposerAttachment(profile.gatewayId, draft.conversationId, uri)
+          draft.conversationId
+        } catch (error: Exception) {
+          conversations.discardDraft(draft.conversationId)
+          throw error
+        }
+      }
+    }
+    openCapabilityConversation(profile, id)
+  }
+
+  private fun openCapabilityConversation(profile: ai.xopc.mobile.gateway.GatewayProfile, conversationId: String) {
+    val active = mutableState.value.profile
+    if (active?.gatewayId != profile.gatewayId || active.deviceId != profile.deviceId) return
+    selectConversation(conversationId)
+    mutableState.update { it.copy(chatNavigationId = conversationId) }
   }
 
   fun createAgentConversation(agentId: String) {

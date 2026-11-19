@@ -358,7 +358,16 @@ struct AppRootView: View {
                                  appState.startCapabilityChat(agentId: defaultAgentID, prompt: prompt,
                                                               agentSetupLanguage: language)
                              },
-                             onPersonalChanged: { Task { await personalAgent.refresh(using: configuration) } })
+                             onPersonalChanged: { Task { await personalAgent.refresh(using: configuration) } },
+                             onOpenDeviceChat: { id, agentID in
+                                 guard configuration == appState.gatewayConfiguration else { return }
+                                 appState.openConversation(id: id, title: "", agentId: agentID)
+                             },
+                             onShareDeviceFile: { attachment in
+                                 try await appState.startLibraryConversation(configuration: configuration, agentID: defaultAgentID,
+                                                                             attachment: attachment, origin: nil)
+                             },
+                             onPairDevice: { settingsPresented = true })
         case .personalOverview:
             if let agent = personalAgent.record(using: configuration) {
                 PersonalAgentOverview(configuration: configuration, agent: agent, attention: pendingAttention,

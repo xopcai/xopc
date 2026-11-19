@@ -98,12 +98,13 @@ export function markdownBlocks(source: string): XopcMarkdownBlock[] {
 
 export function markdownSpans(source: string): XopcMarkdownSpan[] {
   const result: XopcMarkdownSpan[] = [];
-  const pattern = /(`+)[^\n]*?\1(?!`)|!?\[(?:\\.|[^\]\\])*\]\((?:\\.|[^()\\]|\([^()]*\))*\)|<https?:\/\/[^\s<>]+>|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|\\[\\`*{}_\[\]()#+\-.!|>~]/g;
+  const pattern = /(`+)[^\n]*?\1(?!`)|(?:!|(\*\*|__))?\[(?:\\.|[^\]\\])*\]\((?:\\.|[^()\\]|\([^()]*\))*\)\2|<https?:\/\/[^\s<>]+>|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\n]+\*|\\[\\`*{}_\[\]()#+\-.!|>~]/g;
   let cursor = 0; let match = pattern.exec(source);
   const push = (kind: string, text: string, href: string = ''): void => { result.push({ id: result.length.toString(), kind, text, href }); };
   while (match) {
     if (match.index > cursor) push('text', source.slice(cursor, match.index));
-    const token = match[0];
+    const strongMarker = match[2];
+    const token = strongMarker ? match[0].slice(strongMarker.length, -strongMarker.length) : match[0];
     if (token.startsWith('\\')) push('text', token.slice(1));
     else if (token.startsWith('`')) {
       const ticks = token.match(/^`+/)?.[0] ?? '`';
@@ -116,11 +117,12 @@ export function markdownSpans(source: string): XopcMarkdownSpan[] {
       const label = token.startsWith('<') ? target : token.slice(token.startsWith('!') ? 2 : 1, split);
       if (token.startsWith('![') && ((href && (target.startsWith('https://') || !!internalMessageLink(target)?.path)) || /^(media:\/\/|xopc-file:|xopc-attachment:\/\/notes\/|data:image\/)/.test(target))) {
         result.push({ id: result.length.toString(), kind: 'image', text: label, href: target, start: match.index, end: match.index + token.length });
-      } else if (href) push('link', label || href, href); else push('text', token);
+      } else if (href) push(strongMarker ? 'bold' : 'link', label || href, href);
+      else push(strongMarker ? 'bold' : 'text', token);
     } else if (token.startsWith('~~')) push('strike', token.slice(2, -2));
     else if (token.startsWith('**') || token.startsWith('__')) push('bold', token.slice(2, -2));
     else push('italic', token.slice(1, -1));
-    cursor = match.index + token.length; match = pattern.exec(source);
+    cursor = match.index + match[0].length; match = pattern.exec(source);
   }
   if (cursor < source.length) push('text', source.slice(cursor));
   return result;

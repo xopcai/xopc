@@ -8,6 +8,7 @@ import { desktopTerminalCommandSchema, desktopTerminalEventSchema } from './term
 import { providerCatalogSchema, providerStateSchema } from './providers.js';
 export * from './providers.js';
 export * from './execution.js';
+export * from './folders.js';
 export { ENDPOINT_FILE_OUTPUT_SCHEMA, ENDPOINT_CONTACT_RECORD_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 
 export const ENDPOINT_PROTOCOL_VERSION = 3 as const;
@@ -72,6 +73,12 @@ export const endpointPrincipalRegistrationSchema = z.strictObject({
 export const endpointTaskTargetRequestSchema = z.strictObject({
   endpointId: identifierSchema,
 });
+
+const mobileDeviceChatToolSchema = z.enum([
+  'mobile.file.pick', 'mobile.media.pick', 'mobile.contacts.pick', 'mobile.calendar.query_events', 'mobile.device.get_location',
+]);
+export type MobileDeviceChatTool = z.infer<typeof mobileDeviceChatToolSchema>;
+export const deviceConnectionChatRequestSchema = endpointTaskTargetRequestSchema.extend({ toolName: mobileDeviceChatToolSchema.optional() });
 
 const backgroundCapabilitySchema = z.string()
   .regex(/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/)

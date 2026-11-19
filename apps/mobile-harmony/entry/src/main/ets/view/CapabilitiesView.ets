@@ -1,17 +1,18 @@
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
 import { agentDisplayDescription, agentDisplayName } from '../common/agentPresentation';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcChatAgent } from '../model/chat';
+import { XopcChatAttachment, XopcChatAgent } from '../model/chat';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { loadCapabilities, XopcCapabilityItem, XopcCapabilityPage } from '../repository/capabilitiesRepository';
-import { XopcListSkeleton } from './MobileComponents';
+import { XopcListSkeleton, XopcPageTitleMenu, XopcPageTitleOption } from './MobileComponents';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { capabilityDrawerHeight, XopcCapabilityPanelView } from './CapabilityPanelView';
 import { XopcCapabilityLogo } from './CapabilityLogo';
+import { XopcDeviceConnectionsView } from './DeviceConnectionsView';
 
-const categories: string[] = ['plugins', 'skills', 'connections', 'agents', 'channels'];
+const categories: string[] = ['plugins', 'skills', 'connections', 'devices', 'agents', 'channels'];
 const groups: string[] = ['attention', 'assistant', 'expert', 'connected', 'installed', 'configured', 'disabled', 'available'];
 
 @ObservedV2
@@ -35,6 +36,8 @@ export struct XopcCapabilitiesView {
   @Event onOpenAgent: (id: string, personal: boolean) => void = (_id: string, _personal: boolean): void => {};
   @Event onPersonalChanged: () => void = (): void => {};
   @Event onSetupChat: (prompt: string, agentSetup: boolean) => void = (_prompt: string, _agentSetup: boolean): void => {};
+  @Event onDeviceChat: (id: string) => void = (_id: string): void => {};
+  @Event onDeviceFile: (attachment: XopcChatAttachment) => Promise<void> = async (_attachment: XopcChatAttachment): Promise<void> => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local layout: XopcLayoutState = layoutState;
   @Local category: string = 'plugins';
@@ -46,7 +49,6 @@ export struct XopcCapabilitiesView {
   private pendingChatPrompt: string = '';
   private tabs: XopcCapabilityTabState[] = categories.map((key: string): XopcCapabilityTabState => new XopcCapabilityTabState(key));
   private swiper: SwiperController = new SwiperController();
-  private initialIndex: number = 0;
   private active: boolean = false;
   private generation: number = 0;
 
@@ -57,8 +59,7 @@ export struct XopcCapabilitiesView {
   aboutToAppear(): void {
     this.active = true;
     this.category = appSettings.pageSelection('capabilities', categories, 'plugins');
-    this.initialIndex = Math.max(0, categories.indexOf(this.category));
-    this.loadNearby(this.initialIndex);
+    this.loadNearby(Math.max(0, categories.indexOf(this.category)));
   }
 
   aboutToDisappear(): void {
@@ -68,7 +69,7 @@ export struct XopcCapabilitiesView {
   }
 
   private async load(tab: XopcCapabilityTabState, refresh: boolean = false): Promise<void> {
-    if (!this.active || tab.loading || (!refresh && (tab.catalog !== undefined || tab.failed))) return;
+    if (!this.active || tab.key === 'devices' || tab.loading || (!refresh && (tab.catalog !== undefined || tab.failed))) return;
     const generation = this.generation;
     tab.loading = true;
     tab.failed = false;
@@ -115,6 +116,7 @@ export struct XopcCapabilitiesView {
   private title(category: string): Resource {
     if (category === 'skills') return $r('app.string.capability_skills');
     if (category === 'connections') return $r('app.string.capability_connections');
+    if (category === 'devices') return $r('app.string.device_connection_devices');
     if (category === 'agents') return $r('app.string.capability_agents');
     if (category === 'channels') return $r('app.string.capability_channels');
     return $r('app.string.capability_plugins');
@@ -185,9 +187,9 @@ export struct XopcCapabilitiesView {
     return this.matches(tab).filter((item: XopcCapabilityItem): boolean => item.group === group);
   }
 
-  private categoryOptions(): XopcSegmentOption[] {
-    return categories.map((key: string): XopcSegmentOption => ({
-      key, label: this.title(key), testId: 'capability-category-' + key
+  private categoryOptions(): XopcPageTitleOption[] {
+    return categories.map((key: string): XopcPageTitleOption => ({
+      key, label: this.title(key), id: 'capability-category-' + key
     }));
   }
 
@@ -315,28 +317,42 @@ export struct XopcCapabilitiesView {
             .accessibilityText(this.setupLabel()).onClick((): void => { this.startSetup(); })
         }
       }.width('100%').height(44)
-      Text($r('app.string.capability_title')).id('capability-title').fontSize(17)
-        .fontColor(this.colors.foreground).fontWeight(FontWeight.Medium).maxLines(1)
-        .constraintSize({ maxWidth: '48%' }).hitTestBehavior(HitTestMode.None)
+      XopcPageTitleMenu({ heading: this.title(this.category), options: this.categoryOptions(), selected: this.category,
+        menuId: 'capability-page-menu', onSelect: (key: string): void => { this.select(key); } })
+        .constraintSize({ maxWidth: '48%' })
     }.width('100%').padding({ top: 8, bottom: 8 })
   }
 
   build() {
     Column() {
       this.header()
-      XopcSegmentedTabs({ options: this.categoryOptions(), selectedKey: this.category, segmentMin: 44,
-        onSelect: (key: string): void => { this.select(key); } })
       Swiper(this.swiper) {
         ForEach(this.tabs, (tab: XopcCapabilityTabState) => {
           Column() {
-            this.catalogList(tab)
+            if (tab.key === 'devices') {
+              Column() {
+                XopcDeviceConnectionsView({ laneActive: this.category === 'devices',
+                  onUseChat: (id: string): void => { this.onDeviceChat(id); },
+                  onShareFile: (attachment: XopcChatAttachment): Promise<void> => this.onDeviceFile(attachment),
+                  onLocalTool: (tool: string): void => {
+                    const prompt = tool === 'mobile.contacts.pick' ? $r('app.string.device_connection_contact_prompt')
+                      : tool === 'mobile.calendar.query_events' ? $r('app.string.device_connection_calendar_prompt')
+                      : $r('app.string.device_connection_location_prompt');
+                    this.onSetupChat(this.getLabel(prompt), false);
+                  } })
+              }.layoutWeight(1).width('100%')
+            } else {
+              this.catalogList(tab)
+            }
           }.width('100%').height('100%').accessibilityLevel(tab.key === this.category ? 'auto' : 'no-hide-descendants')
         }, (tab: XopcCapabilityTabState): string => tab.key)
-      }.id('capability-pager').index(this.initialIndex).loop(false).indicator(false).cachedCount(4)
+      }.id('capability-pager').index(Math.max(0, categories.indexOf(this.category))).loop(false).indicator(false).cachedCount(4)
         .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(this.detailOpen)
         .onChange((index: number): void => { this.commitPage(index); })
         .width('100%').layoutWeight(1)
-      this.searchField()
+      if (this.category !== 'devices') {
+        this.searchField()
+      }
     }.width('100%').height('100%').padding({ left: 18, right: 18 }).backgroundColor(this.colors.surface)
       .bindSheet($$this.detailOpen, this.detailSheet, { height: capabilityDrawerHeight(this.detailExpanded), dragBar: true,
         showClose: false, backgroundColor: this.colors.surface, onDisappear: (): void => {

@@ -473,7 +473,7 @@ export class EndpointInvocationService {
               || value.status === 'not-found' && value.receipt !== undefined || value.status === 'recorded'
               && desktopOperationReceiptSchema.parse(value.receipt).operationId !== pending.operationQuery.operationId) throw new Error('Operation status identity changed');
           }
-          if (pending.toolName.startsWith('mobile.calendar.') && reading?.type === 'json') {
+          if (pending.toolName.startsWith('mobile.calendar.query_') && reading?.type === 'json') {
             const value = reading.value as { startAt: number; endAt: number; events: Array<{ title?: string; startAt: number; endAt: number }> };
             if (value.startAt !== pending.arguments.startAt || value.endAt !== pending.arguments.endAt
               || value.events.some(event => event.endAt <= event.startAt || event.endAt <= value.startAt || event.startAt >= value.endAt)

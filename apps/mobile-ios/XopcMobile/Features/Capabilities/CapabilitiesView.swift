@@ -8,7 +8,7 @@ private let capabilityCompactDetent = PresentationDetent.height(420)
 private let capabilityExpandedDetent = PresentationDetent.fraction(0.82)
 
 private enum CapabilityCategory: String, CaseIterable, Identifiable {
-    case plugins, skills, connections, agents, channels
+    case plugins, skills, connections, devices, agents, channels
 
     var id: String {
         rawValue
@@ -19,6 +19,7 @@ private enum CapabilityCategory: String, CaseIterable, Identifiable {
         case .plugins: "capability_plugins"
         case .skills: "capability_skills"
         case .connections: "capability_connections"
+        case .devices: "device_connection_devices"
         case .agents: "capability_agents"
         case .channels: "capability_channels"
         }
@@ -29,6 +30,7 @@ private enum CapabilityCategory: String, CaseIterable, Identifiable {
         case .plugins: "puzzlepiece"
         case .skills: "checklist"
         case .connections: "link"
+        case .devices: "iphone"
         case .agents: "person.2"
         case .channels: "bubble.left"
         }
@@ -72,7 +74,9 @@ struct CapabilitiesView: View {
     let onOpenAgent: (String, Bool) -> Void
     let onSetupChat: (String, String?) -> Void
     var onPersonalChanged: () -> Void = {}
-
+    var onOpenDeviceChat: (String, String) -> Void = { _, _ in }
+    var onShareDeviceFile: (MessageAttachment) async throws -> Void = { _ in }
+    var onPairDevice: () -> Void = {}
     @Environment(\.locale) private var locale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("navigation.capabilities") private var category = CapabilityCategory.plugins
@@ -95,14 +99,23 @@ struct CapabilitiesView: View {
 
             TabView(selection: $category) {
                 ForEach(CapabilityCategory.allCases) { kind in
-                    catalogPage(kind).tag(kind)
+                    Group {
+                        if kind == .devices {
+                            DeviceConnectionsView(configuration: configuration, active: category == .devices,
+                                                  onOpenChat: onOpenDeviceChat, onShareFile: onShareDeviceFile,
+                                                  onLocalTool: openDeviceTool, onPair: onPairDevice)
+                                .id(ComposerDraftStore.accountScope(configuration))
+                        } else { catalogPage(kind) }
+                    }.tag(kind)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .accessibilityIdentifier("capability-pager")
         }
         .background(mobileTheme.canvas)
-        .safeAreaInset(edge: .bottom, spacing: 0) { searchField }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if category != .devices { searchField }
+        }
         .mobilePageTitle(Text("capability_title"))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -133,6 +146,15 @@ struct CapabilitiesView: View {
             pendingChatPrompt = nil
             onSetupChat(prompt, nil)
         }) { item in detailView(item) }
+    }
+
+    private func openDeviceTool(_ tool: String) {
+        let key = switch tool {
+        case "mobile.contacts.pick": "device_connection_contact_prompt"
+        case "mobile.calendar.query_events": "device_connection_calendar_prompt"
+        default: "device_connection_location_prompt"
+        }
+        onSetupChat(AppLocalization.string(key, locale: locale), nil)
     }
 
     private var setupLabel: LocalizedStringKey {
@@ -432,7 +454,7 @@ struct CapabilitiesView: View {
     }
 
     private func load(_ kind: CapabilityCategory, refresh: Bool = false) {
-        guard requests[kind] == nil, refresh || (pages[kind] == nil && !failures.contains(kind)) else { return }
+        guard kind != .devices, requests[kind] == nil, refresh || (pages[kind] == nil && !failures.contains(kind)) else { return }
         failures.remove(kind)
         requests[kind] = Task { @MainActor in
             do {

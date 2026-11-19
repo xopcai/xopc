@@ -7,6 +7,7 @@ import { XopcChatAttachment, XopcHistoryMedia } from '../model/chat';
 import { XopcMusicTrack } from '../model/musicPlayback';
 import { XopcMusicPreviewContent, XopcPreviewHeader } from './MusicPlaybackView';
 import { appSettings } from '../service/settings';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { readChatMedia } from '../service/chatMedia';
 import { downloadGatewayMediaFile, removeGeneratedMediaFile } from '../service/generatedMediaFile';
 import { gatewaySession } from '../service/gatewaySession';
@@ -66,8 +67,21 @@ interface XopcLibraryMutation { revision: number; title?: string; favorite?: boo
 interface XopcLibraryUndo { id: string; revision: number; }
 
 const ITEM_PATH: string = '/api/spaces/items';
+const LIBRARY_SCOPES: string[] = ['all', 'favorites', 'trash'];
 const LIBRARY_KINDS: string[] = ['', 'document', 'spreadsheet', 'presentation', 'image', 'audio', 'video', 'archive', 'file'];
 const snapshots = new XopcListSnapshots<XopcLibraryPage>();
+
+@ObservedV2
+class XopcLibraryScopeState {
+  readonly scope: string;
+  @Trace items: XopcLibraryItem[] = [];
+  @Trace cursor: string = '';
+  @Trace loading: boolean = true;
+  @Trace listFailed: boolean = false;
+  @Trace moreFailed: boolean = false;
+
+  constructor(scope: string) { this.scope = scope; }
+}
 
 @ComponentV2
 export struct XopcSpaceLibraryView {
@@ -78,14 +92,10 @@ export struct XopcSpaceLibraryView {
   @Event onUseInChat: (file: XopcChatAttachment, source?: XopcLibraryOrigin) => Promise<void> =
     (_file: XopcChatAttachment, _source?: XopcLibraryOrigin): Promise<void> => Promise.resolve();
   @Local colors: XopcThemeColors = appThemeColors;
-  @Local items: XopcLibraryItem[] = [];
+  @Local layout: XopcLayoutState = layoutState;
   @Local scope: string = 'all';
   @Local query: string = '';
   @Local kind: string = '';
-  @Local cursor: string = '';
-  @Local loading: boolean = true;
-  @Local listFailed: boolean = false;
-  @Local moreFailed: boolean = false;
   @Local selected?: XopcLibraryItem;
   @Local detailOpen: boolean = false;
   @Local detailLoaded: boolean = false;
@@ -100,9 +110,13 @@ export struct XopcSpaceLibraryView {
   private detailRequest: number = 0;
   private leavingForSource: boolean = false;
   private searchTimer: number = -1;
+  private pager: SwiperController = new SwiperController();
+  private pages: XopcLibraryScopeState[] = LIBRARY_SCOPES.map((scope: string): XopcLibraryScopeState => new XopcLibraryScopeState(scope));
+
+  @Computed get scopeIndex(): number { return Math.max(0, LIBRARY_SCOPES.indexOf(this.scope)); }
 
   aboutToAppear(): void {
-    this.scope = appSettings.pageSelection('library-scope', ['all', 'favorites', 'trash'], 'all');
+    this.scope = appSettings.pageSelection('library-scope', LIBRARY_SCOPES, 'all');
     this.kind = appSettings.pageSelection('library-kind', LIBRARY_KINDS, '');
     this.onBackHandler((): boolean => {
       if (this.busy) return true;
@@ -142,45 +156,63 @@ export struct XopcSpaceLibraryView {
   }
 
   private async load(after: string = '', cached: boolean = true): Promise<void> {
-    if (after && (this.loading || this.cursor !== after || this.selected)) return;
+    const state = this.pages[Math.max(0, LIBRARY_SCOPES.indexOf(this.scope))];
+    if (after && (state.loading || state.cursor !== after || this.selected)) return;
     const seq = ++this.listRequest;
     const endpoint = ITEM_PATH + '?view=' + this.scope + '&q=' + encodeURIComponent(this.query.trim())
       + (this.kind ? '&kind=' + this.kind : '');
     const owner = activeListScope();
     const snapshot = !after && cached ? snapshots.read(owner, endpoint) : undefined;
-    if (snapshot) { this.items = snapshot.items; this.cursor = snapshot.nextCursor ?? ''; }
-    this.loading = true;
-    this.listFailed = false;
-    this.moreFailed = false;
+    if (snapshot) { state.items = snapshot.items; state.cursor = snapshot.nextCursor ?? ''; }
+    state.loading = true;
+    state.listFailed = false;
+    state.moreFailed = false;
     try {
       const page = JSON.parse(await gatewaySession.request(endpoint +
         (after ? '&cursor=' + encodeURIComponent(after) : ''))) as XopcLibraryPage;
       if (seq !== this.listRequest) return;
       if (!after) {
-        this.items = page.items;
+        state.items = page.items;
         snapshots.write(owner, endpoint, page, Date.now());
       } else {
-        const known = new Set<string>(this.items.map((item: XopcLibraryItem): string => item.id));
-        this.items = this.items.concat(page.items.filter((item: XopcLibraryItem): boolean => !known.has(item.id)));
+        const known = new Set<string>(state.items.map((item: XopcLibraryItem): string => item.id));
+        state.items = state.items.concat(page.items.filter((item: XopcLibraryItem): boolean => !known.has(item.id)));
       }
-      this.cursor = page.nextCursor !== after ? page.nextCursor ?? '' : '';
+      state.cursor = page.nextCursor !== after ? page.nextCursor ?? '' : '';
     } catch (_) {
       if (seq === this.listRequest) {
-        this.listFailed = !after;
-        this.moreFailed = !!after;
+        state.listFailed = !after;
+        state.moreFailed = !!after;
       }
     }
-    finally { if (seq === this.listRequest) this.loading = false; }
+    finally { if (seq === this.listRequest) state.loading = false; }
   }
 
   private setFilters(reset: boolean = true): void {
     clearTimeout(this.searchTimer);
     ++this.listRequest;
-    if (reset) { this.items = []; this.cursor = ''; }
-    this.loading = true;
-    this.listFailed = false;
-    this.moreFailed = false;
+    const state = this.pages[Math.max(0, LIBRARY_SCOPES.indexOf(this.scope))];
+    if (reset) { state.items = []; state.cursor = ''; }
+    state.loading = true;
+    state.listFailed = false;
+    state.moreFailed = false;
     this.searchTimer = setTimeout((): void => { void this.load(); }, this.query ? 240 : 0);
+  }
+
+  private selectScope(scope: string): void {
+    const index = LIBRARY_SCOPES.indexOf(scope);
+    const current = LIBRARY_SCOPES.indexOf(this.scope);
+    if (index < 0 || index === current || this.busy || this.detailOpen) return;
+    this.pager.changeIndex(index, !this.layout.reduceMotion && Math.abs(index - current) === 1);
+  }
+
+  private commitScope(index: number): void {
+    const scope = LIBRARY_SCOPES[index];
+    if (!scope || scope === this.scope) return;
+    this.getUIContext().getFocusController().clearFocus();
+    this.scope = scope;
+    appSettings.rememberPageSelection('library-scope', scope);
+    this.query = ''; this.undo = undefined; this.error = ''; this.setFilters();
   }
 
   private async open(id: string, preview?: XopcLibraryItem): Promise<void> {
@@ -217,6 +249,13 @@ export struct XopcSpaceLibraryView {
     if (!source) return '';
     return source.label || (source.kind === 'task' ? this.t('任务', 'Task') :
       source.kind === 'automation' ? this.t('定时任务', 'Automation') : this.t('对话', 'Chat'));
+  }
+
+  private sourceActionLabel(): string {
+    const source = this.source;
+    if (source?.kind === 'task' && source.taskId) return this.t('查看来源任务', 'View source task');
+    if (source?.kind === 'automation' && source.automationRunId) return this.t('查看执行记录', 'View run details');
+    return this.t('查看来源对话', 'View source chat');
   }
 
   private date(time: number): string {
@@ -326,11 +365,8 @@ export struct XopcSpaceLibraryView {
         { key: 'favorites', label: this.t('收藏', 'Favorites'), id: 'space-tab-favorites' },
         { key: 'trash', label: this.t('回收站', 'Trash'), id: 'space-tab-trash' }],
       onSelectTitle: (scope: string): void => {
-        if (this.scope === scope) return;
-        this.scope = scope;
-        appSettings.rememberPageSelection('library-scope', scope);
-        this.query = ''; this.undo = undefined; this.error = ''; this.setFilters();
-      } })
+        this.selectScope(scope);
+      } }).id('space-library-header')
     Row({ space: 8 }) {
       TextInput({ text: this.query, placeholder: this.t('搜索资料', 'Search files') }).id('space-search')
         .layoutWeight(1).height(42).maxLength(160).backgroundColor(this.colors.input).fontColor(this.colors.foreground)
@@ -348,7 +384,7 @@ export struct XopcSpaceLibraryView {
   }
 
   @Builder
-  fileRow(item: XopcLibraryItem) {
+  fileRow(item: XopcLibraryItem, scope: string) {
     Row({ space: 10 }) {
       Column() {
         SymbolGlyph(item.kind === 'audio' ? $r('sys.symbol.mic')
@@ -366,7 +402,7 @@ export struct XopcSpaceLibraryView {
         }
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(13).fontColor([this.colors.tertiary])
-    }.id('space-item-' + item.id).width('100%').constraintSize({ minHeight: 56 }).padding(12)
+    }.id('space-item-' + scope + '-' + item.id).width('100%').constraintSize({ minHeight: 56 }).padding(12)
       .borderRadius(this.colors.corner(12)).clipShape(this.colors.cornerClip(12)).backgroundColor(this.colors.panel)
       .onClick((): void => { void this.open(item.id, item); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
@@ -381,6 +417,18 @@ export struct XopcSpaceLibraryView {
   private actions(item: XopcLibraryItem, version: XopcLibraryVersion): MenuElement[] {
     const actions: MenuElement[] = [];
     if (!item.trashedAt) {
+      actions.push({ value: this.t('用此文件提问', 'Ask about this file'),
+        enabled: !this.busy && version.sizeBytes > 0 && version.sizeBytes <= MAX_ATTACHMENT_BYTES,
+        action: (): void => { void this.transfer(item, version, true); } });
+      const source = this.source;
+      if (source) {
+        actions.push({ value: this.sourceActionLabel(), enabled: !this.busy,
+          action: (): void => {
+            this.leavingForSource = true;
+            this.detailOpen = false;
+            this.onOpenSource(source);
+          } });
+      }
       actions.push({ value: this.t('下载', 'Download'), enabled: !this.busy,
         action: (): void => { void this.transfer(item, version, false); } });
       actions.push({ value: item.favorite ? this.t('取消收藏', 'Remove favorite') : this.t('收藏', 'Favorite'), enabled: !this.busy,
@@ -429,25 +477,7 @@ export struct XopcSpaceLibraryView {
       Text(this.searchHit).fontSize(13).fontColor(this.colors.secondary).maxLines(2)
         .width('100%').padding({ left: 20, right: 20 })
     }
-    if (!item.trashedAt) {
-      Row({ space: 8 }) {
-        if (this.source) {
-          Button(this.t('查看来源', 'Open source')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-            .onClick((): void => {
-              const source = this.source;
-              if (source) {
-                this.leavingForSource = true;
-                this.detailOpen = false;
-                this.onOpenSource(source);
-              }
-            })
-        }
-        Blank()
-        Button(this.t('在对话中使用', 'Use in chat')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-          .enabled(version.sizeBytes > 0 && version.sizeBytes <= MAX_ATTACHMENT_BYTES)
-          .onClick((): void => { void this.transfer(item, version, true); })
-      }.enabled(!this.busy).width('100%').padding({ left: 12, right: 12, bottom: 8 })
-    }
+
   }
 
   @Builder
@@ -467,32 +497,46 @@ export struct XopcSpaceLibraryView {
     }.width('100%').height('100%')
   }
 
+  @Builder
+  fileList(page: XopcLibraryScopeState) {
+    List({ space: 8 }) {
+      if (page.loading && !page.items.length) {
+        ListItem() { XopcListSkeleton() }
+      } else if (page.listFailed) {
+        ListItem() { Button(this.t('加载失败，重试', 'Could not load. Retry')).onClick((): void => { void this.load(); }) }
+      } else if (!page.items.length) {
+        ListItem() {
+          Text(this.query ? this.t('没有匹配的资料', 'No matching results')
+            : page.scope === 'favorites' ? this.t('暂无收藏', 'No favorites')
+              : page.scope === 'trash' ? this.t('回收站为空', 'Trash is empty') : this.t('暂无资料', 'No results yet'))
+            .width('100%').textAlign(TextAlign.Center).padding(24).fontColor(this.colors.secondary)
+        }
+      }
+      Repeat<XopcLibraryItem>(page.items).each((entry: RepeatItem<XopcLibraryItem>) => {
+        ListItem() { this.fileRow(entry.item, page.scope) }
+      }).key((entry: XopcLibraryItem): string => entry.id).virtualScroll({ totalCount: page.items.length })
+      if (page.cursor && !page.listFailed) {
+        ListItem() {
+          XopcPaginationFooter({ loadingPage: page.loading, failedPage: page.moreFailed,
+            onLoad: (): void => { if (page.scope === this.scope) void this.load(page.cursor); } })
+        }
+      }
+    }.id('space-list-' + page.scope).layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).cachedCount(5)
+  }
+
   build() {
     Column() {
       this.listHeader()
-      List({ space: 8 }) {
-        if (this.loading && !this.items.length) {
-          ListItem() { XopcListSkeleton() }
-        } else if (this.listFailed) {
-          ListItem() { Button(this.t('加载失败，重试', 'Could not load. Retry')).onClick((): void => { void this.load(); }) }
-        } else if (!this.items.length) {
-          ListItem() {
-            Text(this.query ? this.t('没有匹配的资料', 'No matching results')
-              : this.scope === 'favorites' ? this.t('暂无收藏', 'No favorites')
-                : this.scope === 'trash' ? this.t('回收站为空', 'Trash is empty') : this.t('暂无资料', 'No results yet'))
-              .width('100%').textAlign(TextAlign.Center).padding(24).fontColor(this.colors.secondary)
-          }
-        }
-        Repeat<XopcLibraryItem>(this.items).each((entry: RepeatItem<XopcLibraryItem>) => {
-          ListItem() { this.fileRow(entry.item) }
-        }).key((entry: XopcLibraryItem): string => entry.id).virtualScroll({ totalCount: this.items.length })
-        if (this.cursor && !this.listFailed) {
-          ListItem() {
-            XopcPaginationFooter({ loadingPage: this.loading, failedPage: this.moreFailed,
-              onLoad: (): void => { void this.load(this.cursor); } })
-          }
-        }
-      }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).cachedCount(5)
+      Swiper(this.pager) {
+        ForEach(this.pages, (page: XopcLibraryScopeState) => {
+          Column() {
+            this.fileList(page)
+          }.width('100%').height('100%').accessibilityLevel(page.scope === this.scope ? 'auto' : 'no-hide-descendants')
+        }, (page: XopcLibraryScopeState): string => page.scope)
+      }.id('space-library-pager').index(this.scopeIndex).loop(false).indicator(false).cachedCount(2)
+        .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(this.detailOpen || this.busy)
+        .onChange((index: number): void => { this.commitScope(index); })
+        .width('100%').layoutWeight(1).clip(true)
       if ((!this.detailOpen && this.error) || this.undo) {
         Row({ space: 8 }) {
           Text(this.error || this.t('已移到回收站', 'Moved to Trash')).fontSize(13).fontColor(this.colors.secondary).layoutWeight(1)
@@ -504,7 +548,7 @@ export struct XopcSpaceLibraryView {
         }.width('100%').padding(12)
       }
     }.id('space-library').width('100%').height('100%').backgroundColor(this.colors.surface)
-      .bindSheet($$this.detailOpen, this.previewSheet, { height: '88%', dragBar: true, showClose: false,
+      .bindSheet($$this.detailOpen, this.previewSheet, { height: '95%', dragBar: true, showClose: false,
         backgroundColor: this.colors.chat.canvas,
         onWillDismiss: (action: DismissSheetAction): void => { if (!this.busy) action.dismiss(); },
         onDisappear: (): void => { this.finishPreview(); } })

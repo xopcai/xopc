@@ -60,6 +60,24 @@ describe('mobile chat rendering', () => {
     const dense = markdownBlocks('| A | B | C |\n| --- | --- | --- |\n| 2026-11-18 | 99.98% | v1.16.21 |')[0];
     expect(markdownTableWidths(dense.rows!, 130, measure).reduce((total, width) => total + width, 0)).toBeGreaterThan(130);
   });
+  it('renders a streamed bold table link and sizes its column from the visible label', () => {
+    const measure = (text: string) => Array.from(text).reduce((width, char) => width + (char.charCodeAt(0) > 255 ? 16 : 8), 0);
+    const href = 'https://github.com/example/skill-hub-with-a-long-repository-name';
+    const source = '| 项目 | 定位与管理能力 |\n| --- | --- |\n| **[SkillHub](' + href + ')** | 中文说明可以在可用宽度内正常换行。 |';
+    const table = new XopcMarkdownProjection();
+    table.update(source.slice(0, source.indexOf(')**')));
+    const cell = new XopcMarkdownInlineProjection();
+    cell.update(table.blocks[0].rows[1].cells[0].text);
+    expect(cell.spans.every(span => !span.href)).toBe(true);
+
+    table.update(source);
+    cell.update(table.blocks[0].rows[1].cells[0].text);
+    expect(cell.spans).toMatchObject([{ kind: 'bold', text: 'SkillHub', href }]);
+    const [plain] = markdownBlocks(source.replace('**[SkillHub](' + href + ')**', '**SkillHub**'));
+    const widths = markdownTableWidths(table.blocks[0].rows, 240, measure);
+    expect(widths).toEqual(markdownTableWidths(plain.rows!, 240, measure));
+    expect(widths[0]).toBeLessThan(widths[1]);
+  });
   it('retains prefix and tail identities while content and syntax change', () => {
     const projection = new XopcMarkdownProjection();
     projection.update('# Title\n\nPartial');

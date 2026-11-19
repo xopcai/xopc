@@ -6,10 +6,8 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
     static let shared = DeviceLocation()
     private let manager = CLLocationManager()
     private var pending: CheckedContinuation<Data, Error>?
-    private var consent: UIAlertController?
     private var timeout: Task<Void, Never>?
     private var requestedPrecision = "approximate"
-    private var approved = false
     private var pendingId: UUID?
 
     override private init() {
@@ -21,11 +19,11 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
         finish(.failure(LocationFailure(code: "ENDPOINT_NOT_FOREGROUND")))
     }
 
-    func acquire(purpose: String, precision: String, deadline: Double) async throws -> Data {
+    func acquire(precision: String, deadline: Double) async throws -> Data {
         guard pending == nil else { throw LocationFailure(code: "TOOL_BUSY") }
         guard UIApplication.shared.applicationState == .active else { throw LocationFailure(code: "ENDPOINT_NOT_FOREGROUND") }
         let requestId = UUID()
-        requestedPrecision = precision; approved = false
+        requestedPrecision = precision
         return try await withTaskCancellationHandler(operation: {
             try Task.checkCancellation()
             return try await withCheckedThrowingContinuation { continuation in
@@ -35,20 +33,7 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
                     do { try await Task.sleep(for: .milliseconds(remaining)); self?.finish(.failure(LocationFailure(code: "TOOL_TIMEOUT"))) }
                     catch {}
                 }
-                let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive }
-                var presenter = scene?.windows.first { $0.isKeyWindow }?.rootViewController
-                while let presented = presenter?.presentedViewController {
-                    presenter = presented
-                }
-                guard let presenter else { finish(.failure(LocationFailure(code: "ENDPOINT_NOT_FOREGROUND"))); return }
-                let service = purpose == "weather" ? "Open-Meteo" : "OpenStreetMap"
-                let precisionLabel = precision == "precise" ? "精确" : "大致"
-                let purposeLabel = purpose == "weather" ? "查询天气" : "查询附近地点"
-                let message = "使用此手机的\(precisionLabel)位置\(purposeLabel)。坐标将发送给 \(service)，仅用于本次查询，原始坐标不进入聊天历史。"
-                let dialog = UIAlertController(title: "允许本次使用位置？", message: message, preferredStyle: .alert)
-                dialog.addAction(UIAlertAction(title: "拒绝", style: .cancel) { [weak self] _ in guard self?.pendingId == requestId else { return }; self?.finish(.failure(LocationFailure(code: "USER_DENIED"))) })
-                dialog.addAction(UIAlertAction(title: "允许一次", style: .default) { [weak self] _ in guard self?.pendingId == requestId else { return }; self?.approved = true; self?.startLocation() })
-                consent = dialog; presenter.present(dialog, animated: true)
+                startLocation()
             }
         }, onCancel: { Task { @MainActor in DeviceLocation.shared.cancel(requestId) } })
     }
@@ -60,7 +45,7 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
     }
 
     private func startLocation() {
-        guard pending != nil, approved, UIApplication.shared.applicationState == .active else { return }
+        guard pending != nil, UIApplication.shared.applicationState == .active else { return }
         switch manager.authorizationStatus {
         case .notDetermined: manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
@@ -72,13 +57,11 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
     }
 
     func locationManagerDidChangeAuthorization(_: CLLocationManager) {
-        if approved {
-            startLocation()
-        }
+        startLocation()
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard pending != nil, approved else { return }
+        guard pending != nil else { return }
         guard UIApplication.shared.applicationState == .active else { finish(.failure(LocationFailure(code: "ENDPOINT_NOT_FOREGROUND"))); return }
         guard let location = locations.last, location.horizontalAccuracy >= 0,
               abs(location.timestamp.timeIntervalSinceNow) <= 30 else { finish(.failure(LocationFailure(code: "PROTOCOL_ERROR"))); return }
@@ -103,8 +86,8 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
 
     private func finish(_ result: Result<Data, Error>) {
         guard let continuation = pending else { return }
-        pending = nil; pendingId = nil; approved = false; manager.stopUpdatingLocation(); timeout?.cancel(); timeout = nil
-        consent?.dismiss(animated: false); consent = nil; continuation.resume(with: result)
+        pending = nil; pendingId = nil; manager.stopUpdatingLocation(); timeout?.cancel(); timeout = nil
+        continuation.resume(with: result)
     }
 
     struct LocationFailure: Error, Sendable { let code: String }

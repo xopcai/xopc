@@ -218,6 +218,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
         ok: true;
       }>,
   },
+  deviceFolders: {
+    status: () => ipcRenderer.invoke("device-folders:status"),
+    change: (input: unknown) => ipcRenderer.invoke("device-folders:change", input),
+  },
   file: {
     readFile: (filePath: string) =>
       ipcRenderer.invoke("file:read", filePath) as Promise<string>,

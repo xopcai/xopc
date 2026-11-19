@@ -9,6 +9,8 @@ import {
 } from '@xopcai/browser-control-contract';
 import {
   personalDescriptor,
+  locationDescriptor,
+  deviceFolderDescriptors,
   desktopCommandDescriptor,
   desktopTerminalDescriptors,
   PERSONAL_TOOL_NAMES,
@@ -59,6 +61,8 @@ function contract(
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   [REMOTE_BROWSER_CONTROL_TOOL]: contract(REMOTE_BROWSER_DESCRIPTOR.policyId, REMOTE_BROWSER_DESCRIPTOR.outputSchema, ['json', 'file'], ['browser-control'], REMOTE_BROWSER_DESCRIPTOR.inputSchema),
+  ...Object.fromEntries(deviceFolderDescriptors().map(descriptor => [descriptor.name,
+    contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema)])),
   ...Object.fromEntries(desktopTerminalDescriptors().map(descriptor => [descriptor.name,
     contract(descriptor.policyId, descriptor.outputSchema, descriptor.resultKinds, descriptor.requiredPermissions, descriptor.inputSchema)])),
   'desktop.command.run': (() => {
@@ -73,8 +77,10 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
     [`${kind}.device.get_state`, contract('public.background-read', DEVICE_STATE_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA)],
     [`${kind}.device.get_power`, contract('public.background-read', DEVICE_POWER_OUTPUT_SCHEMA, ['json'], [], DEVICE_EMPTY_INPUT_SCHEMA)],
   ])),
-  ...Object.fromEntries(['mobile', 'desktop', 'web'].map(kind =>
-    [`${kind}.device.get_location`, contract('personal.foreground-read', LOCATION_OUTPUT_SCHEMA, ['json'], ['location-read-once'], LOCATION_INPUT_SCHEMA)])),
+  ...Object.fromEntries((['mobile', 'desktop', 'web'] as const).map(kind => {
+    const descriptor = locationDescriptor(kind);
+    return [descriptor.name, contract(descriptor.policyId, LOCATION_OUTPUT_SCHEMA, ['json'], ['location-read-once'], LOCATION_INPUT_SCHEMA)];
+  })),
   'desktop.computer.control': contract('computer.session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
   [REMOTE_COMPUTER_CONTROL_TOOL]: contract('computer.remote-session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], COMPUTER_INPUT_SCHEMA),
   'web.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
@@ -115,7 +121,8 @@ export class EndpointToolPolicy {
     }
     const contract = POLICY_BY_TOOL[descriptor.name];
     if (!contract) throw new EndpointToolPolicyError(`Tool ${descriptor.name} has no trusted server policy`);
-    if (descriptor.policyId !== contract.policyId) {
+    if (descriptor.policyId !== contract.policyId
+      && !(contract.policyId === 'personal.mobile-authorized-read' && descriptor.policyId === 'personal.foreground-read')) {
       throw new EndpointToolPolicyError(`Tool ${descriptor.name} does not match its trusted server policy`);
     }
     if (
@@ -154,12 +161,19 @@ export class EndpointToolPolicy {
       case 'public.foreground-read':
         this.assertFields(descriptor, 'read', 'never', true, 'public');
         return;
+      case 'personal.desktop-folder-read':
+        this.assertFields(descriptor, 'read', 'never', false, 'personal');
+        if (descriptor.timeoutMs !== 25_000 || descriptor.maxConcurrency !== 2 || !descriptor.supportsCancellation || !descriptor.idempotent) {
+          throw new EndpointToolPolicyError('Folder tool violates its trusted policy');
+        }
+        return;
       case 'personal.foreground-read':
         this.assertFields(descriptor, 'read', 'always', true, 'personal');
         if (descriptor.requiredPermissions.length === 0) {
           throw new EndpointToolPolicyError(`Personal tool ${descriptor.name} must declare a permission`);
         }
         return;
+      case 'personal.mobile-authorized-read':
       case 'personal.foreground-mediated-read':
         this.assertFields(descriptor, 'read', 'never', true, 'personal');
         if (descriptor.requiredPermissions.length === 0) {

@@ -55,6 +55,7 @@ struct DeviceCompatibility: Decodable {
     let clarificationVersions: [Int]?
     let deviceLocationTasksV1: Bool?
     let mobilePersonalToolsV1: Bool?
+    let mobileExtendedPersonalToolsV1: Bool?
     let deviceStateToolsV1: Bool?
     let endpointEnvironmentV1: Bool?
 
@@ -63,9 +64,9 @@ struct DeviceCompatibility: Decodable {
             return "[]"
         }
         if mobilePersonalToolsV1 == true {
-            return DeviceToolCatalog.personalJson
+            return mobileExtendedPersonalToolsV1 == true ? DeviceToolCatalog.personalJson : DeviceToolCatalog.basePersonalJson
         }
-        if deviceLocationTasksV1 == true {
+        if deviceLocationTasksV1 == true && mobileExtendedPersonalToolsV1 == true {
             return DeviceToolCatalog.json
         }
         return DeviceToolCatalog.stateJson

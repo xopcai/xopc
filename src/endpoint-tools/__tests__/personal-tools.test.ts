@@ -34,8 +34,21 @@ describe('Personal device tools', () => {
     const policy = new EndpointToolPolicy();
     for (const name of PERSONAL_TOOL_NAMES) expect(() => policy.validateDescriptor('mobile', personalDescriptor(name))).not.toThrow();
     const descriptor = personalDescriptor('mobile.calendar.query_events');
-    expect(() => policy.validateDescriptor('mobile', { ...descriptor, confirmation: 'never' })).toThrow();
+    expect(() => policy.validateDescriptor('mobile', { ...descriptor, confirmation: 'always' })).toThrow();
     expect(() => policy.validateDescriptor('mobile', { ...descriptor, inputSchema: { type: 'object' } })).toThrow();
+    expect(policy.evaluate(descriptor, 'foreground')).toEqual({ confirmationRequired: false });
+    expect(() => policy.evaluate(descriptor, 'background')).toThrow();
+    const legacy = { ...descriptor, policyId: 'personal.foreground-read', confirmation: 'always' } as const;
+    expect(() => policy.validateDescriptor('mobile', legacy)).not.toThrow();
+    expect(policy.evaluate(legacy, 'foreground')).toEqual({ confirmationRequired: true });
+  });
+  it('requires native confirmation for event creation and accepts the event identifier', async () => {
+    const f = fixture('mobile.calendar.create_event');
+    const promise = f.invoke({ title: 'Test event', startAt: 1, endAt: 3 });
+    expect(JSON.parse(f.sent[0]).payload.confirmationRequired).toBe(true);
+    f.result({ id: '12' });
+    await expect(promise).resolves.toMatchObject({ content: [{ value: { id: '12' } }] });
+    f.service.close();
   });
   it('rejects unbounded, reversed, extra-field and noninteger calendar requests before dispatch', async () => {
     const f = fixture('mobile.calendar.query_events');

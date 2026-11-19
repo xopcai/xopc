@@ -116,6 +116,8 @@ class Handler(BaseHTTPRequestHandler):
   music_fixture = path.startswith('/music/')
   slow_capabilities = path.startswith('/slow-capabilities/')
   live_music_fixture = path.startswith('/music-live/')
+  device_connections = path.startswith('/device-connections/')
+  if device_connections: path = path.removeprefix('/device-connections')
   if keyboard_fixture: path = path.removeprefix('/keyboard')
   if suggestion_fixture: path = path.removeprefix('/next-turn')
   if bubble_fixture: path = path.removeprefix('/bubble-width')
@@ -221,6 +223,18 @@ class Handler(BaseHTTPRequestHandler):
    self.end_headers()
    self.wfile.write(logo)
    return
+  elif device_connections and path=='/api/endpoint-tools/device-connections':
+   data=envelope({'currentDeviceId':'test-phone','devices':[
+    {'id':'test-phone','name':'测试 iPhone','kind':'mobile','platform':'ios','availability':'foreground',
+     'tools':['mobile.file.pick','mobile.media.pick','mobile.contacts.pick','mobile.calendar.query_events','mobile.device.get_location'],'folders':[]},
+    {'id':'test-mac','name':'工作 MacBook','kind':'desktop','platform':'darwin','endpointId':'test-mac-endpoint','availability':'background',
+     'tools':['desktop.folder.search','desktop.folder.read'],'folders':[{'id':space_id,'kind':'downloads','label':'Downloads'}]},
+    {'id':'test-offline-pc','name':'家里的电脑','kind':'desktop','platform':'win32','availability':'offline','tools':[],'folders':[]}]})
+  elif device_connections and path=='/api/endpoint-tools/device-connections/chat' and self.command=='POST':
+   if json.loads(body).get('endpointId') == 'test-mac-endpoint': data=envelope({'conversationId':parent,'agentId':'main'})
+   else: status=409; data={'ok':False,'error':{'message':'Selected computer is unavailable'}}
+  elif device_connections and path=='/api/endpoint-tools/targets/'+parent:
+   data=envelope({'deviceName':'工作 MacBook','deviceState':'ready'})
   elif path=='/api/capabilities/mobile-catalog':
    catalog = {
     'plugins': [{'id':'meeting-plugin','name':'Meeting Plugin','description':'Plan meetings','group':'installed','iconUrl':capability_plugin_icon},

@@ -1,3 +1,4 @@
+import { loadDesktopChatTarget, reselectDesktopChatTarget, XopcDesktopChatTarget } from '../repository/deviceConnectionsRepository';
 import { XopcConversationShare } from './ConversationShare';
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
@@ -910,8 +911,55 @@ export struct XopcChatView {
     this.getUIContext().getFocusController().clearFocus();
   }
   private openSheet(mode: string): void { this.palette.close(); this.editor.stopEditing(); this.setPanel(false); this.sheetMode = mode; this.sheetOpen = true; }
+  @Local desktopChatTarget?: XopcDesktopChatTarget;
+  @Local desktopReselecting: boolean = false;
+  private desktopTargetTimer: number = -1;
+  private desktopTargetEpoch: number = 0;
+
+  private observeDesktopTarget(): void {
+    clearTimeout(this.desktopTargetTimer);
+    this.desktopChatTarget = undefined;
+    const epoch = ++this.desktopTargetEpoch;
+    if (this.activePage && this.chat.selectedId && !this.embedded && !this.taskId) {
+      void this.refreshDesktopTarget(this.chat.selectedId, epoch);
+    }
+  }
+
+  private async refreshDesktopTarget(id: string, epoch: number): Promise<void> {
+    try {
+      const target = await loadDesktopChatTarget(id);
+      if (epoch !== this.desktopTargetEpoch || !this.activePage) return;
+      this.desktopChatTarget = target;
+      if (target) this.desktopTargetTimer = setTimeout((): void => { void this.refreshDesktopTarget(id, epoch); }, 5000);
+    } catch (_error) {}
+  }
+
+  private async selectDesktopAgain(): Promise<void> {
+    const endpoint = this.desktopChatTarget?.reselectEndpointId;
+    if (!endpoint || this.desktopReselecting) return;
+    const id = this.chat.selectedId;
+    const epoch = this.desktopTargetEpoch;
+    this.desktopReselecting = true;
+    try { await reselectDesktopChatTarget(id, endpoint); }
+    catch (_error) {}
+    finally {
+      this.desktopReselecting = false;
+      if (epoch === this.desktopTargetEpoch) this.observeDesktopTarget();
+    }
+  }
+
+  private desktopTargetLabel(): Resource {
+    const target = this.desktopChatTarget;
+    const name = target?.deviceName ?? '';
+    if (target?.deviceState === 'reselect') return $r('app.string.device_execution_reselect', name);
+    if (target?.deviceState === 'offline') return $r('app.string.device_execution_offline', name);
+    if (target?.deviceState === 'authorization_required') return $r('app.string.device_execution_authorization', name);
+    return $r('app.string.device_execution_target', name);
+  }
+
   @Monitor('selectedConversationId', 'activePage')
   onSelectedConversation(): void {
+    this.observeDesktopTarget();
     if (this.activePage && this.chat.selectedId) this.onConversationChange(this.chat.selectedId);
   }
   @Monitor('chat.selectedId', 'chat.transcriptId', 'chat.runId', 'chat.cachedHistory', 'chat.musicJobsRevision',
@@ -984,7 +1032,7 @@ export struct XopcChatView {
     this.focusComposerOnMount = true;
     this.focusMountedComposer();
   }
-  aboutToDisappear(): void { this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(this.readAloudOwner); this.attachments = []; }
+  aboutToDisappear(): void { clearTimeout(this.desktopTargetTimer); this.desktopTargetEpoch++; this.generatedMedia.stop(); this.composerNotice.clear(); this.phone.dispose(); this.closeExecutionDetail(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.intakeTimer); clearTimeout(this.scrollTimer); this.scrollTimer = -1; clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setPanel(false); this.prompt.dispose(); this.connectionWait.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voiceHeld = false; this.voiceDestination = 'send'; this.voice.cancel(); this.reader.leaveForeground(this.readAloudOwner); this.attachments = []; }
 
   private async switchAgent(agentId: string): Promise<void> {
     if (this.chat.loading || this.chat.sending || this.restoringDraft) return;
@@ -2144,7 +2192,17 @@ export struct XopcChatView {
       } else {
         Row({ space: 8 }) {
           this.sidebarButton()
-          Blank().layoutWeight(1)
+          if (this.desktopChatTarget?.deviceName) {
+            if (this.desktopChatTarget?.reselectEndpointId) {
+              Button(this.desktopTargetLabel()).height(44).fontSize(12).fontColor(this.colors.chat.action)
+                .backgroundColor(this.colors.chat.card).layoutWeight(1)
+                .enabled(!this.desktopReselecting && !this.chat.sending && !this.chat.runId)
+                .id('chat-execution-device').onClick((): void => { void this.selectDesktopAgain(); })
+            } else {
+              Text(this.desktopTargetLabel()).fontSize(12).fontColor(this.colors.secondary).maxLines(2)
+                .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1).id('chat-execution-device-label')
+            }
+          } else { Blank().layoutWeight(1) }
           this.conversationActions()
         }.width('100%').padding({ left: 12, right: 12 })
       }

@@ -1,7 +1,7 @@
 export type ProductDomainId = 'work' | 'automation' | 'capabilities' | 'apps' | 'me';
 
 export type ProductSectionId =
-  'work-overview' | 'work-projects' | 'work-notes' | 'automation-triggers' | 'capabilities-agents' | 'capabilities-skills' | 'capabilities-connectors' | 'capabilities-channels' | 'capabilities-extensions' | 'apps-library' | 'me-overview';
+  'work-overview' | 'work-projects' | 'work-notes' | 'automation-triggers' | 'capabilities-agents' | 'capabilities-skills' | 'capabilities-connectors' | 'capabilities-devices' | 'capabilities-channels' | 'capabilities-extensions' | 'apps-library' | 'me-overview';
 
 type ProductSectionDefinition = {
   id: ProductSectionId;
@@ -25,7 +25,7 @@ const automationSections = [
   { id: 'automation-triggers', domain: 'automation', path: '/automations' },
 ] as const satisfies readonly ProductSectionDefinition[];
 
-export const CAPABILITY_SECTIONS = ['extensions', 'skills', 'connectors', 'agents', 'channels'] as const;
+export const CAPABILITY_SECTIONS = ['extensions', 'skills', 'connectors', 'devices', 'agents', 'channels'] as const;
 export type CapabilitySection = typeof CAPABILITY_SECTIONS[number];
 
 const capabilitySections = CAPABILITY_SECTIONS.map((section) => ({

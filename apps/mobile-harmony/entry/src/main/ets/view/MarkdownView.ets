@@ -127,7 +127,8 @@ struct XopcMarkdownInline {
           }, (span: XopcMarkdownRenderSpan): string => span.id)
         }.fontSize(this.textSize)
           .lineHeight(this.textLineHeight)
-          .maxLines(this.lineLimit).textOverflow({ overflow: TextOverflow.Ellipsis })
+          .maxLines(Number.isFinite(this.lineLimit) ? this.lineLimit : undefined)
+          .textOverflow({ overflow: Number.isFinite(this.lineLimit) ? TextOverflow.Ellipsis : TextOverflow.None })
           .copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None).width('100%')
           .onTextSelectionChange((start: number, end: number): void => {
             this.selecting = start >= 0 && end > start;
@@ -281,10 +282,11 @@ export struct XopcMarkdownView {
                       .width(this.tableColumns.get(item.item.id)?.[cell.index] ?? 64)
                       .padding({ left: MARKDOWN_TABLE_CELL_INSET, right: MARKDOWN_TABLE_CELL_INSET, top: 8, bottom: 8 })
                   }).key((cell: XopcMarkdownCell): string => cell.id)
-                }.alignItems(VerticalAlign.Top).backgroundColor(row.item.header ? this.colors.grouped : this.colors.panel)
+                }.width('100%').alignItems(VerticalAlign.Top)
+                  .backgroundColor(row.item.header ? this.colors.grouped : this.colors.panel)
                   .margin({ bottom: 4 })
               }).key((row: XopcMarkdownTableRow): string => row.id)
-            }
+            }.width(this.tableColumns.get(item.item.id)?.reduce((total: number, width: number): number => total + width, 0))
           }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
           if ((item.item.rows || []).length > 40) {
             Button(this.expandedBlocks.has(item.item.id) ? $r('app.string.chat_collapse_content') : $r('app.string.chat_view_more'))

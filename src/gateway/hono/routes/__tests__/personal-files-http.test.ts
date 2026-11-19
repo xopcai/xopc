@@ -40,7 +40,7 @@ it('serves compatibility and device-owned files over authenticated HTTP; rejects
   try {
     expect((await fetch(`${origin}/api/endpoint-tools/compatibility`)).status).toBe(401);
     const compatibility = await fetch(`${origin}/api/endpoint-tools/compatibility`, { headers: { Authorization: `Bearer ${ownToken}` } });
-    expect(await compatibility.json()).toMatchObject({ payload: { mobilePersonalToolsV1: true } });
+    expect(await compatibility.json()).toMatchObject({ payload: { mobilePersonalToolsV1: true, mobileExtendedPersonalToolsV1: true } });
     const grant = runtime.uploads.createGrant('fixture', 'phone', Date.now(), 'personal', 'phone-owner');
     const headers = { Authorization: `Bearer ${ownToken}`, 'x-endpoint-id': 'phone', 'x-endpoint-upload-token': grant.token, 'Content-Type': 'text/plain' };
     const path = `${origin}${grant.path}?name=fixture.txt`;

@@ -124,7 +124,7 @@ describe('Device Bridge', () => {
         { readyState: 1, close: () => {}, send: data => {
           const message = JSON.parse(data);
           if (message.type !== 'tool.invoke') return;
-          calls++; expect(message.payload.confirmationRequired).toBe(true);
+          calls++; expect(message.payload.confirmationRequired).toBe(false);
           queueMicrotask(() => {
             const send = (type: 'tool.received' | 'tool.result', payload: object) => runtime.handleMessage(id, connectionId,
               { protocolVersion: ENDPOINT_PROTOCOL_VERSION, messageId: randomUUID(), type, sentAt: Date.now(), payload } as any);
