@@ -20,7 +20,7 @@
           └─ 设置 → Gateway、通知（按端）、分享中心、语言、外观、关于
 ~~~
 
-三端的五个一级入口语义一致，二级 Tab 根页都提供快捷输入。展开输入工具、打开详情或键盘出现时，底栏显隐和回跳由各端实现。主要差异集中在文件入口、会话管理、项目内创建、通知设置与跳转。9 月的 [Tab 评审](mobile-tabs-information-architecture-review-2026-09-17.md)基于已退役客户端，当时的四入口与部分缺口已经变化。
+三端的五个一级入口语义一致，二级 Tab 根页都提供快捷输入。展开输入工具、打开详情或键盘出现时，底栏显隐和回跳由各端实现。主要差异集中在文件入口、会话管理、项目内创建、通知设置与跳转。此前的四入口布局属于已退役客户端。
 
 入口依据见 [HarmonyOS 首页](../../apps/mobile-harmony/entry/src/main/ets/view/HomeView.ets)、[Android 主界面](../../apps/mobile-android/app/src/main/java/ai/xopc/mobile/ui/main/MainScreen.kt)、[iOS 应用根页](../../apps/mobile-ios/XopcMobile/App/AppRootView.swift)。
 

@@ -2,7 +2,7 @@
 
 状态：待实现的完整设计。决策日期：2026-09-07。源码核查基线：`aa6a22c15`。
 
-用户已选择「历史提示 + 单一连接操作区」。本文替代前一版逐卡片维护状态的产品方案；[竞品调研与源码背景](chat-capability-recovery.md)仅作为研究记录。
+用户已选择「历史提示 + 单一连接操作区」。
 
 ## 1. 产品决定
 
@@ -523,3 +523,14 @@ stream `run_end.status` 增加 `suspended`（协同升级 contract 与所有 con
 授权有效不代表任务工具可用。恢复服务在入队前及 worker 消费前检查候选能力对应的动作契约；缺失契约或查询异常保存 `capabilityError`，保留账号、停止自动继续意图，界面展示“应用工具暂不可用”和“重试检查”。检查通过后由用户继续，工具故障不触发 OAuth。
 
 托管工具搜索必须传递实际 `query`。云端将搜索提示按工具 slug 获取完整定义，返回以 slug 为键的统一 `inputSchema`；执行时精确查询目标定义并保留 toolkit、账号所有权、操作策略和幂等校验，不再将一次语义搜索结果视为执行白名单。本地不会发布缺失或无效参数定义的搜索项，也不会用空对象伪造契约。XOPC 与 model-gateway 的此项接口修改需配套发布，不提供旧接口兼容分支。
+
+## 15. 设计调研（2026-09-07）
+
+当时的调研基于用户截图、官方说明和 xopc 源码。竞品 OAuth 续跑、跨重启恢复和第三方写入去重未实测。
+
+- Manus 截图显示任务内推荐一个连接器，同时提供连接、跳过和查看全部连接器。正文与任务区都有等待提示。Copilot Studio 也有任务内登录入口，连接页面则管理长期连接。[Manus 连接器](https://help.manus.im/en/articles/12231777-how-can-i-use-manus-connectors) · [Copilot Studio 终端用户认证](https://learn.microsoft.com/en-us/microsoft-copilot-studio/configure-enduser-authentication)
+- Codex 和 ChatGPT 插件调研支持区分可发现、已安装、已授权和当前对话可用。观察到 Codex 宿主可用结构化工具推荐安装。ChatGPT 工具级 OAuth 由认证方案、资源元数据和运行时 challenge 共同触发。Claude 对已连接应用的推荐为多应用选择提供了参考。[Codex / ChatGPT 插件](https://learn.chatgpt.com/docs/plugins) · [OpenAI 工具认证](https://developers.openai.com/plugins/build/auth) · [Claude 连接推荐](https://support.claude.com/en/articles/14730684-how-claude-suggests-connected-apps)
+- Zapier Agents 的活动记录区分缺失、过期和取消共享的连接，并引导重连或换账号。Composio Session 提供搜索、授权和执行，并可通过 `session.authorize()` 生成 Connect Link。xopc 负责权限核验、等待和任务续跑。[Zapier Agents 连接错误](https://help.zapier.com/hc/en-us/articles/45697369623693-Zapier-Agents-app-connection-errors) · [Composio Session](https://docs.composio.dev/docs/how-composio-works)
+- MCP URL elicitation 使用 `elicitationId` 关联外部交互，并可发送完成通知。用户接受提示只表示愿意开始外部交互。第三方授权结果和任务能否继续需要单独验证。[MCP URL elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation)
+
+在早期 xopc 基线 `8c165027e`，外部工具入口已支持搜索、描述、执行，Composio 也能生成连接链接。连接器账号、授权状态和 OAuth 窗口已有各自的实现。缺口是把工具缺失、明确账号、授权验证和原目标的恢复串起来。普通会话与 TaskRun 的生命周期不同，因此复用会话输入队列，仅在已有 TaskRun 时关联 TaskWait。恢复前核对绑定账号和动作可用性，避免授权一个账号后用另一个账号继续执行。
