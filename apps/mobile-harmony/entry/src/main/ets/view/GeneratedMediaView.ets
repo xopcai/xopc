@@ -1,9 +1,9 @@
 import { XopcPreviewVideo } from './ChatMediaView';
-import { fileIo as fs, fileUri, picker } from '@kit.CoreFileKit';
+import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { generatedMediaTime } from '../common/generatedMedia';
 import { XopcGeneratedMediaCard } from '../model/generatedMedia';
-import { downloadGeneratedMedia, removeGeneratedMediaFile } from '../service/generatedMediaFile';
+import { downloadGeneratedMedia, gatewayMediaPlaybackUrl, generatedMediaContentPath, removeGeneratedMediaFile } from '../service/generatedMediaFile';
 import { XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcMusicPlayButton, XopcPreviewHeader } from './MusicPlaybackView';
 
@@ -140,6 +140,7 @@ export struct XopcGeneratedVideoDrawer {
   @Event onClose: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local path: string = '';
+  @Local saving: boolean = false;
   @Local loading: boolean = false;
   @Local failed: boolean = false;
   private mounted: boolean = false;
@@ -149,22 +150,17 @@ export struct XopcGeneratedVideoDrawer {
   aboutToAppear(): void { this.mounted = true; void this.load(); }
   aboutToDisappear(): void {
     this.mounted = false; this.request++;
-    const path = this.path;
-    if (path) this.video.stop();
-    void removeGeneratedMediaFile(path);
+    if (this.path) this.video.stop();
+    this.path = '';
   }
 
   private async load(): Promise<void> {
-    const context = this.getUIContext().getHostContext();
-    if (!this.mounted || !context || this.loading) return;
+    if (!this.mounted || this.loading) return;
     const request = ++this.request;
-    const path = context.cacheDir + '/generated-video-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.mp4';
     this.loading = true; this.failed = false;
     try {
-      await downloadGeneratedMedia('video', this.conversationId, this.card.item.id, path,
-        (): boolean => request === this.request);
-      if (request !== this.request) { await removeGeneratedMediaFile(path); return; }
-      this.path = path;
+      const url = await gatewayMediaPlaybackUrl(generatedMediaContentPath('video', this.conversationId, this.card.item.id));
+      if (request === this.request) this.path = url;
     } catch (_) {
       if (request === this.request) this.failed = true;
     } finally {
@@ -173,35 +169,42 @@ export struct XopcGeneratedVideoDrawer {
   }
 
   private async saveVideo(): Promise<void> {
-    const source = this.path;
     const context = this.getUIContext().getHostContext();
-    if (!source || !context) return;
+    if (!context || this.saving) return;
+    const request = this.request;
+    const source = context.cacheDir + '/generated-video-export-' + Date.now() + '.mp4';
+    this.saving = true;
     try {
       const name = mediaTitle(this.card, this.zh).replace(/[\\/:*?"<>|]/g, '_').slice(0, 100) || 'video';
       const paths = await new picker.DocumentViewPicker(context).save({ newFileNames: [name + '.mp4'] });
-      if (!paths.length || !this.mounted || this.path !== source) return;
+      if (!paths.length || !this.mounted || request !== this.request) return;
+      await downloadGeneratedMedia('video', this.conversationId, this.card.item.id, source,
+        (): boolean => this.mounted && request === this.request);
+      if (!this.mounted || request !== this.request) return;
       const target = await fs.open(paths[0], fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
       try { await fs.copyFile(source, target.fd); } finally { await fs.close(target); }
     } catch (_) {
       if (this.mounted) {
         this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_media_failed') });
       }
+    } finally {
+      await removeGeneratedMediaFile(source);
+      this.saving = false;
     }
   }
 
   build() {
     Column() {
       XopcPreviewHeader({ title: mediaTitle(this.card, this.zh), closeId: 'video-player-close', onClose: this.onClose,
-        actions: [{ value: $r('app.string.download'), enabled: !!this.path && !this.failed,
+        actions: [{ value: $r('app.string.download'), enabled: !this.saving,
           action: (): void => { void this.saveVideo(); } }] })
       Stack() {
         if (this.failed) {
           Column({ space: 8 }) {
             Text(this.zh ? '无法播放这段视频' : 'Unable to play this video').fontColor(this.colors.danger)
             Button($r('app.string.refresh')).height(44).onClick((): void => {
-              const path = this.path;
               this.path = '';
-              void removeGeneratedMediaFile(path).then((): void => { void this.load(); });
+              void this.load();
             })
           }
         } else if (this.loading || !this.path) {
@@ -216,7 +219,7 @@ export struct XopcGeneratedVideoDrawer {
 
   @Builder
   videoSurface() {
-    XopcPreviewVideo({ source: fileUri.getUriFromPath(this.path), controller: this.video,
+    XopcPreviewVideo({ source: this.path, controller: this.video,
       videoId: 'generated-video-player-' + this.card.item.id, autoplay: true,
       ratio: this.card.item.ratio === '16:9' ? 16 / 9 : this.card.item.ratio === '9:16' ? 9 / 16 : 1,
       onError: (): void => { this.failed = true; } })

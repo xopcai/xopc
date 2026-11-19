@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.Lifecycle
 import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import java.io.OutputStream
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -31,10 +32,14 @@ class MusicPlaybackJourneyTest {
           connection = ConnectionUiState(profile = profile, selectedConversationId = selected.value))
       }
     }
-    compose.runOnIdle {
-      MusicPlayback.play(compose.activity, track) { file -> file.outputStream().use(::writeFixtureAudio) }
-    }
+    val source = File.createTempFile("music-playback-journey-", ".wav", compose.activity.cacheDir)
     try {
+      source.outputStream().use(::writeFixtureAudio)
+      compose.runOnIdle {
+        MusicPlayback.play(compose.activity, track, { source.absolutePath }) {
+          error("Playback should not call the export downloader")
+        }
+      }
       compose.waitUntil(10_000) { MusicPlayback.state.value?.phase == MusicPhase.Playing }
       compose.runOnIdle { selected.value = "other" }
       compose.onNodeWithTag("music-mini-player").assertExists()
@@ -57,6 +62,28 @@ class MusicPlaybackJourneyTest {
     } finally {
       wakeScreen()
       InstrumentationRegistry.getInstrumentation().runOnMainSync { MusicPlayback.stop() }
+      source.delete()
+    }
+  }
+
+  @Test fun nativePlayerUsesThePlaybackSourceAndSeeksWithoutExporting() {
+    val track = MusicTrack("fixture", "source", "seek-audio", "Music fixture", "Source chat")
+    val source = File.createTempFile("music-playback-source-", ".wav", compose.activity.cacheDir)
+    try {
+      source.outputStream().use(::writeFixtureAudio)
+      compose.runOnIdle {
+        MusicPlayback.play(compose.activity, track, { source.absolutePath }) {
+          error("Playback should not call the export downloader")
+        }
+      }
+      waitForPlayback { it?.phase == MusicPhase.Playing && it.durationMs == 30_000 }
+      compose.runOnIdle { MusicPlayback.pause(); MusicPlayback.seek(14_000) }
+      waitForPlayback { it?.phase == MusicPhase.Paused && it.positionMs == 14_000 }
+      compose.runOnIdle { MusicPlayback.toggle(compose.activity) }
+      waitForPlayback { it?.phase == MusicPhase.Playing && it.positionMs > 14_000 }
+    } finally {
+      InstrumentationRegistry.getInstrumentation().runOnMainSync { MusicPlayback.stop() }
+      source.delete()
     }
   }
 

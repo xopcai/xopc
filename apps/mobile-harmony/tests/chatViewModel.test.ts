@@ -652,6 +652,45 @@ describe('chat history isolation', () => {
       expect(mocks.history).toHaveBeenCalledTimes(2); expect(chat.rows[0].text).toBe('Answer'); expect(chat.liveRow).toBeUndefined();
     } finally { chat.dispose(); vi.useRealTimers(); }
   });
+  it.each(['run_end', 'reconnect'])('keeps the music card attached through %s and a history snapshot without the receipt', async end => {
+    vi.useFakeTimers();
+    const chat = new XopcChatViewModel();
+    try {
+      chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+      const emit = (event: string, payload: object) => realtimeClient.onEvent({ topic: 'run:run', seq: 1, event,
+        data: { conversationId: 'one', runId: 'run', payload } });
+      const savedReply = { id: 'answer', role: 'assistant', turnId: 'run', content: 'Song queued' };
+      const snapshot = (reply: typeof savedReply) => ({
+        session: { key: 'one', transcriptId: 't', messages: [reply] }, pagination: { hasMore: false },
+      });
+      mocks.activeRun.mockResolvedValue({ active: true, runId: 'run' });
+      mocks.history.mockResolvedValue(snapshot(savedReply));
+      if (end === 'run_end') {
+        emit('assistant_delta', { messageId: 'answer', offset: 0, delta: 'Song queued' });
+        emit('assistant_message_end', { messageId: 'answer', presentation: 'answer' });
+      }
+      realtimeClient.onGap('run:run');
+      await vi.advanceTimersByTimeAsync(0);
+
+      emit('tool_end', { messageId: 'answer', toolCallId: 'create', toolName: 'music_generation',
+        status: 'success', generatedMediaId: 'song' });
+      const presented = () => chatPresentationRows(chat.rows, chat.liveRow || chat.liveActivityRow, chat.runId);
+      expect(presented()).toMatchObject([{ id: 'answer', generatedMediaIds: ['song'] }]);
+      if (end === 'run_end') emit('run_end', { status: 'success' });
+      else {
+        mocks.activeRun.mockResolvedValue({ active: false });
+        realtimeClient.onState('connected');
+      }
+      await vi.advanceTimersByTimeAsync(0);
+      expect(chat.liveRow?.generatedMediaIds).toEqual(['song']);
+      expect(presented()).toMatchObject([{ id: 'answer', generatedMediaIds: ['song'] }]);
+
+      mocks.history.mockResolvedValue(snapshot(Object.assign({}, savedReply, { generatedMediaIds: ['song'] })));
+      await vi.advanceTimersByTimeAsync(250);
+      expect(chat.liveRow).toBeUndefined();
+      expect(presented()).toMatchObject([{ id: 'answer', generatedMediaIds: ['song'] }]);
+    } finally { chat.dispose(); vi.useRealTimers(); }
+  });
   it('keeps the partial rich projection visible when reconnect history is unavailable', async () => {
     const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
     realtimeClient.onEvent({ topic: 'run:run', seq: 1, event: 'assistant_delta',

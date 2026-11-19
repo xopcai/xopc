@@ -271,7 +271,7 @@ export struct XopcMusicPreviewContent {
         }
         XopcMusicProgress({ track: this.track, onPlay: (): void => {
           const context = this.getUIContext().getHostContext();
-          if (context) void this.music.play(context.cacheDir, this.track);
+          if (context) void this.music.play(this.track);
         } })
       }.id('music-player-controls').width('100%').constraintSize({ maxWidth: 480 })
         .padding({ left: 24, right: 24, bottom: 12 })

@@ -1,9 +1,13 @@
+import { stat } from 'node:fs/promises';
+
 import type { Hono } from 'hono';
+
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { issueMediaPlaybackTicket } from '../../security/media-playback-ticket.js';
 
 import { resolveScopedMediaReference } from '../../media-access.js';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
-import { parseByteRange } from '../../../media-shared/http/byte-range.js';
-import { readMediaReference } from '../../../media/media-reference.js';
+import { fileRangeResponse } from '../../../media-shared/http/file-response.js';
 import { MEDIA_ARTIFACT_MAX_BYTES, mimeTypeFromMediaPath, saveMediaBuffer } from '../../../media/store.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -11,6 +15,14 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 const log = createGatewayRouteLogger('Media');
 
 export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  authenticated.post('/api/media/playback-ticket', deps.strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json<{ path?: unknown }>().catch(() => null);
+    if (typeof body?.path !== 'string') return c.json({ error: 'Missing media path' }, 400);
+    const path = issueMediaPlaybackTicket(body.path, getGatewayPrincipal(c));
+    if (!path) return c.json({ error: 'Playback is unavailable for this resource' }, 403);
+    return c.json({ path }, 201, { 'Cache-Control': 'no-store' });
+  });
+
   authenticated.post('/api/media', deps.strictRateLimitMiddleware, async (c) => {
     const form = await c.req.formData().catch(() => null);
     const file = form?.get('file');
@@ -55,43 +67,14 @@ export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
     try {
       const parsed = await resolveScopedMediaReference(deps.service, uriRaw.trim(), { conversationId, taskId });
-      const { buffer, path } = await readMediaReference(
-        parsed.uri,
-        parsed.bucket === 'outbound' ? MEDIA_ARTIFACT_MAX_BYTES : MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
-      );
-      const contentType = mimeTypeFromMediaPath(path);
-      const range = parseByteRange(c.req.header('Range'), buffer.byteLength);
-      const commonHeaders = {
-        'Accept-Ranges': 'bytes',
+      const { path, bucket } = parsed;
+      const file = await stat(path);
+      const maxBytes = bucket === 'outbound' ? MEDIA_ARTIFACT_MAX_BYTES : MAX_WEBCHAT_ATTACHMENT_FILE_BYTES;
+      if (!file.isFile() || file.size > maxBytes) throw new Error('Media unavailable');
+      return fileRangeResponse(path, file.size, c.req.header('Range'), {
         'Cache-Control': 'private, max-age=3600',
-        'Content-Type': contentType,
-      };
-      if (range === 'invalid') {
-        return new Response(null, {
-          status: 416,
-          headers: {
-            ...commonHeaders,
-            'Content-Range': `bytes */${buffer.byteLength}`,
-          },
-        });
-      }
-      if (range) {
-        const body = buffer.subarray(range.start, range.end + 1);
-        return new Response(body, {
-          status: 206,
-          headers: {
-            ...commonHeaders,
-            'Content-Length': String(body.byteLength),
-            'Content-Range': `bytes ${range.start}-${range.end}/${buffer.byteLength}`,
-          },
-        });
-      }
-      return new Response(buffer, {
-        headers: {
-          ...commonHeaders,
-          'Content-Length': String(buffer.byteLength),
-        },
-      });
+        'Content-Type': mimeTypeFromMediaPath(path),
+      }, c.req.method === 'HEAD');
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
       log.warn({ err, uri: uriRaw, errorMessage: em }, `Media read failed: ${em}`);

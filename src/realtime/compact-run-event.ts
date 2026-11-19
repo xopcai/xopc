@@ -13,12 +13,18 @@ export function compactRunEvent(message: RealtimeDelivery): RealtimeDelivery | n
       payload = { toolCallId: event.payload.toolCallId, messageId: event.payload.messageId,
         toolName: event.payload.toolName, activity: event.payload.activity };
       break;
-    case 'tool_end':
+    case 'tool_end': {
+      const details = event.payload.result?.details as { id?: unknown } | undefined;
+      const id = details?.id;
+      const generatedMediaId = event.payload.toolName === 'music_generation' && event.payload.status === 'success'
+        && typeof id === 'string' && /^[a-f0-9]{64}$/.test(id) ? id : undefined;
       payload = { toolCallId: event.payload.toolCallId, messageId: event.payload.messageId,
         toolName: event.payload.toolName, status: event.payload.status, activity: event.payload.activity,
+        ...(generatedMediaId ? { generatedMediaId } : {}),
         ...(event.payload.status === 'success' && event.payload.deliveries?.length
           ? { deliveries: event.payload.deliveries } : {}) };
       break;
+    }
     case 'progress':
       if (event.payload.stage === 'model_retry' || event.payload.stage === 'model_fallback') {
         payload = { stage: event.payload.stage, message: '', completed: event.payload.completed, total: event.payload.total };

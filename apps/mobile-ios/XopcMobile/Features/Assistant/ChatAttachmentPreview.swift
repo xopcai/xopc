@@ -1,5 +1,6 @@
 // swiftlint:disable file_length
 import AVKit
+import Combine
 import QuickLook
 import SwiftUI
 import WebKit
@@ -67,13 +68,19 @@ struct PreviewVideo: View {
     @Environment(\.mobileTheme) private var theme
     let url: URL
     var autoplay = false
+    var onError: (() -> Void)?
     @State private var player: AVPlayer?
 
     var body: some View {
         Group {
-            if let player {
+            if let player, let item = player.currentItem {
                 VideoPlayer(player: player)
                     .clipShape(.rect(cornerRadius: theme.corner(16)))
+                    .onReceive(item.publisher(for: \.status, options: [.initial, .new]).receive(on: DispatchQueue.main)) { status in
+                        if status == .failed { onError?() }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.failedToPlayToEndTimeNotification,
+                                                                    object: item)) { _ in onError?() }
             } else {
                 ProgressView()
             }
@@ -82,9 +89,7 @@ struct PreviewVideo: View {
         .task(id: url) {
             let media = AVPlayer(url: url)
             player = media
-            if autoplay {
-                media.play()
-            }
+            if autoplay { media.play() }
         }
         .onDisappear { player?.pause(); player = nil }
     }
@@ -166,20 +171,7 @@ struct ChatAttachmentPreview: View {
             }
         }
         .sheet(item: $share) { item in
-            NavigationStack {
-                Form {
-                    Section("分享链接") {
-                        Text(item.url.absoluteString).textSelection(.enabled)
-                        ShareLink(item: item.url) { Label("系统分享", systemImage: "square.and.arrow.up") }
-                        Button("复制链接", systemImage: "doc.on.doc") {
-                            UIPasteboard.general.url = item.url
-                        }
-                    }
-                    Section("可访问范围") { Text(item.reachabilityText) }
-                }
-                .navigationTitle("文件分享")
-                .toolbar { Button("关闭") { share = nil } }
-            }
+            ManagedFileShareSheet(item: item) { share = nil }
         }
         .sheet(isPresented: $showsPreview, onDismiss: {
             removeTemporaryFile()
@@ -409,7 +401,7 @@ private struct ChatManagedShareRequest: Encodable {
     }
 }
 
-private struct ChatManagedShareEnvelope: Decodable {
+struct ChatManagedShareEnvelope: Decodable {
     let ok: Bool
     let payload: Payload?
 
@@ -431,10 +423,30 @@ private struct ChatManagedShareEnvelope: Decodable {
     }
 }
 
-private struct ChatManagedShare: Identifiable {
+struct ChatManagedShare: Identifiable {
     let id: String
     let url: URL
     let reachabilityText: String
+}
+
+struct ManagedFileShareSheet: View {
+    let item: ChatManagedShare
+    let onClose: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("分享链接") {
+                    Text(item.url.absoluteString).textSelection(.enabled)
+                    ShareLink(item: item.url) { Label("系统分享", systemImage: "square.and.arrow.up") }
+                    Button("复制链接", systemImage: "doc.on.doc") { UIPasteboard.general.url = item.url }
+                }
+                Section("可访问范围") { Text(item.reachabilityText) }
+            }
+            .navigationTitle("文件分享")
+            .toolbar { Button("关闭", action: onClose) }
+        }
+    }
 }
 
 private struct ChatAttachmentSpace: Decodable {

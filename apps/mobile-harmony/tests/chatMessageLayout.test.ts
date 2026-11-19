@@ -138,7 +138,7 @@ describe('chat message layout parity', () => {
 
   it('keeps assistant actions out of the reading flow and opens them on long press', () => {
     const cardStart = chat.indexOf(".id('chat-assistant-card-' + item.item.id)");
-    const cardEnd = chat.indexOf('this.generatedMediaRows(item.item.id)', cardStart);
+    const cardEnd = chat.indexOf('this.generatedMediaRows({ replyId: item.item.id })', cardStart);
     const assistantCard = chat.slice(cardStart, cardEnd);
 
     expect(chat).not.toContain('assistantMessageActions(row: XopcChatRow)');

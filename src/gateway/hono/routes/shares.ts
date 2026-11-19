@@ -1,7 +1,8 @@
 import type { Context, Hono } from 'hono';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import { z } from 'zod';
 import { Readable } from 'node:stream';
 import { basename, dirname } from 'node:path';
 
@@ -16,6 +17,9 @@ import { getSiteShareStore } from '../../../share/site-share-store.js';
 import { resolveSiteShareConfig } from '../../../share/site-share-config.js';
 import { resolveShareUrl, resolveSiteShareUrl } from '../../../share/share-url.js';
 import { resolveReverseProxyPublicUrl } from '../../public-url.js';
+import { fileRangeResponse } from '../../../media-shared/http/file-response.js';
+import { issueShareAssetTicket, verifyShareAssetTicket } from '../../../share/share-asset-ticket.js';
+import { isSpaceMediaMime, resolveSpaceMediaShare } from '../../../space/repository.js';
 import { consumeSharePublicLimit } from '../../../share/share-rate-limit.js';
 import { logShareAudit } from '../../../share/share-audit.js';
 import {
@@ -155,6 +159,18 @@ function rfc5987ContentDisposition(disposition: 'inline' | 'attachment', fileNam
 
 // ── Public routes (no auth required) ──────────────────────────────────────────
 
+const legacyPlaybackSecret = randomBytes(32).toString('base64url');
+const SHARE_PLAYBACK_TTL_MS = 2 * 60 * 60_000;
+const spaceVersionSource = z.object({ itemId: z.uuid(), versionId: z.uuid() });
+
+async function getSpaceShareTarget(source: unknown) {
+  const parsed = spaceVersionSource.safeParse(source);
+  if (!parsed.success) throw new FileServiceError(400, 'Invalid library version');
+  const result = await resolveSpaceMediaShare(parsed.data.itemId, parsed.data.versionId);
+  if (!result) throw new FileServiceError(404, 'Library media version not found');
+  return result;
+}
+
 export function registerSharePublicRoutes(app: Hono, service: GatewayService): void {
   const store = getShareStore(resolveShareConfig(service));
   const noteShares = new NoteShareService(store, service.notesServiceInstance);
@@ -211,16 +227,58 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
 
     const downloadPath = `/s/${token}/download`;
     const cfg = { ...SHARE_CONFIG_DEFAULTS, ...resolveShareConfig(service) };
-    const previewable = isPreviewableInline(record.mimeType, cfg.inlinePreviewMimes);
+    const media = isSpaceMediaMime(record.mimeType);
+    const previewable = !media && isPreviewableInline(record.mimeType, cfg.inlinePreviewMimes);
     const richPreviewable = isRichSpaPreviewable(record.mimeType);
     const og = buildLandingOg(service, record);
     return c.html(
       renderShareLandingPage(record, downloadPath, {
+        playbackUrl: media ? `/s/${token}/playback` : undefined,
         inlineUrl: previewable ? `/s/${token}?inline=1` : null,
         previewUrl: richPreviewable ? `/#/share/${encodeURIComponent(token)}` : null,
         og,
       }),
     );
+  });
+
+  app.on(['POST', 'GET'], '/s/:token/playback', async c => {
+    const clientIp = getClientIpFromHeaders({ get: (name) => c.req.header(name) });
+    const rate = consumeSharePublicLimit(clientIp);
+    if (!rate.allowed) {
+      c.header('Retry-After', String(Math.ceil(rate.retryAfterMs / 1000)));
+      return c.text('Too many requests', 429);
+    }
+    const token = c.req.param('token');
+    const record = store.getByToken(token);
+    if (!record || record.kind !== 'file' || !isSpaceMediaMime(record.mimeType)) return c.text('Not found', 404);
+    if (record.revoked || Date.now() >= new Date(record.expiresAt).getTime()) return c.text('Gone', 410);
+    const ticketRecord = { id: record.id, snapshotRevision: 1, assetTicketSecret: record.playbackSecret ?? legacyPlaybackSecret };
+    const isOpening = c.req.method === 'POST';
+    if (!isOpening && !verifyShareAssetTicket(ticketRecord, c.req.query('ticket') ?? '')) return c.text('Forbidden', 403);
+    if (!(await store.validateFileIntegrity(record)).valid) return c.text('Gone', 410);
+    if (isOpening) {
+      const access = store.consumeAccess(record.id);
+      if (access.valid === false) return c.html(renderShareExpiredPage(access.reason as ShareExpiredReason), 410);
+      logShareAudit('share.access', { shareId: record.id, tokenPrefix: token.slice(0, 8), clientIp, mode: 'playback' },
+        `Share played: ${record.fileName}`);
+      const ticket = issueShareAssetTicket(ticketRecord, SHARE_PLAYBACK_TTL_MS);
+      return c.html(renderShareLandingPage(record, `/s/${token}/download`, {
+        playbackSource: `/s/${token}/playback?ticket=${ticket}`,
+      }), 200, {
+        'Cache-Control': 'private, no-store',
+        'Content-Security-Policy': "default-src 'none'; media-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+        'Referrer-Policy': 'no-referrer',
+      });
+    }
+    const file = await stat(record.absolutePath).catch(() => null);
+    if (!file?.isFile() || file.ino !== record.inode) return c.text('Gone', 410);
+    return fileRangeResponse(record.absolutePath, file.size, c.req.header('Range'), {
+      'Content-Type': record.mimeType,
+      'Cache-Control': 'private, no-store',
+      'Content-Security-Policy': "sandbox; default-src 'none'",
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+    }, c.req.method === 'HEAD');
   });
 
   /** Single-file download — POST so unfurl/scrapers don't consume views. */
@@ -1146,17 +1204,25 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     let path = typeof body.path === 'string' ? body.path.trim() : '';
     const fileId = typeof body.fileId === 'string' ? body.fileId.trim() : '';
     const uri = typeof body.uri === 'string' ? body.uri.trim() : '';
-    if ([path, fileId, uri].filter(Boolean).length !== 1) {
-      return c.json({ ok: false, error: { message: 'Provide exactly one of path, fileId or uri' } }, 400);
+    const spaceVersion = body.spaceVersion;
+    if ([path, fileId, uri, spaceVersion].filter(Boolean).length !== 1) {
+      return c.json({ ok: false, error: { message: 'Provide exactly one of path, fileId, uri or spaceVersion' } }, 400);
     }
     const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : undefined;
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
     const taskId = typeof body.taskId === 'string' ? body.taskId.trim() : undefined;
-    const fileName = typeof body.fileName === 'string' ? basename(body.fileName.trim().replace(/\\/g, '/')) : undefined;
+    let fileName = typeof body.fileName === 'string' ? basename(body.fileName.trim().replace(/\\/g, '/')) : undefined;
 
     let workspaceRoot: string;
+    let libraryMimeType: string | undefined;
     try {
-      if (fileId) {
+      if (spaceVersion) {
+        const target = await getSpaceShareTarget(spaceVersion);
+        workspaceRoot = dirname(target.path);
+        path = basename(target.path);
+        fileName = target.version.fileName;
+        libraryMimeType = target.version.mimeType;
+      } else if (fileId) {
         const target = await getGatewayFileSpaceService(service).resource(fileId);
         workspaceRoot = target.space.root;
         path = target.resource.relativePath || '.';
@@ -1188,6 +1254,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       const record = await store.create({
         path,
         fileName,
+        libraryMimeType,
         ttlMs,
         maxViews,
         description,
@@ -1249,7 +1316,10 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     const fileId = typeof body.fileId === 'string' ? body.fileId.trim() : '';
     let path = typeof body.path === 'string' ? body.path.trim() : '';
-    if (!fileId && !path) return c.json({ ok: false, error: { message: 'Missing path or fileId' } }, 400);
+    const spaceVersion = body.spaceVersion;
+    if ((!fileId && !path && !spaceVersion) || (spaceVersion && (fileId || path))) {
+      return c.json({ ok: false, error: { message: 'Provide a path, fileId or library version' } }, 400);
+    }
     const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : undefined;
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
     const mode = (typeof body.mode === 'string' && ['auto', 'force-file', 'force-site', 'force-zip'].includes(body.mode))
@@ -1267,9 +1337,15 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     const wantThumbnail = body.thumbnail !== false;
 
     let workspaceRoot: string;
+    let libraryVersion: Awaited<ReturnType<typeof getSpaceShareTarget>>['version'] | undefined;
     let probe;
     try {
-      if (fileId) {
+      if (spaceVersion) {
+        const target = await getSpaceShareTarget(spaceVersion);
+        workspaceRoot = dirname(target.path);
+        path = basename(target.path);
+        libraryVersion = target.version;
+      } else if (fileId) {
         const target = await getGatewayFileSpaceService(service).resource(fileId);
         workspaceRoot = target.space.root;
         path = target.resource.relativePath || '.';
@@ -1287,7 +1363,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     let decision;
     try {
-      decision = decideShareKind(probe, mode);
+      decision = decideShareKind(probe, libraryVersion ? 'force-file' : mode);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ ok: false, error: { message } }, 400);
@@ -1411,7 +1487,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       return await createFileShareResponse({
         c, service, store, probe, decision,
         ttlMs, maxViews, title, description, audience,
-        workspaceRoot, tokenHash, urlCtx, wantThumbnail,
+        workspaceRoot, tokenHash, urlCtx, wantThumbnail, libraryVersion,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1886,11 +1962,14 @@ async function createFileShareResponse(args: {
   tokenHash: string;
   urlCtx: ReturnType<typeof getShareUrlContext>;
   wantThumbnail: boolean;
+  libraryVersion?: { fileName: string; mimeType: string };
 }): Promise<Response> {
-  const { c, service, store, probe, decision, ttlMs, maxViews, title, description, audience, workspaceRoot, tokenHash, urlCtx, wantThumbnail } = args;
+  const { c, service, store, probe, decision, ttlMs, maxViews, title, description, audience, workspaceRoot, tokenHash, urlCtx, wantThumbnail, libraryVersion } = args;
   store.updateConfig(resolveShareConfig(service));
   const record = await store.create({
     path: relPathFromAbs(workspaceRoot, probe.absolutePath),
+    fileName: libraryVersion?.fileName,
+    libraryMimeType: libraryVersion?.mimeType,
     workspaceRoot,
     gatewayTokenHash: tokenHash,
     ttlMs,

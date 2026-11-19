@@ -90,6 +90,10 @@ interface XopcChatMessageMenuAction {
   enabled: boolean;
 }
 
+interface XopcGeneratedMediaReply {
+  replyId: string;
+}
+
 @ComponentV2
 export struct XopcChatView {
   @Local phone: XopcPhoneViewModel = new XopcPhoneViewModel();
@@ -104,7 +108,7 @@ export struct XopcChatView {
   @Computed get generatedMediaGroups(): Map<string, XopcGeneratedMediaCard[]> {
     const cards = this.generatedMedia.cards;
     if (!cards.length) return new Map<string, XopcGeneratedMediaCard[]>();
-    return generatedMediaByReply(cards, this.presentationRows);
+    return generatedMediaByReply(cards, this.presentationRows, this.personalConversation);
   }
   @Computed get generatedMediaChinese(): boolean { return appSettings.effectiveLanguage().startsWith('zh'); }
   @Monitor('generatedMusic.sourceRevision', 'generatedMediaGroups', 'chat.selectedId', 'activePage')
@@ -1394,7 +1398,7 @@ export struct XopcChatView {
         this.generatedMusic.openPreview(track);
       } else {
         this.generatedVideoOpen = false;
-        void this.generatedMusic.play(context.cacheDir, track);
+        void this.generatedMusic.play(track);
       }
     } else {
       this.dismissComposer();
@@ -1436,10 +1440,10 @@ export struct XopcChatView {
   }
 
   @Builder
-  generatedMediaRows(replyId: string) {
-    if (this.generatedMediaGroups.has(replyId)) {
+  generatedMediaRows($$: XopcGeneratedMediaReply) {
+    if (this.generatedMediaGroups.has($$.replyId)) {
       Column({ space: 12 }) {
-        Repeat<XopcGeneratedMediaCard>(this.generatedMediaGroups.get(replyId) ?? []).each((entry: RepeatItem<XopcGeneratedMediaCard>) => {
+        Repeat<XopcGeneratedMediaCard>(this.generatedMediaGroups.get($$.replyId) ?? []).each((entry: RepeatItem<XopcGeneratedMediaCard>) => {
           Row() {
             Column() {
               XopcGeneratedMediaRow({ card: entry.item, zh: this.generatedMediaChinese, submitting: this.generatedMedia.submitting,
@@ -1590,7 +1594,7 @@ export struct XopcChatView {
                   connection: this.chat.connection,
                   animateDots: this.atBottom && this.activePage && this.layout.foreground && !this.layout.reduceMotion })
               }
-              this.generatedMediaRows(item.item.id)
+              this.generatedMediaRows({ replyId: item.item.id })
             }.width('100%').alignItems(HorizontalAlign.Start)
           } else {
             Column({ space: 2 }) {
@@ -1606,7 +1610,7 @@ export struct XopcChatView {
       ListItem() {
         Column() {
           Column() {
-            this.generatedMediaRows('')
+            this.generatedMediaRows({ replyId: '' })
           }.width('100%')
           Column().id('chat-bottom-clearance').width('100%')
             .height(this.bottomRegionHeight + 12)

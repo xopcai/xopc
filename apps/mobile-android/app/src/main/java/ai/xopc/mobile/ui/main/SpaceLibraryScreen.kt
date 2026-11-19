@@ -7,9 +7,12 @@ import ai.xopc.mobile.gateway.ChatAttachmentStore
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.gateway.LibraryItem
 import ai.xopc.mobile.gateway.LibraryOrigin
+import ai.xopc.mobile.gateway.LibraryShare
 import ai.xopc.mobile.gateway.LibraryVersion
 import ai.xopc.mobile.gateway.SpaceLibraryAccess
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -269,6 +272,7 @@ private fun ColumnScope.LibraryDetail(id: String, summary: LibraryItem?, profile
   var rename by remember { mutableStateOf(false) }
   var title by remember { mutableStateOf("") }
   var purge by remember { mutableStateOf(false) }
+  var sharedLink by remember(id) { mutableStateOf<LibraryShare?>(null) }
   var export by remember { mutableStateOf<File?>(null) }
   val picker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
     val temp = export
@@ -326,6 +330,12 @@ private fun ColumnScope.LibraryDetail(id: String, summary: LibraryItem?, profile
 
   PreviewHeader(file.title, { if (!busy) onBack() }) { closeMenu ->
     if (!file.trashed) {
+      if (version.mimeType.startsWith("audio/") || version.mimeType.startsWith("video/")) {
+        DropdownMenuItem(text = { Text(t("分享链接", "Share link")) }, enabled = !busy, onClick = {
+          closeMenu()
+          run { sharedLink = access.share(profile, id, version) }
+        })
+      }
       DropdownMenuItem(text = { Text(t("下载", "Download")) }, enabled = !busy, onClick = {
         closeMenu()
         run {
@@ -365,7 +375,9 @@ private fun ColumnScope.LibraryDetail(id: String, summary: LibraryItem?, profile
     val track = MusicTrack(profile.gatewayId, music?.conversationId.orEmpty(), music?.id ?: version.id,
       file.title, source?.label.orEmpty(), music?.lyrics, music?.durationMs ?: 0, version.safeName)
     MusicPreviewContent(track, Modifier.weight(1f)) {
-      MusicPlayback.play(context, track) { destination -> access.download(profile, id, version, destination) }
+      MusicPlayback.play(context, track, { access.playbackUrl(profile, id, version) }) { destination ->
+        access.download(profile, id, version, destination)
+      }
     }
   } else {
     Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
@@ -387,6 +399,21 @@ private fun ColumnScope.LibraryDetail(id: String, summary: LibraryItem?, profile
     confirmButton = { TextButton(enabled = title.isNotBlank(), onClick = { rename = false; mutate("patch", title.trim()) }) {
       Text(t("保存", "Save"))
     } }, dismissButton = { TextButton(onClick = { rename = false }) { Text(t("取消", "Cancel")) } })
+  sharedLink?.let { link ->
+    val reachability = when (link.reachability) {
+      "public" -> t("公网可访问", "Publicly reachable")
+      "lan" -> t("仅同一局域网可访问", "Reachable on the same LAN")
+      else -> t("目前仅网关本机可访问", "Currently local to the gateway")
+    }
+    AlertDialog(onDismissRequest = { sharedLink = null }, title = { Text(t("分享链接", "Share link")) },
+      text = { Text(reachability) },
+      confirmButton = { TextButton(onClick = {
+        val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link.url)
+        context.startActivity(Intent.createChooser(intent, t("分享链接", "Share link")))
+        sharedLink = null
+      }) { Text(t("分享", "Share")) } },
+      dismissButton = { TextButton(onClick = { sharedLink = null }) { Text(t("关闭", "Close")) } })
+  }
   if (purge) AlertDialog(onDismissRequest = { purge = false },
     title = { Text(t("永久删除「${file.title}」？", "Delete “${file.title}” permanently?")) },
     confirmButton = { TextButton(onClick = { purge = false; mutate("purge") }) { Text(t("删除", "Delete")) } },
@@ -396,33 +423,30 @@ private fun ColumnScope.LibraryDetail(id: String, summary: LibraryItem?, profile
 @Composable
 private fun SpaceVersionPreview(modifier: Modifier, id: String, version: LibraryVersion, profile: GatewayProfile,
   access: SpaceLibraryAccess, zh: Boolean) {
-  val context = LocalContext.current
   val media = version.mimeType.startsWith("video/")
   val bitmap = isBitmapPreview(version.fileName, version.mimeType)
-  var bytes by remember(version.id) { mutableStateOf<ByteArray?>(null) }
-  var temp by remember(version.id) { mutableStateOf<File?>(null) }
-  var failed by remember(version.id) { mutableStateOf(false) }
+  var bytes by remember(profile.gatewayId, version.id) { mutableStateOf<ByteArray?>(null) }
+  var stream by remember(profile.gatewayId, version.id) { mutableStateOf<Uri?>(null) }
+  var failed by remember(profile.gatewayId, version.id) { mutableStateOf(false) }
+  var retry by remember(profile.gatewayId, version.id) { mutableStateOf(0) }
   val name = version.fileName
   val mime = version.mimeType
-  LaunchedEffect(access, profile, id, version.id) {
+  LaunchedEffect(access, profile, id, version.id, retry) {
+    failed = false
+    stream = null
     try {
       if (media) {
-        val file = File.createTempFile("space-media-", ".preview", context.cacheDir)
-        try {
-          access.download(profile, id, version, file)
-          temp = file
-          try { kotlinx.coroutines.awaitCancellation() } finally { file.delete() }
-        } catch (failure: Exception) { file.delete(); throw failure }
+        stream = Uri.parse(access.playbackUrl(profile, id, version))
       } else if ((bitmap || previewFileKind(name, mime) != PreviewFileKind.BINARY) && version.sizeBytes <= 16 * 1024 * 1024) {
         bytes = access.content(profile, id, version)
       } else failed = true
     } catch (cancelled: CancellationException) { throw cancelled }
     catch (_: Exception) { failed = true }
   }
-  val file = temp
+  val source = stream
   val data = bytes
   when {
-    file != null && !failed -> PreviewVideo(file, modifier, onError = { failed = true })
+    source != null && !failed -> PreviewVideo(source, modifier, onError = { failed = true })
     data != null && bitmap -> {
       val image = remember(data) {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -435,6 +459,7 @@ private fun SpaceVersionPreview(modifier: Modifier, id: String, version: Library
       else Text(if (zh) "资料暂不可读" else "Content unavailable")
     }
     data != null -> FilePreviewContent(name, mime, data, modifier)
+    failed && media -> TextButton(onClick = { retry++ }) { Text(if (zh) "无法播放，重试" else "Playback failed. Retry") }
     failed -> Text(if (zh) "资料暂不可读，可下载查看" else "Preview unavailable. Download to view.")
     else -> BrandLoadingIndicator(extent = 24.dp)
   }

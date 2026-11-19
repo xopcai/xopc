@@ -5,7 +5,7 @@ import { SpacePatchSchema, SpaceSaveReplySchema, SpaceSaveVersionSchema, SpaceWo
 
 import { createSpaceWorkbook, createSpaceWorkbookSchema, loadSpaceWorkbook, openSpaceBudgetWorkbook, saveSpaceWorkbook, saveSpaceWorkbookSchema, SPACE_WORKBOOK_MAX_BYTES, undoSpaceWorkbookVersion } from '../../../space/budget-workbook.js';
 import { applyWorkbookProposal, findWorkbookProposal, workbookProposalView } from '../../../space/workbook-proposals.js';
-import { changeSpaceItem, findSpaceArtifact, findSpaceTaskDelivery, getSpaceItem, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply, saveSpaceVersion } from '../../../space/repository.js';
+import { changeSpaceItem, findSpaceArtifact, findSpaceTaskDelivery, getSpaceItem, isSpaceMediaMime, listSpaceItems, purgeSpaceItem, readSpaceContent, saveSpaceReply, saveSpaceVersion } from '../../../space/repository.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const revisionSchema = SpacePatchSchema.pick({ revision: true });
@@ -105,12 +105,13 @@ export function registerSpaceRoutes(app: Hono, deps: AuthenticatedRouteDeps): vo
     else app.post(`/api/spaces/items/:id/${action}`, limited, handler);
   }
   app.get('/api/spaces/items/:id/versions/:versionId/content', async c => {
-    const content = await readSpaceContent(c.req.param('id'), c.req.param('versionId'), c.req.header('Range'));
+    const content = await readSpaceContent(c.req.param('id'), c.req.param('versionId'), c.req.header('Range'),
+      { mediaOnly: Boolean(c.req.query('playbackTicket')), headOnly: c.req.method === 'HEAD' });
     if (!content) return c.json({ error: 'Content not found' }, 404);
     const { version, body, size, range } = content;
     const headers = new Headers({
       'Content-Type': /^[\w.+-]+\/[\w.+-]+$/.test(version.mimeType) ? version.mimeType : 'application/octet-stream',
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(Buffer.from(version.fileName, 'utf8').toString('utf8')).replace(/[!'()*]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())}`,
+      'Content-Disposition': `${isSpaceMediaMime(version.mimeType) ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(Buffer.from(version.fileName, 'utf8').toString('utf8')).replace(/[!'()*]/g, char => '%' + char.charCodeAt(0).toString(16).toUpperCase())}`,
       'Content-Security-Policy': "sandbox; default-src 'none'",
       'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'private, no-store',

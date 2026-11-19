@@ -5,6 +5,11 @@ import {
   findAuthenticatedLazyRouteBundle,
 } from '../lazy-bundles.js';
 
+it('loads the media playback ticket issuer through the media bundle', () => {
+  expect(findAuthenticatedLazyRouteBundle('/api/media/playback-ticket')?.id).toBe('media');
+  expect(findAuthenticatedLazyRouteBundle('/api/media-playback/playback-ticket')?.id).not.toBe('media');
+});
+
 describe('lazy route bundles', () => {
   it('loads the task retry endpoint without capturing neighboring task routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/retry')?.id).toBe('task-retry');

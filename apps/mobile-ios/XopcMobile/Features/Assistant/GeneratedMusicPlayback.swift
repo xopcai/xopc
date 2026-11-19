@@ -30,47 +30,54 @@ final class GeneratedMusicPlayback {
     private(set) var phase: Phase = .paused
     private(set) var duration: Double = 0
     private(set) var position: Double = 0
-    private(set) var localURL: URL?
     private(set) var previewTrack: GeneratedMusicTrack?
     var expanded = false {
         didSet {
             if !expanded {
                 previewTrack = nil
                 previewDownloader = nil
+                previewStream = nil
             }
         }
     }
 
-    @ObservationIgnored private var player: AVAudioPlayer?
+    @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var load: Task<Void, Never>?
     @ObservationIgnored private var updates: Task<Void, Never>?
     @ObservationIgnored private var previewDownloader: (() async throws -> URL)?
+    @ObservationIgnored private var previewStream: (() async throws -> URL)?
+    @ObservationIgnored private var stream: (() async throws -> URL)?
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var downloader: (() async throws -> URL)?
     @ObservationIgnored private var playWhenReady = true
     @ObservationIgnored private var remoteTargets: [(MPRemoteCommand, Any)] = []
 
     private init() {}
 
-    func play(_ track: GeneratedMusicTrack, downloading: @escaping () async throws -> URL) {
+    func play(_ track: GeneratedMusicTrack, streaming: @escaping () async throws -> URL,
+              downloading: @escaping () async throws -> URL) {
         if self.track?.key == track.key {
             toggle(); return
         }
         clear()
         self.track = track
+        stream = streaming
         downloader = downloading
         duration = track.duration ?? 0
         prepare()
     }
 
-    func openPreview(_ track: GeneratedMusicTrack, downloading: @escaping () async throws -> URL) {
+    func openPreview(_ track: GeneratedMusicTrack, streaming: @escaping () async throws -> URL,
+                     downloading: @escaping () async throws -> URL) {
         previewTrack = track
+        previewStream = streaming
         previewDownloader = downloading
         expanded = true
     }
 
     func playPreview() {
-        guard let previewTrack, let previewDownloader else { return }
-        play(previewTrack, downloading: previewDownloader)
+        guard let previewTrack, let previewStream, let previewDownloader else { return }
+        play(previewTrack, streaming: previewStream, downloading: previewDownloader)
     }
 
     func downloadPreview() async throws -> URL {
@@ -83,11 +90,7 @@ final class GeneratedMusicPlayback {
         case .loading: playWhenReady.toggle()
         case .playing: pause()
         case .paused, .ended: resume()
-        case .failed: if player != nil {
-                resume()
-            } else {
-                prepare()
-            }
+        case .failed: prepare()
         }
     }
 
@@ -97,7 +100,7 @@ final class GeneratedMusicPlayback {
         player?.pause()
         updates?.cancel()
         if let player {
-            position = player.currentTime
+            position = currentPosition(player)
         }
         phase = .paused
         savePosition()
@@ -112,7 +115,7 @@ final class GeneratedMusicPlayback {
     func seek(_ seconds: Double) {
         guard seconds.isFinite, let player else { return }
         position = min(max(0, seconds), duration)
-        player.currentTime = position
+        player.seek(to: CMTime(seconds: position, preferredTimescale: 600))
         if phase == .ended {
             phase = .paused
         }
@@ -128,7 +131,7 @@ final class GeneratedMusicPlayback {
     func checkpoint() {
         guard let player else { return }
         if phase == .playing {
-            position = player.currentTime
+            position = currentPosition(player)
         }
         savePosition()
     }
@@ -147,35 +150,48 @@ final class GeneratedMusicPlayback {
     }
 
     private func prepare() {
-        guard let track, let downloader else { return }
+        guard let track, let stream else { return }
         load?.cancel()
+        releasePlayer()
         phase = .loading
         playWhenReady = true
         load = Task {
             do {
-                let url = try await downloader()
-                guard !Task.isCancelled, self.track?.key == track.key else {
-                    try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
-                    return
-                }
-                localURL = url
-                let audio = try AVAudioPlayer(contentsOf: url)
-                audio.prepareToPlay()
+                let url = try await stream()
+                try Task.checkCancellation()
+                let item = AVPlayerItem(url: url)
+                let audio = AVPlayer(playerItem: item)
                 player = audio
-                duration = audio.duration
+                let center = NotificationCenter.default
+                observers.append(center.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification,
+                                                     object: item, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.finish()
+                    }
+                })
+                observers.append(center.addObserver(forName: AVPlayerItem.failedToPlayToEndTimeNotification,
+                                                     object: item, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.fail()
+                    }
+                })
+                // Readiness includes remote metadata, which may require a request near the end of the file.
+                while item.status == .unknown {
+                    try await Task.sleep(for: .milliseconds(100))
+                }
+                guard item.status == .readyToPlay else { throw GatewayClientError.invalidResponse }
+                let seconds = item.duration.seconds
+                if seconds.isFinite, seconds > 0 { duration = seconds }
                 let saved = UserDefaults.standard.double(forKey: "music.position.\(track.key)")
                 position = saved < duration ? saved : 0
-                audio.currentTime = position
+                if position > 0 {
+                    await audio.seek(to: CMTime(seconds: position, preferredTimescale: 600))
+                }
+                try Task.checkCancellation()
                 phase = .paused
-                if playWhenReady {
-                    resume()
-                }
+                if playWhenReady { resume() }
             } catch {
-                if !Task.isCancelled, self.track?.key == track.key {
-                    releaseFile()
-                    phase = .failed
-                    publish()
-                }
+                if !Task.isCancelled { fail() }
             }
         }
     }
@@ -184,20 +200,19 @@ final class GeneratedMusicPlayback {
         if phase == .loading {
             playWhenReady = true; return
         }
-        guard let player else {
-            if phase == .failed {
-                prepare()
-            }
-            return
+        if phase == .failed {
+            prepare(); return
         }
+        guard let player else { return }
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .default)
             try session.setActive(true)
             if phase == .ended {
-                player.currentTime = 0; position = 0
+                player.seek(to: .zero)
+                position = 0
             }
-            guard player.play() else { throw GatewayClientError.invalidResponse }
+            player.play()
             phase = .playing
             installMediaCommands()
             publish()
@@ -206,33 +221,50 @@ final class GeneratedMusicPlayback {
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
                     guard let self, phase == .playing, let audio = self.player else { return }
-                    if !audio.isPlaying {
-                        phase = .ended
-                        position = duration
-                        savePosition()
-                        publish()
+                    if audio.currentItem?.status == .failed {
+                        fail()
                         return
                     }
-                    position = audio.currentTime
+                    if let seconds = audio.currentItem?.duration.seconds, seconds.isFinite, seconds > 0 {
+                        duration = seconds
+                    }
+                    position = currentPosition(audio)
                 }
             }
         } catch {
-            phase = .failed
-            publish()
+            fail()
         }
     }
 
+    private func currentPosition(_ player: AVPlayer) -> Double {
+        let seconds = player.currentTime().seconds
+        return seconds.isFinite ? seconds : position
+    }
+
+    private func finish() {
+        updates?.cancel()
+        phase = .ended
+        position = duration
+        savePosition()
+        publish()
+    }
+
+    private func fail() {
+        savePosition()
+        releasePlayer()
+        phase = .failed
+        publish()
+    }
+
     private func clear() {
-        if let player, phase != .ended {
-            position = player.currentTime; savePosition()
+        if let player, phase != .ended, phase != .loading {
+            position = currentPosition(player); savePosition()
         }
         let wasPlaying = phase == .playing
         load?.cancel()
-        updates?.cancel()
-        player?.stop()
-        player = nil
-        releaseFile()
+        releasePlayer()
         track = nil
+        stream = nil
         downloader = nil
         duration = 0
         position = 0
@@ -243,11 +275,12 @@ final class GeneratedMusicPlayback {
         }
     }
 
-    private func releaseFile() {
-        if let localURL {
-            try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent())
-        }
-        localURL = nil
+    private func releasePlayer() {
+        updates?.cancel()
+        for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        observers.removeAll()
+        player?.pause()
+        player = nil
     }
 
     private func savePosition() {
@@ -400,12 +433,8 @@ struct GeneratedMusicPlayer: View {
         if let track = playback.previewTrack ?? playback.track {
             let current = playback.track?.key == track.key
             MobilePreview(title: track.title, closeID: "music-player-close", onClose: { playback.expanded = false }) {
-                if current, let url = playback.localURL {
-                    ShareLink(item: url) { Label("导出音频", systemImage: "square.and.arrow.up") }
-                } else {
-                    Button("导出音频", systemImage: "square.and.arrow.up") { download(track.key) }
-                        .disabled(downloading)
-                }
+                Button("导出音频", systemImage: "square.and.arrow.up") { download(track.key) }
+                    .disabled(downloading)
                 if !track.conversationID.isEmpty {
                     Button("返回来源对话", systemImage: "bubble.left") { onSource(track) }
                         .accessibilityIdentifier("music-return-source")
@@ -527,7 +556,7 @@ struct MusicPreviewContent: View {
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(lines.indices, id: \.self) { index in
                     Button(lines[index].text) { playback.seek(lines[index].seconds) }
-                        .buttonStyle(.plain).disabled(!isCurrent || playback.localURL == nil)
+                        .buttonStyle(.plain).disabled(!isCurrent || playback.phase == .loading || playback.phase == .failed)
                         .foregroundStyle(active == index ? theme.action : theme.foreground)
                 }
             }

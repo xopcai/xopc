@@ -154,7 +154,7 @@ export struct XopcPersonalAgentOverview {
     const context = this.getUIContext().getHostContext();
     if (scope && context && artifact?.availability === 'available' && artifact.uri === expected) {
       if (!generatedMusicPlayback.matches(scope, artifact.artifactId)) {
-        void generatedMusicPlayback.play(context.cacheDir, { id: artifact.artifactId, conversationId: scope,
+        void generatedMusicPlayback.play({ id: artifact.artifactId, conversationId: scope,
           title: artifact.title, sourceTitle: item.task?.title ?? this.record?.displayName ?? '' });
       }
       generatedMusicPlayback.open();

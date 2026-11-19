@@ -85,7 +85,7 @@ export interface XopcAbort { runId: string; }
 export interface XopcRename { name: string; }
 export interface XopcStreamPayload { delta?: string; messageId?: string; message?: string; toolName?: string; status?: string;
   stage?: string; toolCallId?: string;
-  offset?: number; deliveries?: XopcProductDelivery[];
+  offset?: number; deliveries?: XopcProductDelivery[]; generatedMediaId?: string;
   args?: Object; result?: Object; details?: Object; textDelta?: string; presentation?: string;
   command?: string; cwd?: string; exitCode?: number; timedOut?: boolean; diff?: string; review?: XopcContentBlock;
   plan?: XopcPlanStep[]; explanation?: string; uri?: string; mimeType?: string; name?: string;

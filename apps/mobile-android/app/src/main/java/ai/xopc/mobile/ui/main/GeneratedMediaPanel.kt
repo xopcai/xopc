@@ -1,5 +1,6 @@
 package ai.xopc.mobile.ui.main
 
+import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
 import java.io.File
@@ -181,38 +182,30 @@ private fun GeneratedVideoPlayer(
   conversationId: String,
   access: GeneratedMediaAccess,
 ) {
-  val context = LocalContext.current
-  val configuration = LocalConfiguration.current
-  val zh = configuration.locales[0].language == "zh"
+  val zh = LocalConfiguration.current.locales[0].language == "zh"
   var retry by remember(item.id) { mutableIntStateOf(0) }
-  var failed by remember(item.id, retry) { mutableStateOf(false) }
-  var file by remember(item.id, retry) { mutableStateOf<File?>(null) }
+  var failed by remember(conversationId, item.id, retry) { mutableStateOf(false) }
+  var uri by remember(conversationId, item.id, retry) { mutableStateOf<Uri?>(null) }
   LaunchedEffect(access, conversationId, item.id, retry) {
-    var destination: File? = null
     try {
-      destination = File.createTempFile("generated-", item.kind.extension, context.cacheDir)
-      access.download(conversationId, item, destination)
-      file = destination
-      kotlinx.coroutines.awaitCancellation()
+      uri = Uri.parse(access.playbackUrl(item.kind, conversationId, item.id))
     } catch (cancelled: CancellationException) {
       throw cancelled
     } catch (_: Exception) {
       failed = true
-    } finally {
-      destination?.delete()
     }
   }
 
   Column(Modifier.fillMaxWidth().testTag("generated-video-player-${item.id}"),
     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    val local = file
+    val source = uri
     when {
       failed -> {
         Text(label(zh, "无法播放这份媒体", "Unable to play this media"), color = MaterialTheme.colorScheme.error)
         TextButton(onClick = { retry++ }) { Text(label(zh, "重试", "Try again")) }
       }
-      local == null -> CircularProgressIndicator(Modifier.size(32.dp).align(Alignment.CenterHorizontally))
-      else -> PreviewVideo(local, Modifier.fillMaxWidth().aspectRatio(if (item.ratio == "9:16") 1f else 16f / 9f),
+      source == null -> CircularProgressIndicator(Modifier.size(32.dp).align(Alignment.CenterHorizontally))
+      else -> PreviewVideo(source, Modifier.fillMaxWidth().aspectRatio(if (item.ratio == "9:16") 1f else 16f / 9f),
         autoplay = true, onError = { failed = true })
     }
   }
@@ -220,14 +213,19 @@ private fun GeneratedVideoPlayer(
 
 @Composable
 internal fun PreviewVideo(file: File, modifier: Modifier, autoplay: Boolean = false, onError: () -> Unit) {
-  androidx.compose.runtime.key(file) {
+  PreviewVideo(Uri.fromFile(file), modifier, autoplay, onError)
+}
+
+@Composable
+internal fun PreviewVideo(uri: Uri, modifier: Modifier, autoplay: Boolean = false, onError: () -> Unit) {
+  androidx.compose.runtime.key(uri) {
     AndroidView(
       factory = { context ->
         VideoView(context).apply {
           setMediaController(MediaController(context).also { it.setAnchorView(this) })
           setOnErrorListener { _, _, _ -> onError(); true }
           setOnPreparedListener { if (autoplay) start() else seekTo(1) }
-          setVideoPath(file.absolutePath)
+          setVideoURI(uri)
         }
       },
       onRelease = { it.stopPlayback() },

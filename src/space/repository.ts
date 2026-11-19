@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import { constants, lstatSync } from 'node:fs';
-import { open } from 'node:fs/promises';
-import { Readable } from 'node:stream';
+import { open, type FileHandle } from 'node:fs/promises';
 import type { SQLInputValue } from 'node:sqlite';
 
 import { SPACE_WORKBOOK_MIME, type SpaceArtifactLink, type SpaceDetail, type SpaceItem, type SpaceList, type SpaceOrigin, type SpaceVersion, type SpaceVersionLink } from '@xopcai/gateway-contract';
 
 import { parseByteRange } from '../media-shared/http/byte-range.js';
+import { toFileWebStream } from '../media-shared/http/file-response.js';
 import { MEDIA_ARTIFACT_MAX_BYTES, resolveMediaBufferPath } from '../media/store.js';
 import { escapeFts5Query, escapeSqlLike } from '../storage/sqlite/fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
@@ -273,41 +273,73 @@ type SpaceContent = {
   size: number;
 };
 
-export async function readSpaceContent(itemId: string, versionId: string, rangeHeader?: string): Promise<SpaceContent | null> {
+const verifiedSpaceFiles = new Map<string, string>();
+
+async function openSpaceFile(row: VersionRow): Promise<{ path: string; handle: FileHandle } | null> {
+  if (!row.media_id) return null;
+  const path = resolveMediaBufferPath(row.media_id, 'outbound');
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  let verified = false;
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size !== row.size_bytes
+      || stat.size > (row.mime_type === 'video/mp4' ? SPACE_VIDEO_MAX_BYTES : MEDIA_ARTIFACT_MAX_BYTES)) return null;
+    if (row.sha256) {
+      const signature = JSON.stringify([row.sha256, stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs]);
+      if (verifiedSpaceFiles.get(path) !== signature) {
+        const hash = createHash('sha256');
+        for await (const chunk of handle.createReadStream({ start: 0, autoClose: false })) hash.update(chunk);
+        const after = await handle.stat();
+        if (after.mtimeMs !== stat.mtimeMs || after.ctimeMs !== stat.ctimeMs || after.size !== stat.size
+          || hash.digest('hex') !== row.sha256) return null;
+        if (verifiedSpaceFiles.size >= 256) verifiedSpaceFiles.delete(verifiedSpaceFiles.keys().next().value!);
+        verifiedSpaceFiles.set(path, signature);
+      }
+    }
+    verified = true;
+    return { path, handle };
+  } finally {
+    if (!verified) await handle.close();
+  }
+}
+
+export function isSpaceMediaMime(mime: string): boolean {
+  return /^(?:audio|video)\/[a-z0-9.+-]+$/i.test(mime);
+}
+
+export async function resolveSpaceMediaShare(itemId: string, versionId: string): Promise<{ path: string; version: SpaceVersion } | null> {
+  const row = getSqliteDatabase().prepare(`SELECT v.* FROM space_versions v
+    JOIN space_items i ON i.id = v.item_id WHERE i.id = ? AND v.id = ? AND i.trashed_at IS NULL`)
+    .get(itemId, versionId) as VersionRow | undefined;
+  if (!row || !isSpaceMediaMime(row.mime_type)) return null;
+  try {
+    const file = await openSpaceFile(row);
+    if (!file) return null;
+    await file.handle.close();
+    return { path: file.path, version: version(row) };
+  } catch { return null; }
+}
+
+export async function readSpaceContent(itemId: string, versionId: string, rangeHeader?: string,
+  options?: { mediaOnly?: boolean; headOnly?: boolean }): Promise<SpaceContent | null> {
   const row = getSqliteDatabase().prepare('SELECT * FROM space_versions WHERE item_id = ? AND id = ?').get(itemId, versionId) as VersionRow | undefined;
-  if (!row) return null;
+  if (!row || (options?.mediaOnly && !isSpaceMediaMime(row.mime_type))) return null;
   const size = row.size_bytes;
   const range = parseByteRange(rangeHeader, size);
   const metadata = { version: version(row), size, range };
   if (range === 'invalid') return { ...metadata, body: null };
   if (row.body !== null) {
+    if (options?.headOnly) return { ...metadata, body: null };
     const bytes = Uint8Array.from(Buffer.from(row.body));
     return { ...metadata, body: range ? bytes.subarray(range.start, range.end + 1) : bytes };
   }
-  if (!row.media_id) return null;
   try {
-    const handle = await open(resolveMediaBufferPath(row.media_id, 'outbound'), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-    let handedOff = false;
-    try {
-      const stat = await handle.stat();
-      if (!stat.isFile() || stat.size !== size || stat.size > (row.mime_type === 'video/mp4' ? SPACE_VIDEO_MAX_BYTES : MEDIA_ARTIFACT_MAX_BYTES)) return null;
-      if (!row.sha256) {
-        const stream = handle.createReadStream(range ?? undefined);
-        const body = Readable.toWeb(stream) as ReadableStream<Uint8Array<ArrayBuffer>>;
-        handedOff = true;
-        return { ...metadata, body };
-      }
-      const bytes = new Uint8Array(size);
-      let offset = 0;
-      while (offset < bytes.length) {
-        const { bytesRead } = await handle.read(bytes, offset, bytes.length - offset, offset);
-        if (!bytesRead) return null;
-        offset += bytesRead;
-      }
-      if (createHash('sha256').update(bytes).digest('hex') !== row.sha256) return null;
-      return { ...metadata, body: range ? bytes.subarray(range.start, range.end + 1) : bytes };
-    } finally {
-      if (!handedOff) await handle.close();
+    const file = await openSpaceFile(row);
+    if (!file) return null;
+    if (options?.headOnly) {
+      await file.handle.close();
+      return { ...metadata, body: null };
     }
+    return { ...metadata, body: toFileWebStream(file.handle.createReadStream(range ?? undefined)) };
   } catch { return null; }
 }

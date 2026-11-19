@@ -19,7 +19,7 @@ import { appSettings } from '../service/settings';
 import { XopcMarkdownView } from './MarkdownView';
 import { filePreviewKind, htmlPreviewTextLimit, normalizedFileMimeType, previewTextLimit, safeHtmlPreview, XopcFilePreviewKind } from '../common/filePreview';
 import { chatMediaSource } from '../common/chatMediaSource';
-import { downloadGatewayMediaFile, removeGeneratedMediaFile } from '../service/generatedMediaFile';
+import { gatewayMediaPlaybackUrl } from '../service/generatedMediaFile';
 
 @ComponentV2
 export struct XopcPreviewVideo {
@@ -166,7 +166,7 @@ export struct XopcChatMediaView {
     try { this.controller.stop(); } catch (_) {}
     const path = this.playbackPath; this.playbackPath = '';
     await this.audioPlayer.stop();
-    if (path) { try { await fs.unlink(path); } catch (_) {} }
+    if (path && !/^https?:\/\//i.test(path)) { try { await fs.unlink(path); } catch (_) {} }
   }
   private restoreOriginalFile(): void {
     if (!this.galleryFile) return;
@@ -192,13 +192,12 @@ export struct XopcChatMediaView {
     this.sourceIdentity = this.sourceKey();
     const generation = ++this.generation; this.busy = true; this.error = '';
     try {
-      if (this.inlinePreview && (kind === 'audio' || kind === 'video')) {
-        const path = context.cacheDir + '/chat-media-' + util.generateRandomUUID() + (kind === 'audio' ? '.audio' : '.video');
+      if (this.inlinePreview && this.activeFile().uri.startsWith('xopc-space:') && (kind === 'audio' || kind === 'video')) {
         const source = chatMediaSource(this.activeFile().uri, this.conversationId);
-        const size = await downloadGatewayMediaFile(source.path, path, (): boolean => generation === this.generation);
-        if (generation !== this.generation) { await removeGeneratedMediaFile(path); return; }
-        this.playbackPath = path;
-        if (kind === 'audio') await this.audioPlayer.open(path, size);
+        const url = await gatewayMediaPlaybackUrl(source.path);
+        if (generation !== this.generation) return;
+        this.playbackPath = url;
+        if (kind === 'audio') await this.audioPlayer.openUrl(url);
         return;
       }
       const bytes = await readChatMedia(this.activeFile(), this.conversationId, context);

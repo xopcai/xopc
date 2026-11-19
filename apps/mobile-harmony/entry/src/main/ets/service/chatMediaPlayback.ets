@@ -25,17 +25,29 @@ export class XopcChatMediaPlayback {
   private terminal?: (result: XopcChatMediaPlaybackResult) => void;
   private options?: XopcChatMediaPlaybackOptions;
 
-  async open(path: string, length: number, autoPlay: boolean = false, onDuration?: (seconds: number) => void,
+  open(path: string, length: number, autoPlay: boolean = false, onDuration?: (seconds: number) => void,
     options?: XopcChatMediaPlaybackOptions): Promise<void> {
+    return this.openSource(path, length, false, autoPlay, onDuration, options);
+  }
+
+  openUrl(url: string, autoPlay: boolean = false, onDuration?: (seconds: number) => void,
+    options?: XopcChatMediaPlaybackOptions): Promise<void> {
+    return this.openSource(url, 0, true, autoPlay, onDuration, options);
+  }
+
+  private async openSource(source: string, length: number, remote: boolean, autoPlay: boolean,
+    onDuration?: (seconds: number) => void, options?: XopcChatMediaPlaybackOptions): Promise<void> {
     const cleanup = this.stop(); const generation = this.generation;
     await cleanup; if (generation !== this.generation) return;
     this.options = options;
     this.terminalResult = undefined;
     this.state = 'loading'; this.error = '';
     try {
-      const file = await fs.open(path, fs.OpenMode.READ_ONLY);
-      if (generation !== this.generation) { await fs.close(file); return; }
-      this.file = file;
+      if (!remote) {
+        const file = await fs.open(source, fs.OpenMode.READ_ONLY);
+        if (generation !== this.generation) { await fs.close(file); return; }
+        this.file = file;
+      }
       const player = await media.createAVPlayer();
       if (generation !== this.generation) { await player.release(); return; }
       this.player = player;
@@ -80,7 +92,8 @@ export class XopcChatMediaPlayback {
             event.hintType === audio.InterruptHint.INTERRUPT_HINT_STOP)) options.onInterrupt?.();
         });
       }
-      player.fdSrc = { fd: file.fd, offset: 0, length };
+      if (remote) player.url = source;
+      else if (this.file) player.fdSrc = { fd: this.file.fd, offset: 0, length };
     } catch (error) { this.fail(error as Error, generation, options); }
   }
 

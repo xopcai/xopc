@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createWriteStream } from 'node:fs';
 import { link, mkdir, open, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-import { parseByteRange } from '../media-shared/http/byte-range.js';
+import { fileRangeResponse } from '../media-shared/http/file-response.js';
 import { assertSafeUrl } from '../media-shared/http/ssrf-guard.js';
 import { deleteMediaUris } from '../media/session-references.js';
 import { buildMediaUri } from '../media/uri.js';
@@ -91,7 +91,7 @@ export async function saveMusicArtifact(id: string, provider: MusicProvider, sou
   }
 }
 
-export async function readMusicArtifact(id: string, rangeHeader?: string, download = false): Promise<Response> {
+export async function readMusicArtifact(id: string, rangeHeader?: string, download = false, headOnly = false): Promise<Response> {
   const path = artifactPath(id);
   const file = await stat(path).catch(() => null);
   if (!file?.isFile() || !file.size || file.size > MAX_AUDIO_BYTES) return new Response(null, { status: 404 });
@@ -100,13 +100,5 @@ export async function readMusicArtifact(id: string, rangeHeader?: string, downlo
     'X-Content-Type-Options': 'nosniff',
   });
   if (download) headers.set('Content-Disposition', 'attachment; filename="music.mp3"');
-  const range = parseByteRange(rangeHeader, file.size);
-  if (range === 'invalid') {
-    headers.set('Content-Range', `bytes */${file.size}`);
-    return new Response(null, { status: 416, headers });
-  }
-  if (range) headers.set('Content-Range', `bytes ${range.start}-${range.end}/${file.size}`);
-  headers.set('Content-Length', String(range ? range.end - range.start + 1 : file.size));
-  const stream = createReadStream(path, range ?? undefined);
-  return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, { status: range ? 206 : 200, headers });
+  return fileRangeResponse(path, file.size, rangeHeader, headers, headOnly);
 }

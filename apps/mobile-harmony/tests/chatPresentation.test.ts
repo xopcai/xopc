@@ -53,6 +53,14 @@ describe('one continuous assistant response', () => {
     expect(chatPresentationRows([user, steps], live, 'r')).toEqual([user, live]);
     expect(chatPresentationRows([steps, user], live, 'r')).toEqual([user, live]);
   });
+  it.each([undefined, 'old'])('keeps an earlier media-only reply out of the current run (%s)', turnId => {
+    const older: XopcChatRow = { id: 'old-reply', role: 'assistant', text: '', turnId, generatedMediaIds: ['old-song'] };
+    const live: XopcChatRow = { id: 'live:r', role: 'assistant', text: '', turnId: 'r', live: true };
+    expect(chatPresentationRows([older], live, 'r')).toEqual([older, live]);
+    expect(chatPresentationRows([older], undefined, 'r')).toMatchObject([older, { id: 'live:r', live: true }]);
+    expect(chatPresentationRows([{ ...older, turnId: 'r' }], undefined, 'r'))
+      .toMatchObject([{ id: 'old-reply', live: true, generatedMediaIds: ['old-song'] }]);
+  });
   it('uses one placeholder before the response and no placeholder after completion', () => {
     expect(chatPresentationRows([user], undefined, 'r')[1]).toMatchObject({ id: 'live:r', live: true });
     expect(chatPresentationRows([user, steps], undefined, '')).toEqual([user]);

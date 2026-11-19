@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { ArrowDownToLine, ArrowLeft, Archive, Ellipsis, FileText, Inbox, Music2, PanelRight, Plus, Presentation, Search, Sheet, Star, Trash2, Upload, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowLeft, Archive, Ellipsis, FileText, Inbox, Music2, PanelRight, Plus, Presentation, Search, Share2, Sheet, Star, Trash2, Upload, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useBlocker, useLocation, useNavigate, useNavigationType, useOutletContext, useSearchParams } from 'react-router-dom';
@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '@/features/chat/constants';
 import { createComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
+import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
+import { useShareLink } from '@/features/shares/use-share-link';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
@@ -214,6 +216,7 @@ function SpaceHeaderTabs({ zh, onViewChange }: { zh: boolean; onViewChange: () =
 }
 
 export function SpacePage() {
+  const share = useShareLink();
   const language = useLocaleStore(state => state.language);
   const zh = language === 'zh';
   const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
@@ -710,6 +713,12 @@ export function SpacePage() {
               </button> : null}
               <button type="button" className={cn(iconButton, item.favorite && 'text-accent-fg')} aria-pressed={item.favorite}
                 aria-label={zh ? '收藏' : 'Favorite'} disabled={busy} onClick={() => void mutateItem('patch', item, { favorite: !item.favorite })}><Star className={cn('size-4', item.favorite && 'fill-current')} /></button>
+              {version && /^(?:audio|video)\//i.test(version.mimeType) ? (
+                <button type="button" className={iconButton} disabled={busy} aria-label={zh ? '分享链接' : 'Share link'}
+                  onClick={() => share.createShareLink({ spaceVersion: { itemId: item.id, versionId: version.id }, fileName: version.fileName })}>
+                  <Share2 className="size-4" />
+                </button>
+              ) : null}
               <button type="button" className={iconButton} disabled={busy}
                 aria-label={workbook ? (zh ? '下载此版本为 Excel' : 'Download this version as Excel') : (zh ? '下载' : 'Download')}
                 onClick={() => void download()}><ArrowDownToLine className="size-4" /></button>
@@ -800,6 +809,8 @@ export function SpacePage() {
             readSelection={readWorkbookSelection} prepareSendContext={prepareWorkbookChat} onRunSettled={refreshAfterChat} /> : null}
         </section>, previewHost) : null}
       {!(selected && previewHost) ? status : null}
+      <ShareLinkDialog open={share.dialogOpen} onOpenChange={share.handleOpenChange} result={share.result}
+        loading={share.loading} error={share.error} pendingParams={share.pendingParams} onConfirm={share.confirmShareLink} />
     </div>
   );
 }

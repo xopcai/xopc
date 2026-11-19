@@ -377,7 +377,9 @@ struct PersonalAgentOverview: View {
                                             conversationID: conversationID, id: artifact.artifactId, title: artifact.title,
                                             source: item.task?.title ?? agent.displayName, lyrics: nil, duration: nil)
             if playback.track?.key != track.key {
-                playback.play(track) {
+                playback.play(track, streaming: {
+                    try await GatewayClient(configuration: configuration).mediaPlaybackURL(path: uri)
+                }) {
                     try await GatewayClient(configuration: configuration).downloadGeneratedMedia(path: uri, fileName: "music.mp3")
                 }
             }

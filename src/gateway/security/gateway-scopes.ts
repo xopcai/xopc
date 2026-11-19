@@ -30,7 +30,16 @@ function methodScope(
   return method === 'GET' ? read : write;
 }
 
+const mediaPathSegment = '[a-zA-Z0-9_-]+';
+const libraryPlaybackPath = new RegExp(`^/api/spaces/items/${mediaPathSegment}/versions/${mediaPathSegment}/content$`);
+const generatedPlaybackPath = new RegExp(`^/api/(?:music-generation/sessions/${mediaPathSegment}/jobs/[a-f0-9]{64}/audio|video-generation/sessions/${mediaPathSegment}/jobs/${mediaPathSegment}/video)$`);
+
+export function isMediaPlaybackPath(path: string): boolean {
+  return path.length <= 2048 && (libraryPlaybackPath.test(path) || generatedPlaybackPath.test(path));
+}
+
 export function requiredGatewayScope(method: string, path: string): GatewayScope | undefined {
+  if (method === 'HEAD' && isMediaPlaybackPath(path)) method = 'GET';
   if (/^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations|\/runs\/[^/]+\/events)?$/.test(path)) return undefined;
   // Authentication admits this surface; the dispatcher checks each capability's scopes.
   if (path === '/api/capabilities/operations' || path.startsWith('/api/capabilities/operations/')) return undefined;
@@ -94,6 +103,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   }
 
   if (path === '/api/voice/selection' || path === '/api/voice/catalog/refresh' || path === '/api/voice/boson' || path === '/api/voice/boson/reveal-api-key') return 'voice.configure';
+  if (method === 'POST' && path === '/api/media/playback-ticket') return undefined;
   if (path.startsWith('/api/voice') || path.startsWith('/api/media') || path.startsWith('/api/clarifications')) {
     return 'sessions.write';
   }

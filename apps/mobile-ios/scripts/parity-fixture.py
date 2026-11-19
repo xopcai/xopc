@@ -3,7 +3,7 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-import base64, json, time, wave, io, math, struct, sys
+import base64, json, time, wave, io, math, re, struct, sys
 public_assets = Path(__file__).resolve().parents[3] / 'web/public'
 capability_brands = {
  '/channel-icons/telegram.svg': (public_assets / 'channel-icons/telegram.svg').read_bytes(),
@@ -106,6 +106,24 @@ class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
  def do_PUT(self): self.do_GET()
  def do_POST(self): self.do_GET()
+ def do_HEAD(self): self.do_GET()
+ def send_music(self):
+  start, end = 0, len(music_bytes)-1
+  requested = self.headers.get('Range')
+  if requested:
+   matched = re.fullmatch(r'bytes=(\d+)-(\d*)', requested)
+   if not matched or int(matched[1]) > end:
+    self.send_response(416); self.send_header('Content-Range',f'bytes */{len(music_bytes)}'); self.end_headers(); return
+   start = int(matched[1])
+   end = min(end, int(matched[2])) if matched[2] else end
+  payload = music_bytes[start:end+1]
+  self.send_response(206 if requested else 200)
+  if requested: self.send_header('Content-Range',f'bytes {start}-{end}/{len(music_bytes)}')
+  self.send_header('Accept-Ranges','bytes'); self.send_header('Content-Type','audio/mpeg')
+  self.send_header('Content-Length',str(len(payload))); self.end_headers()
+  if self.command != 'HEAD':
+   try: self.wfile.write(payload)
+   except (BrokenPipeError, ConnectionResetError): pass
  def do_PATCH(self): self.do_GET()
  def do_DELETE(self): self.do_GET()
  def do_GET(self):
@@ -142,7 +160,7 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/spaces/items/'+space_music_id and music_fixture:
    data=dict(space_music_summary,currentVersion=space_music_detail_version,versions=[space_music_detail_version],origins=[space_music_origin])
   elif path==f"/api/spaces/items/{space_music_id}/versions/{space_music_version['id']}/content" and music_fixture:
-   self.send_response(200);self.send_header('Content-Type','audio/mpeg');self.send_header('Content-Length',str(len(music_bytes)));self.end_headers();self.wfile.write(music_bytes);return
+   self.send_music(); return
   elif path.startswith('/api/spaces/items/'+space_id):
    action=path.removeprefix('/api/spaces/items/'+space_id).strip('/')
    if not space_item: status=404; data={'error':'Item not found'}
@@ -355,9 +373,13 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/fixture/music-state' and live_music_fixture and self.command=='POST':
    live_music_state=json.loads(body).get('state')
    data={'ok':True}
+  elif path=='/api/media/playback-ticket' and music_fixture and self.command=='POST':
+   target=json.loads(body).get('path')
+   allowed=(f'/api/music-generation/sessions/{personal}/jobs/fixture-song/audio', f'/api/spaces/items/{space_music_id}/versions/{space_music_version["id"]}/content')
+   if target in allowed: status=201; data={'path':target+'?playbackTicket='+'a'*43}
+   else: status=404; data={'error':'Missing media fixture'}
   elif path==f'/api/music-generation/sessions/{personal}/jobs/fixture-song/audio' and music_fixture:
-   payload=music_bytes
-   self.send_response(200);self.send_header('Content-Type','audio/mpeg');self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload);return
+   self.send_music(); return
   elif path=='/api/automations': data={'automations':[] if 'projectId' in query else [automation]}
   elif path=='/api/automations/fixture-automation': data={'automation':automation}
   elif path=='/api/automation-runs': data={'runs':[automation_run]}

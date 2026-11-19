@@ -98,6 +98,8 @@ export function renderShareLandingPage(
     inlineUrl?: string | null;
     /** SPA preview URL (for markdown / docs / code that benefit from rich rendering). */
     previewUrl?: string | null;
+    playbackUrl?: string;
+    playbackSource?: string;
     /** Social card / unfurl metadata. */
     og?: ShareLandingOgOptions;
   },
@@ -114,6 +116,13 @@ export function renderShareLandingPage(
   });
 
   const buttons: string[] = [];
+  if (options?.playbackUrl) {
+    buttons.push(`<form method="POST" action="${escapeHtml(options.playbackUrl)}" style="display:inline"><button type="submit" class="btn">在线播放</button></form>`);
+  }
+  const mediaTag = record.mimeType.startsWith('audio/') ? 'audio' : 'video';
+  const player = options?.playbackSource
+    ? `<${mediaTag} controls autoplay playsinline preload="metadata" style="width:100%;max-height:65vh;margin:1rem 0" src="${escapeHtml(options.playbackSource)}"></${mediaTag}>`
+    : '';
   if (options?.previewUrl) {
     buttons.push(
       `<a class="btn" href="${escapeHtml(options.previewUrl)}" target="_blank" rel="noopener">👁 在线预览</a>`,
@@ -156,6 +165,7 @@ ${ogTags}
 <div class="name">${fileName}</div>
 <div class="meta">${size} · 有效期至 ${expiresDate}</div>
 ${description ? `<div class="desc">${description}</div>` : ''}
+${player}
 <div class="actions">
 ${buttons.join('\n')}
 </div>

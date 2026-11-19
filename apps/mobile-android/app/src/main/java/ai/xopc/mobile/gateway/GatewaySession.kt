@@ -133,6 +133,18 @@ class GatewaySession(
   @Synchronized
   fun requestBytes(path: String): ByteArray = readMedia { origin, bearer -> http.requestBytes(origin, path, bearer) }
 
+  @Synchronized
+  internal fun mediaPlaybackUrl(path: String, expectedGatewayId: String? = null): String {
+    val body = JSONObject().put("path", path).toString()
+    val response = JSONObject(request("/api/media/playback-ticket", "POST", body, expectedGatewayId = expectedGatewayId))
+    val playbackPath = response.getString("path")
+    require(playbackPath.startsWith("$path?playbackTicket=") &&
+      playbackPath.substringAfter("?playbackTicket=").matches(Regex("[A-Za-z0-9_-]{43}"))) { "INVALID_PLAYBACK_URL" }
+    val current = checkNotNull(profile)
+    val origin = current.routes.first { it.id == current.activeRouteId }.url
+    return origin.trimEnd('/') + playbackPath
+  }
+
   fun downloadGeneratedMedia(path: String, destination: java.io.File, expectedGatewayId: String? = null) {
     val (origin, bearer) = synchronized(this) {
       val current = profile ?: throw IllegalStateException("NOT_PAIRED")

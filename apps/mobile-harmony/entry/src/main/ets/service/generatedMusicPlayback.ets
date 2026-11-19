@@ -3,7 +3,7 @@ import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { XopcMusicResume, XopcMusicTrack } from '../model/musicPlayback';
 import { XopcChatMediaPlayback, XopcChatMediaPlaybackOptions } from './chatMediaPlayback';
-import { downloadGatewayMediaFile, downloadGeneratedMedia, removeGeneratedMediaFile } from './generatedMediaFile';
+import { downloadGatewayMediaFile, gatewayMediaPlaybackUrl, generatedMediaContentPath, removeGeneratedMediaFile } from './generatedMediaFile';
 import { XopcMusicSystemSession } from './musicSystemSession';
 import { readMusicResume, writeMusicResume } from './musicResumeStore';
 
@@ -25,7 +25,6 @@ export class XopcGeneratedMusicPlayback {
   private context?: common.UIAbilityContext;
   private gatewayId: string = '';
   private generation: number = 0;
-  private path: string = '';
   private lastCheckpoint: number = 0;
   private wantsPlayback: boolean = false;
   private waitingForProfile: boolean = false;
@@ -70,11 +69,11 @@ export class XopcGeneratedMusicPlayback {
     return this.track?.conversationId === conversationId && this.track.id === songId;
   }
 
-  async play(cacheDir: string, track: XopcMusicTrack): Promise<void> {
+  async play(track: XopcMusicTrack): Promise<void> {
     if (this.matches(track.conversationId, track.id)) { await this.toggle(); return; }
     this.track = track;
     this.position = 0;
-    await this.load(cacheDir);
+    await this.load();
   }
 
   async toggle(): Promise<void> {
@@ -88,7 +87,7 @@ export class XopcGeneratedMusicPlayback {
     const context = this.context;
     if (!track || this.loading || this.player.state === 'playing') return;
     if (this.failed || ['idle', 'stopped', 'released', 'error'].includes(this.player.state)) {
-      if (context) await this.load(context.cacheDir);
+      if (context) await this.load();
       return;
     }
     const generation = this.generation;
@@ -116,7 +115,7 @@ export class XopcGeneratedMusicPlayback {
     });
   }
 
-  private async load(cacheDir: string): Promise<void> {
+  private async load(): Promise<void> {
     const track = this.track;
     if (!track) return;
     this.resetPlayer();
@@ -125,14 +124,11 @@ export class XopcGeneratedMusicPlayback {
     this.failed = false;
     this.wantsPlayback = true;
     this.publish();
-    const path = cacheDir + '/generated-music-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.audio';
     try {
       await this.cleanup;
       if (generation !== this.generation) return;
-      const length = await this.downloadTrack(track, path,
-        (): boolean => generation === this.generation);
-      if (generation !== this.generation) { await removeGeneratedMediaFile(path); return; }
-      this.path = path;
+      const url = await gatewayMediaPlaybackUrl(this.trackPath(track));
+      if (generation !== this.generation) return;
       const permitted = !this.releaseOtherAudio || await this.releaseOtherAudio();
       if (generation !== this.generation) return;
       const mayPlay = permitted && this.wantsPlayback;
@@ -144,7 +140,7 @@ export class XopcGeneratedMusicPlayback {
         onPosition: (position: number): void => { if (generation === this.generation) this.onPosition(position); },
         onInterrupt: (): void => { if (generation === this.generation) void this.pause(); }
       };
-      await this.player.open(path, length, mayPlay && this.wantsPlayback, (duration: number): void => {
+      await this.player.openUrl(url, mayPlay && this.wantsPlayback, (duration: number): void => {
         if (generation === this.generation && Number.isFinite(duration) && duration > 0) {
           this.durations.set(JSON.stringify([track.conversationId, track.id]), duration);
         }
@@ -232,13 +228,12 @@ export class XopcGeneratedMusicPlayback {
     if (this.track?.conversationId) this.sourceRevision++;
   }
 
-  private downloadTrack(track: XopcMusicTrack, destination: string, current: () => boolean): Promise<number> {
+  private trackPath(track: XopcMusicTrack): string {
     if (track.libraryItemId && track.libraryVersionId) {
-      const path = '/api/spaces/items/' + encodeURIComponent(track.libraryItemId) + '/versions/' +
+      return '/api/spaces/items/' + encodeURIComponent(track.libraryItemId) + '/versions/' +
         encodeURIComponent(track.libraryVersionId) + '/content';
-      return downloadGatewayMediaFile(path, destination, current);
     }
-    return downloadGeneratedMedia('music', track.conversationId, track.id, destination, current);
+    return generatedMediaContentPath('music', track.conversationId, track.id);
   }
 
   async download(track: XopcMusicTrack | undefined = this.track): Promise<void> {
@@ -248,7 +243,7 @@ export class XopcGeneratedMusicPlayback {
     this.downloading = true;
     const path = context.cacheDir + '/xopc-music-export-' + Date.now() + '.mp3';
     try {
-      await this.downloadTrack(track, path, (): boolean => generation === this.generation);
+      await downloadGatewayMediaFile(this.trackPath(track), path, (): boolean => generation === this.generation);
       if (generation !== this.generation) return;
       const name = track.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 100) || 'xopc';
       const fileName = track.fileName?.replace(/[\\/:*?"<>|]/g, '_') || name + '.mp3';
@@ -266,13 +261,9 @@ export class XopcGeneratedMusicPlayback {
   private resetPlayer(): void {
     this.generation++;
     this.wantsPlayback = false;
-    const path = this.path;
-    this.path = '';
     const stopping = this.player.stop();
     const system = this.system.release();
-    this.cleanup = Promise.all([this.cleanup, stopping, system]).then(async (): Promise<void> => {
-      await removeGeneratedMediaFile(path);
-    });
+    this.cleanup = Promise.all([this.cleanup, stopping, system]).then((): void => {});
   }
 
   stop(): Promise<void> {

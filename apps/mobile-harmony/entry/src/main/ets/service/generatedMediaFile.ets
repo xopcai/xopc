@@ -10,14 +10,31 @@ interface XopcGeneratedMediaHeaders { Authorization: string; Range: string; }
 const CHUNK_SIZE: number = 2 * 1024 * 1024;
 const FILE_LIMIT: number = 256 * 1024 * 1024;
 
+interface XopcPlaybackTicket { path: string; }
+
+export async function gatewayMediaPlaybackUrl(path: string): Promise<string> {
+  const revision = gatewaySession.connectionRevision();
+  const ticket = JSON.parse(await gatewaySession.request('/api/media/playback-ticket', 'POST',
+    JSON.stringify({ path }))) as XopcPlaybackTicket;
+  gatewaySession.assertConnection(revision);
+  const prefix = path + '?playbackTicket=';
+  if (!ticket.path.startsWith(prefix) || !/^[A-Za-z0-9_-]{43}$/.test(ticket.path.slice(prefix.length))) {
+    throw new Error('INVALID_PLAYBACK_URL');
+  }
+  return gatewaySession.activeOrigin().replace(/\/$/, '') + ticket.path;
+}
+
+export function generatedMediaContentPath(kind: XopcGeneratedMediaKind, conversationId: string, id: string): string {
+  return generatedMediaPath(kind, conversationId) + '/' + encodeURIComponent(id) + (kind === 'music' ? '/audio' : '/video');
+}
+
 export async function removeGeneratedMediaFile(path: string): Promise<void> {
   if (path) { try { await fs.unlink(path); } catch (_) {} }
 }
 
 export async function downloadGeneratedMedia(kind: XopcGeneratedMediaKind, conversationId: string, id: string,
   destination: string, isCurrent: () => boolean): Promise<number> {
-  const path = generatedMediaPath(kind, conversationId) + '/' + encodeURIComponent(id) + (kind === 'music' ? '/audio' : '/video');
-  return downloadGatewayMediaFile(path, destination, isCurrent);
+  return downloadGatewayMediaFile(generatedMediaContentPath(kind, conversationId, id), destination, isCurrent);
 }
 
 export async function downloadGatewayMediaFile(path: string, destination: string, isCurrent: () => boolean): Promise<number> {

@@ -8,7 +8,11 @@ import { XopcShareResult } from '../model/share';
 
 export type XopcShareReachability = 'public' | 'lan' | 'local-only';
 
+export interface XopcShareSpaceVersion { itemId: string; versionId: string; }
+
 export interface XopcShareRequest {
+  spaceVersion?: XopcShareSpaceVersion;
+  thumbnail?: boolean;
   fileId?: string;
   path?: string;
   conversationId?: string;

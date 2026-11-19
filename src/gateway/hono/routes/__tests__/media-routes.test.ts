@@ -1,15 +1,12 @@
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
 import { Hono } from 'hono';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { messagesReferenceMediaUri, readMediaReference, saveMediaBuffer } = vi.hoisted(() => ({
+const { messagesReferenceMediaUri, saveMediaBuffer } = vi.hoisted(() => ({
   messagesReferenceMediaUri: vi.fn(),
-  readMediaReference: vi.fn(),
   saveMediaBuffer: vi.fn(),
-}));
-
-vi.mock('../../../../media/media-reference.js', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../../../../media/media-reference.js')>(),
-  readMediaReference,
 }));
 
 vi.mock('../../../../media/session-references.js', () => ({ messagesReferenceMediaUri }));
@@ -19,6 +16,7 @@ vi.mock('../../../../media/store.js', async (importOriginal) => {
   return { ...actual, saveMediaBuffer };
 });
 
+import { resolveMediaBufferPath } from '../../../../media/store.js';
 import { registerMediaRoutes } from '../media.js';
 
 function createApp() {
@@ -35,14 +33,13 @@ function createApp() {
 }
 
 describe('media routes', () => {
-  beforeEach(() => {
+  const mediaPath = resolveMediaBufferPath('reply.mp3', 'tts');
+
+  beforeEach(async () => {
+    await mkdir(dirname(mediaPath), { recursive: true });
+    await writeFile(mediaPath, '0123456789');
     messagesReferenceMediaUri.mockReset();
     messagesReferenceMediaUri.mockReturnValue(true);
-    readMediaReference.mockReset();
-    readMediaReference.mockResolvedValue({
-      buffer: Buffer.from('0123456789'),
-      path: '/tmp/reply.mp3',
-    });
     saveMediaBuffer.mockReset();
     saveMediaBuffer.mockResolvedValue({
       id: 'voice---id.m4a',
@@ -54,6 +51,8 @@ describe('media routes', () => {
     });
   });
 
+  afterEach(() => rm(mediaPath, { force: true }));
+
   it('returns full media with byte range metadata', async () => {
     const response = await createApp().request(
       '/api/media/read?uri=media%3A%2F%2Ftts%2Freply.mp3&conversationId=chat-1',
@@ -63,10 +62,6 @@ describe('media routes', () => {
     expect(response.headers.get('Accept-Ranges')).toBe('bytes');
     expect(response.headers.get('Content-Length')).toBe('10');
     await expect(response.text()).resolves.toBe('0123456789');
-    expect(readMediaReference).toHaveBeenCalledWith(
-      'media://tts/reply.mp3',
-      32 * 1024 * 1024,
-    );
   });
 
   it.each([

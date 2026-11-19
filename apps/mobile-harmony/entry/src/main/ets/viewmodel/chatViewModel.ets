@@ -234,6 +234,8 @@ export class XopcChatViewModel {
       // A terminal event received during recovery must not resurrect its run.
       if (this.runId !== previousRun) return;
       if (!run.active && previousRun) {
+        const live = this.liveRow || this.liveActivityRow;
+        if (live?.generatedMediaIds?.length) this.liveRow = reduceChatStream(live, 'run_end', {}, previousRun);
         this.completedActivityRunId = previousRun;
         this.snapshotMode = true;
         this.trackRun('');
@@ -358,7 +360,9 @@ export class XopcChatViewModel {
         const hasCompletion = !!savedAnswer || this.liveRow?.runStatus === 'cancelled' || this.liveRow?.runStatus === 'suspended'
           || !!saved?.outcome || !!saved?.media?.length || !!saved?.deliveries?.length || !!saved?.generatedMediaIds?.length
           || !!saved?.blocks?.some((block): boolean => block.kind === 'review');
-        if (saved && hasCompletion && !partial) {
+        const mediaSaved = (this.liveRow?.generatedMediaIds ?? []).every((id: string): boolean =>
+          saved?.generatedMediaIds?.includes(id) === true);
+        if (saved && hasCompletion && !partial && mediaSaved) {
           saved.executionActivity = true;
           this.executionAssistantIds.add(saved.id);
           this.completedActivityRunId = '';
@@ -671,7 +675,9 @@ export class XopcChatViewModel {
     const data = event.data as XopcStreamEvent;
     if (data.conversationId !== this.selectedId || !data.payload) return;
     const payload = data.payload;
-    if (event.event === 'tool_end' && payload.toolName === 'music_generation' && payload.status === 'success') {
+    const musicToolFinished = event.event === 'tool_end' && payload.toolName === 'music_generation' && payload.status === 'success';
+    const hasMusicReceipt = musicToolFinished && !!payload.generatedMediaId;
+    if (musicToolFinished) {
       this.musicJobsRevision++;
     }
     if (event.event === 'assistant_delta' && payload.delta?.trim()) this.firstAnswerRun = this.runId;
@@ -698,11 +704,14 @@ export class XopcChatViewModel {
       if (['thinking_delta', 'tool_start', 'tool_end', 'assistant_delta', 'progress'].includes(event.event)) {
         this.liveActivityRow = reduceChatSnapshotActivity(this.liveActivityRow, event.event, payload, this.runId);
       }
+      if (hasMusicReceipt && this.liveRow) {
+        this.liveRow = reduceChatStream(this.liveRow, event.event, payload, this.runId);
+      }
       if (this.refreshTimer === -1) this.refreshTimer = setTimeout((): void => {
         this.refreshTimer = -1; this.loadHistory(false);
       }, 750);
     } else {
-      if (payload.messageId && this.rows.some((row: XopcChatRow): boolean =>
+      if (!hasMusicReceipt && payload.messageId && this.rows.some((row: XopcChatRow): boolean =>
         (row.sourceIds || [row.id]).includes(payload.messageId || ''))) return;
       if (event.event === 'assistant_delta') {
         const segment = payload.messageId || this.runId;

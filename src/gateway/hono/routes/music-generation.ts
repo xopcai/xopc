@@ -91,6 +91,6 @@ export function registerMusicGenerationRoutes(app: Hono, deps: AuthenticatedRout
     if (!session?.transcriptId || job?.transcript_id !== session.transcriptId || job.state !== 'completed') {
       return c.json({ error: 'Audio not found' }, 404);
     }
-    return readMusicArtifact(job.id, c.req.header('Range'), c.req.query('download') === '1');
+    return readMusicArtifact(job.id, c.req.header('Range'), c.req.query('download') === '1', c.req.method === 'HEAD');
   });
 }

@@ -2,9 +2,9 @@ package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.theme.themedCorners
 import ai.xopc.mobile.R
+import ai.xopc.mobile.gateway.GeneratedMediaKind
 import ai.xopc.mobile.gateway.GeneratedMediaAccess
 import ai.xopc.mobile.playback.MusicPhase
-import ai.xopc.mobile.playback.MusicRequest
 import ai.xopc.mobile.playback.MusicPlayback
 import ai.xopc.mobile.playback.MusicState
 import ai.xopc.mobile.playback.MusicTrack
@@ -43,7 +43,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal fun playGeneratedMusic(context: Context, access: GeneratedMediaAccess?, track: MusicTrack) {
-  if (access != null) MusicPlayback.play(context, track) { destination ->
+  if (access != null) MusicPlayback.play(context, track,
+    { access.playbackUrl(GeneratedMediaKind.Music, track.conversationId, track.id, track.gatewayId) }) { destination ->
     access.downloadMusic(track.gatewayId, track.conversationId, track.id, destination)
   }
 }
@@ -333,14 +334,15 @@ internal fun rememberMusicDownload(access: GeneratedMediaAccess?): (MusicTrack) 
   val context = LocalContext.current
   val export = rememberPreviewExport("audio/*")
   return download@{ track ->
-    val request = MusicPlayback.request?.takeIf { it.track.key == track.key } ?: access?.let {
-      MusicRequest(track) { destination -> it.downloadMusic(track.gatewayId, track.conversationId, track.id, destination) }
+    val downloadFile = MusicPlayback.request?.takeIf { it.track.key == track.key }?.download ?: access?.let {
+      val download: suspend (File) -> Unit = { destination -> it.downloadMusic(track.gatewayId, track.conversationId, track.id, destination) }
+      download
     } ?: return@download
     val name = track.title.replace(Regex("[^\\p{L}\\p{N} ._-]"), "_").trim().take(70).ifBlank { "xopc" }
     export(track.fileName ?: "$name.mp3") { target ->
       val temporary = File.createTempFile("music-export-", ".audio", context.cacheDir)
       try {
-        request.download(temporary)
+        downloadFile(temporary)
         temporary.inputStream().use { it.copyTo(target) }
       } finally { temporary.delete() }
     }

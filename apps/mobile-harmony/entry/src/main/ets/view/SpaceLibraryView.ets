@@ -1,3 +1,4 @@
+import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
@@ -6,6 +7,8 @@ import { MAX_ATTACHMENT_BYTES } from '../common/attachments';
 import { XopcChatAttachment, XopcHistoryMedia } from '../model/chat';
 import { XopcMusicTrack } from '../model/musicPlayback';
 import { XopcMusicPreviewContent, XopcPreviewHeader } from './MusicPlaybackView';
+import { createManagedShare, shareChatLink, shareReachabilityText } from '../service/chatMediaShare';
+import { copyChatMessage } from '../service/chatMessageActions';
 import { appSettings } from '../service/settings';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { readChatMedia } from '../service/chatMedia';
@@ -414,9 +417,40 @@ export struct XopcSpaceLibraryView {
       libraryItemId: item.id, libraryVersionId: version.id };
   }
 
+  private async shareMedia(item: XopcLibraryItem, version: XopcLibraryVersion): Promise<void> {
+    const ui = this.getUIContext();
+    const context = ui.getHostContext() as common.UIAbilityContext | undefined;
+    if (this.busy || !context) return;
+    this.busy = true;
+    this.error = '';
+    const revision = gatewaySession.connectionRevision();
+    try {
+      const payload = await createManagedShare({ spaceVersion: { itemId: item.id, versionId: version.id },
+        audience: 'friend', thumbnail: false });
+      gatewaySession.assertConnection(revision);
+      if (!this.detailOpen || this.selected?.id !== item.id) return;
+      const result = await ui.getPromptAction().showDialog({ title: payload.share.title,
+        message: payload.share.shareUrl + '\n\n' + shareReachabilityText(payload.share, appSettings.effectiveLanguage().startsWith('zh')),
+        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+          { text: $r('app.string.chat_copy_link'), color: this.colors.secondary },
+          { text: $r('app.string.chat_system_share'), color: this.colors.accent }] });
+      gatewaySession.assertConnection(revision);
+      if (result.index === 1) {
+        await copyChatMessage(payload.share.shareUrl);
+        ui.getPromptAction().showToast({ message: $r('app.string.chat_link_copied') });
+      } else if (result.index === 2) await shareChatLink(context, payload.share);
+    } catch (_) {
+      this.error = this.t('无法创建分享链接，请重试', 'Could not share. Try again.');
+    } finally { this.busy = false; }
+  }
+
   private actions(item: XopcLibraryItem, version: XopcLibraryVersion): MenuElement[] {
     const actions: MenuElement[] = [];
     if (!item.trashedAt) {
+      if (version.mimeType.startsWith('audio/') || version.mimeType.startsWith('video/')) {
+        actions.push({ value: this.t('分享链接', 'Share link'), enabled: !this.busy,
+          action: (): void => { void this.shareMedia(item, version); } });
+      }
       actions.push({ value: this.t('用此文件提问', 'Ask about this file'),
         enabled: !this.busy && version.sizeBytes > 0 && version.sizeBytes <= MAX_ATTACHMENT_BYTES,
         action: (): void => { void this.transfer(item, version, true); } });

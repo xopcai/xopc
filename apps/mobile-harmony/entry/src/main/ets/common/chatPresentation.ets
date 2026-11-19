@@ -25,7 +25,8 @@ export function chatPresentationRows(history: XopcChatRow[], live: XopcChatRow |
   const tail = rows[rows.length - 1];
   const sameTurn = !!tail?.turnId && tail.turnId === live?.turnId;
   const distinctTurn = !!tail?.turnId && !!live?.turnId && tail.turnId !== live.turnId;
-  const unfinishedTail = tail?.role === 'assistant' && !tail.outcome && !chatAnswerText(tail);
+  const hasGeneratedMedia = (tail?.generatedMediaIds?.length ?? 0) > 0;
+  const unfinishedTail = tail?.role === 'assistant' && !tail.outcome && !hasGeneratedMedia && !chatAnswerText(tail);
   if (live) {
     if (tail?.role === 'assistant' && !distinctTurn && (sameTurn || unfinishedTail)) {
       const saved = copyPresentationRow(tail);
@@ -44,7 +45,8 @@ export function chatPresentationRows(history: XopcChatRow[], live: XopcChatRow |
     } else rows.push(live);
   } else if (runId) {
     // Snapshot mode already contains the current answer, including partial final text.
-    if (tail?.role === 'assistant' && (!tail.outcome || tail.outcome.runId === runId)) {
+    if (tail?.role === 'assistant' && (!tail.outcome || tail.outcome.runId === runId)
+      && (!hasGeneratedMedia || tail.turnId === runId || tail.outcome?.runId === runId)) {
       const active = copyPresentationRow(tail); active.live = true;
       rows[rows.length - 1] = active;
     }

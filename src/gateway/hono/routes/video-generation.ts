@@ -169,6 +169,6 @@ export function registerVideoGenerationRoutes(app: Hono, deps: AuthenticatedRout
   app.get(`${path}/:jobId/video`, async c => {
     const job = getVideoJob(c.req.param('conversationId'), c.req.param('jobId'));
     if (job?.state !== 'completed') return c.json({ error: 'Video not found' }, 404);
-    return readVideoArtifact(job.id, c.req.header('Range'), c.req.query('download') === '1');
+    return readVideoArtifact(job.id, c.req.header('Range'), c.req.query('download') === '1', c.req.method === 'HEAD');
   });
 }

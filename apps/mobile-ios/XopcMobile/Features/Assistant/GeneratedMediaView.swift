@@ -320,48 +320,63 @@ struct GeneratedVideoDrawer: View {
     let card: GeneratedMediaCard
     let conversationID: String
     let configuration: GatewayConfiguration
-    @State private var localURL: URL?
+    @State private var streamURL: URL?
+    @State private var export: FileShareItem?
+    @State private var exporting = false
+    @State private var exportFailed = false
     @State private var error: String?
     @State private var retry = 0
 
     var body: some View {
         MobilePreview(title: card.title, closeID: "video-player-close", onClose: { dismiss() }) {
-            if let localURL {
-                ShareLink(item: localURL) { Label("分享媒体", systemImage: "square.and.arrow.up") }
-            }
+            Button("分享媒体", systemImage: "square.and.arrow.up") { exportVideo() }
+                .disabled(exporting)
         } content: {
-            if let localURL {
-                PreviewVideo(url: localURL, autoplay: true)
-                    .accessibilityIdentifier("generated-video-player-\(card.id)")
-            } else if let error {
+            if let error {
                 Text(verbatim: error).foregroundStyle(.secondary)
                 Button("重试") { retry += 1 }
                 Spacer()
+            } else if let streamURL {
+                PreviewVideo(url: streamURL, autoplay: true) {
+                    error = AppLocalization.resolve("无法播放视频")
+                }
+                .accessibilityIdentifier("generated-video-player-\(card.id)")
             } else {
                 ProgressView("正在加载媒体").frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .accessibilityIdentifier("video-player-drawer")
         .task(id: retry) { await load() }
-        .onDisappear {
-            if let localURL {
-                try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent())
-                self.localURL = nil
+        .sheet(item: $export) { item in
+            FileShareSheet(url: item.url).onDisappear {
+                try? FileManager.default.removeItem(at: item.url.deletingLastPathComponent())
             }
         }
+        .alert("无法导出视频", isPresented: $exportFailed) { Button("关闭", role: .cancel) {} }
     }
 
     private func load() async {
         error = nil
+        streamURL = nil
         do {
-            let url = try await GatewayClient(configuration: configuration).downloadGeneratedMedia(card, conversationID: conversationID)
-            guard !Task.isCancelled else { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()); return }
-            localURL = url
+            let url = try await GatewayClient(configuration: configuration).mediaPlaybackURL(path: card.artifactPath(conversationID))
+            try Task.checkCancellation()
+            streamURL = url
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-        } catch is CancellationError {
         } catch {
-            if !Task.isCancelled {
-                self.error = error.localizedDescription
+            if !Task.isCancelled { self.error = error.localizedDescription }
+        }
+    }
+
+    private func exportVideo() {
+        exporting = true
+        Task {
+            defer { exporting = false }
+            do {
+                let url = try await GatewayClient(configuration: configuration).downloadGeneratedMedia(card, conversationID: conversationID)
+                export = FileShareItem(url: url)
+            } catch {
+                exportFailed = true
             }
         }
     }
@@ -373,6 +388,20 @@ private func formatGeneratedMediaTime(_ value: Double) -> String {
 }
 
 extension GatewayClient {
+    func mediaPlaybackURL(path: String) async throws -> URL {
+        struct Input: Encodable { let path: String }
+        struct Ticket: Decodable { let path: String }
+        let ticket: Ticket = try await request(path: "/api/media/playback-ticket", method: "POST",
+                                               body: encoder.encode(Input(path: path)))
+        let prefix = path + "?playbackTicket="
+        guard ticket.path.hasPrefix(prefix) else { throw GatewayClientError.invalidResponse }
+        let value = String(ticket.path.dropFirst(prefix.count))
+        guard value.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil else {
+            throw GatewayClientError.invalidResponse
+        }
+        return try makeURL(path: path, queryItems: [URLQueryItem(name: "playbackTicket", value: value)])
+    }
+
     func downloadGeneratedMedia(_ card: GeneratedMediaCard, conversationID: String) async throws -> URL {
         try await downloadGeneratedMedia(path: card.artifactPath(conversationID),
                                          fileName: card.kind == .music ? "music.mp3" : "video.mp4")

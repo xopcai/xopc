@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { historyRows } from '../entry/src/main/ets/common/chatProtocol.ets';
 import { chatPresentationRows } from '../entry/src/main/ets/common/chatPresentation.ets';
+import { reduceChatSnapshotActivity } from '../entry/src/main/ets/common/chatLiveActivity.ets';
 import { mergeAssistantRows } from '../entry/src/main/ets/common/chatRichContent.ets';
+import { reduceChatStream } from '../entry/src/main/ets/common/chatStream.ets';
 import { generatedMediaByReply, generatedMediaCards } from '../entry/src/main/ets/common/generatedMedia.ets';
+import type { XopcChatRow } from '../entry/src/main/ets/model/chat.ets';
 
 const { request, assertConnection } = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
@@ -43,6 +46,34 @@ describe('generated media in chat', () => {
     expect(generatedMediaCards('video', response).map(card => card.item.id)).toEqual(['current', draft.id]);
     expect(generatedMediaCards('video', response).at(-1)).toMatchObject({ draft: true, canConfirm: true });
     expect(generatedMediaCards('video', { ...response, modelRef: 'changed' }).at(-1)?.canConfirm).toBe(false);
+  });
+
+  it.each([reduceChatStream, reduceChatSnapshotActivity])('keeps music with the originating Personal Agent turn via %s', reduce => {
+    const olderJob = { ...song, state: 'saving' };
+    const newJob = { id: 'new-song', state: 'queued', createdAt: 2 };
+    const user: XopcChatRow = { id: 'question', role: 'user', text: 'Make a new song' };
+    const olderReply: XopcChatRow = { id: 'older-reply', role: 'assistant', text: '', generatedMediaIds: [olderJob.id] };
+    const initial = reduce(undefined, 'thinking_delta', {}, 'current');
+    const activeCards = generatedMediaCards('music', { jobs: [olderJob, newJob] });
+    expect(generatedMediaByReply(activeCards, chatPresentationRows([user], initial, 'current'), true).size).toBe(0);
+
+    const receipt = { toolCallId: 'create', toolName: 'music_generation', status: 'success', generatedMediaId: newJob.id };
+    const live = reduce(initial, 'tool_end', receipt, 'current');
+    const replay = reduce(live, 'tool_end', receipt, 'current');
+    expect(initial.generatedMediaIds).toBeUndefined();
+    expect(replay.generatedMediaIds).toEqual([newJob.id]);
+    const expired = { ...olderJob, state: 'failed', error: 'The music task or its download is no longer available.' };
+    const failed = { ...newJob, state: 'failed' };
+    const terminalCards = generatedMediaCards('music', { jobs: [expired, failed] });
+    const liveRows = chatPresentationRows([user], replay, 'current');
+    expect([...generatedMediaByReply(activeCards, liveRows, true)]).toEqual([['live:current', [activeCards[1]]]]);
+    expect([...generatedMediaByReply(terminalCards, liveRows, true)]).toEqual([['live:current', [terminalCards[1]]]]);
+
+    const savedReply: XopcChatRow = { id: 'new-reply', role: 'assistant', turnId: 'current',
+      text: '', generatedMediaIds: [newJob.id] };
+    const history = chatPresentationRows([olderReply, user, savedReply], replay, 'current');
+    expect([...generatedMediaByReply(terminalCards, history, true)])
+      .toEqual([['older-reply', [terminalCards[0]]], ['new-reply', [terminalCards[1]]]]);
   });
 
   it('shows a queued song before history loads and keeps completed music at its original reply', async () => {

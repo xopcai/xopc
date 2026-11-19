@@ -34,6 +34,8 @@ internal data class LibraryItem(
       ?: origin?.takeIf { it.available && (it.versionId == null || it.versionId == version.id) }
 }
 
+internal data class LibraryShare(val url: String, val reachability: String)
+
 internal data class LibraryPage(val items: List<LibraryItem>, val cursor: String?)
 
 class SpaceLibraryAccess internal constructor(private val gateway: GatewaySession) {
@@ -72,6 +74,21 @@ class SpaceLibraryAccess internal constructor(private val gateway: GatewaySessio
 
   suspend fun content(profile: GatewayProfile, id: String, version: LibraryVersion): ByteArray =
     scoped(profile) { gateway.requestBytes(contentPath(id, version.id)) }
+
+  internal suspend fun playbackUrl(profile: GatewayProfile, id: String, version: LibraryVersion): String =
+    scoped(profile) { gateway.mediaPlaybackUrl(contentPath(id, version.id), profile.gatewayId) }
+
+  internal suspend fun share(profile: GatewayProfile, id: String, version: LibraryVersion): LibraryShare = scoped(profile) {
+    val body = JSONObject().put("spaceVersion", JSONObject().put("itemId", id).put("versionId", version.id))
+      .put("audience", "friend").put("thumbnail", false)
+    val response = JSONObject(gateway.request("/api/shares/auto", "POST", body.toString()))
+    check(response.optBoolean("ok"))
+    val share = response.getJSONObject("payload").getJSONObject("share")
+    val url = share.getString("shareUrl")
+    val parsed = java.net.URI(url)
+    require(parsed.scheme in setOf("https", "http") && parsed.host != null && parsed.userInfo == null)
+    LibraryShare(url, share.getString("reachability"))
+  }
 
   internal suspend fun download(profile: GatewayProfile, id: String, version: LibraryVersion,
     destination: File) = runInterruptible(Dispatchers.IO) {

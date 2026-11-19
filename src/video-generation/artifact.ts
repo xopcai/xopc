@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createWriteStream } from 'node:fs';
 import { mkdir, open, rename, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
+import { fileRangeResponse } from '../media-shared/http/file-response.js';
 import { deleteMediaUris } from '../media/session-references.js';
 import { buildMediaUri } from '../media/uri.js';
 import { resolveMediaBufferPath } from '../media/store.js';
@@ -56,7 +57,7 @@ export async function storeVideoArtifact(jobId: string, response: Response): Pro
   }
 }
 
-export async function readVideoArtifact(jobId: string, rangeHeader?: string, download = false): Promise<Response> {
+export async function readVideoArtifact(jobId: string, rangeHeader?: string, download = false, headOnly = false): Promise<Response> {
   const path = videoArtifactPath(jobId);
   const info = await stat(path).catch(() => null);
   if (!info?.isFile() || !info.size || info.size > VIDEO_ARTIFACT_MAX_BYTES) return new Response(null, { status: 404 });
@@ -67,27 +68,5 @@ export async function readVideoArtifact(jobId: string, rangeHeader?: string, dow
   });
   if (download) headers.set('Content-Disposition', 'attachment; filename="generated-video.mp4"');
 
-  let start = 0;
-  let end = info.size - 1;
-  if (rangeHeader) {
-    const range = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader);
-    if (range?.[1]) {
-      start = Number(range[1]);
-      if (range[2]) end = Math.min(end, Number(range[2]));
-    } else if (range?.[2] && Number.isSafeInteger(Number(range[2]))) {
-      start = Math.max(0, info.size - Number(range[2]));
-    } else {
-      start = info.size;
-    }
-    if (!Number.isSafeInteger(start) || start > end) {
-      headers.set('Content-Range', `bytes */${info.size}`);
-      return new Response(null, { status: 416, headers });
-    }
-    headers.set('Content-Range', `bytes ${start}-${end}/${info.size}`);
-  }
-
-  headers.set('Content-Length', String(end - start + 1));
-  return new Response(Readable.toWeb(createReadStream(path, { start, end })) as ReadableStream<Uint8Array>, {
-    status: rangeHeader ? 206 : 200, headers,
-  });
+  return fileRangeResponse(path, info.size, rangeHeader, headers, headOnly);
 }

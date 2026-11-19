@@ -49,7 +49,9 @@ internal data class MusicState(
   val track: MusicTrack, val phase: MusicPhase, val positionMs: Int = 0, val durationMs: Int = track.durationMs,
 )
 
-internal data class MusicRequest(val track: MusicTrack, val download: suspend (File) -> Unit)
+internal data class MusicRequest(
+  val track: MusicTrack, val playbackUrl: suspend () -> String, val download: suspend (File) -> Unit,
+)
 
 internal object MusicPlayback {
   private val mutable = MutableStateFlow<MusicState?>(null)
@@ -57,9 +59,9 @@ internal object MusicPlayback {
   internal var service: MusicPlaybackService? = null
   internal var request: MusicRequest? = null
 
-  fun play(context: Context, track: MusicTrack, download: suspend (File) -> Unit) {
+  fun play(context: Context, track: MusicTrack, playbackUrl: suspend () -> String, download: suspend (File) -> Unit) {
     if (mutable.value?.track?.key == track.key) { toggle(context); return }
-    request = MusicRequest(track, download)
+    request = MusicRequest(track, playbackUrl, download)
     mutable.value = MusicState(track, MusicPhase.Loading)
     start(context, MusicPlaybackService.Action.Load)
   }
@@ -109,7 +111,6 @@ class MusicPlaybackService : Service() {
   private var focusHeld = false
   private var current: MusicRequest? = null
   private var player: MediaPlayer? = null
-  private var file: File? = null
   private var load: Job? = null
   private var progress: Job? = null
   private var playWhenReady = true
@@ -185,25 +186,19 @@ class MusicPlaybackService : Service() {
       return
     }
     load = scope.launch {
-      var destination: File? = null
       try {
-        destination = File.createTempFile("generated-music-", ".mp3", cacheDir)
-        request.download(destination)
+        val url = request.playbackUrl()
         if (current !== request || MusicPlayback.request !== request) return@launch
-        file = destination
-        destination = null
-        createPlayer(requireNotNull(file), request)
+        createPlayer(url, request)
       } catch (cancelled: CancellationException) {
         throw cancelled
       } catch (_: Exception) {
         if (current === request) fail()
-      } finally {
-        destination?.delete()
       }
     }
   }
 
-  private fun createPlayer(local: File, request: MusicRequest) {
+  private fun createPlayer(url: String, request: MusicRequest) {
     val native = MediaPlayer()
     player = native
     native.setAudioAttributes(attributes)
@@ -230,7 +225,7 @@ class MusicPlaybackService : Service() {
       if (player === native) fail()
       true
     }
-    native.setDataSource(local.absolutePath)
+    native.setDataSource(url)
     native.prepareAsync()
   }
 
@@ -328,8 +323,6 @@ class MusicPlaybackService : Service() {
     abandonFocus()
     player?.release()
     player = null
-    file?.delete()
-    file = null
   }
 
   private fun fail() {

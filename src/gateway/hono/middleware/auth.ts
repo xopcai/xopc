@@ -26,6 +26,7 @@ import {
   getDevice,
 } from '../../../storage/sqlite/device-access-repository.js';
 import { isChromeExtensionOrigin } from '../../security/origin-check.js';
+import { authenticateMediaPlaybackTicket } from '../../security/media-playback-ticket.js';
 import { setGatewayPrincipal } from '../../security/gateway-principal.js';
 import { createLogger, logAuthEvent } from '../../../utils/logger.js';
 
@@ -231,6 +232,12 @@ export function auth(config?: AuthConfig) {
     const rl = buildRateLimitContext(getGatewayAuth, clientIp, origin, isPublicTunnelEnabled?.());
 
     const authHeader = extractTokenFromHeader(c.req.header('authorization'));
+    if (!authHeader && c.req.query('playbackTicket')) {
+      const principal = authenticateMediaPlaybackTicket(new URL(c.req.url), c.req.method);
+      if (!principal) return c.json({ error: 'Unauthorized', code: 'invalid_playback_ticket' }, 401);
+      setGatewayPrincipal(c, principal);
+      return next();
+    }
     const browserCookie = readBrowserSessionCookie(c);
     if (!authHeader && browserCookie) {
       if (!browserCookieRequestAllowed(c)) return c.json({ error: 'Forbidden', code: 'csrf_rejected' }, 403);

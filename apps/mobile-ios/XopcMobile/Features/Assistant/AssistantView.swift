@@ -819,7 +819,10 @@ struct AssistantView<Dock: View>: View {
                                               playGeneratedMedia(card, conversationID: id)
                                           } else {
                                               let track = musicTrack(card, conversationID: id)
-                                              music.openPreview(track) {
+                                              music.openPreview(track, streaming: {
+                                                  try await GatewayClient(configuration: configuration)
+                                                      .mediaPlaybackURL(path: card.artifactPath(id))
+                                              }) {
                                                   try await GatewayClient(configuration: configuration)
                                                       .downloadGeneratedMedia(card, conversationID: id)
                                               }
@@ -865,7 +868,9 @@ struct AssistantView<Dock: View>: View {
         if card.kind == .music {
             presentedGeneratedVideo = nil
             let track = musicTrack(card, conversationID: conversationID)
-            music.play(track) {
+            music.play(track, streaming: {
+                try await GatewayClient(configuration: configuration).mediaPlaybackURL(path: card.artifactPath(conversationID))
+            }) {
                 try await GatewayClient(configuration: configuration).downloadGeneratedMedia(card, conversationID: conversationID)
             }
         } else {

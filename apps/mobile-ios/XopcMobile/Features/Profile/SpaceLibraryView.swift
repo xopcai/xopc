@@ -312,6 +312,8 @@ private struct SpaceLibraryDetail: View {
     @Environment(\.mobileTheme) private var theme
     @State private var versionID: String?
     @State private var preview: URL?
+    @State private var playbackRetry = 0
+    @State private var link: ChatManagedShare?
     @State private var share: FileShareItem?
     @State private var text: String?
     @State private var previewFailed = false
@@ -348,6 +350,10 @@ private struct SpaceLibraryDetail: View {
     var body: some View {
         MobilePreview(title: item.title, onClose: { dismiss() }) {
             if item.trashedAt == nil {
+                if version.mimeType.hasPrefix("audio/") || version.mimeType.hasPrefix("video/") {
+                    Button(label("分享链接", "Share link"), systemImage: "square.and.arrow.up") { createShare() }
+                        .disabled(busy)
+                }
                 Button(label("下载", "Download"), systemImage: "arrow.down.to.line") { download() }
                 Button(item.favorite ? label("取消收藏", "Remove favorite") : label("收藏", "Favorite"),
                        systemImage: item.favorite ? "star.fill" : "star")
@@ -426,7 +432,8 @@ private struct SpaceLibraryDetail: View {
             } catch is CancellationError {
             } catch { self.error = label("资料暂不可用", "Result unavailable") }
         }
-        .task(id: version.id) { await loadPreview(version) }
+        .task(id: "\(version.id):\(playbackRetry)") { await loadPreview(version) }
+        .sheet(item: $link) { item in ManagedFileShareSheet(item: item) { link = nil } }
         .sheet(item: $share, onDismiss: {
             if let url = shareURL {
                 try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
@@ -449,20 +456,26 @@ private struct SpaceLibraryDetail: View {
                                             source: source?.label ?? "", lyrics: selectedVersion.music?.lyrics,
                                             duration: selectedVersion.music?.durationMs.map { $0 / 1000 })
             MusicPreviewContent(playback: .shared, track: track) {
-                GeneratedMusicPlayback.shared.play(track) { try await fetchFile(selectedVersion) }
+                GeneratedMusicPlayback.shared.play(track, streaming: {
+                    try await client.mediaPlaybackURL(path: selectedVersion.contentPath(item.id))
+                }) { try await fetchFile(selectedVersion) }
             }
         } else if let text {
             PreviewText(text: text, html: version.mimeType.hasPrefix("text/html") || version.fileName.hasSuffix(".html"),
                         markdown: version.mimeType == "text/markdown" || version.fileName.hasSuffix(".md"),
                         configuration: configuration, conversationID: source?.conversationId)
+        } else if previewFailed {
+            if version.mimeType.hasPrefix("video/") {
+                Button(label("无法播放，重试", "Playback failed. Retry")) { playbackRetry += 1 }
+            } else {
+                ContentUnavailableView(label("资料暂不可读，可下载查看", "Preview unavailable. Download to view."), systemImage: "doc")
+            }
         } else if let preview {
             if version.mimeType.hasPrefix("video/") {
-                PreviewVideo(url: preview)
+                PreviewVideo(url: preview) { previewFailed = true }
             } else {
                 SpaceQuickLook(url: preview)
             }
-        } else if previewFailed {
-            ContentUnavailableView(label("资料暂不可读，可下载查看", "Preview unavailable. Download to view."), systemImage: "doc")
         } else {
             ProgressView()
         }
@@ -473,6 +486,12 @@ private struct SpaceLibraryDetail: View {
         previewFailed = false
         guard !version.mimeType.hasPrefix("audio/") else { return }
         do {
+            if version.mimeType.hasPrefix("video/") {
+                let url = try await client.mediaPlaybackURL(path: version.contentPath(item.id))
+                try Task.checkCancellation()
+                preview = url
+                return
+            }
             if version.mimeType.hasPrefix("text/") || version.fileName.hasSuffix(".html") {
                 guard version.sizeBytes <= 2 * 1024 * 1024 else { previewFailed = true; return }
                 let bytes = try await client.requestData(path: version.contentPath(item.id))
@@ -496,7 +515,7 @@ private struct SpaceLibraryDetail: View {
 
     private func clearPreview() {
         text = nil
-        if let preview {
+        if let preview, preview.isFileURL {
             try? FileManager.default.removeItem(at: preview.deletingLastPathComponent())
         }
         preview = nil
@@ -504,6 +523,26 @@ private struct SpaceLibraryDetail: View {
 
     private func fetchFile(_ version: LibraryVersion) async throws -> URL {
         try await client.downloadGeneratedMedia(path: version.contentPath(item.id), fileName: version.safeName)
+    }
+
+    private func createShare() {
+        struct Version: Encodable { let itemId: String; let versionId: String }
+        struct Request: Encodable {
+            let spaceVersion: Version
+            let audience = "friend"
+            let thumbnail = false
+        }
+        let request = Request(spaceVersion: Version(itemId: item.id, versionId: version.id))
+        run {
+            let response: ChatManagedShareEnvelope = try await client.request(
+                path: "/api/shares/auto", method: "POST", body: JSONEncoder().encode(request))
+            guard response.ok, let share = response.payload?.share,
+                  ["public", "lan", "local-only"].contains(share.reachability),
+                  let url = URL(string: share.shareUrl), let scheme = url.scheme,
+                  ["https", "http"].contains(scheme), url.host != nil, url.user == nil
+            else { throw GatewayClientError.invalidResponse }
+            link = ChatManagedShare(id: share.id, url: url, reachabilityText: share.reachabilityText)
+        }
     }
 
     private func download() {

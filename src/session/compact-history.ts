@@ -19,14 +19,16 @@ export function productDeliveries(result: unknown): ProductDeliveryEnvelope[] {
 }
 
 function generatedMediaId(call: NonNullable<ClientHistoryMessage['toolCalls']>[number]): string | undefined {
-  if (call.isError || (call.name !== 'music_generation' && call.name !== 'video_draft') || !call.result) return;
+  if (call.isError || (call.name !== 'music_generation' && call.name !== 'video_draft')) return;
+  const pattern = call.name === 'music_generation'
+    ? /^[a-f0-9]{64}$/
+    : /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+  const receiptId = (call.details as { id?: unknown } | undefined)?.id;
+  if (typeof receiptId === 'string' && pattern.test(receiptId)) return receiptId;
+  if (!call.result) return;
   try {
     const id: unknown = JSON.parse(call.result)?.id;
-    if (typeof id !== 'string') return;
-    const pattern = call.name === 'music_generation'
-      ? /^[a-f0-9]{64}$/
-      : /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
-    return pattern.test(id) ? id : undefined;
+    return typeof id === 'string' && pattern.test(id) ? id : undefined;
   } catch { return undefined; }
 }
 

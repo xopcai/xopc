@@ -30,6 +30,23 @@ describe('compact run transport', () => {
     expect(output).toMatchObject({ payload: { data: { payload: { deliveries: [delivery] } } } });
     expect(JSON.stringify(output).length).toBeLessThan(1000);
   });
+  it('keeps only the job ID from a successful music generation receipt', () => {
+    const mapper = new ChatStreamMapper({ runId: 'r', conversationId: 'c', channel: 'webchat' });
+    const broker = new RealtimeBroker();
+    const id = 'a'.repeat(64);
+    const compactToolEnd = (details: object, isError = false) => {
+      const end = mapper.map({ type: 'tool_execution_end', toolCallId: 'music', toolName: 'music_generation',
+        result: { content: [{ type: 'text', text: 'private lyrics' }], details }, isError })[0];
+      const output = compactRunEvent(broker.publish('run:r', end.type, end));
+      expect(JSON.stringify(output)).not.toMatch(/private lyrics|"result"/);
+      return output;
+    };
+    expect(compactToolEnd({ id, state: 'queued' }))
+      .toMatchObject({ payload: { data: { payload: { generatedMediaId: id } } } });
+    for (const output of [compactToolEnd({ job: { id } }), compactToolEnd({ id: 'invalid' }), compactToolEnd({ id }, true)]) {
+      expect(output).not.toHaveProperty('payload.data.payload.generatedMediaId');
+    }
+  });
   it('retains tool lifecycle for consecutive actions without arguments, output or raw failures', () => {
     const mapper = new ChatStreamMapper({ runId: 'r', conversationId: 'c', channel: 'webchat' });
     const broker = new RealtimeBroker();

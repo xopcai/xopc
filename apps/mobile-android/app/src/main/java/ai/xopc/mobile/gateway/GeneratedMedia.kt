@@ -76,6 +76,12 @@ class GeneratedMediaAccess internal constructor(private val gateway: GatewaySess
       gateway.request(path, method, body)
     }
 
+  internal suspend fun playbackUrl(kind: GeneratedMediaKind, conversationId: String, id: String,
+    gatewayId: String? = null): String = runInterruptible(Dispatchers.IO) {
+    val artifact = if (kind == GeneratedMediaKind.Music) "audio" else "video"
+    gateway.mediaPlaybackUrl(path(kind, conversationId) + "/" + encode(id) + "/" + artifact, gatewayId)
+  }
+
   internal suspend fun download(conversationId: String, item: GeneratedMediaItem, destination: File) {
     runInterruptible(Dispatchers.IO) {
       val artifact = if (item.kind == GeneratedMediaKind.Music) "audio" else "video"

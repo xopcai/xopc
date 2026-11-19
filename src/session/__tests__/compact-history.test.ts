@@ -20,6 +20,19 @@ describe('compact history', () => {
     expect(compact.find(message => message.id === 'reply')?.generatedMediaIds).toEqual([id]);
     expect(JSON.stringify(compact)).not.toContain('private prompt');
   });
+  it('restores the music anchor from stored receipt details even without a text result', () => {
+    const id = 'a'.repeat(64);
+    const history = transcriptRowsToClientHistory([
+      { role: 'assistant', turnId: 'run', content: [
+        { type: 'toolCall', id: 'create', name: 'music_generation', arguments: { action: 'generate' } },
+      ] },
+      { role: 'toolResult', turnId: 'run', toolCallId: 'create', content: [], details: { id, lyrics: 'private lyrics' } },
+      { role: 'assistant', turnId: 'run', content: [{ type: 'text', text: 'Song queued' }] },
+    ] as never);
+    const compact = compactHistory(history, true);
+    expect(compact.find(message => message.content === 'Song queued')?.generatedMediaIds).toEqual([id]);
+    expect(JSON.stringify(compact)).not.toContain('private lyrics');
+  });
   it('removes private reasoning and tool data without modifying the default response', () => {
     const messages = transcriptRowsToClientHistory([
       { role: 'user', content: 'hello', metadata: { clientMessageId: 'client' } },

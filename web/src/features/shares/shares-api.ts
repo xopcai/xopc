@@ -45,9 +45,10 @@ export type ShareListResponse = {
 };
 
 export type CreateShareParams = (
-  | { path: string; fileId?: never; uri?: never }
-  | { fileId: string; path?: never; uri?: never }
-  | { uri: string; path?: never; fileId?: never }
+  | { path: string; fileId?: never; uri?: never; spaceVersion?: never }
+  | { fileId: string; path?: never; uri?: never; spaceVersion?: never }
+  | { uri: string; path?: never; fileId?: never; spaceVersion?: never }
+  | { spaceVersion: { itemId: string; versionId: string }; path?: never; fileId?: never; uri?: never }
 ) & {
   fileName?: string;
   taskId?: string;

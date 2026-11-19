@@ -66,6 +66,8 @@ interface WorkspaceShareRecordBase extends ShareRecordBase {
 
 export interface FileShareRecord extends WorkspaceShareRecordBase {
   kind: 'file';
+  /** Private key for the short-lived playback grants of this share. */
+  playbackSecret?: string;
   directory?: undefined;
 }
 
@@ -110,6 +112,8 @@ export type ShareRecord = WorkspaceShareRecord | NoteShareRecord | SessionShareR
 export interface CreateShareParams {
   /** Display filename for a stored media attachment. */
   fileName?: string;
+  /** Verified MIME type for a library version resolved by the gateway. */
+  libraryMimeType?: string;
   /** Workspace-relative file path. */
   path: string;
   /** Time-to-live in milliseconds (default: 24h). */

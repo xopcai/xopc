@@ -189,6 +189,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
@@ -1538,20 +1540,15 @@ internal fun MainContent(
   BackHandler(enabled = showOverview) { personalOverviewOpen = false }
   BackHandler(enabled = assistantActionsOpen) { assistantActionsOpen = false }
   BackHandler(enabled = selectedTab == HomeTab.Me) { leavePersonalPage() }
-  BoxWithConstraints(modifier.fillMaxSize()) {
-  val sidebarWidth = (maxWidth * 0.84f).coerceAtMost(350.dp)
-  val density = LocalDensity.current
-  val leftBackEdge = maxOf(WindowInsets.systemGestures.getLeft(density, layoutDirection),
-    with(density) { 24.dp.roundToPx() })
-  val rightBackEdge = maxOf(WindowInsets.systemGestures.getRight(density, layoutDirection),
-    with(density) { 24.dp.roundToPx() })
-  val sidebarWidthPx = with(density) { sidebarWidth.toPx() }
-  val minimumOpenDrag = with(density) { 96.dp.toPx() }
-  val minimumFlickDistance = with(density) { 24.dp.toPx() }
-  val minimumFlickVelocity = with(density) { 550.dp.toPx() }
-  Scaffold(
-    modifier = Modifier.imePadding().then(if (sidebar.open) Modifier.semantics { hideFromAccessibility() } else Modifier),
-    containerColor = MaterialTheme.colorScheme.background,
+  MainScaffoldLayout(
+    modifier = modifier,
+    sidebar = sidebar,
+    layoutDirection = layoutDirection,
+    sidebarGestureEnabled = !assistantActionsOpen && !messageSearchOpen && !inputVoiceHeld &&
+      !isTaskChat(connection) && !connection.automationConfigurationChat && !showingProjectChat &&
+      !showOverview && !phonePage,
+    onCloseKeyboard = closeKeyboard,
+    onOpenSidebar = openSidebar,
     bottomBar = {
       if (showBottomChrome) Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
           if (showMusicMini) MusicMiniPlayer(activeMusic, openMusicPlayer,
@@ -1614,7 +1611,7 @@ internal fun MainContent(
           .padding(horizontal = 12.dp, vertical = 7.dp))
       }
     },
-  ) { insets ->
+    page = { insets, sidebarGesture ->
     val readingPosition = rememberChatReadingPosition(connection.profile?.gatewayId,
       connection.profile?.deviceId, connection.selectedConversationId)
     val rootInsets = if (showBottomChrome) PaddingValues(
@@ -1695,28 +1692,7 @@ internal fun MainContent(
             overviewState.removeState("personal-overview-$gatewayId")
             personalOverviewOpen = true
           },
-          sidebarGesture = Modifier.horizontalSwipe(
-            !sidebar.open && !assistantActionsOpen && !messageSearchOpen && !inputVoiceHeld &&
-              !isTaskChat(connection) && !connection.automationConfigurationChat && !showingProjectChat &&
-              !showOverview && !phonePage && sidebarWidthPx > 0,
-            leftBackEdge, rightBackEdge, allowLeft = false,
-            onDrag = {
-              if (sidebar.dragFraction == null) closeKeyboard()
-              sidebar.dragFraction = (it / sidebarWidthPx).coerceIn(0f, 1f)
-            },
-            onRelease = { distance, speed ->
-              val open = distance >= minOf(sidebarWidthPx * 0.32f, minimumOpenDrag) ||
-                distance >= minimumFlickDistance && speed >= minimumFlickVelocity
-              val fraction = sidebar.dragFraction ?: 0f
-              voiceScope.launch {
-                sidebar.settled.snapTo(fraction)
-                if (open) openSidebar()
-                sidebar.dragFraction = null
-              }
-            }, onCancel = {
-              val fraction = sidebar.dragFraction ?: 0f
-              voiceScope.launch { sidebar.settled.snapTo(fraction); sidebar.dragFraction = null }
-            }),
+          sidebarGesture = sidebarGesture,
           canStartVoiceCall = voiceCall.phase == "idle" && pendingVoiceMode == null &&
             !connection.creatingConversation && conversationId != null && !connection.sending,
           onReselectConnectedComputer = onReselectConnectedComputer,
@@ -1937,7 +1913,8 @@ internal fun MainContent(
     }
     }
     }
-  }
+    },
+    overlays = { sidebarWidth ->
     if (showOverview) {
       overviewState.SaveableStateProvider("personal-overview-$gatewayId") {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -2011,7 +1988,8 @@ internal fun MainContent(
         sidebar.open = false
         onSelectConversation(id)
       })
-  }
+    },
+  )
   if (isPaired) ConversationShareSheet(connection, onBeginConversationShare,
     onConfirmConversationShare, onRevokeConversationShare, onDismissConversationShare)
   if (musicPlayerOpen && activeMusic != null) MusicPlayerSheet(activeMusic, { musicPlayerOpen = false },
@@ -2146,6 +2124,66 @@ internal fun MainContent(
           modifier = Modifier.testTag("voice-mini-end")) { Text(stringResource(R.string.voice_end)) }
       }
     }
+  }
+}
+
+@Composable
+private fun MainScaffoldLayout(
+  modifier: Modifier,
+  sidebar: ChatSidebarState,
+  layoutDirection: LayoutDirection,
+  sidebarGestureEnabled: Boolean,
+  onCloseKeyboard: () -> Unit,
+  onOpenSidebar: () -> Unit,
+  bottomBar: @Composable () -> Unit,
+  page: @Composable (PaddingValues, Modifier) -> Unit,
+  overlays: @Composable (Dp) -> Unit,
+) {
+  // Pass independent slots so the layout lambda does not capture every screen callback.
+  val scope = rememberCoroutineScope()
+  BoxWithConstraints(modifier.fillMaxSize()) {
+    val sidebarWidth = (maxWidth * 0.84f).coerceAtMost(350.dp)
+    val density = LocalDensity.current
+    val backEdge = with(density) { 24.dp.roundToPx() }
+    val leftBackEdge = maxOf(WindowInsets.systemGestures.getLeft(density, layoutDirection), backEdge)
+    val rightBackEdge = maxOf(WindowInsets.systemGestures.getRight(density, layoutDirection), backEdge)
+    val sidebarWidthPx = with(density) { sidebarWidth.toPx() }
+    val minimumOpenDrag = with(density) { 96.dp.toPx() }
+    val minimumFlickDistance = with(density) { 24.dp.toPx() }
+    val minimumFlickVelocity = with(density) { 550.dp.toPx() }
+    Scaffold(
+      modifier = Modifier.imePadding().then(if (sidebar.open) Modifier.semantics { hideFromAccessibility() } else Modifier),
+      containerColor = MaterialTheme.colorScheme.background,
+      bottomBar = bottomBar,
+    ) { insets ->
+      val sidebarGesture = Modifier.horizontalSwipe(
+        sidebarGestureEnabled && !sidebar.open && sidebarWidthPx > 0,
+        leftBackEdge, rightBackEdge, allowLeft = false,
+        onDrag = { distance ->
+          if (sidebar.dragFraction == null) onCloseKeyboard()
+          sidebar.dragFraction = (distance / sidebarWidthPx).coerceIn(0f, 1f)
+        },
+        onRelease = { distance, speed ->
+          val open = distance >= minOf(sidebarWidthPx * 0.32f, minimumOpenDrag) ||
+            distance >= minimumFlickDistance && speed >= minimumFlickVelocity
+          val fraction = sidebar.dragFraction ?: 0f
+          scope.launch {
+            sidebar.settled.snapTo(fraction)
+            if (open) onOpenSidebar()
+            sidebar.dragFraction = null
+          }
+        },
+        onCancel = {
+          val fraction = sidebar.dragFraction ?: 0f
+          scope.launch {
+            sidebar.settled.snapTo(fraction)
+            sidebar.dragFraction = null
+          }
+        },
+      )
+      page(insets, sidebarGesture)
+    }
+    overlays(sidebarWidth)
   }
 }
 

@@ -13,6 +13,11 @@ export function reduceChatLiveActivity(row: XopcChatRow, event: string, payload:
     if (!existing || existing.status === 'running') row.activity = tools.find((item: XopcLiveActivityTool): boolean =>
       item.id === payload.toolCallId)?.kind || 'working';
   } else if (event === 'tool_end' && payload.toolCallId) {
+    const mediaId = payload.generatedMediaId;
+    if (payload.toolName === 'music_generation' && payload.status === 'success' && mediaId
+      && !row.generatedMediaIds?.includes(mediaId)) {
+      row.generatedMediaIds = (row.generatedMediaIds ?? []).concat(mediaId);
+    }
     const tools = row.activityTools || [];
     const match = tools.find((item: XopcLiveActivityTool): boolean => item.id === payload.toolCallId);
     if (match) match.status = payload.status === 'error' ? 'failed' : 'completed';
@@ -37,6 +42,7 @@ export function reduceChatSnapshotActivity(previous: XopcChatRow | undefined, ev
   payload: XopcStreamPayload, runId: string): XopcChatRow {
   const row: XopcChatRow = { id: 'live:' + runId, role: 'assistant', turnId: runId, text: '', live: true,
     executionActivity: true,
+    generatedMediaIds: previous?.generatedMediaIds,
     activity: previous?.activity, activityUpdatedAtMs: previous?.activityUpdatedAtMs,
     activityTools: previous?.activityTools?.map((item: XopcLiveActivityTool): XopcLiveActivityTool => ({
       id: item.id, kind: item.kind, status: item.status })) };

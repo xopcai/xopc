@@ -176,7 +176,7 @@ export class ShareStore {
 
     const sourceName = relPath.split('/').pop() || relPath;
     const fileName = params.fileName || sourceName;
-    const mimeType = resolveMimeType(sourceName);
+    const mimeType = params.libraryMimeType ?? resolveMimeType(sourceName);
     const record = this.buildRecord({
       kind: 'file',
       absolutePath,
@@ -303,7 +303,7 @@ export class ShareStore {
     };
     const record: WorkspaceShareRecord = input.kind === 'directory'
       ? { ...common, kind: 'directory', directory: input.directory! }
-      : { ...common, kind: 'file' };
+      : { ...common, kind: 'file', playbackSecret: randomBytes(32).toString('base64url') };
 
     this.saveNew(record);
     return record;
