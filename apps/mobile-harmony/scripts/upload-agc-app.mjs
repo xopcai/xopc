@@ -8,8 +8,6 @@ import { spawn } from 'node:child_process';
 
 import { AGC_ORIGIN, agcAuthHeaders } from './agc-auth.mjs';
 
-const appId = process.env.HUAWEI_AGC_APP_ID || '6917618744771171142';
-const packagePath = process.argv[2] && resolve(process.argv[2]);
 const maxAttempts = 5;
 
 function fail(message) {
@@ -44,7 +42,7 @@ function uploadWithCurl(url, headers, path, size) {
   });
 }
 
-async function main() {
+export async function uploadAgcApp(appId, packagePath) {
   if (!packagePath || !packagePath.endsWith('.app')) throw new Error('Usage: node upload-agc-app.mjs /absolute/path/to/signed.app');
   const headers = { ...agcAuthHeaders(), Accept: 'application/json' };
   const file = await stat(packagePath);
@@ -68,9 +66,7 @@ async function main() {
       }
       const status = await uploadWithCurl(info.url, info.headers, packagePath, file.size);
       if (status !== 200) throw new Error(`APP upload failed: HTTP ${status}`);
-      console.log(JSON.stringify({ appId, fileName, sha256: checksum, objectId: info.objectId, uploaded: true }, null, 2));
-      console.log('File upload complete. Register this objectId as a test package and check parsing before submitting an internal test.');
-      return;
+      return { appId, fileName, sha256: checksum, objectId: info.objectId, uploaded: true };
     } catch (error) {
       if (attempt === maxAttempts) throw error;
       const waitMs = Math.min(30_000, 1000 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 500);
@@ -80,4 +76,13 @@ async function main() {
   }
 }
 
-main().catch((error) => fail(error.message));
+if (import.meta.main) {
+  const appId = process.env.HUAWEI_AGC_APP_ID || '6917618744771171142';
+  const packagePath = process.argv[2] && resolve(process.argv[2]);
+  try {
+    console.log(JSON.stringify(await uploadAgcApp(appId, packagePath), null, 2));
+    console.log('File upload complete. Register this objectId as a test package and check parsing before submitting an internal test.');
+  } catch (error) {
+    fail(error.message);
+  }
+}

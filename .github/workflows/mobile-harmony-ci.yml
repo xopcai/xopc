@@ -7,6 +7,23 @@ on:
         description: Sign an encrypted debug HAP for registered test devices only
         type: boolean
         default: false
+      release_channel:
+        description: Verify the release signature or submit to an AppTest group
+        type: choice
+        default: none
+        options: [none, verify, internal, external]
+      expected_version:
+        description: Exact AppScope versionName for verify or release
+        type: string
+      external_group:
+        description: Existing external AppTest group name (external only)
+        type: string
+      resume_package_id:
+        description: Huawei package ID from a previous interrupted run (optional)
+        type: string
+      resume_version_id:
+        description: Huawei test version ID from a previous interrupted run (optional)
+        type: string
   push:
     branches: [main, master]
     paths:
@@ -36,8 +53,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: mobile-harmony-ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.release_channel != 'none' && 'mobile-harmony-release' || format('mobile-harmony-ci-{0}', github.event.pull_request.number || github.ref) }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' || inputs.release_channel == 'none' }}
 
 jobs:
   host-checks:
@@ -51,7 +68,28 @@ jobs:
         with:
           node-version: 26.12.1
           cache: pnpm
+      - name: Check release inputs
+        if: github.event_name == 'workflow_dispatch' && inputs.release_channel != 'none'
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+          RELEASE_CHANNEL: ${{ inputs.release_channel }}
+          EXTERNAL_GROUP: ${{ inputs.external_group }}
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const app = JSON.parse(require('node:fs').readFileSync('apps/mobile-harmony/AppScope/app.json5', 'utf8')).app;
+          if (process.env.RELEASE_REF !== 'refs/heads/main' || app.versionName !== process.env.EXPECTED_VERSION) {
+            throw new Error('Select main and set expected_version to the exact AppScope versionName.');
+          }
+          if (process.env.RELEASE_CHANNEL === 'external' && !process.env.EXTERNAL_GROUP.trim()) {
+            throw new Error('Specify the existing external AppTest group.');
+          }
+          NODE
       - run: pnpm install --frozen-lockfile
+      - name: Check AppTest retry and audience safeguards
+        env:
+          HUAWEI_AGC_ACCESS_TOKEN: mock-token
+        run: node --test apps/mobile-harmony/tests/releaseAgcTest.test.mjs
       - run: pnpm run harmony:verify --host-only
 
   native-build:
@@ -99,7 +137,7 @@ jobs:
       - name: Build and lint native preview
         run: node apps/mobile-harmony/scripts/build-ci.mjs
       - uses: actions/setup-java@v5
-        if: github.event_name == 'workflow_dispatch' && inputs.sign_test_hap
+        if: github.event_name == 'workflow_dispatch' && (inputs.sign_test_hap || inputs.release_channel != 'none')
         with:
           distribution: temurin
           java-version: '17'
@@ -136,8 +174,27 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Explain installation boundary
+        if: github.event_name != 'workflow_dispatch' || inputs.release_channel == 'none'
         shell: bash
         run: |
           echo '### HarmonyOS development preview' >> "$GITHUB_STEP_SUMMARY"
           echo 'Minimum HarmonyOS 6.1 / API 23; target and compile SDK 26. Unsigned Debug/Release HAP and Release APP; build evidence, not phone-install links.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Physical-device installation requires an appropriate Huawei signing profile. Phone-only distribution uses the Huawei testing channel after signing and its checks.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Sign and verify the release APP
+        if: github.event_name == 'workflow_dispatch' && inputs.release_channel != 'none'
+        env:
+          HARMONY_RELEASE_SIGNING_JSON: ${{ secrets.HARMONY_RELEASE_SIGNING_JSON }}
+        run: node apps/mobile-harmony/scripts/sign-release-app.mjs apps/mobile-harmony/.test/ci "$RUNNER_TEMP/xopc-harmony-test-release.app"
+      - name: Verify or submit the Huawei AppTest release
+        if: github.event_name == 'workflow_dispatch' && inputs.release_channel != 'none'
+        env:
+          HUAWEI_AGC_SERVICE_ACCOUNT_JSON: ${{ secrets.HUAWEI_AGC_SERVICE_ACCOUNT_JSON }}
+          HARMONY_RELEASE_CHANNEL: ${{ inputs.release_channel }}
+          HARMONY_RELEASE_EXPECTED_VERSION: ${{ inputs.expected_version }}
+          HARMONY_RELEASE_GROUP: ${{ inputs.external_group }}
+          HARMONY_RESUME_PACKAGE_ID: ${{ inputs.resume_package_id }}
+          HARMONY_RESUME_VERSION_ID: ${{ inputs.resume_version_id }}
+        run: node apps/mobile-harmony/scripts/release-agc-test.mjs apps/mobile-harmony/.test/ci/build-info.json "$RUNNER_TEMP/xopc-harmony-test-release.app"
+      - name: Remove the temporary signed APP
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.release_channel != 'none'
+        run: rm -f -- "$RUNNER_TEMP/xopc-harmony-test-release.app"

@@ -1,4 +1,5 @@
 import { constants, createPrivateKey, sign } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 
 export const AGC_ORIGIN = 'https://connect-api.cloud.huawei.com';
 
@@ -38,19 +39,28 @@ export function agcAuthHeaders(env = process.env) {
   return { Authorization: `Bearer ${message}.${signature.toString('base64url')}` };
 }
 
-export async function agcRequest(path, { method = 'GET', headers, body, label }) {
-  const response = await fetch(new URL(path, AGC_ORIGIN), {
+export async function agcRequest(path, { method = 'GET', headers, body, label, retry = false, appTest = false }) {
+  const url = new URL(path, AGC_ORIGIN);
+  if (url.origin !== AGC_ORIGIN) throw new Error('Invalid Huawei Connect API path.');
+  const options = {
     method,
     redirect: 'error',
     headers: { ...agcAuthHeaders(), ...headers, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
-  });
+  };
+  let response;
+  for (let attempt = 0; ; attempt++) {
+    response = await fetch(url, { ...options, signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
+    if (!retry || attempt >= 2 || (response && response.status !== 429 && response.status < 500)) break;
+    await response?.body?.cancel().catch(() => {});
+    await delay(1000 * 2 ** attempt);
+  }
+  if (!response) throw new Error(`${label} did not return an HTTP response.`);
   if (!response.ok) throw new Error(`${label} failed (HTTP ${response.status}).`);
   const data = await response.json().catch(() => { throw new Error(`${label} returned invalid JSON.`); });
-  if (data.ret?.code !== 0) {
-    const code = /^\d+$/.test(data.ret?.code) ? data.ret.code : 'unknown';
-    throw new Error(`${label} failed (service code ${code}).`);
+  const code = appTest ? data?.rtnCode : data?.ret?.code;
+  if (code !== 0 && code !== '0') {
+    throw new Error(`${label} failed (service code ${/^-?\d+$/.test(code) ? code : 'unknown'}).`);
   }
   return data;
 }

@@ -37,6 +37,16 @@ HARMONY_TOOLS_DIR=/absolute/path/to/command-line-tools node apps/mobile-harmony/
 
 ## 受限测试签名
 
+手机测试分发走 `Mobile HarmonyOS CI` 的手动运行入口。选择 `main`，填写 `expected_version`（与 `AppScope/app.json5` 里的 `versionName` 一致），再选择 `release_channel`。
+
+- `internal` 提交到现有 `xopc 内测` 群组。
+- `external` 提交到 `external_group` 指定的现有外部 AppTest 群组。
+- `verify` 构建并验证发布签名，查询华为 API 权限，不创建测试版本。
+
+发布步骤先构建、检查 HAP 和 APP 的版本与签名，再上传、等待华为解析、核对版本与唯一绑定群组、提交并回读审核状态。需要续跑时，从之前运行的摘要复制 `resume_package_id` 和 `resume_version_id`。已进入审核或已审核通过的同一版本会跳过重复提交。流程使用 `harmony-testing` 环境的 `HARMONY_RELEASE_SIGNING_JSON`（发布证书、匹配的发布 Profile、密钥库、别名和密码）与 `HUAWEI_AGC_SERVICE_ACCOUNT_JSON`，签名 APP 只在 runner 的临时目录使用。外部邀请测试仍按华为要求审核。参见 [华为 Testing API 指南](https://developer.huawei.com/consumer/cn/doc/app/agc-help-test-api-guide-0000002236015562/)。
+
+## 真机调试 HAP
+
 在 Actions 手动运行本流程，分支选择 `main`，启用 `sign_test_hap`。签名只接受 `ai.xopc.xopc` 的有效 Debug Profile 和 API 23 Debug HAP，不执行正式上架签名。
 
 GitHub Environment `harmony-testing` 的分支策略仅允许 `main`。以下 Secrets 仅注入手动签名步骤：`HARMONY_TEST_KEY_ALIAS`、`HARMONY_TEST_STORE_PASSWORD`、`HARMONY_TEST_KEY_PASSWORD`、`HARMONY_TEST_KEYSTORE_BASE64`、`HARMONY_TEST_PROFILE_BASE64`、`HARMONY_TEST_CERT_BASE64`、`HARMONY_TEST_ARTIFACT_KEY`。前三个是别名和可移植密码，中间三个是对应文件的 Base64，最后一个是随机 32 字节十六进制加密密钥。不要把 DevEco 本机加密密码直接当作可移植密码；不得上传 `.ohos/config/material` 主密钥目录。
