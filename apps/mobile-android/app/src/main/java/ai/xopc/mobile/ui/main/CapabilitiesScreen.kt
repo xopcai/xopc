@@ -43,6 +43,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
@@ -77,14 +79,17 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -99,6 +104,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 import androidx.compose.foundation.Image
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Switch
@@ -357,7 +363,8 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
         CapabilityItemIcon(row, category, origin, personal, agentAvatars, 44.dp)
       }, request = { body ->
         onPanel(category.key, if (category == CapabilityCategory.Connections) row.id else row.targetId ?: row.id, body)
-      }, onChanged = { load(category, refresh = true) }, onChat = chat, onClose = { detail = null })
+      }, onChanged = { load(category, refresh = true) }, onChat = chat, onClose = { detail = null },
+        isMcpSetup = row.id == "mcp:setup")
     }
   }
 }
@@ -429,8 +436,9 @@ private fun CapabilityItemIcon(item: CapabilityItem, category: CapabilityCategor
   when {
     item.personal -> PersonalAgentAvatar(personal.agentAvatar, personal.agent?.appearance.orEmpty(), extent, active = false)
     category == CapabilityCategory.Agents -> AgentAvatar(avatars[item.id], item.avatar.orEmpty(), item.id, extent, active = false)
+    item.id == "mcp:setup" -> CapabilityLogo(null, origin, "", R.drawable.action_link, extent)
     else -> CapabilityLogo(item.iconUrl, origin,
-      if (item.id == "marketplace:search" || item.id == "mcp:setup") "" else item.name, category.icon, extent)
+      if (item.id == "marketplace:search") "" else item.name, category.icon, extent)
   }
 }
 
@@ -480,14 +488,18 @@ private fun JSONObject.value(key: String): String? = (opt(key) as? String)?.take
 
 @Composable
 private fun CapabilitySettingsPanel(name: String, summary: String, origin: String?, icon: @Composable () -> Unit,
-  request: suspend (JSONObject?) -> JSONObject, onChanged: () -> Unit, onChat: (() -> Unit)?, onClose: () -> Unit) {
+  request: suspend (JSONObject?) -> JSONObject, onChanged: () -> Unit, onChat: (() -> Unit)?, onClose: () -> Unit,
+  isMcpSetup: Boolean = false) {
   val scope = rememberCoroutineScope()
   val browser = LocalUriHandler.current
   val keyboard = LocalSoftwareKeyboardController.current
+  val focus = LocalFocusManager.current
   val requestFailure = capabilityLabel("暂时无法完成，请重试。", "Could not complete this action. Try again.")
   val waitingTooLong = capabilityLabel("等待时间过长，可以刷新状态或重新开始。", "This is taking longer than expected. Refresh or start again.")
   var panel by remember { mutableStateOf<JSONObject?>(null) }
   var values by remember { mutableStateOf(emptyMap<String, String>()) }
+  var retainedValues by remember { mutableStateOf(emptyMap<String, String>()) }
+  var requestRevision by remember { mutableStateOf(0) }
   var busy by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var advanced by remember { mutableStateOf(false) }
@@ -514,20 +526,31 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
       }
     }
     val previous = values
+    val revision = ++requestRevision
+    val submitted = if (isMcpSetup) {
+      panel?.objects("fields").orEmpty().filter { capabilityItemVisible(it, values) }
+        .associate { it.getString("id") to values[it.getString("id")].orEmpty() }
+    } else values
     val priorPoll = panel?.value("pollAction")
     val priorFlow = panel?.value("flow")
     try {
       val result = request(action?.let {
-        JSONObject().put("action", it).put("values", if (polling) JSONObject() else JSONObject(values)).apply {
+        JSONObject().put("action", it).put("values", if (polling) JSONObject() else JSONObject(submitted)).apply {
           panel?.value("flow")?.let { flow -> put("flow", flow) }
           panel?.opt("revision")?.let { revision -> put("revision", revision) }
         }
       })
-      if (polling && (busy || panel?.value("pollAction") != action || panel?.value("flow") != priorFlow)) return
+      if (revision != requestRevision || polling && (busy || panel?.value("pollAction") != action || panel?.value("flow") != priorFlow)) return
       panel = result
+      val resultActions = result.objects("actions")
+      if (resultActions.any { it.optBoolean("dismiss") } && resultActions.none { it.value("id") == "add-another" }) {
+        retainedValues = emptyMap()
+      }
       values = result.objects("fields").associate { field ->
         val id = field.getString("id")
-        id to ((if (polling) previous[id] else null) ?: if (field.value("type") == "secret") "" else field.optString("value", ""))
+        id to ((if (polling) previous[id] else null)
+          ?: (if (field.optBoolean("retain")) retainedValues[id] else null)
+          ?: if (field.value("type") == "secret") "" else field.optString("value", ""))
       }
       errorMessage = null
       val url = authorizationUrl(result)
@@ -536,7 +559,10 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         openWhenReady = false
         runCatching { browser.openUri(url) }.onFailure { errorMessage = requestFailure }
       }
-      if ((!polling && action != null && action != "search") || (polling && priorPoll != null && result.value("pollAction") == null)) onChanged()
+      if (isMcpSetup) {
+        if (action == "save" && resultActions.any { it.optBoolean("dismiss") }) onChanged()
+      } else if ((!polling && action != null && action != "search") ||
+        (polling && priorPoll != null && result.value("pollAction") == null)) onChanged()
     } catch (cancelled: CancellationException) { throw cancelled }
     catch (error: Exception) {
       if (!polling) errorMessage = (error as? GatewayHttpException)?.detail ?: requestFailure
@@ -560,15 +586,24 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
     if (panel?.value("pollAction") == action) errorMessage = waitingTooLong
   }
   fun perform(action: JSONObject) {
+    if (busy) return
+    focus.clearFocus()
     keyboard?.hide()
-    if (action.value("confirmation") != null && !action.optBoolean("inlineReview")) confirm = action
+    if (action.optBoolean("dismiss")) onClose()
+    else if (action.value("confirmation") != null && !action.optBoolean("inlineReview")) confirm = action
     else scope.launch { load(action.getString("id")) }
   }
-  val allFields = panel?.objects("fields").orEmpty().filter { field ->
-    val condition = field.optJSONObject("visibleWhen")
-    condition == null || values[condition.getString("field")] == condition.getString("value")
+  fun updateField(field: JSONObject, id: String, value: String) {
+    values = values + (id to value)
+    if (field.optBoolean("retain")) retainedValues = retainedValues + (id to value)
+    if (field.value("presentation") == "segmented") {
+      focus.clearFocus()
+      keyboard?.hide()
+      errorMessage = null
+    }
   }
-  val allActions = panel?.objects("actions").orEmpty()
+  val allFields = panel?.objects("fields").orEmpty().filter { capabilityItemVisible(it, values) }
+  val allActions = panel?.objects("actions").orEmpty().filter { capabilityItemVisible(it, values) }
   val mainActions = allActions.filter { !it.optBoolean("advanced") }
   val hasAdvanced = allFields.any { it.optBoolean("advanced") } || allActions.any { it.optBoolean("advanced") }
   val authUrl = authorizationUrl(panel)
@@ -578,9 +613,11 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
   val visibleFields = allFields.filter { advanced || !it.optBoolean("advanced") }
   val results = panel?.objects("results").orEmpty()
   val expanded = (qrValue != null && (qrOnly != null || showQr)) ||
+    panel?.value("reviewText") != null ||
     (hasAdvanced && advanced) || (detailsOpen && panel?.value("details") != null) ||
-    visibleFields.size >= 3 || visibleFields.any { it.value("type") in setOf("multiline", "list") } || results.size >= 3
-  val drawerHeight = if (expanded) Modifier.fillMaxHeight(.82f) else Modifier.heightIn(max = 420.dp).fillMaxHeight()
+    visibleFields.size >= 3 || visibleFields.any { it.value("type") in setOf("multiline", "list", "headers") } || results.size >= 3
+  val drawerHeight = if (expanded) Modifier.fillMaxHeight(.82f)
+    else Modifier.heightIn(max = if (isMcpSetup) 460.dp else 420.dp).fillMaxHeight()
   val expiresAt = panel?.optLong("expiresAt") ?: 0L
   val primary = mainActions.firstOrNull()?.takeIf { authUrl == null && qrOnly == null && pollAction == null }
   val cancel = mainActions.find { it.value("id") == "pair-cancel" }
@@ -604,14 +641,30 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
     Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
       .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp),
       verticalArrangement = Arrangement.spacedBy(14.dp)) {
+      panel?.value("headline")?.let { headline ->
+        Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+          Text(headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+          panel?.value("subtitle")?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) }
+        }
+      }
       val status = panel?.value("message")
       if (status != null) Row(Modifier.fillMaxWidth().background(colors.surfaceContainerLow, themedCorners(16))
         .padding(horizontal = 14.dp, vertical = 12.dp).testTag("capability-panel-status"),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (pollAction != null) Box(Modifier.size(8.dp).background(colors.primary, CircleShape))
+        if (panel?.value("tone") == "success") {
+          val success = if (colors.surface.luminance() < .5f) Color(0xFF66D89A) else Color(0xFF187B49)
+          ActionIcon(R.drawable.action_check_circle, color = success, contentDescription = null, size = 18.dp)
+        } else if (pollAction != null) {
+          Box(Modifier.size(8.dp).background(colors.primary, CircleShape))
+        }
         Text(status, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
       }
       else if (summary.isNotEmpty()) Text(summary, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      panel?.value("reviewText")?.let { review ->
+        Text(review, Modifier.fillMaxWidth().background(colors.surfaceContainerLow, themedCorners(16))
+          .padding(14.dp).testTag("capability-panel-review-text"),
+          style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
+      }
       if (busy) BrandLoadingIndicator(extent = 24.dp)
       errorMessage?.let {
         Text(it, color = MaterialTheme.colorScheme.error)
@@ -624,15 +677,23 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
       }
       CapabilitySetupOptions(authUrl, panel?.value("deviceVerificationCode"), qrValue, expiresAt, busy,
         showQr, onToggleQr = { showQr = !showQr })
-      panel?.value("details")?.let { details ->
-        TextButton(onClick = { detailsOpen = !detailsOpen }, modifier = Modifier.testTag("capability-panel-review-details")) {
-          Text(if (detailsOpen) capabilityLabel("收起详情", "Hide details") else capabilityLabel("查看详情", "View details"))
-        }
-        if (detailsOpen) Text(details, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-      }
+      if (!isMcpSetup) CapabilityPanelDetails(panel, detailsOpen) { detailsOpen = !detailsOpen }
       for (field in allFields.filter { !it.optBoolean("advanced") }) {
-        CapabilityInput(field, values, busy, { id, text -> values = values + (id to text) },
+        CapabilityInput(field, values, busy, { id, text -> updateField(field, id, text) },
           onSearch = { keyboard?.hide(); scope.launch { load("search") } })
+      }
+      if (isMcpSetup) {
+        panel?.value("details")?.let { details ->
+          CapabilityDisclosure(
+            label = panel?.value("detailsLabel") ?: capabilityLabel("查看详情", "View details"),
+            expanded = detailsOpen,
+            testTag = "capability-panel-review-details",
+            enabled = !busy,
+            onToggle = { detailsOpen = !detailsOpen },
+          ) {
+            Text(details, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+          }
+        }
       }
       for (action in mainActions.filter { it != primary && it != cancel }) {
         CapabilityActionButton(action, false, busy) { perform(action) }
@@ -653,16 +714,22 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         }
       }
       if (hasAdvanced) {
-        TextButton(onClick = { advanced = !advanced }, modifier = Modifier.testTag("capability-panel-more")) {
-          Text(if (advanced) capabilityLabel("收起选项", "Fewer options") else capabilityLabel("更多选项", "More options"))
-        }
-        if (advanced) {
+        val label = panel?.value("advancedLabel") ?: capabilityLabel("更多选项", "More options")
+        val options: @Composable () -> Unit = {
           for (field in allFields.filter { it.optBoolean("advanced") }) {
-            CapabilityInput(field, values, busy, { id, text -> values = values + (id to text) })
+            CapabilityInput(field, values, busy, { id, text -> updateField(field, id, text) })
           }
           for (action in allActions.filter { it.optBoolean("advanced") }) {
             CapabilityActionButton(action, false, busy) { perform(action) }
           }
+        }
+        if (isMcpSetup) {
+          CapabilityDisclosure(label, advanced, "capability-panel-more", !busy, { advanced = !advanced }, options)
+        } else {
+          TextButton(onClick = { advanced = !advanced }, modifier = Modifier.testTag("capability-panel-more")) {
+            Text(if (advanced) capabilityLabel("收起选项", "Fewer options") else label)
+          }
+          if (advanced) options()
         }
       }
     }
@@ -695,6 +762,50 @@ private fun CapabilitySettingsPanel(name: String, summary: String, origin: Strin
         Text(capabilityLabel("确认", "Confirm"))
       } }, dismissButton = { TextButton(onClick = { confirm = null }) { Text(capabilityLabel("取消", "Cancel")) } })
   }
+}
+
+@Composable
+private fun CapabilityDisclosure(
+  label: String,
+  expanded: Boolean,
+  testTag: String,
+  enabled: Boolean,
+  onToggle: () -> Unit,
+  content: @Composable () -> Unit,
+) {
+  val colors = MaterialTheme.colorScheme
+  Column(Modifier.fillMaxWidth().clip(themedCorners(14)).background(colors.surfaceContainerLow)) {
+    Row(
+      Modifier.fillMaxWidth().heightIn(min = 44.dp).testTag(testTag)
+        .clickable(enabled = enabled, role = Role.Button, onClick = onToggle)
+        .padding(horizontal = 14.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+      ActionIcon(
+        if (expanded) R.drawable.action_chevron_down else R.drawable.action_chevron_right,
+        color = colors.onSurfaceVariant,
+        contentDescription = null,
+        size = 14.dp,
+      )
+    }
+    if (expanded) {
+      Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        content()
+      }
+    }
+  }
+}
+
+@Composable
+private fun CapabilityPanelDetails(panel: JSONObject?, open: Boolean, onToggle: () -> Unit) {
+  val details = panel?.value("details") ?: return
+  TextButton(onClick = onToggle, modifier = Modifier.testTag("capability-panel-review-details")) {
+    Text(if (open) capabilityLabel("收起详情", "Hide details") else panel.value("detailsLabel") ?: capabilityLabel("查看详情", "View details"))
+  }
+  if (open) Text(details, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
@@ -869,10 +980,13 @@ private fun CapabilityInput(field: JSONObject, values: Map<String, String>, busy
           Switch(checked = value == "true", onCheckedChange = { change(it.toString()) }, enabled = !busy,
             modifier = Modifier.semantics { contentDescription = label }.testTag("capability-field-$id"))
         }
+        "headers" -> CapabilityKeyValueEditor(id, value, busy, change)
         "select" -> {
           val options = field.objects("options")
           var open by remember(id) { mutableStateOf(false) }
-          Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)).padding(12.dp)) {
+          if (field.value("presentation") == "segmented") {
+            CapabilityModeSelector(id, label, options, value, busy, change)
+          } else Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)).padding(12.dp)) {
             Text(label, style = MaterialTheme.typography.labelLarge)
             Box {
               TextButton(onClick = { open = true }, enabled = !busy,
@@ -895,10 +1009,98 @@ private fun CapabilityInput(field: JSONObject, values: Map<String, String>, busy
           colors = TextFieldDefaults.colors(focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
             unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
             disabledIndicatorColor = androidx.compose.ui.graphics.Color.Transparent),
-          keyboardOptions = KeyboardOptions(imeAction = if (id == "query") ImeAction.Search else ImeAction.Default),
+          keyboardOptions = KeyboardOptions(
+            keyboardType = when {
+              id == "url" -> KeyboardType.Uri
+              field.value("type") == "secret" -> KeyboardType.Password
+              else -> KeyboardType.Text
+            },
+            autoCorrectEnabled = id !in setOf("mcp-json", "url", "command", "args", "cwd") && field.value("type") != "secret",
+            imeAction = if (id == "query") ImeAction.Search else ImeAction.Default),
           keyboardActions = KeyboardActions(onSearch = { onSearch() }),
           singleLine = field.value("type") != "multiline",
+          minLines = if (id == "mcp-json") 5 else 1,
+          maxLines = when (id) { "mcp-json" -> 9; "args" -> 6; else -> Int.MAX_VALUE },
+          textStyle = if (id == "mcp-json") MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
+            else MaterialTheme.typography.bodyLarge,
           visualTransformation = if (field.value("type") == "secret") PasswordVisualTransformation()
             else VisualTransformation.None)
       }
+}
+
+private fun capabilityItemVisible(item: JSONObject, values: Map<String, String>): Boolean {
+  val condition = item.optJSONObject("visibleWhen") ?: return true
+  return values[condition.getString("field")].orEmpty() == condition.getString("value")
+}
+
+@Composable
+private fun CapabilityModeSelector(id: String, label: String, options: List<JSONObject>, value: String,
+  busy: Boolean, onChange: (String) -> Unit) {
+  val colors = MaterialTheme.colorScheme
+  Row(Modifier.fillMaxWidth().background(colors.surfaceContainer, themedCorners(14)).padding(4.dp)
+    .selectableGroup().semantics { contentDescription = label }.testTag("capability-field-$id"),
+    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    for (option in options) {
+      val key = option.getString("id")
+      val selected = value == key
+      Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(themedCorners(10))
+        .background(if (selected) colors.surface else Color.Transparent)
+        .selectable(selected, enabled = !busy, role = Role.Tab, onClick = { onChange(key) })
+        .testTag("capability-option-$key"),
+        contentAlignment = Alignment.Center) {
+        Text(option.getString("label"), Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+          color = if (selected) colors.primary else colors.onSurfaceVariant,
+          style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
+      }
+    }
+  }
+}
+
+@Composable
+private fun CapabilityKeyValueEditor(id: String, encoded: String, busy: Boolean, onChange: (String) -> Unit) {
+  val rows = remember(encoded) {
+    val input = runCatching { JSONArray(encoded) }.getOrNull()
+    List(input?.length() ?: 0) { index ->
+      val row = input?.optJSONArray(index)
+      row?.optString(0).orEmpty() to row?.optString(1).orEmpty()
+    }.ifEmpty { listOf("" to "") }
+  }
+  fun update(next: List<Pair<String, String>>) {
+    onChange(JSONArray(next.map { (name, value) -> JSONArray(listOf(name, value)) }).toString())
+  }
+  val environment = id == "mcp-env"
+  val prefix = if (environment) "mcp-env" else "mcp-header"
+  val nameLabel = if (environment) capabilityLabel("变量名", "Variable name") else capabilityLabel("请求头名称", "Header name")
+  val valueLabel = if (environment) capabilityLabel("变量值", "Variable value") else capabilityLabel("请求头值", "Header value")
+  val removeLabel = if (environment) capabilityLabel("移除变量", "Remove variable") else capabilityLabel("移除请求头", "Remove header")
+  Column(Modifier.fillMaxWidth().testTag("capability-field-$id"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    rows.forEachIndexed { index, (name, value) ->
+      Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          val fieldColors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent)
+          TextField(name, { text -> update(rows.toMutableList().apply { this[index] = text to value }) },
+            Modifier.fillMaxWidth().testTag("$prefix-name-$index"), enabled = !busy,
+            label = { Text(nameLabel) }, placeholder = { Text(if (environment) "API_KEY" else "X-API-Key") }, singleLine = true,
+            shape = themedCorners(12), colors = fieldColors, keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
+          TextField(value, { text -> update(rows.toMutableList().apply { this[index] = name to text }) },
+            Modifier.fillMaxWidth().testTag("$prefix-value-$index"), enabled = !busy,
+            label = { Text(valueLabel) }, singleLine = true, visualTransformation = PasswordVisualTransformation(),
+            shape = themedCorners(12), colors = fieldColors, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+        }
+        if (rows.size > 1) {
+          IconButton(onClick = { update(rows.filterIndexed { rowIndex, _ -> rowIndex != index }) }, enabled = !busy) {
+            ActionIcon(R.drawable.action_close, contentDescription = removeLabel, size = 16.dp)
+          }
+        }
+      }
+    }
+    if (rows.size < (if (environment) 32 else 16)) {
+      TextButton(onClick = { update(rows + ("" to "")) }, enabled = !busy) {
+        ActionIcon(R.drawable.action_add, color = MaterialTheme.colorScheme.primary, contentDescription = null, size = 16.dp)
+        Spacer(Modifier.size(6.dp))
+        Text(if (environment) capabilityLabel("添加变量", "Add variable") else capabilityLabel("添加请求头", "Add header"))
+      }
+    }
+  }
 }

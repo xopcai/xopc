@@ -12,6 +12,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 
 import { ReadAloudDock } from '@/features/voice/read-aloud-dock';
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
+import { startsWithRegisteredSlashCommand } from '@/features/chat/palette/slash-command-wire';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkillDiscoveryWelcome } from '@/features/skills/skill-discovery-welcome';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
@@ -719,7 +720,7 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
   const handleComposerSend = useCallback(
     (...[text, attachments, thinkingLevel, refs, sendOptions]: Parameters<ComposerSendHandler>) => {
       const dispatch = (contextRefs: ComposerContextRef[] | undefined) => {
-        if (pageContextDraft && (editingUserTurn || text.trim().startsWith('/'))) {
+        if (pageContextDraft && (editingUserTurn || startsWithRegisteredSlashCommand(text))) {
           useChatSessionStore.getState().setShellError(m.chat.pageContext.pending);
           return false;
         }

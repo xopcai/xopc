@@ -118,6 +118,12 @@ export class CommandRegistry {
     return !!this.findByName(name);
   }
 
+  parseRegisteredSlashCommand(text: string): { command: string; args: string; definition: CommandDefinition } | null {
+    const parsed = parseSlashCommand(text);
+    const definition = parsed && this.findByName(parsed.command);
+    return parsed && definition ? { ...parsed, definition } : null;
+  }
+
   /**
    * Get all registered commands
    */

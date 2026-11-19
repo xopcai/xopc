@@ -494,6 +494,8 @@ export const GatewayWebchatConfigSchema = z.object({
 export const GatewayConfigSchema = z.object({
   outboundProxy: OutboundProxySchema.optional(),
   deviceProvidersEnabled: z.boolean().optional(),
+  /** Allow paired phones to review and launch stdio MCP processes on this Gateway. */
+  mobileMcpAllowStdio: z.boolean().optional(),
   /** Semantic bind mode. */
   bind: GatewayBindModeSchema.optional(),
   /** IPv4 listen address when `bind` is `custom`. */
@@ -1080,7 +1082,7 @@ const ConnectorSecretReferenceSchema = z.object({
 const McpConfigScalarSchema = z.union([z.string(), ConnectorSecretReferenceSchema]);
 const McpExposureSchema = z.enum(['codemode', 'deferred', 'direct', 'hidden']);
 export const McpOAuthConfigSchema = z.object({
-  clientId: z.string().min(1).optional(), clientSecret: z.string().optional(),
+  clientId: z.string().min(1).optional(), clientSecret: McpConfigScalarSchema.optional(),
   callbackPort: z.number().int().min(1).max(65535).optional(), callbackUrl: z.string().url().optional(),
   scope: z.string().optional(), clientName: z.string().optional(),
   clientRegistration: z.enum(['dcr', 'cimd']).optional(), authServerMetadataUrl: z.string().url().optional(),

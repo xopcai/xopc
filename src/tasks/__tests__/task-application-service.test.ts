@@ -379,8 +379,9 @@ describe('TaskApplicationService', () => {
       items: [{ id: first.ok ? first.model.task.id : undefined, title: 'Background work' }] });
   });
 
-  it('pages delegated tasks by latest update when requested', () => {
+  it('pages delegated tasks by latest update and keeps current work scoped to its origin', () => {
     const conversation = createConversation({ agentId: 'main' });
+    const otherConversation = createConversation({ agentId: 'main' });
     const tasks = new TaskRepository();
     const db = getSqliteDatabase();
     const ids = ['Older active', 'Newest finished', 'Middle active'].map((title, index) => {
@@ -393,7 +394,14 @@ describe('TaskApplicationService', () => {
       return task.id;
     });
 
+    const unrelated = tasks.create({ title: 'Other conversation work', objective: 'Other conversation work', phase: 'active' });
+    db.prepare('INSERT INTO task_origin_links (task_id, conversation_id, created_at) VALUES (?, ?, ?)')
+      .run(unrelated.id, otherConversation.key, 4);
+    tasks.create({ title: 'Unlinked work', objective: 'Unlinked work', phase: 'active' });
+
     const origin = new TaskOriginRepository();
+    expect(origin.listCurrent(conversation.key).map(item => item.id)).toEqual([ids[2], ids[0]]);
+    expect(origin.listCurrent(otherConversation.key).map(item => item.id)).toEqual([unrelated.id]);
     expect(origin.list(conversation.key, 2, { order: 'recent' })).toMatchObject({
       total: 3, items: [{ id: ids[1] }, { id: ids[2] }],
     });

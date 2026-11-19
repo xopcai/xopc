@@ -4,6 +4,7 @@ import type { CommandEntry } from '@/features/chat/palette/command-palette.types
 import {
   collectSlashCommandWireRanges,
   refreshSlashCommandWireIndex,
+  startsWithRegisteredSlashCommand,
   trySlashCommandTokenAt,
 } from '@/features/chat/palette/slash-command-wire';
 
@@ -46,6 +47,13 @@ describe('slash-command-wire', () => {
 
   it('matches aliases', () => {
     expect(trySlashCommandTokenAt('/h', 0)).toEqual({ len: 2, matchedKey: 'h' });
+  });
+
+  it('recognizes registered commands when sending context with a prompt', () => {
+    expect(startsWithRegisteredSlashCommand('/H@xopc_bot topic')).toBe(true);
+    expect(startsWithRegisteredSlashCommand('/tmp')).toBe(false);
+    expect(startsWithRegisteredSlashCommand('/clear/logs')).toBe(false);
+    expect(startsWithRegisteredSlashCommand('/clear@xopc_bot/logs')).toBe(false);
   });
 
   it('does not treat /skill: as slash command', () => {

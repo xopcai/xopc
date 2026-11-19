@@ -28,7 +28,7 @@ it('uses the native client on a real legacy SSE connection with a custom API-Key
     const origin = { id: 'fixture', revision: 'test-revision', serverName: 'legacy' };
     const checkAccess = vi.fn<() => Promise<void>>()
       .mockRejectedValueOnce(new Error('Plugin authorization revoked')).mockResolvedValue(undefined);
-    const transport = createXopcMcpTransport({}, checkAccess)({ name: 'legacy', config: { type: 'http', url: `http://127.0.0.1:${address.port}/legacy`, headers: { 'X-API-Key': 'fixture-api-key' }, xopcLegacySse: true, xopcPlugin: origin } as any, source: 'test', scope: 'extension' }, process.cwd(), undefined);
+    const transport = createXopcMcpTransport({}, checkAccess)({ name: 'legacy', config: { type: 'http', url: `http://127.0.0.1:${address.port}/legacy`, headers: { 'X-API-Key': 'fixture-api-key' }, xopcLegacySse: true, xopcPrivateNetwork: true, xopcPlugin: origin } as any, source: 'test', scope: 'extension' }, process.cwd(), undefined);
     await client.connect(transport); expect((await client.listTools())[0].name).toBe('read_profile');
     expect(checkAccess).not.toHaveBeenCalled();
     await expect(client.callTool('read_profile', {})).rejects.toThrow('Plugin authorization revoked');
@@ -51,7 +51,7 @@ it('keeps optional GET 405 compatible with Streamable HTTP and exposes safe requ
   server.listen(0, '127.0.0.1'); await once(server, 'listening'); const address = server.address() as { port: number };
   const client = new McpClient({ name: 'xopc-test', version: '1', requestTimeoutMs: 5000 });
   try {
-    await client.connect(createXopcMcpTransport({ observe: value => observations.push(value) })({ name: 'http', config: { type: 'http', url: `http://127.0.0.1:${address.port}/mcp` }, source: 'test', scope: 'extension' }, process.cwd(), undefined));
+    await client.connect(createXopcMcpTransport({ observe: value => observations.push(value) })({ name: 'http', config: { type: 'http', url: `http://localhost:${address.port}/mcp`, xopcPrivateNetwork: true } as any, source: 'test', scope: 'extension' }, process.cwd(), undefined));
     expect(await client.listTools()).toEqual([]); expect(observations.some(o => o.stage === 'initialize' && o.status === 200)).toBe(true);
     await vi.waitFor(() => expect(observations.some(o => o.method === 'GET' && o.status === 405)).toBe(true));
   } finally { await client.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }

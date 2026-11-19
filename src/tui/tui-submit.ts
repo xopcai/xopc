@@ -3,6 +3,8 @@
  * for terminals that split multiline paste into rapid single-line submits.
  */
 
+import { parseSlashCommand } from '../chat-commands/command-parse.js';
+
 function normalizeLowercaseStringOrEmpty(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -13,7 +15,7 @@ export function createEditorSubmitHandler(params: {
     addToHistory: (value: string) => void;
   };
   recordChatHistory?: (value: string) => void;
-  handleCommand: (value: string) => void | Promise<void>;
+  handleCommand: (value: string) => false | void;
   sendMessage: (value: string) => void | Promise<void>;
   handleBangLine: (value: string) => void | Promise<void>;
   getMode?: () => 'chat' | 'shell';
@@ -64,8 +66,7 @@ export function createEditorSubmitHandler(params: {
       (params.recordChatHistory ?? params.editor.addToHistory)(rawTrimmed);
     }
 
-    if (value.startsWith('/')) {
-      void params.handleCommand(value);
+    if (value.startsWith('/') && parseSlashCommand(value) && params.handleCommand(value) !== false) {
       return;
     }
 

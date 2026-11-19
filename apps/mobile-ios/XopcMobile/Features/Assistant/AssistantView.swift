@@ -13,13 +13,12 @@ struct AssistantView<Dock: View>: View {
     let onStartConversation: (String) -> Void
     let onStartScopedConversation: (ProjectRecord?, String?, String) -> Void
     let onConversationUpdated: (ConversationSelection) -> Void
-    let onPersonalAgentUpdated: (PersonalAgentRecord) -> Void
     let onOpenSettings: () -> Void
     let onInputFocusChanged: (Bool) -> Void
     var showsFloatingHeader = true
     var onOpenSidebar: (() -> Void)?
     var onOpenProgress: () -> Void = {}
-    var onOpenPersonalOverview: () -> Void = {}
+    var onOpenPersonalOverview: (Bool) -> Void = { _ in }
     var onConversationUnavailable: (String) async -> Void = { _ in }
     var pendingAttention = 0
     var sidebarOpen = false
@@ -56,7 +55,6 @@ struct AssistantView<Dock: View>: View {
     @State private var isActionPanelExpanded = false
     @State private var showingSessionActions = false
     @State private var sharingConversation = false
-    @State private var showingPersonalProfile = false
     @State private var showingAgentPicker = false
     @State private var selectedPickerAgent: String?
     @State private var searchAfterOptions = false
@@ -258,15 +256,6 @@ struct AssistantView<Dock: View>: View {
             }) {
                 AgentPicker(configuration: configuration, agents: state.agents,
                             currentID: conversation?.agentId, personal: personalAgent, select: { selectedPickerAgent = $0 })
-            }
-            .sheet(isPresented: $showingPersonalProfile) {
-                if let personalAgent, let conversation {
-                    PersonalAgentProfileView(configuration: configuration, record: personalAgent,
-                                             conversation: conversation, onSaved: onPersonalAgentUpdated,
-                                             onModelSaved: onConversationUpdated,
-                                             allowsConversationSharing: !conversation.isDraft && !state.messages.isEmpty)
-                        .presentationDetents([.fraction(0.65)])
-                }
             }
             .onChange(of: isActionPanelExpanded, initial: true) { _, shown in onActionPanelVisibilityChanged(shown) }
     }
@@ -1196,25 +1185,21 @@ struct AssistantView<Dock: View>: View {
                 headerButton("语音通话", symbol: "phone", action: startRealtimeVoice)
                     .disabled(!canStartRealtimeVoice)
                     .accessibilityIdentifier("chat-header-voice-call")
-                if isPersonalConversation || conversation?.isDraft != true || onOpenSidebar == nil {
-                    headerButton(isPersonalConversation ? "配置助手" : "会话选项",
-                                 symbol: isPersonalConversation ? "slider.horizontal.3" : "ellipsis")
-                    {
-                        if isPersonalConversation {
-                            showingPersonalProfile = true
-                        } else {
-                            showingSessionActions = true
-                        }
+                if !isPersonalConversation && (conversation?.isDraft != true || onOpenSidebar == nil) {
+                    headerButton("会话选项", symbol: "ellipsis") {
+                        showingSessionActions = true
                     }
                     .accessibilityIdentifier("assistant-options")
                 }
             }
             if isPersonalConversation {
                 VStack(spacing: 4) {
-                    Button(action: onOpenPersonalOverview) {
+                    Button {
+                        onOpenPersonalOverview(conversation?.isDraft == false && !state.messages.isEmpty)
+                    } label: {
                         VStack(spacing: 4) {
                             PersonalAgentAvatar(configuration: configuration, agent: personalAgent, size: 62,
-                                                active: isActive && !showingPersonalProfile && !showingMessageSearch,
+                                                active: isActive && !showingMessageSearch,
                                                 working: state.isRunActive || state.isSending)
                                 .background(mobileTheme.card, in: Circle())
                                 .accessibilityHidden(true)

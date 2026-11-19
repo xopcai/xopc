@@ -1988,13 +1988,14 @@ final class MobileLayoutParityUITests: XCTestCase {
         let timeline = app.scrollViews.firstMatch
         let olderMessage = app.descendants(matching: .any)["chat-message-user-history-1"].firstMatch
         let avatarFrame = avatar.frame
-        let optionsFrame = app.buttons["assistant-options"].frame
+        let voiceCall = app.buttons["chat-header-voice-call"]
+        let voiceFrame = voiceCall.frame
         for _ in 0 ..< 6 where !olderMessage.isHittable {
             timeline.swipeDown(velocity: .slow)
         }
         XCTAssertTrue(olderMessage.isHittable)
         XCTAssertEqual(avatar.frame, avatarFrame)
-        XCTAssertEqual(app.buttons["assistant-options"].frame, optionsFrame)
+        XCTAssertEqual(voiceCall.frame, voiceFrame)
         capture("ios-scroll-under-personal-header")
         avatar.tap()
         XCTAssertTrue(app.scrollViews["personal-overview-scroll"].waitForExistence(timeout: 6))
@@ -2623,6 +2624,68 @@ final class MobileLayoutParityUITests: XCTestCase {
         address.tap()
         address.typeText("https://example.com/mcp")
         app.buttons["capability-panel-create"].tap()
+        let addConnection = app.buttons["capability-panel-save"]
+        XCTAssertTrue(addConnection.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["连接已添加"].exists)
+        capture("custom-mcp-confirm-link")
+        addConnection.tap()
+        XCTAssertTrue(app.staticTexts["连接已添加"].waitForExistence(timeout: 5))
+        app.buttons["capability-panel-done"].tap()
+        XCTAssertFalse(app.buttons["capability-panel-close"].exists)
+    }
+
+    func testCustomMcpJsonPreviewsAndRetainsConfigurationOnBack() {
+        tab("capabilities")
+        app.selectCapability("capability-category-connections")
+        app.buttons["capability-add-mcp"].tap()
+        let pasteTab = app.buttons["粘贴 JSON"]
+        XCTAssertTrue(pasteTab.waitForExistence(timeout: 5))
+        pasteTab.tap()
+        let preview = app.buttons["capability-panel-preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["capability-panel-create"].exists)
+        let json = app.textViews["capability-field-mcp-json"]
+        XCTAssertTrue(json.waitForExistence(timeout: 5))
+        capture("custom-mcp-json-entry")
+        json.tap()
+        json.typeText("{\"url\":\"https://example.com/mcp\"}")
+        preview.tap()
+        let check = app.buttons["capability-panel-select"]
+        XCTAssertTrue(check.waitForExistence(timeout: 5))
+        capture("custom-mcp-json-preview")
+        app.buttons["capability-panel-edit"].tap()
+        XCTAssertTrue(json.waitForExistence(timeout: 5))
+        XCTAssertTrue((json.value as? String)?.contains("https://example.com/mcp") == true)
+        preview.tap()
+        XCTAssertTrue(check.waitForExistence(timeout: 5))
+        check.tap()
+        let addConnection = app.buttons["capability-panel-save"]
+        XCTAssertTrue(addConnection.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["连接已添加"].exists)
+        addConnection.tap()
+        XCTAssertTrue(app.staticTexts["连接已添加"].waitForExistence(timeout: 5))
+    }
+
+    func testCustomMcpCommandReviewsBeforeCheckAndAdd() {
+        tab("capabilities")
+        app.selectCapability("capability-category-connections")
+        app.buttons["capability-add-mcp"].tap()
+        let commandMode = app.buttons["命令启动"]
+        XCTAssertTrue(commandMode.waitForExistence(timeout: 5))
+        commandMode.tap()
+        let command = app.textFields["capability-field-command"]
+        XCTAssertTrue(command.waitForExistence(timeout: 5))
+        command.tap()
+        command.typeText("node")
+        app.buttons["capability-panel-review-command"].tap()
+        XCTAssertTrue(app.staticTexts["capability-panel-review-text"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["capability-panel-save"].exists)
+        capture("custom-mcp-command-review")
+        app.buttons["capability-panel-confirm-check"].tap()
+        let add = app.buttons["capability-panel-save"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["连接已添加"].exists)
+        add.tap()
         XCTAssertTrue(app.staticTexts["连接已添加"].waitForExistence(timeout: 5))
     }
 
@@ -2933,14 +2996,22 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertFalse(app.textFields["chat-message-search-input"].exists)
     }
 
+    private func openPersonalAgentEditor() {
+        let avatar = app.buttons["chat-header-personal"]
+        XCTAssertTrue(avatar.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["assistant-options"].exists)
+        avatar.tap()
+        let edit = app.buttons["personal-overview-edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+    }
+
     func testPersonalAgentSettingsSaveModel() {
         XCTAssertTrue(app.openHomeSidebar())
         let personal = app.buttons["chat-sidebar-personal"]
         XCTAssertTrue(personal.waitForExistence(timeout: 10))
         personal.tap()
-        let settings = app.buttons["assistant-options"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 5))
-        settings.tap()
+        openPersonalAgentEditor()
         let model = app.buttons["personal-setting-model"]
         XCTAssertTrue(model.waitForExistence(timeout: 5))
         model.tap()
@@ -2951,8 +3022,9 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertTrue(model.label.contains("Second Fixture Model"))
         XCTAssertFalse(app.buttons["personal-setting-thinking"].exists)
         app.buttons["personal-setting-close"].tap()
-        XCTAssertTrue(settings.waitForExistence(timeout: 5))
-        settings.tap()
+        let edit = app.buttons["personal-overview-edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
         XCTAssertTrue(model.waitForExistence(timeout: 5))
         XCTAssertTrue(model.label.contains("Second Fixture Model"))
     }
@@ -2962,15 +3034,12 @@ final class MobileLayoutParityUITests: XCTestCase {
         let personal = app.buttons["chat-sidebar-personal"]
         XCTAssertTrue(personal.waitForExistence(timeout: 10))
         personal.tap()
-        let settings = app.buttons["assistant-options"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 5))
-        settings.tap()
+        openPersonalAgentEditor()
         let mode = app.buttons["personal-setting-call-mode"]
         let form = app.collectionViews.firstMatch
         XCTAssertTrue(form.waitForExistence(timeout: 5))
-        form.swipeUp(velocity: .fast)
         XCTAssertTrue(mode.waitForExistence(timeout: 5))
-        if mode.frame.maxY > form.frame.maxY - 20 {
+        if !mode.isHittable || mode.frame.maxY > form.frame.maxY - 20 {
             form.swipeUp(velocity: .fast)
         }
         mode.tap()
@@ -2985,11 +3054,10 @@ final class MobileLayoutParityUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
         close.tap()
         XCTAssertTrue(mode.waitForNonExistence(timeout: 5))
-        settings.tap()
+        app.buttons["personal-overview-edit"].tap()
         XCTAssertTrue(form.waitForExistence(timeout: 5))
-        form.swipeUp(velocity: .fast)
         XCTAssertTrue(mode.waitForExistence(timeout: 5))
-        if mode.frame.maxY > form.frame.maxY - 20 {
+        if !mode.isHittable || mode.frame.maxY > form.frame.maxY - 20 {
             form.swipeUp(velocity: .fast)
         }
         XCTAssertTrue(mode.label.contains("直接对话") || (mode.value as? String) == "直接对话")
@@ -3009,9 +3077,8 @@ final class MobileLayoutParityUITests: XCTestCase {
         let voice = app.buttons["chat-header-voice-call"]
         XCTAssertTrue(voice.waitForExistence(timeout: 10))
         XCTAssertGreaterThanOrEqual(voice.frame.height, 44)
-        XCTAssertTrue(app.buttons["assistant-options"].exists)
         capture("personal-chat-capsule-header")
-        app.buttons["assistant-options"].tap()
+        openPersonalAgentEditor()
         XCTAssertFalse(app.buttons["assistant-search"].exists)
         XCTAssertTrue(app.textFields["名称"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["上传头像"].exists)

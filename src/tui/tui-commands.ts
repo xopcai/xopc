@@ -715,7 +715,8 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
   });
 }
 
-export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: string) => void {
+/** Returns false when the input has no TUI command handler. */
+export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: string) => false | void {
 
   const {
     state,
@@ -1435,15 +1436,10 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
       return;
     }
 
-    if (normalizedCommand.startsWith('skill:')) {
+    if (skillSlashCommands.some(({ name }) => name.toLowerCase() === normalizedCommand)) {
       sendMessage(input);
       return;
     }
-
-
-
-
-    chatLog.addSystem(`Unknown command /${normalizedCommand}. Type /help to see available commands.`);
-    tui.requestRender();
+    return false;
   };
 }

@@ -48,12 +48,10 @@ describe('TUI session slash commands', () => {
   beforeAll(() => initializeTestAgentCatalog());
   afterAll(() => closeXopcDatabase());
 
-  it.each(['quit', 'clone', 'aside', 'btw', 'name', 'restart', 'cancel', 'sessions', 'scopedmodels', 'reload-keybindings'])(
-    'rejects retired /%s instead of forwarding it to a model', (name) => {
-      const { handler, sendMessage, chatLog } = makeHandler();
-      handler(`/${name}`);
-      expect(sendMessage).not.toHaveBeenCalled();
-      expect(chatLog.render(100).join('\n')).toContain(`Unknown command /${name}`);
+  it.each(['tmp', 'skill:unknown', 'quit', 'clone', 'aside', 'btw', 'name', 'restart', 'cancel', 'sessions', 'scopedmodels', 'reload-keybindings'])(
+    'declines /%s so normal submission can continue', (name) => {
+      const { handler } = makeHandler();
+      expect(handler(`/${name}`)).toBe(false);
     },
   );
 

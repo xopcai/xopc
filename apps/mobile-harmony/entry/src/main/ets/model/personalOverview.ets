@@ -30,3 +30,15 @@ export interface XopcPersonalDelivery {
   reference?: XopcProductReference;
 }
 export interface XopcPersonalDeliveriesPage { items: XopcPersonalDelivery[]; nextOffset: number | null; }
+
+export function personalWorkStatus(item: XopcPersonalWorkItem): string {
+  return item.presentation?.status ?? item.operationalState ?? item.phase;
+}
+
+export function personalWorkNeedsAttention(item: XopcPersonalWorkItem): boolean {
+  return !!item.attention || item.presentation?.status === 'needsUser' || item.presentation?.status === 'review';
+}
+
+export function personalPromptNeedsAttention(promptId: string, attention: XopcPersonalWorkItem[]): boolean {
+  return !!promptId && !attention.some((item: XopcPersonalWorkItem): boolean => item.prompt?.id === promptId);
+}

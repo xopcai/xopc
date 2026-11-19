@@ -276,16 +276,11 @@ struct AppRootView: View {
             onStartConversation: appState.startConversation,
             onStartScopedConversation: appState.startScopedConversation,
             onConversationUpdated: appState.updateConversation,
-            onPersonalAgentUpdated: { updated in
-                if configuration == appState.gatewayConfiguration {
-                    personalAgent.applyProfile(updated, using: configuration)
-                }
-            },
             onOpenSettings: { settingsPresented = true },
             onInputFocusChanged: { composerFocused = $0 },
             onOpenSidebar: { setSidebar(true) },
             onOpenProgress: { navigate(.progress) },
-            onOpenPersonalOverview: { navigate(.personalOverview) },
+            onOpenPersonalOverview: { navigate(.personalOverview(allowsConversationSharing: $0)) },
             onConversationUnavailable: { id in await recoverUnavailableConversation(id, using: configuration) },
             pendingAttention: pendingAttention,
             sidebarOpen: sidebarOpen,
@@ -368,9 +363,13 @@ struct AppRootView: View {
                                                                              attachment: attachment, origin: nil)
                              },
                              onPairDevice: { settingsPresented = true })
-        case .personalOverview:
-            if let agent = personalAgent.record(using: configuration) {
-                PersonalAgentOverview(configuration: configuration, agent: agent, attention: pendingAttention,
+        case let .personalOverview(allowsConversationSharing):
+            if let agent = personalAgent.record(using: configuration),
+               let conversation = appState.selectedConversation, conversation.id == agent.conversationId
+            {
+                PersonalAgentOverview(configuration: configuration, agent: agent, conversation: conversation,
+                                      attention: pendingAttention,
+                                      allowsConversationSharing: allowsConversationSharing,
                                       onEdit: { personalAgent.applyProfile($0, using: configuration) },
                                       onModelSaved: appState.updateConversation, onOpenConversation: appState.openConversation)
             }

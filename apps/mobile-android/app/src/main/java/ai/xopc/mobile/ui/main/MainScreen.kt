@@ -1676,8 +1676,7 @@ internal fun MainContent(
           assistantReferenceKind, { assistantReferenceKind = it },
           assistantReferenceQuery, { assistantReferenceQuery = it },
           agentPickerOpen, { agentPickerOpen = it },
-          { assistantActionsOpen = it }, onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
-          onLoadPersonalProactivity, onSavePersonalProactivity, onUploadPersonalAvatar, onLoadPersonalModel, onSavePersonalModel,
+          { assistantActionsOpen = it },
           phoneAvailable = phoneUi.summary?.available == true, phoneNeedsUser = phoneUi.summary?.access != "none" && phoneUi.attention,
           onOpenPhone = { phonePage = true },
           onShareConversation = onBeginConversationShare,
@@ -1953,7 +1952,11 @@ internal fun MainContent(
       }
       if (editingOverviewProfile) PersonalAgentProfileSheet(connection.personal, { editingOverviewProfile = false },
         onLoadPersonalVoiceChoices, onUpdatePersonalAgentProfile,
-        onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel)
+        onUploadAvatar = onUploadPersonalAvatar, onLoadModel = onLoadPersonalModel, onSaveModel = onSavePersonalModel,
+        modelBusy = connection.sending || connection.activeRunId != null || connection.pendingInput != null,
+        onShare = { onBeginConversationShare(overviewAgent.conversationId) }.takeIf {
+          connection.messages.any { message -> message.role == "user" || message.role == "assistant" }
+        })
       overviewMedia?.let { request ->
         MobilePreviewSheet(onClose = { overviewMedia = null }, heightFraction = 0.95f) {
           MessageMediaPreview(request, onLoadMessageMedia) { overviewMedia = null }
@@ -2692,12 +2695,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
   referenceQuery: String, onReferenceQueryChange: (String) -> Unit,
   agentPickerOpen: Boolean, onAgentPickerOpenChange: (Boolean) -> Unit,
   onActionsOpenChange: (Boolean) -> Unit,
-  onLoadAgentVoices: () -> Unit = {},
-  onUpdateAgentProfile: (String, String, String?, Boolean, String) -> Unit = { _, _, _, _, _ -> },
-  onLoadProactivity: suspend () -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
-  onSaveProactivity: suspend (ai.xopc.mobile.gateway.PersonalProactivitySettings) -> ai.xopc.mobile.gateway.PersonalProactivitySettings = { error("UNAVAILABLE") },
-  onUploadAvatar: suspend (ByteArray) -> Unit = {},
-  onLoadPersonalModel: LoadPersonalModel? = null, onSavePersonalModel: SavePersonalModel? = null,
   phoneAvailable: Boolean = false, phoneNeedsUser: Boolean = false, onOpenPhone: () -> Unit = {},
   onShareConversation: (String) -> Unit,
   messageSearchOpen: Boolean,
@@ -2744,7 +2741,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
       connection.messages.isEmpty() && connection.context == null && !connection.contextError) onReloadContext()
   }
   val selected = connection.conversationSummary(connection.selectedConversationId)
-  var personalSettingsOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var modelPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var thinkingPickerOpen by remember(connection.selectedConversationId) { mutableStateOf(false) }
   var pendingModelChoice by remember(connection.selectedConversationId) { mutableStateOf<String?>(null) }
@@ -3319,7 +3315,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               contentDescription = personalOverviewLabel
             }.testTag("chat-personal-overview")) {
             PersonalAgentAvatar(connection.personal.agentAvatar, personalAgent.appearance, 62.dp,
-              active = !personalSettingsOpen && !messageSearchOpen)
+              active = !messageSearchOpen)
           }
           Row(Modifier.align(Alignment.TopEnd), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             if (phoneAvailable) IconButton(onClick = onOpenPhone,
@@ -3339,12 +3335,10 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
               Icon(painterResource(R.drawable.action_call),
                 stringResource(R.string.assistant_action_voice_natural), Modifier.size(22.dp))
             }
-            if (personalAgent != null || selected?.isLocalDraft != true) {
-              IconButton(onClick = {
-                if (personalAgent != null) personalSettingsOpen = true else optionsOpen = true
-              }, modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("assistant-options")) {
-                Icon(painterResource(if (personalAgent != null) R.drawable.settings_gear else R.drawable.action_more_horizontal),
-                  optionsLabel, Modifier.size(22.dp))
+            if (personalAgent == null && selected?.isLocalDraft != true) {
+              IconButton(onClick = { optionsOpen = true },
+                modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("assistant-options")) {
+                Icon(painterResource(R.drawable.action_more_horizontal), optionsLabel, Modifier.size(22.dp))
               }
             }
           }
@@ -3548,12 +3542,6 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
     thinkingPickerOpen = false; onAgentPickerOpenChange(false)
     pendingModelChoice = null; pendingThinkingChoice = null
   }
-  if (personalSettingsOpen) PersonalAgentProfileSheet(connection.personal, { personalSettingsOpen = false },
-    onLoadAgentVoices, onUpdateAgentProfile, onUploadAvatar, onLoadPersonalModel, onSavePersonalModel,
-    modelBusy = connection.sending || connection.activeRunId != null || connection.pendingInput != null,
-    onShare = connection.selectedConversationId?.takeIf {
-      connection.messages.any { message -> message.role == "user" || message.role == "assistant" }
-    }?.let { id -> { onShareConversation(id) } })
   if (messageSearchOpen) ChatMessageSearch(connection.messages, connection.historyBefore != null,
     connection.historyLoadingOlder, onLoadOlderHistory, onClose = { onMessageSearchOpenChange(false) },
     onSelect = { id -> onMessageSearchOpenChange(false); messageDetailId = id })

@@ -110,7 +110,9 @@ struct PersonalAgentOverview: View {
     @Environment(\.mobileTheme) private var mobileTheme
     let configuration: GatewayConfiguration
     let agent: PersonalAgentRecord
+    let conversation: ConversationSelection
     let attention: Int
+    let allowsConversationSharing: Bool
     let onEdit: (PersonalAgentRecord) -> Void
     let onModelSaved: (ConversationSelection) -> Void
     let onOpenConversation: (String, String, String) -> Void
@@ -186,8 +188,9 @@ struct PersonalAgentOverview: View {
                                               prompt: $setupPrompt, onClosed: { Task { await loadSchedules() } }))
         .sheet(isPresented: $showingEdit) {
             PersonalAgentProfileView(configuration: configuration, record: agent,
-                                     conversation: .existing(id: agent.conversationId, title: agent.displayName, agentId: agent.agentId),
-                                     onSaved: onEdit, onModelSaved: onModelSaved)
+                                     conversation: conversation,
+                                     onSaved: onEdit, onModelSaved: onModelSaved,
+                                     allowsConversationSharing: allowsConversationSharing)
         }
     }
 
@@ -204,6 +207,7 @@ struct PersonalAgentOverview: View {
                 Button("编辑助手", systemImage: "pencil") { showingEdit = true }
                     .labelStyle(.iconOnly).frame(width: 44, height: 44)
                     .background(.regularMaterial, in: .circle)
+                    .accessibilityIdentifier("personal-overview-edit")
             }
             Text(agent.displayName).font(.title2.weight(.semibold)).lineLimit(1)
             let count = workLoaded ? current.filter(\.requiresAttention).count : attention

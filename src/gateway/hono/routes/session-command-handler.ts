@@ -12,7 +12,7 @@ import { receiveSessionCommand, sessionCommandSnapshot } from '../../service/ses
 import { getSessionInputReceipt, isConversationDeleted, SessionCommandError, retrySessionPreparation } from '../../../storage/sqlite/session-creation-repository.js';
 import { z } from 'zod';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { parseSlashCommand, commandRegistry } from '../../../chat-commands/index.js';
+import { commandRegistry } from '../../../chat-commands/registry.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
 import { createLogger } from '../../../utils/logger.js';
 import { getSessionInputById } from '../../../storage/sqlite/session-input-repository.js';
@@ -59,8 +59,8 @@ export async function handleSessionCommand(c: Context, deps: AuthenticatedRouteD
     if (document && !userTurnDocumentRefIds(document).every(ref => refs.has(ref))) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Input contains an unknown context reference' } }, 400);
     }
-    const slash = parseSlashCommand(command.input.content);
-    if (slash && commandRegistry.has(slash.command) && command.input.attachments?.some(attachment => !isVoiceLikeAttachment(attachment))) {
+    if (commandRegistry.parseRegisteredSlashCommand(command.input.content)
+      && command.input.attachments?.some(attachment => !isVoiceLikeAttachment(attachment))) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Slash commands do not accept file or image attachments.' } }, 400);
     }
     if (!command.input.content.trim() && !command.input.attachments?.length && !command.input.contextRefs?.length && !command.input.browserContexts?.length && !command.input.appContext) {

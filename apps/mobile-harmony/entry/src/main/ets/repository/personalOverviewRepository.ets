@@ -1,5 +1,5 @@
 import { XopcClarification } from '../model/clarification';
-import { XopcPersonalDeliveriesPage, XopcPersonalWorkPage } from '../model/personalOverview';
+import { XopcPersonalDeliveriesPage, XopcPersonalWorkItem, XopcPersonalWorkPage } from '../model/personalOverview';
 import { XopcPayload } from '../model/realtime';
 import { XopcAutomation } from '../model/workspace';
 import { gatewaySession } from '../service/gatewaySession';
@@ -15,13 +15,17 @@ export class XopcPersonalOverviewRepository {
     return response.payload;
   }
 
-  async work(offset: number): Promise<XopcPersonalWorkPage> {
+  async work(offset: number, limit: number = WORK_PAGE_SIZE): Promise<XopcPersonalWorkPage> {
     const page = await this.read<XopcPersonalWorkPage>(
-      '/api/personal-agent/activity?view=work&limit=' + WORK_PAGE_SIZE + '&offset=' + offset);
+      '/api/personal-agent/activity?view=work&limit=' + limit + '&offset=' + offset);
     if (!Array.isArray(page.current) || !Array.isArray(page.items) || typeof page.total !== 'number') {
       throw new Error('INVALID_PERSONAL_WORK');
     }
     return page;
+  }
+
+  async currentWork(): Promise<XopcPersonalWorkItem[]> {
+    return (await this.work(0, 1)).current;
   }
 
   async deliveries(offset: number): Promise<XopcPersonalDeliveriesPage> {

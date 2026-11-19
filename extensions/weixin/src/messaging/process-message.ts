@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 
 import { persistInboundAttachments } from '@xopcai/xopc/channels/attachments/inbound-persist.js';
 import { handleChannelConnectionProbe } from '@xopcai/xopc/channels/connection-probe.js';
+import { commandRegistry } from '@xopcai/xopc/chat-commands/registry.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import { issuePairingChallenge, resolveWeixinPairingPath } from '@xopcai/xopc/channels/pairing/index.js';
@@ -251,7 +252,7 @@ export async function processWeixinInboundMessage(
       conversationId,
       messageId: full.message_id != null ? String(full.message_id) : undefined,
       isGroup: false,
-      isCommand: body.trim().startsWith('/'),
+      isCommand: Boolean(commandRegistry.parseRegisteredSlashCommand(body)),
       contextToken: ctx.context_token,
     },
     attachments: attachments.length ? attachments : undefined,

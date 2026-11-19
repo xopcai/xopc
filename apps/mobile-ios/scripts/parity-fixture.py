@@ -211,11 +211,50 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/api/capabilities/mobile-actions/panel/connections':
    if query.get('id')==['mcp:setup']:
     request=json.loads(body) if body else {}
-    if request.get('action')=='create' and request.get('values',{}).get('url')=='https://example.com/mcp':
-     data=envelope({'message':'连接已添加','chatPrompt':'请使用此连接帮我：'})
+    action=request.get('action')
+    values=request.get('values',{})
+    try:
+     pasted_config=json.loads(values.get('mcp-json','{}'))
+    except ValueError:
+     pasted_config={}
+    checked={'flow':'mobile-mcp-fixture','revision':2,'headline':'example.com','subtitle':'https://example.com/mcp',
+             'message':'连接检查通过 · 发现 1 个工具','tone':'success',
+             'actions':[{'id':'save','label':'添加连接'},{'id':'edit','label':'返回配置'}]}
+    if action=='save' and request.get('flow')==checked['flow'] and request.get('revision')==2:
+     data=envelope({'message':'连接已添加','headline':'example.com','tone':'success',
+                    'actions':[{'id':'done','label':'完成','dismiss':True}]})
+    elif action=='review-command' and values.get('command')=='node':
+     data=envelope({'flow':'mobile-mcp-fixture','revision':1,'headline':'node',
+                    'message':'程序在 Gateway 主机运行','reviewText':'["node"]\n工作目录  /fixtures',
+                    'actions':[{'id':'confirm-check','label':'运行并检查'},{'id':'edit','label':'返回配置'}]})
+    elif action=='confirm-check' and request.get('revision')==1:
+     data=envelope(checked)
+    elif action=='create' and values.get('url')=='https://example.com/mcp':
+     data=envelope(checked)
+    elif action=='select' and request.get('revision')==1:
+     data=envelope(checked)
+    elif action=='preview' and isinstance(pasted_config,dict) and pasted_config.get('url')=='https://example.com/mcp':
+     data=envelope({'flow':'mobile-mcp-fixture','revision':1,'headline':'选择服务','message':'每次添加一个服务。',
+                    'fields':[{'id':'selection','label':'服务','type':'select','value':'0',
+                               'options':[{'id':'0','label':'example.com'}]}],
+                    'actions':[{'id':'select','label':'检查所选连接'},{'id':'edit','label':'返回配置'}]})
     else:
-     data=envelope({'fields':[{'id':'url','label':'MCP 服务地址','type':'text','hint':'https://'}],
-                    'actions':[{'id':'create','label':'测试并连接'}]})
+     link={'field':'mcp-mode','value':'link'}
+     pasted={'field':'mcp-mode','value':'json'}
+     stdio={'field':'mcp-mode','value':'stdio'}
+     data=envelope({'detailsLabel':'连接与数据说明','details':'Gateway 会访问此服务并读取工具列表。',
+                    'advancedLabel':'认证与高级设置','fields':[
+                     {'id':'mcp-mode','label':'添加方式','type':'select','presentation':'segmented',
+                      'value':'json' if action=='edit' else 'link',
+                      'options':[{'id':'link','label':'服务链接'},{'id':'json','label':'粘贴 JSON'},{'id':'stdio','label':'命令启动'}]},
+                     {'id':'url','label':'服务地址','type':'text','hint':'https://example.com/mcp','visibleWhen':link},
+                     {'id':'mcp-json','label':'MCP JSON 配置','type':'multiline','retain':True,'visibleWhen':pasted,
+                      'hint':'{ "mcpServers": { … } }'},
+                     {'id':'command','label':'可执行程序','type':'text','visibleWhen':stdio},
+                     {'id':'id','label':'名称（选填）','type':'text','advanced':True,'visibleWhen':link}],
+                    'actions':[{'id':'create','label':'检查连接','visibleWhen':link},
+                               {'id':'preview','label':'预览配置','visibleWhen':pasted},
+                               {'id':'review-command','label':'审阅命令','visibleWhen':stdio}]})
    else:
     data=envelope({'message':'账号已连接','chatPrompt':'请使用「Drive Connection」帮我：',
                    'actions':[{'id':'authorize','label':'重新授权','advanced':True}]})

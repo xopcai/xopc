@@ -58,6 +58,7 @@ describe('slash command source context policy', () => {
     commandRegistry.register({
       id: 'test.contextual',
       name: 'contextual',
+      aliases: ['ctx'],
       description: 'Context-aware command',
       category: 'tool',
       scope: ['private'],
@@ -69,29 +70,38 @@ describe('slash command source context policy', () => {
       aggregatedText: 'done',
     }));
 
-    await tryRunSlashCommand(
+    const result = await tryRunSlashCommand(
       { commandHandler: { executeCommandAndAggregateReply }, log: { warn: vi.fn() } },
       commandContext,
-      '/contextual',
+      '/CTX@xopc_bot Topic',
       { sourceContexts },
     );
 
     expect(executeCommandAndAggregateReply).toHaveBeenCalledWith(
-      'contextual',
-      '',
+      'ctx',
+      'Topic',
       expect.objectContaining({ sourceContexts }),
       expect.any(Object),
     );
+    expect(result).toMatchObject({ matched: true, aggregatedText: 'done' });
   });
 
-  it('returns an explicit receipt for unknown commands but preserves skill tokens', async () => {
-    const deps = { commandHandler: { executeCommandAndAggregateReply: vi.fn() }, log: { warn: vi.fn() } };
-    const unknown = await tryRunSlashCommand(deps, commandContext, '/does-not-exist');
-    const skill = await tryRunSlashCommand(deps, commandContext, '/skill:weather Paris');
+  it.each([
+    '/tmp',
+    '/tmp 请检查这个目录',
+    '/Users/me/project 请检查这个目录',
+    '/does-not-exist',
+    '/skill:weather Paris',
+  ])('leaves %s for the normal agent turn', async (content) => {
+    const executeCommandAndAggregateReply = vi.fn();
+    const result = await tryRunSlashCommand(
+      { commandHandler: { executeCommandAndAggregateReply }, log: { warn: vi.fn() } },
+      commandContext,
+      content,
+    );
 
-    expect(unknown).toMatchObject({ matched: true, command: 'does-not-exist' });
-    expect(unknown.aggregatedText).toContain('Unknown command');
-    expect(skill.matched).toBe(false);
+    expect(result).toEqual({ matched: false, aggregatedText: '' });
+    expect(executeCommandAndAggregateReply).not.toHaveBeenCalled();
   });
 });
 
@@ -100,13 +110,14 @@ describe('personal slash input', () => {
   const deps = { commandHandler: { executeCommandAndAggregateReply: vi.fn() }, log: { warn: vi.fn() } };
   const personal = { ...commandContext, conversationId: 'personal-conversation' };
 
-  it.each(['/Users/me/file.md', '/', '/unknown text', '请比较 A/B', 'Discuss this:\n/new', 'https://example.com/path'])('keeps ordinary slash text: %s', async text => {
+  it.each(['/Users/me/file.md', '/', '/unknown text', '/skill:weather Paris', '请比较 A/B', 'Discuss this:\n/new', 'https://example.com/path'])('keeps ordinary slash text: %s', async text => {
     expect(await tryRunSlashCommand(deps, personal, text)).toMatchObject({ matched: false });
   });
 
-  it('blocks Skills and registered reset commands even when reset-overlap skipping is enabled', async () => {
+  it('blocks registered skill and reset commands even when reset-overlap skipping is enabled', async () => {
     commandRegistry.register({ id: 'session.new', name: 'new', aliases: ['reset'], category: 'session', scope: ['global'], description: 'Reset', handler: vi.fn() });
-    for (const text of ['/new', '/reset', '/skill:weather Paris']) {
+    commandRegistry.register({ id: 'system.skill', name: 'skill', category: 'system', scope: ['global'], description: 'Skills', handler: vi.fn() });
+    for (const text of ['/new', '/reset', '/skill weather Paris']) {
       const result = await tryRunSlashCommand(deps, personal, text, { skipResetCommands: true });
       expect(result).toMatchObject({ matched: true, aggregatedText: expect.stringContaining('Personal AI does not support') });
     }

@@ -83,9 +83,10 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     const review = await fetch(`${base}/api/review/context?agentId=main`, { headers });
     expect(review.status, await review.clone().text()).toBe(200);
     expect(getSessionMetadata(id)).toBeNull();
+    const firstPrompt = '/tmp inspect this folder';
     const command = { kind: 'start', clientMessageId: randomUUID(),
       creation: { agentId: 'main', projectId: null, execution: null, model: 'test/model', thinkingLevel: 'off', temporary: false, workingDirectory: dir },
-      input: { content: 'hello', endpointContext: { version: 1, capturedAt: Date.now(), timezone: 'Asia/Shanghai', locale: 'zh-CN' } },
+      input: { content: firstPrompt, endpointContext: { version: 1, capturedAt: Date.now(), timezone: 'Asia/Shanghai', locale: 'zh-CN' } },
       origin: { type: 'endpoint', endpointId: hello.endpointId, token: registration.turnToken } };
     const post = (body: object, compact = false) => fetch(base + path + (compact ? '?view=compact' : ''), { method: 'POST', headers, body: JSON.stringify(body) });
     expect((await fetch(base + path, { method: 'POST', body: JSON.stringify(command) })).status).toBe(401);
@@ -126,6 +127,7 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
       session: first.payload.session,
     });
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    expect(execute.mock.calls[0]![0]).toMatchObject({ content: firstPrompt });
     const configVersion = (getSqliteDatabase().prepare('SELECT updated_at FROM session_config WHERE conversation_id = ?').get(id) as { updated_at: number } | undefined)?.updated_at ?? 0;
     const append = { kind: 'append', clientMessageId: randomUUID(),
       expectedTranscriptId: getSessionMetadata(id)!.transcriptId, configVersion, delivery: 'next',

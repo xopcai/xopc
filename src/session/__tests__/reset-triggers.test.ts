@@ -53,7 +53,7 @@ describe('isTaskDestructiveCommand', () => {
     expect(isTaskDestructiveCommand(value)).toBe(true);
   });
 
-  it.each(['/help', '/compact', 'explain /clear'])('allows %s', (value) => {
+  it.each(['/help', '/compact', '/clear@xopc_bot/logs', 'explain /clear'])('allows %s', (value) => {
     expect(isTaskDestructiveCommand(value)).toBe(false);
   });
 });

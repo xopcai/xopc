@@ -29,7 +29,7 @@ type Draft = {
   server: McpServerConfig; config: Config; credentials: NativeMcpCredentials; controller: AbortController;
   expiresAt: number; timer: ReturnType<typeof setTimeout>; probe?: McpConnectionProbe; authorizationId?: string;
   running: boolean; committing: boolean; checkedAt?: string;
-  bearerToken?: string;
+  protectCredentials: boolean;
   toolsPending?: ReturnType<typeof discoverMcpTools>;
 };
 export type McpDraftInput = { serverId: string; sourceServerId?: string; expectedServer?: unknown; server: unknown };
@@ -43,7 +43,7 @@ export class McpConnectionDrafts {
     saveConfig: (config: Config, expectedConfig?: Config) => Promise<{ saved: boolean; error?: string; persisted?: boolean; conflict?: boolean }>;
   }) {}
 
-  async create(owner: string, input: McpDraftInput, bearerToken?: string) {
+  async create(owner: string, input: McpDraftInput, options?: { protectCredentials?: boolean }) {
     const current = this.options.readConfig();
     if (!/^[a-zA-Z0-9_-]+$/.test(input.serverId) || input.sourceServerId && input.sourceServerId !== input.serverId) throw new McpDraftError(400, 'Invalid or changed MCP server ID.');
     const source = Object.hasOwn(current.mcp?.servers ?? {}, input.serverId) ? current.mcp?.servers?.[input.serverId] : undefined;
@@ -57,9 +57,7 @@ export class McpConnectionDrafts {
     for (const internal of ['xopcConnector', 'xopcPlugin', 'xopcOAuthCredentialId', 'xopcConnectionCheck']) delete server[internal];
     const workspace = getWorkspacePath(current) || process.cwd();
     const config = structuredClone(current);
-    config.mcp = { servers: { [input.serverId]: { ...server, enabled: true,
-      ...(bearerToken ? { headers: { Authorization: `Bearer ${bearerToken}` } } : {}),
-    } } };
+    config.mcp = { servers: { [input.serverId]: { ...server, enabled: true } } };
     const credentials = await createNativeMcpCredentials(true);
     if (this.drafts.size >= 100 || [...this.drafts.values()].filter(draft => draft.owner === owner).length >= 8) throw new McpDraftError(429, 'Too many unsaved MCP connection tests.');
     const id = randomUUID();
@@ -69,7 +67,7 @@ export class McpConnectionDrafts {
     }, TTL_MS);
     timer.unref();
     const draft: Draft = { id, owner, serverId: input.serverId, sourceServerId: input.sourceServerId,
-      revision, workspace, server, config, credentials, bearerToken, controller: new AbortController(),
+      revision, workspace, server, config, credentials, protectCredentials: options?.protectCredentials === true, controller: new AbortController(),
       timer, expiresAt: Date.now() + TTL_MS, running: false, committing: false };
     this.drafts.set(id, draft);
     return { id, serverId: draft.serverId, expiresAt: draft.expiresAt };
@@ -142,16 +140,32 @@ export class McpConnectionDrafts {
     draft.committing = true;
     let alias: string | undefined;
     let durable: NativeMcpCredentials | undefined;
-    let bearerProvider: string | undefined;
+    const protectedProviders: string[] = [];
+    const resolver = draft.protectCredentials ? new CredentialResolver() : undefined;
     let published = false;
     try {
       const server = structuredClone(draft.server);
       if (enable) server.enabled = true;
-      if (draft.bearerToken) {
-        const reference = createConnectorSecretReference(`mcp-draft-${id}`, 'token', { prefix: 'Bearer ' });
-        bearerProvider = reference.xopcSecretRef.provider;
-        await new CredentialResolver().saveApiKey(bearerProvider, draft.bearerToken);
-        server.headers = { Authorization: reference };
+      if (resolver) {
+        const protect = async (field: string, value: string, prefix?: string) => {
+          const reference = createConnectorSecretReference(`mcp-draft-${id}`, field, { prefix });
+          const provider = reference.xopcSecretRef.provider;
+          protectedProviders.push(provider);
+          await resolver.saveApiKey(provider, value.slice(prefix?.length ?? 0));
+          return reference;
+        };
+        for (const [index, [name, value]] of Object.entries(server.headers ?? {}).entries()) {
+          if (typeof value !== 'string') continue;
+          const prefix = name.toLowerCase() === 'authorization' ? /^Bearer /i.exec(value)?.[0] : undefined;
+          server.headers![name] = await protect(`header-${index}`, value, prefix);
+        }
+        for (const [index, [name, value]] of Object.entries(server.env ?? {}).entries()) {
+          if (typeof value !== 'string' || value === '') continue;
+          server.env![name] = await protect(`env-${index}`, value);
+        }
+        if (typeof server.oauth?.clientSecret === 'string') {
+          server.oauth.clientSecret = await protect('oauth-client-secret', server.oauth.clientSecret);
+        }
       }
       if (typeof server.url === 'string') {
         const state = await draft.credentials.forServer(draft.serverId, server.url).load();
@@ -187,7 +201,9 @@ export class McpConnectionDrafts {
       draft.committing = false;
       if (alias && this.options.readConfig().mcp?.servers?.[draft.serverId]?.xopcOAuthCredentialId === alias) published = true;
       if (!published && alias && durable && typeof draft.server.url === 'string') durable.remove(alias, draft.server.url);
-      if (!published && bearerProvider) await new CredentialResolver().deleteProfile(`${bearerProvider}:default`);
+      if (!published && resolver) {
+        await Promise.allSettled(protectedProviders.map(provider => resolver.deleteProfile(`${provider}:default`)));
+      }
       if (this.drafts.has(id) && draft.expiresAt <= Date.now()) this.dispose(draft);
     }
   }

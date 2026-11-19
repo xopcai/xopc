@@ -19,7 +19,7 @@ import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
 import { isTaskDestructiveCommand } from '../../../session/reset-triggers.js';
-import { parseSlashCommand, commandRegistry } from '../../../chat-commands/index.js';
+import { commandRegistry } from '../../../chat-commands/registry.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { hasGatewayScope } from '../../security/gateway-scopes.js';
@@ -70,10 +70,8 @@ export async function submitSessionInput(
       error: { code: 'BAD_REQUEST', message: 'A task has one continuous conversation.' },
     }, 400);
   }
-  const parsedCommand = parseSlashCommand(content);
   if (
-    parsedCommand
-    && commandRegistry.has(parsedCommand.command)
+    commandRegistry.parseRegisteredSlashCommand(content)
     && attachments?.some((attachment) => !isVoiceLikeAttachment(attachment as UserTurnAttachment))
   ) {
     return c.json({

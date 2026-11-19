@@ -13,6 +13,6 @@ export interface XopcHomeDelivery { id: string; projectId?: string; title: strin
 export interface XopcHomeResponse { needsUser: XopcHomeItem[]; background: XopcHomeItem[]; backgroundCount: number; decisions?: XopcHomeDecision[]; recentDeliveries?: XopcHomeDelivery[]; }
 export interface XopcMobileRoute {
   page: string; itemId: string; projectId?: string; prompt?: string; title?: string; version?: string; personalSchedule?: boolean;
-  returnToSidebar?: boolean;
+  returnToSidebar?: boolean; canShareConversation?: boolean;
 }
 export interface XopcHomeCommand { kind: string; runId?: string; approvalId?: string; decision?: string; }

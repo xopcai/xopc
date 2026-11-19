@@ -20,10 +20,9 @@ import type { ImageContent } from '@earendil-works/pi-ai';
 import type { AgentSourceContext } from '../source-context/types.js';
 import { injectSourceContextsIntoUserMessage } from '../source-context/injector.js';
 
-import { commandRegistry } from '../../chat-commands/index.js';
+import { commandRegistry } from '../../chat-commands/registry.js';
 import { isPersonalConversation } from '../../personal-agent/repository.js';
 import { personalCommandRejection } from '../../chat-commands/personal-command-policy.js';
-import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import { shouldSkipResetOverlapCommand } from '../../session/reset-triggers.js';
 import { hydrateUserTurnForLlm, type TranscriptUserMessage } from '../inbound/attachment-pipeline.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
@@ -97,34 +96,19 @@ export async function tryRunSlashCommand(
   if (options?.origin?.type === 'system' && options.origin.source === 'task') return { matched: false, aggregatedText: '' };
 
   const personal = isPersonalConversation(ctx.conversationId);
-  // Personal chat treats paths, inline slashes and unregistered slash text as ordinary input.
-  const parsed = personal
-    ? (/^\/[a-z][a-z0-9_:-]*(?:\s|$)/i.test(content.trim()) ? parseSlashCommand(content.trim().split(/\r?\n/)[0]!) : null)
-    : parseSlashCommand(content);
+  // Personal chat recognizes commands only on the first line.
+  const parsed = commandRegistry.parseRegisteredSlashCommand(personal ? content.trim().split(/\r?\n/, 1)[0] : content);
   if (!parsed) {
     return { matched: false, aggregatedText: '' };
   }
   if (personal) {
-    const command = commandRegistry.findByName(parsed.command);
-    if (!command && !parsed.command.startsWith('skill:')) return { matched: false, aggregatedText: '' };
-    const rejection = personalCommandRejection(ctx.conversationId, command?.id ?? 'skill.invoke', parsed.command);
+    const rejection = personalCommandRejection(ctx.conversationId, parsed.definition.id, parsed.command);
     if (rejection) return { matched: true, aggregatedText: rejection, command: parsed.command };
   }
   if (options?.skipResetCommands && shouldSkipResetOverlapCommand(parsed.command, true)) {
     return { matched: false, aggregatedText: '' };
   }
-  if (!commandRegistry.has(parsed.command)) {
-    if (parsed.command.startsWith('skill:')) {
-      return { matched: false, aggregatedText: '' };
-    }
-    return {
-      matched: true,
-      aggregatedText: `Unknown command: /${parsed.command}\nType /help to see available commands.`,
-      command: parsed.command,
-    };
-  }
-  const command = commandRegistry.findByName(parsed.command);
-  if (options?.sourceContexts?.length && !command?.acceptsContext) {
+  if (options?.sourceContexts?.length && !parsed.definition.acceptsContext) {
     return {
       matched: true,
       aggregatedText: `Command /${parsed.command} does not accept Note context. Remove the Note reference or use it with a regular prompt.`,
@@ -132,7 +116,7 @@ export async function tryRunSlashCommand(
     };
   }
   try {
-    const { aggregatedText, metadata } = await deps.commandHandler.executeCommandAndAggregateReply(
+    const { handled, aggregatedText, metadata } = await deps.commandHandler.executeCommandAndAggregateReply(
       parsed.command,
       parsed.args,
       {
@@ -146,7 +130,8 @@ export async function tryRunSlashCommand(
       },
       { emitEvent: options?.emitEvent },
     );
-    return { matched: true, aggregatedText: aggregatedText ?? '', command: parsed.command, metadata };
+    if (!handled) return { matched: false, aggregatedText: '' };
+    return { matched: true, aggregatedText, command: parsed.command, metadata };
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     deps.log.warn(

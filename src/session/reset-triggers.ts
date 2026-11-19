@@ -83,7 +83,7 @@ export const TASK_DESTRUCTIVE_COMMANDS = new Set([
 
 export function isTaskDestructiveCommand(body: string): boolean {
   const normalized = stripLeadingEnvelopeTimestamp(body.trim());
-  const match = /^\/([^\s@]+)(?:@[^\s]+)?(?:\s|$)/.exec(normalized);
+  const match = /^\/([^/\s@]+)(?:@[^/\s]+)?(?:\s|$)/.exec(normalized);
   return Boolean(match && TASK_DESTRUCTIVE_COMMANDS.has(match[1]!.toLowerCase()));
 }
 

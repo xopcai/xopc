@@ -17,12 +17,16 @@ interface CapabilityChoice { id: string; label: string; }
 interface CapabilityFieldVisibility { field: string; value: string; }
 interface CapabilityField {
   id: string; label: string; type: string; value?: string; hint?: string; options?: CapabilityChoice[]; advanced?: boolean;
-  visibleWhen?: CapabilityFieldVisibility;
+  visibleWhen?: CapabilityFieldVisibility; presentation?: string; retain?: boolean;
 }
-interface CapabilityAction { id: string; label: string; confirmation?: string; inlineReview?: boolean; advanced?: boolean; }
+interface CapabilityAction {
+  id: string; label: string; confirmation?: string; inlineReview?: boolean; advanced?: boolean;
+  visibleWhen?: CapabilityFieldVisibility; dismiss?: boolean;
+}
 interface CapabilitySearchResult { id: string; name: string; summary?: string; source: string; iconUrl?: string; action?: CapabilityAction; }
 interface CapabilityPanelPayload {
   fields?: CapabilityField[]; actions?: CapabilityAction[]; message?: string; details?: string;
+  headline?: string; subtitle?: string; reviewText?: string; tone?: string; advancedLabel?: string; detailsLabel?: string;
   authorizationUrl?: string; qrUrl?: string; flow?: string; revision?: number;
   deviceVerificationCode?: string; expiresAt?: number;
   pollAction?: string; results?: CapabilitySearchResult[]; chatPrompt?: string;
@@ -68,6 +72,7 @@ export struct XopcCapabilityPanelView {
   private openWhenReady: boolean = false;
   private pollingNow: boolean = false;
   private reportedExpanded: boolean = false;
+  private retainedValues: Map<string, string> = new Map<string, string>();
 
   aboutToAppear(): void { this.alive = true; void this.request(); }
   aboutToDisappear(): void {
@@ -75,6 +80,7 @@ export struct XopcCapabilityPanelView {
     ++this.generation;
     this.clearPoll();
     this.values.clear();
+    this.retainedValues.clear();
   }
 
   @Monitor('layout.foreground')
@@ -93,9 +99,10 @@ export struct XopcCapabilityPanelView {
     const extraFields = this.fields(true);
     const shownFields = this.advanced ? this.fields(false).concat(extraFields) : this.fields(false);
     const expanded = (Boolean(this.panel?.qrUrl) && (!this.panel?.authorizationUrl || this.showQr)) ||
+      Boolean(this.panel?.reviewText) ||
       (this.advanced && (extraFields.length > 0 || this.actions(true).length > 0)) ||
       (this.detailsOpen && Boolean(this.panel?.details)) || shownFields.length >= 3 ||
-      shownFields.some((field: CapabilityField): boolean => field.type === 'multiline' || field.type === 'list') ||
+      shownFields.some((field: CapabilityField): boolean => ['multiline', 'list', 'headers'].includes(field.type)) ||
       (this.panel?.results?.length ?? 0) >= 3;
     if (expanded === this.reportedExpanded) return;
     this.reportedExpanded = expanded;
@@ -108,6 +115,19 @@ export struct XopcCapabilityPanelView {
     const updated = new Map<string, string>(this.values);
     updated.set(id, value);
     this.values = updated;
+  }
+
+  private setField(field: CapabilityField, text: string): void {
+    this.set(field.id, text);
+    if (field.retain) this.retainedValues.set(field.id, text);
+    if (field.presentation === 'segmented') {
+      this.getUIContext().getFocusController().clearFocus();
+      this.errorMessage = '';
+    }
+  }
+
+  private isVisible(rule?: CapabilityFieldVisibility): boolean {
+    return !rule || (this.values.get(rule.field) ?? '') === rule.value;
   }
 
   private clearPoll(): void {
@@ -146,7 +166,13 @@ export struct XopcCapabilityPanelView {
       const url = '/api/capabilities/mobile-actions/panel/' + this.category + '?id=' + encodeURIComponent(this.itemId)
         + '&locale=' + encodeURIComponent(appSettings.effectiveLanguage());
       const values: Record<string, string> = {};
-      if (!polling) this.values.forEach((value: string, id: string): void => { values[id] = value; });
+      if (!polling && this.itemId === 'mcp:setup') {
+        for (const field of this.panel?.fields ?? []) {
+          if (this.isVisible(field.visibleWhen)) values[field.id] = this.values.get(field.id) ?? '';
+        }
+      } else if (!polling) {
+        this.values.forEach((value: string, id: string): void => { values[id] = value; });
+      }
       const command: CapabilityPanelCommand = { action, values, flow: this.panel?.flow, revision: this.panel?.revision };
       const raw = await gatewaySession.request(url, action ? 'POST' : 'GET', action ? JSON.stringify(command) : '');
       const result = JSON.parse(raw) as CapabilityPanelEnvelope;
@@ -155,9 +181,13 @@ export struct XopcCapabilityPanelView {
       if (this.panel?.qrUrl !== result.payload.qrUrl) this.qrFeedback = '';
       if (this.panel?.authorizationUrl !== result.payload.authorizationUrl) this.showQr = false;
       this.panel = result.payload;
+      const actions = result.payload.actions ?? [];
+      if (actions.some((entry: CapabilityAction): boolean => entry.dismiss === true) &&
+          !actions.some((entry: CapabilityAction): boolean => entry.id === 'add-another')) this.retainedValues.clear();
       const next = new Map<string, string>();
       for (const field of result.payload.fields ?? []) {
-        next.set(field.id, (polling ? this.values.get(field.id) : undefined) ?? (field.type === 'secret' ? '' : field.value ?? ''));
+        next.set(field.id, (polling ? this.values.get(field.id) : undefined) ??
+          (field.retain ? this.retainedValues.get(field.id) : undefined) ?? (field.type === 'secret' ? '' : field.value ?? ''));
       }
       this.values = next;
       if (!polling) this.newGroup = '';
@@ -167,7 +197,11 @@ export struct XopcCapabilityPanelView {
         this.openWhenReady = false;
         void this.authorize(result.payload.authorizationUrl);
       }
-      if ((!polling && action && action !== 'search') || (polling && previous && !result.payload.pollAction)) this.onChanged();
+      if (this.itemId === 'mcp:setup') {
+        if (action === 'save' && actions.some((entry: CapabilityAction): boolean => entry.dismiss === true)) this.onChanged();
+      } else if ((!polling && action && action !== 'search') || (polling && previous && !result.payload.pollAction)) {
+        this.onChanged();
+      }
     } catch (error) {
       if (!polling && generation === this.generation) {
         if (canRecover && (!(error instanceof XopcHttpError) || error.status >= 500)) {
@@ -195,6 +229,10 @@ export struct XopcCapabilityPanelView {
 
   private async perform(action: CapabilityAction): Promise<void> {
     if (this.busy) return;
+    if (action.dismiss) {
+      this.onClose();
+      return;
+    }
     if (action.confirmation && !action.inlineReview) {
       try {
         const result = await this.getUIContext().getPromptAction().showDialog({
@@ -288,7 +326,20 @@ export struct XopcCapabilityPanelView {
   @Builder
   field(field: CapabilityField) {
     Column({ space: 6 }) {
-      if (field.type === 'toggle') {
+      if (field.presentation === 'segmented') {
+        Row({ space: 4 }) {
+          ForEach(field.options ?? [], (option: CapabilityChoice) => {
+            Button() {
+              Text(option.label).fontSize(14).fontWeight(FontWeight.Medium).textAlign(TextAlign.Center)
+                .fontColor(this.values.get(field.id) === option.id ? this.colors.accent : this.colors.secondary)
+            }.id('capability-option-' + option.id).layoutWeight(1).constraintSize({ minHeight: 44 }).padding(4)
+              .backgroundColor(this.values.get(field.id) === option.id ? this.colors.surface : Color.Transparent)
+              .borderRadius(this.colors.corner(10)).accessibilitySelected(this.values.get(field.id) === option.id)
+              .enabled(!this.busy).onClick((): void => { this.setField(field, option.id); })
+          }, (option: CapabilityChoice): string => option.id)
+        }.id('capability-field-' + field.id).width('100%').padding(4)
+          .backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
+      } else if (field.type === 'toggle') {
         Row({ space: 12 }) {
           Text(field.label).layoutWeight(1).fontColor(this.colors.foreground)
           Toggle({ type: ToggleType.Switch, isOn: this.values.get(field.id) === 'true' })
@@ -297,13 +348,19 @@ export struct XopcCapabilityPanelView {
         }.width('100%').padding(12).backgroundColor(this.colors.input).borderRadius(this.colors.corner(14))
       } else {
         Text(field.label).fontSize(14).fontColor(this.colors.foreground)
-        if (field.type === 'list') {
+        if (field.type === 'headers') {
+          XopcCapabilityKeyValueEditor({ encoded: this.values.get(field.id) ?? '', locked: this.busy,
+            isEnvironment: field.id === 'mcp-env',
+            onUpdate: (text: string): void => { this.setField(field, text); } })
+        } else if (field.type === 'list') {
           this.groupList(field)
         } else if (field.type === 'multiline') {
           TextArea({ text: this.values.get(field.id) ?? '', placeholder: field.hint ?? '' })
-            .id('capability-field-' + field.id).width('100%').height(96).maxLength(2000)
+            .id('capability-field-' + field.id).width('100%').height(field.id === 'mcp-json' ? 144 : 96)
+            .maxLength(field.id === 'mcp-json' ? 32768 : field.id === 'args' ? 8192 : 2000)
+            .fontFamily(field.id === 'mcp-json' ? 'monospace' : 'HarmonyOS Sans')
             .backgroundColor(this.colors.input).fontColor(this.colors.foreground).enabled(!this.busy).borderRadius(this.colors.corner(14))
-            .onChange((value: string): void => { this.set(field.id, value); })
+            .onChange((value: string): void => { this.setField(field, value); })
         } else if (field.type === 'select') {
           Select((field.options ?? []).map((option: CapabilityChoice): SelectOption => ({ value: option.label })))
             .selected(this.selectedOption(field)).value(field.options?.[this.selectedOption(field)]?.label ?? '')
@@ -364,11 +421,12 @@ export struct XopcCapabilityPanelView {
 
   private fields(advanced: boolean): CapabilityField[] {
     return (this.panel?.fields ?? []).filter((field: CapabilityField): boolean => (field.advanced === true) === advanced &&
-      (!field.visibleWhen || this.values.get(field.visibleWhen.field) === field.visibleWhen.value));
+      this.isVisible(field.visibleWhen));
   }
 
   private actions(advanced: boolean): CapabilityAction[] {
-    return (this.panel?.actions ?? []).filter((action: CapabilityAction): boolean => (action.advanced === true) === advanced);
+    return (this.panel?.actions ?? []).filter((action: CapabilityAction): boolean =>
+      (action.advanced === true) === advanced && this.isVisible(action.visibleWhen));
   }
 
   @Builder
@@ -458,7 +516,9 @@ export struct XopcCapabilityPanelView {
         } else if (this.panel?.qrUrl) {
           this.qrSaveAction(true)
         } else if (this.primaryAction()) {
-          this.actionButton(this.primaryAction()!, true)
+          ForEach(this.actions(false).slice(0, 1),
+            (action: CapabilityAction) => { this.actionButton(action, true) },
+            (action: CapabilityAction): string => action.id)
         }
         if (this.cancelPairing() && this.cancelPairing()?.id !== this.primaryAction()?.id) {
           this.actionButton(this.cancelPairing()!, false)
@@ -525,15 +585,67 @@ export struct XopcCapabilityPanelView {
     }
   }
 
+  private disclosureLabel(isAdvanced: boolean): string {
+    return isAdvanced
+      ? this.panel?.advancedLabel ?? this.t('更多选项', 'More options')
+      : this.panel?.detailsLabel ?? this.t('查看详情', 'View details');
+  }
+
+  @Builder
+  private mcpDisclosure(isAdvanced: boolean) {
+    Button() {
+      Row({ space: 8 }) {
+        Text(this.disclosureLabel(isAdvanced)).layoutWeight(1).fontSize(14).fontColor(this.colors.foreground)
+        SymbolGlyph((isAdvanced ? this.advanced : this.detailsOpen) ? $r('sys.symbol.chevron_down') : $r('sys.symbol.chevron_right'))
+          .fontSize(14).fontColor([this.colors.secondary]).accessibilityLevel('no')
+      }.width('100%').padding({ left: 14, right: 14 })
+    }.id(isAdvanced ? 'capability-panel-more' : 'capability-panel-review-details')
+      .width('100%').height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.busy)
+      .accessibilityText(this.disclosureLabel(isAdvanced)).accessibilitySelected(isAdvanced ? this.advanced : this.detailsOpen)
+      .onClick((): void => {
+        this.getUIContext().getFocusController().clearFocus();
+        if (isAdvanced) this.advanced = !this.advanced; else this.detailsOpen = !this.detailsOpen;
+      })
+  }
+
+  @Builder
+  private panelDetails() {
+    if (this.panel?.details) {
+      Column({ space: 6 }) {
+        if (this.itemId === 'mcp:setup') {
+          this.mcpDisclosure(false)
+        } else {
+          Button(this.detailsOpen ? this.t('收起详情', 'Hide details') : this.disclosureLabel(false))
+            .id('capability-panel-review-details').height(44).backgroundColor(Color.Transparent)
+            .fontColor(this.colors.chat.action).onClick((): void => { this.detailsOpen = !this.detailsOpen; })
+        }
+        if (this.detailsOpen) {
+          Text(this.panel?.details).fontSize(13).fontColor(this.colors.secondary).width('100%')
+            .padding({ left: this.itemId === 'mcp:setup' ? 14 : 0, right: this.itemId === 'mcp:setup' ? 14 : 0 })
+        }
+      }.width('100%').padding({ left: this.itemId === 'mcp:setup' ? 0 : 12, right: this.itemId === 'mcp:setup' ? 0 : 12,
+        bottom: this.detailsOpen ? 12 : 0 })
+        .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
+    }
+  }
+
   @Builder
   panelBody() {
     Scroll() {
       Column({ space: 14 }) {
+        if (this.panel?.headline) {
+          Column({ space: 4 }) {
+            Text(this.panel.headline).fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).width('100%')
+            if (this.panel.subtitle) {
+              Text(this.panel.subtitle).fontSize(13).fontColor(this.colors.secondary).width('100%')
+            }
+          }.width('100%').padding({ left: 4, right: 4 })
+        }
         if (this.panel?.message || this.readyPrompt() || this.panel?.pollAction) {
           Row({ space: 10 }) {
             if (this.panel?.pollAction) {
               Text('').width(8).height(8).borderRadius(4).backgroundColor(this.colors.accent).accessibilityLevel('no')
-            } else if (this.readyPrompt()) {
+            } else if (this.readyPrompt() || this.panel?.tone === 'success') {
               SymbolGlyph($r('sys.symbol.checkmark_circle')).fontSize(20).fontColor([this.colors.success])
             }
             Text(this.panel?.message || this.t('可在对话中使用', 'Ready to use in chat')).fontSize(14)
@@ -542,6 +654,11 @@ export struct XopcCapabilityPanelView {
             .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
         } else if (this.panel && this.description && this.category !== 'agents') {
           Text(this.description).fontSize(14).fontColor(this.colors.secondary).width('100%')
+        }
+        if (this.panel?.reviewText) {
+          Text(this.panel.reviewText).id('capability-panel-review-text').width('100%').padding(14)
+            .fontSize(13).fontFamily('monospace').fontColor(this.colors.foreground)
+            .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
         }
         if (this.busy && this.panel) LoadingProgress().width(22).height(22).color(this.colors.accent)
         if (!this.panel && !this.errorMessage) { XopcListSkeleton() }
@@ -552,21 +669,14 @@ export struct XopcCapabilityPanelView {
             .onClick((): void => { if (this.panel?.pollAction) void this.request(this.panel.pollAction); })
         }
         this.setupOptions()
-        if (this.panel?.details) {
-          Column({ space: 6 }) {
-            Button(this.detailsOpen ? this.t('收起详情', 'Hide details') : this.t('查看详情', 'View details'))
-              .id('capability-panel-review-details').height(44).backgroundColor(Color.Transparent)
-              .fontColor(this.colors.chat.action).onClick((): void => { this.detailsOpen = !this.detailsOpen; })
-            if (this.detailsOpen) Text(this.panel?.details).fontSize(13).fontColor(this.colors.secondary).width('100%')
-          }.width('100%').padding({ left: 12, right: 12, bottom: this.detailsOpen ? 12 : 0 })
-            .alignItems(HorizontalAlign.Start).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
-        }
+        if (this.itemId !== 'mcp:setup') this.panelDetails()
         if (this.fields(false).length) {
           Column({ space: 14 }) {
             ForEach(this.fields(false), (entry: CapabilityField) => { this.field(entry) },
               (entry: CapabilityField): string => entry.id)
           }.width('100%').padding(14).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16))
         }
+        if (this.itemId === 'mcp:setup') this.panelDetails()
         ForEach(this.actions(false).filter((action: CapabilityAction): boolean =>
           action.id !== this.primaryAction()?.id && action.id !== this.cancelPairing()?.id),
           (action: CapabilityAction) => { this.actionButton(action, false) }, (action: CapabilityAction): string => action.id)
@@ -574,15 +684,23 @@ export struct XopcCapabilityPanelView {
           (entry: CapabilitySearchResult): string => entry.id)
         if (this.fields(true).length || this.actions(true).length) {
           Column({ space: 10 }) {
-            Button(this.t('更多选项', 'More options'))
-              .id('capability-panel-more').height(44).backgroundColor(Color.Transparent).fontColor(this.colors.chat.action)
-              .accessibilitySelected(this.advanced).onClick((): void => { this.advanced = !this.advanced; })
-            if (this.advanced) {
-              ForEach(this.fields(true), (field: CapabilityField) => { this.field(field) }, (field: CapabilityField): string => field.id)
-              ForEach(this.actions(true), (action: CapabilityAction) => { this.actionButton(action, false) },
-                (action: CapabilityAction): string => action.id)
+            if (this.itemId === 'mcp:setup') {
+              this.mcpDisclosure(true)
+            } else {
+              Button(this.advanced ? this.t('收起选项', 'Fewer options') : this.disclosureLabel(true))
+                .id('capability-panel-more').height(44).backgroundColor(Color.Transparent).fontColor(this.colors.chat.action)
+                .accessibilitySelected(this.advanced).onClick((): void => { this.advanced = !this.advanced; })
             }
-          }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 12, right: 12 })
+            if (this.advanced) {
+              Column({ space: 10 }) {
+                ForEach(this.fields(true), (field: CapabilityField) => { this.field(field) },
+                  (field: CapabilityField): string => field.id)
+                ForEach(this.actions(true), (action: CapabilityAction) => { this.actionButton(action, false) },
+                  (action: CapabilityAction): string => action.id)
+              }.width('100%').alignItems(HorizontalAlign.Start).padding(this.itemId === 'mcp:setup' ? { left: 14, right: 14, bottom: 14 } : 0)
+            }
+          }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: this.itemId === 'mcp:setup' ? 0 : 12,
+            right: this.itemId === 'mcp:setup' ? 0 : 12 })
             .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(14))
         }
       }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 20, right: 20, top: 4, bottom: 12 })
@@ -595,5 +713,94 @@ export struct XopcCapabilityPanelView {
       this.panelBody()
       this.panelFooter()
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
+  }
+}
+
+interface CapabilityRequestHeaderRow {
+  id: number;
+  headerName: string;
+  headerValue: string;
+}
+
+@ComponentV2
+struct XopcCapabilityKeyValueEditor {
+  @Param encoded: string = '';
+  @Param locked: boolean = false;
+  @Param isEnvironment: boolean = false;
+  @Event onUpdate: (text: string) => void = (_text: string): void => {};
+  @Local rows: CapabilityRequestHeaderRow[] = [];
+  @Local colors: XopcThemeColors = appThemeColors;
+  private nextId: number = 0;
+
+  aboutToAppear(): void { this.restore(); }
+
+  @Monitor('encoded')
+  onEncodedChange(): void {
+    if (!this.encoded) this.restore();
+  }
+
+  private t(zh: string, en: string): string {
+    return appSettings.effectiveLanguage().startsWith('zh') ? zh : en;
+  }
+
+  private restore(): void {
+    const rows = this.encoded ? JSON.parse(this.encoded) as string[][] : [];
+    this.rows = rows.map((row: string[]): CapabilityRequestHeaderRow => ({
+      id: this.nextId++, headerName: row[0], headerValue: row[1],
+    }));
+    if (!this.rows.length) this.rows = [{ id: this.nextId++, headerName: '', headerValue: '' }];
+  }
+
+  private write(rows: CapabilityRequestHeaderRow[]): void {
+    this.rows = rows;
+    this.onUpdate(JSON.stringify(rows.map((row: CapabilityRequestHeaderRow): string[] => [row.headerName, row.headerValue])));
+  }
+
+  private update(id: number, text: string, editingName: boolean): void {
+    this.write(this.rows.map((row: CapabilityRequestHeaderRow): CapabilityRequestHeaderRow => {
+      if (row.id !== id) return row;
+      return { id, headerName: editingName ? text : row.headerName, headerValue: editingName ? row.headerValue : text };
+    }));
+  }
+
+  build() {
+    Column({ space: 10 }) {
+      ForEach(this.rows, (row: CapabilityRequestHeaderRow) => {
+        Row({ space: 4 }) {
+          Column({ space: 4 }) {
+            TextInput({ text: row.headerName, placeholder: this.isEnvironment ? 'API_KEY' : 'X-API-Key' })
+              .accessibilityText(this.isEnvironment ? this.t('变量名', 'Variable name') : this.t('请求头名称', 'Header name'))
+              .width('100%').height(44).maxLength(128)
+              .backgroundColor(this.colors.input).borderRadius(this.colors.corner(12)).fontColor(this.colors.foreground)
+              .enabled(!this.locked).onChange((text: string): void => { this.update(row.id, text, true); })
+            TextInput({ text: row.headerValue, placeholder: this.isEnvironment ? this.t('变量值', 'Variable value')
+              : this.t('请求头值', 'Header value') })
+              .accessibilityText(this.isEnvironment ? this.t('变量值', 'Variable value') : this.t('请求头值', 'Header value'))
+              .width('100%').height(44).maxLength(4096)
+              .type(InputType.Password).backgroundColor(this.colors.input).borderRadius(this.colors.corner(12))
+              .fontColor(this.colors.foreground).enabled(!this.locked)
+              .onChange((text: string): void => { this.update(row.id, text, false); })
+          }.layoutWeight(1)
+          if (this.rows.length > 1) {
+            Button() {
+              SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([this.colors.secondary])
+            }.accessibilityText(this.isEnvironment ? this.t('移除变量', 'Remove variable') : this.t('移除请求头', 'Remove header'))
+              .width(44).height(44).padding(0)
+              .backgroundColor(Color.Transparent).enabled(!this.locked)
+              .onClick((): void => { this.write(this.rows.filter((item: CapabilityRequestHeaderRow): boolean => item.id !== row.id)); })
+          }
+        }.width('100%').alignItems(VerticalAlign.Top)
+      }, (row: CapabilityRequestHeaderRow): string => String(row.id))
+      if (this.rows.length < (this.isEnvironment ? 32 : 16)) {
+        Button() {
+          Row({ space: 6 }) {
+            SymbolGlyph($r('sys.symbol.plus')).fontSize(15).fontColor([this.colors.accent])
+            Text(this.isEnvironment ? this.t('添加变量', 'Add variable') : this.t('添加请求头', 'Add header')).fontColor(this.colors.accent)
+          }
+        }.height(44).padding({ left: 4, right: 4 }).backgroundColor(Color.Transparent).enabled(!this.locked)
+          .onClick((): void => { this.write(this.rows.concat([{ id: this.nextId++, headerName: '', headerValue: '' }])); })
+      }
+    }.id(this.isEnvironment ? 'capability-field-mcp-env' : 'capability-field-requestHeaders')
+      .width('100%').alignItems(HorizontalAlign.Start)
   }
 }

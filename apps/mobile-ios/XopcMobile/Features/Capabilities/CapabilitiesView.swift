@@ -494,9 +494,9 @@ private struct CapabilityPanelPayload: Decodable {
         let label: String
     }
 
+    struct Visibility: Decodable { let field: String; let value: String }
+
     struct Field: Decodable, Identifiable {
-        // swiftlint:disable:next nesting
-        struct Visibility: Decodable { let field: String; let value: String }
         let id: String
         let label: String
         let type: String
@@ -505,6 +505,8 @@ private struct CapabilityPanelPayload: Decodable {
         let advanced: Bool?
         let options: [Choice]?
         let visibleWhen: Visibility?
+        let presentation: String?
+        let retain: Bool?
     }
 
     struct Action: Decodable, Identifiable {
@@ -513,6 +515,8 @@ private struct CapabilityPanelPayload: Decodable {
         let confirmation: String?
         let inlineReview: Bool?
         let advanced: Bool?
+        let visibleWhen: Visibility?
+        let dismiss: Bool?
     }
 
     struct Result: Decodable, Identifiable {
@@ -526,6 +530,12 @@ private struct CapabilityPanelPayload: Decodable {
 
     let fields: [Field]?
     let actions: [Action]?
+    let headline: String?
+    let subtitle: String?
+    let reviewText: String?
+    let tone: String?
+    let advancedLabel: String?
+    let detailsLabel: String?
     let message: String?
     let details: String?
     let authorizationUrl: URL?
@@ -617,6 +627,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var panel: CapabilityPanelPayload?
     @State private var values: [String: String] = [:]
+    @State private var retainedValues: [String: String] = [:]
     @State private var busy = false
     @State private var errorMessage: String?
     @State private var advanced = false
@@ -665,6 +676,16 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     panelStatus
+                    if let review = panel?.reviewText {
+                        Text(verbatim: review)
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(theme.foreground)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
+                            .accessibilityIdentifier("capability-panel-review-text")
+                    }
                     if panel == nil, errorMessage == nil {
                         ProgressListSkeleton()
                     } else if busy {
@@ -680,15 +701,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         }
                     }
                     setupOptions
-                    if let details = panel?.details, !details.isEmpty {
-                        DisclosureGroup(t("查看详情", "View details"), isExpanded: $detailsOpen) {
-                            Text(verbatim: details).font(.footnote).foregroundStyle(theme.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
-                        }
-                        .padding(14)
-                        .background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
-                        .accessibilityIdentifier("capability-panel-review-details")
-                    }
+                    if itemID != "mcp:setup" { panelDetails }
                     if !mainFields.isEmpty {
                         VStack(spacing: 14) {
                             ForEach(mainFields) { field in input(field) }
@@ -696,6 +709,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         .padding(14)
                         .background(theme.panel, in: .rect(cornerRadius: theme.corner(16)))
                     }
+                    if itemID == "mcp:setup" { panelDetails }
                     ForEach(mainActions.filter { $0.id != primaryAction?.id && $0.id != cancelPairing?.id }) { action in
                         actionButton(action, prominent: false)
                     }
@@ -722,13 +736,18 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                         .padding(12).background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
                     }
                     if !extraFields.isEmpty || !extraActions.isEmpty {
-                        DisclosureGroup(t("更多选项", "More options"), isExpanded: $advanced) {
+                        DisclosureGroup(isExpanded: $advanced) {
                             VStack(spacing: 10) {
                                 ForEach(extraFields) { field in input(field) }
                                 ForEach(extraActions) { action in actionButton(action, prominent: false) }
                             }.padding(.top, 8)
+                        } label: {
+                            Text(verbatim: panel?.advancedLabel ?? t("更多选项", "More options"))
                         }
                         .padding(12).background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
+                        .onChange(of: advanced) {
+                            if itemID == "mcp:setup" { focusedField = nil }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -754,6 +773,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         .onDisappear {
             requestRevision += 1
             values.removeAll()
+            retainedValues.removeAll()
         }
         .task { await load() }
         .onChange(of: scenePhase) {
@@ -876,11 +896,25 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     @ViewBuilder private var panelStatus: some View {
+        if let headline = panel?.headline {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: headline)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(theme.foreground)
+                    .accessibilityAddTraits(.isHeader)
+                if let subtitle = panel?.subtitle {
+                    Text(verbatim: subtitle).font(.footnote).foregroundStyle(theme.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+        }
         if panel?.message != nil || readyPrompt != nil || panel?.pollAction != nil {
             HStack(spacing: 10) {
                 if panel?.pollAction != nil {
                     Circle().fill(theme.action).frame(width: 8, height: 8).accessibilityHidden(true)
-                } else if readyPrompt != nil {
+                } else if readyPrompt != nil || panel?.tone == "success" {
                     Image(systemName: "checkmark.circle").foregroundStyle(.green).accessibilityHidden(true)
                 }
                 Text(verbatim: panel?.message ?? t("可在对话中使用", "Ready to use in chat"))
@@ -892,6 +926,20 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             .accessibilityIdentifier("capability-panel-status")
         } else if panel != nil, !summary.isEmpty, category != "agents" {
             Text(verbatim: summary).font(.subheadline).foregroundStyle(theme.secondary)
+        }
+    }
+
+    @ViewBuilder private var panelDetails: some View {
+        if let details = panel?.details, !details.isEmpty {
+            DisclosureGroup(isExpanded: $detailsOpen) {
+                Text(verbatim: details).font(.footnote).foregroundStyle(theme.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
+            } label: {
+                Text(verbatim: panel?.detailsLabel ?? t("查看详情", "View details"))
+            }
+            .padding(14)
+            .background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
+            .accessibilityIdentifier("capability-panel-review-details")
         }
     }
 
@@ -938,10 +986,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     private var visibleFields: [CapabilityPanelPayload.Field] {
-        (panel?.fields ?? []).filter { field in
-            guard let rule = field.visibleWhen else { return true }
-            return values[rule.field] == rule.value
-        }
+        (panel?.fields ?? []).filter { isVisible($0.visibleWhen) }
     }
 
     private var mainFields: [CapabilityPanelPayload.Field] {
@@ -955,19 +1000,25 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     private var needsExpandedDrawer: Bool {
         let shownFields = advanced ? visibleFields : mainFields
         return (panel?.qrUrl != nil && (verifiedURL == nil || showQr))
+            || panel?.reviewText != nil
             || (advanced && (!extraFields.isEmpty || !extraActions.isEmpty))
             || (detailsOpen && panel?.details?.isEmpty == false)
             || shownFields.count >= 3
-            || shownFields.contains { $0.type == "multiline" || $0.type == "list" }
+            || shownFields.contains { ["multiline", "list", "headers"].contains($0.type) }
             || (panel?.results?.count ?? 0) >= 3
     }
 
     private var mainActions: [CapabilityPanelPayload.Action] {
-        (panel?.actions ?? []).filter { $0.advanced != true }
+        (panel?.actions ?? []).filter { $0.advanced != true && isVisible($0.visibleWhen) }
     }
 
     private var extraActions: [CapabilityPanelPayload.Action] {
-        (panel?.actions ?? []).filter { $0.advanced == true }
+        (panel?.actions ?? []).filter { $0.advanced == true && isVisible($0.visibleWhen) }
+    }
+
+    private func isVisible(_ rule: CapabilityPanelPayload.Visibility?) -> Bool {
+        guard let rule else { return true }
+        return (values[rule.field] ?? "") == rule.value
     }
 
     private var verifiedURL: URL? {
@@ -997,7 +1048,9 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
 
     private func perform(_ action: CapabilityPanelPayload.Action) {
         focusedField = nil
-        if action.confirmation != nil, action.inlineReview != true {
+        if action.dismiss == true {
+            onClose()
+        } else if action.confirmation != nil, action.inlineReview != true {
             confirmation = action; confirmationOpen = true
         } else {
             Task { await load(action.id) }
@@ -1018,26 +1071,82 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     }
 
     @ViewBuilder private func input(_ field: CapabilityPanelPayload.Field) -> some View {
-        let value = Binding(get: { values[field.id] ?? "" }, set: { values[field.id] = $0 })
+        let value = Binding(get: { values[field.id] ?? "" }, set: {
+            values[field.id] = $0
+            if field.retain == true { retainedValues[field.id] = $0 }
+            if field.presentation == "segmented" { focusedField = nil; errorMessage = nil }
+        })
         if field.type == "toggle" {
             Toggle(isOn: Binding(get: { value.wrappedValue == "true" }, set: { value.wrappedValue = String($0) })) {
                 Text(verbatim: field.label)
             }
-        } else if field.type == "select" {
+        } else if field.presentation == "segmented" {
             Picker(selection: value) {
                 ForEach(field.options ?? []) { option in Text(verbatim: option.label).tag(option.id) }
             } label: { Text(verbatim: field.label) }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("capability-field-\(field.id)")
+        } else if field.type == "select" {
+            let picker = Picker(selection: value) {
+                ForEach(field.options ?? []) { option in Text(verbatim: option.label).tag(option.id) }
+            } label: { Text(verbatim: field.label) }
+            if itemID == "mcp:setup" {
+                HStack(spacing: 8) {
+                    Text(verbatim: field.label)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(theme.foreground)
+                        .accessibilityHidden(true)
+                    Spacer(minLength: 0)
+                    picker
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .accessibilityLabel(Text(verbatim: field.label))
+                        .accessibilityIdentifier("capability-field-\(field.id)")
+                }
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
+            } else {
+                picker
+            }
         } else if field.type == "list" {
             groupList(field, selection: value)
+        } else if field.type == "headers" {
+            CapabilityKeyValueEditor(encoded: value, focus: $focusedField, isEnvironment: field.id == "mcp-env")
+        } else if field.id == "mcp-json" {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(verbatim: field.label).font(.subheadline.weight(.medium))
+                ZStack(alignment: .topLeading) {
+                    if value.wrappedValue.isEmpty, let hint = field.hint {
+                        Text(verbatim: hint).foregroundStyle(theme.secondary)
+                            .padding(.top, 8).padding(.leading, 5)
+                            .accessibilityHidden(true)
+                    }
+                    TextEditor(text: value)
+                        .scrollContentBackground(.hidden)
+                        .focused($focusedField, equals: field.id)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel(Text(verbatim: field.label))
+                        .accessibilityIdentifier("capability-field-mcp-json")
+                }
+                .font(.system(.footnote, design: .monospaced))
+                .frame(height: 144)
+            }
+            .padding(12).background(theme.input, in: .rect(cornerRadius: theme.corner(14)))
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: field.label).font(.subheadline.weight(.medium))
                 if field.type == "secret" {
                     SecureField(field.hint ?? field.label, text: value).textContentType(nil)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .focused($focusedField, equals: field.id)
                 } else {
                     TextField(field.hint ?? field.label, text: value, axis: field.type == "multiline" ? .vertical : .horizontal)
                         .lineLimit(field.type == "multiline" ? 3 ... 6 : 1 ... 1)
+                        .keyboardType(itemID == "mcp:setup" && field.id == "url" ? .URL : .default)
+                        .textInputAutocapitalization(itemID == "mcp:setup" ? .never : nil)
+                        .autocorrectionDisabled(itemID == "mcp:setup")
                         .submitLabel(field.id == "query" ? .search : .done)
                         .focused($focusedField, equals: field.id)
                         .onSubmit {
@@ -1161,8 +1270,11 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
         do {
             let client = GatewayClient(configuration: configuration)
             let path = "/api/capabilities/mobile-actions/panel/\(category)"
+            let submitted = itemID == "mcp:setup" ? values.filter { entry in
+                visibleFields.contains { $0.id == entry.key }
+            } : values
             let body = try action.map { try client.encoder.encode(CapabilityPanelCommand(
-                action: $0, values: polling ? [:] : values, flow: panel?.flow, revision: panel?.revision
+                action: $0, values: polling ? [:] : submitted, flow: panel?.flow, revision: panel?.revision
             )) }
             let response: GatewayEnvelope<CapabilityPanelPayload> = try await client.request(
                 path: path, queryItems: [URLQueryItem(name: "id", value: itemID), URLQueryItem(name: "locale", value: locale.identifier)],
@@ -1176,15 +1288,24 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
             }
             let currentValues = values
             panel = result
+            if result.actions?.contains(where: { $0.dismiss == true }) == true,
+               result.actions?.contains(where: { $0.id == "add-another" }) != true
+            {
+                retainedValues.removeAll()
+            }
             values = Dictionary((result.fields ?? []).map { ($0.id,
-                                                             (polling ? currentValues[$0.id] : nil) ?? ($0.type == "secret" ? "" : $0.value ?? "")) },
+                                                             (polling ? currentValues[$0.id] : nil)
+                                                                 ?? (itemID == "mcp:setup" && $0.retain == true ? retainedValues[$0.id] : nil)
+                                                                 ?? ($0.type == "secret" ? "" : $0.value ?? "")) },
                                 uniquingKeysWith: { first, _ in first })
             errorMessage = nil
             if openWhenReady, let url = verifiedURL, url != openedURL {
                 openWhenReady = false
                 openAuthorization(url)
             }
-            if !polling && action != "search" && action != nil || polling && before != nil && result.pollAction == nil {
+            if itemID == "mcp:setup" {
+                if action == "save", result.actions?.contains(where: { $0.dismiss == true }) == true { onChanged() }
+            } else if !polling && action != "search" && action != nil || polling && before != nil && result.pollAction == nil {
                 onChanged()
             }
         } catch is CancellationError {
@@ -1197,5 +1318,90 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
                 }
             }
         }
+    }
+}
+
+private struct CapabilityKeyValueEditor: View {
+    @Binding var encoded: String
+    let focus: FocusState<String?>.Binding
+    let isEnvironment: Bool
+    @Environment(\.locale) private var locale
+    @Environment(\.mobileTheme) private var theme
+
+    private var prefix: String { isEnvironment ? "mcp-env" : "mcp-header" }
+    private var nameLabel: String { isEnvironment ? t("变量名", "Variable name") : t("请求头名称", "Header name") }
+    private var valueLabel: String { isEnvironment ? t("变量值", "Variable value") : t("请求头值", "Header value") }
+
+    private var rows: [[String]] {
+        let decoded = try? JSONDecoder().decode([[String]].self, from: Data(encoded.utf8))
+        let pairs = (decoded ?? []).filter { $0.count == 2 }
+        return pairs.isEmpty ? [["", ""]] : pairs
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(rows.indices, id: \.self) { index in
+                HStack(alignment: .top, spacing: 4) {
+                    VStack(spacing: 0) {
+                        TextField(isEnvironment ? "API_KEY" : "X-API-Key", text: cell(index, 0))
+                            .focused(focus, equals: "\(prefix)-name-\(index)")
+                            .accessibilityLabel(nameLabel)
+                            .accessibilityIdentifier("\(prefix)-name-\(index)")
+                            .padding(10)
+                        Divider().padding(.horizontal, 10)
+                        SecureField(valueLabel, text: cell(index, 1))
+                            .focused(focus, equals: "\(prefix)-value-\(index)")
+                            .textContentType(nil)
+                            .accessibilityIdentifier("\(prefix)-value-\(index)")
+                            .padding(10)
+                    }
+                    .textFieldStyle(.plain)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .background(theme.input, in: .rect(cornerRadius: theme.corner(12)))
+                    if rows.count > 1 {
+                        Button {
+                            var pairs = rows
+                            pairs.remove(at: index)
+                            write(pairs)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(theme.secondary)
+                        .accessibilityLabel(isEnvironment ? t("移除变量", "Remove variable") : t("移除请求头", "Remove header"))
+                    }
+                }
+            }
+            if rows.count < (isEnvironment ? 32 : 16) {
+                Button {
+                    write(rows + [["", ""]])
+                } label: {
+                    Label(isEnvironment ? t("添加变量", "Add variable") : t("添加请求头", "Add header"), systemImage: "plus")
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.action)
+            }
+        }
+    }
+
+    private func cell(_ index: Int, _ column: Int) -> Binding<String> {
+        Binding(get: { rows.indices.contains(index) ? rows[index][column] : "" }, set: { value in
+            var pairs = rows
+            guard pairs.indices.contains(index) else { return }
+            pairs[index][column] = value
+            write(pairs)
+        })
+    }
+
+    private func write(_ pairs: [[String]]) {
+        guard let data = try? JSONEncoder().encode(pairs) else { return }
+        encoded = String(decoding: data, as: UTF8.self)
+    }
+
+    private func t(_ zh: String, _ en: String) -> String {
+        locale.identifier.hasPrefix("zh") ? zh : en
     }
 }

@@ -8,7 +8,7 @@ import type { McpTransportFactory } from '@earendil-works/pi-coding-agent';
 import { Agent, fetch as safeFetch } from 'undici';
 
 import { mcpStdioSupervisor } from '../../process/mcp-stdio-supervisor.js';
-import { checkUrlSafety } from '../tools/url-safety.js';
+import { isPrivateMcpIp, isPrivateMcpTarget, isPublicMcpIp, isPublicMcpTarget, mcpHostname } from './network-policy.js';
 
 export type McpObservation = { method: string; stage: string; status: number; contentType: string; retryAt?: number; challenge?: string };
 export type McpTransportDiagnostics = { observe?: (value: McpObservation) => void; beforeRequest?: (request?: { method: string; stage: string }) => void; probe?: boolean };
@@ -47,22 +47,34 @@ export function createXopcMcpTransport(diagnostics: McpTransportDiagnostics = {}
     }
     const url = new URL(String(config.url));
     const headers = config.headers as Record<string, string> | undefined;
-    const dispatcher = new Agent({ connect: { lookup(host, options, callback) {
+    const privateNetwork = config.xopcPrivateNetwork === true;
+    const publicOnly = config.xopcPublicOnly === true;
+    const makeDispatcher = (policy: 'private' | 'public' | 'legacy') => new Agent({ connect: { lookup(host, options, callback) {
       lookup(host, { all: true }, (error, addresses) => {
         if (error) { callback(error, '', 4); return; }
-        const local = !config.xopcPublicOnly && host === url.hostname;
-        if (!local && addresses.some(a => !checkUrlSafety(`http://${a.family === 6 ? `[${a.address}]` : a.address}`).safe)) { callback(new Error('MCP destination resolved to a non-public address'), '', 4); return; }
+        const local = policy === 'legacy' && mcpHostname(host) === mcpHostname(url.hostname);
+        const allowed = policy === 'private' ? isPrivateMcpIp : isPublicMcpIp;
+        if (!local && addresses.some(address => !allowed(address.address))) {
+          callback(new Error('MCP destination resolved outside its approved network'), '', 4); return;
+        }
         if (options.all) callback(null, addresses); else if (addresses[0]) callback(null, addresses[0].address, addresses[0].family); else callback(new Error('MCP destination has no address'), '', 4);
       });
     } } });
+    const dispatcher = makeDispatcher(privateNetwork ? 'private' : publicOnly ? 'public' : 'legacy');
+    const externalDispatcher = privateNetwork ? makeDispatcher('public') : undefined;
     const fetcher = async (input: string | URL, init?: RequestInit): Promise<Response> => {
       const method = init?.method ?? 'GET';
       let stage = method === 'GET' ? 'stream' : 'request';
       try { if (typeof init?.body === 'string') stage = JSON.parse(init.body).method ?? stage; } catch { /* Non-JSON OAuth bodies have no MCP method. */ }
       diagnostics.beforeRequest?.({ method, stage });
       const target = new URL(input);
-      if (target.origin !== url.origin && !checkUrlSafety(target.href).safe || config.xopcPublicOnly && !checkUrlSafety(target.href).safe) throw new Error('MCP network policy refused this destination');
-      const response = await safeFetch(input, { ...init, redirect: 'error', dispatcher } as Parameters<typeof safeFetch>[1]) as unknown as Response;
+      const sameOrigin = target.origin === url.origin;
+      const approved = privateNetwork && sameOrigin ? isPrivateMcpTarget(target)
+        : !sameOrigin || publicOnly ? isPublicMcpTarget(target) && (!privateNetwork || target.protocol === 'https:')
+        : true;
+      if (!approved) throw new Error('MCP network policy refused this destination');
+      const response = await safeFetch(input, { ...init, redirect: 'error',
+        dispatcher: sameOrigin ? dispatcher : externalDispatcher ?? dispatcher } as Parameters<typeof safeFetch>[1]) as unknown as Response;
       const media = (response.headers.get('content-type') ?? '').split(';')[0].toLowerCase();
       diagnostics.observe?.({ method, stage, status: response.status, contentType: ['application/json', 'text/event-stream', 'text/html'].includes(media) ? media : 'unknown', retryAt: retryAfter(response.headers.get('retry-after')), challenge: response.headers.get('www-authenticate') ?? undefined });
       return response;
@@ -71,7 +83,7 @@ export function createXopcMcpTransport(diagnostics: McpTransportDiagnostics = {}
     if (config.xopcLegacySse) transport = legacySse(url, headers, authProvider, fetcher);
     else transport = new StreamableHttpTransport({ url, headers, authProvider, fetch: fetcher, openGetStream: !diagnostics.probe, reconnect: diagnostics.probe ? { maxRetries: 0 } : undefined });
     const close = transport.close.bind(transport);
-    transport.close = async () => { try { await close(); } finally { await dispatcher.close(); } };
+    transport.close = async () => { try { await close(); } finally { await Promise.all([dispatcher.close(), externalDispatcher?.close()]); } };
     return guard(transport);
   };
 }

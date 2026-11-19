@@ -93,6 +93,39 @@ describe('createEditorSubmitHandler', () => {
     expect(handleCommand).toHaveBeenCalledWith('/abort');
   });
 
+  it('submits an absolute-path prompt as a chat message', () => {
+    const handleCommand = vi.fn();
+    const sendMessage = vi.fn();
+    const submit = createEditorSubmitHandler({
+      editor: { setText: vi.fn(), addToHistory: vi.fn() },
+      handleCommand,
+      sendMessage,
+      handleBangLine: vi.fn(),
+    });
+
+    const prompt = '/Users/me/project inspect this folder';
+    submit(prompt);
+    expect(sendMessage).toHaveBeenCalledWith(prompt);
+    expect(handleCommand).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('uses the normal chat submission path for /tmp when busy is %s', (busy) => {
+    const sendMessage = vi.fn();
+    const steerWhileBusy = vi.fn();
+    const submit = createEditorSubmitHandler({
+      editor: { setText: vi.fn(), addToHistory: vi.fn() },
+      handleCommand: () => false,
+      sendMessage,
+      handleBangLine: vi.fn(),
+      isAgentBusy: () => busy,
+      steerWhileBusy,
+    });
+
+    submit('/tmp inspect this folder');
+    expect(busy ? steerWhileBusy : sendMessage).toHaveBeenCalledWith('/tmp inspect this folder');
+    expect(busy ? sendMessage : steerWhileBusy).not.toHaveBeenCalled();
+  });
+
   it('sends a default prompt when only attachments are pending', () => {
     const sendMessage = vi.fn();
     const addToHistory = vi.fn();

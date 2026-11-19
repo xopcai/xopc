@@ -18,7 +18,7 @@ import type { TelegramAccountManager } from './account-manager.js';
 import { telegramInboundScope } from './update-offset-store.js';
 import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
-import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopc/chat-commands/command-parse.js';
+import { commandRegistry } from '@xopcai/xopc/chat-commands/registry.js';
 import { answerClarificationTextFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
 import { resolveRoute } from '@xopcai/xopc/routing/index.js';
 import { resolveTelegramGroupContext } from './group-config-resolver.js';
@@ -30,9 +30,7 @@ const log = createLogger('TelegramInboundProcessor');
 
 /** Must bypass the per-chat queue so /abort can cancel an in-flight turn. */
 function isAbortSlashCommand(text: string): boolean {
-  const parsed = parseSlashCommand(text);
-  if (!parsed) return false;
-  const cmd = normalizeTelegramCommandName(parsed.command);
+  const cmd = commandRegistry.parseRegisteredSlashCommand(text)?.command;
   return cmd === 'abort' || cmd === 'stop' || cmd === 'cancel';
 }
 
@@ -573,7 +571,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
 
     // Combine transcribed text with content. If the user caption is a slash command, put it first
     // so routing and logs match a normal `/cmd` message (STT prefix no longer hides the command).
-    const captionIsCommand = cleanContent.trim().startsWith('/');
+    const captionIsCommand = Boolean(commandRegistry.parseRegisteredSlashCommand(cleanContent));
     let finalContent = transcribedText
       ? captionIsCommand && cleanContent
         ? cleanContent.trim() + (transcribedText ? `\n\n${transcribedText}` : '')
@@ -587,7 +585,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
         : '[Sticker]';
     }
 
-    const isCommand = cleanContent.trim().startsWith('/');
+    const isCommand = captionIsCommand || Boolean(transcribedText && commandRegistry.parseRegisteredSlashCommand(finalContent));
 
     log.info({
       accountId,

@@ -2,11 +2,17 @@
 
 xopc 使用 pi 原生 MCP 扩展处理出站连接、工具发现、资源读取、OAuth 与调用。服务配置位于 `mcp.servers`；能力中心可编辑自定义服务，启用的 Agent Plugin MCP 服务也会加入同一原生注册表。
 
-只支持 stdio 与 Streamable HTTP。`exposure` 支持 `codemode`（默认）、`deferred`、`direct`、`hidden`；`timeout` 使用秒。HTTP 服务使用 `type: "http"`，预注册 OAuth 客户端使用 `oauth` 对象。
+支持 stdio、Streamable HTTP 和旧版 SSE。`exposure` 支持 `codemode`（默认）、`deferred`、`direct`、`hidden`，`timeout` 使用秒。Streamable HTTP 服务使用 `type: "http"`，旧版 SSE 使用 `type: "sse"`，预注册 OAuth 客户端使用 `oauth` 对象。
 
-在 Gateway 主机运行 `xopc mcp list --json`、`xopc mcp login <server>`、`xopc mcp logout <server>`。网页支持配置、静态密钥与浏览器授权；授权和远程回调复用 pi 原生流程。当前配置流程不支持 SSE 和 MCP 资源附件。
+在 Gateway 主机运行 `xopc mcp list --json`、`xopc mcp login <server>`、`xopc mcp logout <server>`。网页支持配置、静态密钥与浏览器授权，授权和远程回调复用 pi 原生流程。
 
 完整配置、发现模式、登录方式及不兼容变更见 [MCP 配置与迁移指南](../cli/mcp.md)。入站 `xopc mcp capabilities --allow-capability <id>` 桥接继续保留。
+
+## 移动端配置
+
+打开「能力中心 → 连接 → 添加自定义 MCP」。在服务链接的高级设置中选择旧版 SSE，或在 JSON 中使用 `type: "sse"`。内网地址在 Gateway 所在网络访问，`localhost` 指向 Gateway 主机。使用自定义内网域名时，可在高级设置选择「Gateway 内网」，或在导入 JSON 时指定 `"network": "private"`。
+
+使用「命令启动」填写 Gateway 主机上的程序和参数。启用该入口需要 Gateway 管理员设置 `xopc config set gateway.mobileMcpAllowStdio true`。请在「运行并检查」前审阅程序、参数和工作目录。环境变量的值只在确认添加时写入 Gateway 凭据库。连接检查通过后，点「添加连接」提交草稿。
 
 ## WebUI 配置
 

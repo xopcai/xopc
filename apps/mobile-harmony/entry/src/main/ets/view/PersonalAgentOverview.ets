@@ -1,7 +1,7 @@
 import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { artifactMedia, chatProductCapability } from '../common/chatRichContent';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcProductReference } from '../model/chat';
+import { XopcHistoryMedia, XopcProductReference } from '../model/chat';
 import { XopcMobileRoute } from '../model/home';
 import { XopcPersonalAgentRecord } from '../model/personalAgent';
 import { XopcPersonalDelivery, XopcPersonalWorkGroup, XopcPersonalWorkItem } from '../model/personalOverview';
@@ -12,16 +12,29 @@ import { XopcPersonalOverviewViewModel } from '../viewmodel/personalOverviewView
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcListSkeleton, XopcPaginationFooter } from './MobileComponents';
 import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
+import { XopcPersonalLibraryThumbnail } from './PersonalLibraryThumbnail';
 import { XopcAutomationIdeas } from './AutomationIdeas';
 
 interface XopcOverviewRow {
   title: ResourceStr;
   subtitle: ResourceStr;
   stamp: string;
-  symbol: Resource;
+  symbol?: Resource;
   marker?: ResourceColor;
   attention?: boolean;
+  delivery?: XopcPersonalDelivery;
   onOpen: () => void;
+}
+
+interface XopcPersonalDeliveryPreview {
+  file: XopcHistoryMedia;
+  conversationId: string;
+}
+
+interface XopcOverviewWorkSection {
+  label: ResourceStr;
+  items: XopcPersonalWorkItem[];
+  attention?: boolean;
 }
 
 const PERSONAL_HEADER_TRAVEL: number = 60;
@@ -32,12 +45,14 @@ const PERSONAL_AVATAR_COMPACT: number = 68;
 export struct XopcPersonalAgentOverview {
   @Param record: XopcPersonalAgentRecord | null = null;
   @Param activePage: boolean = true;
+  @Param canShareConversation: boolean = false;
   @Event onClose: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcPersonalOverviewViewModel = new XopcPersonalOverviewViewModel();
   @Local librarySelected: boolean = false;
   @Local headerTravel: number = 0;
+  @Local deliveryPreview?: XopcPersonalDeliveryPreview;
   @Computed get headerProgress(): number { return this.headerTravel / PERSONAL_HEADER_TRAVEL; }
   @Computed get avatarExtent(): number {
     return PERSONAL_AVATAR_EXPANDED - (PERSONAL_AVATAR_EXPANDED - PERSONAL_AVATAR_COMPACT) * this.headerProgress;
@@ -116,6 +131,14 @@ export struct XopcPersonalAgentOverview {
     return undefined;
   }
 
+  private taskSymbol(item: XopcPersonalWorkItem): Resource {
+    const status = item.presentation?.status ?? item.operationalState ?? item.phase;
+    if (['completed', 'closed', 'ended'].includes(status)) return $r('sys.symbol.checkmark_circle');
+    if (['blocked', 'failed'].includes(status)) return $r('sys.symbol.exclamationmark_circle');
+    if (['running', 'verifying', 'waiting', 'queued'].includes(status)) return $r('sys.symbol.clock');
+    return $r('sys.symbol.circle');
+  }
+
   private historyTitle(id: string): Resource {
     if (id === 'today') return $r('app.string.chat_today');
     if (id === 'week') return $r('app.string.chat_this_week');
@@ -140,7 +163,39 @@ export struct XopcPersonalAgentOverview {
     else this.onClose();
   }
 
+  private deliveryScope(item: XopcPersonalDelivery): string {
+    return item.task?.conversationId ?? this.record?.conversationId ?? '';
+  }
+
+  private deliveryFile(item: XopcPersonalDelivery): XopcHistoryMedia | undefined {
+    const artifact = item.artifact;
+    if (artifact?.availability !== 'available') return undefined;
+    const uri = artifact.uri ?? '';
+    if (uri ? /^(xopc-file:|xopc-file-version:|xopc-space:|xopc-attachment:\/\/notes\/|media:\/\/|data:)/.test(uri)
+      : !!artifact.workspaceRelativePath) {
+      return artifactMedia(artifact);
+    }
+    return undefined;
+  }
+
+  private deliveryThumbnailFile(item: XopcPersonalDelivery): XopcHistoryMedia | undefined {
+    const file = this.deliveryFile(item);
+    if (file) return file;
+    const reference = item.reference;
+    if (!item.artifact && reference?.id && this.referenceRoute(reference) === 'files') {
+      return { id: reference.id, name: reference.title, type: 'file', mimeType: '', size: 0,
+        uri: 'xopc-file:' + encodeURIComponent(reference.id) };
+    }
+    return undefined;
+  }
+
   private openDelivery(item: XopcPersonalDelivery): void {
+    const file = this.deliveryFile(item);
+    const scope = this.deliveryScope(item);
+    if (file) {
+      this.deliveryPreview = { file, conversationId: scope };
+      return;
+    }
     const reference = item.reference;
     const page = this.referenceRoute(reference);
     if (page && reference?.id) {
@@ -148,7 +203,6 @@ export struct XopcPersonalAgentOverview {
       return;
     }
     const artifact = item.artifact;
-    const scope = item.task?.conversationId ?? this.record?.conversationId ?? '';
     const expected = '/api/music-generation/sessions/' + encodeURIComponent(scope) + '/jobs/' +
       encodeURIComponent(artifact?.artifactId ?? '') + '/audio';
     const context = this.getUIContext().getHostContext();
@@ -165,37 +219,50 @@ export struct XopcPersonalAgentOverview {
 
   @Builder entry($$: XopcOverviewRow) {
     Button({ type: ButtonType.Normal }) {
-      Row({ space: 12 }) {
-        SymbolGlyph($$.symbol).fontSize(20).fontColor([this.colors.secondary]).width(24)
-        Column({ space: 4 }) {
+      Row({ space: 14 }) {
+        if ($$.delivery) {
+          XopcPersonalLibraryThumbnail({ file: this.deliveryThumbnailFile($$.delivery),
+            conversationId: this.deliveryScope($$.delivery),
+            mediaKind: $$.delivery.artifact?.kind ?? $$.delivery.reference?.kind ?? '' })
+        } else {
+          Stack({ alignContent: Alignment.Center }) {
+            SymbolGlyph($$.symbol ?? $r('sys.symbol.checkmark_circle')).fontSize(19)
+              .fontColor([$$.attention ? this.colors.attentionForeground : this.colors.secondary])
+          }.width(32).height(32).borderRadius(this.colors.corner(10))
+            .backgroundColor($$.attention ? this.colors.attentionFill : this.colors.grouped)
+            .accessibilityLevel('no')
+        }
+        Column({ space: 5 }) {
           Text($$.title).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-            .width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .lineHeight('22fp').width('100%').maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           Row({ space: 6 }) {
-            if ($$.marker !== undefined) { Circle().width(6).height(6).fill($$.marker) }
+            if ($$.marker !== undefined) { Blank().width(6).height(6).borderRadius(3).backgroundColor($$.marker) }
             Text($$.subtitle).fontSize(13)
               .fontColor($$.attention ? this.colors.attentionForeground : this.colors.secondary).maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis }).flexShrink(1)
             if ($$.stamp) {
               Text('·').fontSize(13).fontColor(this.colors.tertiary)
-              Text($$.stamp).fontSize(13).fontColor(this.colors.tertiary).maxLines(1)
+              Text($$.stamp).fontSize(13).fontColor(this.colors.secondary).maxLines(1).flexShrink(0)
             }
           }.width('100%').alignItems(VerticalAlign.Center)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-      }.width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
-    }.width('100%').constraintSize({ minHeight: 58 }).padding(0)
-      .backgroundColor($$.attention ? this.colors.attentionFill : this.colors.light ? this.colors.panel : Color.Transparent)
-      .borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
+        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(12).fontColor([this.colors.tertiary])
+          .accessibilityLevel('no')
+      }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    }.width('100%').constraintSize({ minHeight: $$.delivery ? 88 : 70 }).padding(0)
+      .backgroundColor(Color.Transparent)
       .onClick((): void => { $$.onOpen(); }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }
 
   @Builder groupHeading(label: ResourceStr) {
-    Text(label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.secondary)
-      .width('100%').padding({ left: 8, right: 8, top: 12, bottom: 4 })
+    Text(label).fontSize(17).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
+      .width('100%').padding({ left: 4, right: 4 })
   }
 
   @Builder workRow(item: XopcPersonalWorkItem, attention: boolean = false) {
     Column() {
       this.entry({ title: item.title, subtitle: this.status(item), stamp: this.time(item.updatedAt),
-        symbol: attention ? $r('sys.symbol.bell') : $r('sys.symbol.checkmark_circle'),
+        symbol: attention ? $r('sys.symbol.bell') : this.taskSymbol(item),
         marker: attention ? this.colors.attentionForeground : this.marker(item), attention,
         onOpen: (): void => { this.onNavigate({ page: 'tasks', itemId: item.id }); } })
     }.id('personal-overview-task-' + item.id).width('100%')
@@ -210,55 +277,68 @@ export struct XopcPersonalAgentOverview {
     }.id('personal-overview-schedule-' + item.id).width('100%')
   }
 
-  @Builder tasks() {
-    Column({ space: 3 }) {
-      if (this.model.workLoading && !this.model.workLoaded) { XopcListSkeleton() }
-      if (this.model.attentionCount > 0) {
-        this.groupHeading($r('app.string.personal_overview_attention'))
-        if (this.model.prompt) {
+  @Builder workGroup($$: XopcOverviewWorkSection) {
+    Column({ space: 10 }) {
+      this.groupHeading($$.label)
+      Column() {
+        if ($$.attention && this.model.prompt) {
           this.entry({ title: this.model.prompt.question, subtitle: $r('app.string.personal_overview_attention'), stamp: '',
             symbol: $r('sys.symbol.bell'), marker: this.colors.attentionForeground, attention: true, onOpen: this.onClose })
         }
-        ForEach(this.model.attention, (item: XopcPersonalWorkItem) => { this.workRow(item, true) },
-          (item: XopcPersonalWorkItem): string => item.id)
+        ForEach($$.items, (item: XopcPersonalWorkItem) => {
+          this.workRow(item, $$.attention ?? false)
+        }, (item: XopcPersonalWorkItem): string => item.id)
+      }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(20)).clip(true)
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder tasks() {
+    Column({ space: 24 }) {
+      if (this.model.workLoading && !this.model.workLoaded) { XopcListSkeleton() }
+      if (this.model.attentionCount > 0) {
+        this.workGroup({ label: $r('app.string.personal_overview_attention'), items: this.model.attention, attention: true })
       }
       if (this.model.active.length) {
-        this.groupHeading($r('app.string.personal_overview_current'))
-        ForEach(this.model.active, (item: XopcPersonalWorkItem) => { this.workRow(item) },
-          (item: XopcPersonalWorkItem): string => item.id)
+        this.workGroup({ label: $r('app.string.personal_overview_current'), items: this.model.active })
       }
-      Row() {
-        Text($r('app.string.personal_overview_schedules')).fontSize(14).fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.secondary).layoutWeight(1)
-        Button($r('app.string.personal_overview_new_schedule')).id('personal-overview-new-schedule')
-          .height(44).fontSize(14).fontColor(this.colors.foreground).backgroundColor(Color.Transparent)
-          .enabled(!!this.record?.conversationId)
-          .onClick((): void => { this.openScheduleSetup(); })
-      }.width('100%').padding({ left: 8, right: 8, top: 8 })
-      if (this.model.schedulesLoading && !this.model.schedules.length) {
-        LoadingProgress().width(22).height(22).color(this.colors.secondary).margin({ left: 8 })
-      }
-      if (this.model.scheduleError) {
-        Button($r('app.string.retry')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
-          .onClick((): void => { void this.model.loadSchedules(); })
-      }
-      ForEach(this.model.schedules, (item: XopcAutomation) => { this.scheduleRow(item) },
-        (item: XopcAutomation): string => item.id)
-      if (this.model.schedulesLoaded && !this.model.schedulesLoading && !this.model.schedules.length && !this.model.scheduleError) {
-        XopcAutomationIdeas({ onChoose: (prompt: string): void => { this.openScheduleSetup(prompt); } })
-      }
+      this.schedules()
       ForEach(this.model.groups, (group: XopcPersonalWorkGroup) => {
-        Column({ space: 3 }) {
-          this.groupHeading(this.historyTitle(group.id))
-          ForEach(group.items, (item: XopcPersonalWorkItem) => { this.workRow(item) },
-            (item: XopcPersonalWorkItem): string => item.id)
-        }.width('100%')
+        this.workGroup({ label: this.historyTitle(group.id), items: group.items })
       }, (group: XopcPersonalWorkGroup): string => group.id)
       if (this.model.workError || this.model.moreWork) {
         XopcPaginationFooter({ loadingPage: this.model.workLoading, failedPage: !!this.model.workError,
           onLoad: (): void => { void this.model.work(this.model.moreWork); } })
       }
     }.id('personal-overview-task-list').width('100%').alignItems(HorizontalAlign.Start)
+      .padding({ top: 4, bottom: 24 })
+  }
+
+  @Builder schedules() {
+    Column({ space: 8 }) {
+      Row() {
+        Text($r('app.string.personal_overview_schedules')).fontSize(17).fontWeight(FontWeight.Bold)
+          .fontColor(this.colors.foreground).layoutWeight(1)
+        Button($r('app.string.personal_overview_new_schedule')).id('personal-overview-new-schedule')
+          .height(44).padding({ left: 12, right: 4 }).fontSize(14).fontColor(this.colors.accent)
+          .backgroundColor(Color.Transparent).enabled(!!this.record?.conversationId)
+          .onClick((): void => { this.openScheduleSetup(); })
+      }.width('100%').padding({ left: 4 })
+      if (this.model.schedulesLoading && !this.model.schedules.length) { XopcListSkeleton() }
+      if (this.model.scheduleError) {
+        Button($r('app.string.retry')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.accent)
+          .onClick((): void => { void this.model.loadSchedules(); })
+      }
+      if (this.model.schedules.length) {
+        Column() {
+          ForEach(this.model.schedules, (item: XopcAutomation) => {
+            this.scheduleRow(item)
+          }, (item: XopcAutomation): string => item.id)
+        }.width('100%').backgroundColor(this.colors.panel).borderRadius(this.colors.corner(20)).clip(true)
+      }
+      if (this.model.schedulesLoaded && !this.model.schedulesLoading && !this.model.schedules.length && !this.model.scheduleError) {
+        XopcAutomationIdeas({ onChoose: (prompt: string): void => { this.openScheduleSetup(prompt); } })
+      }
+    }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   private openScheduleSetup(prompt: string = ''): void {
@@ -267,25 +347,26 @@ export struct XopcPersonalAgentOverview {
   }
 
   @Builder library() {
-    Column({ space: 6 }) {
+    Column({ space: 16 }) {
       if (!this.model.deliveryLoaded && !this.model.deliveryError) { XopcListSkeleton() }
-      ForEach(this.model.deliveries, (item: XopcPersonalDelivery) => {
-        Column({ space: 2 }) {
-          if (item.artifact?.availability === 'available' &&
-            (item.artifact.workspaceRelativePath || item.artifact.uri?.startsWith('xopc-file:') ||
-              item.artifact.uri?.startsWith('xopc-file-version:') || item.artifact.uri?.startsWith('media://'))) {
-            XopcChatMediaView({ file: artifactMedia(item.artifact), conversationId: item.task?.conversationId ?? this.record?.conversationId ?? '',
-              compact: true, embedded: true, compactAvailable: true, resultCapsule: true, showLibraryActions: false })
-          } else {
-            this.entry({ title: item.artifact?.title ?? item.reference?.title ?? $r('app.string.untitled'),
-              subtitle: item.task?.title ?? $r('app.string.personal_overview_source'), stamp: this.time(item.createdAt),
-              symbol: $r('sys.symbol.doc'), onOpen: (): void => { this.openDelivery(item); } })
-          }
-        }.id('personal-overview-delivery-' + item.id).width('100%').alignItems(HorizontalAlign.Start)
-      }, (item: XopcPersonalDelivery): string => item.id)
+      if (this.model.deliveries.length) {
+        Column({ space: 10 }) {
+          ForEach(this.model.deliveries, (item: XopcPersonalDelivery) => {
+            Column() {
+              this.entry({ title: item.artifact?.title ?? item.reference?.title ?? $r('app.string.untitled'),
+                subtitle: item.task?.title ?? $r('app.string.personal_overview_source'), stamp: this.time(item.createdAt),
+                delivery: item, onOpen: (): void => { this.openDelivery(item); } })
+            }.id('personal-overview-delivery-' + item.id).width('100%')
+              .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(20)).clip(true)
+          }, (item: XopcPersonalDelivery): string => item.id)
+        }.width('100%')
+      }
       if (this.model.deliveryLoaded && !this.model.deliveries.length && !this.model.deliveryError && !this.model.deliveryLoading) {
-        Text($r('app.string.personal_overview_no_deliveries')).fontSize(14).fontColor(this.colors.secondary)
-          .textAlign(TextAlign.Center).width('100%').padding(20)
+        Column({ space: 12 }) {
+          SymbolGlyph($r('sys.symbol.doc_text')).fontSize(28).fontColor([this.colors.tertiary]).accessibilityLevel('no')
+          Text($r('app.string.personal_overview_no_deliveries')).fontSize(15).fontColor(this.colors.secondary)
+            .textAlign(TextAlign.Center)
+        }.width('100%').padding(32).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(20))
       }
       if (this.model.deliveryError || this.model.nextDeliveryOffset !== null) {
         XopcPaginationFooter({ loadingPage: this.model.deliveryLoading, failedPage: !!this.model.deliveryError,
@@ -295,6 +376,7 @@ export struct XopcPersonalAgentOverview {
           } })
       }
     }.id('personal-overview-library-list').width('100%').alignItems(HorizontalAlign.Start)
+      .padding({ top: 4, bottom: 24 })
   }
 
   build() {
@@ -322,28 +404,32 @@ export struct XopcPersonalAgentOverview {
         }.id('personal-overview-edit').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .translate({ x: 7 * this.headerProgress, y: 7 * this.headerProgress })
           .accessibilityText($r('app.string.personal_overview_edit'))
-          .onClick((): void => { this.onNavigate({ page: 'personal-agent-profile', itemId: '' }); })
+          .onClick((): void => {
+            this.onNavigate({ page: 'personal-agent-profile', itemId: '', canShareConversation: this.canShareConversation });
+          })
       }
       Text(this.record?.displayName ?? '').fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         .textAlign(TextAlign.Center).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%').padding({ left: 16, right: 16, top: 8 - 4 * this.headerProgress })
-      Row({ space: 6 }) {
-        if (this.model.attentionCount) {
-          Circle().width(6).height(6).fill(this.colors.attentionForeground)
-          Text($r('app.string.chat_attention_count', this.model.attentionCount)).fontSize(14)
-            .fontColor(this.colors.attentionForeground)
-        } else if (this.model.runningCount) {
-          Circle().width(6).height(6).fill(this.colors.accent)
-          Text($r('app.string.personal_overview_running', this.model.runningCount)).fontSize(14).fontColor(this.colors.secondary)
-        }
-      }.constraintSize({ minHeight: 24 }).margin({ top: 4 - 2 * this.headerProgress })
+      if (this.model.attentionCount || this.model.runningCount) {
+        Row({ space: 6 }) {
+          if (this.model.attentionCount) {
+            Blank().width(6).height(6).borderRadius(3).backgroundColor(this.colors.attentionForeground)
+            Text($r('app.string.chat_attention_count', this.model.attentionCount)).fontSize(14)
+              .fontColor(this.colors.attentionForeground)
+          } else {
+            Blank().width(6).height(6).borderRadius(3).backgroundColor(this.colors.accent)
+            Text($r('app.string.personal_overview_running', this.model.runningCount)).fontSize(14).fontColor(this.colors.secondary)
+          }
+        }.constraintSize({ minHeight: 24 }).margin({ top: 4 - 2 * this.headerProgress })
+      }
       Column() {
         XopcSegmentedTabs({ options: [
           { key: 'tasks', label: $r('app.string.tasks'), icon: $r('sys.symbol.checkmark_circle'), count: this.model.attentionCount || undefined, testId: 'personal-overview-tasks-tab' },
           { key: 'library', label: $r('app.string.personal_overview_library'), icon: $r('sys.symbol.doc_text'), testId: 'personal-overview-library-tab' }
         ], selectedKey: this.librarySelected ? 'library' : 'tasks',
           onSelect: (key: string): void => { this.selectLibrary(key === 'library'); } })
-      }.width('100%').margin({ top: 14 - 6 * this.headerProgress, bottom: 8 })
+      }.width('100%').margin({ top: 12 - 4 * this.headerProgress, bottom: 16 })
       if (this.librarySelected) {
         Scroll() { this.library() }.width('100%').layoutWeight(1).scrollBar(BarState.Auto)
           .onWillScroll((x: number, y: number, _state: ScrollState, source: ScrollSource): OffsetResult =>
@@ -353,7 +439,11 @@ export struct XopcPersonalAgentOverview {
           .onWillScroll((x: number, y: number, _state: ScrollState, source: ScrollSource): OffsetResult =>
             this.scrollHeader(x, y, source))
       }
+      if (this.deliveryPreview) {
+        XopcChatMediaView({ file: this.deliveryPreview.file, conversationId: this.deliveryPreview.conversationId,
+          previewOnly: true, onPreviewClosed: (): void => { this.deliveryPreview = undefined; } })
+      }
     }.id('personal-overview').width('100%').height('100%').constraintSize({ maxWidth: 640 })
-      .padding({ left: 16, right: 16, bottom: 8 }).backgroundColor(this.colors.surface)
+      .padding({ left: 20, right: 20 }).backgroundColor(this.colors.surface)
   }
 }

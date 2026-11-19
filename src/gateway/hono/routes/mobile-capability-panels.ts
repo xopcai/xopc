@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 import type { Context, Hono } from 'hono';
@@ -9,7 +9,6 @@ import { AgentCatalogService } from '../../../agent-catalog/service.js';
 import type { SkillCatalogEntry } from '../../../agent/agent-manager.js';
 import { McpConnectionDrafts, McpDraftError } from '../../../agent/mcp/connection-drafts.js';
 import { evictAllEmbeddedSessionRunners } from '../../../agent/embedded/session-runner.js';
-import { checkUrlSafety } from '../../../agent/tools/url-safety.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { getStoreConnectorInstallPlan, installStoreConnector } from '../../../capabilities/store-connector.js';
 import { buildChannelCatalogForConfig, buildChannelCatalogFromSnapshot, getChannelSetupStatus } from '../../../channels/catalog/channel-catalog-service.js';
@@ -44,6 +43,7 @@ import { connectorPrincipalForSession } from '../../../connectors/principal.js';
 import { createLogger } from '../../../utils/logger.js';
 import { getGatewayPrincipal, getPersonalOwnerId } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { assertMobileStdioAllowed, createMobileMcpSetup } from './mobile-mcp-setup.js';
 import { withGatewayConfigWriteLock } from '../lib/config-write-lock.js';
 
 const path = '/api/capabilities/mobile-actions/panel/:category';
@@ -52,27 +52,40 @@ const stableId = z.string().regex(/^[\p{L}\p{M}\p{N}_@./: -]{1,160}$/u)
   .refine(id => !id.split(/[/:.]/).some(part => ['__proto__', 'constructor', 'prototype'].includes(part.toLowerCase())));
 const schema = z.strictObject({
   action: z.string().min(1).max(240),
-  values: z.record(z.string().max(160), z.string().max(8192)).default({}),
+  values: z.record(z.string().max(160), z.string()).refine(values =>
+    Object.entries(values).every(([key, value]) => value.length <= (['mcp-json', 'requestHeaders', 'mcp-env'].includes(key) ? 32_768 : 8192))).default({}),
   flow: z.string().max(160).optional(),
   revision: z.number().int().optional(),
 });
 
-type Field = {
+type Visibility = { field: string; value: string };
+export type Field = {
   id: string;
   label: string;
-  type: 'text' | 'multiline' | 'secret' | 'toggle' | 'select' | 'list';
+  type: 'text' | 'multiline' | 'secret' | 'toggle' | 'select' | 'list' | 'headers';
   value?: string;
   hint?: string;
   advanced?: boolean;
-  visibleWhen?: { field: string; value: string };
+  visibleWhen?: Visibility;
+  presentation?: 'segmented';
+  retain?: boolean;
   options?: { id: string; label: string }[];
 };
-type PanelAction = { id: string; label: string; confirmation?: string; inlineReview?: boolean; advanced?: boolean };
+export type PanelAction = {
+  id: string; label: string; confirmation?: string; inlineReview?: boolean; advanced?: boolean;
+  visibleWhen?: Visibility; dismiss?: boolean;
+};
 type SkillResult = { id: string; name: string; summary?: string; source: string; iconUrl?: string; action?: PanelAction };
-type Panel = {
+export type Panel = {
   available?: boolean;
   fields?: Field[];
   actions?: PanelAction[];
+  headline?: string;
+  subtitle?: string;
+  reviewText?: string;
+  tone?: 'success';
+  advancedLabel?: string;
+  detailsLabel?: string;
   message?: string;
   details?: string;
   flow?: string;
@@ -85,8 +98,8 @@ type Panel = {
   results?: SkillResult[];
   chatPrompt?: string;
 };
-type Translator = (zh: string, en: string) => string;
-type Command = z.output<typeof schema>;
+export type Translator = (zh: string, en: string) => string;
+export type Command = z.output<typeof schema>;
 type SkillMarket = {
   search: (c: Context, query: string) => Promise<{
     items: { id: string; name: string; provider: string; selection?: string; description?: string; iconUrl?: string; installed: boolean }[];
@@ -168,6 +181,13 @@ function connectorInput(definition: ConnectorDefinition, values: Record<string, 
 
 export function registerMobileCapabilityPanels(app: Hono, { service, strictRateLimitMiddleware }: AuthenticatedRouteDeps,
   drafts: McpConnectionDrafts, skillMarket: SkillMarket): void {
+  const allowStdio = () => service.currentConfig.gateway?.mobileMcpAllowStdio === true;
+  const mobileMcpSetup = createMobileMcpSetup(drafts,
+    () => ({ allowStdio: allowStdio(), workspace: getWorkspacePath(service.currentConfig) || process.cwd() }),
+    (owner, id, enable, stdio, t) => withGatewayConfigWriteLock(service, () => {
+      if (stdio) assertMobileStdioAllowed(allowStdio(), t);
+      return drafts.commit(owner, id, enable);
+    }));
   const store = new AgentPluginStore();
   const setup = new PluginSetupService(store);
   const setupOwner = 'gateway-owner';
@@ -350,95 +370,7 @@ export function registerMobileCapabilityPanels(app: Hono, { service, strictRateL
       return { ...status, actions: [{ id: 'advance', label: t('检查连接', 'Check connection') }, cancel] };
     }
     if (id === 'mcp:setup') {
-      const owner = getGatewayPrincipal(c).principalId;
-      const flow = command?.flow;
-      const form = (url = '', name = ''): Panel => ({
-        fields: [{ ...text('url', t('MCP 服务地址', 'MCP server URL'), url), hint: 'https://' },
-          text('id', t('名称（选填）', 'Name (optional)'), name),
-          { ...text('token', t('Bearer 令牌（选填）', 'Bearer token (optional)'), '', 'secret'), advanced: true }],
-        actions: [{ id: 'create', label: t('测试并连接', 'Test and connect') }],
-      });
-      if (flow) {
-        const complete = async (): Promise<Panel> => {
-          const result = await withGatewayConfigWriteLock(service, () => drafts.commit(owner, flow, true)).catch(error => {
-            if (error instanceof McpDraftError && error.status === 500) return undefined;
-            throw error;
-          });
-          if (!result) return { flow, message: t('验证通过，暂未保存连接。', 'Verification passed. The connection could not be saved.'),
-            actions: [{ id: 'save', label: t('重试保存', 'Retry save') }, { id: 'cancel', label: t('取消连接', 'Cancel connection') }] };
-          if (result.reloadRequired) return {
-            message: t('连接已保存，重启网关后生效。', 'Connection saved. Restart the Gateway to apply it.'),
-          };
-          return { message: t('连接已添加', 'Connection added'),
-            chatPrompt: useCapability(service.currentConfig.mcp?.servers?.[result.serverId]?.displayName ?? result.serverId, result.serverId, t) };
-        };
-        if (command.action === 'save') {
-          return complete();
-        }
-        if (command.action === 'cancel') { drafts.remove(owner, flow); return connection(c, id, t); }
-        let current: { state: string; authorizationUrl?: string; acceptsRedirect?: boolean };
-        switch (command.action) {
-          case 'probe': current = await drafts.probe(owner, flow); break;
-          case 'authorize': current = drafts.authorize(owner, flow); break;
-          case 'callback':
-            drafts.redirect(owner, flow, z.url().max(8192).parse(command.values.callback));
-            current = drafts.authorization(owner, flow);
-            break;
-          case 'status': current = drafts.authorization(owner, flow); break;
-          default: throw new McpDraftError(400, 'Unknown connection action.');
-        }
-        if (current.state === 'connected') {
-          return complete();
-        }
-        const authorizing = current.state === 'authorizing' || current.state === 'starting';
-        const canAuthorize = current.state === 'oauth_required' || current.state === 'auth_unknown'
-          || (current.state === 'error' && command.action !== 'probe');
-        if (!authorizing && !canAuthorize) {
-          const { url, id: name, token } = command.values;
-          drafts.remove(owner, flow);
-          return { ...form(url, name), message: current.state === 'token_required' || token
-            ? t('连接验证失败。请检查服务地址、令牌和访问权限。', 'Verification failed. Check the server URL, token and permissions.')
-            : t('无法建立连接。请检查服务地址后重试。', 'Could not connect. Check the server URL and try again.') };
-        }
-        return { flow, message: authorizing
-          ? t('请在服务商页面完成授权。返回后会自动添加。', 'Finish signing in with the provider. The connection will be added automatically.')
-          : current.state === 'auth_unknown'
-            ? t('此服务需要授权。可以尝试登录，或修改配置并填写服务商提供的令牌。', 'This server requires authorization. Sign in or edit the connection to enter the provider’s token.')
-            : current.state === 'error'
-              ? t('授权未完成。请重试或修改连接配置。', 'Sign-in did not complete. Retry or edit the connection settings.')
-              : t('此连接需要服务商授权。', 'This connection needs provider authorization.'),
-          authorizationUrl: authorizing ? safeLink(current.authorizationUrl) : undefined,
-          pollAction: authorizing ? 'status' : undefined,
-          fields: authorizing && current.acceptsRedirect ? [{
-            ...text('callback', t('浏览器最后打开的地址', 'Address shown in your browser')),
-            hint: t('只有在授权未自动完成时才需要。', 'Only needed if authorization does not finish automatically.'),
-            advanced: true,
-          }] : undefined,
-          actions: [
-            ...(!authorizing ? [{ id: 'authorize', label: t('连接账号', 'Connect account') }] : []),
-            ...(authorizing && current.acceptsRedirect ? [{ id: 'callback', label: t('完成授权', 'Finish authorization'), advanced: true }] : []),
-            { id: 'cancel', label: authorizing ? t('取消连接', 'Cancel connection') : t('修改连接配置', 'Edit connection settings') },
-          ] };
-      }
-      if (command?.action === 'create') {
-        const displayName = z.string().trim().max(64).parse(command.values.id ?? '');
-        const address = z.url().max(2048).safeParse(command.values.url?.trim());
-        if (!address.success) throw new McpDraftError(400, t('请输入完整的 HTTPS 地址。', 'Enter the full HTTPS address.'));
-        const url = new URL(address.data);
-        if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !checkUrlSafety(url.href).safe) {
-          throw new McpDraftError(400, t('请输入不含账号或参数的公共 HTTPS 地址。', 'Use a public HTTPS address without a username, password, or parameters.'));
-        }
-        const token = command.values.token?.trim();
-        if (token && !/^[!-~]+$/.test(token)) {
-          throw new McpDraftError(400, t('请输入服务商提供的 Bearer 令牌。', 'Enter the Bearer token provided by the service.'));
-        }
-        const host = url.hostname.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 42);
-        const serverId = host + '-' + createHash('sha256').update(url.href).digest('hex').slice(0, 12);
-        const draft = await drafts.create(owner, { serverId, server: { type: 'http', url: url.href,
-          displayName: displayName || url.hostname, xopcPublicOnly: true } }, token);
-        return connection(c, id, t, { action: 'probe', flow: draft.id, values: command.values });
-      }
-      return form();
+      return mobileMcpSetup(getGatewayPrincipal(c).principalId, t, command);
     }
     if (id.startsWith('mcp:')) {
       const key = id === 'mcp:server:setup' ? 'setup' : id.slice(4);

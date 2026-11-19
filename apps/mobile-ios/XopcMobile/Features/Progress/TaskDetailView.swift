@@ -108,7 +108,7 @@ struct TaskConversationView: View {
                         conversation: conversation, personalAgent: nil,
                         onStartConversation: { _ in }, onStartScopedConversation: { _, _, _ in },
                         onConversationUpdated: { self.conversation = $0 },
-                        onPersonalAgentUpdated: { _ in }, onOpenSettings: { optionsRevision += 1 },
+                        onOpenSettings: { optionsRevision += 1 },
                         onInputFocusChanged: { focused in
                             if focused {
                                 overviewExpanded = false

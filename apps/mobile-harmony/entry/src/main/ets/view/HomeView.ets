@@ -516,12 +516,14 @@ export struct XopcHomeView {
       NavDestination() {
         XopcPersonalAgentOverview({ record: this.personalAgent.record,
           activePage: this.detailRoute === 'personal-agent-overview' && this.layout.foreground,
+          canShareConversation: (param as XopcMobileRoute).canShareConversation ?? false,
           onClose: (): void => { this.pathStack.pop(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
     } else if (page === 'personal-agent-profile') {
       NavDestination() {
         XopcPersonalAgentSettings({ record: this.personalAgent.record, chatOptions: this.profileOptions,
+          canShare: (param as XopcMobileRoute).canShareConversation ?? false,
           onReloadModels: (): void => {
             const record = this.personalAgent.record;
             if (record) void this.profileOptions.load(record.conversationId, record.agentId);
@@ -628,8 +630,6 @@ export struct XopcHomeView {
               if (this.chatReady) {
                 XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
                   personalAgent: this.personalAgent.record,
-                  pendingAttention: this.pendingAttention,
-                  onPersonalAgentSaved: (record: XopcPersonalAgentRecord): void => { this.personalAgent.record = record; },
                   focusRevision: this.chatFocusRevision,
                   intakeRevision: this.intake.chatRevision, intakeText: this.requestedChatDraft,
                   activePage: !this.detailVisible,

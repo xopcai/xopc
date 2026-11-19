@@ -408,52 +408,216 @@ it('serves only category metadata to a signed mobile device through the authenti
     expect((await (await signed(panel('connections', 'mcp:server:setup'))).json()).payload.fields)
       .toContainEqual(expect.objectContaining({ id: 'enabled', value: 'false' }));
     const custom = panel('connections', 'mcp:setup');
+    const setupMcp = (action: string, flow?: { flow: string; revision: number }, values?: Record<string, string>) =>
+      signed(custom, 'POST', { action, ...(flow ? { flow: flow.flow, revision: flow.revision } : {}), values });
+    const mcpByName = (name: string) => Object.values(config.mcp?.servers ?? {}).find(server => server.displayName === name);
     expect((await (await signed(custom)).json()).payload).toMatchObject({
-      fields: expect.arrayContaining([expect.objectContaining({ id: 'url' }), expect.objectContaining({ id: 'token', type: 'secret' })]),
-      actions: [{ id: 'create', label: 'Test and connect' }],
+      fields: expect.arrayContaining([
+        expect.objectContaining({ id: 'mcp-mode', presentation: 'segmented', value: 'link' }),
+        expect.objectContaining({ id: 'url' }),
+        expect.objectContaining({ id: 'mcp-json', retain: true, type: 'multiline' }),
+      ]),
+      actions: [expect.objectContaining({ id: 'create' }), expect.objectContaining({ id: 'preview' }), expect.objectContaining({ id: 'review-command' })],
     });
-    expect((await signed(custom, 'POST', { action: 'create', values: { url: 'https://127.0.0.1/mcp' } })).status).toBe(400);
-    expect((await (await signed(custom, 'POST', { action: 'create', values: {
+    for (const url of ['http://8.8.8.8/mcp', 'http://169.254.169.254/mcp', 'http://metadata.google.internal./mcp']) {
+      expect((await setupMcp('create', undefined, { url })).status).toBe(400);
+    }
+    const probesBeforeLan = vi.mocked(probeMcpConnection).mock.calls.length;
+    const lan = (await (await setupMcp('create', undefined, {
+      url: 'http://127.0.0.1:53231/sse', id: 'Local SSE', transport: 'sse',
+    })).json()).payload;
+    expect(lan).toMatchObject({ subtitle: expect.stringContaining('Legacy SSE'),
+      actions: [expect.objectContaining({ id: 'confirm-check' }), expect.objectContaining({ id: 'edit' })] });
+    expect((await setupMcp('save', lan)).status).toBe(409);
+    expect(vi.mocked(probeMcpConnection).mock.calls).toHaveLength(probesBeforeLan);
+    const lanChecked = (await (await setupMcp('confirm-check', lan)).json()).payload;
+    const [lanConfig, , lanId] = vi.mocked(probeMcpConnection).mock.lastCall!;
+    expect(lanConfig.mcp?.servers?.[lanId]).toMatchObject({ type: 'sse', xopcPrivateNetwork: true, xopcPublicOnly: false });
+    expect(mcpByName('Local SSE')).toBeUndefined();
+    expect((await setupMcp('save', lanChecked)).status).toBe(200);
+    expect(mcpByName('Local SSE')).toMatchObject({ type: 'sse', xopcPrivateNetwork: true });
+
+    const commandInput = { command: 'node', args: 'fixture MCP.mjs\n--quiet', commandName: 'Local fixture',
+      'mcp-env': JSON.stringify([['FIXTURE_API_KEY', '  fixture-secret-value  ']]) };
+    expect((await setupMcp('review-command', undefined, commandInput)).status).toBe(409);
+    config.gateway.mobileMcpAllowStdio = true;
+    const beforeCommand = vi.mocked(probeMcpConnection).mock.calls.length;
+    const commandReview = (await (await setupMcp('review-command', undefined, commandInput)).json()).payload;
+    expect(commandReview.reviewText).toContain('["node","fixture MCP.mjs","--quiet"]');
+    expect(commandReview.reviewText).toContain('FIXTURE_API_KEY');
+    expect(JSON.stringify(commandReview)).not.toContain('fixture-secret-value');
+    expect(vi.mocked(probeMcpConnection).mock.calls).toHaveLength(beforeCommand);
+    config.gateway.mobileMcpAllowStdio = false;
+    expect((await setupMcp('confirm-check', commandReview)).status).toBe(409);
+    config.gateway.mobileMcpAllowStdio = true;
+    const commandChecked = (await (await setupMcp('confirm-check', commandReview)).json()).payload;
+    const [commandConfig, , commandId] = vi.mocked(probeMcpConnection).mock.lastCall!;
+    expect(commandConfig.mcp?.servers?.[commandId]).toMatchObject({
+      type: 'stdio', command: 'node', args: ['fixture MCP.mjs', '--quiet'], xopcManagedStdio: true,
+      env: { FIXTURE_API_KEY: '  fixture-secret-value  ' },
+    });
+    expect(mcpByName('Local fixture')).toBeUndefined();
+    config.gateway.mobileMcpAllowStdio = false;
+    expect((await setupMcp('save', commandChecked)).status).toBe(409);
+    config.gateway.mobileMcpAllowStdio = true;
+    expect((await setupMcp('save', commandChecked)).status).toBe(200);
+    const commandEnv = mcpByName('Local fixture')?.env?.FIXTURE_API_KEY;
+    if (!commandEnv || typeof commandEnv === 'string') throw new Error('Missing stdio credential reference');
+    expect(await new CredentialResolver().resolveApiKey(commandEnv.xopcSecretRef.provider)).toBe('  fixture-secret-value  ');
+    const checked = (await (await setupMcp('create', undefined, {
       url: 'https://example.com/mcp', id: 'Calendar notes',
-    } })).json()).payload).toMatchObject({ message: 'Connection added', chatPrompt: expect.stringContaining('Calendar notes') });
-    expect(Object.values(config.mcp?.servers ?? {})).toContainEqual(expect.objectContaining({
+    })).json()).payload;
+    expect(checked).toMatchObject({ headline: 'Calendar notes', tone: 'success',
+      actions: [expect.objectContaining({ id: 'save', label: 'Add connection' }), expect.objectContaining({ id: 'edit' })] });
+    expect(mcpByName('Calendar notes')).toBeUndefined();
+    expect((await setupMcp('save', { ...checked, revision: checked.revision - 1 })).status).toBe(409);
+    expect((await (await setupMcp('save', checked)).json()).payload).toMatchObject({ message: 'Connection added' });
+    expect((await (await setupMcp('save', checked)).json()).payload).toMatchObject({ message: 'Connection added' });
+    expect(mcpByName('Calendar notes')).toMatchObject({
       url: 'https://example.com/mcp', enabled: true, displayName: 'Calendar notes', xopcPublicOnly: true,
-    }));
+    });
+
+    vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'auth_unknown' });
+    const credentials = (await (await setupMcp('create', undefined, {
+      url: 'https://example.com/bearer', id: 'Token service',
+    })).json()).payload;
+    expect(credentials).toMatchObject({
+      message: expect.stringContaining('Choose the method'),
+      fields: expect.arrayContaining([expect.objectContaining({ id: 'method', value: '' })]),
+    });
+    expect((await setupMcp('save', credentials)).status).toBe(409);
     vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'token_required' });
-    const rejected = await signed(custom, 'POST', { action: 'create', values: {
-      url: 'https://example.com/bearer', id: 'Token service', token: 'rejected-fixture-token',
-    } });
+    const rejected = await setupMcp('verify', credentials, { method: 'bearer', token: 'rejected-fixture-token' });
     const rejectedBody = await rejected.text();
     expect(rejectedBody).not.toContain('rejected-fixture-token');
-    expect(JSON.parse(rejectedBody).payload).toMatchObject({
-      fields: expect.arrayContaining([expect.objectContaining({ id: 'url', value: 'https://example.com/bearer' })]),
-      actions: [{ id: 'create', label: 'Test and connect' }],
+    const rejectedPanel = JSON.parse(rejectedBody).payload;
+    expect(rejectedPanel).toMatchObject({
+      fields: expect.arrayContaining([expect.objectContaining({ id: 'token', type: 'secret' })]),
+      actions: [expect.objectContaining({ id: 'verify' }), expect.objectContaining({ id: 'edit' })],
     });
-    const bearer = await signed(custom, 'POST', { action: 'create', values: {
-      url: 'https://example.com/bearer', id: 'Token service', token: 'accepted-fixture-token',
-    } });
-    expect(bearer.status).toBe(200);
-    expect(await bearer.text()).not.toContain('accepted-fixture-token');
-    const bearerServer = Object.values(config.mcp?.servers ?? {}).find(server => server.displayName === 'Token service');
-    expect(JSON.stringify(bearerServer)).not.toContain('accepted-fixture-token');
+    const bearer = (await (await setupMcp('verify', rejectedPanel, {
+      method: 'bearer', token: 'Bearer accepted-fixture-token',
+    })).json()).payload;
+    expect(bearer).toMatchObject({ tone: 'success' });
+    expect(JSON.stringify(bearer)).not.toContain('accepted-fixture-token');
+    expect(mcpByName('Token service')).toBeUndefined();
     const [bearerProbeConfig, , bearerServerId] = vi.mocked(probeMcpConnection).mock.lastCall!;
     expect(bearerProbeConfig.mcp?.servers?.[bearerServerId]?.headers?.Authorization).toBe('Bearer accepted-fixture-token');
+    expect((await setupMcp('save', bearer)).status).toBe(200);
+    const bearerServer = mcpByName('Token service');
+    expect(JSON.stringify(bearerServer)).not.toContain('accepted-fixture-token');
     const header = bearerServer?.headers?.Authorization;
     expect(header).toMatchObject({ xopcSecretRef: { prefix: 'Bearer ' } });
     if (!header || typeof header === 'string') throw new Error('Missing bearer credential reference');
     expect(await new CredentialResolver().resolveApiKey(header.xopcSecretRef.provider)).toBe('accepted-fixture-token');
+
+    const customHeaders = (await (await setupMcp('create', undefined, {
+      url: 'https://example.com/headers', id: 'Headers service', authMethod: 'headers',
+    })).json()).payload;
+    expect(customHeaders.fields).toContainEqual(expect.objectContaining({ id: 'requestHeaders', type: 'headers' }));
+    expect((await setupMcp('verify', customHeaders, {
+      method: 'headers', requestHeaders: JSON.stringify([['X-API-Key', 'one'], ['x-api-key', 'two']]),
+    })).status).toBe(400);
+    const headerReview = (await (await setupMcp('verify', customHeaders, {
+      method: 'headers', requestHeaders: JSON.stringify([['X-API-Key', 'header-fixture-key'], ['X-Team', 'team-fixture-key']]),
+    })).json()).payload;
+    expect(headerReview).toMatchObject({ tone: 'success' });
+    expect(mcpByName('Headers service')).toBeUndefined();
+    expect((await setupMcp('save', headerReview)).status).toBe(200);
+    const customConfig = mcpByName('Headers service');
+    expect(JSON.stringify(customConfig)).not.toMatch(/header-fixture-key|team-fixture-key/);
+    for (const [name, secret] of [['X-API-Key', 'header-fixture-key'], ['X-Team', 'team-fixture-key']]) {
+      const ref = customConfig?.headers?.[name];
+      if (!ref || typeof ref === 'string') throw new Error('Missing custom header credential reference');
+      expect(await new CredentialResolver().resolveApiKey(ref.xopcSecretRef.provider)).toBe(secret);
+    }
+
+    expect((await setupMcp('preview', undefined, { 'mcp-json': '{' })).status).toBe(400);
+    expect((await setupMcp('preview', undefined, { 'mcp-json': JSON.stringify({
+      mcpServers: { unsafe: { url: 'https://example.com/mcp', command: 'node' } },
+    }) })).status).toBe(400);
+    const probeCalls = vi.mocked(probeMcpConnection).mock.calls.length;
+    const imported = await setupMcp('preview', undefined, { 'mcp-json': JSON.stringify({ mcpServers: {
+      plain: { url: 'https://example.com/plain' },
+      imported: { url: 'https://example.com/import', description: 'Imported service', headers: { 'X-Api-Key': 'import-fixture-key' }, enabled: false },
+      skipped: { url: 'https://example.com/unsupported', command: 'node' },
+    } }) });
+    expect(imported.status).toBe(200);
+    const importedBody = await imported.text();
+    expect(importedBody).not.toContain('import-fixture-key');
+    const preview = JSON.parse(importedBody).payload;
+    expect(preview).toMatchObject({
+      message: expect.stringContaining('1 other configurations'),
+      fields: [expect.objectContaining({ id: 'selection', options: [
+        { id: '0', label: 'plain · example.com/plain' }, { id: '1', label: 'imported · example.com/import' },
+      ] })],
+    });
+    expect(vi.mocked(probeMcpConnection).mock.calls).toHaveLength(probeCalls);
+    expect((await setupMcp('save', preview)).status).toBe(409);
+    const importedReview = (await (await setupMcp('select', preview, { selection: '1' })).json()).payload;
+    expect(config.mcp?.servers?.imported).toBeUndefined();
+    const selectedAgain = (await (await setupMcp('edit', importedReview)).json()).payload;
+    expect(selectedAgain.fields[0].value).toBe('1');
+    expect((await setupMcp('save', importedReview)).status).toBe(409);
+    const importRetry = (await (await setupMcp('select', selectedAgain, { selection: '1' })).json()).payload;
+    const importedSaved = (await (await setupMcp('save', importRetry)).json()).payload;
+    expect(importedSaved).toMatchObject({ message: 'Connection added · Disabled' });
+    expect(config.mcp?.servers?.imported).toMatchObject({ description: 'Imported service', enabled: false });
+    expect(JSON.stringify(config.mcp?.servers?.imported)).not.toContain('import-fixture-key');
+    expect(config.mcp?.servers?.plain).toBeUndefined();
+    expect((await (await setupMcp('add-another', importedSaved)).json()).payload.fields[0].options)
+      .toEqual([{ id: '0', label: 'plain · example.com/plain' }]);
+
+    const advancedImport = (await (await setupMcp('preview', undefined, { 'mcp-json': JSON.stringify({ mcpServers: {
+      legacy: { url: 'https://legacy.example.com/sse', type: 'sse' },
+      lan: { url: 'https://mcp.corp.example.com/mcp', network: 'private' },
+      stdio: { command: 'node', args: ['fixture path.mjs'], env: { FIXTURE_API_KEY: 'imported-stdio-secret' } },
+    } }) })).json()).payload;
+    const importedStdio = (await (await setupMcp('select', advancedImport, { selection: '2' })).json()).payload;
+    expect(importedStdio.reviewText).toContain('["node","fixture path.mjs"]');
+    expect(JSON.stringify(importedStdio)).not.toContain('imported-stdio-secret');
+    const advancedPreview = (await (await setupMcp('edit', importedStdio)).json()).payload;
+    const importedLan = (await (await setupMcp('select', advancedPreview, { selection: '1' })).json()).payload;
+    expect(importedLan.actions[0].id).toBe('confirm-check');
+    const legacyPreview = (await (await setupMcp('edit', importedLan)).json()).payload;
+    const importedLegacy = (await (await setupMcp('select', legacyPreview, { selection: '0' })).json()).payload;
+    expect(importedLegacy).toMatchObject({ tone: 'success', subtitle: expect.stringContaining('Legacy SSE') });
+    expect(config.mcp?.servers?.legacy).toBeUndefined();
+
     vi.mocked(probeMcpConnection).mockResolvedValueOnce({ state: 'oauth_required' });
-    const oauthDraft = (await (await signed(custom, 'POST', { action: 'create', values: {
+    const oauthDraft = (await (await setupMcp('create', undefined, {
       url: 'https://example.com/oauth', id: 'OAuth service',
-    } })).json()).payload;
-    expect(oauthDraft.actions).toContainEqual({ id: 'authorize', label: 'Connect account' });
-    const waitingForOAuth = (await (await signed(custom, 'POST', { action: 'authorize', flow: oauthDraft.flow })).json()).payload;
+    })).json()).payload;
+    expect(oauthDraft.actions).toContainEqual({ id: 'authorize', label: 'Authorize in browser' });
+    const waitingForOAuth = (await (await setupMcp('authorize', oauthDraft)).json()).payload;
     expect(waitingForOAuth.pollAction).toBe('status');
     vi.mocked(getMcpAuthorization).mockReturnValueOnce({ id: 'test-authorization', serverId: 'test', state: 'connected', toolCount: 1 });
-    // The commit rechecks authorization after the status request observed success.
+    const authorized = (await (await setupMcp('status', waitingForOAuth)).json()).payload;
+    expect(authorized).toMatchObject({ tone: 'success', message: expect.stringContaining('Connection verified') });
+    expect(mcpByName('OAuth service')).toBeUndefined();
+    expect((await (await setupMcp('status', waitingForOAuth)).json()).payload).toEqual(authorized);
     vi.mocked(getMcpAuthorization).mockReturnValueOnce({ id: 'test-authorization', serverId: 'test', state: 'connected', toolCount: 1 });
-    expect((await (await signed(custom, 'POST', { action: 'status', flow: oauthDraft.flow })).json()).payload)
-      .toMatchObject({ message: 'Connection added', chatPrompt: expect.stringContaining('OAuth service') });
+    expect((await (await setupMcp('save', authorized)).json()).payload).toMatchObject({ message: 'Connection added' });
+    expect(mcpByName('OAuth service')).toBeDefined();
+    const oauthImport = await setupMcp('preview', undefined, { 'mcp-json': JSON.stringify({ mcp: { servers: {
+      confidential: { url: 'https://example.com/confidential', oauth: { clientId: 'fixture-client', clientSecret: 'fixture-client-secret' } },
+    } } }) });
+    const oauthImportBody = await oauthImport.text();
+    expect(oauthImportBody).not.toContain('fixture-client-secret');
+    const confidential = (await (await setupMcp('select', JSON.parse(oauthImportBody).payload, { selection: '0' })).json()).payload;
+    expect(confidential.actions).toContainEqual({ id: 'authorize', label: 'Authorize in browser' });
+    const confidentialWaiting = (await (await setupMcp('authorize', confidential)).json()).payload;
+    const connectedOAuth = { id: 'test-authorization', serverId: 'confidential', state: 'connected' as const, toolCount: 1 };
+    vi.mocked(getMcpAuthorization).mockReturnValueOnce(connectedOAuth);
+    const confidentialReview = (await (await setupMcp('status', confidentialWaiting)).json()).payload;
+    expect(config.mcp?.servers?.confidential).toBeUndefined();
+    vi.mocked(getMcpAuthorization).mockReturnValueOnce(connectedOAuth);
+    expect((await setupMcp('save', confidentialReview)).status).toBe(200);
+    const confidentialConfig = config.mcp?.servers?.confidential?.oauth;
+    expect(confidentialConfig).toMatchObject({ clientId: 'fixture-client', clientSecret: { xopcSecretRef: {} } });
+    const oauthSecret = confidentialConfig?.clientSecret;
+    if (!oauthSecret || typeof oauthSecret === 'string') throw new Error('Missing OAuth credential reference');
+    expect(await new CredentialResolver().resolveApiKey(oauthSecret.xopcSecretRef.provider)).toBe('fixture-client-secret');
     const signIn = panel('connections', 'composio-gmail');
     expect((await (await signed(signIn)).json()).payload.actions).toContainEqual({ id: 'authorize', label: 'Connect account' });
     vi.mocked(assertComposioAccessConfigured).mockRejectedValueOnce(new Error('Missing connection service'));

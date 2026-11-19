@@ -1,5 +1,6 @@
 import type { CommandEntry } from '@/features/chat/palette/command-palette.types';
 import { SKILL_ID_IN_WIRE } from '@/features/chat/palette/skill-wire-pattern';
+import { parseLeadingSlashCommand } from '@/features/chat/session/slash-command-semantics';
 
 const SKILL_HEAD_AT = new RegExp(`^\\/skill:(${SKILL_ID_IN_WIRE})`);
 
@@ -17,6 +18,11 @@ export function refreshSlashCommandWireIndex(commands: CommandEntry[] | null | u
   }
   sortedEntries = Array.from(keys).toSorted((a, b) => b.length - a.length).map((key) => ({ key }));
   slashCommandEowSuffixReByTok.clear();
+}
+
+export function startsWithRegisteredSlashCommand(content: string): boolean {
+  const parsed = parseLeadingSlashCommand(content);
+  return parsed !== null && sortedEntries.some(({ key }) => key === parsed.name);
 }
 
 function boundaryOk(rest: string, endExclusive: number): boolean {

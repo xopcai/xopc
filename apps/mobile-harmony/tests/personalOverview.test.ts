@@ -4,12 +4,75 @@ const request = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined, Computed: () => undefined });
   return vi.fn();
 });
+const connectionRevision = vi.hoisted(() => vi.fn(() => 1));
 
-vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request } }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({
+  gatewaySession: { request, connectionRevision, assertConnection: (revision: number) => {
+    if (revision !== connectionRevision()) throw new Error('OPERATION_CANCELLED');
+  } },
+}));
 
+import { personalPromptNeedsAttention } from '../entry/src/main/ets/model/personalOverview';
+import { XopcPersonalChatActivityViewModel } from '../entry/src/main/ets/viewmodel/personalChatActivityViewModel';
 import { XopcPersonalOverviewViewModel } from '../entry/src/main/ets/viewmodel/personalOverviewViewModel';
 
-beforeEach(() => request.mockReset());
+beforeEach(() => {
+  request.mockReset();
+  connectionRevision.mockReturnValue(1);
+});
+
+it('uses the current personal task snapshot for the chat header and refreshes it only while active', async () => {
+  const model = new XopcPersonalChatActivityViewModel();
+  const task = (id: string, status: string) => ({ id, title: id, phase: 'active', presentation: { status }, updatedAt: 1 });
+  const approval = { ...task('approval', 'needsUser'), prompt: { id: 'shared' } };
+  const working = [task('allocate', 'allocating'), task('queued', 'queued'), task('run', 'running'),
+    task('verify', 'verifying'), task('wait', 'waiting')];
+  const inactive = [task('ready', 'ready'), task('done', 'completed'), task('blocked', 'blocked'), task('paused', 'paused')];
+  vi.useFakeTimers();
+  try {
+    request.mockResolvedValueOnce(JSON.stringify({ payload: { current: [approval, ...working, ...inactive],
+      items: [task('history', 'review')], total: 1 } }));
+    model.observe('personal-chat', true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request).toHaveBeenCalledExactlyOnceWith('/api/personal-agent/activity?view=work&limit=1&offset=0');
+    expect(model.attention).toEqual([approval]);
+    expect(personalPromptNeedsAttention('shared', model.attention)).toBe(false);
+    expect(personalPromptNeedsAttention('direct', model.attention)).toBe(true);
+    expect(model.working).toEqual(working);
+
+    request.mockResolvedValueOnce(JSON.stringify({ payload: { current: [task('run', 'verifying')], items: [], total: 0 } }));
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(model.working).toEqual([task('run', 'verifying')]);
+    expect(model.attention).toEqual([]);
+
+    model.observe('personal-chat', false);
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(request).toHaveBeenCalledTimes(2);
+  } finally {
+    model.stop();
+    vi.useRealTimers();
+  }
+});
+
+it('drops a stale response when the Personal Agent scope is replaced', async () => {
+  const model = new XopcPersonalChatActivityViewModel();
+  let resolvePrevious: (snapshot: string) => void = () => {};
+  request.mockImplementationOnce(() => new Promise<string>(resolve => { resolvePrevious = resolve; }));
+  request.mockResolvedValueOnce(JSON.stringify({ payload: { current: [], items: [], total: 0 } }));
+  vi.useFakeTimers();
+  try {
+    model.observe('first-chat', true);
+    connectionRevision.mockReturnValue(2);
+    model.observe('replacement-chat', true);
+    resolvePrevious(JSON.stringify({ payload: { current: [{ id: 'stale', phase: 'active', operationalState: 'running' }],
+      items: [], total: 0 } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(model.working).toEqual([]);
+  } finally {
+    model.stop();
+    vi.useRealTimers();
+  }
+});
 
 it('uses the Personal Agent work feed and counts a shared clarification only once', async () => {
   const model = new XopcPersonalOverviewViewModel();

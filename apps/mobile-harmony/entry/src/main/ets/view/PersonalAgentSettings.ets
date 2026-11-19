@@ -10,6 +10,7 @@ import { XopcPersonalAgentAvatar } from './PersonalAgentAvatar';
 import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { XopcChatOptionsViewModel } from '../viewmodel/chatOptionsViewModel';
 import { XopcChatOptions } from './ChatOptions';
+import { XopcConversationShare } from './ConversationShare';
 
 interface XopcPersonalSettingChoice {
   heading: string;
@@ -25,12 +26,10 @@ const PERSONAL_CALL_MODES: XopcPersonalCallMode[] = ['auto', 'natural', 'assista
 @ComponentV2
 export struct XopcPersonalAgentSettings {
   @Param chatOptions: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
-  @Param modelBusy: boolean = false;
   @Event onReloadModels: () => void = (): void => {};
   @Param record: XopcPersonalAgentRecord | null = null;
   @Event onSaved: (record: XopcPersonalAgentRecord) => void = (_record: XopcPersonalAgentRecord): void => {};
   @Param canShare: boolean = false;
-  @Event onShare: () => void = (): void => {};
   @Event onClose: () => void = (): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
   @Local model: XopcPersonalAgentSettingsViewModel = new XopcPersonalAgentSettingsViewModel();
@@ -44,6 +43,7 @@ export struct XopcPersonalAgentSettings {
   @Local uploading: boolean = false;
   @Local avatarPreview: string = '';
   @Local modelPickerOpen: boolean = false;
+  @Local shareOpen: boolean = false;
   private nameSaveTimer: number = -1;
 
   private label(zh: string, en: string): string { return appSettings.effectiveLanguage().startsWith('zh') ? zh : en; }
@@ -132,11 +132,17 @@ export struct XopcPersonalAgentSettings {
     }.width('100%').constraintSize({ minHeight: 48 })
   }
 
+  @Builder
+  shareSheet() {
+    XopcConversationShare({ conversationId: this.record?.conversationId ?? '',
+      onClose: (): void => { this.shareOpen = false; } })
+  }
+
   build() {
     Column() {
       if (this.modelPickerOpen) {
         XopcChatOptions({ model: this.chatOptions, mode: 'model',
-          modelBusy: this.modelBusy, rememberModel: false,
+          modelBusy: this.chatOptions.queued.length > 0, rememberModel: false,
           onClose: (): void => { this.modelPickerOpen = false; },
           onRetry: (): void => { this.onReloadModels(); } })
       } else {
@@ -168,7 +174,7 @@ export struct XopcPersonalAgentSettings {
                 XopcHubRow({ heading: $r('app.string.share_session_title'), compact: true,
                   symbol: $r('sys.symbol.link'), onOpen: (): void => {
                     if (!this.model.saving && !this.uploading) {
-                      void this.save().then((): void => { if (!this.model.error) this.onShare(); });
+                      void this.save().then((): void => { if (!this.model.error) this.shareOpen = true; });
                     }
                   } }).enabled(!this.model.saving && !this.uploading)
               }
@@ -232,5 +238,6 @@ export struct XopcPersonalAgentSettings {
         }
       }
     }.id('personal-agent-profile-sheet').width('100%').height('100%').backgroundColor(this.colors.panel)
+      .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
   }
 }

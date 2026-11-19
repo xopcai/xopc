@@ -399,8 +399,7 @@ it('handles thinking command through native TUI controls', async () => {
     handler('/model gpt');
     expect(systems.at(-1)).toBe('model picker: gpt');
 
-    handler('/switch');
-    expect(systems.at(-1)).toContain('Unknown command /switch');
+    expect(handler('/switch')).toBe(false);
 
     handler('/model openai/gpt-5');
     await Promise.resolve();

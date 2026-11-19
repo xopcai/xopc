@@ -5,7 +5,7 @@
  */
 
 import type { InboundMessage } from '../../infra/bus/index.js';
-import { parseSlashCommand } from '../../chat-commands/command-parse.js';
+import { commandRegistry } from '../../chat-commands/registry.js';
 import type { AgentContext } from '../service.types.js';
 
 export interface MessageRoutingResult {
@@ -30,7 +30,7 @@ export class MessageRouter {
       isGroup: (msg.metadata?.isGroup as boolean) || false,
     };
 
-    const commandInfo = parseSlashCommand(msg.content);
+    const commandInfo = commandRegistry.parseRegisteredSlashCommand(msg.content);
 
     return {
       context,

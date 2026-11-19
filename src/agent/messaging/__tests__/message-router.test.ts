@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { MessageRouter } from '../message-router.js';
 import type { InboundMessage } from '../../../infra/bus/index.js';
+import { commandRegistry, initializeCommands } from '../../../chat-commands/index.js';
 
 function makeInbound(content: string, conversationId = 'agent:main:telegram:acc:direct:1:u:2'): InboundMessage {
   return {
@@ -14,6 +15,15 @@ function makeInbound(content: string, conversationId = 'agent:main:telegram:acc:
 
 describe('MessageRouter', () => {
   const router = new MessageRouter();
+
+  beforeAll(() => initializeCommands());
+  afterAll(() => commandRegistry.clear());
+
+  it.each(['/tmp', '/tmp inspect this folder', '/unknown\n/new'])('routes %s as normal input', async (content) => {
+    const result = await router.routeMessage(makeInbound(content));
+    expect(result.isCommand).toBe(false);
+    expect(result.command).toBeUndefined();
+  });
 
   it('treats /new@BotName as command new', async () => {
     const r = await router.routeMessage(makeInbound('/new@xopc_bot'));

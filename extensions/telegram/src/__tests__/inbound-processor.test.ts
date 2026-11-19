@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, it, expect, vi, beforeEach } from 'vitest';
 import { initializeTestAgentCatalog } from '@xopcai/xopc/agent-catalog/test-support.js';
+import { registerSessionCommands } from '@xopcai/xopc/chat-commands/builtins/session.js';
+import { commandRegistry } from '@xopcai/xopc/chat-commands/registry.js';
 import { createInboundProcessor, type InboundProcessorDeps } from '../inbound-processor.js';
 import { TelegramAccountManager } from '../account-manager.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
@@ -26,8 +28,14 @@ vi.mock('../../../utils/logger.js', () => ({
 }));
 
 describe('inbound-processor', () => {
-  beforeAll(() => initializeTestAgentCatalog());
-  afterAll(() => closeXopcDatabase());
+  beforeAll(() => {
+    initializeTestAgentCatalog();
+    registerSessionCommands();
+  });
+  afterAll(() => {
+    commandRegistry.clear();
+    closeXopcDatabase();
+  });
 
   let accountManager: TelegramAccountManager;
   let mockBus: MessageBus;
@@ -103,6 +111,18 @@ describe('inbound-processor', () => {
   });
 
   describe('basic message processing', () => {
+    it.each([
+      { text: '/tmp inspect this folder', isCommand: false },
+      { text: '/reset', isCommand: true },
+    ])('publishes $text with command classification $isCommand', async ({ text, isCommand }) => {
+      await processor(createMockContext({ text }) as Context, 'default');
+
+      expect(vi.mocked(mockBus.publishInbound).mock.calls[0]?.[0]).toMatchObject({
+        content: text,
+        metadata: { isCommand },
+      });
+    });
+
     it('should process text message', async () => {
       const mockCtx = createMockContext({
         text: 'Hello World',

@@ -1,11 +1,8 @@
 import { XopcClarification } from '../model/clarification';
-import { XopcPersonalDelivery, XopcPersonalWorkGroup, XopcPersonalWorkItem } from '../model/personalOverview';
+import { personalPromptNeedsAttention, personalWorkNeedsAttention,
+  XopcPersonalDelivery, XopcPersonalWorkGroup, XopcPersonalWorkItem } from '../model/personalOverview';
 import { XopcAutomation } from '../model/workspace';
 import { XopcPersonalOverviewRepository } from '../repository/personalOverviewRepository';
-
-function needsAttention(item: XopcPersonalWorkItem): boolean {
-  return !!item.attention || item.presentation?.status === 'needsUser' || item.presentation?.status === 'review';
-}
 
 function ended(item: XopcPersonalWorkItem): boolean {
   return item.phase === 'closed' || item.operationalState === 'failed' || item.operationalState === 'cancelled';
@@ -35,14 +32,14 @@ export class XopcPersonalOverviewViewModel {
   private promptRevision: number = 0;
   private repository: XopcPersonalOverviewRepository = new XopcPersonalOverviewRepository();
 
-  @Computed get attention(): XopcPersonalWorkItem[] { return this.current.filter(needsAttention); }
+  @Computed get attention(): XopcPersonalWorkItem[] { return this.current.filter(personalWorkNeedsAttention); }
   @Computed get active(): XopcPersonalWorkItem[] {
-    return this.current.filter((item: XopcPersonalWorkItem): boolean => !needsAttention(item) && !ended(item));
+    return this.current.filter((item: XopcPersonalWorkItem): boolean => !personalWorkNeedsAttention(item) && !ended(item));
   }
   @Computed get prompt(): XopcClarification | undefined {
     const prompt = this.clarification;
     return prompt?.status === 'open' && (prompt.expiresAt === undefined || prompt.expiresAt > Date.now()) &&
-      !this.attention.some((item: XopcPersonalWorkItem): boolean => item.prompt?.id === prompt.id) ? prompt : undefined;
+      personalPromptNeedsAttention(prompt.id, this.attention) ? prompt : undefined;
   }
   @Computed get attentionCount(): number { return this.attention.length + (this.prompt ? 1 : 0); }
   @Computed get runningCount(): number {
@@ -52,7 +49,7 @@ export class XopcPersonalOverviewViewModel {
   @Computed get moreWork(): boolean { return this.historyOffset > 0 && this.historyOffset < this.historyTotal; }
   @Computed get groups(): XopcPersonalWorkGroup[] {
     const currentIds = new Set<string>(this.current.map((item: XopcPersonalWorkItem): string => item.id));
-    const items = this.current.filter((item: XopcPersonalWorkItem): boolean => ended(item) && !needsAttention(item))
+    const items = this.current.filter((item: XopcPersonalWorkItem): boolean => ended(item) && !personalWorkNeedsAttention(item))
       .concat(this.history.filter((item: XopcPersonalWorkItem): boolean => !currentIds.has(item.id)))
       .sort((a: XopcPersonalWorkItem, b: XopcPersonalWorkItem): number => b.updatedAt - a.updatedAt);
     const today = new Date();

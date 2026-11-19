@@ -2249,6 +2249,44 @@ class MainScreenTest {
     fun form(id: String, label: String, action: String) = JSONObject()
       .put("fields", JSONArray().put(JSONObject().put("id", id).put("type", "text").put("label", label)))
       .put("actions", JSONArray().put(JSONObject().put("id", action).put("label", "Continue")))
+    fun mcpPanel(input: JSONObject?): JSONObject {
+      val url = "https://example.com/mcp"
+      fun action(id: String, label: String) = JSONObject().put("id", id).put("label", label)
+      fun field(id: String, label: String, type: String) = JSONObject().put("id", id).put("label", label).put("type", type)
+      fun condition(mode: String) = JSONObject().put("field", "mcp-mode").put("value", mode)
+      fun option(id: String, label: String) = JSONObject().put("id", id).put("label", label)
+      fun checked() = JSONObject().put("flow", "mcp-fixture").put("revision", 2).put("headline", "example.com")
+        .put("message", "Connection verified").put("tone", "success")
+        .put("actions", JSONArray().put(action("save", "Add connection")).put(action("edit", "Back")))
+      val operation = input?.optString("action")
+      val values = input?.optJSONObject("values")
+      return when {
+        input != null && operation == "save" && input.optString("flow") == "mcp-fixture" && input.optInt("revision") == 2 ->
+          JSONObject().put("message", "Connection added").put("actions", JSONArray().put(action("done", "Done").put("dismiss", true)))
+        operation == "review-command" && values?.optString("command") == "node" ->
+          JSONObject().put("flow", "mcp-fixture").put("revision", 1).put("headline", "node")
+            .put("reviewText", "[\"node\"]").put("message", "Runs on the Gateway host")
+            .put("actions", JSONArray().put(action("confirm-check", "Run and check")).put(action("edit", "Back")))
+        operation == "confirm-check" -> checked()
+        operation == "create" && values?.optString("url") == url -> checked()
+        operation == "select" && values?.optString("selection") == "0" -> checked()
+        operation == "preview" && values?.optString("mcp-json") == """{"url":"https://example.com/mcp"}""" ->
+          JSONObject().put("flow", "mcp-fixture").put("revision", 1).put("headline", "Choose a server")
+            .put("fields", JSONArray().put(field("selection", "Server", "select").put("value", "0")
+              .put("options", JSONArray().put(option("0", "example.com")))))
+            .put("actions", JSONArray().put(action("select", "Check selected connection")).put(action("edit", "Back")))
+        else -> JSONObject().put("fields", JSONArray()
+          .put(field("mcp-mode", "Add method", "select").put("presentation", "segmented")
+            .put("value", if (operation == "edit") "json" else "link")
+            .put("options", JSONArray().put(option("link", "Server URL")).put(option("json", "Paste JSON")).put(option("stdio", "Command"))))
+          .put(field("url", "Server URL", "text").put("visibleWhen", condition("link")))
+          .put(field("command", "Executable", "text").put("visibleWhen", condition("stdio")))
+          .put(field("mcp-json", "MCP JSON configuration", "multiline").put("retain", true).put("visibleWhen", condition("json"))))
+          .put("actions", JSONArray().put(action("create", "Check connection").put("visibleWhen", condition("link")))
+            .put(action("preview", "Preview configuration").put("visibleWhen", condition("json")))
+            .put(action("review-command", "Review command").put("visibleWhen", condition("stdio"))))
+      }
+    }
     fun captureCategory(category: String) {
       if (android.os.Build.VERSION.SDK_INT < 29) return
       val resolver = composeTestRule.activity.contentResolver
@@ -2268,11 +2306,7 @@ class MainScreenTest {
           onCapabilityPanel = { category, id, input ->
           when {
             id == "marketplace:search" -> form("query", "Search skills", "search")
-            id == "mcp:setup" -> {
-              if (input?.optString("action") == "create" && input.optJSONObject("values")?.optString("url") == "https://example.com/mcp") {
-                JSONObject().put("message", "Connection added")
-              } else form("url", "MCP server URL", "create")
-            }
+            id == "mcp:setup" -> mcpPanel(input)
             category == "connections" -> form("account", "Account", "authorize")
             category == "agents" -> form("name", "Name", "save")
             category == "channels" -> form("scope", "Scope", "pair")
@@ -2347,8 +2381,39 @@ class MainScreenTest {
         composeTestRule.onNodeWithTag("capability-add-mcp").performClick()
         composeTestRule.onNodeWithTag("capability-field-url").performTextInput("https://example.com/mcp")
         composeTestRule.onNodeWithTag("capability-panel-create").performClick()
+        composeTestRule.onNodeWithText("Connection verified").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connection added").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("capability-panel-save").performClick()
         composeTestRule.onNodeWithText("Connection added").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("capability-panel-close").performClick()
+        composeTestRule.onNodeWithTag("capability-panel-done").performClick()
+        composeTestRule.onNodeWithTag("capability-add-mcp").performClick()
+        composeTestRule.onNodeWithTag("capability-option-json").performClick()
+        composeTestRule.onNodeWithTag("capability-panel-create").assertDoesNotExist()
+        val json = composeTestRule.onNodeWithTag("capability-field-mcp-json")
+        val preview = composeTestRule.onNodeWithTag("capability-panel-preview")
+        json.performTextInput("""{"url":"https://example.com/mcp"}""")
+        preview.performClick()
+        composeTestRule.onNodeWithText("Choose a server").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("capability-panel-edit").performClick()
+        preview.performClick()
+        composeTestRule.onNodeWithTag("capability-panel-select").performClick()
+        composeTestRule.onNodeWithText("Connection verified").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connection added").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("capability-panel-save").performClick()
+        composeTestRule.onNodeWithText("Connection added").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("capability-panel-done").performClick()
+        composeTestRule.onNodeWithTag("capability-add-mcp").performClick()
+        composeTestRule.onNodeWithTag("capability-option-stdio").performClick()
+        composeTestRule.onNodeWithTag("capability-field-command").performTextInput("node")
+        composeTestRule.onNodeWithTag("capability-panel-review-command").performClick()
+        composeTestRule.onNodeWithTag("capability-panel-review-text").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("capability-panel-save").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("capability-panel-confirm-check").performClick()
+        composeTestRule.onNodeWithText("Connection verified").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connection added").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("capability-panel-save").performClick()
+        composeTestRule.onNodeWithText("Connection added").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("capability-panel-done").performClick()
       }
       if (kind == "skills" || kind == "agents") {
         composeTestRule.onNodeWithTag("capability-chat-setup-$kind").performClick()

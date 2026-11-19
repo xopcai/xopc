@@ -3,7 +3,7 @@ const TASK_DESTRUCTIVE_COMMANDS = new Set([...RESET_COMMANDS, 'clear', 'archive'
 
 export function parseLeadingSlashCommand(content: string): { name: string; args: string } | null {
   const trimmed = content.trim();
-  const match = /^\/([^\s@]+)(?:@[^\s]+)?(?:\s+([\s\S]*))?$/.exec(trimmed);
+  const match = /^\/([^/\s@]+)(?:@[^/\s]+)?(?:\s+([\s\S]*))?$/.exec(trimmed);
   if (!match) return null;
   return { name: match[1].toLowerCase(), args: match[2]?.trim() ?? '' };
 }

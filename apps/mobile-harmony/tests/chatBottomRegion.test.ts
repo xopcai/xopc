@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
+const personalChatActivity = readFileSync(new URL('../entry/src/main/ets/view/PersonalChatActivity.ets', import.meta.url), 'utf8');
 const options = readFileSync(new URL('../entry/src/main/ets/view/ChatOptions.ets', import.meta.url), 'utf8');
 const home = readFileSync(new URL('../entry/src/main/ets/view/HomeView.ets', import.meta.url), 'utf8');
 const sessions = readFileSync(new URL('../entry/src/main/ets/view/SessionsView.ets', import.meta.url), 'utf8');
@@ -138,14 +139,14 @@ describe('chat bottom region composition', () => {
     expect(sessions).not.toContain("Button('+').id('sessions-new')");
   });
 
-  it('keeps routine Gateway connection progress quiet and renders capsule voice call and settings actions', () => {
+  it('keeps routine Gateway connection progress quiet and limits the chat options to ordinary conversations', () => {
     expect(chat).toContain('if (this.hasConnectionIssue())');
     expect(chat).not.toContain("if (this.chat.connection !== 'connected')");
     expect(chat).toContain("this.chat.connection === 'gateway_update_required' || this.chat.connection.startsWith('error:')");
     const header = chat.slice(chat.indexOf('  voiceCallButton()'), chat.indexOf('  chatWorkspace()'));
-    expect(header).toContain("$r('sys.symbol.slider_horizontal_2')");
     expect(header).toContain("$r('sys.symbol.phone')");
-    expect(header).toContain(".id('chat-header-actions')");
+    const actions = header.slice(header.indexOf('  conversationActions()'), header.indexOf('  sidebarButton()'));
+    expect(actions).toMatch(/if \(!this\.personalConversation\) \{\s*Button[\s\S]+?\.id\('chat-header-actions'\)/);
     expect(header).toContain(".id('chat-header-voice-call')");
     expect(header).toContain('this.startVoiceCall()');
     const draftHeader = header.split('} else if (this.isStandaloneDraft())')[1]?.split('} else {')[0];
@@ -154,8 +155,8 @@ describe('chat bottom region composition', () => {
     expect(draftHeader).not.toContain('this.conversationActions()');
     expect(header).not.toContain(".id('chat-header-new')");
     expect(header).not.toContain(".id('chat-header-search')");
-    expect(header).toContain('this.personalSettingsOpen = true');
-
+    expect(header).toContain("page: 'personal-agent-overview'");
+    expect(chat).not.toContain('personalSettingsSheet');
   });
 
   it('centers the personal avatar and leaves the ordinary conversation header blank between the controls', () => {
@@ -164,15 +165,21 @@ describe('chat bottom region composition', () => {
     expect(header).toContain('Stack({ alignContent: Alignment.Top })');
     expect(header).toContain('XopcPersonalAgentAvatar({ extent: 62');
     expect(header).toContain('this.personalAgent?.displayName');
-    expect(header).toContain("$r('app.string.chat_attention_count', this.pendingAttention)");
-    expect(header).toContain("this.onNavigate({ page: 'progress', itemId: '' })");
+    expect(header).toContain('XopcPersonalChatActivity({ conversationId: this.chat.selectedId');
+    expect(header).toContain('onOpenAttention: (): void => { this.openPersonalOverview(); }');
+    expect(header).toContain("page: 'tasks', itemId: taskId");
+    expect(header).not.toContain('pendingAttention');
+    expect(personalChatActivity).toContain("$r('app.string.chat_attention_count', this.attentionCount)");
+    expect(personalChatActivity).toContain('.autoPlay(this.activePage && !this.reduceMotion)');
     const ordinary = header.slice(header.indexOf('} else if (this.isStandaloneDraft())'));
     expect(ordinary.match(/Blank\(\)\.layoutWeight\(1\)/g)).toHaveLength(2);
     expect(ordinary).not.toContain('this.chat.title');
     expect(ordinary).not.toContain('this.options.agentName()');
     expect(ordinary).not.toContain('this.agentPickerButton()');
     expect(ordinary).toContain('this.conversationActions()');
-    expect(home).toContain('pendingAttention: this.pendingAttention');
+    const mainChat = home.slice(home.indexOf('XopcChatView({ requestedId: this.requestedChatId'),
+      home.indexOf(".id('home-chat-viewport')"));
+    expect(mainChat).not.toContain('pendingAttention');
     expect(home).toContain('return this.attention.pendingCount;');
     expect(home).toContain('XopcWorkbenchView({ progress: this.attention');
     expect(options).toContain("heading: $r('app.string.chat_model')");

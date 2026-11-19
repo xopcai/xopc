@@ -11,6 +11,7 @@ export function normalizeTelegramCommandName(command: string): string {
  * Parse a `/command` from message text. Handles:
  * - `/cmd@BotName` and arguments
  * - Multiline: voice STT text before a line that starts with `/` (Telegram caption after transcript)
+ * A leading path or bare slash leaves the message as ordinary input.
  */
 export function parseSlashCommand(text: string): { command: string; args: string } | null {
   const trimmed = text.trim();
@@ -20,15 +21,11 @@ export function parseSlashCommand(text: string): { command: string; args: string
     const line = part.trim();
     if (!line.startsWith('/')) continue;
 
-    const withoutPrefix = line.slice(1);
-    const whitespaceIndex = withoutPrefix.search(/\s/);
-    if (whitespaceIndex === -1) {
-      return { command: normalizeTelegramCommandName(withoutPrefix), args: '' };
-    }
-    return {
-      command: normalizeTelegramCommandName(withoutPrefix.slice(0, whitespaceIndex)),
-      args: withoutPrefix.slice(whitespaceIndex + 1).trim(),
-    };
+    const match = /^\/([^/\s]+)(?:\s+([\s\S]*))?$/.exec(line);
+    if (!match) return null;
+
+    const command = normalizeTelegramCommandName(match[1]);
+    return command ? { command, args: match[2]?.trim() ?? '' } : null;
   }
 
   return null;

@@ -17,6 +17,26 @@ describe('parseSlashCommand', () => {
   it('normalizes command names and accepts tab-separated arguments', () => {
     expect(parseSlashCommand('/HELP\tTopic')).toEqual({ command: 'help', args: 'Topic' });
   });
+
+  it('allows paths in command arguments', () => {
+    expect(parseSlashCommand('/help@XopcBot /Users/me/project')).toEqual({
+      command: 'help',
+      args: '/Users/me/project',
+    });
+  });
+
+  it.each([
+    '/',
+    '/ list the root directory',
+    '/Users/me/project',
+    '/tmp/',
+    '/help@dev/project',
+    '//server/share',
+    '/tmp/project\n/help',
+  ])('returns null for path input %j', (text) => {
+    expect(parseSlashCommand(text)).toBeNull();
+  });
+
   it('parses first slash line when transcript precedes caption', () => {
     expect(parseSlashCommand('hello world\n/tts always')).toEqual({
       command: 'tts',

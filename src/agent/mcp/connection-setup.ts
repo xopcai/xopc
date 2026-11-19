@@ -6,11 +6,11 @@ import { Agent } from 'undici';
 import type { Config } from '../../config/schema.js';
 import { isManagedConnectorServer } from '../../connectors/materialize.js';
 import { createLogger } from '../../utils/logger.js';
-import { checkUrlSafety } from '../tools/url-safety.js';
 import { classifyMcpConnectionError, type McpConnectionErrorCode } from './connection-errors.js';
 import { prepareNativeMcpConfig } from './native-mcp.js';
 import { discoverMcpTools, McpAuthenticationRequiredError, signInNativeMcp, type McpSessionOptions } from './tool-catalog.js';
 import type { McpObservation } from './transport.js';
+import { isPrivateMcpIp, isPrivateMcpTarget, isPublicMcpIp, isPublicMcpTarget } from './network-policy.js';
 
 const log = createLogger('McpConnectionSetup');
 export type McpMetadataState = 'valid' | 'absent' | 'unreachable' | 'invalid' | 'not_checked';
@@ -26,15 +26,19 @@ function httpUrl(value: string): URL {
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Use an HTTP or HTTPS MCP address without embedded credentials.');
   return url;
 }
-async function metadata(url: URL, endpoint: URL, signal?: AbortSignal, publicOnly = false): Promise<{ state: McpMetadataState; data?: Record<string, unknown>; retryAt?: number }> {
-  const sameOrigin = endpoint.origin === url.origin && !publicOnly;
-  if (!sameOrigin && !checkUrlSafety(url.href).safe) return { state: 'invalid' };
+async function metadata(url: URL, endpoint: URL, signal?: AbortSignal, publicOnly = false, privateNetwork = false): Promise<{ state: McpMetadataState; data?: Record<string, unknown>; retryAt?: number }> {
+  const local = endpoint.origin === url.origin && !publicOnly;
+  const privateOrigin = local && privateNetwork;
+  if (privateOrigin ? !isPrivateMcpTarget(url) : !local && !isPublicMcpTarget(url)) return { state: 'invalid' };
   const { retryAfter } = await import('./transport.js');
   signal?.throwIfAborted();
   const dispatcher = new Agent({ connect: { lookup(host, options, callback) {
     lookup(host, { all: true }, (error, addresses) => {
       if (error) { callback(error, '', 4); return; }
-      if (!sameOrigin && addresses.some(a => !checkUrlSafety(`http://${a.family === 6 ? `[${a.address}]` : a.address}`).safe)) { callback(new Error('Non-public authorization metadata destination'), '', 4); return; }
+      const allowed = privateOrigin ? isPrivateMcpIp : isPublicMcpIp;
+      if ((!local || privateOrigin) && addresses.some(address => !allowed(address.address))) {
+        callback(new Error('Authorization metadata resolved outside its approved network'), '', 4); return;
+      }
       if (options.all) callback(null, addresses); else if (addresses[0]) callback(null, addresses[0].address, addresses[0].family); else callback(new Error('No metadata address'), '', 4);
     });
   } } });
@@ -61,9 +65,13 @@ async function authentication(config: Config, workspace: string, serverId: strin
   options?.signal?.throwIfAborted();
   const url = httpUrl(entry.config.url);
   const publicOnly = config.mcp?.servers?.[serverId]?.xopcPublicOnly === true;
+  const privateNetwork = config.mcp?.servers?.[serverId]?.xopcPrivateNetwork === true;
   const allowedIssuer = (value: unknown) => {
     try { if (typeof value !== 'string') return false; const issuer = httpUrl(value);
-      return !issuer.hash && (issuer.protocol === 'https:' && checkUrlSafety(issuer.href).safe || !publicOnly && issuer.origin === url.origin && ['localhost', '127.0.0.1', '[::1]'].includes(issuer.hostname));
+      return !issuer.hash && (issuer.protocol === 'https:' && isPublicMcpTarget(issuer) ||
+        !publicOnly && issuer.origin === url.origin && (privateNetwork
+          ? issuer.protocol === 'https:' && isPrivateMcpTarget(issuer)
+          : ['localhost', '127.0.0.1', '[::1]'].includes(issuer.hostname)));
     } catch { return false; }
   };
   const challenge = failure?.challenge;
@@ -78,11 +86,13 @@ async function authentication(config: Config, workspace: string, serverId: strin
   const read = async (target: URL) => {
     options?.signal?.throwIfAborted();
     options?.diagnostics?.beforeRequest?.({ method: 'GET', stage: 'authorization_metadata' });
-    return metadata(target, url, options?.signal, publicOnly);
+    return metadata(target, url, options?.signal, publicOnly, privateNetwork);
   };
   let issuer: string | undefined;
   for (const candidate of new Map(candidates.map(c => [c.href, c])).values()) {
-    if (!allowedIssuer(candidate.href)) { state = 'invalid'; continue; }
+    const privateResource = privateNetwork && candidate.origin === url.origin && !candidate.username && !candidate.password &&
+      !candidate.hash && isPrivateMcpTarget(candidate);
+    if (!privateResource && !allowedIssuer(candidate.href)) { state = 'invalid'; continue; }
     const result = await read(candidate);
     if (result.retryAt) return unknown(result.state, result.retryAt);
     if (result.state !== 'absent') state = result.state;

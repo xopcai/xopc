@@ -120,7 +120,7 @@ struct ScopedAssistantChat: View {
                           if wasDraft, !updated.isDraft {
                               onMaterialized(updated)
                           }
-                      }, onPersonalAgentUpdated: { _ in },
+                      },
                       onOpenSettings: {}, onInputFocusChanged: { _ in }, showsFloatingHeader: false,
                       automationSetup: automationSetup) { $0 }
             .mobilePageTitle(Text(heading))
