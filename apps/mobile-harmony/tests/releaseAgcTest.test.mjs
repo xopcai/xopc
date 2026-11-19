@@ -37,11 +37,14 @@ function mockHuawei(t, { existing = [], groupId = group.groupId, auditOpinion, r
 
 test('resumes from a Huawei package ID and confirms review after binding only the internal group', async (t) => {
   const requests = mockHuawei(t);
+  const startedAt = Date.now();
   await releaseAgcTest(build, 'unused.app', 'internal', group.groupName, '123');
   const versionWrites = requests.filter(({ path, method }) => path.includes('/test/app/version') && method !== 'GET');
   assert.deepEqual(versionWrites.map(({ method }) => method), ['POST', 'PUT', 'POST']);
   const binding = versionWrites[1].body;
   assert.equal(binding.pkgId, '123');
+  assert(binding.openTestInfo.startTime >= startedAt && binding.openTestInfo.startTime <= Date.now());
+  assert.equal(binding.openTestInfo.endTime - binding.openTestInfo.startTime, 14 * 86400_000);
   assert.deepEqual(binding.openTestInfo.testTaskInfo.groupInfos, [{ groupId: group.groupId, groupName: group.groupName, addedTesterNum: 1, bind: 1 }]);
   assert.deepEqual(versionWrites[2].body, { versionId: '456' });
   assert.equal(requests.at(-1).path, '/api/publish/v3/app-info');

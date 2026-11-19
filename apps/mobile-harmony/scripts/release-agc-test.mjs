@@ -152,7 +152,7 @@ export async function releaseAgcTest(build, packagePath, channel, groupName, res
     versionId = requireId(created.versionId, 'test version ID');
   }
   record(`Huawei test version ID (resume_version_id): ${versionId}.`);
-  const startTime = Date.now() + 15 * 60_000;
+  const startTime = Date.now() + (channel === 'internal' ? 0 : 15 * 60_000);
   await agcRequest(draftPath, {
     method: 'PUT', label: 'Bind AGC test package and group',
     body: {

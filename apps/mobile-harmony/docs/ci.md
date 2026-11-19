@@ -39,7 +39,7 @@ HARMONY_TOOLS_DIR=/absolute/path/to/command-line-tools node apps/mobile-harmony/
 
 手机测试分发走 `Mobile HarmonyOS CI` 的手动运行入口。选择 `main`，填写 `expected_version`（与 `AppScope/app.json5` 里的 `versionName` 一致），再选择 `release_channel`。
 
-- `internal` 提交到现有 `xopc 内测` 群组。
+- `internal` 提交到现有 `xopc 内测` 群组。测试时间从配置提交时起算，有效期 14 天，华为发布生效后即可测试。
 - `external` 提交到 `external_group` 指定的现有外部 AppTest 群组。
 - `verify` 构建并验证发布签名，查询华为 API 权限，不创建测试版本。
 
