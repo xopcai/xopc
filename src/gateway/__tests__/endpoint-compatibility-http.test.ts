@@ -36,6 +36,8 @@ it('checks compatibility through a running authenticated Gateway and its lazy ro
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await response.json()).toMatchObject({ payload: {
       computerControl: COMPUTER_DESCRIPTOR,
+      gatewayId: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      deviceFolderGatewayAccessV1: true,
       clarificationVersions: process.env.XOPC_CLARIFY_MULTI_QUESTION === 'false' ? [1] : [1, 2],
       realtime: {
         minVersion: REALTIME_PROTOCOL_VERSION,

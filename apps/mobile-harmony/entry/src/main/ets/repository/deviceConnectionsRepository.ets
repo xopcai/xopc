@@ -1,15 +1,19 @@
 import { gatewaySession } from '../service/gatewaySession';
+import { prepareDeviceCapabilityPermission } from '../service/devicePersonalTools';
 
 export interface XopcConnectionFolder { id: string; kind: string; label: string; }
+export interface XopcReportedCapability { name: string; title: string; titleZh: string; allowed: boolean; }
 export interface XopcConnectedDevice {
   id: string; name: string; kind: string; platform: string; endpointId?: string;
   availability: string; tools: string[]; folders: XopcConnectionFolder[];
+  capabilities?: XopcReportedCapability[];
 }
 export interface XopcDeviceConnections { currentDeviceId?: string; devices: XopcConnectedDevice[]; }
 interface XopcDeviceConnectionsEnvelope { ok: boolean; payload?: XopcDeviceConnections; }
 interface XopcDeviceConnectionChat { conversationId: string; agentId: string; }
 interface XopcDeviceConnectionChatEnvelope { ok: boolean; payload?: XopcDeviceConnectionChat; }
 interface XopcDeviceConnectionChatInput { endpointId: string; }
+interface XopcDeviceCapabilityChange { toolName: string; allowed: boolean; }
 
 export async function loadDeviceConnections(): Promise<XopcDeviceConnections> {
   const revision = gatewaySession.connectionRevision();
@@ -17,6 +21,16 @@ export async function loadDeviceConnections(): Promise<XopcDeviceConnections> {
   gatewaySession.assertConnection(revision);
   if (!response.ok || !response.payload || !Array.isArray(response.payload.devices)) throw new Error('DEVICE_CONNECTIONS_UNAVAILABLE');
   return response.payload;
+}
+
+export async function setDeviceCapability(name: string, allowed: boolean, deviceId: string): Promise<void> {
+  const revision = gatewaySession.connectionRevision();
+  if (gatewaySession.currentProfile()?.deviceId !== deviceId) throw new Error('GATEWAY_CHANGED');
+  if (allowed) await prepareDeviceCapabilityPermission(name);
+  gatewaySession.assertConnection(revision);
+  const input: XopcDeviceCapabilityChange = { toolName: name, allowed };
+  await gatewaySession.request('/api/endpoint-tools/device-connections', 'PATCH', JSON.stringify(input));
+  gatewaySession.assertConnection(revision);
 }
 
 export async function openDeviceConnectionChat(endpointId: string): Promise<string> {

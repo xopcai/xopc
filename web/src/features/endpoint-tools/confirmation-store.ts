@@ -1,12 +1,9 @@
 import { useSyncExternalStore } from 'react';
 
-const PREVIEW_LIMIT = 600;
-
 export interface EndpointConfirmationRequest {
   invocationId: string;
   title: string;
-  toolName?: string;
-  argumentsPreview: string;
+  remember: boolean;
 }
 
 type PendingConfirmation = EndpointConfirmationRequest & {
@@ -30,17 +27,10 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-export function formatEndpointToolArguments(args: Record<string, unknown>): string {
-  const json = JSON.stringify(args, null, 2);
-  if (json.length <= PREVIEW_LIMIT) return json;
-  return `${json.slice(0, PREVIEW_LIMIT)}\n…`;
-}
-
 export function requestEndpointConfirmation(input: {
   invocationId: string;
   title: string;
-  toolName?: string;
-  args: Record<string, unknown>;
+  remember: boolean;
   deadlineAt: number;
 }): Promise<boolean> {
   if (input.deadlineAt <= Date.now()) return Promise.resolve(false);
@@ -52,8 +42,7 @@ export function requestEndpointConfirmation(input: {
     pending.push({
       invocationId: input.invocationId,
       title: input.title,
-      toolName: input.toolName,
-      argumentsPreview: formatEndpointToolArguments(input.args),
+      remember: input.remember,
       resolve,
       timeout,
     });

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 import { canonicalJson } from './canonical-json.js';
 import { desktopOperationIntentSchema, desktopOperationReceiptSchema } from './execution.js';
+import { PERSONAL_TOOL_NAMES } from './personal.js';
 import { desktopTerminalCommandSchema, desktopTerminalEventSchema } from './terminal.js';
 import { providerCatalogSchema, providerStateSchema } from './providers.js';
 export * from './providers.js';
@@ -76,11 +77,42 @@ export const endpointTaskTargetRequestSchema = z.strictObject({
   endpointId: identifierSchema,
 });
 
-const mobileDeviceChatToolSchema = z.enum([
-  'mobile.file.pick', 'mobile.media.pick', 'mobile.contacts.pick', 'mobile.calendar.query_events', 'mobile.device.get_location',
+export const mobileDeviceChatToolSchema = z.enum([
+  ...PERSONAL_TOOL_NAMES, 'mobile.device.get_location', 'mobile.device.get_state', 'mobile.device.get_power',
 ]);
 export type MobileDeviceChatTool = z.infer<typeof mobileDeviceChatToolSchema>;
-export const deviceConnectionChatRequestSchema = endpointTaskTargetRequestSchema.extend({ toolName: mobileDeviceChatToolSchema.optional() });
+export const desktopDeviceChatToolSchema = z.enum([
+  'desktop.device.get_state', 'desktop.file.pick', 'desktop.file.save', 'desktop.notification.show',
+  'desktop.clipboard.read', 'desktop.clipboard.write', 'desktop.app.open_external', 'desktop.computer.control',
+]);
+export type DesktopDeviceChatTool = z.infer<typeof desktopDeviceChatToolSchema>;
+export const desktopCapabilityTitles: Record<DesktopDeviceChatTool, readonly [zh: string, en: string]> = {
+  'desktop.device.get_state': ['设备信息', 'Device information'],
+  'desktop.file.pick': ['选择文件', 'Choose a file'],
+  'desktop.file.save': ['保存文本文件', 'Save a text file'],
+  'desktop.notification.show': ['显示通知', 'Show notifications'],
+  'desktop.clipboard.read': ['读取剪贴板', 'Read clipboard'],
+  'desktop.clipboard.write': ['写入剪贴板', 'Write to clipboard'],
+  'desktop.app.open_external': ['打开网页链接', 'Open web links'],
+  'desktop.computer.control': ['操作应用窗口', 'Operate application windows'],
+};
+const deviceChatToolSchema = z.union([mobileDeviceChatToolSchema, desktopDeviceChatToolSchema]);
+export type DeviceChatTool = z.infer<typeof deviceChatToolSchema>;
+export const deviceConnectionChatRequestSchema = endpointTaskTargetRequestSchema.extend({ toolName: deviceChatToolSchema.optional() });
+export const mobileDeviceCapabilityGrantSchema = z.strictObject({ toolName: mobileDeviceChatToolSchema, allowed: z.boolean() });
+export const desktopDeviceCapabilityGrantSchema = endpointTaskTargetRequestSchema.extend({
+  toolName: desktopDeviceChatToolSchema,
+  allowed: z.boolean(),
+});
+export type DesktopDeviceCapabilityGrant = z.infer<typeof desktopDeviceCapabilityGrantSchema>;
+export const desktopCapabilitySnapshotSchema = z.strictObject({
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  allowed: z.array(desktopDeviceChatToolSchema).max(desktopDeviceChatToolSchema.options.length),
+});
+export type DesktopCapabilitySnapshot = z.infer<typeof desktopCapabilitySnapshotSchema>;
+export function desktopCapabilitySigningPayload(origin: EndpointTurnClaim, snapshot: DesktopCapabilitySnapshot): string {
+  return canonicalJson({ action: 'publish-desktop-capabilities', origin, snapshot });
+}
 
 const backgroundCapabilitySchema = z.string()
   .regex(/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/)
@@ -146,6 +178,7 @@ export const toolInvokePayloadSchema = z.strictObject({
   arguments: jsonObjectSchema,
   descriptorRevision: z.string().min(1).max(128),
   confirmationRequired: z.boolean(),
+  gatewayCapabilityAuthorized: z.literal(true).optional(),
   deadlineAt: timestampSchema,
   execution: desktopOperationIntentSchema.optional(),
   operationQuery: desktopOperationIntentSchema.optional(),

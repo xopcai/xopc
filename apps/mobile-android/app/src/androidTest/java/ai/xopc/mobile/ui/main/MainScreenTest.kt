@@ -22,6 +22,7 @@ import ai.xopc.mobile.gateway.ConversationShare
 import ai.xopc.mobile.gateway.GatewayProfile
 import ai.xopc.mobile.gateway.ConnectedDevice
 import ai.xopc.mobile.gateway.DeviceConnections
+import ai.xopc.mobile.gateway.DeviceCapability
 import ai.xopc.mobile.gateway.DeviceConnectionFolder
 import ai.xopc.mobile.gateway.NextTurnSuggestion
 import ai.xopc.mobile.gateway.PendingInput
@@ -72,6 +73,7 @@ import java.time.Instant
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -2376,6 +2378,31 @@ class MainScreenTest {
     composeTestRule.runOnIdle {
       assertTrue(chatSetups.map { it.second } == listOf(false, true))
     }
+  }
+
+  @Test fun deviceConnectionsToggleOnlyTheReportedCapability() {
+    val allowed = AtomicReference(false)
+    val tool = "mobile.file.pick"
+    composeTestRule.setContent {
+      XopcTheme {
+        DeviceConnectionsScreen(
+          load = {
+            val phone = ConnectedDevice("phone", "Test phone", "mobile", "android", "phone-endpoint", "foreground",
+              setOf(tool), emptyList(), listOf(DeviceCapability(tool, "Files", "文件", allowed.get())))
+            DeviceConnections(phone.id, listOf(phone))
+          },
+          openChat = {}, shareFile = {}, useLocalTool = { error("The authorization switch must not open the capability") },
+          pair = {}, setCapability = { name, enabled, deviceId ->
+            assertEquals(tool, name)
+            assertEquals("phone", deviceId)
+            allowed.set(enabled)
+          },
+        )
+      }
+    }
+    val toggle = composeTestRule.onNodeWithTag("device-grant-$tool")
+    toggle.assertIsOff().performClick().assertIsOn()
+    toggle.performClick().assertIsOff()
   }
 
   @Test fun deviceConnectionsOpenOnlyTheAuthorizedComputer() {

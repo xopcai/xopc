@@ -3,6 +3,8 @@ import { ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
 import { REALTIME_CAPABILITIES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import type { Hono } from 'hono';
 
+import { isXopcDatabaseOpen } from '../../../storage/sqlite/connection.js';
+import { getOrCreateGatewayIdentity } from '../../../storage/sqlite/gateway-identity-repository.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
 export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
@@ -19,6 +21,7 @@ export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
       turnDeviceContextV1: true,
       clarificationVersions: process.env.XOPC_CLARIFY_MULTI_QUESTION === 'false' ? [1] : [1, 2],
       endpointEnvironmentV1: true,
+      ...(isXopcDatabaseOpen() ? { gatewayId: getOrCreateGatewayIdentity().id } : {}),
       locationSharingV1: true,
       mobilePhoneWorkspaceV1: true,
       phoneMediaProtocolVersion: 1,
@@ -29,6 +32,8 @@ export function registerEndpointCompatibilityRoutes(authenticated: Hono): void {
       mobilePersonalToolsV1: true,
       mobileExtendedPersonalToolsV1: true,
       deviceFolderConnectionsV1: true,
+      deviceFolderGatewayAccessV1: true,
+      desktopCapabilityAccessV1: true,
       ...(principal.kind === 'device' ? { deviceId: principal.deviceId } : {}),
       endpointProtocolVersion: ENDPOINT_PROTOCOL_VERSION,
       computerControl: COMPUTER_DESCRIPTOR,

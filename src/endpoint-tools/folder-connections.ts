@@ -9,6 +9,12 @@ import type { EndpointConnectionSnapshot, EndpointRegistry } from './registry.js
 export const deviceFolderSnapshots = new DurableState<DeviceFolderSnapshot>('device.folder-connections');
 export const mobileFolderPlatforms = new Set(['ios', 'android', 'harmonyos']);
 
+export function pairedFolderClientId(actor: GatewayPrincipal): string | undefined {
+  if (actor.kind !== 'device' || !actor.deviceId || !actor.scopes.includes('sessions.write')) return;
+  const device = getDevice(actor.deviceId);
+  if (device && device.revokedAt === undefined && mobileFolderPlatforms.has(device.platform)) return device.id;
+}
+
 export function saveDeviceFolderSnapshot(principalId: string, snapshot: DeviceFolderSnapshot): boolean {
   return deviceFolderSnapshots.update(principalId, previous => {
     if (previous && (previous.revision > snapshot.revision
@@ -25,14 +31,13 @@ export function deviceFoldersFor(endpoint: EndpointConnectionSnapshot, actor: Ga
     || !isXopcDatabaseOpen()) return [];
   const folders = deviceFolderSnapshots.get(endpoint.principalId)?.folders ?? [];
   if (actor.kind === 'owner' && actor.scopes.includes('gateway.admin')) {
-    if (origin?.type !== 'endpoint' || registry?.get(origin.endpointId)?.principalId !== endpoint.principalId) return [];
-    return folders;
+    const local = origin?.type === 'endpoint' && registry?.get(origin.endpointId)?.principalId === endpoint.principalId;
+    return folders.filter(folder => folder.access === 'gateway' || local);
   }
-  if (actor.kind !== 'device' || !actor.deviceId) return [];
-  if (origin && (origin.type !== 'endpoint' || registry?.get(origin.endpointId)?.principalId !== actor.deviceId)) return [];
-  const device = getDevice(actor.deviceId);
-  if (!device || device.revokedAt !== undefined || !mobileFolderPlatforms.has(device.platform)) return [];
-  return folders.filter(folder => folder.mobileIds.includes(device.id));
+  const clientId = pairedFolderClientId(actor);
+  if (!clientId) return [];
+  const local = !origin || origin.type === 'endpoint' && registry?.get(origin.endpointId)?.principalId === clientId;
+  return folders.filter(folder => folder.access === 'gateway' || local && folder.mobileIds?.includes(clientId));
 }
 
 export function permitsFolderInvocation(endpoint: EndpointConnectionSnapshot, actor: GatewayPrincipal | undefined,

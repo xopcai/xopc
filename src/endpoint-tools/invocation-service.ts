@@ -32,6 +32,7 @@ import { appendTranscriptEntry } from '../storage/sqlite/transcript-repository.j
 import { emitSessionTranscriptUpdate } from '../session/transcript-events.js';
 
 import { EndpointRegistry, endpointToolRevision } from './registry.js';
+import { deviceCapabilityAllowed } from './device-capability-grants.js';
 import { EndpointToolPolicy, EndpointToolPolicyError } from './policy.js';
 import type { EndpointInvocationScope, EndpointUploadService } from './upload-service.js';
 
@@ -51,6 +52,7 @@ interface PendingInvocation {
   id: string;
   endpointId: string;
   toolName: string;
+  gatewayCapabilityPrincipalId?: string;
   descriptor: EndpointToolDescriptor;
   providerDigest?: string;
   resourceKey?: string;
@@ -159,6 +161,7 @@ export class EndpointInvocationService {
     toolName: string;
     arguments: Record<string, unknown>;
     descriptorRevision: string;
+    gatewayCapability?: true;
     operationId?: string;
     invocationScope?: EndpointInvocationScope;
     interactionOrigin?: InteractionOrigin;
@@ -171,6 +174,9 @@ export class EndpointInvocationService {
     }
     const endpoint = this.registry.get(params.endpointId);
     if (!endpoint) return Promise.reject(new EndpointToolExecutionError('ENDPOINT_OFFLINE', 'Endpoint is offline', true));
+    if (params.gatewayCapability && !deviceCapabilityAllowed(endpoint, params.toolName)) {
+      return Promise.reject(new EndpointToolExecutionError('PERMISSION_DENIED', 'The device capability is not authorized for Gateway', true));
+    }
     if ([REMOTE_COMPUTER_CONTROL_TOOL, REMOTE_BROWSER_CONTROL_TOOL].includes(params.toolName) && !endpoint.executionAuthority) {
       return Promise.reject(new EndpointToolExecutionError('PERMISSION_DENIED', 'Remote device control requires independent desktop execution authority', true));
     }
@@ -289,6 +295,7 @@ export class EndpointInvocationService {
         id: invocationId,
         endpointId: params.endpointId,
         toolName: params.toolName,
+        ...(params.gatewayCapability && { gatewayCapabilityPrincipalId: endpoint.principalId }),
         descriptor: tool.descriptor,
         providerDigest: tool.provider?.digest,
         resourceKey,
@@ -326,6 +333,7 @@ export class EndpointInvocationService {
           arguments: params.arguments,
           descriptorRevision: params.descriptorRevision,
           confirmationRequired,
+          ...(params.gatewayCapability && { gatewayCapabilityAuthorized: true }),
           deadlineAt,
           ...(execution ? { execution: execution.intent } : {}),
           ...(operationQuery ? { operationQuery } : {}),
@@ -572,6 +580,14 @@ export class EndpointInvocationService {
       if (changed) db.prepare(`UPDATE capability_invocations SET state='unknown', finished_at=? WHERE operation_id=? AND state='running'`)
         .run(Date.now(), operation.operationId);
     });
+  }
+
+  revokeDeviceCapability(deviceId: string, toolName: string): void {
+    for (const invocation of this.pending.values()) {
+      if (invocation.gatewayCapabilityPrincipalId === deviceId && invocation.toolName === toolName) {
+        this.cancel(invocation.id, 'Device capability authorization was revoked', 'TOOL_CANCELLED');
+      }
+    }
   }
 
   private cancel(

@@ -1329,7 +1329,8 @@ app.whenReady().then(async () => {
   if (!globalShortcut.register('Control+Alt+Escape', () => { void desktopEndpointHost?.stopControl(); })) {
     console.warn('[Computer] Emergency shortcut unavailable; use the tray or settings Stop control.');
   }
-  powerMonitor.on('lock-screen', () => { void desktopEndpointHost?.stopControl(); });
+  powerMonitor.on('lock-screen', () => { desktopEndpointHost?.setScreenLocked(true); });
+  powerMonitor.on('unlock-screen', () => { desktopEndpointHost?.setScreenLocked(false); });
   powerMonitor.on('suspend', () => { void desktopEndpointHost?.stopControl(); });
   const assertMainComputerRenderer = (event: IpcMainInvokeEvent) => {
     assertTrustedRenderer(event);
@@ -1344,6 +1345,14 @@ app.whenReady().then(async () => {
   ipcMain.handle('device-folders:change', (event, input: unknown) => {
     assertMainComputerRenderer(event);
     return desktopEndpointHost?.changeDeviceFolder(input);
+  });
+  ipcMain.handle('device-capabilities:status', (event) => {
+    assertMainComputerRenderer(event);
+    return desktopEndpointHost?.deviceCapabilities();
+  });
+  ipcMain.handle('device-capabilities:change', (event, input: unknown) => {
+    assertMainComputerRenderer(event);
+    return desktopEndpointHost?.changeDeviceCapability(input);
   });
   ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
   registerComputerPreviewIpc(() => desktopEndpointHost, assertMainComputerRenderer);

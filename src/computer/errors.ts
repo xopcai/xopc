@@ -92,6 +92,7 @@ export function computerRecovery(code: string): string {
   if (code === 'COMPUTER_TARGET_REQUIRED') return 'Use device_use discover to find an accessible desktop, then device_use select with its exact targetRef. Continue in this conversation; opening it in another client is not required.';
   if (code === 'COMPUTER_TARGET_UNSUPPORTED') return 'The selected device does not provide desktop control. Explicitly select a device with Computer Use capability.';
   if (code === 'COMPUTER_TARGET_SCOPE_CHANGED') return 'This input is outside the active device execution context. Close the current control session before explicitly selecting the authorized target.';
+  if (code === 'COMPUTER_GATEWAY_CAPABILITY_REQUIRED') return 'Enable Operate application windows in Device connections on the source computer, then retry.';
   if (code === 'COMPUTER_TARGET_OFFLINE') return 'The selected desktop execution context is unavailable or its connection changed. Do not switch devices or replay actions. Check device_use discover and reconcile any uncertain operation before explicitly selecting a new context.';
   if (code === 'COMPUTER_AGENT_MODEL_REQUIRED') return 'Direct UI programs require an active visual main-model turn. Select a visual model and open with planner:agent; do not change models inside an active desktop session.';
   if (code === 'COMPUTER_AGENT_MODEL_CHANGED' || code === 'COMPUTER_PLANNER_MISMATCH') return 'The requested UI planner does not match the active session. Close and confirm release before opening the requested mode with the current main model.';
@@ -122,7 +123,7 @@ export function computerRecovery(code: string): string {
     case 'COMPUTER_WINDOWS_TEXT_INPUT_UNVERIFIED': case 'COMPUTER_WINDOWS_KEY_INPUT_UNVERIFIED':
       return 'This Windows control cannot be certified for safe input. Ask the user to enter text manually. Do not substitute key presses, paste, shell commands, coordinates or another tool to bypass this refusal.';
     case 'COMPUTER_WINDOWS_KEY_TARGET_REQUIRED':
-      return 'Keyboard input requires one verified non-password control focused inside the authorized window. Observe or focus the intended safe control before a new proposal; never send keys to another window or bypass the refusal with global input.';
+      return 'No key was sent. Windows needs a verified focused control in the authorized window. Replacing text does not establish focus. Observe the intended control, select it in a separate action if safe, then verify its focus in a fresh observation before proposing the key again.';
     case 'COMPUTER_WINDOWS_KEY_TARGET_CHANGED': case 'COMPUTER_WINDOWS_EDIT_TARGET_CHANGED':
       return 'The native input target or its safety state changed before dispatch. Inspect the actual application and release this operation. Do not replay an uncertain input or switch to global keys, paste or shell input.';
     case 'COMPUTER_WINDOW_APP_CHANGED':

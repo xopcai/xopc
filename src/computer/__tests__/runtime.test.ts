@@ -1,4 +1,5 @@
 import { EndpointTaskTargetService } from '../../endpoint-tools/task-targets.js';
+import * as deviceCapabilities from '../../endpoint-tools/device-capability-grants.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ComputerBroker } from '../broker.js';
 import { ComputerRuntime, ComputerUseInputSchema } from '../runtime.js';
@@ -66,6 +67,30 @@ function fixture(autoApprove = true, flowStore?: ComputerFlowRepository) {
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
 describe('agent to broker desktop lifecycle', () => {
+  it('requires the selected desktop capability for window control in a device chat', async () => {
+    const f = fixture();
+    const permission = vi.spyOn(deviceCapabilities, 'deviceCapabilityAllowed').mockReturnValue(false);
+    try {
+      f.targets.select('owner', f.endpointIdentity.endpointId, Date.now(), 'owner', 'desktop.computer.control');
+      await expect(f.discover()).rejects.toThrow('COMPUTER_GATEWAY_CAPABILITY_REQUIRED');
+      expect(f.invoke).not.toHaveBeenCalled();
+
+      permission.mockReturnValue(true);
+      await f.open(await f.discover());
+      expect(f.invoke).toHaveBeenLastCalledWith(expect.objectContaining({
+        endpointId: f.endpointIdentity.endpointId, toolName: 'desktop.computer.control', gatewayCapability: true,
+      }));
+
+      permission.mockReturnValue(false);
+      const sent = f.invoke.mock.calls.length;
+      await expect(f.runtime.execute('owner', { op: 'observe' })).rejects.toThrow('COMPUTER_GATEWAY_CAPABILITY_REQUIRED');
+      expect(f.invoke).toHaveBeenCalledTimes(sent);
+      expect(await f.runtime.close('owner')).toBe(true);
+    } finally {
+      permission.mockRestore();
+    }
+  });
+
   it('rejects a different actor before an existing GUI session can observe or dispatch', async () => {
     const f = fixture();
     await f.open(await f.discover());

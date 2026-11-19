@@ -55,6 +55,21 @@ export class XopcGatewaySession {
   }
 
   currentProfile(): XopcProfile | undefined { return this.profile; }
+  async deviceCapabilityAllowed(tool: string, revision: number): Promise<boolean> {
+    const value = await this.store.read(this.deviceCapabilityKey(tool, revision));
+    this.assertConnection(revision);
+    return value === 'allowed';
+  }
+  async allowDeviceCapability(tool: string, revision: number): Promise<void> {
+    await this.store.write(this.deviceCapabilityKey(tool, revision), 'allowed');
+    this.assertConnection(revision);
+  }
+  private deviceCapabilityKey(tool: string, revision: number): string {
+    this.assertConnection(revision);
+    const profile = this.profile;
+    if (!profile) throw new Error('NOT_PAIRED');
+    return gatewayCredentialKey(profile.gatewayId, 'capability.' + profile.deviceId + '.' + tool);
+  }
   connectionRevision(): number { return this.generation; }
   assertConnection(revision: number): void {
     this.assertGeneration(revision);

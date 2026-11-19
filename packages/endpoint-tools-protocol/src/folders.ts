@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { ENDPOINT_FILE_OUTPUT_SCHEMA } from './shared-schemas.js';
 import { canonicalJson } from './canonical-json.js';
-import type { EndpointToolDescriptor, EndpointTurnClaim } from './index.js';
+import type { DeviceChatTool, EndpointToolDescriptor, EndpointTurnClaim } from './index.js';
 
 export const DEVICE_FOLDER_SEARCH = 'desktop.folder.search';
 export const DEVICE_FOLDER_READ = 'desktop.folder.read';
@@ -14,8 +14,10 @@ export const deviceFolderGrantSchema = z.strictObject({
   id: z.uuid(),
   kind: deviceFolderKindSchema,
   label: z.string().trim().min(1).max(120),
-  mobileIds: z.array(z.string().min(1).max(160)).max(32),
-});
+  access: z.literal('gateway').optional(),
+  // Older grants retain their recipient limit until the source computer authorizes Gateway access.
+  mobileIds: z.array(z.string().min(1).max(160)).max(32).optional(),
+}).refine(folder => (folder.access === 'gateway') !== (folder.mobileIds !== undefined), 'Folder grant must declare its access');
 export type DeviceFolderGrant = z.infer<typeof deviceFolderGrantSchema>;
 export const deviceFolderSnapshotSchema = z.strictObject({
   revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -35,7 +37,8 @@ export type DeviceConnection = {
   endpointId?: string;
   availability: 'foreground' | 'background' | 'offline';
   tools: string[];
-  folders: Array<Omit<DeviceFolderGrant, 'mobileIds'>>;
+  capabilities?: Array<{ name: DeviceChatTool; title: string; titleZh: string; allowed: boolean; requiresForeground: boolean; needsSetup?: true }>;
+  folders: Array<Pick<DeviceFolderGrant, 'id' | 'kind' | 'label' | 'access'>>;
 };
 export type DeviceConnections = {
   currentDeviceId?: string;
@@ -101,8 +104,8 @@ export function deviceFolderDescriptors(): EndpointToolDescriptor[] {
 }
 
 export const deviceFolderChangeSchema = z.union([
-  z.strictObject({ kind: deviceFolderKindSchema, mobileIds: z.array(z.string().min(1).max(160)).max(32) }),
-  z.strictObject({ id: z.uuid(), mobileIds: z.array(z.string().min(1).max(160)).max(32) }),
+  z.strictObject({ kind: deviceFolderKindSchema }),
+  z.strictObject({ id: z.uuid() }),
   z.strictObject({ id: z.uuid(), revoke: z.literal(true) }),
 ]);
 export type DeviceFolderChange = z.infer<typeof deviceFolderChangeSchema>;

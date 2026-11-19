@@ -1,13 +1,14 @@
 import crypto from 'node:crypto';
 import { once } from 'node:events';
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { serve } from '@hono/node-server';
 import { EndpointToolHostController, EndpointToolRegistry } from '@xopcai/endpoint-tools-client';
-import { deviceFolderSigningPayload, DEVICE_FOLDER_SEARCH, DEVICE_FOLDER_READ, endpointHelloSigningPayload, personalDescriptor,
-  type DeviceFolderSnapshot, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
+import { createDesktopEndpointToolDefinitions } from '@xopcai/endpoint-tools-client/desktop-tools';
+import { desktopCapabilitySigningPayload, deviceFolderSigningPayload, DEVICE_FOLDER_SEARCH, DEVICE_FOLDER_READ, endpointHelloSigningPayload, personalDescriptor,
+  type DesktopCapabilitySnapshot, type DeviceFolderSnapshot, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import WebSocket from 'ws';
@@ -15,6 +16,7 @@ import { expect, it, vi } from 'vitest';
 
 import { uploadDesktopFrame } from '../../../electron/computer/frame-upload.js';
 import { DesktopFolderStore } from '../../../electron/files/device-folders.js';
+import { DesktopCapabilityStore } from '../../../electron/computer/device-capability-store.js';
 import { EndpointToolProvider } from '../../agent/external-tools/endpoint-provider.js';
 import { seedTestAgentCatalog } from '../../agent-catalog/test-support.js';
 import { ConfigSchema } from '../../config/schema.js';
@@ -30,7 +32,7 @@ import { createHonoApp } from '../hono/app.js';
 import { proofDigest, requestProofMessage } from '../security/device-request-proof.js';
 import type { GatewayService } from '../service.js';
 
-it('searches and reads only the authorized folder of the chosen computer over signed HTTP and real WebSocket', async () => {
+it('reads folders authorized to the Gateway and preserves restricted legacy access until the computer updates it', async () => {
   const root = mkdtempSync(join(tmpdir(), 'xopc-device-folders-'));
   const folderPath = join(root, 'Downloads');
   const secret = join(root, 'quote-private.txt');
@@ -92,7 +94,7 @@ it('searches and reads only the authorized folder of the chosen computer over si
       const connectionId = crypto.randomUUID();
       endpointTools.connect(hello, connectionId, { readyState: 1, send: data => void toolHost.handleMessage(JSON.parse(data)), close: () => toolHost.disconnect() });
       toolHost.connect(message => endpointTools.handleMessage(origin.endpointId, connectionId, message));
-      const request = (target: string, payload?: unknown, methodOverride?: 'PUT') => {
+      const request = (target: string, payload?: unknown, methodOverride?: 'PUT' | 'PATCH') => {
         const body = payload === undefined ? undefined : JSON.stringify(payload);
         const method = methodOverride ?? (body ? 'POST' : 'GET');
         const headers = new Headers({ Authorization: `Bearer ${credential}`, 'Content-Type': 'application/json' });
@@ -117,13 +119,23 @@ it('searches and reads only the authorized folder of the chosen computer over si
     });
     expect((await second.request(path + '/chat', mobileChat)).status).toBe(403);
     expect((await startWebChat({ ...mobileChat, toolName: 'mobile.device.get_location' })).status).toBe(409);
+    const grant = { toolName: mobileChat.toolName, allowed: true };
+    expect((await startWebChat(mobileChat)).status).toBe(403);
+    expect((await second.request(path, grant, 'PATCH')).status).toBe(200);
+    expect((await startWebChat(mobileChat)).status).toBe(403);
+    expect((await first.request(path, { ...grant, toolName: 'mobile.device.get_location' }, 'PATCH')).status).toBe(409);
+    expect((await first.request(path, { ...grant, deviceId: second.device.id }, 'PATCH')).status).toBe(400);
+    expect((await first.request(path, grant, 'PATCH')).status).toBe(200);
+    const ownCapabilities = await (await first.request(path)).json();
+    expect(ownCapabilities.payload.devices.find((entry: { id: string }) => entry.id === first.device.id).capabilities)
+      .toContainEqual(expect.objectContaining({ name: mobileChat.toolName, allowed: true }));
     endpointTools.registry.heartbeat(first.origin.endpointId, first.connectionId, 'background');
     expect((await startWebChat(mobileChat)).status).toBe(409);
     endpointTools.registry.heartbeat(first.origin.endpointId, first.connectionId, 'foreground');
     const webChat = await startWebChat(mobileChat);
     expect(webChat.status).toBe(201);
     const { conversationId: webConversationId } = (await webChat.json()).payload;
-    expect(endpointTools.targets.get(webConversationId)).toMatchObject({ endpointId: mobileChat.endpointId, mobileTool: mobileChat.toolName });
+    expect(endpointTools.targets.get(webConversationId)).toMatchObject({ endpointId: mobileChat.endpointId, capabilityTool: mobileChat.toolName });
     const webOrigin = { type: 'endpoint' as const, endpointId: 'web-client' };
     insertSessionInput({ id: crypto.randomUUID(), conversationId: webConversationId, clientMessageId: 'calendar-input',
       requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Read my calendar', origin: webOrigin });
@@ -145,15 +157,41 @@ it('searches and reads only the authorized folder of the chosen computer over si
     expect(second.execute).not.toHaveBeenCalled();
     endpointTools.registry.heartbeat(first.origin.endpointId, first.connectionId, 'background');
     expect(await calendarProvider.catalog()).toEqual([]);
+    endpointTools.registry.heartbeat(first.origin.endpointId, first.connectionId, 'foreground');
+    const executeCalendar = first.execute.getMockImplementation()!;
+    let releaseCalendar = () => {};
+    first.execute.mockImplementationOnce(async args => {
+      await new Promise<void>(resolve => { releaseCalendar = resolve; });
+      return executeCalendar(args);
+    });
+    const cancelled = expect(calendarProvider.execute(calendarTool.toolRef, { startAt: 3, endAt: 4 }, undefined,
+      { toolCallId: 'calendar-revoked' })).rejects.toThrow(/revoked/i);
+    await vi.waitFor(() => expect(first.execute).toHaveBeenCalledTimes(2));
+    expect((await first.request(path, { ...grant, allowed: false }, 'PATCH')).status).toBe(200);
+    await cancelled;
+    releaseCalendar();
+    expect(await calendarProvider.describe(calendarTool.toolRef)).toBeUndefined();
+    expect((await startWebChat(mobileChat)).status).toBe(403);
     const keys = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const desktopId = crypto.randomUUID(), endpointId = desktopId + ':test';
     const registration = { principalId: desktopId, displayName: 'Test Mac', kind: 'desktop' as const, platform: 'darwin',
       publicKey: keys.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url') };
     expect((await owner('/api/endpoint-tools/principals', registration)).status).toBe(201);
-    const store = new DesktopFolderStore(() => join(root, 'local-folders.json'), () => 'text/plain');
-    const registry = new EndpointToolRegistry(store.definitions());
-    const controller = new EndpointToolHostController({ registry, getAvailability: () => 'background', createMessageId: crypto.randomUUID,
-      confirm: async () => false, uploadFile: (grant, file, context) => uploadDesktopFrame({ base, token, endpointId, grant, file, ...context }) });
+    const localFolders = join(root, 'local-folders.json');
+    const store = new DesktopFolderStore(() => localFolders, () => 'text/plain');
+    const desktopCapabilityStore = new DesktopCapabilityStore(join(root, 'desktop-capabilities.json'));
+    const desktopTool = 'desktop.clipboard.read';
+    const readClipboard = vi.fn(async () => 'fixture clipboard text');
+    const desktopConfirm = vi.fn(async () => false);
+    const desktopDefinitions = createDesktopEndpointToolDefinitions(() => ({
+      file: { pickEndpointFile: async () => null, saveEndpointText: async () => ({ saved: false }) },
+      clipboard: { readText: readClipboard, writeText: async () => true },
+    })).filter(tool => tool.descriptor.name === desktopTool);
+    const registry = new EndpointToolRegistry([...store.definitions(), ...desktopDefinitions]);
+    const controller = new EndpointToolHostController({ registry, getAvailability: () => 'foreground', createMessageId: crypto.randomUUID,
+      confirm: desktopConfirm,
+      hasCapabilityGrant: request => request.gatewayCapabilityAuthorized === true && desktopCapabilityStore.allows(request.descriptor.name),
+      uploadFile: (grant, file, context) => uploadDesktopFrame({ base, token, endpointId, grant, file, ...context }) });
     const clientId = crypto.randomUUID();
     client = new RealtimeClient({ clientId, clientKind: 'desktop', createMessageId: crypto.randomUUID,
       issueTicket: async () => (await (await owner('/api/realtime/tickets', { clientId, clientKind: 'desktop', protocolVersion: REALTIME_PROTOCOL_VERSION })).json()).payload,
@@ -174,13 +212,61 @@ it('searches and reads only the authorized folder of the chosen computer over si
     });
     client.connect();
     await vi.waitFor(() => expect(origin).toBeDefined());
+    const desktopCall = { endpointId, toolName: desktopTool };
+    const desktopCapabilityPath = path + '/capabilities';
+    const capabilityPublication = (snapshot: DesktopCapabilitySnapshot) => ({ origin: origin!, snapshot,
+      signature: sign(desktopCapabilitySigningPayload(origin!, snapshot), keys.privateKey) });
+    const publishCapability = async (snapshot: DesktopCapabilitySnapshot) => {
+      expect((await owner(desktopCapabilityPath, capabilityPublication(snapshot))).status).toBe(200);
+    };
+    endpointTools.registry.heartbeat(endpointId, endpointTools.registry.get(endpointId)!.connectionId, 'foreground');
+    expect((await startWebChat(desktopCall)).status).toBe(403);
+    expect((await owner(desktopCapabilityPath, { ...capabilityPublication({ revision: 1, allowed: [desktopTool] }), signature: 'x'.repeat(86) })).status).toBe(403);
+    expect((await owner(desktopCapabilityPath, capabilityPublication({ revision: 1, allowed: ['desktop.file.save'] }))).status).toBe(400);
+    const desktopGrant = await desktopCapabilityStore.update(() => [desktopTool], publishCapability);
+    const desktopCatalog = (await (await owner(path)).json()).payload.devices;
+    expect(desktopCatalog.find((entry: { id: string }) => entry.id === desktopId).capabilities)
+      .toEqual([expect.objectContaining({ name: desktopTool, allowed: true })]);
+    const remoteDesktopChat = await startWebChat(desktopCall);
+    expect(remoteDesktopChat.status).toBe(201);
+    const desktopConversation = (await remoteDesktopChat.json()).payload.conversationId as string;
+    insertSessionInput({ id: crypto.randomUUID(), conversationId: desktopConversation, clientMessageId: 'desktop-input',
+      requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Read the clipboard', origin: webOrigin });
+    recordDeviceExecutionActor(desktopConversation, 'desktop-input', {
+      kind: 'owner', principalId: `browser:${browserSessionId}`, browserSessionId, scopes: ['gateway.admin'],
+    });
+    claimNextSessionInput(desktopConversation, crypto.randomUUID());
+    const desktopProvider = new EndpointToolProvider({ runtime: endpointTools, getCurrentContext: () => ({
+      conversationId: desktopConversation, channel: 'webchat', chatId: desktopConversation, origin: webOrigin,
+    }) });
+    const [clipboard] = await desktopProvider.catalog();
+    expect(await desktopProvider.catalog()).toHaveLength(1);
+    expect(clipboard.toolRef).toContain(desktopTool);
+    await expect(desktopProvider.execute(clipboard.toolRef, {}, undefined, { toolCallId: 'clipboard' }))
+      .resolves.toMatchObject({ content: [{ type: 'text', text: 'fixture clipboard text' }] });
+    expect(readClipboard).toHaveBeenCalledOnce();
+    expect(desktopConfirm).not.toHaveBeenCalled();
+    await desktopCapabilityStore.update(() => [], publishCapability);
+    expect(await desktopProvider.describe(clipboard.toolRef)).toBeUndefined();
+    expect((await startWebChat(desktopCall)).status).toBe(403);
+    expect((await owner(desktopCapabilityPath, capabilityPublication(desktopGrant))).status).toBe(409);
     const publication = (snapshot: DeviceFolderSnapshot) => ({ origin: origin!, snapshot,
       signature: sign(deviceFolderSigningPayload(origin!, snapshot), keys.privateKey) });
     const publish = async (snapshot: DeviceFolderSnapshot) => { expect((await owner(path + '/folders', publication(snapshot))).status).toBe(200); };
-    const snapshot = await store.change({ kind: 'downloads', path: realpathSync(folderPath), mobileIds: [first.device.id] }, publish);
+    await store.change({ kind: 'downloads', path: realpathSync(folderPath) }, async () => {});
+    const stored = JSON.parse(readFileSync(localFolders, 'utf8'));
+    delete stored.folders[0].access;
+    stored.folders[0].mobileIds = [first.device.id];
+    writeFileSync(localFolders, JSON.stringify(stored));
+    const snapshot = await store.snapshot();
+    await publish(snapshot);
     const folderId = snapshot.folders[0].id;
     expect((await fetch(base + path)).status).toBe(401);
     expect((await owner(path + '/folders', { ...publication(snapshot), signature: 'x'.repeat(86) })).status).toBe(403);
+    expect((await owner(path + '/folders', publication({
+      revision: snapshot.revision + 1,
+      folders: [{ id: folderId, kind: 'downloads', label: 'Downloads' }],
+    }))).status).toBe(400);
     expect((await first.request(path + '/folders', publication(snapshot))).status).toBe(403);
     const catalog = await (await first.request(path)).json();
     expect(catalog.payload.currentDeviceId).toBe(first.device.id);
@@ -188,19 +274,28 @@ it('searches and reads only the authorized folder of the chosen computer over si
     const unrelated = await (await second.request(path)).json();
     expect(JSON.stringify(unrelated)).not.toContain(folderId);
     expect((await second.request(path + '/chat', { endpointId })).status).toBe(403);
-    const chat = await first.request(path + '/chat', { endpointId });
+    expect((await owner(path + '/chat', { endpointId })).status).toBe(403);
+    const upgraded = await store.change({ id: folderId }, publish);
+    const folderSummary = { id: folderId, kind: 'downloads', label: 'Downloads' };
+    expect(upgraded.folders).toEqual([{ ...folderSummary, access: 'gateway' }]);
+    const otherPhone = await (await second.request(path)).json();
+    expect(otherPhone.payload.devices.find((entry: { id: string }) => entry.id === desktopId).folders)
+      .toEqual([{ ...folderSummary, access: 'gateway' }]);
+    const computerWebChat = await owner(path + '/chat', { endpointId });
+    expect(computerWebChat.status).toBe(201);
+    const chat = await second.request(path + '/chat', { endpointId });
     expect(chat.status).toBe(201);
     const { conversationId } = (await chat.json()).payload;
     const targetPath = '/api/endpoint-tools/targets/' + conversationId;
-    expect(await (await first.request(targetPath)).json()).toMatchObject({ payload: { deviceName: 'Test Mac', deviceState: 'ready' } });
-    expect((await second.request(targetPath)).status).toBe(403);
+    expect(await (await second.request(targetPath)).json()).toMatchObject({ payload: { deviceName: 'Test Mac', deviceState: 'ready' } });
+    expect((await first.request(targetPath)).status).toBe(403);
     insertSessionInput({ id: crypto.randomUUID(), conversationId, clientMessageId: 'find-quote', requestedDelivery: 'next',
-      effectiveDelivery: 'next', status: 'queued', content: 'Find quote', origin: first.origin });
-    recordDeviceExecutionActor(conversationId, 'find-quote', { kind: 'device', principalId: first.device.id,
-      deviceId: first.device.id, scopes: first.device.scopes });
+      effectiveDelivery: 'next', status: 'queued', content: 'Find quote', origin: second.origin });
+    recordDeviceExecutionActor(conversationId, 'find-quote', { kind: 'device', principalId: second.device.id,
+      deviceId: second.device.id, scopes: second.device.scopes });
     claimNextSessionInput(conversationId, crypto.randomUUID());
     const provider = new EndpointToolProvider({ runtime: endpointTools, getCurrentContext: () => ({
-      conversationId, channel: 'webchat', chatId: conversationId, origin: first.origin,
+      conversationId, channel: 'webchat', chatId: conversationId, origin: second.origin,
     }) });
     const tools = await provider.search('quote');
     const search = tools.find(tool => tool.toolRef.endsWith(DEVICE_FOLDER_SEARCH))!;
@@ -218,23 +313,24 @@ it('searches and reads only the authorized folder of the chosen computer over si
     client.disconnect();
     await vi.waitFor(() => expect(endpointTools.registry.get(endpointId)).toBeUndefined());
     expect(await provider.describe(search.toolRef)).toBeUndefined();
-    expect(await (await first.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'offline' } });
+    expect(await (await second.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'offline' } });
     client.connect();
     await vi.waitFor(() => expect(origin!.token).not.toBe(previousToken));
-    expect(await (await first.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'reselect', reselectEndpointId: endpointId } });
+    expect(await (await second.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'reselect', reselectEndpointId: endpointId } });
     expect(await provider.describe(search.toolRef)).toBeUndefined();
-    expect((await first.request(targetPath, { endpointId }, 'PUT')).status).toBe(200);
-    expect(await (await first.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'ready' } });
+    expect((await second.request(targetPath, { endpointId }, 'PUT')).status).toBe(200);
+    expect(await (await second.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'ready' } });
     expect(await provider.describe(search.toolRef)).toBeDefined();
-    await store.change({ id: folderId, mobileIds: [], revoke: true }, publish);
+    await store.change({ id: folderId, revoke: true }, publish);
     expect(await provider.describe(search.toolRef)).toBeUndefined();
     expect((await first.request(path + '/chat', { endpointId })).status).toBe(403);
-    expect(await (await first.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'authorization_required' } });
+    expect((await second.request(path + '/chat', { endpointId })).status).toBe(403);
+    expect(await (await second.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'authorization_required' } });
     expect((await owner(path + '/folders', publication(snapshot))).status).toBe(409);
     client.disconnect();
     await vi.waitFor(() => expect(endpointTools.registry.get(endpointId)).toBeUndefined());
     expect((await first.request(path + '/chat', { endpointId })).status).toBe(409);
-    expect(await (await first.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'offline' } });
+    expect(await (await second.request(targetPath)).json()).toMatchObject({ payload: { deviceState: 'offline' } });
   } finally {
     client?.disconnect(); realtime.close(); endpointTools.close();
     await new Promise<void>(resolve => server.close(() => resolve()));

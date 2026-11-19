@@ -360,6 +360,7 @@ fun MainScreen(
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
   onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
+  onSetDeviceCapability: suspend (String, Boolean, String) -> Unit = { _, _, _ -> },
   onLoadCapabilityDevices: suspend () -> ai.xopc.mobile.gateway.DeviceConnections = { ai.xopc.mobile.gateway.DeviceConnections(null, emptyList()) },
   onUseConnectedComputer: suspend (String) -> Unit = {},
   onShareDeviceConnectionFile: suspend (Uri) -> Unit = {},
@@ -685,7 +686,7 @@ fun MainScreen(
     onRefreshRecentConversations = onRefreshRecentConversations,
     onLoadCapabilities = onLoadCapabilities, onCapabilityPanel = onCapabilityPanel,
     onCapabilitySetupChat = onCapabilitySetupChat,
-    onLoadCapabilityDevices = onLoadCapabilityDevices, onUseConnectedComputer = onUseConnectedComputer,
+    onLoadCapabilityDevices = onLoadCapabilityDevices, onSetDeviceCapability = onSetDeviceCapability, onUseConnectedComputer = onUseConnectedComputer,
     onShareDeviceConnectionFile = onShareDeviceConnectionFile, onReselectConnectedComputer = onReselectConnectedComputer,
     onCreateAgentConversation = onCreateAgentConversation,
     onLoadMoreConversations = onLoadMoreConversations, onLoadOlderHistory = onLoadOlderHistory,
@@ -891,6 +892,7 @@ internal fun MainContent(
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
   onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
+  onSetDeviceCapability: suspend (String, Boolean, String) -> Unit = { _, _, _ -> },
   onLoadCapabilityDevices: suspend () -> ai.xopc.mobile.gateway.DeviceConnections = { ai.xopc.mobile.gateway.DeviceConnections(null, emptyList()) },
   onUseConnectedComputer: suspend (String) -> Unit = {},
   onShareDeviceConnectionFile: suspend (Uri) -> Unit = {},
@@ -1822,7 +1824,7 @@ internal fun MainContent(
           onSelectTab(HomeTab.Assistant)
         }, onExit = exitDestination,
         onPanel = onCapabilityPanel, onSetupChat = onCapabilitySetupChat,
-        onLoadDevices = onLoadCapabilityDevices, onUseComputer = onUseConnectedComputer,
+        onLoadDevices = onLoadCapabilityDevices, onSetDeviceCapability = onSetDeviceCapability, onUseComputer = onUseConnectedComputer,
         onShareDeviceFile = onShareDeviceConnectionFile, onPairDevice = onScanPairing,
         deviceScope = connection.profile?.let { it.gatewayId + ':' + it.deviceId })
       HomeTab.Notes -> if (!isPaired) PairingScreen(

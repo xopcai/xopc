@@ -8,6 +8,8 @@ import {
 } from '@xopcai/computer-control-contract';
 import { hasReviewedDesktopExecutionStop, type ReviewedDesktopExecutionScope } from '../storage/sqlite/desktop-operation-repository.js';
 import { hasVerifiedDesktopExecutionStop } from '../storage/sqlite/desktop-execution-stop-repository.js';
+import { deviceCapabilityAllowed } from '../endpoint-tools/device-capability-grants.js';
+import type { EndpointConnectionSnapshot } from '../endpoint-tools/registry.js';
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForSession } from '../config/agent-profile.js';
@@ -664,21 +666,35 @@ export class ComputerRuntime {
     if (!endpoint) throw new Error(explicitBinding ? 'COMPUTER_TARGET_OFFLINE' : 'COMPUTER_TARGET_REQUIRED');
     if (endpoint.kind !== 'desktop') throw new Error('COMPUTER_TARGET_UNSUPPORTED');
     if (!this.endpoints.registry.getTool(endpoint.endpointId, endpoint.executionAuthority ? REMOTE_COMPUTER_CONTROL_TOOL : COMPUTER_CONTROL_TOOL)) throw new Error('COMPUTER_DESKTOP_UPGRADE_REQUIRED');
+    this.requiresGatewayCapability(owner, endpoint);
     if (!explicitBinding) this.endpoints.targets.select(owner, endpoint.endpointId);
     return endpoint;
   }
-  private assertTarget(owner: string, session: Pick<Session, 'endpointId' | 'connectionId'>): void {
+  private assertTarget(owner: string, session: Pick<Session, 'endpointId' | 'connectionId'>): boolean {
     const current = this.endpoints.registry.get(session.endpointId);
     if (!current || current.connectionId !== session.connectionId) throw new Error('COMPUTER_TARGET_OFFLINE');
     const selected = this.endpoints.targets.resolve(owner);
     if (!selected || selected.endpointId !== session.endpointId || selected.connectionId !== session.connectionId) throw new Error('COMPUTER_TARGET_SCOPE_CHANGED');
+    return this.requiresGatewayCapability(owner, current);
+  }
+  private requiresGatewayCapability(owner: string, endpoint: EndpointConnectionSnapshot): boolean {
+    const selected = this.endpoints.targets.get(owner)?.capabilityTool;
+    if (selected && selected !== COMPUTER_CONTROL_TOOL) throw new Error('COMPUTER_TARGET_SCOPE_CHANGED');
+    if (endpoint.executionAuthority) return false;
+    const source = this.getTurnEndpoint?.(owner);
+    const remote = Boolean(selected) || source !== endpoint.endpointId
+      && (!source || this.endpoints.registry.get(source)?.principalId !== endpoint.principalId);
+    if (remote && !deviceCapabilityAllowed(endpoint, COMPUTER_CONTROL_TOOL)) {
+      throw new Error('COMPUTER_GATEWAY_CAPABILITY_REQUIRED');
+    }
+    return remote;
   }
   private async send(s: Pick<Session, 'endpointId' | 'connectionId' | 'id'> & Partial<Pick<Session, 'diagnostics'>>, command: ComputerCommand, signal?: AbortSignal) {
     signal?.throwIfAborted();
     const current = this.endpoints.registry.get(s.endpointId);
     if (!current || current.connectionId !== s.connectionId) throw new Error('COMPUTER_TARGET_OFFLINE');
-    if (command.op !== 'release') this.assertTarget(command.owner, s);
-    const invoke = () => invokeComputerCommand(this.endpoints, s.endpointId, command, signal);
+    const gatewayCapability = command.op !== 'release' && this.assertTarget(command.owner, s);
+    const invoke = () => invokeComputerCommand(this.endpoints, s.endpointId, command, signal, gatewayCapability);
     const phase = command.op === 'open' ? 'open' : command.op === 'act' ? 'dispatch' : command.op === 'observe' ? 'observe' : command.op === 'release' ? 'release' : undefined;
     if (command.op === 'observe') s.diagnostics?.count('observations');
     const startedAt = performance.now();

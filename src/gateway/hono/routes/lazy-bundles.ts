@@ -163,7 +163,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'device-connections',
-    match: path => /^\/api\/endpoint-tools\/device-connections(?:\/(?:folders|chat))?$/.test(path),
+    match: path => /^\/api\/endpoint-tools\/device-connections(?:\/(?:folders|chat|capabilities))?$/.test(path),
     load: async () => {
       const { registerDeviceConnectionRoutes } = await import('./device-connections.js');
       return { register: registerDeviceConnectionRoutes };

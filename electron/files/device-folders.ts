@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { writeTextAtomic } from '../../src/infra/write-file-atomic.js';
 
-const localGrantSchema = deviceFolderGrantSchema.extend({ path: z.string().min(1).max(4096), identity: z.string().min(1) });
+const localGrantSchema = deviceFolderGrantSchema.safeExtend({ path: z.string().min(1).max(4096), identity: z.string().min(1) });
 const localStateSchema = z.strictObject({ revision: z.number().int().nonnegative(), folders: z.array(localGrantSchema).max(20) });
 type LocalGrant = z.infer<typeof localGrantSchema>;
 type LocalState = z.infer<typeof localStateSchema>;
@@ -28,22 +28,28 @@ export class DesktopFolderStore {
   private updates = Promise.resolve();
   private readonly refs = new Map<string, FileRef>();
 
-  constructor(private readonly settingsPath: () => string, private readonly mimeType: (extension: string) => string) {}
+  constructor(private readonly settingsPath: () => string, private readonly mimeType: (extension: string) => string,
+    private readonly previousSettingsPath?: string) {}
 
   private async load(): Promise<LocalState> {
-    try { return localStateSchema.parse(JSON.parse(await readFile(this.settingsPath(), 'utf8'))); }
-    catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      return { revision: 0, folders: [] };
+    for (const path of [this.settingsPath(), this.previousSettingsPath]) {
+      if (!path) continue;
+      try { return localStateSchema.parse(JSON.parse(await readFile(path, 'utf8'))); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
     }
+    return { revision: 0, folders: [] };
   }
 
   async snapshot(): Promise<DeviceFolderSnapshot> {
     const state = await this.load();
-    return { revision: state.revision, folders: state.folders.map(({ id, kind, label, mobileIds }) => ({ id, kind, label, mobileIds })) };
+    return { revision: state.revision, folders: state.folders.map(({ id, kind, label, access, mobileIds }) => ({
+      id, kind, label, ...(access === 'gateway' ? { access } : { mobileIds }),
+    })) };
   }
 
-  change(input: { id?: string; kind?: DeviceFolderGrant['kind']; path?: string; mobileIds: string[]; revoke?: boolean },
+  change(input: { id?: string; kind?: DeviceFolderGrant['kind']; path?: string; revoke?: boolean },
     publish: (snapshot: DeviceFolderSnapshot) => Promise<void>): Promise<DeviceFolderSnapshot> {
     const task = this.updates.then(async () => {
       const state = await this.load();
@@ -52,7 +58,10 @@ export class DesktopFolderStore {
       if (input.revoke && !previous) return this.snapshot();
       let folders = state.folders.filter(folder => folder.id !== previous?.id);
       if (!input.revoke) {
-        const selectedPath = input.path ?? previous!.path;
+        const selectedPath = input.path ?? previous?.path;
+        const kind = input.kind ?? previous?.kind;
+        if (!selectedPath || !kind) throw new Error('FOLDER_AUTHORIZATION_CHANGED');
+        if (input.id && previous?.access === 'gateway' && !input.path) return this.snapshot();
         const path = await realpath(selectedPath);
         if (path !== selectedPath) throw new Error('FOLDER_NOT_AVAILABLE');
         if (folders.some(folder => folder.path === path)) throw new Error('FOLDER_ALREADY_AUTHORIZED');
@@ -60,8 +69,8 @@ export class DesktopFolderStore {
         const metadata = await lstat(path);
         if (!metadata.isDirectory() || previous && !input.path && previous.identity !== fileIdentity(metadata)) throw new Error('FOLDER_NOT_AVAILABLE');
         if (folders.length >= 20) throw new Error('FOLDER_LIMIT_REACHED');
-        folders = [...folders, { id: randomUUID(), kind: input.kind ?? previous!.kind, label: basename(path).slice(0, 120),
-          mobileIds: [...new Set(input.mobileIds)], path, identity: fileIdentity(metadata) }];
+        folders = [...folders, { id: previous && !input.path ? previous.id : randomUUID(), kind, access: 'gateway',
+          label: basename(path).slice(0, 120), path, identity: fileIdentity(metadata) }];
       }
       if (previous) for (const [ref, entry] of this.refs) if (entry.folderId === previous.id) this.refs.delete(ref);
       await writeTextAtomic(this.settingsPath(), JSON.stringify({ folders, revision: state.revision + 1 }), { mode: 0o600, ensureDirMode: 0o700 });

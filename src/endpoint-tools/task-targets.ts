@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { MobileDeviceChatTool } from '@xopcai/endpoint-tools-protocol';
+import type { DeviceChatTool, MobileDeviceChatTool } from '@xopcai/endpoint-tools-protocol';
 
 import type { EndpointConnectionSnapshot } from './registry.js';
 import type { EndpointRegistry } from './registry.js';
@@ -16,6 +16,7 @@ export interface EndpointExecutionTarget {
   transcriptId?: string;
   actorPrincipalId?: string;
   mobileTool?: MobileDeviceChatTool;
+  capabilityTool?: DeviceChatTool;
 }
 
 interface TaskTargetStore {
@@ -40,13 +41,13 @@ export class EndpointTaskTargetService {
     return () => { this.listeners.delete(listener); };
   }
 
-  select(conversationId: string, endpointId: string, now = Date.now(), actorPrincipalId?: string, mobileTool?: MobileDeviceChatTool): EndpointExecutionTarget {
+  select(conversationId: string, endpointId: string, now = Date.now(), actorPrincipalId?: string, capabilityTool?: DeviceChatTool): EndpointExecutionTarget {
     const key = this.key(conversationId), endpoint = this.registry.get(endpointId);
     if (!endpoint) throw new Error('TARGET_OFFLINE');
     actorPrincipalId ??= this.actorPrincipalId(key);
     const current = this.get(key);
     if (current && current.endpointId === endpointId && current.principalId === endpoint.principalId && current.connectionId === endpoint.connectionId
-      && current.actorPrincipalId === actorPrincipalId && current.mobileTool === mobileTool && current.expiresAt > now) return current;
+      && current.actorPrincipalId === actorPrincipalId && current.capabilityTool === capabilityTool && current.expiresAt > now) return current;
     this.assertReleased(key);
     if (!current) {
       const stored = [...this.targets.entries()];
@@ -59,7 +60,7 @@ export class EndpointTaskTargetService {
     }
     const target: EndpointExecutionTarget = { conversationId: key, endpointId, principalId: endpoint.principalId,
       connectionId: endpoint.connectionId, executionRef: randomUUID(), selectedAt: now, expiresAt: now + 30 * 60_000,
-      transcriptId: this.transcriptId(key), actorPrincipalId, ...(mobileTool && { mobileTool }) };
+      transcriptId: this.transcriptId(key), actorPrincipalId, ...(capabilityTool && { capabilityTool }) };
     this.targets.set(key, target);
     for (const listener of this.listeners) listener(key);
     return { ...target };
@@ -72,7 +73,9 @@ export class EndpointTaskTargetService {
       this.clear(key);
       return;
     }
-    return { ...target };
+    const { mobileTool, ...binding } = target;
+    const capabilityTool = target.capabilityTool ?? mobileTool;
+    return capabilityTool ? { ...binding, capabilityTool } : binding;
   }
 
   resolve(conversationId: string): EndpointConnectionSnapshot | undefined {

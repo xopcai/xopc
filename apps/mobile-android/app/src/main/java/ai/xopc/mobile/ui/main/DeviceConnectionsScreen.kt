@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import ai.xopc.mobile.R
 import ai.xopc.mobile.gateway.ConnectedDevice
@@ -40,6 +43,7 @@ import kotlinx.coroutines.launch
 internal fun DeviceConnectionsScreen(
   load: suspend () -> DeviceConnections, openChat: suspend (String) -> Unit,
   shareFile: suspend (Uri) -> Unit, useLocalTool: (String) -> Unit, pair: () -> Unit,
+  setCapability: suspend (String, Boolean, String) -> Unit = { _, _, _ -> },
   active: Boolean = true,
 ) {
   var data by remember { mutableStateOf<DeviceConnections?>(null) }
@@ -85,13 +89,19 @@ internal fun DeviceConnectionsScreen(
         "mobile.media.pick" -> photos.launch("image/*")
         else -> useLocalTool(tool)
       }
-    }, useComputer = { perform { openChat(it) } })
+    }, useComputer = { perform { openChat(it) } }, onCapabilityChanged = { name, allowed, deviceId ->
+      perform {
+        setCapability(name, allowed, deviceId)
+        attempt++
+      }
+    })
 }
 
 @Composable
 private fun DeviceConnectionsContent(
   data: DeviceConnections?, selection: String?, failed: Boolean, actionFailed: Boolean, busy: Boolean, zh: Boolean,
   onSelect: (String?) -> Unit, retry: () -> Unit, pair: () -> Unit, useTool: (String) -> Unit, useComputer: (String) -> Unit,
+  onCapabilityChanged: (String, Boolean, String) -> Unit,
 ) {
   val colors = MaterialTheme.colorScheme
   val selected = data?.devices?.find { it.id == selection }
@@ -153,8 +163,28 @@ private fun DeviceConnectionsContent(
           DeviceTool("mobile.device.get_location", if (zh) "位置" else "Location",
             if (zh) "按次共享位置" else "Share your location once", R.drawable.material_location_on),
         )
-        tools.filter { it.id in current.tools }.forEach { tool ->
-          DeviceConnectionRow(tool.name, tool.description, tool.icon, if (busy) null else ({ useTool(tool.id) }))
+        val reported = current.capabilities
+        if (reported == null) {
+          tools.filter { it.id in current.tools }.forEach { tool ->
+            DeviceConnectionRow(tool.name, tool.description, tool.icon, if (busy) null else ({ useTool(tool.id) }))
+          }
+        } else {
+          Text(if (zh) "允许当前 Gateway 使用" else "Allow the current Gateway to use",
+            style = MaterialTheme.typography.titleSmall)
+          if (reported.isEmpty()) Text(if (zh) "设备连接后会在这里显示已上报的能力。" else "Reported capabilities appear here when connected.")
+          reported.forEach { capability ->
+            val title = if (zh) capability.titleZh else capability.title
+            val known = tools.find { it.id == capability.name }
+            val status = if (capability.allowed) (if (zh) "已授权" else "Authorized") else (if (zh) "未授权" else "Not authorized")
+            CapabilityCard(title, status, onClick = if (!busy && known != null) ({ useTool(capability.name) }) else null,
+              leading = { CapabilityLogo(reference = null, origin = null, label = "", fallback = known?.icon ?: reportedToolIcon(capability.name)) },
+              trailing = {
+                Switch(checked = capability.allowed, enabled = !busy && !failed, onCheckedChange = { onCapabilityChanged(capability.name, it, current.id) },
+                  modifier = Modifier.testTag("device-grant-${capability.name}").semantics {
+                    contentDescription = if (zh) "允许 Gateway 使用${title}" else "Allow Gateway to use ${title}"
+                  })
+              })
+          }
         }
       }
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -176,6 +206,13 @@ private fun deviceState(device: ConnectedDevice, zh: Boolean) =
   if (device.availability == "offline") (if (zh) "离线" else "Offline") else (if (zh) "在线" else "Online")
 
 private data class DeviceTool(val id: String, val name: String, val description: String, val icon: Int)
+
+private fun reportedToolIcon(name: String) = when {
+  name.startsWith("mobile.calendar.") -> R.drawable.material_calendar_month
+  name.startsWith("mobile.contacts.") -> R.drawable.material_contacts
+  name.startsWith("mobile.media.") || name.startsWith("mobile.camera.") -> R.drawable.material_photo_library
+  else -> R.drawable.action_phone
+}
 
 private fun computerIcon(device: ConnectedDevice) =
   if (device.platform == "darwin") R.drawable.material_laptop_mac else R.drawable.material_desktop_windows

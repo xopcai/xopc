@@ -42,6 +42,7 @@ internal object DevicePersonalTools {
   private var permission: CompletableDeferred<Unit>? = null
   private var resumed = CompletableDeferred<Unit>()
   private var job: Job? = null
+  private var preparingCapability = false
   private var invocationId: String? = null
   private var cameraFile: File? = null
   private var cameraUri: Uri? = null
@@ -64,6 +65,25 @@ internal object DevicePersonalTools {
   fun cancel(id: String) { scope.launch { if (id == invocationId) job?.cancel() } }
   fun cancelAll() { scope.launch { job?.cancel() } }
   fun hasActiveInvocation(): Boolean = job?.isActive == true
+
+  suspend fun prepareCapabilityPermission(name: String) {
+    check(!preparingCapability && !hasActiveInvocation() && permission == null && selection == null) { "TOOL_BUSY" }
+    preparingCapability = true
+    try {
+      when (name) {
+        "mobile.calendar.query_events", "mobile.calendar.query_free_busy" -> allow(Manifest.permission.READ_CALENDAR)
+        "mobile.calendar.create_event" -> {
+          allow(Manifest.permission.READ_CALENDAR)
+          allow(Manifest.permission.WRITE_CALENDAR)
+        }
+        "mobile.contacts.find_by_name" -> allow(Manifest.permission.READ_CONTACTS)
+        "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album" -> allowPhotoAccess()
+        "mobile.device.get_location" -> allow(Manifest.permission.ACCESS_COARSE_LOCATION)
+      }
+    } finally {
+      preparingCapability = false
+    }
+  }
 
   fun invoke(request: JSONObject, gateway: GatewaySession, send: (String, JSONObject) -> Unit) {
     scope.launch { start(request, gateway, send) }
@@ -97,7 +117,7 @@ internal object DevicePersonalTools {
       (organize && (args.opt("album") !is String || album.isEmpty() || album.length > 100 || album.startsWith(".") || album.any { it == '/' || it == '\\' || it.isISOControl() })) ||
       (!calendar && !contact && !search && !photo && args.length() != 0)) { fail("INVALID_ARGUMENTS"); return }
     if (owner == null) { fail("ENDPOINT_NOT_FOREGROUND"); return }
-    if (job?.isActive == true || selection != null || permission != null) { fail("TOOL_BUSY"); return }
+    if (preparingCapability || job?.isActive == true || selection != null || permission != null) { fail("TOOL_BUSY"); return }
     val remaining = request.optLong("deadlineAt") - System.currentTimeMillis()
     if (remaining <= 0) { fail("TOOL_TIMEOUT"); return }
     val sourceProfile = gateway.currentProfile()
@@ -107,28 +127,20 @@ internal object DevicePersonalTools {
     job = scope.launch {
       try {
         withTimeout(remaining.coerceAtMost(120000)) {
-          if (name == "mobile.file.pick" || name == "mobile.camera.capture") {
-            val message = "请在接下来的系统页面选择本次要提供给 Agent 的文件或照片。"
-            if (!confirm(message + "所选内容会发送给 Agent，并可能保存在聊天历史中。")) { fail("USER_DENIED"); return@withTimeout }
+          if ((create || organize) && !request.optBoolean("gatewayCapabilityAuthorized")
+            && !withContext(Dispatchers.IO) { gateway.deviceCapabilityAllowed(sourceProfile, name) }) {
+            val capability = if (create) "创建日程" else "整理相册"
+            if (!confirm("允许当前 Gateway 使用「$capability」？允许后，当前 Gateway 可以继续使用这项能力。")) {
+              fail("USER_DENIED"); return@withTimeout
+            }
+            withContext(Dispatchers.IO) { gateway.allowDeviceCapability(sourceProfile, name) }
           }
           if (gateway.currentProfile() != sourceProfile) throw SecurityException()
           val content = when {
-            create -> {
-              if (!confirm("创建日程「${title}」？\n${java.util.Date(start)} 至 ${java.util.Date(end)}")) {
-                fail("USER_DENIED"); return@withTimeout
-              }
-              if (gateway.currentProfile() != sourceProfile) throw SecurityException()
-              createEvent(start, end, title)
-            }
+            create -> createEvent(start, end, title)
             search -> findContacts(query)
             name == "mobile.media.list_recent" -> listPhotos()
-            organize && Build.VERSION.SDK_INT >= 29 -> {
-              if (!confirm("将这张照片复制到相册「${album}」？")) {
-                fail("USER_DENIED"); return@withTimeout
-              }
-              if (gateway.currentProfile() != sourceProfile) throw SecurityException()
-              addPhotoToAlbum(args.getString("id").toLong(), album)
-            }
+            organize && Build.VERSION.SDK_INT >= 29 -> addPhotoToAlbum(args.getString("id").toLong(), album)
             calendar -> readCalendar(start, end, name.endsWith("free_busy"))
             contact -> readContact(args.getString("field"))
             else -> uploadSelection(name, request, gateway, sourceProfile)
@@ -148,9 +160,9 @@ internal object DevicePersonalTools {
 
   private suspend fun confirm(message: String): Boolean = suspendCancellableCoroutine { continuation ->
     val activity = owner ?: run { continuation.resume(false); return@suspendCancellableCoroutine }
-    val dialog = AlertDialog.Builder(activity).setTitle("允许本次提供设备信息？").setMessage(message)
+    val dialog = AlertDialog.Builder(activity).setTitle("设备能力授权").setMessage(message)
       .setNegativeButton("拒绝") { _, _ -> if (continuation.isActive) continuation.resume(false) }
-      .setPositiveButton("继续") { _, _ -> if (continuation.isActive) continuation.resume(true) }
+      .setPositiveButton("允许") { _, _ -> if (continuation.isActive) continuation.resume(true) }
       .setOnCancelListener { if (continuation.isActive) continuation.resume(false) }.create()
     continuation.invokeOnCancellation { scope.launch { dialog.dismiss() } }
     dialog.show()

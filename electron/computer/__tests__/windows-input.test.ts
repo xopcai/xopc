@@ -102,6 +102,23 @@ describe('Windows input dispatch', () => {
     expect(f.call).toHaveBeenCalledWith('hotkey', expect.objectContaining({
       pid: 42, window_id: 9, element_token: 'private-token', delivery_mode: 'background', keys: ['ctrl', 'a'] }), f.signal);
   });
+  it('requires fresh evidence of focus before sending End after replacing a field value', async () => {
+    const f = fixture();
+    native.read.mockResolvedValue({ ...f.identity, input: { fields: [field], focused: null } });
+    const before = await f.driver.observe(f.target, f.signal);
+    expect(before.focusedEditableRef).toBeUndefined();
+    await f.driver.perform(f.target, { kind: 'setValue', ref: 'e0', text: 'new value' }, f.signal);
+    await expect(f.driver.perform(f.target, { kind: 'pressKeys', keys: ['end'] }, f.signal)).rejects.toThrow('KEY_TARGET_REQUIRED');
+    expect(f.call).toHaveBeenCalledTimes(1);
+
+    native.read.mockResolvedValue(f.identity);
+    const focused = await f.driver.observe(f.target, f.signal);
+    expect(focused.focusedEditableRef).toBe('e0');
+    await f.driver.perform(f.target, { kind: 'pressKeys', keys: ['end'] }, f.signal);
+    expect(f.call).toHaveBeenLastCalledWith('press_key', expect.objectContaining({
+      window_id: 9, element_token: 'private-token', delivery_mode: 'background', key: 'end',
+    }), f.signal);
+  });
   it('dispatches typing and keys to the certified inner Qt editor after a large history', async () => {
     const f = fixture();
     const child = { ...field, runtimeId: '42,2', parentRuntimeId: field.runtimeId };

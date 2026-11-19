@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ foreground: true, answer: vi.fn(), close: vi.fn(), permission: vi.fn(), contacts: vi.fn(), file: vi.fn(), photo: vi.fn(), instances: vi.fn(), addEvent: vi.fn(), upload: vi.fn(), destroy: vi.fn(), revision: 1 }));
+const mocks = vi.hoisted(() => ({ foreground: true, answer: vi.fn(), close: vi.fn(), permission: vi.fn(), contacts: vi.fn(), file: vi.fn(), photo: vi.fn(), instances: vi.fn(), addEvent: vi.fn(), upload: vi.fn(), destroy: vi.fn(), revision: 1, capabilityAllowed: false }));
 vi.mock('@kit.AbilityKit', () => ({ abilityAccessCtrl: { createAtManager: () => ({ requestPermissionsFromUser: mocks.permission }) } }));
 vi.mock('@kit.ArkUI', () => ({}));
 vi.mock('@kit.ArkTS', () => ({ util: { Base64Helper: class { async decode(value: string) { return Uint8Array.from(Buffer.from(value, 'base64')); } } } }));
@@ -12,6 +12,8 @@ vi.mock('../entry/src/main/ets/service/deviceLocationConsent', () => ({ openDevi
 vi.mock('../entry/src/main/ets/service/chatAttachmentPicker', () => ({ pickChatAttachment: mocks.file }));
 vi.mock('../entry/src/main/ets/service/chatPhotoPicker', () => ({ pickChatPhoto: mocks.photo }));
 vi.mock('../entry/src/main/ets/service/gatewaySession', () => ({ gatewaySession: { connectionRevision: () => 1,
+  deviceCapabilityAllowed: async () => mocks.capabilityAllowed,
+  allowDeviceCapability: async () => { mocks.capabilityAllowed = true; },
   assertConnection: (revision: number) => { if (revision !== mocks.revision) throw new Error('CHANGED'); },
   currentProfile: () => ({ deviceId: 'fixture' }), transferAuth: async () => ({ token: 'fixture-token', origin: 'https://gateway.example.test' }) } }));
 import { attachDevicePersonalTools, hasActivePersonalPicker, invokeDevicePersonalTool, cancelDevicePersonalTool, cancelAllDevicePersonalTools } from '../entry/src/main/ets/service/devicePersonalTools';
@@ -22,7 +24,7 @@ function request(index: number, args: object = {}, overrides: object = {}) {
     descriptorRevision: DEVICE_TOOL_REVISIONS[index + 3], deadlineAt: Date.now() + 120000,
     uploadGrant: { path: '/api/endpoint-tools/invocations/once/files', token: 'fixture-grant', maxBytes: 1024, expiresAt: Date.now() + 120000 }, ...overrides };
 }
-beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); mocks.foreground = true; mocks.revision = 1;
+beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); mocks.foreground = true; mocks.revision = 1; mocks.capabilityAllowed = false;
   mocks.answer.mockResolvedValue(true); mocks.permission.mockResolvedValue({ authResults: [0] });
   attachDevicePersonalTools({} as never, {} as never); });
 afterEach(() => { cancelAllDevicePersonalTools(); vi.useRealTimers(); });
@@ -55,6 +57,7 @@ describe('Harmony personal information adapters', () => {
     mocks.upload.mockResolvedValue({ responseCode: 201, result: JSON.stringify({ ok: true, payload: { type: 'file', fileId: 'selected-file' } }) });
     const send = vi.fn(); invokeDevicePersonalTool(request(0), send); await vi.advanceTimersByTimeAsync(0);
     expect(send.mock.calls.at(-1)).toMatchObject(['tool.result', { content: [{ type: 'file', fileId: 'selected-file' }] }]);
+    expect(mocks.answer).not.toHaveBeenCalled();
     expect(mocks.upload.mock.calls[0][1].header['x-endpoint-id']).toBe('harmonyos:fixture');
     let complete: (value: object) => void = () => {};
     mocks.file.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
@@ -62,7 +65,7 @@ describe('Harmony personal information adapters', () => {
     complete({ name: 'private.txt', mimeType: 'text/plain', size: 4, data: 'dGVzdA==' }); await vi.advanceTimersByTimeAsync(0);
     expect(mocks.upload).toHaveBeenCalledTimes(1);
   });
-  it('creates a single event only after confirmation and calendar permission', async () => {
+  it('reuses the Gateway capability grant for subsequent calendar writes', async () => {
     const send = vi.fn();
     const args = { startAt: 1796000000000, endAt: 1796003600000, title: 'Test event' };
     mocks.answer.mockResolvedValueOnce(false);
@@ -84,9 +87,27 @@ describe('Harmony personal information adapters', () => {
     expect(hasActivePersonalPicker()).toBe(false);
     expect(mocks.addEvent).toHaveBeenCalledExactlyOnceWith({ type: 0, title: 'Test event', startTime: args.startAt, endTime: args.endAt });
     expect(send.mock.calls.at(-1)).toMatchObject(['tool.result', { content: [{ value: { id: '12' } }] }]);
+    mocks.answer.mockClear();
+    mocks.permission.mockResolvedValueOnce({ authResults: [0, 0] });
+    mocks.addEvent.mockResolvedValueOnce(13);
+    invokeDevicePersonalTool(request(6, args), send);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.answer).not.toHaveBeenCalled();
+    expect(send.mock.calls.at(-1)).toMatchObject(['tool.result', { content: [{ value: { id: '13' } }] }]);
   });
-  it('does not open selectors after user denial', async () => {
-    mocks.answer.mockResolvedValueOnce(false); const send = vi.fn(); invokeDevicePersonalTool(request(0), send); await vi.advanceTimersByTimeAsync(0);
+  it('returns denial when the system picker is dismissed', async () => {
+    mocks.file.mockResolvedValueOnce(undefined); const send = vi.fn(); invokeDevicePersonalTool(request(0), send); await vi.advanceTimersByTimeAsync(0);
     expect(send.mock.calls.at(-1)).toMatchObject(['tool.error', { code: 'USER_DENIED' }]); expect(mocks.permission).not.toHaveBeenCalled();
+    expect(mocks.answer).not.toHaveBeenCalled();
+  });
+  it('uses the explicit Gateway grant from Device Connections without a local approval dialog', async () => {
+    const send = vi.fn();
+    const args = { startAt: 1796000000000, endAt: 1796003600000, title: 'Test event' };
+    mocks.permission.mockResolvedValueOnce({ authResults: [0, 0] });
+    mocks.addEvent.mockResolvedValueOnce(12);
+    invokeDevicePersonalTool(request(6, args, { gatewayCapabilityAuthorized: true }), send);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.answer).not.toHaveBeenCalled();
+    expect(send.mock.calls.at(-1)).toMatchObject(['tool.result', { content: [{ value: { id: '12' } }] }]);
   });
 });

@@ -3,6 +3,7 @@ package ai.xopc.mobile.ui.main
 import ai.xopc.mobile.gateway.DesktopChatTarget
 import ai.xopc.mobile.gateway.loadDesktopChatTarget
 import ai.xopc.mobile.gateway.loadDeviceConnections
+import ai.xopc.mobile.gateway.setDeviceCapability
 import org.json.JSONObject
 
 import ai.xopc.mobile.gateway.ProgressTaskEdit
@@ -4329,6 +4330,11 @@ class GatewayViewModel internal constructor(application: Application, private va
       }
       if (mutableState.value.selectedConversationId == id && mutableState.value.profile == state.profile) refreshDesktopTarget(id)
     }
+  }
+
+  internal suspend fun setDeviceCapabilityAccess(toolName: String, allowed: Boolean, deviceId: String) {
+    if (allowed) ai.xopc.mobile.gateway.DevicePersonalTools.prepareCapabilityPermission(toolName)
+    runInterruptible(Dispatchers.IO) { session.setDeviceCapability(toolName, allowed, deviceId) }
   }
 
   internal suspend fun loadCapabilityDevices() = runInterruptible(Dispatchers.IO) { session.loadDeviceConnections() }

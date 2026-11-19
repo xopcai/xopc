@@ -9,6 +9,8 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
     private var timeout: Task<Void, Never>?
     private var requestedPrecision = "approximate"
     private var pendingId: UUID?
+    private var authorization: CheckedContinuation<Void, Error>?
+    private var authorizationID: UUID?
 
     override private init() {
         super.init(); manager.delegate = self
@@ -17,10 +19,37 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
 
     @objc private func backgrounded() {
         finish(.failure(LocationFailure(code: "ENDPOINT_NOT_FOREGROUND")))
+        finishAuthorization(.failure(LocationFailure(code: "ENDPOINT_NOT_FOREGROUND")))
+    }
+
+    func preparePermission() async throws {
+        guard pending == nil, authorization == nil else { throw LocationFailure(code: "TOOL_BUSY") }
+        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways { return }
+        guard manager.authorizationStatus == .notDetermined else { throw LocationFailure(code: "PERMISSION_DENIED") }
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation { continuation in
+                authorizationID = id
+                authorization = continuation
+                manager.requestWhenInUseAuthorization()
+            }
+        } onCancel: {
+            Task { @MainActor in
+                if self.authorizationID == id { self.finishAuthorization(.failure(CancellationError())) }
+            }
+        }
+    }
+
+    private func finishAuthorization(_ result: Result<Void, Error>) {
+        let continuation = authorization
+        authorization = nil
+        authorizationID = nil
+        continuation?.resume(with: result)
     }
 
     func acquire(precision: String, deadline: Double) async throws -> Data {
-        guard pending == nil else { throw LocationFailure(code: "TOOL_BUSY") }
+        guard pending == nil, authorization == nil else { throw LocationFailure(code: "TOOL_BUSY") }
         guard UIApplication.shared.applicationState == .active else { throw LocationFailure(code: "ENDPOINT_NOT_FOREGROUND") }
         let requestId = UUID()
         requestedPrecision = precision
@@ -57,6 +86,11 @@ final class DeviceLocation: NSObject, @preconcurrency CLLocationManagerDelegate 
     }
 
     func locationManagerDidChangeAuthorization(_: CLLocationManager) {
+        switch manager.authorizationStatus {
+        case .notDetermined: break
+        case .authorizedWhenInUse, .authorizedAlways: finishAuthorization(.success(()))
+        default: finishAuthorization(.failure(LocationFailure(code: "PERMISSION_DENIED")))
+        }
         startLocation()
     }
 

@@ -1,9 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CalendarDays, CheckCircle2, ChevronRight, Clock3, Contact, Folder, Image, Laptop, Loader2, MapPin, Monitor, MousePointer2, Plus, ShieldCheck, Smartphone, WifiOff, type LucideIcon } from 'lucide-react';
+import { Battery, Bell, CalendarDays, Camera, CheckCircle2, ChevronRight, Clipboard, Clock3, Contact, FileText, Folder, Image, Laptop, Link2, Loader2, MapPin, Monitor, MousePointer2, Plus, ShieldCheck, Smartphone, WifiOff, type LucideIcon } from 'lucide-react';
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
-import { DEVICE_FOLDER_PRESETS, type DeviceConnection, type DeviceConnections, type DeviceFolderGrant, type DeviceFolderKind, type MobileDeviceChatTool } from '@xopcai/endpoint-tools-protocol';
+import { DEVICE_FOLDER_PRESETS, type DesktopDeviceChatTool, type DeviceChatTool, type DeviceConnection, type DeviceConnections, type DeviceFolderChange, type DeviceFolderGrant, type DeviceFolderKind, type MobileDeviceChatTool } from '@xopcai/endpoint-tools-protocol';
 
 import { Button } from '@/components/ui/button';
 import { SlidingTabList } from '@/components/ui/sliding-tab-list';
@@ -16,12 +16,11 @@ import { useSectionNavigation } from '@/lib/use-section-navigation';
 import { apiUrl } from '@/lib/url';
 import { DevicePairingAction } from './device-pairing-action';
 
-type FolderEditor = { kind: DeviceFolderKind; folder?: DeviceFolderGrant };
 type LocalizedText = readonly [zh: string, en: string];
 const DEVICE_CONNECTIONS_PATH = '/api/endpoint-tools/device-connections';
-const mobileTools = [
+const mobileTools: ReadonlyArray<readonly [MobileDeviceChatTool, LucideIcon, LocalizedText, LocalizedText, LocalizedText, false?]> = [
   ['mobile.file.pick', Folder, ['阅读文件', 'Read a file'], ['从手机上选择一个文件，请助理阅读或总结。', 'Select a file on your phone to read or summarize.'],
-    ['请让我在选中的手机上选择一个文件，帮我阅读并总结内容。', 'Let me pick a file on the selected phone, then read and summarize it.']],
+    ['请在选中的手机上打开文件选择器，帮我阅读并总结所选文件。', 'Let me pick a file on the selected phone, then read and summarize it.']],
   ['mobile.media.pick', Image, ['解读照片', 'Analyze a photo'], ['从相册选一张照片，了解画面里的内容。', 'Choose a photo from your library and ask about what’s in it.'],
     ['请让我在选中的手机上从相册选择一张照片，然后帮我解读。', 'Let me pick a photo on the selected phone, then describe what’s in it.']],
   ['mobile.contacts.pick', Contact, ['选取联系方式', 'Pick contact details'], ['从手机通讯录选择一个电话号码。', 'Pick a phone number from your phone’s contacts.'],
@@ -30,8 +29,44 @@ const mobileTools = [
     ['请查看选中的手机日历，告诉我今天有哪些安排。', 'Check the calendar on the selected phone and tell me what’s scheduled today.']],
   ['mobile.device.get_location', MapPin, ['使用当前位置', 'Use your location'], ['用手机的大致位置查询当地天气。', 'Check local weather using your phone’s approximate location.'],
     ['请用选中手机的大致位置查询当地天气。', 'Use the selected phone’s approximate location to check the local weather.']],
-] as const satisfies ReadonlyArray<readonly [MobileDeviceChatTool, LucideIcon, LocalizedText, LocalizedText, LocalizedText]>;
+  ['mobile.camera.capture', Camera, ['拍照', 'Take a photo'], ['在手机上拍一张照片，带到对话里。', 'Take a photo on your phone and bring it into the chat.'],
+    ['请在选中的手机上打开相机，让我拍一张照片。', 'Open the camera on the selected phone so I can take a photo.']],
+  ['mobile.contacts.find_by_name', Contact, ['查找联系人', 'Find contacts'], ['按姓名查找联系方式。', 'Find contact details by name.'],
+    ['请在选中的手机上查找联系人：', 'Find a contact on the selected phone: '], false],
+  ['mobile.calendar.query_free_busy', CalendarDays, ['查看空闲时间', 'Check availability'], ['查看今天哪些时间有安排。', 'See when you are busy today.'],
+    ['请查看选中手机上今天的空闲时间。', 'Check today’s availability on the selected phone.']],
+  ['mobile.calendar.create_event', CalendarDays, ['创建日程', 'Create an event'], ['把对话中的安排添加到手机日历。', 'Add an event to your phone’s calendar.'],
+    ['请在选中的手机上创建日程：', 'Create this event on the selected phone: '], false],
+  ['mobile.media.list_recent', Image, ['最近照片', 'Recent photos'], ['查看最近拍摄的照片记录。', 'Find recently captured photos.'],
+    ['请列出选中手机上最近拍摄的照片。', 'List the most recent photos on the selected phone.']],
+  ['mobile.media.read_image', Image, ['读取照片', 'Read a photo'], ['使用照片编号读取对应的照片。', 'Read a photo by its ID.'],
+    ['请从选中的手机读取这张照片，照片编号：', 'Read this photo from the selected phone. Photo ID: '], false],
+  ['mobile.media.add_to_album', Image, ['整理相册', 'Organize albums'], ['按照片编号把照片加入指定相册。', 'Add a photo to an album by its ID.'],
+    ['请把选中手机上的照片加入相册，照片编号和相册名称：', 'Add a photo on the selected phone to an album. Photo ID and album name: '], false],
+  ['mobile.device.get_state', Smartphone, ['设备信息', 'Device information'], ['查看手机系统版本、语言和时区。', 'Check the phone’s system version, language and time zone.'],
+    ['请查询选中手机的设备信息。', 'Check the selected phone’s device information.']],
+  ['mobile.device.get_power', Battery, ['电量', 'Battery'], ['查看这部手机的电量和充电状态。', 'Check battery level and charging status.'],
+    ['请查询选中手机的电量和充电状态。', 'Check battery level and charging status on the selected phone.']],
+];
 const names = { desktop: ['桌面', 'Desktop'], documents: ['文稿', 'Documents'], downloads: ['下载', 'Downloads'] } as const;
+const desktopTools: ReadonlyArray<readonly [DesktopDeviceChatTool, LucideIcon, LocalizedText, LocalizedText, false?]> = [
+  ['desktop.device.get_state', Monitor, ['查看系统版本、语言和时区。', 'Check the system version, language and time zone.'],
+    ['请查询选中电脑的设备信息。', 'Check the selected computer’s device information.']],
+  ['desktop.file.pick', Folder, ['从这台电脑选择一个文件并带到对话里。', 'Choose a file on this computer and bring it into the chat.'],
+    ['请打开选中电脑的文件选择器，帮我阅读所选文件。', 'Open the file picker on the selected computer and read the file I choose.']],
+  ['desktop.file.save', FileText, ['在这台电脑上选择位置保存文本。', 'Choose where to save text on this computer.'],
+    ['请在选中的电脑上保存以下文本：', 'Save the following text on the selected computer: '], false],
+  ['desktop.clipboard.read', Clipboard, ['把这台电脑剪贴板里的文字带到对话里。', 'Read text from this computer’s clipboard.'],
+    ['请读取选中电脑剪贴板里的文字。', 'Read the clipboard text on the selected computer.']],
+  ['desktop.clipboard.write', Clipboard, ['把指定文字复制到这台电脑的剪贴板。', 'Copy text to this computer’s clipboard.'],
+    ['请把以下文字复制到选中电脑的剪贴板：', 'Copy this text to the selected computer’s clipboard: '], false],
+  ['desktop.notification.show', Bell, ['在这台电脑上显示系统通知。', 'Show a system notification on this computer.'],
+    ['请在选中的电脑显示通知，标题和内容是：', 'Show a notification on the selected computer. Title and message: '], false],
+  ['desktop.app.open_external', Link2, ['用这台电脑的默认浏览器打开链接。', 'Open a link in this computer’s default browser.'],
+    ['请在选中的电脑打开这个链接：', 'Open this link on the selected computer: '], false],
+  ['desktop.computer.control', MousePointer2, ['使用已允许的应用窗口。', 'Use application windows that have been allowed.'],
+    ['请在选中的电脑上操作这个应用：', 'Use this app on the selected computer: '], false],
+];
 
 const platformNames: Record<string, string> = { darwin: 'macOS', win32: 'Windows', linux: 'Linux', ios: 'iOS', android: 'Android', harmonyos: 'HarmonyOS' };
 const platformIconTones: Record<string, string> = {
@@ -137,75 +172,145 @@ export function ConnectDeviceButton({ zh }: { zh: boolean }) {
 export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
   const navigate = useNavigate();
   const desktop = window.electronAPI?.deviceFolders;
+  const desktopCapabilities = window.electronAPI?.deviceCapabilities;
   const catalog = useSWR(apiUrl(DEVICE_CONNECTIONS_PATH), async url => (
     await fetchJson<{ payload: DeviceConnections }>(url)
   ).payload, { refreshInterval: 5_000, shouldRetryOnError: false });
   const local = useSWR(desktop ? 'device-folders:status' : null, () => desktop?.status(), { refreshInterval: 3_000 });
-  const [editor, setEditor] = useState<FolderEditor>();
-  const [mobileIds, setMobileIds] = useState<string[]>([]);
+  const localCapabilities = useSWR(desktopCapabilities ? 'device-capabilities:status' : null, () => desktopCapabilities?.status(), { refreshInterval: 3_000 });
+  const [revoking, setRevoking] = useState<DeviceFolderGrant>();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [startingTool, setStartingTool] = useState<{ deviceId: string; tool: MobileDeviceChatTool }>();
+  const [changingCapability, setChangingCapability] = useState<DesktopDeviceChatTool>();
+  const [capabilityError, setCapabilityError] = useState(false);
+  const [startingTool, setStartingTool] = useState<{ deviceId: string; key: string }>();
   const [chatError, setChatError] = useState<{ deviceId: string; message: string }>();
   const folderTrigger = useRef<HTMLButtonElement>(null);
   const folderFallback = useRef<HTMLButtonElement>(null);
   const devices = catalog.data?.devices ?? [];
-  const localDevice = devices.find(device => device.endpointId && device.endpointId === local.data?.endpointId);
-  const mobile = devices.filter(device => device.kind === 'mobile');
+  const localEndpoint = localCapabilities.data?.endpointId ?? local.data?.endpointId;
+  const localDevice = devices.find(device => device.endpointId && device.endpointId === localEndpoint);
   const locale = zh ? 0 : 1;
   const offlineHint = zh ? '让设备连上网络，再打开 xopc。' : 'Connect the device to the internet, then open xopc.';
   const folderName = (kind: DeviceFolderKind, label?: string) => kind === 'custom' ? (label ?? (zh ? '文件夹' : 'Folder')) : names[kind][locale];
 
-  async function startChat(device: DeviceConnection, toolName: MobileDeviceChatTool, prompt: string) {
-    if (startingTool || device.kind !== 'mobile' || device.availability !== 'foreground' || !device.endpointId) return;
-    setStartingTool({ deviceId: device.id, tool: toolName });
+  async function startChat(device: DeviceConnection, key: string, prompt: string, toolName?: DeviceChatTool, autoSend = true) {
+    if (startingTool || device.availability === 'offline' || !device.endpointId) return;
+    setStartingTool({ deviceId: device.id, key });
     setChatError(undefined);
     try {
       const { payload } = await fetchJson<{ payload: { conversationId: string } }>(apiUrl(`${DEVICE_CONNECTIONS_PATH}/chat`), {
         method: 'POST', body: JSON.stringify({ endpointId: device.endpointId, toolName }),
       });
-      const query = new URLSearchParams({ draft: prompt, autoSend: '1' });
+      const query = new URLSearchParams({ draft: prompt, ...(autoSend && { autoSend: '1' }) });
       navigate(`/chat/${encodeURIComponent(payload.conversationId)}?${query}`);
     } catch (error) {
-      const unavailable = typeof error === 'object' && error !== null && 'status' in error && error.status === 409;
-      setChatError({ deviceId: device.id, message: unavailable
-        ? (zh ? '手机暂时无法使用此项功能，请打开手机上的 xopc 后重试。' : 'This feature is unavailable. Open xopc on the phone and try again.')
+      const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
+      setChatError({ deviceId: device.id, message: status === 403
+        ? (zh ? '请在来源设备的「设备连接」中授权后重试。' : 'Authorize this capability on the source device and try again.')
+        : status === 409 ? (zh ? '此能力暂不可用，请打开设备上的 xopc 后重试。' : 'This capability is unavailable. Open xopc on the device and try again.')
         : (zh ? '暂时无法开启新对话，请重试。' : 'Unable to start a new chat. Try again.') });
-      if (unavailable) void catalog.mutate().catch(() => {});
+      if (status === 403 || status === 409) void catalog.mutate().catch(() => {});
     } finally {
       setStartingTool(undefined);
     }
   }
 
-  function configure(kind: DeviceFolderKind, trigger: HTMLButtonElement, folder?: DeviceFolderGrant) {
-    folderTrigger.current = trigger;
-    setFailed(false);
-    setMobileIds(folder?.mobileIds.filter(id => mobile.some(device => device.id === id)) ?? []);
-    setEditor({ kind, folder });
+  async function changeCapability(endpointId: string | undefined, toolName: DesktopDeviceChatTool, allowed: boolean) {
+    if (!desktopCapabilities || !endpointId || changingCapability) return;
+    setChangingCapability(toolName);
+    setCapabilityError(false);
+    try {
+      await desktopCapabilities.change({ endpointId, toolName, allowed });
+    } catch {
+      setCapabilityError(true);
+    } finally {
+      await Promise.allSettled([localCapabilities.mutate(), catalog.mutate()]);
+      setChangingCapability(undefined);
+    }
   }
 
-  async function save(revoke = false) {
-    if (!editor || !desktop || busy) return;
+  function renderReportedDesktopCapabilities(device: DeviceConnection) {
+    const isLocal = device.id === localDevice?.id;
+    const canManage = isLocal && localCapabilities.data?.ready;
+    const reported = desktopTools.flatMap(tool => {
+      const capability = device.capabilities?.find(item => item.name === tool[0]);
+      return capability ? [{ tool, capability }] : [];
+    });
+    if (!reported.length) return null;
+    return <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-fg">{isLocal
+        ? (zh ? '允许当前 Gateway 使用' : 'Allow the current Gateway to use')
+        : (zh ? '电脑能力' : 'Computer capabilities')}</h3>
+      {isLocal && capabilityError ? <p role="alert" className="text-sm text-danger">
+        {zh ? '无法更新授权，请检查电脑与 Gateway 的连接后重试。' : 'Unable to update access. Check the computer’s connection to Gateway.'}
+      </p> : null}
+      <div className={CONNECTION_CARD_GRID_CLASS}>
+        {reported.map(({ tool: [id, Icon, description, prompt, autoSend], capability }) => {
+          const title = zh ? capability.titleZh : capability.title;
+          const allowed = canManage ? localCapabilities.data?.allowed.includes(id) === true : capability.allowed;
+          const unavailable = capability.requiresForeground && device.availability !== 'foreground';
+          return <DeviceCapabilityCard key={id} icon={Icon} name={title} description={description[locale]}
+            action={<div className="flex w-full flex-wrap items-center justify-end gap-x-2">
+              <span className={cn('mr-auto text-xs', allowed ? 'text-emerald-700 dark:text-emerald-300' : 'text-fg-muted')}>
+                {allowed ? (zh ? '已授权' : 'Authorized') : isLocal ? (zh ? '未授权' : 'Not authorized')
+                  : (zh ? '在来源电脑上授权' : 'Authorize on the source computer')}
+              </span>
+              {id === 'desktop.computer.control' && isLocal ? <Button asChild variant="ghost" className="px-2 text-xs">
+                <Link to="/settings/computer-use">{zh ? '应用权限' : 'App permissions'}</Link>
+              </Button> : null}
+              {capability.allowed && allowed && capability.needsSetup ? <span className="text-xs text-fg-muted">
+                {zh ? '需在 Gateway 设置中启用电脑控制' : 'Enable Computer Use in Gateway settings'}
+              </span> : capability.allowed && allowed && device.endpointId && chatButton(device, id, title, unavailable,
+                () => void startChat(device, id, prompt[locale], id, autoSend))}
+              {canManage ? <button type="button" role="switch" aria-checked={allowed}
+                aria-label={zh ? `允许 Gateway 使用「${title}」` : `Allow Gateway to use ${title}`}
+                disabled={Boolean(changingCapability)} onClick={() => void changeCapability(device.endpointId, id, !allowed)}
+                className="touch-target flex shrink-0 items-center rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+                <span aria-hidden className={cn('flex h-6 w-11 items-center rounded-full p-0.5 transition-colors motion-reduce:transition-none',
+                  allowed ? 'bg-accent' : 'bg-fg-muted/30')}>
+                  <span className={cn('size-5 rounded-full bg-white transition-transform motion-reduce:transition-none', allowed && 'translate-x-5')} />
+                </span>
+              </button> : null}
+            </div>} />;
+        })}
+      </div>
+    </div>;
+  }
+
+  function chatButton(device: DeviceConnection, key: string, title: string, disabled: boolean, start: () => void) {
+    return <Button variant="ghost" className={capabilityActionClass}
+      disabled={disabled || Boolean(startingTool)}
+      aria-label={zh ? `在新对话中使用「${title}」` : `Use ${title} in a new chat`}
+      onClick={start}>
+      {zh ? '新对话中使用' : 'Use in new chat'}
+      {startingTool?.deviceId === device.id && startingTool.key === key
+        ? <Loader2 aria-hidden className="size-3.5 animate-spin motion-reduce:animate-none" />
+        : <ChevronRight className="size-3.5" aria-hidden />}
+    </Button>;
+  }
+
+  async function changeFolder(input: DeviceFolderChange) {
+    if (!desktop || busy) return;
     setBusy(true);
     setFailed(false);
     try {
-      const id = editor.folder?.id;
-      if (revoke && id) {
-        await desktop.change({ id, revoke: true });
-        if (editor.kind === 'custom') folderTrigger.current = null;
-      } else if (id) await desktop.change({ id, mobileIds });
-      else await desktop.change({ kind: editor.kind, mobileIds });
-      setEditor(undefined);
+      await desktop.change(input);
+      if ('revoke' in input) {
+        if (revoking?.kind === 'custom') folderTrigger.current = null;
+        setRevoking(undefined);
+      }
     } catch {
       setFailed(true);
     } finally {
       setBusy(false);
-      await Promise.all([local.mutate(), catalog.mutate()]);
+      await Promise.allSettled([local.mutate(), catalog.mutate()]);
     }
   }
 
   function renderPhoneCapabilities(device: DeviceConnection) {
-    const actions = mobileTools.filter(([id]) => device.tools.includes(id));
+    const actions = mobileTools.filter(([id]) => device.capabilities
+      ? device.capabilities.some(capability => capability.name === id) : device.tools.includes(id));
     if (actions.length === 0) return <p className="rounded-xl bg-surface-panel p-4 text-sm text-fg-muted">
       {zh ? '这部手机暂时没有可在对话中使用的功能。' : 'This phone has no features available for chats yet.'}
     </p>;
@@ -215,18 +320,16 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
       </p> : null}
       {chatError?.deviceId === device.id ? <p role="alert" className="text-sm text-danger">{chatError.message}</p> : null}
       <div className={CONNECTION_CARD_GRID_CLASS}>
-        {actions.map(([id, Icon, title, description, prompt]) => <DeviceCapabilityCard
-          key={id} icon={Icon} name={title[locale]} description={description[locale]}
-          action={device.endpointId ? <Button variant="ghost" className={capabilityActionClass}
-            disabled={Boolean(startingTool) || device.availability !== 'foreground'}
-            aria-label={zh ? `在新对话中使用「${title[locale]}」` : `Use ${title[locale]} in a new chat`}
-            onClick={() => void startChat(device, id, prompt[locale])}>
-            {zh ? '新对话中使用' : 'Use in new chat'}
-            {startingTool?.deviceId === device.id && startingTool.tool === id
-              ? <Loader2 aria-hidden className="size-3.5 animate-spin motion-reduce:animate-none" />
-              : <ChevronRight className="size-3.5" aria-hidden />}
-          </Button> : null}
-        />)}
+        {actions.map(([id, Icon, title, description, prompt, autoSend]) => {
+          const capability = device.capabilities?.find(item => item.name === id);
+          const allowed = capability?.allowed ?? !device.capabilities;
+          const unavailable = (capability?.requiresForeground ?? true) && device.availability !== 'foreground';
+          return <DeviceCapabilityCard key={id} icon={Icon} name={title[locale]} description={description[locale]}
+            action={!allowed ? <span className="text-xs text-fg-muted">
+              {zh ? '在手机的「设备连接」中授权' : 'Authorize in Device connections on your phone'}
+            </span> : device.endpointId && chatButton(device, id, title[locale], unavailable,
+              () => void startChat(device, id, prompt[locale], id, autoSend))} />;
+        })}
       </div>
     </div>;
   }
@@ -234,6 +337,7 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
   function renderComputerCapabilities(device: DeviceConnection) {
     const isLocal = device.id === localDevice?.id;
     const canManage = isLocal && local.data?.ready;
+    const canAuthorize = canManage && local.data?.gatewayAccess === true;
     const grants = isLocal ? local.data?.folders ?? [] : [];
     const folders = isLocal ? grants : device.folders;
     const folderRows = [
@@ -242,31 +346,49 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
     ];
 
     return <div className="space-y-3">
+      {renderReportedDesktopCapabilities(device)}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-fg-muted">
           {zh ? '在对话中查找并阅读已授权文件夹里的文件。' : 'Find and read files from approved folders in your chats.'}
         </p>
-        {canManage ? <Button ref={folderFallback} variant="secondary" className="shrink-0 text-xs" onClick={event => configure('custom', event.currentTarget)}>
+        {canAuthorize ? <Button ref={folderFallback} variant="secondary" className="shrink-0 text-xs" disabled={busy}
+          onClick={() => void changeFolder({ kind: 'custom' })}>
           <Plus className="size-4" aria-hidden />{zh ? '添加文件夹' : 'Add folder'}
         </Button> : null}
       </div>
+      {chatError?.deviceId === device.id ? <p role="alert" className="text-sm text-danger">{chatError.message}</p> : null}
       <div className={CONNECTION_CARD_GRID_CLASS}>
         {folderRows.map(({ kind, folder }) => {
           const grant = grants.find(entry => entry.id === folder?.id);
-          const audience = mobile.filter(device => grant?.mobileIds.includes(device.id)).map(device => device.name);
-          const access = !folder ? (zh ? '未开放访问' : 'Access off') : zh
-            ? (audience.length ? `这台电脑、${audience.join('、')} · 只读` : isLocal ? '仅这台电脑 · 只读' : '只读')
-            : (audience.length ? `This computer and ${audience.join(', ')} · Read only` : isLocal ? 'This computer only · Read only' : 'Read only');
+          const legacy = Boolean(grant && grant.access !== 'gateway');
+          const access = !folder ? (zh ? '未授权' : 'Not authorized')
+            : legacy ? (zh ? '仅限原授权范围 · 只读' : 'Previous access only · Read-only')
+            : isLocal ? (zh ? '已授权给 Gateway · 只读' : 'Authorized for Gateway · Read-only') : (zh ? '已授权 · 只读' : 'Authorized · Read-only');
           const name = folderName(kind, folder?.label);
-          const action = folder ? (zh ? '管理' : 'Manage') : (zh ? '允许访问' : 'Allow access');
+          const usable = folder?.access === 'gateway' && device.endpointId;
           return <DeviceCapabilityCard key={kind === 'custom' ? folder?.id : kind} icon={Folder} name={name} description={access}
-            action={canManage ? <Button variant="ghost" className={capabilityActionClass} aria-label={`${action} ${name}`}
-              onClick={event => configure(kind, event.currentTarget, grant)}>
-              {action}<ChevronRight className="size-3.5" aria-hidden />
-            </Button> : null}
+            action={canManage || usable ? <div className="flex flex-wrap justify-end gap-2">
+              {usable && folder ? chatButton(device, folder.id, name, false, () => void startChat(device, folder.id, zh
+                ? `请在选中电脑的「${name}」里查找文件：` : `Find a file in “${name}” on the selected computer: `, undefined, false)) : null}
+              {canAuthorize && (!grant || legacy) ? <Button variant="ghost" className={capabilityActionClass}
+                disabled={busy} aria-label={zh ? `授权给 Gateway ${name}` : `Authorize Gateway for ${name}`}
+                onClick={() => void changeFolder(grant ? { id: grant.id } : { kind })}>
+                {zh ? '授权给 Gateway' : 'Authorize Gateway'}<ChevronRight className="size-3.5" aria-hidden />
+              </Button> : null}
+              {canManage && grant ? <Button variant="ghost" className={cn(capabilityActionClass, 'text-fg-muted hover:text-fg')}
+                disabled={busy} aria-label={zh ? `撤销授权 ${name}` : `Revoke access to ${name}`}
+                onClick={event => {
+                  folderTrigger.current = event.currentTarget;
+                  setFailed(false);
+                  setRevoking(grant);
+                }}>
+                {zh ? '撤销授权' : 'Revoke access'}
+              </Button> : null}
+            </div> : null}
           />;
         })}
-        {isLocal && (device.platform === 'darwin' || device.platform === 'win32') ? <DeviceCapabilityCard
+        {isLocal && !device.capabilities?.some(capability => capability.name === 'desktop.computer.control')
+          && (device.platform === 'darwin' || device.platform === 'win32') ? <DeviceCapabilityCard
           icon={MousePointer2} name={zh ? '操作应用窗口' : 'Operate application windows'}
           description={zh ? '在设置中管理应用窗口操作权限。' : 'Manage access to application windows in settings.'}
           action={<Button asChild variant="ghost" className={capabilityActionClass}>
@@ -274,6 +396,12 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
           </Button>}
         /> : null}
       </div>
+      {isLocal && failed && !revoking ? <p role="alert" className="text-sm text-danger">
+        {zh ? '无法更新文件夹授权，请检查 Gateway 连接后重试。' : 'Could not update folder access. Check the Gateway connection and try again.'}
+      </p> : null}
+      {canManage && !canAuthorize ? <p className="text-sm text-fg-muted">
+        {zh ? '更新电脑端和 Gateway 后，即可直接授权给 Gateway。' : 'Update the desktop app and Gateway to grant direct access.'}
+      </p> : null}
       <p className="flex gap-2 text-xs leading-5 text-fg-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
         {isLocal ? (zh ? '可随时撤销授权。选中文件的内容可能随对话发送给模型。' : 'You can revoke access at any time. Selected file content can be sent to your model.')
           : (zh ? '请在文件所在的电脑上更改访问设置。' : 'Change access on the computer where the files are stored.')}
@@ -284,7 +412,7 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
   const orderedDevices = localDevice ? [localDevice, ...devices.filter(device => device.id !== localDevice.id)] : devices;
 
   return <>
-    {catalog.isLoading || local.isLoading ? <div aria-busy="true" aria-label={zh ? '正在加载设备' : 'Loading devices'} className={cn(CONNECTION_CARD_GRID_CLASS, 'pt-3 lg:pt-4')}>
+    {catalog.isLoading || local.isLoading || localCapabilities.isLoading ? <div aria-busy="true" aria-label={zh ? '正在加载设备' : 'Loading devices'} className={cn(CONNECTION_CARD_GRID_CLASS, 'pt-3 lg:pt-4')}>
       {[0, 1, 2].map(slot => <InstalledConnectorRowSkeleton key={slot} />)}
     </div> : catalog.error ? <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-edge bg-surface-panel p-4 text-sm text-fg-muted lg:mt-4">
       <p>{zh ? '暂时无法加载设备，请检查连接后重试。' : 'Unable to load devices. Check your connection and try again.'}</p>
@@ -296,38 +424,31 @@ export function DeviceConnectionsPanel({ zh }: { zh: boolean }) {
         <WifiOff className="size-4 shrink-0" aria-hidden />{offlineHint}
       </p> : device.kind === 'desktop' ? renderComputerCapabilities(device) : renderPhoneCapabilities(device)
     )} />}
-    <Dialog.Root open={Boolean(editor)} onOpenChange={open => { if (!open && !busy) setEditor(undefined); }}>
+    <Dialog.Root open={Boolean(revoking)} onOpenChange={open => {
+      if (!open && !busy) { setFailed(false); setRevoking(undefined); }
+    }}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
         <Dialog.Content
-          className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(28rem,calc(100dvh-2rem))] w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-float outline-none"
+          className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-edge bg-surface-overlay p-5 shadow-float outline-none"
           onCloseAutoFocus={event => {
             event.preventDefault();
             (folderTrigger.current?.isConnected ? folderTrigger.current : folderFallback.current)?.focus();
           }}
         >
-          <header className="border-b border-edge-subtle px-5 py-4">
-            <Dialog.Title className="font-semibold text-fg">{editor?.folder ? (zh ? '管理文件夹访问' : 'Manage folder access') : (zh ? '允许访问文件夹' : 'Allow folder access')}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm text-fg-muted">
-              {editor ? folderName(editor.kind, editor.folder?.label) : ''} · {zh ? '只读' : 'Read-only'}
-            </Dialog.Description>
-          </header>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4 text-sm text-fg">
-            <p>{mobile.length > 0
-              ? (zh ? '这台电脑可以读取此文件夹。也可以选择哪些手机能在对话中使用它。' : 'This computer can read this folder. You can also choose which phones can use it in chats.')
-              : (zh ? '这台电脑可以在对话中读取此文件夹。' : 'This computer can read this folder in chats.')}</p>
-            {mobile.length > 0 ? <div className="divide-y divide-edge-subtle rounded-xl bg-surface-inset/60 px-3">
-              {mobile.map(device => <label key={device.id} className="flex min-h-11 items-center gap-3 py-2 [overflow-wrap:anywhere]">
-                <input type="checkbox" className="size-4 shrink-0 accent-accent" checked={mobileIds.includes(device.id)} disabled={busy}
-                  onChange={event => setMobileIds(ids => event.target.checked ? [...ids, device.id] : ids.filter(id => id !== device.id))} />{device.name}
-              </label>)}
-            </div> : null}
-            {failed ? <p role="alert" className="text-sm text-danger">{zh ? '无法更新文件夹访问设置，请检查设备连接并重试。' : 'Unable to update folder access. Check the device connection and try again.'}</p> : null}
-          </div>
-          <footer className="flex flex-wrap justify-end gap-2 border-t border-edge-subtle p-4">
-            {editor?.folder ? <Button variant="secondary" disabled={busy} onClick={() => void save(true)}>{zh ? '撤销授权' : 'Revoke'}</Button> : null}
-            <Button variant="secondary" disabled={busy} onClick={() => setEditor(undefined)}>{zh ? '取消' : 'Cancel'}</Button>
-            <Button variant="primary" disabled={busy} onClick={() => void save()}>{editor?.folder ? (zh ? '保存' : 'Save') : (zh ? '选择文件夹' : 'Choose folder')}</Button>
+          <Dialog.Title className="font-semibold text-fg">{zh ? '撤销文件夹授权' : 'Revoke folder access'}</Dialog.Title>
+          <Dialog.Description className="mt-2 text-sm text-fg-muted">
+            {revoking ? (zh ? `Gateway 将无法再访问「${folderName(revoking.kind, revoking.label)}」。`
+              : `Gateway will lose access to “${folderName(revoking.kind, revoking.label)}”.`) : null}
+          </Dialog.Description>
+          {failed ? <p role="alert" className="mt-2 text-sm text-danger">
+            {zh ? '无法撤销授权，请重试。' : 'Could not revoke access. Try again.'}
+          </p> : null}
+          <footer className="mt-4 flex justify-end gap-2">
+            <Dialog.Close asChild><Button variant="secondary" disabled={busy}>{zh ? '取消' : 'Cancel'}</Button></Dialog.Close>
+            <Button variant="primary" disabled={busy} onClick={() => revoking && void changeFolder({ id: revoking.id, revoke: true })}>
+              {zh ? '撤销授权' : 'Revoke access'}
+            </Button>
           </footer>
         </Dialog.Content>
       </Dialog.Portal>

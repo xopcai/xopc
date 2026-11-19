@@ -15,6 +15,7 @@ import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { getSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { getDeviceInteractionForRun } from '../../storage/sqlite/clarification-wait-repository.js';
 import { deviceFoldersFor, permitsFolderInvocation } from '../../endpoint-tools/folder-connections.js';
+import { deviceCapabilityAllowed, isManagedDeviceCapability } from '../../endpoint-tools/device-capability-grants.js';
 import { DeviceTargetResolver } from '../../endpoint-tools/target-resolver.js';
 import { currentDeviceExecutionActor } from '../../endpoint-tools/execution-actor.js';
 import { getEmbeddedExecutionRunId } from '../embedded/execution-context.js';
@@ -63,7 +64,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     }
     const resolver = this.targetResolver(true);
     const checkpoint = getDeviceInteractionForRun(context.conversationId, getEmbeddedExecutionRunId());
-    const selectedMobileTool = this.deps.runtime.targets.get(context.conversationId)?.mobileTool;
+    const selectedCapability = this.deps.runtime.targets.get(context.conversationId)?.capabilityTool;
     return resolver.candidates(context.conversationId, context.origin).flatMap(endpoint => endpoint.tools.filter(({ descriptor, provider }) => ![BROWSER_CONTROL_ENDPOINT_TOOL_NAME, REMOTE_BROWSER_CONTROL_TOOL, COMPUTER_CONTROL_TOOL, REMOTE_COMPUTER_CONTROL_TOOL].includes(descriptor.name)
       && (!provider || this.deps.runtime.providers.isReady(provider))
       && (!checkpoint || endpoint.endpointId === checkpoint.endpointId && descriptor.name === checkpoint.toolName
@@ -73,7 +74,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
       source: this.source,
       namespace: endpoint.endpointId,
       title: descriptor.title,
-      summary: `${selectedMobileTool ? descriptor.title : descriptor.description} (${getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName})`,
+      summary: `${selectedCapability ? descriptor.title : descriptor.description} (${getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName})`,
     })));
   }
 
@@ -105,7 +106,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
 
   private describeResolved(toolRef: string, resolved: NonNullable<ReturnType<EndpointToolProvider['resolve']>>): ExternalToolDescriptor {
     const folders = resolved.folders?.map(({ id, kind, label }) => ({ id, kind, label }));
-    const toolDescription = resolved.selectedMobileTool
+    const toolDescription = resolved.selectedCapability?.startsWith('mobile.')
       ? resolved.tool.descriptor.description.replace(
         /Uses the (?:foreground )?device that sent this message\b/u,
         'Runs on the phone selected for this chat',
@@ -154,7 +155,8 @@ export class EndpointToolProvider implements ExternalToolProvider {
     let grantLease: ReturnType<NonNullable<EndpointToolRuntime['grants']>['reserve']> | undefined;
     const invoke = (operationId?: string) => {
       if (context.signal?.aborted) throw new ExternalEffectNotAppliedError('Device invocation cancelled before dispatch');
-      if (this.resolve(toolRef)?.contractRevision !== revision) {
+      const active = this.resolve(toolRef);
+      if (!active || active.contractRevision !== revision) {
         throw new ExternalEffectNotAppliedError('Endpoint connection, binding or tool contract changed');
       }
       assertFolderAccess();
@@ -162,7 +164,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
       const actor = currentDeviceExecutionActor(turn.conversationId, getEmbeddedExecutionRunId());
       const transcriptId = actor && getSessionMetadata(turn.conversationId)?.transcriptId;
       const invocationScope = actor && transcriptId ? { conversationId: turn.conversationId, transcriptId, actorPrincipalId: actor.principalId } : undefined;
-      const grant = this.deps.runtime.grants?.find(turn.conversationId, turn.origin, resolved.endpointId, resolved.tool.descriptor.name);
+      const grant = active.singleCallGrant;
       const recoveryRunId = invocationScope && !grant && actor?.kind === 'owner' && actor.scopes.includes('gateway.admin')
         && resolved.tool.provider?.gatewayFormInput ? getEmbeddedExecutionRunId() ?? getSessionInputState(turn.conversationId).activeRunId : undefined;
       if (grant) grantLease = this.deps.runtime.grants.reserve(grant.id, args);
@@ -173,6 +175,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
       toolName: resolved.tool.descriptor.name,
       arguments: args,
       descriptorRevision: resolved.tool.revision,
+      ...(active.gatewayCapability && { gatewayCapability: true }),
       ...(invocationScope ? { invocationScope } : {}),
       ...(invocationScope && recoveryRunId ? { interactionOrigin: { ...invocationScope, runId: recoveryRunId,
         targetRef: this.deps.runtime.targets.get(turn.conversationId)?.executionRef } } : {}),
@@ -302,6 +305,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
   }
 
   private delegation(conversationId: string) {
+    if (this.deps.runtime.targets.get(conversationId)?.capabilityTool) return undefined;
     return resolveDeviceDelegation(conversationId, getEmbeddedExecutionRunId(), this.deps.runtime.registry);
   }
 
@@ -310,11 +314,20 @@ export class EndpointToolProvider implements ExternalToolProvider {
     if (!parsed) return undefined;
     const context = this.deps.getCurrentContext();
     if (!context) return undefined;
+    const target = this.deps.runtime.targets.get(context.conversationId);
     const delegated = this.delegation(context.conversationId);
     if (delegated && (isDeviceFolderTool(parsed.toolName) || delegated.grant?.toolName !== parsed.toolName || delegated.endpoint?.endpointId !== parsed.namespace)) return undefined;
-    const endpoint = delegated ? delegated.endpoint : resolver.resolve(context.conversationId, context.origin, parsed.namespace, parsed.toolName);
+    const endpoint = delegated ? delegated.endpoint
+      : resolver.resolve(context.conversationId, context.origin, parsed.namespace, parsed.toolName);
     if (!endpoint || endpoint.endpointId !== parsed.namespace) return undefined;
     const tool = this.deps.runtime.registry.getTool(endpoint.endpointId, parsed.toolName);
+    const singleCallGrant = target?.capabilityTool ? undefined
+      : this.deps.runtime.grants?.find(context.conversationId, context.origin, endpoint.endpointId, parsed.toolName);
+    const source = context.origin.type === 'endpoint' ? this.deps.runtime.registry.get(context.origin.endpointId) : undefined;
+    const gatewayCapability = isManagedDeviceCapability(endpoint, parsed.toolName)
+      && (Boolean(target?.capabilityTool) || source?.principalId !== endpoint.principalId)
+      && !(endpoint.kind === 'mobile' && (singleCallGrant || delegated?.grant));
+    if (gatewayCapability && !deviceCapabilityAllowed(endpoint, parsed.toolName)) return undefined;
     if (tool?.provider && !this.deps.runtime.providers.isReady(tool.provider)) return undefined;
     const checkpoint = checkpointSnapshot === undefined ? getDeviceInteractionForRun(context.conversationId, getEmbeddedExecutionRunId()) : checkpointSnapshot;
     if (checkpoint && (parsed.toolName !== checkpoint.toolName || endpoint.endpointId !== checkpoint.endpointId
@@ -323,11 +336,10 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const folders = isDeviceFolderTool(parsed.toolName) ? deviceFoldersFor(endpoint,
       currentDeviceExecutionActor(context.conversationId, getEmbeddedExecutionRunId()), context.origin, this.deps.runtime.registry) : undefined;
     if (folders && !folders.length) return undefined;
-    const target = this.deps.runtime.targets.get(context.conversationId);
-    return tool ? { folders, selectedMobileTool: target?.mobileTool, delegation: delegated?.grant, approvedArguments: this.deps.runtime.grants.find(context.conversationId, context.origin, endpoint.endpointId, parsed.toolName)?.arguments, connectionId: endpoint.connectionId, endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName, tool,
+    return tool ? { folders, selectedCapability: target?.capabilityTool, gatewayCapability, delegation: delegated?.grant, singleCallGrant, approvedArguments: singleCallGrant?.arguments, connectionId: endpoint.connectionId, endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: getEndpointDeviceSettings(endpoint.principalId)?.nickname ?? endpoint.displayName, tool,
       contractRevision: createHash('sha256').update(JSON.stringify([endpoint.principalId, endpoint.connectionId, tool.revision, tool.provider?.digest ?? null, folders?.map(folder => folder.id) ?? null,
         target?.selectedAt ?? null,
-        delegated?.grant?.id ?? this.deps.runtime.grants?.find(context.conversationId, context.origin, endpoint.endpointId, parsed.toolName)?.id ?? null])).digest('hex'),
+        delegated?.grant?.id ?? singleCallGrant?.id ?? null])).digest('hex'),
     } : undefined;
   }
 }

@@ -14,6 +14,7 @@ struct PersonalDeviceRequest: Decodable, Sendable {
     let toolName: String
     let descriptorRevision: String
     let confirmationRequired: Bool
+    let gatewayCapabilityAuthorized: Bool?
     let deadlineAt: Int64
     let arguments: Arguments
     let uploadGrant: UploadGrant?
@@ -48,7 +49,30 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         return presenter
     }
 
-    func acquire(_ request: PersonalDeviceRequest) async throws -> Data {
+    func prepareCapabilityPermission(_ name: String) async throws {
+        guard !busy else { throw PersonalDeviceFailure(code: "TOOL_BUSY") }
+        busy = true
+        defer { busy = false }
+        switch name {
+        case "mobile.calendar.query_events", "mobile.calendar.query_free_busy":
+            guard try await EKEventStore().requestFullAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        case "mobile.calendar.create_event":
+            if EKEventStore.authorizationStatus(for: .event) != .fullAccess {
+                guard try await EKEventStore().requestWriteOnlyAccessToEvents() else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+            }
+        case "mobile.contacts.find_by_name":
+            guard try await CNContactStore().requestAccess(for: .contacts) else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        case "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album":
+            try await allowPhotoAccess()
+        case "mobile.device.get_location":
+            try await DeviceLocation.shared.preparePermission()
+        default:
+            break
+        }
+        try Task.checkCancellation()
+    }
+
+    func acquire(_ request: PersonalDeviceRequest, capabilityScope: String?) async throws -> Data {
         guard !busy else { throw PersonalDeviceFailure(code: "TOOL_BUSY") }
         guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
         busy = true; activeInvocation = request.invocationId
@@ -62,12 +86,31 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         }
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
+            if request.gatewayCapabilityAuthorized != true, let capability = Self.writeCapabilityTitle(request.toolName) {
+                guard let capabilityScope else { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+                let key = "device-capability.\(capabilityScope).\(request.toolName)"
+                if !UserDefaults.standard.bool(forKey: key) {
+                    guard await confirm("允许后，当前 Gateway 可以继续使用「" + capability + "」。", title: "允许 Gateway 使用「" + capability + "」？") else {
+                        throw PersonalDeviceFailure(code: "USER_DENIED")
+                    }
+                    try Task.checkCancellation()
+                    UserDefaults.standard.set(true, forKey: key)
+                }
+            }
             return try await acquireContent(request)
         } onCancel: { Task {
             @MainActor in if self.activeInvocation == request.invocationId {
                 self.cancel()
             }
         } }
+    }
+
+    private static func writeCapabilityTitle(_ toolName: String) -> String? {
+        switch toolName {
+        case "mobile.calendar.create_event": "创建日程"
+        case "mobile.media.add_to_album": "整理相册"
+        default: nil
+        }
     }
 
     private func acquireContent(_ request: PersonalDeviceRequest) async throws -> Data {
@@ -96,12 +139,6 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
     }
 
     private func acquireSelectedFile(_ toolName: String) async throws -> Data {
-        if ["mobile.file.pick", "mobile.camera.capture"].contains(toolName) {
-            let scope = "请在接下来的系统页面选择本次要提供给 Agent 的文件、照片或联系人字段。"
-            guard await confirm(scope + "所选内容会发送给 Agent，并可能保存在聊天历史中。") else { throw PersonalDeviceFailure(code: "USER_DENIED") }
-            try await Task.sleep(for: .milliseconds(350))
-            try Task.checkCancellation()
-        }
         let selected = try await selectFile(toolName)
         return try JSONEncoder().encode(SelectionWire(name: selected.name, mimeType: selected.mimeType, data: selected.data))
     }
@@ -125,12 +162,12 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         presented = controller; presenter.present(controller, animated: true)
     }
 
-    private func confirm(_ message: String, title: String = "允许本次提供设备信息？") async -> Bool {
+    private func confirm(_ message: String, title: String) async -> Bool {
         await withCheckedContinuation { continuation in
             confirmation = continuation
             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "拒绝", style: .cancel) { _ in self.confirmation?.resume(returning: false); self.confirmation = nil; self.presented = nil })
-            alert.addAction(UIAlertAction(title: "继续", style: .default) { _ in self.confirmation?.resume(returning: true); self.confirmation = nil; self.presented = nil })
+            alert.addAction(UIAlertAction(title: "允许", style: .default) { _ in self.confirmation?.resume(returning: true); self.confirmation = nil; self.presented = nil })
             present(alert)
         }
     }
@@ -283,10 +320,6 @@ extension DevicePersonalTools {
               !album.isEmpty, album.utf16.count <= 100 else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
         try await allowPhotoAccess()
         let asset = try photo(arguments.id)
-        let date = asset.creationDate?.formatted() ?? "拍摄时间未知"
-        guard await confirm("将拍摄于 " + date + " 的照片加入相册「" + album + "」？", title: "整理照片？") else {
-            throw PersonalDeviceFailure(code: "USER_DENIED")
-        }
         try Task.checkCancellation()
         guard foregroundPresenter != nil else { throw PersonalDeviceFailure(code: "ENDPOINT_NOT_FOREGROUND") }
         let options = PHFetchOptions()
@@ -337,10 +370,6 @@ extension DevicePersonalTools {
         }
         let start = Date(timeIntervalSince1970: Double(startAt) / 1000)
         let end = Date(timeIntervalSince1970: Double(endAt) / 1000)
-        let range = start.formatted() + " 至 " + end.formatted()
-        guard await confirm("创建日程「" + title + "」？\n" + range, title: "创建此日程？") else {
-            throw PersonalDeviceFailure(code: "USER_DENIED")
-        }
         try Task.checkCancellation()
         let store = EKEventStore()
         if EKEventStore.authorizationStatus(for: .event) != .fullAccess {

@@ -42,7 +42,7 @@ describe('Personal device tools', () => {
     expect(() => policy.validateDescriptor('mobile', legacy)).not.toThrow();
     expect(policy.evaluate(legacy, 'foreground')).toEqual({ confirmationRequired: true });
   });
-  it('requires native confirmation for event creation and accepts the event identifier', async () => {
+  it('requires native capability authorization for event creation and accepts the event identifier', async () => {
     const f = fixture('mobile.calendar.create_event');
     const promise = f.invoke({ title: 'Test event', startAt: 1, endAt: 3 });
     expect(JSON.parse(f.sent[0]).payload.confirmationRequired).toBe(true);

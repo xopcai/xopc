@@ -62,6 +62,7 @@ function createHost(options: {
   ) => Promise<EndpointToolExecutionResult>;
   availability?: 'foreground' | 'background';
   authorize?: ConstructorParameters<typeof EndpointToolHostController>[0]['authorize'];
+  hasCapabilityGrant?: ConstructorParameters<typeof EndpointToolHostController>[0]['hasCapabilityGrant'];
   confirm?: ConstructorParameters<typeof EndpointToolHostController>[0]['confirm'];
   sendMessage?: (message: ClientEndpointMessage, sent: ClientEndpointMessage[]) => void;
 } = {}) {
@@ -75,6 +76,7 @@ function createHost(options: {
     registry,
     getAvailability: () => options.availability ?? 'foreground',
     authorize: options.authorize,
+    hasCapabilityGrant: options.hasCapabilityGrant,
     confirm: options.confirm ?? vi.fn(async () => true),
     uploadFile: vi.fn(),
     createMessageId: () => crypto.randomUUID(),
@@ -247,6 +249,20 @@ describe('EndpointToolHostController', () => {
       confirmationRequired: false,
     }));
     expect(mismatch.sent.at(-1)).toMatchObject({ type: 'tool.error', payload: { code: 'PROTOCOL_ERROR' } });
+  });
+
+  it('uses a device capability grant without asking for approval again', async () => {
+    const tool = { ...descriptor, confirmation: 'always' as const };
+    let granted = false;
+    const confirm = vi.fn(async () => { granted = true; return true; });
+    const { host, execute, sent } = createHost({ tool, confirm, hasCapabilityGrant: () => granted });
+    for (const text of ['first call', 'next call']) {
+      await host.handleMessage(invocation({ descriptorRevision: endpointToolRevision(tool),
+        confirmationRequired: true, arguments: { text } }));
+    }
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(sent.filter(message => message.type === 'tool.progress')).toHaveLength(1);
   });
 
   it('authorizes a system-mediated write without requesting another confirmation', async () => {

@@ -5,9 +5,9 @@ import { basename, dirname, extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, clipboard, dialog, safeStorage, shell, systemPreferences, type BrowserWindow } from 'electron';
 import WebSocket from 'ws';
-import { EndpointToolHostController, EndpointToolRegistry } from '@xopcai/endpoint-tools-client';
+import { EndpointToolClientError, EndpointToolHostController, EndpointToolRegistry, type EndpointToolApprovalRequest } from '@xopcai/endpoint-tools-client';
 import { createDesktopEndpointToolDefinitions } from '@xopcai/endpoint-tools-client/desktop-tools';
-import { deviceFolderChangeSchema, deviceFolderSigningPayload, endpointHelloSigningPayload, type DeviceConnections, type DeviceFolderSnapshot, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
+import { desktopCapabilitySigningPayload, desktopCapabilityTitles, desktopDeviceCapabilityGrantSchema, desktopDeviceChatToolSchema, deviceFolderChangeSchema, deviceFolderSigningPayload, endpointHelloSigningPayload, type DesktopCapabilitySnapshot, type DeviceFolderSnapshot, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { COMPUTER_DESCRIPTOR, ComputerCommandSchema } from '@xopcai/computer-control-contract';
@@ -28,6 +28,7 @@ import { ComputerAccessPolicy } from './access-policy.js';
 import { ComputerPreviewManager } from './preview-manager.js';
 import { startPreviewCapture } from './preview-capture.js';
 import { DesktopFolderStore } from '../files/device-folders.js';
+import { DesktopCapabilityStore } from './device-capability-store.js';
 import { localGatewayOrigin } from '../gateway/local-connection.js';
 import type { DesktopGatewayTarget } from '../gateway/desktop-transport.js';
 
@@ -67,6 +68,10 @@ export class DesktopEndpointHost {
   private readonly lifetime = new AbortController();
   private folders?: DesktopFolderStore;
   private publishFolders?: (snapshot: DeviceFolderSnapshot) => Promise<void>;
+  private folderGatewayAccess = false;
+  private capabilityStore?: DesktopCapabilityStore;
+  private changeCapability?: (value: unknown) => Promise<DesktopCapabilitySnapshot | undefined>;
+  private screenLocked = false;
   private readonly accessPolicy = new ComputerAccessPolicy();
   private readonly workspaceVisibility = new ComputerWorkspaceVisibility();
   private stopBrokerInBackground(errorCode?: 'COMPUTER_LOCAL_UI_REQUIRED'): void {
@@ -165,7 +170,24 @@ export class DesktopEndpointHost {
   }
   async deviceFolders() {
     if (!this.folders) return;
-    return { endpointId: this.claim?.endpointId, ready: !!this.publishFolders && !!this.claim, ...await this.folders.snapshot() };
+    return { endpointId: this.claim?.endpointId, ready: !!this.publishFolders && !!this.claim,
+      gatewayAccess: this.folderGatewayAccess, ...await this.folders.snapshot() };
+  }
+
+  async deviceCapabilities() {
+    if (!this.capabilityStore) return;
+    return { endpointId: this.claim?.endpointId, ready: Boolean(this.changeCapability), ...await this.capabilityStore.snapshot() };
+  }
+
+  async changeDeviceCapability(value: unknown) {
+    if (!this.changeCapability) throw new Error('DESKTOP_CAPABILITY_CONNECTION_REQUIRED');
+    return this.changeCapability(value);
+  }
+
+  setScreenLocked(locked: boolean): void {
+    this.screenLocked = locked;
+    this.controller?.publishAvailability();
+    if (locked) this.stopBrokerInBackground();
   }
 
   async changeDeviceFolder(value: unknown): Promise<DeviceFolderSnapshot | undefined> {
@@ -176,44 +198,32 @@ export class DesktopEndpointHost {
     const window = this.options.window();
     const connection = this.options.connection();
     if (!publish || !origin || !folders || !window || !this.visible() || !connection) throw new Error('DESKTOP_FOLDER_CONNECTION_REQUIRED');
-    const previous = 'id' in input ? (await folders.snapshot()).folders.find(folder => folder.id === input.id) : undefined;
-    if ('id' in input && !previous) throw new Error('FOLDER_AUTHORIZATION_CHANGED');
-    if ('revoke' in input) return folders.change({ id: input.id, mobileIds: [], revoke: true }, publish);
+    if (!('revoke' in input) && !this.folderGatewayAccess) throw new Error('DESKTOP_FOLDER_GATEWAY_ACCESS_REQUIRED');
+    if ('revoke' in input) return folders.change(input, publish);
     const zh = getElectronShellLanguage().startsWith('zh');
-    let path: string | undefined;
-    if ('kind' in input) {
-      const selection = await dialog.showOpenDialog(window, {
-        title: zh ? '选择要授权的文件夹' : 'Choose a folder to authorize',
-        properties: ['openDirectory'],
-        ...(input.kind === 'custom' ? {} : { defaultPath: app.getPath(input.kind) }),
+    if ('id' in input) {
+      const previous = (await folders.snapshot()).folders.find(folder => folder.id === input.id);
+      if (!previous) throw new Error('FOLDER_AUTHORIZATION_CHANGED');
+      if (previous.access === 'gateway') return folders.snapshot();
+      const confirmation = await dialog.showMessageBox(window, {
+        type: 'question', title: zh ? '文件夹授权' : 'Folder access',
+        message: zh ? `允许当前 Gateway 只读访问「${previous.label}」？` : `Give the current Gateway read-only access to “${previous.label}”?`,
+        buttons: zh ? ['取消', '允许'] : ['Cancel', 'Allow'], defaultId: 0, cancelId: 0, noLink: true, signal: this.lifetime.signal,
       });
-      if (selection.canceled || !selection.filePaths[0]) return;
-      path = await realpath(selection.filePaths[0]);
+      if (confirmation.response !== 1 || this.claim !== origin || this.stopped) return;
+      return folders.change(input, publish);
     }
-    const base = 'origin' in connection ? connection.origin : localGatewayOrigin(connection);
-    const response = await fetch(base + '/api/endpoint-tools/device-connections', {
-      headers: { Authorization: `Bearer ${connection.token}` }, redirect: 'error', signal: this.lifetime.signal,
+    const defaultPath = input.kind === 'custom' ? undefined : app.getPath(input.kind);
+    const selection = await dialog.showOpenDialog(window, {
+      title: zh ? '选择要向当前 Gateway 开放的只读文件夹' : 'Choose a folder for read-only Gateway access',
+      buttonLabel: zh ? '允许访问' : 'Allow access',
+      properties: ['openDirectory'], defaultPath,
     });
-    if (!response.ok) throw new Error('DEVICE_CONNECTIONS_UNAVAILABLE');
-    const data = await response.json() as { payload: DeviceConnections };
-    const mobiles = [...new Set(input.mobileIds)].map(id => data.payload.devices.find(device => device.id === id && device.kind === 'mobile'));
-    if (mobiles.some(device => !device)) throw new Error('FOLDER_AUDIENCE_CHANGED');
-    const name = path ? basename(path) : previous!.label;
-    const audience = mobiles.map(device => device!.name).join('、');
-    const confirmation = await dialog.showMessageBox(window, {
-      type: 'question', title: zh ? '目录授权' : 'Folder access',
-      message: zh ? `允许 Agent 搜索和读取「${name}」？` : `Allow the agent to search and read “${name}”?`,
-      detail: (path ? path + '\n\n' : '') + (zh
-        ? (audience ? `只读访问范围为本机和 ${audience}。` : '只读访问范围为本机。')
-        : (audience ? `Read-only access from this computer and ${audience}.` : 'Read-only access from this computer.')),
-      buttons: zh ? ['取消', '允许只读访问'] : ['Cancel', 'Allow read-only access'], defaultId: 0, cancelId: 0, noLink: true, signal: this.lifetime.signal,
-    });
-    if (confirmation.response !== 1 || this.claim !== origin || !this.visible() || this.stopped) return;
-    if ('kind' in input && input.kind !== 'custom') {
-      const preset = await realpath(app.getPath(input.kind)).catch(() => undefined);
-      return folders.change({ ...input, kind: path === preset ? input.kind : 'custom', path }, publish);
-    }
-    return folders.change({ ...input, path }, publish);
+    if (selection.canceled || !selection.filePaths[0] || this.claim !== origin || this.stopped) return;
+    const path = await realpath(selection.filePaths[0]);
+    const preset = defaultPath ? await realpath(defaultPath).catch(() => undefined) : undefined;
+    if (this.claim !== origin || this.stopped) return;
+    return folders.change({ kind: path === preset ? input.kind : 'custom', path }, publish);
   }
 
   async start(): Promise<void> {
@@ -260,6 +270,7 @@ export class DesktopEndpointHost {
     this.reenrollmentRequired = true;
     clearTimeout(this.retry);
     this.claim = undefined;
+    this.changeCapability = undefined;
     this.client?.disconnect(); this.client = undefined;
     this.controller?.disconnect(); this.controller = undefined;
     this.stopBrokerInBackground();
@@ -301,9 +312,7 @@ export class DesktopEndpointHost {
       return result.json();
     };
     const identity = await this.identity();
-    const folderPath = join(dirname(this.identityPath()), 'desktop-folder-grants', identity.data.principalId + '.json');
-    const folders = new DesktopFolderStore(() => folderPath,
-      extension => MIME_TYPE_BY_EXTENSION[extension] ?? 'application/octet-stream');
+    const identityDirectory = dirname(this.identityPath());
     const displayName = identity.data.displayName ?? 'xopc Desktop';
     const registerIdentity = async () => {
       await assertGatewayCompatibility(connection, this.lifetime.signal);
@@ -313,10 +322,29 @@ export class DesktopEndpointHost {
     if (this.stopped) return;
     const compatibilityResponse = await fetch(base + '/api/endpoint-tools/compatibility', { headers, redirect: 'error', signal: this.lifetime.signal });
     if (!compatibilityResponse.ok) throw new Error('Gateway compatibility is unavailable');
-    const compatibility = await compatibilityResponse.json() as { payload?: { deviceStateToolsV1?: boolean; deviceFolderConnectionsV1?: boolean } };
+    const compatibility = await compatibilityResponse.json() as { payload?: {
+      gatewayId?: string; deviceStateToolsV1?: boolean; deviceFolderConnectionsV1?: boolean; deviceFolderGatewayAccessV1?: boolean;
+      desktopCapabilityAccessV1?: boolean;
+    } };
     const endpointId = `${identity.data.principalId}:${randomUUID()}`;
     const foldersSupported = compatibility.payload?.deviceFolderConnectionsV1 === true;
-    if (foldersSupported) this.folders = folders;
+    const gatewayId = compatibility.payload?.gatewayId;
+    const gatewayScope = gatewayId && createHash('sha256').update(gatewayId).digest('hex');
+    const capabilityStore = gatewayScope && compatibility.payload?.desktopCapabilityAccessV1 === true
+      ? new DesktopCapabilityStore(join(identityDirectory, 'desktop-capability-grants', identity.data.principalId, gatewayScope + '.json'))
+      : undefined;
+    this.capabilityStore = capabilityStore;
+    const getAvailability = () => !this.screenLocked && (capabilityStore ? this.visible() : this.options.window()?.isFocused())
+      ? 'foreground' as const : 'background' as const;
+    this.folderGatewayAccess = Boolean(gatewayScope) && compatibility.payload?.deviceFolderGatewayAccessV1 === true;
+    const folderDirectory = join(identityDirectory, 'desktop-folder-grants');
+    const previousFolderPath = join(folderDirectory, identity.data.principalId + '.json');
+    const folderPath = this.folderGatewayAccess && gatewayScope
+      ? join(folderDirectory, identity.data.principalId + '.' + gatewayScope + '.json') : previousFolderPath;
+    const folders = new DesktopFolderStore(() => folderPath,
+      extension => MIME_TYPE_BY_EXTENSION[extension] ?? 'application/octet-stream',
+      folderPath !== previousFolderPath ? previousFolderPath : undefined);
+    this.folders = foldersSupported ? folders : undefined;
     const registry = new EndpointToolRegistry([
       ...(foldersSupported ? folders.definitions() : []),
       ...createDesktopEndpointToolDefinitions(() => ({
@@ -341,19 +369,48 @@ export class DesktopEndpointHost {
         shell: { openExternalUrl: async (url) => { const normalized = normalizeExternalHttpUrl(url); if (!normalized) return { ok: false, error: 'Invalid URL' }; await shell.openExternal(normalized); return { ok: true }; } },
         system: { showEndpointNotification: async (input) => showEndpointNotification(input) },
       })).filter(definition => compatibility.payload?.deviceStateToolsV1 === true || !definition.descriptor.name.includes('.device.get_')),
-      { descriptor: structuredClone(COMPUTER_DESCRIPTOR) as any, execute: async (args, context) => {
-        const command = ComputerCommandSchema.parse(args);
-        return executeComputerCommand(this.broker, command, context);
-      } },
+      ...(process.platform === 'darwin' || process.platform === 'win32' && process.arch === 'x64' ? [{
+        descriptor: structuredClone(COMPUTER_DESCRIPTOR) as any, execute: async (args, context) => {
+          const command = ComputerCommandSchema.parse(args);
+          return executeComputerCommand(this.broker, command, context);
+        },
+      }] satisfies import('@xopcai/endpoint-tools-client').EndpointToolDefinition[] : []),
     ]);
+    const capabilityGrantPath = ({ descriptor: { name, effect, requiredPermissions } }: EndpointToolApprovalRequest) => {
+      if (!gatewayScope) return;
+      const permission = createHash('sha256').update(JSON.stringify([name, effect, [...requiredPermissions].sort()])).digest('hex');
+      return join(identityDirectory, 'device-capability-grants', identity.data.principalId, gatewayScope, permission);
+    };
     const controller = new EndpointToolHostController({ registry,
-      getAvailability: () => this.options.window()?.isFocused() ? 'foreground' : 'background', createMessageId: randomUUID,
+      getAvailability, createMessageId: randomUUID,
+      authorize: async request => {
+        if (request.gatewayCapabilityAuthorized && !await capabilityStore?.allows(request.descriptor.name)) {
+          throw new EndpointToolClientError('PERMISSION_DENIED', 'This computer did not grant the capability to Gateway');
+        }
+      },
+      hasCapabilityGrant: async (request) => {
+        if (request.gatewayCapabilityAuthorized) return true;
+        const path = capabilityGrantPath(request);
+        if (!path) return false;
+        try { return await readFile(path, 'utf8') === 'allowed'; }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+          return false;
+        }
+      },
       confirm: async (request) => {
         if (!this.visible() || request.signal.aborted) return false;
-        const t = getComputerMessages(getElectronShellLanguage());
-        const answer = await dialog.showMessageBox(this.options.window()!, { type: 'question', message: request.descriptor.title,
-          detail: JSON.stringify(request.arguments).slice(0, 4000), buttons: [t.cancel, t.allow], defaultId: 0, cancelId: 0, signal: request.signal });
-        return !request.signal.aborted && answer.response === 1;
+        const grantPath = capabilityGrantPath(request);
+        const language = getElectronShellLanguage();
+        const { cancel, capabilityAccess } = getComputerMessages(language);
+        const tool = desktopDeviceChatToolSchema.safeParse(request.descriptor.name);
+        const message = tool.success ? desktopCapabilityTitles[tool.data][language === 'zh' ? 0 : 1] : request.descriptor.title;
+        const answer = await dialog.showMessageBox(this.options.window()!, { type: 'question', title: capabilityAccess.title, message,
+          detail: grantPath ? capabilityAccess.savedDetail : capabilityAccess.detail,
+          buttons: [cancel, capabilityAccess.allow], defaultId: 0, cancelId: 0, signal: request.signal });
+        if (request.signal.aborted || answer.response !== 1) return false;
+        if (grantPath) await writeTextAtomic(grantPath, 'allowed', { mode: 0o600, ensureDirMode: 0o700 });
+        return !request.signal.aborted;
       },
       uploadFile: (grant, file, context) => uploadDesktopFrame({ base, token: connection.token, endpointId, grant, file,
         invocationId: context.invocationId, signal: AbortSignal.any([context.signal, this.lifetime.signal]) }),
@@ -378,7 +435,7 @@ export class DesktopEndpointHost {
       if (this.stopped || this.reenrollmentRequired) throw new Error('Desktop endpoint is unavailable');
       const hello: EndpointHelloPayload = { principalId: identity.data.principalId, endpointId, connectionInstanceId: randomUUID(),
         kind: 'desktop', platform: process.platform, displayName, appVersion: app.getVersion(),
-        availability: this.options.window()?.isFocused() ? 'foreground' : 'background', nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: registry.descriptors() };
+        availability: getAvailability(), nonce: randomUUID(), signedAt: Date.now(), signature: 'pending', tools: registry.descriptors() };
       hello.signature = sign('sha256', Buffer.from(endpointHelloSigningPayload(hello)), { key: identity.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
       return hello;
     }, onReady: ({ endpointId, turnToken }) => {
@@ -386,6 +443,35 @@ export class DesktopEndpointHost {
       const claim: EndpointTurnClaim = { type: 'endpoint', endpointId, token: turnToken };
       this.claim = claim;
       controller.connect(message => realtime.sendEndpointMessage(message));
+      if (capabilityStore) {
+        const publish = async (snapshot: DesktopCapabilitySnapshot) => {
+          if (this.claim !== claim) throw new Error('DESKTOP_CAPABILITY_CONNECTION_CHANGED');
+          const signature = sign('sha256', Buffer.from(desktopCapabilitySigningPayload(claim, snapshot)),
+            { key: identity.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+          await request('/api/endpoint-tools/device-connections/capabilities', { origin: claim, snapshot, signature });
+        };
+        this.changeCapability = async value => {
+          const { endpointId: expectedEndpointId, toolName, allowed } = desktopDeviceCapabilityGrantSchema.parse(value);
+          if (expectedEndpointId !== endpointId) throw new Error('DESKTOP_CAPABILITY_CONNECTION_CHANGED');
+          const tool = registry.get(toolName);
+          const window = this.options.window();
+          if (!window || !this.visible() || this.screenLocked || (allowed && !tool)) throw new Error('DESKTOP_CAPABILITY_UNAVAILABLE');
+          if (allowed && tool && !await capabilityStore.allows(toolName)) {
+            const language = getElectronShellLanguage();
+            const { cancel, capabilityAccess } = getComputerMessages(language);
+            const answer = await dialog.showMessageBox(window, { type: 'question', title: capabilityAccess.title,
+              message: desktopCapabilityTitles[toolName][language === 'zh' ? 0 : 1], detail: capabilityAccess.detail,
+              buttons: [cancel, capabilityAccess.allow], defaultId: 0, cancelId: 0, noLink: true, signal: this.lifetime.signal });
+            if (answer.response !== 1) return;
+          }
+          if (this.claim !== claim || this.stopped || this.screenLocked) throw new Error('DESKTOP_CAPABILITY_CONNECTION_CHANGED');
+          if (!allowed && toolName === COMPUTER_DESCRIPTOR.name) this.stopBrokerInBackground();
+          return capabilityStore.update(names => allowed ? [...names, toolName] : names.filter(name => name !== toolName), publish);
+        };
+        void capabilityStore.update(names => names.filter(name => registry.get(name)), publish).catch(() => {
+          if (this.claim === claim) log.warn('Desktop capability authorization sync failed');
+        });
+      }
       if (foldersSupported) {
         const publish = async (snapshot: DeviceFolderSnapshot) => {
           if (this.claim !== claim) throw new Error('DESKTOP_FOLDER_CONNECTION_CHANGED');
@@ -400,7 +486,7 @@ export class DesktopEndpointHost {
       }
     },
       onMessage: message => { void controller.handleMessage(message); },
-      onDisconnected: () => { this.claim = undefined; this.publishFolders = undefined; controller.disconnect(); this.stopBrokerInBackground(); },
+      onDisconnected: () => { this.claim = undefined; this.publishFolders = undefined; this.changeCapability = undefined; controller.disconnect(); this.stopBrokerInBackground(); },
     });
     this.client = realtime; this.controller = controller; realtime.connect();
   }

@@ -63,6 +63,7 @@ export interface EndpointToolApprovalRequest {
   arguments: Record<string, unknown>;
   deadlineAt: number;
   signal: AbortSignal;
+  gatewayCapabilityAuthorized?: true;
 }
 
 type ToolInvokeMessage = Extract<ServerEndpointMessage, { type: 'tool.invoke' }>;
@@ -190,6 +191,7 @@ export interface EndpointToolHostControllerOptions {
   registry: EndpointToolRegistry;
   getAvailability(): EndpointAvailability;
   authorize?(request: EndpointToolApprovalRequest): Promise<void>;
+  hasCapabilityGrant?(request: EndpointToolApprovalRequest): Promise<boolean> | boolean;
   confirm(request: EndpointToolApprovalRequest): Promise<boolean>;
   uploadFile(grant: EndpointToolUploadGrant, file: EndpointToolFile, context: { signal: AbortSignal; invocationId: string }): Promise<Extract<EndpointToolContent, { type: 'file' }>>;
   downloadArtifact?(artifact: NonNullable<ToolInvokeMessage['payload']['artifact']>, context: { signal: AbortSignal; invocationId: string }): Promise<Uint8Array>;
@@ -314,6 +316,7 @@ export class EndpointToolHostController {
       arguments: args,
       descriptorRevision,
       confirmationRequired,
+      gatewayCapabilityAuthorized,
       deadlineAt,
       uploadGrant,
       providerExecution,
@@ -378,10 +381,13 @@ export class EndpointToolHostController {
         arguments: args,
         deadlineAt,
         signal: invocation.controller.signal,
+        ...(gatewayCapabilityAuthorized && { gatewayCapabilityAuthorized }),
       };
       await this.options.authorize?.(authorizationRequest);
       this.assertExecutable(invocationId, invocation, descriptor, deadlineAt);
-      if (localConfirmationRequired) {
+      const granted = localConfirmationRequired && await this.options.hasCapabilityGrant?.(authorizationRequest);
+      this.assertExecutable(invocationId, invocation, descriptor, deadlineAt);
+      if (localConfirmationRequired && !granted) {
         this.send('tool.progress', { invocationId, message: 'Waiting for approval' });
         const allowed = await this.options.confirm(authorizationRequest);
         this.assertExecutable(invocationId, invocation, descriptor, deadlineAt);

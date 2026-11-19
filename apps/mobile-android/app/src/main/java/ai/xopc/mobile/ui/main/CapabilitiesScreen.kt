@@ -140,6 +140,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
   onExit: () -> Unit, onSetupChat: (String, Boolean) -> Unit,
   onPanel: suspend (String, String, JSONObject?) -> JSONObject,
   onLoadDevices: suspend () -> ai.xopc.mobile.gateway.DeviceConnections = { ai.xopc.mobile.gateway.DeviceConnections(null, emptyList()) },
+  onSetDeviceCapability: suspend (String, Boolean, String) -> Unit = { _, _, _ -> },
   onUseComputer: suspend (String) -> Unit = {},
   onShareDeviceFile: suspend (android.net.Uri) -> Unit = {},
   onPairDevice: () -> Unit = {},
@@ -281,7 +282,7 @@ internal fun CapabilitiesScreen(insets: PaddingValues, personal: PersonalUiState
                 else -> if (zh) "获取我当前的位置。" else "Get my current location."
               }
               onSetupChat(prompt, false)
-            }, onPairDevice, active = category == CapabilityCategory.Devices)
+            }, onPairDevice, setCapability = onSetDeviceCapability, active = category == CapabilityCategory.Devices)
           }
         } else {
           val catalog = pages[kind]

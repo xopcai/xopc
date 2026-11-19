@@ -15,10 +15,24 @@ private struct ConnectedDevice: Decodable, Identifiable {
     let availability: String
     let tools: Set<String>
     let folders: [ConnectedDeviceFolder]
+    let capabilities: [ReportedDeviceCapability]?
 
     var offline: Bool {
         availability == "offline"
     }
+}
+
+private struct ReportedDeviceCapability: Decodable, Identifiable {
+    let name: String
+    let title: String
+    let titleZh: String
+    let allowed: Bool
+    var id: String { name }
+}
+
+private struct DeviceCapabilityChange: Codable {
+    let toolName: String
+    let allowed: Bool
 }
 
 private struct DeviceConnectionCatalog: Decodable {
@@ -140,23 +154,73 @@ struct DeviceConnectionsView: View {
                 ("mobile.calendar.query_events", word("日历", "Calendar"), word("使用时请求授权", "Asks for access when used"), "calendar"),
                 ("mobile.device.get_location", word("位置", "Location"), word("按次共享位置", "Share your location once"), "mappin.and.ellipse")
             ]
-            ForEach(tools.filter { device.tools.contains($0.0) }, id: \.0) { tool in
-                Button {
-                    if tool.0 == "mobile.file.pick" {
-                        showFile = true
-                    } else if tool.0 == "mobile.media.pick" {
-                        showPhoto = true
-                    } else {
-                        onLocalTool(tool.0)
-                    }
-                } label: {
-                    card(tool.1, tool.2, tool.3)
+            if let reported = device.capabilities {
+                Text(word("允许当前 Gateway 使用", "Allow the current Gateway to use"))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(theme.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if reported.isEmpty {
+                    Text(word("设备连接后会在这里显示已上报的能力。", "Reported capabilities appear here when connected."))
+                        .font(.footnote).foregroundStyle(theme.secondary)
                 }
-                .buttonStyle(MobilePressStyle(radius: theme.corner(18)))
-                .disabled(requestRunning)
-                .accessibilityIdentifier("device-tool-\(tool.0)")
+                ForEach(reported) { capability in
+                    let local = tools.first { $0.0 == capability.name }
+                    let row = capabilityRow(capability, symbol: local?.3 ?? capabilitySymbol(capability.name))
+                    if local != nil {
+                        row.onTapGesture { if !requestRunning { useLocal(capability.name) } }
+                            .accessibilityAction(named: Text(word("在本机使用", "Use on this device"))) { useLocal(capability.name) }
+                    } else {
+                        row
+                    }
+                }
+            } else {
+                ForEach(tools.filter { device.tools.contains($0.0) }, id: \.0) { tool in
+                    Button { useLocal(tool.0) } label: { card(tool.1, tool.2, tool.3) }
+                        .buttonStyle(MobilePressStyle(radius: theme.corner(18)))
+                        .disabled(requestRunning)
+                        .accessibilityIdentifier("device-tool-\(tool.0)")
+                }
             }
         }
+    }
+
+    private func useLocal(_ name: String) {
+        switch name {
+        case "mobile.file.pick": showFile = true
+        case "mobile.media.pick": showPhoto = true
+        default: onLocalTool(name)
+        }
+    }
+
+    private func capabilitySymbol(_ name: String) -> String {
+        if name.hasPrefix("mobile.calendar.") { return "calendar" }
+        if name.hasPrefix("mobile.contacts.") { return "person.crop.rectangle" }
+        if name.hasPrefix("mobile.media.") { return "photo.on.rectangle.angled" }
+        if name == "mobile.camera.capture" { return "camera" }
+        return name == "mobile.device.get_power" ? "battery.75percent" : "iphone"
+    }
+
+    private func capabilityRow(_ capability: ReportedDeviceCapability, symbol: String) -> some View {
+        let title = usesChinese ? capability.titleZh : capability.title
+        let status = capability.allowed ? word("已授权", "Authorized") : word("未授权", "Not authorized")
+        return CapabilityCardLabel(title: title, description: status) {
+            CapabilityLogo(reference: nil, origin: configuration.baseURL, label: "", symbol: symbol)
+        } trailing: {
+            Toggle(word("允许 Gateway 使用" + title, "Allow Gateway to use " + title),
+                   isOn: Binding(get: { capability.allowed }, set: { allowed in
+                run {
+                    if allowed { try await DevicePersonalTools.shared.prepareCapabilityPermission(capability.name) }
+                    let payload = DeviceCapabilityChange(toolName: capability.name, allowed: allowed)
+                    let result: GatewayEnvelope<DeviceCapabilityChange> = try await GatewayClient(configuration: configuration)
+                        .request(path: "/api/endpoint-tools/device-connections", method: "PATCH", body: JSONEncoder().encode(payload))
+                    guard result.isSuccessful else { throw DeviceConnectionUnavailable() }
+                    retry += 1
+                }
+            }))
+            .labelsHidden().toggleStyle(.switch).tint(theme.action)
+            .disabled(loadFailed || requestRunning)
+            .accessibilityIdentifier("device-grant-\(capability.name)")
+        }
+        .background(theme.panel, in: .rect(cornerRadius: theme.corner(18)))
     }
 
     @ViewBuilder

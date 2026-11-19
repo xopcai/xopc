@@ -54,18 +54,26 @@ export interface EndpointToolHostConfig {
   confirmReenrollment(): Promise<boolean>;
 }
 
-async function confirmEndpointTool(request: EndpointToolApprovalRequest): Promise<boolean> {
+function capabilityGrantKey(request: EndpointToolApprovalRequest, scope?: string): string | undefined {
+  const { name, effect, requiredPermissions } = request.descriptor;
+  if (scope) return `xopc.device-capability.${JSON.stringify([scope, name, effect, [...requiredPermissions].sort()])}`;
+}
+
+async function authorizeEndpointCapability(request: EndpointToolApprovalRequest, scope?: string): Promise<boolean> {
   if (request.signal.aborted) return false;
+  const key = capabilityGrantKey(request, scope);
   const onAbort = () => settleEndpointConfirmation(request.invocationId, false);
   request.signal.addEventListener('abort', onAbort, { once: true });
   try {
-    return await requestEndpointConfirmation({
+    const allowed = await requestEndpointConfirmation({
       invocationId: request.invocationId,
       title: request.descriptor.title,
-      toolName: request.descriptor.name,
-      args: request.arguments,
+      remember: Boolean(key),
       deadlineAt: request.deadlineAt,
     });
+    if (!allowed || request.signal.aborted) return false;
+    if (key) window.localStorage.setItem(key, 'allowed');
+    return true;
   } finally {
     request.signal.removeEventListener('abort', onAbort);
   }
@@ -78,6 +86,7 @@ export class EndpointToolHost {
   private stopped = false;
   private registrationBlocked = false;
   private endpointId?: string;
+  private capabilityScope?: string;
   private supportsDeviceState = false;
   private supportsEnvironment = false;
   private readonly contextPublisher = createEndpointContextPublisher();
@@ -91,7 +100,11 @@ export class EndpointToolHost {
     this.controller = new EndpointToolHostController({
       registry: this.registry,
       getAvailability: availability,
-      confirm: confirmEndpointTool,
+      hasCapabilityGrant: request => {
+        const key = capabilityGrantKey(request, this.capabilityScope);
+        return Boolean(key && window.localStorage.getItem(key) === 'allowed');
+      },
+      confirm: request => authorizeEndpointCapability(request, this.capabilityScope),
       uploadFile: (grant, file) => this.uploadFile(grant, file),
       createMessageId: () => crypto.randomUUID(),
     });
@@ -122,6 +135,7 @@ export class EndpointToolHost {
     clearEndpointTurnClaim(this.turnToken);
     this.turnToken = undefined;
     this.endpointId = undefined;
+    this.capabilityScope = undefined;
     cancelAllEndpointConfirmations();
   }
 
@@ -150,6 +164,7 @@ export class EndpointToolHost {
     try {
       const compatibility = await apiFetch(apiUrl('/api/endpoint-tools/compatibility'));
       const compatibilityBody = await compatibility.json().catch(() => null);
+      const gatewayId = compatibility.ok ? compatibilityBody?.payload?.gatewayId : undefined;
       this.supportsEnvironment = compatibility.ok && compatibilityBody?.payload?.endpointEnvironmentV1 === true;
       publishTurnEnvironmentSupport(compatibility.ok && compatibilityBody?.payload?.turnDeviceContextV1 === true);
       this.supportsLocationTasks = compatibility.ok && compatibilityBody?.payload?.deviceLocationTasksV1 === true;
@@ -196,6 +211,8 @@ export class EndpointToolHost {
       const binding: RealtimeEndpointBinding = {
         createHello: () => this.createHello(identity),
         onReady: ({ endpointId, turnToken }) => {
+          this.capabilityScope = typeof gatewayId === 'string' && gatewayId
+            ? `${gatewayId}.${identity.principalId}` : undefined;
           this.endpointId = endpointId;
           this.turnToken = turnToken;
           publishEndpointTurnClaim(endpointId, turnToken);
@@ -210,6 +227,7 @@ export class EndpointToolHost {
           this.controller.disconnect();
           clearEndpointTurnClaim(this.turnToken);
           this.turnToken = undefined;
+          this.capabilityScope = undefined;
           cancelAllEndpointConfirmations();
         },
       };

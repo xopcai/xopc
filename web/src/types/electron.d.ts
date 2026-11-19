@@ -628,8 +628,13 @@ export interface ElectronAPI {
     reenroll(): Promise<Awaited<ReturnType<NonNullable<ElectronAPI['computer']>['status']>>>;
   };
   deviceFolders?: {
-    status(): Promise<({ endpointId?: string; ready: boolean } & import('@xopcai/endpoint-tools-protocol').DeviceFolderSnapshot) | undefined>;
+    status(): Promise<({ endpointId?: string; ready: boolean; gatewayAccess?: boolean } & import('@xopcai/endpoint-tools-protocol').DeviceFolderSnapshot) | undefined>;
     change(input: import('@xopcai/endpoint-tools-protocol').DeviceFolderChange): Promise<import('@xopcai/endpoint-tools-protocol').DeviceFolderSnapshot | undefined>;
+  };
+  deviceCapabilities?: {
+    status(): Promise<({ endpointId?: string; ready: boolean } & import('@xopcai/endpoint-tools-protocol').DesktopCapabilitySnapshot) | undefined>;
+    change(input: import('@xopcai/endpoint-tools-protocol').DesktopDeviceCapabilityGrant):
+      Promise<import('@xopcai/endpoint-tools-protocol').DesktopCapabilitySnapshot | undefined>;
   };
   clipboard?: ElectronClipboardAPI;
   shell?: ElectronShellAPI;

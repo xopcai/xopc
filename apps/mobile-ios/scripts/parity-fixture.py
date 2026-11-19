@@ -20,6 +20,7 @@ music_job = {'id':'fixture-song','title':'模拟器背景音乐','lyrics':'用�
 older_music_job = {'id':'fixture-older-song','title':'历史歌曲验收','state':'completed','createdAt':0,'durationMs':30000}
 music_reply = {'id':'fixture-music-reply','role':'assistant','content':'','generatedMediaIds':[music_job['id']]}
 live_music_state = None
+device_file_allowed = False
 space_id = '55555555-5555-4555-8555-555555555555'
 space_version = {'id':'66666666-6666-4666-8666-666666666666','ordinal':2,'fileName':'验收.txt',
  'mimeType':'text/plain','sizeBytes':20,'createdAt':now,'indexStatus':'ready'}
@@ -108,7 +109,7 @@ class Handler(BaseHTTPRequestHandler):
  def do_PATCH(self): self.do_GET()
  def do_DELETE(self): self.do_GET()
  def do_GET(self):
-  global live_music_state, space_item, capability_skill_enabled, global_model, global_model_revision
+  global live_music_state, space_item, capability_skill_enabled, global_model, global_model_revision, device_file_allowed
   path=urlparse(self.path).path; query=parse_qs(urlparse(self.path).query)
   keyboard_fixture = path.startswith('/keyboard/')
   suggestion_fixture = path.startswith('/next-turn/')
@@ -117,6 +118,8 @@ class Handler(BaseHTTPRequestHandler):
   slow_capabilities = path.startswith('/slow-capabilities/')
   live_music_fixture = path.startswith('/music-live/')
   device_connections = path.startswith('/device-connections/')
+  device_capabilities = path.startswith('/device-capability-access/')
+  if device_capabilities: path = path.removeprefix('/device-capability-access')
   if device_connections: path = path.removeprefix('/device-connections')
   if keyboard_fixture: path = path.removeprefix('/keyboard')
   if suggestion_fixture: path = path.removeprefix('/next-turn')
@@ -223,6 +226,17 @@ class Handler(BaseHTTPRequestHandler):
    self.end_headers()
    self.wfile.write(logo)
    return
+  elif device_capabilities and path=='/api/endpoint-tools/device-connections':
+   if self.command=='PATCH':
+    change=json.loads(body)
+    if change.get('toolName')=='mobile.file.pick' and isinstance(change.get('allowed'),bool):
+     device_file_allowed=change['allowed']; data=envelope(change)
+    else: status=400; data={'ok':False}
+   else:
+    data=envelope({'currentDeviceId':'test-phone','devices':[
+     {'id':'test-phone','name':'测试 iPhone','kind':'mobile','platform':'ios','availability':'foreground',
+      'tools':['mobile.file.pick'],'folders':[],
+      'capabilities':[{'name':'mobile.file.pick','title':'Files','titleZh':'文件','allowed':device_file_allowed}]}]})
   elif device_connections and path=='/api/endpoint-tools/device-connections':
    data=envelope({'currentDeviceId':'test-phone','devices':[
     {'id':'test-phone','name':'测试 iPhone','kind':'mobile','platform':'ios','availability':'foreground',

@@ -2443,6 +2443,24 @@ final class MobileLayoutParityUITests: XCTestCase {
         capture("capability-drawer-long-form")
     }
 
+    func testDeviceConnectionsAuthorizeAndRevokeReportedCapability() {
+        app.terminate()
+        app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/device-capability-access"
+        app.launch()
+        tab("capabilities")
+        app.selectCapability("capability-category-devices")
+        let toggle = app.switches["device-grant-mobile.file.pick"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 6))
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.tap()
+        XCTAssertTrue(app.staticTexts["已授权"].waitForExistence(timeout: 6))
+        XCTAssertEqual(toggle.value as? String, "1")
+        capture("device-capability-authorization")
+        toggle.tap()
+        XCTAssertTrue(app.staticTexts["未授权"].waitForExistence(timeout: 6))
+        XCTAssertEqual(toggle.value as? String, "0")
+    }
+
     func testDeviceConnectionsShowFolderPermissionsAndOpenTheSelectedComputerChat() {
         app.terminate()
         app.launchEnvironment["XOPC_E2E_GATEWAY_URL"] = fixtureBase + "/device-connections"

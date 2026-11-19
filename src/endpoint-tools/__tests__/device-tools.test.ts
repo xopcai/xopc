@@ -6,6 +6,7 @@ import { requireXopcDatabase } from '../../storage/sqlite/connection.js';
 import { EndpointRegistry } from '../registry.js';
 import { EndpointTaskTargetService } from '../task-targets.js';
 import { DeviceTargetResolver } from '../target-resolver.js';
+import { saveDesktopCapabilitySnapshot } from '../device-capability-grants.js';
 import { EndpointToolPolicy } from '../policy.js';
 import { endpointClaimBelongsToPrincipal, deviceTurnSourceContext } from '../turn-context.js';
 import { projectDeviceReading } from '../result-projector.js';
@@ -29,6 +30,9 @@ describe('Device Tools', () => {
     const origin = { type: 'endpoint' as const, endpointId: 'mobile' };
     expect(resolver.resolve('chat', origin, 'mobile', 'mobile.device.get_state')?.endpointId).toBe('mobile');
     expect(resolver.resolve('chat', origin, 'desktop', 'desktop.device.get_state')).toBeUndefined();
+    expect(resolver.resolve('chat', origin, 'desktop', 'desktop.file.save')).toBeUndefined();
+    requireXopcDatabase();
+    saveDesktopCapabilitySnapshot('desktop', { revision: 1, allowed: ['desktop.file.save'] });
     expect(resolver.resolve('chat', origin, 'desktop', 'desktop.file.save')?.endpointId).toBe('desktop');
     expect(resolver.resolve('chat', origin, 'mobile', 'mobile.file.share')).toBeUndefined();
     for (const name of ['mobile.file.pick', 'mobile.contacts.pick', 'mobile.media.pick', 'mobile.camera.capture', 'mobile.calendar.query_events', 'mobile.calendar.query_free_busy']) {

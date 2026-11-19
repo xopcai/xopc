@@ -7,6 +7,7 @@ actor DeviceEndpointHost {
     private let client: GatewayClient
     private var socket: URLSessionWebSocketTask?
     private var claim: DeviceEndpointOrigin?
+    private var pairedDeviceID: String?
     private var connection: Task<DeviceEndpointOrigin, Error>?
     private var runSubscriptions = DeviceRunSubscriptions()
     private var retired = false
@@ -43,6 +44,7 @@ actor DeviceEndpointHost {
 
     private func closeSocket() {
         claim = nil
+        pairedDeviceID = nil
         runSubscriptions.finishAll(throwing: retired ? CancellationError() : DeviceRunStreamError.disconnected)
         appProviderAccepted = false
         appProviderSequence = 0
@@ -116,6 +118,7 @@ actor DeviceEndpointHost {
             }
             guard self.socket === socket else { throw GatewayClientError.transport }
             self.claim = claim
+            pairedDeviceID = compatibility.payload?.deviceId
             startLoops(socket)
             if compatibility.payload?.endpointEnvironmentV1 == true {
                 environmentTask = Task { await publishEnvironment(claim) }
@@ -425,7 +428,10 @@ private extension DeviceEndpointHost {
                 }
             }
             defer { timeout.cancel() }
-            let selected = try await DevicePersonalTools.shared.acquire(request)
+            let capabilityScope = pairedDeviceID.map {
+                (client.configuration.localIdentity ?? client.configuration.baseURL.absoluteString) + "." + $0
+            }
+            let selected = try await DevicePersonalTools.shared.acquire(request, capabilityScope: capabilityScope)
             try Task.checkCancellation()
             let contentData: Data
             if calendar || request.toolName.hasPrefix("mobile.contacts.") || ["mobile.media.list_recent", "mobile.media.add_to_album"].contains(request.toolName) {

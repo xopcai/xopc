@@ -16,7 +16,7 @@ import { openDeviceLocationConsent, XopcLocationConsentHandle } from './deviceLo
 
 interface XopcPersonalArgs { field?: string; startAt?: number; endAt?: number; title?: string; }
 interface XopcPersonalGrant { path: string; token: string; maxBytes: number; expiresAt: number; }
-interface XopcPersonalInvocation { invocationId: string; toolName: string; arguments: XopcPersonalArgs; descriptorRevision: string; confirmationRequired: boolean; deadlineAt: number; uploadGrant?: XopcPersonalGrant; }
+interface XopcPersonalInvocation { invocationId: string; toolName: string; arguments: XopcPersonalArgs; descriptorRevision: string; confirmationRequired: boolean; gatewayCapabilityAuthorized?: boolean; deadlineAt: number; uploadGrant?: XopcPersonalGrant; }
 interface XopcPersonalStatus { invocationId: string; code?: string; message?: string; }
 interface XopcPersonalContact { id: string; name: string; phones: string[]; emails: string[]; }
 interface XopcPersonalEvent { startAt: number; endAt: number; allDay: boolean; busy: boolean; title?: string; }
@@ -37,6 +37,30 @@ export function attachDevicePersonalTools(context: common.UIAbilityContext, ui: 
 export function hasActivePersonalPicker(): boolean { return xopcPersonalPicker; }
 export function cancelDevicePersonalTool(id: string): void { xopcPersonalPending.get(id)?.cancel(); }
 export function cancelAllDevicePersonalTools(): void { xopcPersonalPending.forEach((pending: XopcPersonalPending): void => { pending.cancel(); }); }
+export async function prepareDeviceCapabilityPermission(name: string): Promise<void> {
+  let permissions: Permissions[] = [];
+  if (name === 'mobile.calendar.query_events' || name === 'mobile.calendar.query_free_busy') {
+    permissions = ['ohos.permission.READ_CALENDAR'];
+  } else if (name === 'mobile.calendar.create_event') {
+    permissions = ['ohos.permission.READ_CALENDAR', 'ohos.permission.WRITE_CALENDAR'];
+  } else if (name === 'mobile.device.get_location') {
+    permissions = ['ohos.permission.APPROXIMATELY_LOCATION'];
+  }
+  if (!permissions.length) return;
+  if (!xopcPersonalContext || xopcPersonalBusy || xopcPersonalPicker) throw new Error('TOOL_BUSY');
+  xopcPersonalBusy = true;
+  xopcPersonalPicker = true;
+  try {
+    const grant = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(xopcPersonalContext, permissions);
+    if (grant.authResults.length !== permissions.length || grant.authResults.some((value: number): boolean => value !== 0)) {
+      throw new Error('PERMISSION_DENIED');
+    }
+  } finally {
+    xopcPersonalPicker = false;
+    xopcPersonalBusy = false;
+  }
+}
+
 export function invokeDevicePersonalTool(payload: Object, send: (kind: string, body: Object) => void): void {
   const request = payload as XopcPersonalInvocation;
   const names: string[] = ['mobile.file.pick', 'mobile.media.pick', 'mobile.camera.capture', 'mobile.contacts.pick', 'mobile.calendar.query_events', 'mobile.calendar.query_free_busy', 'mobile.calendar.create_event'];
@@ -80,11 +104,6 @@ export function invokeDevicePersonalTool(payload: Object, send: (kind: string, b
   };
   const work = async (): Promise<void> => {
     try {
-      if (index === 0 || index === 2) {
-        const scope: string = '请在系统页面选择本次要提供给 Agent 的文件或照片。';
-        consent = openDeviceLocationConsent(xopcPersonalUi!, scope + '所选内容会发送给 Agent，并可能保存在聊天历史中。', '允许本次提供设备信息？');
-        if (!await consent.answer) { if (alive) { finish(); fail('USER_DENIED'); } return; }
-      }
       assertActive();
       let content: XopcPersonalJson | XopcPersonalFile;
       if (calendar) {
@@ -113,9 +132,13 @@ export function invokeDevicePersonalTool(payload: Object, send: (kind: string, b
         const value: XopcPersonalCalendar = { capturedAt: Date.now(), startAt: args.startAt!, endAt: args.endAt!, timeZone: i18n.getTimeZone().getID(), accessScope: 'app_only', truncated, events: entries };
         content = { type: 'json', value };
       } else if (create) {
-        const range: string = new Date(args.startAt!).toLocaleString() + ' 至 ' + new Date(args.endAt!).toLocaleString();
-        consent = openDeviceLocationConsent(xopcPersonalUi!, args.title! + '\n' + range, '创建此日程？');
-        if (!await consent.answer) { if (alive) { finish(); fail('USER_DENIED'); } return; }
+        if (request.gatewayCapabilityAuthorized !== true && !await gatewaySession.deviceCapabilityAllowed(request.toolName, revision)) {
+          assertActive();
+          consent = openDeviceLocationConsent(xopcPersonalUi!, '允许后，当前 Gateway 可以继续使用「创建日程」。', '允许 Gateway 创建日程？');
+          if (!await consent.answer) { if (alive) { finish(); fail('USER_DENIED'); } return; }
+          assertActive();
+          await gatewaySession.allowDeviceCapability(request.toolName, revision);
+        }
         assertActive();
         await requestCalendarPermissions(['ohos.permission.READ_CALENDAR', 'ohos.permission.WRITE_CALENDAR']);
         const target: calendarManager.Calendar = await calendarManager.getCalendarManager(xopcPersonalContext!).getCalendar();

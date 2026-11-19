@@ -51,6 +51,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onRefreshRecentConversations = gateway::loadRecentConversations,
             onLoadCapabilities = { gateway.loadCapabilities(it, catalogLocale) },
             onLoadCapabilityDevices = gateway::loadCapabilityDevices,
+            onSetDeviceCapability = gateway::setDeviceCapabilityAccess,
             onUseConnectedComputer = gateway::useConnectedComputer,
             onShareDeviceConnectionFile = gateway::useLocalConnectionFile,
             onReselectConnectedComputer = gateway::reselectConnectedComputer,

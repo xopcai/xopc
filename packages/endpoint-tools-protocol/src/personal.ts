@@ -43,7 +43,7 @@ export function personalDescriptor(name: PersonalToolName): EndpointToolDescript
     return {
       name, title: list ? 'List recent photos' : write ? 'Add a photo to an album' : 'Read a photo',
       description: list ? 'List up to 20 recently captured photos visible to this app. Returns IDs and timestamps only.'
-        : write ? 'Add one authorized photo to a named album, creating the album if needed. Android makes a copy. Requires on-device confirmation.'
+        : write ? 'Add one authorized photo to a named album, creating the album if needed. Android makes a copy. The device must allow this capability for the current Gateway.'
           : 'Read one authorized photo by an ID returned by List recent photos. The image may appear in chat history.',
       inputSchema: list ? DEVICE_EMPTY_INPUT_SCHEMA : {
         type: 'object', additionalProperties: false, required: write ? ['id', 'album'] : ['id'],
@@ -73,7 +73,7 @@ export function personalDescriptor(name: PersonalToolName): EndpointToolDescript
     return {
       name, title,
       description: write
-        ? 'Create one timed event on the foreground device after on-device confirmation. Provide Unix milliseconds.'
+        ? 'Create one timed event on the foreground device. The device must allow calendar creation for the current Gateway. Provide Unix milliseconds.'
         : 'Search authorized contacts by name on the foreground device. Returns up to 20 matches with phone numbers and email addresses.',
       inputSchema: write ? {
         ...CALENDAR_INPUT_SCHEMA, required: ['startAt', 'endAt', 'title'],

@@ -1,7 +1,8 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcChatAttachment } from '../model/chat';
-import { loadDeviceConnections, openDeviceConnectionChat, XopcConnectedDevice, XopcConnectionFolder,
-  XopcDeviceConnections } from '../repository/deviceConnectionsRepository';
+import { loadDeviceConnections, openDeviceConnectionChat, setDeviceCapability, XopcConnectedDevice, XopcConnectionFolder,
+  XopcDeviceConnections, XopcReportedCapability } from '../repository/deviceConnectionsRepository';
+import { i18n } from '@kit.LocalizationKit';
 import { gatewaySession } from '../service/gatewaySession';
 import { pickChatAttachment } from '../service/chatAttachmentPicker';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
@@ -121,6 +122,53 @@ export struct XopcDeviceConnectionsView {
     } finally { if (epoch === this.epoch) this.actionBusy = false; }
   }
 
+  private async changeCapability(name: string, allowed: boolean): Promise<void> {
+    const deviceId = this.currentDevice?.id;
+    if (!deviceId || this.actionBusy) return;
+    const epoch = this.epoch;
+    this.actionBusy = true;
+    this.actionFailed = false;
+    clearTimeout(this.timer);
+    try {
+      await setDeviceCapability(name, allowed, deviceId);
+    } catch (_error) {
+      if (epoch === this.epoch) this.actionFailed = true;
+    } finally {
+      if (epoch === this.epoch) this.refreshLane();
+    }
+  }
+
+  private capabilityIcon(name: string): Resource {
+    const known = tools.find((tool: XopcConnectionToolLabel): boolean => tool.key === name);
+    if (known) return known.icon;
+    if (name.startsWith('mobile.calendar.')) return $r('sys.symbol.calendar');
+    if (name.startsWith('mobile.contacts.')) return $r('sys.symbol.contacts_book');
+    if (name.startsWith('mobile.media.') || name.startsWith('mobile.camera.')) return $r('sys.symbol.picture');
+    return $r('sys.symbol.phone');
+  }
+
+  private capabilityTitle(capability: XopcReportedCapability): string {
+    return i18n.System.getAppPreferredLanguage().startsWith('zh') ? capability.titleZh : capability.title;
+  }
+
+  @Builder
+  reportedCapability(capability: XopcReportedCapability) {
+    Row({ space: CAPABILITY_CARD_GAP }) {
+      XopcCapabilityLogo({ symbol: this.capabilityIcon(capability.name) })
+      XopcCapabilityCardText({ title: this.capabilityTitle(capability),
+        description: capability.allowed ? $r('app.string.device_capability_allowed') : $r('app.string.device_capability_denied') })
+        .layoutWeight(1)
+        .onClick((): void => {
+          if (tools.some((tool: XopcConnectionToolLabel): boolean => tool.key === capability.name)) void this.useTool(capability.name);
+        })
+      Toggle({ type: ToggleType.Switch, isOn: capability.allowed })
+        .selectedColor(this.colors.chat.action).enabled(!this.actionBusy && !this.loadFailed)
+        .accessibilityText(this.capabilityTitle(capability)).id('device-grant-' + capability.name)
+        .onChange((allowed: boolean): void => { if (allowed !== capability.allowed) void this.changeCapability(capability.name, allowed); })
+    }.width('100%').alignItems(VerticalAlign.Center).constraintSize({ minHeight: CAPABILITY_CARD_HEIGHT })
+      .padding(CAPABILITY_CARD_PADDING).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(CAPABILITY_CARD_CORNER))
+  }
+
   @Builder
   cardContent(title: ResourceStr, description: ResourceStr, icon: Resource, actionable: boolean) {
     Row({ space: CAPABILITY_CARD_GAP }) {
@@ -154,9 +202,20 @@ export struct XopcDeviceConnectionsView {
       Text($r('app.string.device_connection_current')).fontSize(13).fontColor(this.colors.secondary)
       Column({ space: 10 }) {
         this.card(this.currentDevice.name, $r('app.string.device_connection_this_phone'), $r('sys.symbol.phone'))
-        ForEach(this.localTools, (tool: XopcConnectionToolLabel): void => {
-          this.card(tool.title, tool.description, tool.icon, (): void => { void this.useTool(tool.key); })
-        }, (tool: XopcConnectionToolLabel): string => tool.key)
+        if (this.currentDevice.capabilities !== undefined) {
+          Text($r('app.string.device_capability_gateway')).fontSize(13).fontColor(this.colors.secondary)
+            .width('100%')
+          if (!this.currentDevice.capabilities.length) {
+            Text($r('app.string.device_capability_empty')).fontSize(13).fontColor(this.colors.secondary).width('100%')
+          }
+          ForEach(this.currentDevice.capabilities, (capability: XopcReportedCapability): void => {
+            this.reportedCapability(capability)
+          }, (capability: XopcReportedCapability): string => capability.name + ':' + capability.allowed + ':' + this.actionBusy)
+        } else {
+          ForEach(this.localTools, (tool: XopcConnectionToolLabel): void => {
+            this.card(tool.title, tool.description, tool.icon, (): void => { void this.useTool(tool.key); })
+          }, (tool: XopcConnectionToolLabel): string => tool.key)
+        }
       }.width('100%')
     }
     Row() {

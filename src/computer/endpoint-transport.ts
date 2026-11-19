@@ -10,14 +10,16 @@ import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 const hash = (input: unknown) => createHash('sha256').update(canonicalJson(input)).digest('hex');
 
 /** Keep local transport unchanged; independently authorized remote Computer commands always carry durable intent. */
-export async function invokeComputerCommand(endpoints: EndpointToolRuntime, endpointId: string, command: ComputerCommand, signal?: AbortSignal) {
+export async function invokeComputerCommand(endpoints: EndpointToolRuntime, endpointId: string, command: ComputerCommand, signal?: AbortSignal,
+  gatewayCapability = false) {
   signal?.throwIfAborted();
   const endpoint = endpoints.registry.get(endpointId), authority = endpoint?.executionAuthority;
   const toolName = authority ? REMOTE_COMPUTER_CONTROL_TOOL : COMPUTER_CONTROL_TOOL;
   const tool = endpoints.registry.getTool(endpointId, toolName);
   if (!tool) throw new Error('COMPUTER_DESKTOP_UPGRADE_REQUIRED');
   const invoke = (operationId?: string) => endpoints.invocations.invoke({ endpointId, toolCallId: randomUUID(), toolName,
-    arguments: command, descriptorRevision: tool.revision, ...(operationId ? { operationId } : {}), signal });
+    arguments: command, descriptorRevision: tool.revision, ...(operationId ? { operationId } : {}),
+    ...(gatewayCapability && !authority && { gatewayCapability: true }), signal });
   if (!authority) return invoke();
   if (!endpoint || endpoint.availability !== 'foreground' || authority.deviceId !== endpoint.principalId
     || authority.expiresAt <= Date.now() || tool.descriptor.name !== REMOTE_COMPUTER_CONTROL_TOOL) throw new Error('COMPUTER_REMOTE_AUTHORITY_INVALID');

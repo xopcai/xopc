@@ -27,6 +27,17 @@ class GatewaySession(
   private val identity: DeviceIdentity = DeviceIdentity(),
   private val store: AndroidSecureStore = AndroidSecureStore(context),
 ) {
+  internal fun deviceCapabilityAllowed(profile: GatewayProfile, tool: String): Boolean =
+    store.read(capabilityKey(profile, tool)) == "allowed"
+
+  internal fun allowDeviceCapability(profile: GatewayProfile, tool: String) {
+    if (currentProfile() != profile) throw SecurityException()
+    store.write(capabilityKey(profile, tool), "allowed")
+  }
+
+  private fun capabilityKey(profile: GatewayProfile, tool: String) =
+    "device-capability." + DeviceRequestProof.digest("${profile.gatewayPublicKey}\n${profile.deviceId}\n$tool".toByteArray())
+
   internal fun clarificationRecord(key: String): String? = store.read(clarificationScope(key))
   internal fun writeClarificationRecord(key: String, value: String?) {
     val scoped = clarificationScope(key)

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   cancelAllEndpointConfirmations,
-  formatEndpointToolArguments,
   requestEndpointConfirmation,
   settleEndpointConfirmation,
 } from '../confirmation-store';
@@ -17,16 +16,11 @@ describe('endpoint tool confirmation store', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows actual arguments with a bounded preview', () => {
-    expect(formatEndpointToolArguments({ url: 'https://example.com' })).toContain('https://example.com');
-    expect(formatEndpointToolArguments({ text: 'x'.repeat(1_000) }).length).toBeLessThan(700);
-  });
-
   it('resolves asynchronously when the user decides', async () => {
     const decision = requestEndpointConfirmation({
       invocationId: 'invocation-1',
       title: 'Write clipboard',
-      args: { text: 'hello' },
+      remember: true,
       deadlineAt: Date.now() + 10_000,
     });
     settleEndpointConfirmation('invocation-1', true);
@@ -37,7 +31,7 @@ describe('endpoint tool confirmation store', () => {
     const decision = requestEndpointConfirmation({
       invocationId: 'invocation-2',
       title: 'Navigate',
-      args: { url: 'https://example.com' },
+      remember: true,
       deadlineAt: Date.now() + 10_000,
     });
     cancelAllEndpointConfirmations();
