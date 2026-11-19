@@ -1187,11 +1187,11 @@
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "授权后，助手可在 xopc 前台读取指定时间范围内的日历事件。";
 				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "确认后，助手可以创建日程。";
-				INFOPLIST_KEY_NSContactsUsageDescription = "授权后，助手可以在 xopc 前台按姓名查找联系人。";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "授权后，助手可读取可访问的照片，并在你确认后将照片加入相册。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
+				INFOPLIST_KEY_NSContactsUsageDescription = "授权后，助手可以在 xopc 前台按姓名查找联系人。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "授权后，助手可在 xopc 前台使用当前位置查询天气或附近地点。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "授权后，助手可读取可访问的照片，并在你确认后将照片加入相册。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -1349,11 +1349,11 @@
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "授权后，助手可在 xopc 前台读取指定时间范围内的日历事件。";
 				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "确认后，助手可以创建日程。";
-				INFOPLIST_KEY_NSContactsUsageDescription = "授权后，助手可以在 xopc 前台按姓名查找联系人。";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "授权后，助手可读取可访问的照片，并在你确认后将照片加入相册。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄并发送给助手的图片。";
+				INFOPLIST_KEY_NSContactsUsageDescription = "授权后，助手可以在 xopc 前台按姓名查找联系人。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "授权后，助手可在 xopc 前台使用当前位置查询天气或附近地点。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于实时语音、语音助手、语音消息和语音笔记。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "授权后，助手可读取可访问的照片，并在你确认后将照片加入相册。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
