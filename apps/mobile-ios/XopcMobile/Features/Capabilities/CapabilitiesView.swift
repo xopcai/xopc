@@ -345,7 +345,6 @@ struct CapabilitiesView: View {
         detail = item
     }
 
-    // swiftlint:disable:next function_body_length
     private func catalogRow(_ item: CapabilityCatalogItem, kind: CapabilityCategory) -> some View {
         HStack(spacing: 0) {
             Button {
@@ -357,7 +356,8 @@ struct CapabilitiesView: View {
                 }
             } label: {
                 CapabilityCardLabel(title: item.name, description: item.description,
-                                    hoverEnabled: kind != .agents || item.group != "disabled") {
+                                    hoverEnabled: kind != .agents || item.group != "disabled")
+                {
                     icon(item, kind: kind)
                 } trailing: {
                     if kind == .connections, item.group == "available" || item.group == "attention" {
