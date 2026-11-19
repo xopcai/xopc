@@ -1,4 +1,5 @@
 <resources>
+    <string name="chat_project_comparison_failed">无法更新项目对比，请重试。</string>
     <string name="brand_loading">加载中…</string>
     <string name="app_name">xopc</string>
     <string name="tab_assistant">助手</string>

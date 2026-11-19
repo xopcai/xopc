@@ -9,10 +9,13 @@ The app icon uses the HarmonyOS artwork with a slightly smaller ring, matching A
 ```bash
 cd apps/mobile-ios
 xcodegen generate
-xcodebuild -project XopcMobile.xcodeproj -scheme XopcMobile \
+xcodebuild -skipPackagePluginValidation -project XopcMobile.xcodeproj -scheme XopcMobile \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   CODE_SIGNING_ALLOWED=NO build
 ```
+
+The A2UI dependency is pinned to a commit in `project.yml`. The noninteractive
+commands run its Swift schema generator with `-skipPackagePluginValidation`.
 
 ## TestFlight
 

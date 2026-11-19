@@ -92,6 +92,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'project-comparison',
+    match: path => path === '/api/project-comparison/action',
+    load: async () => {
+      const { registerProjectComparisonRoutes } = await import('./project-comparison.js');
+      return { register: registerProjectComparisonRoutes };
+    },
+  },
+  {
     id: 'session-input-control',
     match: path => /^\/api\/sessions\/[^/]+\/input-control$/.test(path),
     load: async () => {

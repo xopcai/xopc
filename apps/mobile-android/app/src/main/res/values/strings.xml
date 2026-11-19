@@ -1,4 +1,5 @@
 <resources>
+    <string name="chat_project_comparison_failed">Could not update the project comparison. Try again.</string>
     <string name="brand_loading">Loading…</string>
     <string name="app_name">xopc</string>
     <string name="tab_assistant">Assistant</string>

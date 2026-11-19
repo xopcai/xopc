@@ -13,6 +13,12 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: true
 
 packages:
+  A2UI:
+    url: https://github.com/a2ui-project/a2ui.git
+    revision: b4f91c26fcf62abc0720c21a65840220941d0a3f
+  JSONSchema:
+    url: https://github.com/ajevans99/swift-json-schema
+    minorVersion: 0.13.1
   SwiftDraw:
     url: https://github.com/swhitty/SwiftDraw.git
     exactVersion: 0.9.6
@@ -24,6 +30,10 @@ targets:
     dependencies:
       - target: XopcShareExtension
       - package: SwiftDraw
+      - package: A2UI
+        products: [A2UISwiftCore, A2UISwiftUI, BasicCatalogSwiftUI]
+      - package: JSONSchema
+        product: OrderedJSON
     sources:
       - path: Shared
       - path: XopcMobile

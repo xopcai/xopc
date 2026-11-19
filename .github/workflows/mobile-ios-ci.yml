@@ -57,6 +57,7 @@ jobs:
         working-directory: apps/mobile-ios
         run: |
           xcodebuild \
+            -skipPackagePluginValidation \
             -project XopcMobile.xcodeproj \
             -scheme XopcMobile \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \

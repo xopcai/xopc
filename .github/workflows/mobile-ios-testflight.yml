@@ -89,6 +89,7 @@ jobs:
         working-directory: apps/mobile-ios
         run: |
           xcodebuild \
+            -skipPackagePluginValidation \
             -project XopcMobile.xcodeproj \
             -scheme XopcMobile \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
@@ -194,6 +195,7 @@ jobs:
           export_path="$RUNNER_TEMP/xopc-native-ios-export"
           options_path="$RUNNER_TEMP/ExportOptions.plist"
           xcodebuild \
+            -skipPackagePluginValidation \
             -project XopcMobile.xcodeproj \
             -scheme XopcMobile \
             -configuration Release \

@@ -47,6 +47,7 @@ struct MessageBubble: View {
     var body: some View {
         if !message.text.isEmpty || !message.references.isEmpty || !message.attachments.isEmpty
             || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty || !message.taskReceipts.isEmpty
+            || !message.projectComparisons.isEmpty
         {
             messageContent
         }
@@ -58,6 +59,9 @@ struct MessageBubble: View {
                 messageText
                 references
                 attachments
+                ForEach(message.projectComparisons) { comparison in
+                    ProjectComparisonPanel(comparison: comparison, configuration: configuration)
+                }
                 ForEach(message.taskReceipts) { receipt in
                     if let url = receipt.url {
                         Link(destination: url) { taskReceiptLabel(receipt) }
@@ -166,7 +170,7 @@ struct MessageBubble: View {
         }
         let maximumWidth = message.role == "user" ? min(availableWidth, 360) : availableWidth
         if !message.attachments.isEmpty || !message.references.isEmpty || !message.taskReceipts.isEmpty
-            || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty || showsPreview
+            || !message.resultLinks.isEmpty || !message.unavailableOutputs.isEmpty || !message.projectComparisons.isEmpty || showsPreview
         {
             return maximumWidth
         }

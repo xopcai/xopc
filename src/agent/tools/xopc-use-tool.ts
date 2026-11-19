@@ -16,6 +16,8 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult, BeforeToolCallContext } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
+  projectComparisonIdsSchema,
+  ProductReadContracts,
   ChatPreviewCreateInputSchema,
   ChatPreviewReviseInputSchema,
   PRODUCT_DELIVERY_VERSION,
@@ -109,7 +111,7 @@ const XopcUseToolSchema = Type.Object({
       'Project milestone writes support idempotencyKey; update_milestone/delete_milestone require original expectedRevision for stable retries, and create_update requires original expectedVersion. TaskRun cancel accepts idempotencyKey and expectedVersion, and does not confirm external execution stopped. ' +
       'Automation diagnostics: get_run/run_events {runId}, metrics {}, events {eventType?, source?, limit?}, deliveries {runId?, limit?}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. Recovery commands: replay_event {eventId, reason, idempotencyKey}, retry_delivery {runId, destinationKey, reason, idempotencyKey}. ' +
       'Automation also supports cancel/read {runId, idempotencyKey?} and read_all {projectId?, idempotencyKey?}; omitted projectId means all projects. Cancel acceptance is not confirmation of stopping. ' +
-      'Object command. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, chat_preview create/revise/get, local_app list/get/create/validate, settings open/inspect/patch/set_avatar/delete_avatar/rollback/changes, and setup inspect/start/get/recheck/verify/cancel {scene: models|web_search|voice|channels|computer|browser|phone|mcp, resumeObjective?}.',
+      'Object command. Supports project list/get/compare/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, chat_preview create/revise/get, local_app list/get/create/validate, settings open/inspect/patch/set_avatar/delete_avatar/rollback/changes, and setup inspect/start/get/recheck/verify/cancel {scene: models|web_search|voice|channels|computer|browser|phone|mcp, resumeObjective?}.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -1357,7 +1359,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Use mode browser_setup for inspect/preview/start/get/advance/recheck/request_interaction/begin_verification/verification_report/cancel of local Chrome setup. Load configure-xopc for guided setup; writes require product-owner approval. Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {title:"Short task name", objective:"One-sentence outcome", body:"Full Markdown task brief", createMode:"start", agentId:"researcher"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. Inspect an existing Task and its run before creating another Task for the same objective. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest and grantRevision, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Use mode browser_setup for inspect/preview/start/get/advance/recheck/request_interaction/begin_verification/verification_report/cancel of local Chrome setup. Load configure-xopc for guided setup; writes require product-owner approval. Operate first-class xopc objects through one safe entry point. To delegate work for immediate execution: mode task, command create, args {title:"Short task name", objective:"One-sentence outcome", body:"Full Markdown task brief", createMode:"start", agentId:"researcher"}; omitting createMode creates a backlog task only. To start an existing Task: mode task, command command, args {taskId, type:"start", expectedVersion, commandArgs:{executor:{kind:"agent",agentId:"main"}}}. Inspect an existing Task and its run before creating another Task for the same objective. For delegated work, task delegated_tasks lists this conversation\'s tasks; task collaboration reads the shared board; task collaboration_post writes {taskId, kind, body, causationId?, idempotencyKey?}. Workers report progress or questions; the main Agent writes instructions and answers. Use project compare with args {projectIds:[id1,id2]} to show a project comparison panel in chat. Use chat_preview for lightweight UI mockups in the current conversation; do not create a Local App unless the user asks for a durable app. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest and grantRevision, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for Agents, projects, automations, notes, tasks, TaskRuns, chat previews, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -1673,6 +1675,20 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
           surface: 'agent', scopes: ['automations.read'], authorize: deps.authorizeCapability ?? (() => true), signal };
         const result = await capabilities.call(`xopc.automations.${command}`, projectedInput, caller);
         return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+      }
+
+      if (mode === 'project' && command === 'compare') {
+        const ids = projectComparisonIdsSchema.safeParse(args.projectIds);
+        if (!ids.success) return errorText('projectIds must contain two to four distinct project IDs', details);
+        const context: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['workspace.read'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const projects = await Promise.all(ids.data.map(async id => {
+          const result = await capabilities.call('xopc.projects.get', { id }, context);
+          return ProductReadContracts['xopc.projects.get'].output.parse(result).project;
+        }));
+        const { buildProjectComparison } = await import('../../projects/project-comparison.js');
+        return okText({ ...details, result: { ok: true, projects },
+          delivery: dryRun ? undefined : buildProjectComparison(projects) });
       }
 
       if (mode === 'project' && ['get', 'list', 'list_milestones', 'list_updates'].includes(command)) {

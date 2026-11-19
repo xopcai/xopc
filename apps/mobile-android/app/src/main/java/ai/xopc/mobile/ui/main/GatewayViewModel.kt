@@ -3553,6 +3553,13 @@ class GatewayViewModel internal constructor(application: Application, private va
   suspend fun readMessageMedia(conversationId: String, media: ConversationMedia): ByteArray =
     withContext(Dispatchers.IO) { conversations.readMessageMedia(conversationId, media) }
 
+  suspend fun inspectProjectComparison(action: String): String {
+    val gatewayId = checkNotNull(session.currentProfile()?.gatewayId)
+    return withContext(Dispatchers.IO) {
+      session.request("/api/project-comparison/action", "POST", action, expectedGatewayId = gatewayId)
+    }
+  }
+
   private fun loadExecution(conversationId: String, messageId: String, turnId: String) {
     executionJob?.cancel()
     val revision = ++executionRevision
