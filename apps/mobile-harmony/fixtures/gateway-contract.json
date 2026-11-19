@@ -4872,6 +4872,10 @@
                         "confirmationRequired": {
                           "type": "boolean"
                         },
+                        "gatewayCapabilityAuthorized": {
+                          "type": "boolean",
+                          "const": true
+                        },
                         "deadlineAt": {
                           "type": "integer",
                           "minimum": 0,
