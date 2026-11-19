@@ -66,7 +66,7 @@ struct DeviceCompatibility: Decodable {
         if mobilePersonalToolsV1 == true {
             return mobileExtendedPersonalToolsV1 == true ? DeviceToolCatalog.personalJson : DeviceToolCatalog.basePersonalJson
         }
-        if deviceLocationTasksV1 == true && mobileExtendedPersonalToolsV1 == true {
+        if deviceLocationTasksV1 == true, mobileExtendedPersonalToolsV1 == true {
             return DeviceToolCatalog.json
         }
         return DeviceToolCatalog.stateJson

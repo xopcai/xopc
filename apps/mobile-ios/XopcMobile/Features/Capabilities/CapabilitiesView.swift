@@ -105,7 +105,9 @@ struct CapabilitiesView: View {
                                                   onOpenChat: onOpenDeviceChat, onShareFile: onShareDeviceFile,
                                                   onLocalTool: openDeviceTool, onPair: onPairDevice)
                                 .id(ComposerDraftStore.accountScope(configuration))
-                        } else { catalogPage(kind) }
+                        } else {
+                            catalogPage(kind)
+                        }
                     }.tag(kind)
                 }
             }
@@ -114,7 +116,9 @@ struct CapabilitiesView: View {
         }
         .background(mobileTheme.canvas)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if category != .devices { searchField }
+            if category != .devices {
+                searchField
+            }
         }
         .mobilePageTitle(Text("capability_title"))
         .toolbar {

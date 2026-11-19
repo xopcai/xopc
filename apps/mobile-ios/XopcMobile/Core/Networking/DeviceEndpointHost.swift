@@ -405,7 +405,11 @@ actor DeviceEndpointHost {
 }
 
 private extension DeviceEndpointHost {
-    private static let personalNames = ["mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick", "mobile.calendar.query_events", "mobile.calendar.query_free_busy", "mobile.contacts.find_by_name", "mobile.calendar.create_event", "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album"]
+    private static let personalNames = [
+        "mobile.file.pick", "mobile.media.pick", "mobile.camera.capture", "mobile.contacts.pick",
+        "mobile.calendar.query_events", "mobile.calendar.query_free_busy", "mobile.contacts.find_by_name",
+        "mobile.calendar.create_event", "mobile.media.list_recent", "mobile.media.read_image", "mobile.media.add_to_album"
+    ]
 
     private func invokePersonal(_ data: Data, id: String) async throws {
         do {

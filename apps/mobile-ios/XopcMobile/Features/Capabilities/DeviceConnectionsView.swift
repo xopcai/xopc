@@ -16,7 +16,9 @@ private struct ConnectedDevice: Decodable, Identifiable {
     let tools: Set<String>
     let folders: [ConnectedDeviceFolder]
 
-    var offline: Bool { availability == "offline" }
+    var offline: Bool {
+        availability == "offline"
+    }
 }
 
 private struct DeviceConnectionCatalog: Decodable {
@@ -54,9 +56,17 @@ struct DeviceConnectionsView: View {
     @State private var showPhoto = false
     @State private var showCamera = false
 
-    private var zh: Bool { locale.identifier.hasPrefix("zh") }
-    private var selected: ConnectedDevice? { catalog?.devices.first { $0.id == selectedID } }
-    private var current: ConnectedDevice? { catalog?.devices.first { $0.id == catalog?.currentDeviceId } }
+    private var usesChinese: Bool {
+        locale.identifier.hasPrefix("zh")
+    }
+
+    private var selected: ConnectedDevice? {
+        catalog?.devices.first { $0.id == selectedID }
+    }
+
+    private var current: ConnectedDevice? {
+        catalog?.devices.first { $0.id == catalog?.currentDeviceId }
+    }
 
     var body: some View {
         ScrollView {
@@ -68,14 +78,16 @@ struct DeviceConnectionsView: View {
                         .foregroundStyle(theme.action)
                 }
                 if catalog == nil, !loadFailed {
-                    ForEach(0..<3) { _ in
+                    ForEach(0 ..< 3) { _ in
                         RoundedRectangle(cornerRadius: theme.corner(12)).fill(theme.panel)
                             .frame(height: 56).redacted(reason: .placeholder)
                     }
                 } else if let selected {
                     detail(selected)
                 } else if let catalog {
-                    if let current { localDevice(current) }
+                    if let current {
+                        localDevice(current)
+                    }
                     computers(catalog.devices.filter { $0.kind == "desktop" })
                 }
             }
@@ -93,7 +105,9 @@ struct DeviceConnectionsView: View {
                     catalog = payload
                     loadFailed = false
                 } catch {
-                    if Task.isCancelled { return }
+                    if Task.isCancelled {
+                        return
+                    }
                     loadFailed = true
                 }
                 do { try await Task.sleep(for: .seconds(5)) }
@@ -110,7 +124,9 @@ struct DeviceConnectionsView: View {
         }
     }
 
-    private func word(_ chinese: String, _ english: String) -> String { zh ? chinese : english }
+    private func word(_ chinese: String, _ english: String) -> String {
+        usesChinese ? chinese : english
+    }
 
     @ViewBuilder
     private func localDevice(_ device: ConnectedDevice) -> some View {
@@ -127,9 +143,13 @@ struct DeviceConnectionsView: View {
             ForEach(tools.filter { device.tools.contains($0.0) }, id: \.0) { tool in
                 Divider().padding(.leading, 46)
                 Button {
-                    if tool.0 == "mobile.file.pick" { showFile = true }
-                    else if tool.0 == "mobile.media.pick" { showPhoto = true }
-                    else { onLocalTool(tool.0) }
+                    if tool.0 == "mobile.file.pick" {
+                        showFile = true
+                    } else if tool.0 == "mobile.media.pick" {
+                        showPhoto = true
+                    } else {
+                        onLocalTool(tool.0)
+                    }
                 } label: {
                     row(tool.1, tool.2, tool.3)
                 }.buttonStyle(.plain).disabled(requestRunning).accessibilityIdentifier("device-tool-\(tool.0)")
@@ -152,7 +172,9 @@ struct DeviceConnectionsView: View {
                     .font(.footnote).foregroundStyle(theme.secondary).padding(12)
             }
             ForEach(devices) { device in
-                if device.id != devices.first?.id { Divider().padding(.leading, 46) }
+                if device.id != devices.first?.id {
+                    Divider().padding(.leading, 46)
+                }
                 Button { selectedID = device.id; errorMessage = nil } label: {
                     row(device.name, "\(device.platform) · \(status(device))", device.platform == "darwin" ? "laptopcomputer" : "desktopcomputer")
                 }.buttonStyle(.plain).accessibilityIdentifier("connected-device-\(device.id)")
@@ -175,20 +197,7 @@ struct DeviceConnectionsView: View {
                 .background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
         } else {
             Text(word("本地文件", "Local files")).font(.subheadline.weight(.semibold))
-            VStack(spacing: 0) {
-                let presets = [("desktop", word("桌面", "Desktop"), "desktopcomputer"),
-                               ("documents", word("文稿", "Documents"), "folder"),
-                               ("downloads", word("下载", "Downloads"), "arrow.down.to.line")]
-                ForEach(presets, id: \.0) { kind, title, symbol in
-                    if kind != "desktop" { Divider().padding(.leading, 46) }
-                    row(title, device.folders.contains { $0.kind == kind } ? word("已授权 · 只读", "Authorized · Read-only")
-                        : word("需在电脑上授权", "Authorize on computer"), symbol, actionable: false)
-                }
-                ForEach(device.folders.filter { $0.kind == "custom" }) { folder in
-                    Divider().padding(.leading, 46)
-                    row(folder.label, word("已授权 · 只读", "Authorized · Read-only"), "folder", actionable: false)
-                }
-            }.background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
+            folderPermissions(device)
             if device.platform == "darwin" || device.platform == "win32" {
                 Text(word("电脑控制", "Computer use")).font(.subheadline.weight(.semibold))
                 row(word("操作应用窗口", "Operate application windows"), word("在电脑的设置中授权", "Authorize in settings on the computer"),
@@ -215,6 +224,25 @@ struct DeviceConnectionsView: View {
         }
     }
 
+    private func folderPermissions(_ device: ConnectedDevice) -> some View {
+        VStack(spacing: 0) {
+            let presets = [("desktop", word("桌面", "Desktop"), "desktopcomputer"),
+                           ("documents", word("文稿", "Documents"), "folder"),
+                           ("downloads", word("下载", "Downloads"), "arrow.down.to.line")]
+            ForEach(presets, id: \.0) { kind, title, symbol in
+                if kind != "desktop" {
+                    Divider().padding(.leading, 46)
+                }
+                row(title, device.folders.contains { $0.kind == kind } ? word("已授权 · 只读", "Authorized · Read-only")
+                    : word("需在电脑上授权", "Authorize on computer"), symbol, actionable: false)
+            }
+            ForEach(device.folders.filter { $0.kind == "custom" }) { folder in
+                Divider().padding(.leading, 46)
+                row(folder.label, word("已授权 · 只读", "Authorized · Read-only"), "folder", actionable: false)
+            }
+        }.background(theme.panel, in: .rect(cornerRadius: theme.corner(14)))
+    }
+
     private func status(_ device: ConnectedDevice) -> String {
         device.offline ? word("离线", "Offline") : word("在线", "Online")
     }
@@ -227,7 +255,9 @@ struct DeviceConnectionsView: View {
                 Text(subtitle).font(.footnote).foregroundStyle(theme.secondary)
             }
             Spacer(minLength: 0)
-            if actionable { Image(systemName: "chevron.right").font(.caption).foregroundStyle(theme.secondary).accessibilityHidden(true) }
+            if actionable {
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(theme.secondary).accessibilityHidden(true)
+            }
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .frame(minHeight: 50).contentShape(.rect)

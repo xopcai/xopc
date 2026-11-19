@@ -62,53 +62,61 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         }
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
-            if request.toolName == "mobile.contacts.find_by_name" {
-                return try await findContacts(request.arguments.query)
-            }
-            if request.toolName == "mobile.calendar.create_event" {
-                return try await createEvent(request.arguments)
-            }
-            if request.toolName == "mobile.media.list_recent" {
-                return try await listPhotos()
-            }
-            if request.toolName == "mobile.media.read_image" {
-                try await allowPhotoAccess()
-                let asset = try photo(request.arguments.id)
-                let image = try await loadPhoto(asset)
-                return try JSONEncoder().encode(SelectionWire(name: "photo.jpg", mimeType: "image/jpeg", data: image))
-            }
-            if request.toolName == "mobile.media.add_to_album" {
-                return try await addPhotoToAlbum(request.arguments)
-            }
-            let calendar = request.toolName.hasPrefix("mobile.calendar.")
-            if calendar {
-                return try await calendarContent(request)
-            }
-            if ["mobile.file.pick", "mobile.camera.capture"].contains(request.toolName) {
-                let scope = "请在接下来的系统页面选择本次要提供给 Agent 的文件、照片或联系人字段。"
-                guard await confirm(scope + "所选内容会发送给 Agent，并可能保存在聊天历史中。") else { throw PersonalDeviceFailure(code: "USER_DENIED") }
-                try await Task.sleep(for: .milliseconds(350))
-                try Task.checkCancellation()
-            }
-            if request.toolName == "mobile.contacts.pick" {
-                field = request.arguments.field ?? "phone"
-                return try await withCheckedThrowingContinuation { continuation in
-                    contactSelection = continuation
-                    let picker = CNContactPickerViewController(); picker.delegate = self
-                    picker.displayedPropertyKeys = [field == "phone" ? CNContactPhoneNumbersKey : CNContactEmailAddressesKey]
-                    picker.predicateForEnablingContact = NSPredicate(format: "\(field == "phone" ? "phoneNumbers" : "emailAddresses").@count > 0")
-                    picker.predicateForSelectionOfContact = NSPredicate(value: false)
-                    picker.predicateForSelectionOfProperty = NSPredicate(format: "key == %@", field == "phone" ? CNContactPhoneNumbersKey : CNContactEmailAddressesKey)
-                    present(picker)
-                }
-            }
-            let selected = try await selectFile(request.toolName)
-            return try JSONEncoder().encode(SelectionWire(name: selected.name, mimeType: selected.mimeType, data: selected.data))
+            return try await acquireContent(request)
         } onCancel: { Task {
             @MainActor in if self.activeInvocation == request.invocationId {
                 self.cancel()
             }
         } }
+    }
+
+    private func acquireContent(_ request: PersonalDeviceRequest) async throws -> Data {
+        switch request.toolName {
+        case "mobile.contacts.find_by_name":
+            return try await findContacts(request.arguments.query)
+        case "mobile.calendar.create_event":
+            return try await createEvent(request.arguments)
+        case "mobile.media.list_recent":
+            return try await listPhotos()
+        case "mobile.media.read_image":
+            try await allowPhotoAccess()
+            let asset = try photo(request.arguments.id)
+            let image = try await loadPhoto(asset)
+            return try JSONEncoder().encode(SelectionWire(name: "photo.jpg", mimeType: "image/jpeg", data: image))
+        case "mobile.media.add_to_album":
+            return try await addPhotoToAlbum(request.arguments)
+        case "mobile.contacts.pick":
+            return try await pickContact(field: request.arguments.field ?? "phone")
+        default:
+            if request.toolName.hasPrefix("mobile.calendar.") {
+                return try await calendarContent(request)
+            }
+            return try await acquireSelectedFile(request.toolName)
+        }
+    }
+
+    private func acquireSelectedFile(_ toolName: String) async throws -> Data {
+        if ["mobile.file.pick", "mobile.camera.capture"].contains(toolName) {
+            let scope = "请在接下来的系统页面选择本次要提供给 Agent 的文件、照片或联系人字段。"
+            guard await confirm(scope + "所选内容会发送给 Agent，并可能保存在聊天历史中。") else { throw PersonalDeviceFailure(code: "USER_DENIED") }
+            try await Task.sleep(for: .milliseconds(350))
+            try Task.checkCancellation()
+        }
+        let selected = try await selectFile(toolName)
+        return try JSONEncoder().encode(SelectionWire(name: selected.name, mimeType: selected.mimeType, data: selected.data))
+    }
+
+    private func pickContact(field selectedField: String) async throws -> Data {
+        field = selectedField
+        return try await withCheckedThrowingContinuation { continuation in
+            contactSelection = continuation
+            let picker = CNContactPickerViewController(); picker.delegate = self
+            picker.displayedPropertyKeys = [field == "phone" ? CNContactPhoneNumbersKey : CNContactEmailAddressesKey]
+            picker.predicateForEnablingContact = NSPredicate(format: "\(field == "phone" ? "phoneNumbers" : "emailAddresses").@count > 0")
+            picker.predicateForSelectionOfContact = NSPredicate(value: false)
+            picker.predicateForSelectionOfProperty = NSPredicate(format: "key == %@", field == "phone" ? CNContactPhoneNumbersKey : CNContactEmailAddressesKey)
+            present(picker)
+        }
     }
 
     struct SelectionWire: Codable, Sendable { let name: String; let mimeType: String; let data: Data }
@@ -217,7 +225,9 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         catch { continuation.resume(throwing: error) }
         contactSelection = nil; presented = nil
     }
+}
 
+extension DevicePersonalTools {
     private func allowPhotoAccess() async throws {
         var status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         if status == .notDetermined {
@@ -234,7 +244,7 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         options.fetchLimit = 20
         let assets = PHAsset.fetchAssets(with: .image, options: options)
-        let result: [[String: Any]] = (0..<assets.count).map { index in
+        let result: [[String: Any]] = (0 ..< assets.count).map { index in
             let asset = assets.object(at: index)
             return ["id": asset.localIdentifier, "capturedAt": Int64(max(0, (asset.creationDate?.timeIntervalSince1970 ?? 0) * 1000))]
         }
@@ -256,7 +266,9 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         options.isNetworkAccessAllowed = false
         return try await withCheckedThrowingContinuation { continuation in
             PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 2048, height: 2048), contentMode: .aspectFit, options: options) { image, info in
-                if (info?[PHImageResultIsDegradedKey] as? Bool) == true { return }
+                if (info?[PHImageResultIsDegradedKey] as? Bool) == true {
+                    return
+                }
                 guard let data = image?.jpegData(compressionQuality: 0.85), data.count <= 10 * 1024 * 1024 else {
                     continuation.resume(throwing: PersonalDeviceFailure(code: "RESULT_TOO_LARGE"))
                     return
@@ -282,7 +294,9 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
         let albums = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: options)
         guard albums.count <= 1 else { throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS") }
         let existing = albums.firstObject
-        if let existing, !existing.canPerform(.addContent) { throw PersonalDeviceFailure(code: "PERMISSION_DENIED") }
+        if let existing, !existing.canPerform(.addContent) {
+            throw PersonalDeviceFailure(code: "PERMISSION_DENIED")
+        }
         try await PHPhotoLibrary.shared().performChanges {
             if let existing, let change = PHAssetCollectionChangeRequest(for: existing) {
                 change.addAssets([asset] as NSArray)
@@ -317,7 +331,8 @@ final class DevicePersonalTools: NSObject, UIDocumentPickerDelegate, PHPickerVie
 
     private func createEvent(_ arguments: PersonalDeviceRequest.Arguments) async throws -> Data {
         guard let title = arguments.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty, title.utf16.count <= 500,
-              let startAt = arguments.startAt, let endAt = arguments.endAt else {
+              let startAt = arguments.startAt, let endAt = arguments.endAt
+        else {
             throw PersonalDeviceFailure(code: "INVALID_ARGUMENTS")
         }
         let start = Date(timeIntervalSince1970: Double(startAt) / 1000)
