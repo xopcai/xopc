@@ -43,7 +43,7 @@
 
 ## 证据与复现
 
-- [总报告及各用例运行标识](../chat-charts-matrix-results/report.json)
+- 总报告及各用例运行标识（本地文件 `../chat-charts-matrix-results/report.json`）
 - 缺失值折线图截图（历史产物已移入 Git 历史）
 - 负数与零值柱状图截图（历史产物已移入 Git 历史）
 - 多序列分组柱状图截图（历史产物已移入 Git 历史）

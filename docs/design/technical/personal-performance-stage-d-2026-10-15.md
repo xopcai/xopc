@@ -51,7 +51,7 @@ pnpm exec tsx scripts/check-personal-performance.mts \
 
 ## 最终结果
 
-最终证据为 [真实链路原始样本](./personal-performance-live-2026-10-15.json)、[读取基准](./personal-performance-live-2026-10-15-reads.json)、[回归结果](./personal-performance-regression-2026-10-15.json)、[验收门禁与关联审计](./personal-performance-live-2026-10-15-acceptance.json)。门禁全部通过，运行期间及运行后源码指纹变化均为 0，临时配置及其备份残留为 0。
+最终证据为 [真实链路原始样本](./personal-performance-live-2026-10-15.json)、读取基准（本地文件 `./personal-performance-live-2026-10-15-reads.json`）、回归结果（本地文件 `./personal-performance-regression-2026-10-15.json`）、验收门禁与关联审计（本地文件 `./personal-performance-live-2026-10-15-acceptance.json`）。门禁全部通过，运行期间及运行后源码指纹变化均为 0，临时配置及其备份残留为 0。
 
 | 指标 | 空闲 | 后台执行 |
 | --- | --- | --- |

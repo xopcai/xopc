@@ -16,11 +16,11 @@
 
 | 编号 | 来源 | 可确认的内容 |
 |---|---|---|
-| S1 | [编辑任务截图](ux-audit-codex-scheduled-tasks-2026-10-25-evidence/01-edit-task.png) | 长任务描述、重复开关、重复频率、时间、结束重复；高级区含时区、运行于、模型、强度；暂停和保存 |
-| S2 | [设定定时任务截图](ux-audit-codex-scheduled-tasks-2026-10-25-evidence/02-create-task.png) | 描述输入、重复、时间、高级折叠、取消与创建；截图中没有独立的名称输入 |
-| S3 | [任务与对话截图](ux-audit-codex-scheduled-tasks-2026-10-25-evidence/03-task-conversation.png) | 左侧任务列表，中心对话，回复下方任务卡片及打开入口，底部可继续输入 |
-| S4 | [右侧信息面板截图](ux-audit-codex-scheduled-tasks-2026-10-25-evidence/04-task-inspector.png) | 对话旁边的定时任务、输出、来源；增加来源和输出的入口 |
-| S5 | [发现页截图](ux-audit-codex-scheduled-tasks-2026-10-25-evidence/05-discovery.png) | 保留已有任务列表，右侧居中展示六个场景 |
+| S1 | 编辑任务截图（本地文件 `ux-audit-codex-scheduled-tasks-2026-10-25-evidence/01-edit-task.png`） | 长任务描述、重复开关、重复频率、时间、结束重复；高级区含时区、运行于、模型、强度；暂停和保存 |
+| S2 | 设定定时任务截图（本地文件 `ux-audit-codex-scheduled-tasks-2026-10-25-evidence/02-create-task.png`） | 描述输入、重复、时间、高级折叠、取消与创建；截图中没有独立的名称输入 |
+| S3 | 任务与对话截图（本地文件 `ux-audit-codex-scheduled-tasks-2026-10-25-evidence/03-task-conversation.png`） | 左侧任务列表，中心对话，回复下方任务卡片及打开入口，底部可继续输入 |
+| S4 | 右侧信息面板截图（本地文件 `ux-audit-codex-scheduled-tasks-2026-10-25-evidence/04-task-inspector.png`） | 对话旁边的定时任务、输出、来源；增加来源和输出的入口 |
+| S5 | 发现页截图（本地文件 `ux-audit-codex-scheduled-tasks-2026-10-25-evidence/05-discovery.png`） | 保留已有任务列表，右侧居中展示六个场景 |
 | D1 | [OpenAI 官方文档：Scheduled tasks](https://learn.chatgpt.com/docs/automations) | 聊天创建和修改、独立运行与回到原聊天、运行结果入口 |
 | X1 | `web/src/features/automations/automation-create-navigation.ts` | 当前 xopc 通过 `/chat/new` 携带草稿；编辑也新开聊天，在文本里携带任务 ID |
 | X2 | `web/src/features/automations/automation-api.ts` | 前端合同已有 Automation、AutomationRun、conversationMode，运行可关联 conversationId |

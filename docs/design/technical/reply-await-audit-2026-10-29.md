@@ -70,7 +70,7 @@ Gateway 保留附件数量上限，将原始附件交给既有流式入口。`pr
 
 表中只包含被移除的验证快照阶段。个人助手仍有其他准备、模型和传输成本；这些数字不是整轮回复或首字耗时，不代表整体降低相同比例。非 Git 工作区原本也会尝试 Git 探测，但本基准没有测量该场景。
 
-原始样本：[reply-preparation-benchmark-2026-10-29.json](./evidence/reply-preparation-benchmark-2026-10-29.json)。
+原始样本：本地文件 `./evidence/reply-preparation-benchmark-2026-10-29.json`。
 
 ### 并行与去重验证
 

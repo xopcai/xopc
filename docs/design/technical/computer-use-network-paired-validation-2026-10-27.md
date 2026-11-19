@@ -84,7 +84,7 @@ Agent 平均约快 2.31 倍；总模型请求减少 60.9%。主要收益来自�
 - 成对：`pnpm exec tsx scripts/benchmark-computer-paired-live.mts 3`。
 - 公开输入入口：`XOPC_PAIR_MODE=agent XOPC_PAIR_PUBLIC=1 pnpm exec tsx scripts/benchmark-computer-paired-live.mts 1`。
 - 需要 macOS 图形会话、已有原生驱动及权限、`DASHSCOPE_API_KEY`；会启动和关闭临时 Cocoa 应用、连接实际模型并产生真实推理用量。
-- 原始元数据、原生 60 次输入时序、正式六轮与探索失败见 [JSON 证据](evidence/computer-use-network-paired-2026-10-27.json)。不发布模型生成的完整程序、模型响应、像素或鉴权信息。
+- 原始元数据、原生 60 次输入时序、正式六轮与探索失败见 JSON 证据（本地文件 `evidence/computer-use-network-paired-2026-10-27.json`）。不发布模型生成的完整程序、模型响应、像素或鉴权信息。
 
 这是一台机器、一个原生 fixture、同一模型的三组成对试验；它验证真实主模型和现有 Gateway 传输上的执行路径及该任务收益，不代表所有业务应用、平台、复杂视觉任务或生产可靠性门槛已经通过。早期缺少主模型图片、损坏图片、遗漏 await、超时及跨模式回退的结果均按失败或不合格探索样本保留。
 

@@ -27,7 +27,7 @@
 | 自然通话 | Cloud realtime 完成识别与回复，返回“语音测试成功”与非零 PCM |
 | React 浏览器 | 真实采集、上传、识别、回复及运行中的音频播放缓冲通过 |
 
-逐项耗时、模型目录及返回证据见 [JSON 报告](./cloud-onboarding-live-2026-10-15.json)。
+逐项耗时、模型目录及返回证据见 JSON 报告（本地文件 `./cloud-onboarding-live-2026-10-15.json`）。
 
 ## 本轮发现与修复
 

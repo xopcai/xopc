@@ -43,7 +43,7 @@ XOPC_PHONE_REAL_MODEL=1 XOPC_SETUP_LIVE_SCENE=phone XOPC_PHONE_SETUP_MODEL=xopc-
 
 Phone 脚本使用专用测试手机及本机现有安全凭据；缺少条件时应读阻塞报告，不能人为改成通过。
 
-详细结果见[脱敏验收证据](evidence/browser-phone-setup-review-fixes-2026-10-28.json)。2026-10-24 的阻塞摘要见下节，2026-10-25 的报告保留为历史记录，不能用旧报告推断当前模型目录或当前验收状态。本轮尚未增加 Computer Use 配置引导。
+详细结果见脱敏验收证据（本地文件 `evidence/browser-phone-setup-review-fixes-2026-10-28.json`）。2026-10-24 的阻塞摘要见下节，2026-10-25 的报告保留为历史记录，不能用旧报告推断当前模型目录或当前验收状态。本轮尚未增加 Computer Use 配置引导。
 
 ## 合并保留的早期额度阻塞记录
 

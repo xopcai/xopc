@@ -83,7 +83,7 @@
 - 证据规范化 v2 修正 memory 终态服务错误：执行完整性可为 complete，质量仍是 unavailable，错误仍留在计划分母。不同版本索引记录保留，不能把 184 次已结束运行误写成 181 次，也不能把 3 次错误认作正确答案。
 - 控制面源码继续保持类型检查；本批未执行新的收费模型调用。
 
-最终结果摘要：[第一阶段工程验收证据](./technical/evidence/harness-stage-one-2026-10-23.json)。原始本地记录位于 `.xopc-evals/control/`，首次失败与所有增量批次均保留。
+最终结果摘要：第一阶段工程验收证据（本地文件 `./technical/evidence/harness-stage-one-2026-10-23.json`）。原始本地记录位于 `.xopc-evals/control/`，首次失败与所有增量批次均保留。
 
 ## 6. 真实模型试点与候选拒绝闭环（本次新增）
 
@@ -130,7 +130,7 @@
 - 补充尾部缺失回归后，对账文件 4/4 定向通过；部分 HTTP 用量不能变成完整总量。浏览器实查拒绝状态、四阶段成绩、用量差额与证据链接；本地文档链接和 diff whitespace 检查通过。
 - 新增回收测试首次暴露父/子 broker 同时回收的竞态，已让上游租约 owner 指向 broker 进程并通过回归；没有放松 alive-owner 保护。
 
-本次可审计摘要：[真实模型闭环验收证据](./technical/evidence/harness-stage-one-live-2026-10-23.json)。原始决策 `.xopc-evals/control/live-cycle-20261023/decision.json`，开发与验证输出均保留。下一优先项是修复用量协议并另建候选复验，再建设封存的新结构验证家族。
+本次可审计摘要：真实模型闭环验收证据（本地文件 `./technical/evidence/harness-stage-one-live-2026-10-23.json`）。原始决策 `.xopc-evals/control/live-cycle-20261023/decision.json`，开发与验证输出均保留。下一优先项是修复用量协议并另建候选复验，再建设封存的新结构验证家族。
 
 ## 7. Token/尾部修复与真实复验（本次新增）
 
@@ -186,12 +186,12 @@ H02 三次全部通过，44 个 HTTP 请求与 44 个 ledger 行和 41 个任务
 
 仍未通过的范围只有清晰保留：Personal mixed 交付质量（0/1）、该次强制中断的 provider 最终用量，以及 H01 的旧协议复核。Cloud receipt 实查 `404/not_found`，不能把金额或截断请求记作零。应另立 Personal 交付收敛候选并要求 provider 提供中断最终用量/可查询回执；本地代码无法追溯补造该数据。整体 `phaseOneComplete` 保持 false，范围内用量修复已接受。
 
-机器可读记录：[token/尾部修复验收](./technical/evidence/harness-stage-one-usage-tail-2026-10-23.json)。
+机器可读记录：token/尾部修复验收（本地文件 `./technical/evidence/harness-stage-one-usage-tail-2026-10-23.json`）。
 
 
 ## 8. Personal 超时与取消请求分项用量复验（2026-10-23）
 
-汇总见[本轮便携验收证据](./technical/evidence/harness-stage-one-personal-convergence-2026-10-23.json)。原始记录位于 `.xopc-evals/control/`，新增输出目录，不覆盖第 6/7 节的任何 trial、数据库、HTTP 日志或不可变决定。
+汇总见本轮便携验收证据（本地文件 `./technical/evidence/harness-stage-one-personal-convergence-2026-10-23.json`）。原始记录位于 `.xopc-evals/control/`，新增输出目录，不覆盖第 6/7 节的任何 trial、数据库、HTTP 日志或不可变决定。
 
 ### 8.1 修复与协议
 
@@ -234,7 +234,7 @@ Personal 保留当前 `xopc-cloud/auto` Personal、router、worker 与 reviewer 
 
 ## 9. Personal v7 固定门槛延迟迭代（2026-10-24）
 
-[本轮完整便携证据](./technical/evidence/harness-stage-one-personal-latency-2026-10-24.json)记录三份预登记、冻结源码、真实配置、不可变拒绝与只读诊断。三轮**顺序执行**，避免试验之间争用同一模型额度。三轮全量 v7 评分为 0/3，不丢弃任何失败，不重跑未改动候选来寻找偶然通过。
+本轮完整便携证据（本地文件 `./technical/evidence/harness-stage-one-personal-latency-2026-10-24.json`）记录三份预登记、冻结源码、真实配置、不可变拒绝与只读诊断。三轮**顺序执行**，避免试验之间争用同一模型额度。三轮全量 v7 评分为 0/3，不丢弃任何失败，不重跑未改动候选来寻找偶然通过。
 
 ### 9.1 实施内容
 
@@ -303,7 +303,7 @@ v4 将必需 `command` 放在工具属性首位，缩短重复说明，并把“
 
 [预登记](../../evals/control/plans/personal-latency-v7-v4-registration.json)先于运行，固定源码在 `personal-latency-source-20261024-v4`。按原 v7 mixed 一轮全量执行；20s/5s/5s、10min 与本地 250ms 门槛保持，预算 80 个物理请求/15 分钟。Personal、Router、worker、reviewer 沿用现有配置，thinking 不变。只运行本轮这一份新候选，不重跑相同源码寻找偶然通过。
 
-[便携验收证据](./technical/evidence/harness-stage-one-personal-latency-v4-2026-10-24.json)与原始输出 `personal-latency-v7-20261024-v4` 已保留。improvement `2cc95494-da4f-4950-8285-96f6b3189370` 按原门槛 **rejected**，完整 v7 0/1。原始 trial 首个失败为提交后首答超 5 秒；评估器另行检查 ping，不能因原断言短路而漏报。
+便携验收证据（本地文件 `./technical/evidence/harness-stage-one-personal-latency-v4-2026-10-24.json`）与原始输出 `personal-latency-v7-20261024-v4` 已保留。improvement `2cc95494-da4f-4950-8285-96f6b3189370` 按原门槛 **rejected**，完整 v7 0/1。原始 trial 首个失败为提交后首答超 5 秒；评估器另行检查 ping，不能因原断言短路而漏报。
 
 | 分项 | 实测 | 门槛 | 结果 |
 |---|---:|---:|---|

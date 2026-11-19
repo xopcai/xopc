@@ -29,4 +29,4 @@ node --import tsx/esm scripts/verify-chatgpt-phone.mts \
   --output /tmp/xopc-chatgpt-phone-verification
 ```
 
-The harness also supports the dedicated `XOPC_Android_Test_API_35` local AVD through `--serial`. It does not start or shut down the device itself. The current run's isolated emulator was stopped before switching to the requested Aliyun phone. Phone screenshots and transient verification artifacts live under the output directory; the persistent metadata-only result is [retained here](evidence/phone-use-gpt-oauth-live-2026-10-29.json).
+The harness also supports the dedicated `XOPC_Android_Test_API_35` local AVD through `--serial`. It does not start or shut down the device itself. The current run's isolated emulator was stopped before switching to the requested Aliyun phone. Phone screenshots and transient verification artifacts live under the output directory; the persistent metadata-only result is retained locally (`evidence/phone-use-gpt-oauth-live-2026-10-29.json`).

@@ -1,6 +1,6 @@
 # Retained acceptance evidence
 
-Retain small records that are used by executable analysis, current work, or independent cross-run comparisons. This includes harness decisions/usage accounting, computer-flow trials, recent setup/latency summaries, and Phone Use v1/v2 frozen source/traces used by `scripts/phone-apps-live/analyze-execution-latency.py`. Raw evidence is historical, not a current availability claim.
+This directory tracks the frozen Phone Use v1/v2 source and trace archives used to reproduce historical benchmark results. Recalculate latency from the traces with `scripts/phone-apps-live/analyze-execution-latency.py`. The accompanying Markdown reports summarize historical results. Prior run exports remain available in local copies and Git history.
 
 Historical screenshots, intermediate Phone Use candidates/pilots and unconsumed raw runs were removed on 2026-10-29 after preserving useful results and limitations in the accompanying reports. References inside immutable historical JSON to omitted screenshots/archives record original run paths; recover the original files from Git history if needed. Untracked evidence from ongoing work was left intact.
 

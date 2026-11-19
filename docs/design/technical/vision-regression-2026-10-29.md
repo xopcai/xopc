@@ -39,8 +39,8 @@ DeepSeek 的官方文档确认该模型支持 PNG/base64 输入，并说明小�
 
 ## 证据和复跑
 
-- [实时样本](evidence/vision-regression-ab-2026-10-29.json)
-- [实际 HTTP 图片元数据、原始回复及最小请求结果](evidence/vision-regression-wire-2026-10-29.json)
+- 实时样本（本地文件 `evidence/vision-regression-ab-2026-10-29.json`）
+- 实际 HTTP 图片元数据、原始回复及最小请求结果（本地文件 `evidence/vision-regression-wire-2026-10-29.json`）
 - `XOPC_LIVE_LATENCY=1 pnpm exec tsx scripts/measure-gateway-response-latency.mts --phase optimized --vision-only --warmups 0 --count 12 --output /tmp/vision-new-run.json`
 - `XOPC_LOG_LEVEL=fatal pnpm exec vitest run src/agent/embedded/__tests__/vision-transport.integration.test.ts src/agent/service/__tests__/direct-turn-vision.test.ts`
 

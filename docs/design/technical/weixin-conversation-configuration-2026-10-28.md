@@ -44,7 +44,7 @@ pnpm run test:configuration:e2e
 
 覆盖普通请求与 Skill 安装使用、可信链接实际保留、owner 认证与具体目标批准、错误 Token、重启后重建、安全输入与原私聊自动结果、OAuth Gateway 回调、错误 state、拒绝授权、发送失败后只重发、取消后不继续、Skill 停启、一次性提醒重启后真实执行与微信 outbox 确认，以及 20 条中英文无变更负例。领域测试另覆盖群聊、通配符、假身份、路由合并、配对撤销、旧版本和重复回调。
 
-验收状态：本轮真实模型微信完整矩阵 **41/41 通过**，共 67 次实际推理请求，HTTP 状态均为 200。20 条中英文无变更负例通过；密钥未出现在所检查的模型请求、会话、微信出站、普通配置与日志中。见[脱敏结构化证据](evidence/weixin-conversation-configuration-2026-10-28.json)；原始私密报告与截图保留在忽略目录 `.xopc-evals/conversation-configuration/weixin-final/`。开发期间保留了失败轮次：微信格式化剥离安全链接、无关 onboarding 阻断安全页面、模型仅口头承诺安装、模型重名造成不同服务 ID 冲突，均已修复并加入约束或回归。安装承诺纠偏仅针对用户明确授权安装且模型尚未执行的情形，最多一次；不扩大权限。故障注入从单次失败改为持续断网，避免渠道自动重发掩盖手动重发测试；开发脚本曾在 Node 构建清理静态目录后未重建 Web，现明确按上述顺序构建。失败开发轮次不计入最终通过数。
+验收状态：本轮真实模型微信完整矩阵 **41/41 通过**，共 67 次实际推理请求，HTTP 状态均为 200。20 条中英文无变更负例通过；密钥未出现在所检查的模型请求、会话、微信出站、普通配置与日志中。见脱敏结构化证据（本地文件 `evidence/weixin-conversation-configuration-2026-10-28.json`）；原始私密报告与截图保留在忽略目录 `.xopc-evals/conversation-configuration/weixin-final/`。开发期间保留了失败轮次：微信格式化剥离安全链接、无关 onboarding 阻断安全页面、模型仅口头承诺安装、模型重名造成不同服务 ID 冲突，均已修复并加入约束或回归。安装承诺纠偏仅针对用户明确授权安装且模型尚未执行的情形，最多一次；不扩大权限。故障注入从单次失败改为持续断网，避免渠道自动重发掩盖手动重发测试；开发脚本曾在 Node 构建清理静态目录后未重建 Web，现明确按上述顺序构建。失败开发轮次不计入最终通过数。
 
 真实微信官方服务与手机内置浏览器由用户后续自行验收（2026-10-28 已明确）。本轮不再索要测试登录；本地协议通过不能标记为手机或官方平台通过。
 
@@ -102,4 +102,4 @@ pnpm run test:configuration:e2e
 
 界面预览位于 `.xopc-evals/conversation-configuration/modal-visual/`：`desktop-token.png`、`mobile-token.png`、`desktop-dark.png`、`desktop-approval.png`。这些是 production UI 的示例展示数据，不能作为授权或模型调用证据。真实流程回归另见本轮 modal 验收证据。
 
-本轮新 modal 下真实模型 E2E：微信 **41/41**、Web MCP **40/40**；领域与 UI 回归 **9 文件、100 项**通过（包含 9 项新增弹窗／路由恢复用例）。Web 类型检查、production build、E2E 脚本类型检查、受影响 UI lint 和 diff 检查通过。见[modal 验收证据](evidence/conversation-configuration-modal-2026-10-28.json)。首次 Web 轮次停在旧脚本查找已折叠取消按钮，已改为先展开详情再取消；原失败报告保留，不计入通过数。此前视频保留旧页面样式，本节截图展示当前实现。
+本轮新 modal 下真实模型 E2E：微信 **41/41**、Web MCP **40/40**；领域与 UI 回归 **9 文件、100 项**通过（包含 9 项新增弹窗／路由恢复用例）。Web 类型检查、production build、E2E 脚本类型检查、受影响 UI lint 和 diff 检查通过。见modal 验收证据（本地文件 `evidence/conversation-configuration-modal-2026-10-28.json`）。首次 Web 轮次停在旧脚本查找已折叠取消按钮，已改为先展开详情再取消；原失败报告保留，不计入通过数。此前视频保留旧页面样式，本节截图展示当前实现。

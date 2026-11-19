@@ -80,7 +80,7 @@
 
 ## 证据与复现入口
 
-- [完整原始结果、版本 hash 和部署检查](./evidence/gateway-latency-live-2026-10-29.json)
+- 完整原始结果、版本 hash 和部署检查（本地文件 `./evidence/gateway-latency-live-2026-10-29.json`）
 - [前置 await 优化审查](./reply-await-audit-2026-10-29.md)
 - 脚本：`scripts/measure-gateway-response-latency.mts`，使用真实 HTTP + 官方 Realtime 客户端。
 

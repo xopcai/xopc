@@ -56,7 +56,7 @@ O08 候选首条额外加入“具体由谁负责核对，我确认后告诉你�
 
 输入审计确认两组各 176 次被测请求末条均为冻结用户文本，未带 expectations/split；完整文件清单与源码比较只发现预登记的两个模块差异。裁判确实包含冻结 focus，rubric SHA-256 匹配。所有捕获、裁判、wire、ledger、决定与报告哈希均核对。最终 style TypeScript/Python 19 项、coder 类型检查和 28 文件 92 项、git diff 空白检查通过。
 
-[便携证据](technical/evidence/personal-ownership-benchmark-2026-11-03.json)保留全部门槛、成绩、非零分项、逐作业对账摘要、失败原文引用及完整原始文件哈希；全空维度仅在逐场景摘要中省略，分组总量保留全部维度。Dashboard 已实查自动通过、44/44、开发/验证分组和人审 0/2；截图 `.xopc-evals/personal-ownership-benchmark-20261103.png`。底层采用决定仍为 rejected，唯一阻断是两位独立真人盲评待办，不代表自动评测失败。本次没有执行部署或重启。
+便携证据（本地文件 `technical/evidence/personal-ownership-benchmark-2026-11-03.json`）保留全部门槛、成绩、非零分项、逐作业对账摘要、失败原文引用及完整原始文件哈希；全空维度仅在逐场景摘要中省略，分组总量保留全部维度。Dashboard 已实查自动通过、44/44、开发/验证分组和人审 0/2；截图 `.xopc-evals/personal-ownership-benchmark-20261103.png`。底层采用决定仍为 rejected，唯一阻断是两位独立真人盲评待办，不代表自动评测失败。本次没有执行部署或重启。
 
 ## 提交归档范围
 

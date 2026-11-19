@@ -21,7 +21,7 @@ v1 improvement `7543a53c-e60a-4b0e-8a51-d916f2fba657` 已拒绝，风格自动�
 
 ## 复验与验收结果
 
-[便携证据](./technical/evidence/personal-assistant-flow-2026-11-02.json)包含两批独立结果与不可变决定哈希。方法修复后两个 capture 和 judge campaign 正常完成，源码无漂移、收尾 active/queued 为 0。两条件各 12/12 场景、48/48 用户轮次，双序评审 24/24，无缺失或格式失败。
+便携证据（本地文件 `./technical/evidence/personal-assistant-flow-2026-11-02.json`）包含两批独立结果与不可变决定哈希。方法修复后两个 capture 和 judge campaign 正常完成，源码无漂移、收尾 active/queued 为 0。两条件各 12/12 场景、48/48 用户轮次，双序评审 24/24，无缺失或格式失败。
 
 | 分组 | 整体 候选胜/旧版胜/平/分歧/未决 | 自然度 候选胜/旧版胜/平/分歧/未决 | 完成时延 p95 旧/新 |
 |---|---|---|---|
@@ -54,4 +54,4 @@ Dashboard 浏览器实查通过：最终拒绝、双序 12/12、开发/验证分
 
 第五轮验证整体新/旧/平/分歧为 1/0/4/1，自然度 3/0/1/2；候选任一顺序无 major，八项错误不增，验证 p95 旧 7,167ms、新 5,840ms（原上限 1.2 倍）。36/36 双序完整，366 次物理请求逐条用量匹配，最终用量缺失 0，token 差额 0。开发集旧版胜和轻微问题仍保留。自动门禁通过不代表全部真实场景通过，也不替代 Personal v7 绝对延迟、人审或发布门槛。
 
-完整过程、连续筛选偏差、所有拒绝及通过证据见[自我迭代记录](personal-dialogue-style-self-iteration-2026-11-02.md)和[新增便携证据](technical/evidence/personal-assistant-flow-self-iteration-2026-11-02.json)。Dashboard 最终记录 `0cf8d3f2-3f5c-47e3-b497-3ba175336284`，自动通过、真人 0/2 待办；候选仅在冻结源、生产默认未采用，完整阶段仍 `phaseOneComplete=false`。
+完整过程、连续筛选偏差、所有拒绝及通过证据见[自我迭代记录](personal-dialogue-style-self-iteration-2026-11-02.md)和新增便携证据（本地文件 `technical/evidence/personal-assistant-flow-self-iteration-2026-11-02.json`）。Dashboard 最终记录 `0cf8d3f2-3f5c-47e3-b497-3ba175336284`，自动通过、真人 0/2 待办；候选仅在冻结源、生产默认未采用，完整阶段仍 `phaseOneComplete=false`。

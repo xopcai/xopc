@@ -72,7 +72,7 @@ V1 下降 28.6 个百分点，实际模型请求为 67 → 87，两臂累计执�
 
 轨迹显示：About 的新版第三轮连续输出截断；设置搜索中原生字段已聚焦，新版却出现额外点击、返回、重新打开；Files Downloads 有已记录的 Back 离开 Files 返回之前的 Clock，再被应用范围保护停止；计时器两版都存在数字选择与状态规划错误。格式错误与截断也出现在原版，不能把每次错误都归因于同一根因。
 
-证据：[V1 全部结果](evidence/phone-real-app-v1-2026-10-24.json)、[V1 逐步轨迹](evidence/phone-real-app-v1-traces-2026-10-24.tar.gz)、[V1 源码与冻结评测归档](evidence/phone-real-app-v1-source-2026-10-24.tar.gz)。固定任务的小样本只说明本面板，不代表第三方商业 App、网络波动、生产账号或跨平台总体完成率。
+证据：V1 全部结果（本地文件 `evidence/phone-real-app-v1-2026-10-24.json`）、[V1 逐步轨迹](evidence/phone-real-app-v1-traces-2026-10-24.tar.gz)、[V1 源码与冻结评测归档](evidence/phone-real-app-v1-source-2026-10-24.tar.gz)。固定任务的小样本只说明本面板，不代表第三方商业 App、网络波动、生产账号或跨平台总体完成率。
 
 **第二候选 V2 的预设方向**
 
@@ -97,7 +97,7 @@ V2 的 About 失败轨迹在列表中已经观察到 About 条目，但继续反
 
 两轮均未出现已计分的错误完成声明，但模型能力候选没有收益，因而不将这些大范围提示/采样改动作为最终默认。保留所有失败，回到上一轮已验证实现，并仅对可证明的协议兼容缺陷作窄修复。
 
-证据：[V2 全部结果](evidence/phone-real-app-v2-2026-10-24.json)、[V2 逐步轨迹](evidence/phone-real-app-v2-traces-2026-10-24.tar.gz)、[V2 源码与冻结评测归档](evidence/phone-real-app-v2-source-2026-10-24.tar.gz)。
+证据：V2 全部结果（本地文件 `evidence/phone-real-app-v2-2026-10-24.json`）、[V2 逐步轨迹](evidence/phone-real-app-v2-traces-2026-10-24.tar.gz)、[V2 源码与冻结评测归档](evidence/phone-real-app-v2-source-2026-10-24.tar.gz)。
 
 V2 按组合方案计分，不把其中某一参数单独宣称为原因。预设复验仍用同样 7 类任务、同样判定器和基线，重复两轮、两臂配对，共 28 次；单轮上限不变，整套请求上限 200。两轮使每项任务的起始顺序恰好为 AB / BA。保留第一候选负面结果，第二组数据单独报告，不把开发过程中的较好样本拼成一个成功率。
 

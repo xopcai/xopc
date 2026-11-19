@@ -30,7 +30,7 @@
 
 回归测试：`src/pets/__tests__/native-window.test.ts` 覆盖完整气泡边界、尺寸变化和落点持久化；`web/src/features/desktop-pet/__tests__/desktop-pet-drag.test.tsx` 覆盖局部坐标不变、窗口级松开、丢失移动事件和误点击。全部宠物相关测试共 34 项通过，Web 构建与相关 ESLint 检查通过。
 
-截图保存在 `assets/brand/loopi/native-validation/`，包括待机、工作、默认尺寸等待确认、完成与边界修复前后对照。窗口截图中的白色区域是截图合成背景。
+截图留存在本地 `assets/brand/loopi/native-validation/`，包括待机、工作、默认尺寸等待确认、完成与边界修复前后对照。窗口截图中的白色区域是截图合成背景。
 
 ## 重复验证
 

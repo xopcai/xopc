@@ -106,10 +106,34 @@ diagnosis/
 
 /reports
 
-# Local Phone Use benchmark output and temporary source snapshots
+# Local UX research and verification output
+/ux-audit-*-evidence/
+/assets/brand/loopi/native-validation/
+/assets/brand/loopi/desktop-pet-implementation.png
+/assets/brand/loopi/desktop-pet-preview-v5-screenshot.png
+/docs/design/chat-charts-matrix-results/
+/scripts/.flash-latency.*.mts
+
+# Historical run output. Keep the inputs used for offline Phone Use reproduction.
+/docs/design/technical/evidence/*
+!/docs/design/technical/evidence/README.md
+!/docs/design/technical/evidence/phone-real-app-v[12]-source-2026-10-24.tar.gz
+!/docs/design/technical/evidence/phone-real-app-v[12]-traces-2026-10-24.tar.gz
+/docs/design/technical/cloud-onboarding-live-*.json
+/docs/design/technical/conversational-setup*-evaluation-*.json
+/docs/design/technical/note-*-2026-10-1[56].json
+/docs/design/technical/personal-allocation-live-verification-*.json
+/docs/design/technical/personal-dialogue-style-baseline-*.json
+/docs/design/technical/personal-dialogue-style-p0-comparison-*.json
+/docs/design/technical/personal-performance-live-*-acceptance.json
+/docs/design/technical/personal-performance-live-*-reads.json
+/docs/design/technical/personal-performance-regression-*.json
+/docs/design/technical/personal-result-reading-live-*.json
+/docs/design/technical/personal-task-handoff-live-*.json
+/docs/design/technical/personal-task-revision-live-*.json
+
+# Local Phone Use benchmark workspaces
 /.phone-apps-baseline-*/
-/docs/design/technical/evidence/phone-recovery-*
-/docs/design/technical/evidence/phone-semantic-planning-*
 
 # HarmonyOS native compiler intermediates
 apps/mobile-harmony/entry/.cxx/

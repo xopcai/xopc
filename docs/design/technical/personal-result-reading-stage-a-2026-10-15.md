@@ -86,7 +86,7 @@ XOPC_RESULT_READ_LIVE=1 XOPC_RESULT_READ_BROWSER=1 \
 
 使用当前配置的真实 Personal、Router 和执行模型；隔离 Gateway、数据库、账户状态及合成文件，不克隆 OAuth 刷新凭据，而是沿用原凭据目录和提供方锁。文件包中的检查脚本包含明确的 8 秒等待，用于观察后台执行期间的并发聊天，不代表真实解析耗时。
 
-验证要求：真实提交与后台分配、三份文件原字节下载、未鉴权下载拒绝、主对话并发回复、冷解析后自动读取聊天摘要之外的尾部事实、结构化选择报告与 CSV 后追问、任务与 Router 调用数不增加、浏览器实际点击并提交准确引用。最终数值与通过状态以[最终 JSON](./personal-result-reading-live-2026-10-15.json)为准。
+验证要求：真实提交与后台分配、三份文件原字节下载、未鉴权下载拒绝、主对话并发回复、冷解析后自动读取聊天摘要之外的尾部事实、结构化选择报告与 CSV 后追问、任务与 Router 调用数不增加、浏览器实际点击并提交准确引用。最终数值与通过状态以最终 JSON（本地文件 `./personal-result-reading-live-2026-10-15.json`）为准。
 
 最终轮通过，`sourceChangedDuringRun=false`。Personal 使用 `deepseek/deepseek-flash`，Router/执行者沿用配置中的 `xopc-cloud/auto`。三份文件分别为 42,926 / 36 / 370 字节，下载字节与冻结输入逐一相等；执行记录另确认现有检查脚本实际成功运行两次。最终仍为一个 Task、一次 Router 分配，冷读取等待记录为 `done`。
 

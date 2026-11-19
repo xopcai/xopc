@@ -36,7 +36,7 @@ XOPC_ACTIVITY_DROP_END=message pnpm exec tsx scripts/verify-assistant-activity-b
 XOPC_ACTIVITY_DROP_END=all pnpm exec tsx scripts/verify-assistant-activity-browser.mts
 ```
 
-验证结果：187 个聊天测试文件、1,187 项测试通过（含流式表格隔离、结束事件漏收、取消/失败与重复收尾）；Web 生产构建（包含类型检查）与修改源码的 ESLint 检查通过。浏览器验证结果见 [机器可读记录](./evidence/assistant-activity-browser-2026-10-27.json)。
+验证结果：187 个聊天测试文件、1,187 项测试通过（含流式表格隔离、结束事件漏收、取消/失败与重复收尾）；Web 生产构建（包含类型检查）与修改源码的 ESLint 检查通过。浏览器验证结果见机器可读记录（本地文件 `./evidence/assistant-activity-browser-2026-10-27.json`）。
 
 浏览器测试使用生产 Web UI、真实认证 Gateway、REST/WebSocket、Agent 文件工具和 SQLite。只有模型推理由本地可控 SSE 服务替代，不依赖外部模型或用户凭证。服务与数据库使用临时目录，测试结束后清理。
 

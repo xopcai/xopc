@@ -111,7 +111,7 @@
 ## 6. 测试与可复现材料
 
 - Personal 相关 12 个测试文件、156 项测试通过；项目类型检查通过；风格 adapter 类型检查和 7 项 Python 协议/聚合测试通过。
-- [机器可读完整对比](personal-dialogue-style-p0-comparison-2026-10-21.json)：含逐例结果、各维度交集与并集、原始/补充评分及未通过门槛。
+- 机器可读完整对比（本地文件 `personal-dialogue-style-p0-comparison-2026-10-21.json`）：含逐例结果、各维度交集与并集、原始/补充评分及未通过门槛。
 - [原始基线报告](personal-dialogue-style-baseline-2026-10-21.md)；[失败审计与原优化方案](personal-dialogue-style-failure-audit-2026-10-21.md)。
 - 最终生产快照：`8f6bb49ae6562e5399a7484b01c373012bad3fe0`；源码哈希 `8b20f67397f770e342174dabba0601ea10a0be5fba6184a50c6534d25c4a1ce6`；运行结束源码变化：`False`。
 - 最终原始运行：`/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/p0-refined-gpt56-gpt61-2026-10-21-v1`；原基线：`/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1`。

@@ -30,7 +30,7 @@ The endpoint transport remains an in-process harness bridge to the real DesktopE
 
 ## Observed result — 2026-10-17
 
-[Metadata-only evidence](./evidence/computer-use-flows-hosted-2026-10-17.json) records the passing matrix on macOS 26.6.2, Electron 42.4.1 and pinned Cua Driver 0.28.2:
+Local metadata-only evidence (`./evidence/computer-use-flows-hosted-2026-10-17.json`) records the passing matrix on macOS 26.6.2, Electron 42.4.1 and pinned Cua Driver 0.28.2:
 
 | Phase | OS PID | Actual successful HTTP responses | Scenario native inputs | Requests with saved hints | Result |
 | --- | ---: | ---: | ---: | ---: | --- |

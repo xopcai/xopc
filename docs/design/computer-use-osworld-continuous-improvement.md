@@ -101,6 +101,6 @@
 - 已添加 `.github/workflows/computer-evals.yml`，只运行离线协议、报告和共用适配器回归；尚未推送或执行 GitHub CI。
 - 本地 Computer Use 相关回归：429 通过、9 个显式 opt-in 在线测试跳过；新桥进程测试另行通过。
 - 新 Python 离线测试：20 通过。根目录（含 Electron）与 OSWorld 桥的 TypeScript 类型检查通过。
-- 机器可读记录：[offline evidence](technical/evidence/computer-use-osworld-offline-2026-11-07.json)。
+- 机器可读记录：offline evidence（本地文件 `technical/evidence/computer-use-osworld-offline-2026-11-07.json`）。
 
 来源：[OSWorld](https://github.com/xlang-ai/OSWorld)、[2.1 release manifest](https://github.com/xlang-ai/OSWorld-V2/blob/osworld-v2.1/benchmark_releases/osworld-v2.1.json)。

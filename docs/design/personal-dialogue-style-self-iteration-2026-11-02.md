@@ -69,11 +69,11 @@
 
 共 366 请求，3,754,041 已观测 provider tokens；每条 identity/usage 匹配，最终快照保证成立。两组各 144 次被测输入均是冻结用户原文，没有 expectations/split 泄漏。三次 preflight 计入物理请求和用量，不计入对话评分分母。实际结算费用缺权威回执，仍为 null。第二轮原上游失败的未知用量不因第五轮完整对账而补零。
 
-[便携验收证据](technical/evidence/personal-assistant-flow-self-iteration-2026-11-02.json)并列记录第二至第五轮；原第一阶段两批证据单独保留。导出时核验所有对话/裁判 artifact、每组 wire/ledger 及决定的 SHA-256。评测 reader 增加精确用户原文、维度完整及引用真实性检查，原第一阶段两批回放结果不变。coder 28 文件 92 项通过；最终 style TypeScript / Python 18 项通过；Dashboard JS 语法及 git diff 空白检查通过。
+便携验收证据（本地文件 `technical/evidence/personal-assistant-flow-self-iteration-2026-11-02.json`）并列记录第二至第五轮；原第一阶段两批证据单独保留。导出时核验所有对话/裁判 artifact、每组 wire/ledger 及决定的 SHA-256。评测 reader 增加精确用户原文、维度完整及引用真实性检查，原第一阶段两批回放结果不变。coder 28 文件 92 项通过；最终 style TypeScript / Python 18 项通过；Dashboard JS 语法及 git diff 空白检查通过。
 
 [Dashboard 最终记录](http://127.0.0.1:4310/#improvements/0cf8d3f2-3f5c-47e3-b497-3ba175336284)已实查：自动通过、36/36、人工待办 0/2、分组票数与时延可见。顶部明确“自动 benchmark 已通过；两位独立真人盲评待办，候选尚未采用”。底层不可变采用决定仍为 `rejected`，唯一阻断为真人评审；不能把此字段误读为自动 benchmark 失败。截图 `.xopc-evals/assistant-flow-auto-pass-20261102.png`。本轮自动停止目标完成，完整阶段采用验收仍 `phaseOneComplete=false`。
 
-最终[验证补充记录](technical/evidence/personal-assistant-flow-self-iteration-verification-2026-11-02.json)固定 Dashboard 截图和检查日志哈希，确认第一阶段原始决定/捕获/裁判未变，以及生产 `reply-style.ts`、`system-prompt.ts` 与冻结旧版一致。
+最终验证补充记录（本地文件 `technical/evidence/personal-assistant-flow-self-iteration-verification-2026-11-02.json`）固定 Dashboard 截图和检查日志哈希，确认第一阶段原始决定/捕获/裁判未变，以及生产 `reply-style.ts`、`system-prompt.ts` 与冻结旧版一致。
 
 ## 仓库归档范围
 

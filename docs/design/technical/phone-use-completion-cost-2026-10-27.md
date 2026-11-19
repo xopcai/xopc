@@ -48,7 +48,7 @@
 
 原生观察和字段事务仍保持上一轮实现与速度量级，核心设备及模型适配器源码哈希一致，未靠跳过确认或减少请求预算取得收益。预算耗尽、持续提前结束、取消和未知输入结果仍按原规则处理。所有作用域、设置值、测试文件哈希检查和动画还原均通过，设备端观察服务已释放。
 
-最终结果保存在 `/tmp/xopc-phone-finish-cost-final-main-20261027` 与 `/tmp/xopc-phone-finish-cost-final-files-20261027`。[结构化摘要](evidence/phone-completion-cost-summary-2026-10-27.json)保存初轮负结果、最终全部试跑、源码/脚本哈希和决策序列校验值。本轮共 84 次真实模型请求，其中初轮 43 次、最终 41 次，不将两个版本混算完成率或速度。
+最终结果保存在 `/tmp/xopc-phone-finish-cost-final-main-20261027` 与 `/tmp/xopc-phone-finish-cost-final-files-20261027`。结构化摘要（本地文件 `evidence/phone-completion-cost-summary-2026-10-27.json`）保存初轮负结果、最终全部试跑、源码/脚本哈希和决策序列校验值。本轮共 84 次真实模型请求，其中初轮 43 次、最终 41 次，不将两个版本混算完成率或速度。
 
 ## 工程验收
 

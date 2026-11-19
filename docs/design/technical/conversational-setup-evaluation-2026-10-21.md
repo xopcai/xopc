@@ -119,7 +119,7 @@ Gateway 用例回执写完后依赖仍保留空闲 timer，结束了已完成的
 - 各目录内逐样本 trace、不可变 attempt、合成 state 路径及 frozen baseline-manual.md。
 - 来源摘要覆盖 runner、cases、guide、关键工具和生产提示词模块；运行前后校验，变化时不输出排名。
 
-机器可读汇总：[最终评测证据](conversational-setup-evaluation-2026-10-21.json)。
+机器可读汇总：最终评测证据（本地文件 `conversational-setup-evaluation-2026-10-21.json`）。
 
 ## 后续实施顺序与验收门槛
 

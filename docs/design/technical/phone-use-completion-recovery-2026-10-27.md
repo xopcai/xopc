@@ -50,7 +50,7 @@
 
 设备端观察、字段输入、云端通道、生成 DEX 和模型适配器的源码哈希均与冻结的第二阶段基线一致。正常完成路径仍使用原来的观察和预测次数；不能从小样本耗时波动推导新的执行层加速。测试设置值、文件哈希、作用域约束和动画还原全部通过；未操作生产账号或公网云手机。
 
-[结构化摘要](evidence/phone-completion-recovery-summary-2026-10-27.json)保存全部试跑、来源哈希、恢复决策序列与原始轨迹校验值。基线冻结在 `/tmp/xopc-phone-finish-baseline-20261027`；两组完整原始结果分别在 `/tmp/xopc-phone-finish-main-20261027` 与 `/tmp/xopc-phone-finish-files-20261027`。
+结构化摘要（本地文件 `evidence/phone-completion-recovery-summary-2026-10-27.json`）保存全部试跑、来源哈希、恢复决策序列与原始轨迹校验值。基线冻结在 `/tmp/xopc-phone-finish-baseline-20261027`；两组完整原始结果分别在 `/tmp/xopc-phone-finish-main-20261027` 与 `/tmp/xopc-phone-finish-files-20261027`。
 
 ## 工程检查与限制
 

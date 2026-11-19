@@ -59,6 +59,6 @@ XOPC_CONFIGURATION_E2E_LIVE=1 XOPC_CONFIGURATION_E2E_STAGE=mcp XOPC_CONFIGURATIO
 
 最终专项 E2E **9 个场景全部通过**，覆盖首次无凭据 403、聊天实际链接、安全输入、Gateway 重启、错误 Token、原会话仅排队一次、明确 Bearer 跳过无凭据探测、两个原会话的实际只读结果及秘密隔离。验证中还发现模型改写成不支持的 `xopc://workspace/...` 链接，已让宿主在 instruction 中提供完整 Markdown 链接并要求原样复制；最终 E2E 仍通过直接点击回复链接完成，未改用测试拼接地址。
 
-相关回归 **7 个文件、153 项通过**，包括原有 OAuth 原生协议集成；根项目 / Electron / Web 类型检查、Web 生产构建、E2E 脚本类型检查、修改代码 ESLint 和 `git diff --check` 通过。[脱敏证据](evidence/mcp-token-auth-recovery-2026-10-28.json)仅保存场景断言和模型请求统计，不包含 Token、原始聊天或连接身份。
+相关回归 **7 个文件、153 项通过**，包括原有 OAuth 原生协议集成；根项目 / Electron / Web 类型检查、Web 生产构建、E2E 脚本类型检查、修改代码 ESLint 和 `git diff --check` 通过。脱敏证据（本地文件 `evidence/mcp-token-auth-recovery-2026-10-28.json`）仅保存场景断言和模型请求统计，不包含 Token、原始聊天或连接身份。
 
 修复需要更新运行代码并重启 Gateway、刷新 Web 页面。未过期且会话身份未变的旧 blocked 请求可恢复；过期或取消的请求需要重新发起。本次没有替用户重启日常 Gateway，也没有修改截图中请求的数据库状态。

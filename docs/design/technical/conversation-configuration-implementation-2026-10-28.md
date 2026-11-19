@@ -26,7 +26,7 @@ XOPC_CONFIGURATION_E2E_LIVE=1 pnpm exec tsx scripts/verify-conversation-configur
 
 Skill 安装测试使用本地真实归档，内容是销售周报流程；模型响应不 mock。它能验证安装、刷新、使用、停启、卸载的产品链路，不能冒充公共市场或第三方 OAuth 验收。脚本支持 `skills`、`mcp`、`automations` 三阶段；诊断用 smoke 明确标注为局部验证，不能替代完整阶段验收。
 
-已覆盖公共市场发现、实际公共包安装／卸载、受限来源拒绝、错误来源恢复、跨进程恢复、管理链接和 20 条中英文无写入负例。核心证据见[结构化报告](evidence/conversation-configuration-skills-2026-10-28.json)，原始截图与逐步结果在 `.xopc-evals/conversation-configuration/skills-final/` 和 `skills-public-final/`。
+已覆盖公共市场发现、实际公共包安装／卸载、受限来源拒绝、错误来源恢复、跨进程恢复、管理链接和 20 条中英文无写入负例。核心证据见结构化报告（本地文件 `evidence/conversation-configuration-skills-2026-10-28.json`），原始截图与逐步结果在 `.xopc-evals/conversation-configuration/skills-final/` 和 `skills-public-final/`。
 
 公共市场安装单独复跑：`XOPC_CONFIGURATION_E2E_LIVE=1 XOPC_CONFIGURATION_E2E_PUBLIC_INSTALL=1 pnpm run test:configuration:e2e`。根项目类型检查、E2E 脚本类型检查、受影响源码 ESLint 和 diff 检查通过。脚本不在根 ESLint 匹配范围内，使用独立 TypeScript 配置检查。
 
@@ -45,7 +45,7 @@ pnpm run test:configuration:check
 
 密钥只通过 `/mcp-setup/:setupId` 安全页提交；持久配置使用 CredentialResolver 引用，OAuth 由 pi 管理。目标绑定会话、transcript、Agent 与版本，取消／reset／配置改变后执行前再次校验；过期目标不续跑。局部保存但运行时 reload 失败时报告待重启，不宣称已可用。移除自定义服务不表示撤销远端授权或卸载软件包。
 
-完整通过证据在 `.xopc-evals/conversation-configuration/mcp-final/`，可提交的脱敏结果见 [MCP 结构化报告](evidence/conversation-configuration-mcp-2026-10-28.json)。包含不提供技术 ID 的普通请求、只连接不读取、错误 Token 重输、取消、拒绝 OAuth、重启续跑、停启移除、服务不可用和 20 条负例。模型请求、全部聊天、配置和诊断日志均完成测试秘密扫描。
+完整通过证据在 `.xopc-evals/conversation-configuration/mcp-final/`，脱敏结果见 MCP 结构化报告（本地文件 `evidence/conversation-configuration-mcp-2026-10-28.json`）。包含不提供技术 ID 的普通请求、只连接不读取、错误 Token 重输、取消、拒绝 OAuth、重启续跑、停启移除、服务不可用和 20 条负例。模型请求、全部聊天、配置和诊断日志均完成测试秘密扫描。
 
 失败轮次保留：曾发现模型未经探测误报工具／回环服务不可用，以及明确移除请求仍被重复确认。已增加小型直接配置入口、Gateway 执行位置说明、明确授权语义，并对无实际工具调用的错误能力声明做一次有界事实纠正；真实权限拒绝不会因此被重试绕过。补充了实际 Agent runner 的有界纠正测试。测试运行器另修复初始化编辑器重建与可选引导的竞争，不将这些脚本问题当作产品通过。
 
@@ -66,7 +66,7 @@ XOPC_CONFIGURATION_E2E_LIVE=1 XOPC_CONFIGURATION_E2E_STAGE=automations pnpm run 
 - 自定义 HTTP MCP 的只读自动化先生成 `mcpSourceId`，固定服务／凭据引用、工具契约及参数哈希。每次运行先复核来源和 schema，运行时只连接该服务，并由原生 pi 的调用守卫拦截其他工具或变化的参数。每轮必须有成功的选定工具调用，模型回答或历史结果不能代替它。
 - 启用需要同一对象、同一 action 的成功试跑。替换 Agent action 时保留原来源绑定；更改内容／来源／执行助手后需要暂停并重新试跑。来源停用或改变时失败，不选其他服务；任务即使来源失效也能暂停／删除。
 
-自动化核心矩阵已在 `automations-run3/` 通过 44 个场景，含两次真实时钟触发：普通一次性提醒，以及 MCP 来源任务在重启后的后续运行。服务每次读取都生成新标记码，以独立调用记录、当前 run 的时间窗口、运行 transcript 和结果共同核对，不能用旧结果通过。最终扩展矩阵在 `automations-final3/` 完整通过 46 项，另验证真实界面通知、连续会话的每轮新读取和桌面布局。连续会话恢复连接时暴露了旧 MCP 守卫被复用的产品缺陷；已将运行身份加入 runner 指纹，新增回归断言并完成重跑。脱敏结果见[自动化结构化报告](evidence/conversation-configuration-automations-2026-10-28.json)。
+自动化核心矩阵已在 `automations-run3/` 通过 44 个场景，含两次真实时钟触发：普通一次性提醒，以及 MCP 来源任务在重启后的后续运行。服务每次读取都生成新标记码，以独立调用记录、当前 run 的时间窗口、运行 transcript 和结果共同核对，不能用旧结果通过。最终扩展矩阵在 `automations-final3/` 完整通过 46 项，另验证真实界面通知、连续会话的每轮新读取和桌面布局。连续会话恢复连接时暴露了旧 MCP 守卫被复用的产品缺陷；已将运行身份加入 runner 指纹，新增回归断言并完成重跑。脱敏结果见自动化结构化报告（本地文件 `evidence/conversation-configuration-automations-2026-10-28.json`）。
 
 实测发现过“一次性提醒被保存成年重复 cron，回复却称一次性”的产品错误，已增加相对一次性输入并复测。后续轮次还发现明确删除请求被重复索要确认；已将现有授权规则前置到常驻工具摘要和 automation 描述，避免仅依赖早先加载的手册。管理链接实际打开当前聊天内的编辑对话框；运行器原先误等页面跳转，现按真实产品行为验收。通知验证后也通过真实关闭动作退出通知面板和导航抽屉，不把遮挡后的发送失败算作产品通过。测试还修正了服务显示名不等于内部 ID 的错误假设；时间修改的保留断言只允许原 instruction 内同一句“上午九点”同步改为“上午十点半”，其余 action 仍要求精确保留。
 

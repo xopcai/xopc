@@ -139,6 +139,6 @@ gateway-contract 独立 TypeScript 检查仍在未修改的 `sessions-backend-co
 
 ## 证据与复现
 
-[机器可读报告](conversational-setup-compact-evaluation-2026-10-21.json)保存两轮汇总、manifest、逐样本断言、调用和回答，以及 Gateway 原始／复核回执。详细本地原始数据在 `.xopc-evals/conversational-setup/compact-{development-v4,development-v5,regression-v5,scope-v5}/`，包含 source 快照、attempt、模型 usage 和合成 state 路径；目录被 Git 忽略。
+机器可读报告（本地文件 `conversational-setup-compact-evaluation-2026-10-21.json`）保存两轮汇总、manifest、逐样本断言、调用和回答，以及 Gateway 原始／复核回执。详细本地原始数据在 `.xopc-evals/conversational-setup/compact-{development-v4,development-v5,regression-v5,scope-v5}/`，包含 source 快照、attempt、模型 usage 和合成 state 路径；目录被 Git 忽略。
 
 运行命令、代理和选择规则见冻结协议。历史 v3 与 v4、正式 v5、Gateway 的网络失败／语言误报分开保存，不删除失败或把无模型检查计入真实成绩。当前工作区已改变，重跑历史 runner 属于新实验，不能直接冒充旧源码结果。

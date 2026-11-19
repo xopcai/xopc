@@ -48,7 +48,7 @@
 
 真实链路脚本：[`scripts/personal-task-revision-live-smoke.mts`](../../../scripts/personal-task-revision-live-smoke.mts)。
 
-通过证据：[`personal-task-revision-live-2026-10-15.json`](./personal-task-revision-live-2026-10-15.json)。使用已配置的 `deepseek/deepseek-flash` 主对话模型及 `xopc-cloud/auto` 全局模型，通过运行中 Gateway 的认证输入接口和实时服务执行；没有向生产环境发布。
+验收通过记录留存在本地文件 `./personal-task-revision-live-2026-10-15.json`。使用已配置的 `deepseek/deepseek-flash` 主对话模型及 `xopc-cloud/auto` 全局模型，通过运行中 Gateway 的认证输入接口和实时服务执行；没有向生产环境发布。
 
 | 项目 | 实测结果 |
 | --- | --- |

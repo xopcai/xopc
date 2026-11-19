@@ -37,7 +37,7 @@ The separate [TextEdit network mode](./computer-use-verified-flows-textedit-netw
 
 ## Observed result — 2026-10-17
 
-[Committed metadata-only evidence](./evidence/computer-use-flows-network-2026-10-17.json) records the passing matrix on macOS 26.6.2, Node 24.16.0, Electron 42.4.1 and pinned Cua Driver 0.28.2. The native fixture PID was 12973; it and all six Gateway/desktop processes exited after validation.
+Local metadata-only evidence (`./evidence/computer-use-flows-network-2026-10-17.json`) records the passing matrix on macOS 26.6.2, Node 24.16.0, Electron 42.4.1 and pinned Cua Driver 0.28.2. The native fixture PID was 12973; it and all six Gateway/desktop processes exited after validation.
 
 | Phase | Gateway PID | Desktop PID | Actual model requests | Scenario native inputs | Lost results | Rescue attempts | Result |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |

@@ -48,7 +48,7 @@ V2 基线 prompt token 中位数为 5156、completion token 中位数为 146；�
 
 历史 V1 基线普通 dispatch 中位数为 369 ms，接近驱动默认 350 ms settle；dispatch P95 为 3315 ms，包含文字输入内部确认等操作，不能把它解释为单个 ADB 点击需要三秒。
 
-证据：[本轮原始计时](evidence/phone-execution-local-observation-2026-10-27.json)。历史 `decision → 下一 observe/dispatch_attempt` 只是动作前观察代理指标，包含检查、可能的恢复路径，不是独立埋点的 UI dump 耗时。
+证据：本轮原始计时（本地文件 `evidence/phone-execution-local-observation-2026-10-27.json`）。历史 `decision → 下一 observe/dispatch_attempt` 只是动作前观察代理指标，包含检查、可能的恢复路径，不是独立埋点的 UI dump 耗时。
 
 ### 1.3 “效果差”有历史数据，不只是主观感受
 
@@ -296,7 +296,7 @@ flowchart TD
 
 ## 附：证据与复算
 
-固定版本参考源码及哈希：[清单](evidence/phone-execution-reference-sources-2026-10-27.json)。上游源码暂存于调研目录，没有作为依赖接入项目。
+固定版本参考源码及哈希：清单（本地文件 `evidence/phone-execution-reference-sources-2026-10-27.json`）。上游源码暂存于调研目录，没有作为依赖接入项目。
 
 历史统计只需要仓库已保存轨迹，不会调用设备或模型；生成的完整数值结果保存在指定输出目录，不纳入版本控制：
 

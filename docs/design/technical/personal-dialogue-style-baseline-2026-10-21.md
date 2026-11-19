@@ -80,7 +80,7 @@ HSR 是每题全部约束满足的比例；SSR 按题平均，不是把所有等
 ## 接入与证据
 
 - [运行入口与协议](../../../evals/personal/style/README.md)
-- [机器可读汇总](personal-dialogue-style-baseline-2026-10-21.json)
+- 机器可读汇总（本地文件 `personal-dialogue-style-baseline-2026-10-21.json`）
 - 本地原始证据：`/Users/micjoyce/develop/github/xopc/.xopc-evals/personal-style/baseline-gpt56-gpt61-2026-10-21-v1`。包含 manifest、逐题回答与裁判说明、EQ 每轮记录、SQLite 历史和内容寻址 artifacts。
 - 现有 eval CLI 可以通过 `--db` 读取本次实验；EQ 风格画像没有质量 grade，通用 coder scalar/pass-rate 列不代表 EQ 能力。
 - 上游源码分别下载到忽略目录；EQ-Bench 4 带 Commons Clause，不随 xopc 产品重新分发。

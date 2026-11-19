@@ -38,7 +38,7 @@ Native tests use independent credential aliases. The TLS integration test does n
 - Attachment-only messages remain visible in history, and changed attachment bytes get a new input identity while unchanged retries retain the previous one.
 - Explicit local disconnect clears both persisted private-key aliases and in-memory key caches; ordinary background/ability lifecycle stops do not erase device identity.
 - First-run simulator keyboard setup, test timeout and screenshot sandbox path were corrected in UI test prerequisites/code.
-- TestKit legacy Context cannot be mechanically replaced with a Stage-only application API; see the [diagnosis](../diagnosis/diagnosis_20260917_154345.md). This compatibility exception is test-only.
+- TestKit returns a legacy Context wrapper. The Stage-only `application.createModuleContext` rejects it before the pairing test can read the CA. The pairing test uses the TestKit Context's own module creation method.
 
 ## Not yet verified / release blockers
 

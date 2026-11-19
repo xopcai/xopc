@@ -60,7 +60,7 @@
 - 唯一候选失败发生于文件搜索：模型两次直接结束，没有派发任何动作，随后生成一次只读说明；原生 query 仍不匹配。`verified=false`、`stopReason=model_finished_unverified`，没有误报成功、字段拒绝或重复写入。
 - 所有试跑均未触发预设作用域拒绝，测试设置与文件哈希检查通过，测试动画配置已还原。初轮加最终面板共 **76 次真实模型请求**，没有运行生产账号任务。
 
-[结构化摘要](evidence/phone-efficiency-phase2-summary-2026-10-27.json)保存分组计分、负样本、源码/脚本哈希及原始结果校验值。完整逐步轨迹放在 `/tmp/xopc-phone-phase2-*`，不将临时源码、截图与调试转储纳入仓库。
+结构化摘要（本地文件 `evidence/phone-efficiency-phase2-summary-2026-10-27.json`）保存分组计分、负样本、源码/脚本哈希及原始结果校验值。完整逐步轨迹放在 `/tmp/xopc-phone-phase2-*`，不将临时源码、截图与调试转储纳入仓库。
 
 ## 工程验收
 
