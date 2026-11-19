@@ -17,7 +17,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
   if (( build_status == 0 )); then
     exit 1
   fi
-  if ! grep -Eqi 'The server aborted pending request|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|503 Slow Down|code: serviceUnavailable' "$log_file"; then
+  if ! grep -Eqi "The server aborted pending request|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|503 Slow Down|code: serviceUnavailable|Timeout awaiting 'request' for [0-9]+ms" "$log_file"; then
     exit "$build_status"
   fi
   if (( attempt == max_attempts )); then
