@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 import { ENDPOINT_FILE_OUTPUT_SCHEMA } from './shared-schemas.js';
-import { canonicalJson, type EndpointToolDescriptor, type EndpointTurnClaim } from './index.js';
+import { canonicalJson } from './canonical-json.js';
+import type { EndpointToolDescriptor, EndpointTurnClaim } from './index.js';
 
 export const DEVICE_FOLDER_SEARCH = 'desktop.folder.search';
 export const DEVICE_FOLDER_READ = 'desktop.folder.read';

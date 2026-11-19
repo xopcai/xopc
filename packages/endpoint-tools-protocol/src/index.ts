@@ -3,12 +3,14 @@ export * from './provider-execution.js';
 import { z } from 'zod';
 
 import { DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
+import { canonicalJson } from './canonical-json.js';
 import { desktopOperationIntentSchema, desktopOperationReceiptSchema } from './execution.js';
 import { desktopTerminalCommandSchema, desktopTerminalEventSchema } from './terminal.js';
 import { providerCatalogSchema, providerStateSchema } from './providers.js';
 export * from './providers.js';
 export * from './execution.js';
 export * from './folders.js';
+export { canonicalJson } from './canonical-json.js';
 export { ENDPOINT_FILE_OUTPUT_SCHEMA, ENDPOINT_CONTACT_RECORD_SCHEMA, ENDPOINT_CONTACT_OUTPUT_SCHEMA, ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, DEVICE_EMPTY_INPUT_SCHEMA } from './shared-schemas.js';
 
 export const ENDPOINT_PROTOCOL_VERSION = 3 as const;
@@ -299,26 +301,6 @@ export const ENDPOINT_TEXT_OUTPUT_SCHEMA = {
     },
   },
 } as const;
-
-export function canonicalJson(value: unknown): string {
-  if (value === null) return 'null';
-  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new Error('Canonical JSON only supports finite numbers');
-    return JSON.stringify(value);
-  }
-  if (typeof value !== 'object') throw new Error(`Canonical JSON does not support ${typeof value}`);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new Error('Canonical JSON only supports plain objects');
-  }
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
-    .join(',')}}`;
-}
 
 export function endpointHelloSigningPayload(payload: EndpointHelloPayload): string {
   const { signature: _signature, ...unsigned } = payload;
