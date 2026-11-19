@@ -10,7 +10,7 @@ import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory, type ClientHistoryMessage } from '../../../session/client-history.js';
-import { DEFAULT_AGENT_REACTION, readAgentReactions } from '../../../storage/sqlite/agent-reaction-repository.js';
+import { readAgentReactions } from '../../../storage/sqlite/agent-reaction-repository.js';
 import { getPersonalAgentByConversation, isPersonalConversation, resolveMessageReactionsEnabled } from '../../../personal-agent/repository.js';
 import { SessionStatus, type SessionType } from '../../../session/types.js';
 import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-references.js';
@@ -518,26 +518,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         const entries = messages.flatMap(row => row.role === 'user' && row.transcriptEntryId ? [row.transcriptEntryId] : []);
         const reactions = new Map(readAgentReactions(key, transcriptId, entries, actor.displayName)
           .map(reaction => [reaction.entryId, reaction]));
-        const activeRunId = service.getActiveWebchatRunId(key);
         for (const row of messages) {
           const entryId = row.transcriptEntryId;
           if (row.role !== 'user' || !entryId) continue;
           const saved = reactions.get(entryId);
           if (saved) row.agentReaction = saved;
-          // Give in-flight personalization a chance to arrive before showing the default.
-          else if (!activeRunId || row.turnId !== activeRunId || row.metadata?.steered) {
-            row.agentReaction = {
-              conversationId: key,
-              transcriptId,
-              clientMessageId: row.metadata?.clientMessageId ?? entryId,
-              entryId,
-              actorAgentId: actor.agentId,
-              actorName: actor.displayName,
-              runId: row.turnId ?? entryId,
-              emoji: DEFAULT_AGENT_REACTION,
-              createdAtMs: row.timestamp ?? 0,
-            };
-          }
         }
       }
     }

@@ -43,7 +43,7 @@ struct AppSettingsView: View {
                 NavigationLink {
                     ModelSettingsView(configuration: configuration)
                 } label: {
-                    Label("模型设置", systemImage: "slider.horizontal.3")
+                    Label("模型设置", image: "SettingsSliders")
                 }
                 .accessibilityIdentifier("settings-models")
                 NavigationLink {

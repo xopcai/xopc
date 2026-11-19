@@ -12,7 +12,7 @@ import kotlinx.coroutines.runInterruptible
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal const val RECENT_CONVERSATION_LIMIT = 6
+private const val MIN_SIDEBAR_PAGE_ROWS = 8
 
 sealed interface ConversationHistoryScope {
   data object Recent : ConversationHistoryScope
@@ -38,6 +38,7 @@ data class ConversationTaskChild(val taskId: String, val title: String, val phas
 data class ConversationTaskGroup(val total: Int, val activeCount: Int, val items: List<ConversationTaskChild>)
 data class ConversationPage(val items: List<ConversationSummary>, val remoteCount: Int, val hasMore: Boolean,
   val taskGroups: Map<String, ConversationTaskGroup> = emptyMap())
+internal data class RecentConversationPage(val items: List<ConversationSummary>, val nextOffset: Int?)
 data class ConversationShareMessage(val id: String, val role: String, val markdown: String)
 data class ConversationShareAttachment(val id: String, val fileName: String)
 data class ConversationSharePreview(val conversationId: String, val transcriptId: String,
@@ -451,17 +452,18 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     return remote.copy(items = (if (offset == 0 && scope == null) localDrafts(search) else emptyList()) + items)
   }
 
-  suspend fun recent(): List<ConversationSummary> {
+  internal suspend fun recent(startOffset: Int = 0): RecentConversationPage {
     val recent = mutableListOf<ConversationSummary>()
     val seen = mutableSetOf<String>()
-    var offset = 0
+    var offset = startOffset
+    var hasMore: Boolean
     do {
       val page = runInterruptible(Dispatchers.IO) { list(offset = offset, scope = ConversationHistoryScope.Recent) }
       recent += page.items.filter { it.isRecentSidebarCandidate && seen.add(it.id) }
       offset += page.remoteCount
-      // Leave space for the personal conversation and a pending deletion.
-    } while (recent.size < RECENT_CONVERSATION_LIMIT + 2 && page.hasMore && page.remoteCount > 0)
-    return recent.take(20)
+      hasMore = page.hasMore && page.remoteCount > 0
+    } while (recent.size < MIN_SIDEBAR_PAGE_ROWS && hasMore)
+    return RecentConversationPage(recent, offset.takeIf { hasMore })
   }
 
   fun sharePreview(conversationId: String): ConversationSharePreview {

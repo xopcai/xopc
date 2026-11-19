@@ -4,6 +4,7 @@ import { loadModelsJson, type ModelsJsonConfig } from '../config/models-json.js'
 import { getModelCatalogStore, type ModelCatalogStore } from './model-catalog-store.js';
 import { discoverProviderModels, isProviderApiDiscoverable } from './model-discovery.js';
 import { getModelRegistry } from './model-registry.js';
+import { isRetiredModelProvider } from './provider-policy.js';
 import {
   getXopcCloudCatalogCoordinator,
   type CatalogReadiness,
@@ -125,7 +126,8 @@ export class ModelCatalogSyncService {
     this.status.refreshing = true;
 
     const providers = this.options.loadProviders?.() ?? loadModelsJson().config.providers;
-    const discoverable = Object.entries(providers).filter(([, provider]) =>
+    const discoverable = Object.entries(providers).filter(([providerId, provider]) =>
+      !isRetiredModelProvider(providerId) &&
       provider.modelDiscovery?.enabled === true &&
       typeof provider.baseUrl === 'string' &&
       isProviderApiDiscoverable(provider.api),

@@ -8,6 +8,7 @@ import { XopcPersonalDelivery, XopcPersonalWorkGroup, XopcPersonalWorkItem } fro
 import { XopcAutomation } from '../model/workspace';
 import { appSettings } from '../service/settings';
 import { generatedMusicPlayback } from '../service/generatedMusicPlayback';
+import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcPersonalOverviewViewModel } from '../viewmodel/personalOverviewViewModel';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcListSkeleton, XopcPaginationFooter } from './MobileComponents';
@@ -49,10 +50,12 @@ export struct XopcPersonalAgentOverview {
   @Event onClose: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local colors: XopcThemeColors = appThemeColors;
+  @Local layout: XopcLayoutState = layoutState;
   @Local model: XopcPersonalOverviewViewModel = new XopcPersonalOverviewViewModel();
   @Local librarySelected: boolean = false;
   @Local headerTravel: number = 0;
   @Local deliveryPreview?: XopcPersonalDeliveryPreview;
+  private pager: SwiperController = new SwiperController();
   @Computed get headerProgress(): number { return this.headerTravel / PERSONAL_HEADER_TRAVEL; }
   @Computed get avatarExtent(): number {
     return PERSONAL_AVATAR_EXPANDED - (PERSONAL_AVATAR_EXPANDED - PERSONAL_AVATAR_COMPACT) * this.headerProgress;
@@ -77,8 +80,9 @@ export struct XopcPersonalAgentOverview {
     if (selected && !this.model.deliveryLoaded && !this.model.deliveryError) void this.model.loadDeliveries();
   }
 
-  private scrollHeader(xOffset: number, yOffset: number, source: ScrollSource): OffsetResult {
-    if (source !== ScrollSource.DRAG && source !== ScrollSource.FLING && source !== ScrollSource.OTHER_USER_INPUT) {
+  private scrollHeader(xOffset: number, yOffset: number, source: ScrollSource, library: boolean): OffsetResult {
+    if (library !== this.librarySelected || (source !== ScrollSource.DRAG && source !== ScrollSource.FLING
+      && source !== ScrollSource.OTHER_USER_INPUT)) {
       return { xOffset, yOffset };
     }
     const next = Math.max(0, Math.min(PERSONAL_HEADER_TRAVEL, this.headerTravel + yOffset));
@@ -382,32 +386,26 @@ export struct XopcPersonalAgentOverview {
   build() {
     Column() {
       Row() {
+        Button($r('app.string.personal_overview_edit'), { type: ButtonType.Normal, buttonStyle: ButtonStyleMode.TEXTUAL })
+          .id('personal-overview-edit').constraintSize({ minHeight: 44 })
+          .padding({ left: 4, right: 12 }).fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.colors.accent)
+          .backgroundColor(Color.Transparent)
+          .onClick((): void => {
+            this.onNavigate({ page: 'personal-agent-profile', itemId: '', canShareConversation: this.canShareConversation });
+          })
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.xmark')).fontSize(22).fontColor([this.colors.secondary])
         }.id('personal-overview-close').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .accessibilityText($r('app.string.close')).onClick((): void => { this.onClose(); })
-      }.width('100%').justifyContent(FlexAlign.End).padding({ left: 12, right: 12 })
-      Stack({ alignContent: Alignment.BottomEnd }) {
-        Stack({ alignContent: Alignment.Center }) {
-          Stack() {
-            XopcPersonalAgentAvatar({ agentId: this.record?.agentId ?? '', revision: this.record?.revision ?? 0,
-              appearance: this.record?.appearance ?? 'loopi', extent: 110, activePage: this.activePage,
-              moodOverride: this.model.attentionCount ? 'care' : this.model.runningCount ? 'work' : undefined })
-          }.width(PERSONAL_AVATAR_EXPANDED).height(PERSONAL_AVATAR_EXPANDED).borderRadius(PERSONAL_AVATAR_EXPANDED / 2)
-            .backgroundColor(this.colors.grouped).scale({ x: this.avatarScale, y: this.avatarScale })
-        }.id('personal-overview-avatar').width(this.avatarExtent).height(this.avatarExtent)
-        Button({ type: ButtonType.Circle }) {
-          Stack() {
-            SymbolGlyph($r('sys.symbol.pencil_line')).fontSize(18 - 3 * this.headerProgress).fontColor([this.colors.foreground])
-          }.width(44 - 10 * this.headerProgress).height(44 - 10 * this.headerProgress)
-            .borderRadius(this.colors.corner(22)).backgroundColor(this.colors.chat.card)
-        }.id('personal-overview-edit').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .translate({ x: 7 * this.headerProgress, y: 7 * this.headerProgress })
-          .accessibilityText($r('app.string.personal_overview_edit'))
-          .onClick((): void => {
-            this.onNavigate({ page: 'personal-agent-profile', itemId: '', canShareConversation: this.canShareConversation });
-          })
-      }
+      }.width('100%').justifyContent(FlexAlign.SpaceBetween)
+      Stack({ alignContent: Alignment.Center }) {
+        Stack() {
+          XopcPersonalAgentAvatar({ agentId: this.record?.agentId ?? '', revision: this.record?.revision ?? 0,
+            appearance: this.record?.appearance ?? 'loopi', extent: 110, activePage: this.activePage,
+            moodOverride: this.model.attentionCount ? 'care' : this.model.runningCount ? 'work' : undefined })
+        }.width(PERSONAL_AVATAR_EXPANDED).height(PERSONAL_AVATAR_EXPANDED).borderRadius(PERSONAL_AVATAR_EXPANDED / 2)
+          .backgroundColor(this.colors.grouped).scale({ x: this.avatarScale, y: this.avatarScale })
+      }.id('personal-overview-avatar').width(this.avatarExtent).height(this.avatarExtent)
       Text(this.record?.displayName ?? '').fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         .textAlign(TextAlign.Center).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%').padding({ left: 16, right: 16, top: 8 - 4 * this.headerProgress })
@@ -428,17 +426,26 @@ export struct XopcPersonalAgentOverview {
           { key: 'tasks', label: $r('app.string.tasks'), icon: $r('sys.symbol.checkmark_circle'), count: this.model.attentionCount || undefined, testId: 'personal-overview-tasks-tab' },
           { key: 'library', label: $r('app.string.personal_overview_library'), icon: $r('sys.symbol.doc_text'), testId: 'personal-overview-library-tab' }
         ], selectedKey: this.librarySelected ? 'library' : 'tasks',
-          onSelect: (key: string): void => { this.selectLibrary(key === 'library'); } })
+          onSelect: (key: string): void => {
+            const library = key === 'library';
+            if (library !== this.librarySelected && !this.deliveryPreview) {
+              this.pager.changeIndex(library ? 1 : 0, !this.layout.reduceMotion);
+            }
+          } })
       }.width('100%').margin({ top: 12 - 4 * this.headerProgress, bottom: 16 })
-      if (this.librarySelected) {
-        Scroll() { this.library() }.width('100%').layoutWeight(1).scrollBar(BarState.Auto)
+      Swiper(this.pager) {
+        Scroll() { this.tasks() }.width('100%').height('100%').scrollBar(BarState.Auto)
+          .accessibilityLevel(this.librarySelected ? 'no-hide-descendants' : 'auto')
           .onWillScroll((x: number, y: number, _state: ScrollState, source: ScrollSource): OffsetResult =>
-            this.scrollHeader(x, y, source))
-      } else {
-        Scroll() { this.tasks() }.width('100%').layoutWeight(1).scrollBar(BarState.Auto)
+            this.scrollHeader(x, y, source, false))
+        Scroll() { this.library() }.width('100%').height('100%').scrollBar(BarState.Auto)
+          .accessibilityLevel(this.librarySelected ? 'auto' : 'no-hide-descendants')
           .onWillScroll((x: number, y: number, _state: ScrollState, source: ScrollSource): OffsetResult =>
-            this.scrollHeader(x, y, source))
-      }
+            this.scrollHeader(x, y, source, true))
+      }.id('personal-overview-pager').index(this.librarySelected ? 1 : 0).loop(false).indicator(false).cachedCount(1)
+        .duration(this.layout.reduceMotion ? 0 : 230).disableSwipe(!this.activePage || !!this.deliveryPreview)
+        .onChange((index: number): void => { this.selectLibrary(index === 1); })
+        .width('100%').layoutWeight(1).clip(true)
       if (this.deliveryPreview) {
         XopcChatMediaView({ file: this.deliveryPreview.file, conversationId: this.deliveryPreview.conversationId,
           previewOnly: true, onPreviewClosed: (): void => { this.deliveryPreview = undefined; } })

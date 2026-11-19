@@ -115,7 +115,7 @@ struct ProjectDetailView: View {
                         Button("新建项目任务", systemImage: "checklist") { creationSheet = .task }
                         Button("新建项目笔记", systemImage: "note.text") { creationSheet = .note }
                         Button("新建项目自动化", systemImage: "clock") { setupPrompt = "" }
-                        Button("项目设置", systemImage: "gearshape") { managingProject = true }
+                        Button { managingProject = true } label: { Label("项目设置", image: "SettingsSliders") }
                     }
                     .accessibilityIdentifier("project-add")
                 }
@@ -200,7 +200,7 @@ struct ProjectDetailView: View {
             } else {
                 ForEach(visible(tasks)) { item in
                     NavigationLink {
-                        TaskDetailView(configuration: configuration, taskID: item.task.id)
+                        TaskConversationView(configuration: configuration, taskID: item.task.id)
                     } label: {
                         ProgressRow(title: item.task.title, subtitle: item.task.contract?.objective ?? item.task.body,
                                     state: item.operationalState, date: item.task.updatedAt.millisecondsDate, symbol: "checklist")

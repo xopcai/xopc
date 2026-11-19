@@ -20,6 +20,7 @@ import { colors, colorizeStatus } from '../utils/colors.js';
 import { getOAuthProvider, getSupportedOAuthProviders } from '../utils/oauth-providers.js';
 import { runCliOAuthLogin } from '../utils/oauth-login.js';
 import { disconnectProvider } from '../../providers/provider-disconnect.js';
+import { isRetiredModelProvider } from '../../providers/provider-policy.js';
 
 const log = createLogger('AuthCommand');
 
@@ -244,8 +245,9 @@ function createAuthCommand(_ctx: CLIContext): Command {
 }
 
 async function listAuthProfiles(): Promise<void> {
-	const profiles = listAllProfiles();
-	const oauthTokens = await new CredentialResolver().listOAuthTokens();
+	const profiles = listAllProfiles().filter((profile) => !isRetiredModelProvider(profile.provider));
+	const oauthTokens = (await new CredentialResolver().listOAuthTokens())
+		.filter((token) => !isRetiredModelProvider(token.provider));
 	
 	if (profiles.length === 0 && oauthTokens.length === 0) {
 		log.info('No auth profiles configured.');

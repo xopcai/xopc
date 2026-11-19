@@ -113,7 +113,7 @@ struct XopcIndex {
       }
       Blank().layoutWeight(1)
       Button({ type: ButtonType.Circle }) {
-        SymbolGlyph($r('sys.symbol.gearshape')).fontSize(22).fontColor([this.colors.secondary])
+        SymbolGlyph($r('sys.symbol.slider_horizontal_2')).fontSize(22).fontColor([this.colors.secondary])
       }.id('open-settings').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
         .accessibilityText($r('app.string.settings')).enabled(!this.connection.busy && !this.scanning)
         .onClick((): void => { this.invitationEditor.stopEditing(); this.showSettings = true; })

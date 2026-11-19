@@ -44,7 +44,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'logs', description: 'Manage and query logs' },
   { name: 'config', description: 'View and edit configuration' },
   { name: 'image', description: 'Inspect image provider availability' },
-  { name: 'models [options]', description: 'List and manage models and model auth' },
+  { name: 'models', description: 'List and manage models and model auth' },
   { name: 'providers', description: 'Manage LLM provider credentials (user-friendly hub over `xopc auth`)' },
   { name: 'voice', description: 'Configure text-to-speech (TTS) output' },
   { name: 'search', description: 'Manage web-search providers (brave / tavily / bing / searxng / deepseek)' },

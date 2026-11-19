@@ -115,7 +115,7 @@ private struct ProgressHubView: View {
                         Text("历史").mobileTextStyle(.rowTitle).padding(.top, 12)
                         ForEach(recentClosed.prefix(2)) { item in
                             NavigationLink {
-                                TaskDetailView(configuration: configuration, taskID: item.id)
+                                TaskConversationView(configuration: configuration, taskID: item.id)
                             } label: {
                                 compactRow(title: item.task.title, subtitle: item.task.resolution ?? "", symbol: "checkmark.circle")
                             }.buttonStyle(.plain)
@@ -269,7 +269,7 @@ private struct ProgressHubView: View {
     private func destination(for route: HomeOpenRoute) -> some View {
         switch route {
         case let .task(id):
-            TaskDetailView(configuration: configuration, taskID: id)
+            TaskConversationView(configuration: configuration, taskID: id)
         case let .project(id):
             ProjectDetailView(configuration: configuration, projectID: id,
                               onOpenConversation: onOpenConversation)
@@ -384,7 +384,7 @@ struct HomeDeliveryLink: View {
             NavigationLink {
                 switch route {
                 case let .task(id):
-                    TaskDetailView(configuration: configuration, taskID: id)
+                    TaskConversationView(configuration: configuration, taskID: id)
                 case let .automationRun(id):
                     AutomationRunDetailView(configuration: configuration, runID: id, initialRun: nil,
                                             onOpenConversation: onOpenConversation)
@@ -492,7 +492,7 @@ private struct TasksView: View {
             } else {
                 ForEach(visibleItems) { item in
                     NavigationLink {
-                        TaskDetailView(configuration: configuration, taskID: item.task.id)
+                        TaskConversationView(configuration: configuration, taskID: item.task.id)
                     } label: {
                         ProgressRow(
                             title: item.task.title,

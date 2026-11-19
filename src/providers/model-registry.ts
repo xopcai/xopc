@@ -452,8 +452,11 @@ export class ModelRegistry {
 			const overrides = new Map<string, ProviderOverride>();
 			const modelOverrides = new Map<string, Map<string, ModelOverride>>();
 			const apiKeyConfigs = new Map<string, string>();
+			const activeProviders = Object.fromEntries(
+				Object.entries(config.providers).filter(([providerName]) => !isRetiredModelProvider(providerName)),
+			);
 
-			for (const [providerName, providerConfig] of Object.entries(config.providers)) {
+			for (const [providerName, providerConfig] of Object.entries(activeProviders)) {
 				// Apply provider-level baseUrl/headers/apiKey override
 				if (providerConfig.baseUrl || providerConfig.headers || providerConfig.apiKey) {
 					overrides.set(providerName, {
@@ -475,7 +478,7 @@ export class ModelRegistry {
 			}
 
 			return {
-				models: this.parseModels(config),
+				models: this.parseModels({ ...config, providers: activeProviders }),
 				overrides,
 				modelOverrides,
 				apiKeyConfigs,

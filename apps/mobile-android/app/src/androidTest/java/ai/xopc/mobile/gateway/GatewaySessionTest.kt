@@ -44,19 +44,26 @@ class GatewaySessionTest {
     val filters = "&excludeArchived=true&excludeAutomationRuns=true&rootConversationsOnly=true&sortBy=updatedAt&sortOrder=desc&search="
     fun row(id: String, messages: Int = 1, status: String = "active") = JSONObject()
       .put("key", id).put("updatedAt", "2026-11-17T00:00:00Z").put("messageCount", messages).put("status", status)
-    fun page(items: List<JSONObject>) = JSONObject().put("items", JSONArray(items)).put("hasMore", true).toString()
+    fun page(items: List<JSONObject>, hasMore: Boolean = true) =
+      JSONObject().put("items", JSONArray(items)).put("hasMore", hasMore).toString()
     val personal = row("personal")
     val first = row("one")
     val older = listOf("two", "three", "four", "five", "six", "spare")
     fake.sessionPages = mapOf(
       "${prefix}0$filters" to page(listOf(personal, row("empty", messages = 0), first, row("archived", status = "archived"))),
       "${prefix}4$filters" to page(listOf(first) + older.map { row(it) }),
+      "${prefix}11$filters" to page(listOf(row("older-empty", messages = 0), row("last")), hasMore = false),
     )
     clear(store)
     try {
       session.pair(invitation()) {}
-      val recent = ConversationRepository(session, app).recent()
-      assertEquals(listOf("personal", "one") + older, recent.map { it.id })
+      val repository = ConversationRepository(session, app)
+      val recent = repository.recent()
+      assertEquals(listOf("personal", "one") + older, recent.items.map { it.id })
+      assertEquals(11, recent.nextOffset)
+      val next = repository.recent(checkNotNull(recent.nextOffset))
+      assertEquals(listOf("last"), next.items.map { it.id })
+      assertNull(next.nextOffset)
     } finally { clear(store) }
   }
 

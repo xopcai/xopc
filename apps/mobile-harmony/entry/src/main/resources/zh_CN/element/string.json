@@ -90,7 +90,7 @@
     {"name": "settings_about_xopc", "value": "关于 xopc"},
     {"name": "personalization", "value": "个性化"},
     {"name": "personal_overview_open", "value": "打开助理概览"},
-    {"name": "personal_overview_edit", "value": "编辑助理资料"},
+    {"name": "personal_overview_edit", "value": "编辑资料"},
     {"name": "personal_overview_attention", "value": "待你处理"},
     {"name": "personal_overview_current", "value": "当前任务"},
     {"name": "personal_overview_library", "value": "资料库"},
@@ -1195,7 +1195,7 @@
     },
     {
       "name": "history",
-      "value": "聊天记录"
+      "value": "历史会话"
     },
     {
       "name": "back_to_chat",
@@ -1346,6 +1346,7 @@
     { "name": "voice_call_muted", "value": "已静音" },
     { "name": "voice_call_mute", "value": "静音" },
     { "name": "voice_call_speaker", "value": "扬声器" },
+    { "name": "voice_call_return", "value": "返回通话" },
     { "name": "voice_call_end", "value": "结束" },
     { "name": "voice_call_retry", "value": "重试" },
     { "name": "voice_call_stop_reply", "value": "停止回复" },

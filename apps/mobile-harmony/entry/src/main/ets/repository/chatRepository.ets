@@ -34,10 +34,11 @@ interface XopcTaskConversationResult { ok: boolean; conversationId: string; }
 interface XopcTaskInputState { activeRunId?: string; }
 interface XopcTaskInputPayload { conversationId?: string; state?: XopcTaskInputState; }
 interface XopcTaskInputResponse { ok: boolean; payload?: XopcTaskInputPayload; }
+interface XopcRecentConversationPage extends XopcSessionList { nextOffset: number | null; }
 
-let recentLoad: Promise<XopcSessionList> | undefined;
+let recentLoad: Promise<XopcRecentConversationPage> | undefined;
 let recentConnection: number = -1;
-export const RECENT_CONVERSATION_LIMIT = 6;
+const SIDEBAR_MIN_CONVERSATIONS = 7;
 
 export class XopcChatRepository {
   async ensureTaskConversation(taskId: string): Promise<string> {
@@ -108,13 +109,13 @@ export class XopcChatRepository {
     return cached;
   }
 
-  refreshRecent(): Promise<XopcSessionList> {
+  refreshRecent(): Promise<XopcRecentConversationPage> {
     const profile = gatewaySession.currentProfile();
     if (!profile) return Promise.reject(new Error('NOT_PAIRED'));
     const connection = gatewaySession.connectionRevision();
     if (recentLoad && recentConnection === connection) return recentLoad;
     recentConnection = connection;
-    const request = this.loadRecentPages(connection).then((page: XopcSessionList): XopcSessionList => {
+    const request = this.recentPage(0).then((page: XopcRecentConversationPage): XopcRecentConversationPage => {
       gatewaySession.assertConnection(connection);
       if (recentLoad === request) {
         void chatSessionCache.write(profile.gatewayId, profile.deviceId, page).catch((): void => {});
@@ -125,15 +126,16 @@ export class XopcChatRepository {
     return request;
   }
 
-  private async loadRecentPages(connection: number): Promise<XopcSessionList> {
+  async recentPage(startOffset: number): Promise<XopcRecentConversationPage> {
+    const connection = gatewaySession.connectionRevision();
     const items: XopcSessionItem[] = [];
     const seen = new Set<string>();
-    let offset = 0;
+    let offset = startOffset;
     let page: XopcSessionList;
     let hasMore = false;
     do {
-      gatewaySession.assertConnection(connection);
       page = await this.historyList('', offset, {});
+      gatewaySession.assertConnection(connection);
       for (const item of page.items) {
         if (item.messageCount > 0 && item.status !== 'archived' && !seen.has(item.key)) {
           seen.add(item.key);
@@ -143,8 +145,8 @@ export class XopcChatRepository {
       offset += page.items.length;
       hasMore = page.hasMore && page.items.length > 0;
       // The personal conversation has a separate row and may still be loading.
-    } while (items.length <= RECENT_CONVERSATION_LIMIT && hasMore);
-    return { items, total: page.total, hasMore };
+    } while (items.length < SIDEBAR_MIN_CONVERSATIONS && hasMore);
+    return { items, total: page.total, hasMore, nextOffset: hasMore ? offset : null };
   }
 
   async historyList(search: string, offset: number, scope: XopcSessionHistoryScope): Promise<XopcSessionList> {
@@ -338,7 +340,7 @@ export class XopcChatRepository {
       if (!transcriptId) transcriptId = (await this.history(id)).session.transcriptId;
       if (!transcriptId || config.configVersion === undefined) throw new Error('SESSION_IDENTITY_UNAVAILABLE');
       body = { kind: 'append', clientMessageId, expectedTranscriptId: transcriptId,
-        configVersion: config.configVersion, delivery, input };
+        configVersion: config.configVersion, delivery, interrupt: delivery === 'steer' ? false : undefined, input };
     }
     gatewaySession.assertConnection(connection);
     await localSessionStore.saveCommand(id, body, scope);

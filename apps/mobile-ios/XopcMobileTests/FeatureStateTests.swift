@@ -79,15 +79,22 @@ struct FeatureStateTests {
         let first = row("one")
         let firstPage = [personal, row("empty", messageCount: 0), first, row("archived", status: "archived")]
         let older = ["two", "three", "four", "five", "six"].map { row($0) }
+        let last = row("last")
         var gateway = GatewayStub()
         gateway.conversationPages = [
             ConversationPage(items: firstPage, total: 12, hasMore: true),
-            ConversationPage(items: [first] + older, total: 12, hasMore: true)
+            ConversationPage(items: [first] + older, total: 12, hasMore: true),
+            ConversationPage(items: [row("older-empty", messageCount: 0), last], total: 12, hasMore: false)
         ]
 
         let recent = try await gateway.fetchRecentConversations()
 
-        #expect(recent == [personal, first] + older)
+        #expect(recent.items == [personal, first] + older)
+        let offset = try #require(recent.nextOffset)
+        #expect(offset == 10)
+        let next = try await gateway.fetchRecentConversations(startOffset: offset)
+        #expect(next.items == [last])
+        #expect(next.nextOffset == nil)
     }
 
     @Test func assistantSendsAndRecoversPersistedHistory() async {

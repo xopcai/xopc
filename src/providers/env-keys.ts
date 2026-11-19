@@ -38,7 +38,6 @@ export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 	'xiaomi-token-plan-ams': ['XIAOMI_TOKEN_PLAN_AMS_API_KEY', 'XIAOMI_TOKEN_PLAN_API_KEY'],
 	'xiaomi-token-plan-sgp': ['XIAOMI_TOKEN_PLAN_SGP_API_KEY', 'XIAOMI_TOKEN_PLAN_API_KEY'],
 	'google-gemini-cli': ['GEMINI_CLI_TOKEN', 'GOOGLE_TOKEN'],
-	'google-antigravity': ['ANTIGRAVITY_API_KEY'],
 	'vercel-ai-gateway': ['AI_GATEWAY_API_KEY', 'VERCEL_AI_GATEWAY_API_KEY'],
 	'github-copilot': ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'GITHUB_COPILOT_TOKEN'],
 	/** DashScope HTTP APIs (image gen, STT, TTS) — not an LLM KnownProvider. */

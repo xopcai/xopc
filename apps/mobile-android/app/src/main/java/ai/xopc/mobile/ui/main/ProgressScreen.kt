@@ -339,13 +339,6 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     }
   }
   val selectedTask = state.detailTask.takeIf { state.detailTaskId == selectedTaskId }
-  fun openTask(id: String) {
-    detailReturnPage = page
-    selectedTaskId = id
-    page = "detail"
-    requestedTaskId = id
-    onOpenTask(id)
-  }
   fun openProject(id: String) {
     selectedProjectId = id
     page = "project"
@@ -416,13 +409,13 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
     when (target) {
       "projects" -> ProgressProjects(state, onLoadProjects, ::openProject, projectSearchOpen, page == target)
       "tasks" -> ProgressTaskList(state, taskFilter, { taskFilter = it }, onRefreshTasks,
-        onLoadMore, onSearchChange, onSubmitSearch, taskSearchOpen && page == target, ::closeTaskSearch) { task -> openTask(task.id) }
+        onLoadMore, onSearchChange, onSubmitSearch, taskSearchOpen && page == target, ::closeTaskSearch) { task -> onOpenTaskChat(task.id) }
       "overview" -> ProgressOverview(state, onRefreshHome, onOpenChat, { scrollToWorkPage("tasks") },
         { scrollToWorkPage("projects") }, ::openAutomationsFromOverview,
-        ::openAutomation, ::openTask,
+        ::openAutomation, onOpenTaskChat,
         { action ->
           val taskId = action.reviewTaskId
-          if (taskId != null) openTask(taskId) else pendingHomeAction = action
+          if (taskId != null) onOpenTaskChat(taskId) else pendingHomeAction = action
         }, ::openRun)
     }
   }
@@ -511,7 +504,7 @@ internal fun ProgressScreen(state: ProgressUiState, insets: PaddingValues,
           state.projectSessions, state.projectSessionsLoading, state.projectSessionsError,
           state.projectNotes, state.projectNotesLoading, state.projectNotesError,
           state.projectAutomations, state.projectAutomationsLoading, state.projectAutomationsError,
-          onCreate = { createProjectTask(state.project.id) }, onOpenTask = ::openTask, onOpenChat = onOpenProjectChat,
+          onCreate = { createProjectTask(state.project.id) }, onOpenTask = onOpenTaskChat, onOpenChat = onOpenProjectChat,
           onOpenNote = onOpenNote, onOpenAutomation = ::openAutomation,
           onSchedule = { prompt -> onArrangeAutomation(state.project.id, prompt) },
           onCreateChat = { onCreateProjectChat(state.project.id) }, chatBusy = chatBusy,

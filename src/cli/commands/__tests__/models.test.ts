@@ -1,5 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Command } from 'commander';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import { initializeTestAgentCatalog } from '../../../agent-catalog/test-support.js';
+import { providerSupportsOAuth } from '../../../providers/index.js';
+import { runCliOAuthLogin } from '../../utils/oauth-login.js';
 import { createModelsCommand } from '../models.js';
 
 vi.mock('../../../providers/index.js', () => ({
@@ -53,23 +57,27 @@ describe('Models Command', () => {
     vi.clearAllMocks();
   });
 
-  it('accepts `models list` subcommand', async () => {
-    const cmd = createModelsCommand({} as any);
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    ['models --json', ['models', '--json']],
+    ['models list --json', ['models', 'list', '--json']],
+  ])('outputs JSON for %s', async (_command, args) => {
+    const program = new Command().addCommand(createModelsCommand({} as any));
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await cmd.parseAsync(['node', 'test', 'list', '--json']);
+    await program.parseAsync(args, { from: 'user' });
 
-    expect(logSpy).toHaveBeenCalled();
-    logSpy.mockRestore();
+    expect(JSON.parse(logSpy.mock.calls[0][0])).toMatchObject({ providers: [], models: [] });
   });
 
-  it('keeps root `models --json` working', async () => {
-    const cmd = createModelsCommand({} as any);
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  it('passes --provider to the nested auth login action', async () => {
+    const program = new Command().addCommand(createModelsCommand({} as any));
+    vi.mocked(providerSupportsOAuth).mockReturnValueOnce(true);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await cmd.parseAsync(['node', 'test', '--json']);
+    await program.parseAsync(['models', 'auth', 'login', '--provider', 'openai', '--method', 'oauth'], { from: 'user' });
 
-    expect(logSpy).toHaveBeenCalled();
-    logSpy.mockRestore();
+    expect(runCliOAuthLogin).toHaveBeenCalledWith({ provider: 'openai', onProgress: expect.any(Function) });
   });
 });

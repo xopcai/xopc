@@ -54,6 +54,24 @@ describe('local-first session creation', () => {
     expect(mock.remove).not.toHaveBeenCalled();
   });
 
+  it('submits successive steer messages with distinct identities and cooperative delivery', async () => {
+    const repository = new XopcChatRepository();
+    const config = JSON.stringify({ payload: { configVersion: 3 } });
+    mock.request.mockResolvedValueOnce(config).mockResolvedValueOnce(response('steer-1'))
+      .mockResolvedValueOnce(config).mockResolvedValueOnce(response('steer-2'));
+    const audio = { type: 'voice', name: 'voice.m4a', mimeType: 'audio/mp4', size: 1, data: 'YQ==' };
+
+    await expect(repository.send('draft-1', 'Use a shorter answer', 'steer-1', 'transcript-1', [], 'steer')).resolves.toBe('run-1');
+    await expect(repository.send('draft-1', '', 'steer-2', 'transcript-1', [audio], 'steer')).resolves.toBe('run-1');
+
+    const commands = mock.request.mock.calls.filter(call => call[1] === 'POST').map(call => JSON.parse(call[2]));
+    expect(commands).toMatchObject([
+      { kind: 'append', delivery: 'steer', interrupt: false, clientMessageId: 'steer-1', input: { content: 'Use a shorter answer' } },
+      { kind: 'append', delivery: 'steer', interrupt: false, clientMessageId: 'steer-2', input: { content: '', attachments: [audio] } },
+    ]);
+    expect(mock.clearCommand).toHaveBeenCalledTimes(2);
+  });
+
   it('does not accept a mismatched receipt as successful delivery', async () => {
     mock.read.mockResolvedValue(draft());
     mock.request.mockRejectedValueOnce(timeout()).mockResolvedValueOnce(response('other-message'));

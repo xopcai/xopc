@@ -13,7 +13,7 @@ import type { Config } from '../config/schema.js';
 import { getOAuthProviderDefinition } from './oauth/registry.js';
 import type { OAuthCredentials } from './oauth/types.js';
 import { withOAuthProviderLock } from './oauth-provider-lock.js';
-import { assertCurrentModelProvider } from '../providers/provider-policy.js';
+import { assertCurrentModelProvider, isRetiredModelProvider } from '../providers/provider-policy.js';
 
 const log = createLogger('Credentials');
 const warnedExpiredOAuthTokens = new Set<string>();
@@ -274,6 +274,7 @@ export class CredentialResolver {
    */
   async loadOAuthToken(provider: string): Promise<OAuthToken | null> {
     const normalizedProvider = provider.toLowerCase();
+    if (isRetiredModelProvider(normalizedProvider)) return null;
     let token = await this.loadOAuthTokenRecord(normalizedProvider);
     if (!token) return null;
     let expiresAt = token.expiresAt ?? Number.POSITIVE_INFINITY;
@@ -400,6 +401,7 @@ export class CredentialResolver {
    */
   async saveOAuthToken(provider: string, token: OAuthTokenInput): Promise<void> {
     const normalizedProvider = provider.toLowerCase();
+    assertCurrentModelProvider(normalizedProvider);
     await withOAuthProviderLock(normalizedProvider, async () => {
       const oauthPath = resolveOAuthPath(normalizedProvider);
       await mkdir(dirname(oauthPath), { recursive: true });

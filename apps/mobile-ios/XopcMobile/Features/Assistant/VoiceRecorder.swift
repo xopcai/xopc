@@ -188,9 +188,11 @@ struct MicrophonePermissionSettingsButton: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        Button("打开设置", systemImage: "gear") {
+        Button {
             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
             openURL(url)
+        } label: {
+            Label("打开设置", image: "SettingsSliders")
         }
         .buttonStyle(.bordered)
         .accessibilityIdentifier("voice-open-settings")

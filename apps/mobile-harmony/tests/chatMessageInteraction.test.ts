@@ -13,11 +13,24 @@ describe('chat message interactions', () => {
     expect(sheet).not.toContain('FlexAlign.Center');
     expect(sheet).not.toContain('Alignment.Center');
   });
-  it('opens the full message from the preview and the visible view-more action', () => {
-    expect(content).toContain("Button($r('app.string.chat_view_more'))");
-    expect(content).toContain(".id('chat-message-preview-' + this.row.id)");
-    expect(content).toContain(".accessibilityText($r('app.string.chat_message_detail'))");
-    expect(content).toContain('.onClick((): void => { this.onShowMore(this.row); })');
+  it('opens full user and assistant messages from the faded previews and bubbles', () => {
+    const preview = content.slice(content.indexOf('} else if (this.showPreview)'), content.indexOf("if (this.row.role !== 'user')"));
+    expect(preview).toContain('direction: GradientDirection.Bottom');
+    expect(preview).toContain(".id('chat-message-preview-' + this.row.id)");
+    expect(preview).toContain(".accessibilityText($r('app.string.chat_message_detail'))");
+    expect(preview).toContain('.onClick((): void => { this.onShowMore(this.row); })');
+    expect(preview).not.toContain("$r('app.string.chat_view_more')");
+    for (const bubble of ['chat-user-bubble-', 'chat-assistant-card-']) {
+      const card = chat.slice(chat.indexOf(`.id('${bubble}'`), chat.indexOf('.bindContextMenu', chat.indexOf(`.id('${bubble}'`)));
+      expect(card).toContain('item.item.id !== this.latestMessageId && chatMessageNeedsPreview(item.item)) this.openMessageDetail(item.item);');
+    }
+  });
+
+  it('keeps the inline expand controls for long code blocks and tables', () => {
+    const expand = /Button\(this\.expandedBlocks\.has\(item\.item\.id\) \? \$r\('app.string.chat_collapse_content'\) : \$r\('app.string.chat_view_more'\)\)/g;
+    expect(markdown.match(expand)).toHaveLength(2);
+    expect(markdown).toContain('if (markdownCodePreview(item.item.text).length < item.item.text.length)');
+    expect(markdown).toContain('if ((item.item.rows || []).length > 40)');
   });
 
   it('opens anchored long-press menus with haptics and selects assistant text inline', () => {

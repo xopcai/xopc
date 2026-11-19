@@ -338,7 +338,7 @@ struct PersonalAgentOverview: View {
 
     private func taskRow(_ task: PersonalOverviewWork) -> some View {
         NavigationLink {
-            TaskDetailView(configuration: configuration, taskID: task.id)
+            TaskConversationView(configuration: configuration, taskID: task.id)
         } label: {
             row(task.title, subtitle: task.status, symbol: "checkmark.circle", attention: task.requiresAttention)
         }

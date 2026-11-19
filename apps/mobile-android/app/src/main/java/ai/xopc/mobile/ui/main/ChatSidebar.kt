@@ -1,7 +1,6 @@
 package ai.xopc.mobile.ui.main
 
 import ai.xopc.mobile.R
-import ai.xopc.mobile.gateway.RECENT_CONVERSATION_LIMIT
 import ai.xopc.mobile.theme.LocalAttentionColors
 import ai.xopc.mobile.theme.LocalChatColors
 import androidx.annotation.DrawableRes
@@ -13,9 +12,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -101,7 +100,8 @@ internal class ChatSidebarState {
 
 @Composable
 internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: ConnectionUiState,
-  onClose: () -> Unit, onRetry: () -> Unit, onDestination: (HomeTab) -> Unit, onPersonal: () -> Unit,
+  onClose: () -> Unit, onRetry: () -> Unit, onLoadMore: () -> Unit,
+  onDestination: (HomeTab) -> Unit, onPersonal: () -> Unit,
   onNew: () -> Unit, onConversation: (String) -> Unit, onSearch: () -> Unit) {
   LaunchedEffect(state.open, state.dragFraction != null) {
     val fraction = state.dragFraction
@@ -157,58 +157,77 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
           Icon(painterResource(R.drawable.action_close), dismissLabel, Modifier.size(22.dp), tint = scheme.onSurface)
         }
       }
-      SidebarRow(R.string.conversations_search, R.drawable.action_search, "chat-sidebar-search",
-        Modifier.clip(MaterialTheme.shapes.large).background(scheme.surfaceContainer), onClick = onSearch)
-      Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 8.dp)) {
-        val personal = connection.personal.agent
-        SidebarRow(personal?.displayName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.personal_agent_title),
-          "chat-sidebar-personal",
-          Modifier.clip(MaterialTheme.shapes.medium)
-            .background(if (personal != null && personal.conversationId == connection.selectedConversationId)
-              scheme.surfaceContainerHigh else Color.Transparent),
-          enabled = !connection.personal.agentCreating, onClick = onPersonal) {
-          PersonalAgentAvatar(connection.personal.agentAvatar, personal?.appearance ?: "loopi", 22.dp, active = false)
+      val personal = connection.personal.agent
+      val attention = connection.progress.needsUser.size.takeIf {
+        connection.progress.gatewayId == connection.profile?.gatewayId
+      } ?: 0
+      val recent = connection.recentConversations.orEmpty().filter {
+        it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
+      }
+      val nextOffset = connection.recentConversationsNextOffset
+      val requestMore by rememberUpdatedState(onLoadMore)
+      LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("chat-sidebar-list"),
+        verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(bottom = 8.dp)) {
+        item("search") {
+          SidebarRow(R.string.conversations_search, R.drawable.action_search, "chat-sidebar-search",
+            Modifier.padding(bottom = 4.dp).clip(MaterialTheme.shapes.large).background(scheme.surfaceContainer),
+            onClick = onSearch)
         }
-        val attention = connection.progress.needsUser.size.takeIf {
-          connection.progress.gatewayId == connection.profile?.gatewayId
-        } ?: 0
-        SidebarRow(R.string.tab_workbench, R.drawable.tab_progress, "chat-sidebar-workbench", badge = attention) {
-          onDestination(HomeTab.Progress)
+        item("personal") {
+          SidebarRow(personal?.displayName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.personal_agent_title),
+            "chat-sidebar-personal",
+            Modifier.clip(MaterialTheme.shapes.medium)
+              .background(if (personal != null && personal.conversationId == connection.selectedConversationId)
+                scheme.surfaceContainerHigh else Color.Transparent),
+            enabled = !connection.personal.agentCreating, onClick = onPersonal) {
+            PersonalAgentAvatar(connection.personal.agentAvatar, personal?.appearance ?: "loopi", 22.dp, active = false)
+          }
         }
-        SidebarRow(R.string.progress_automations, R.drawable.action_clock, "chat-sidebar-automations") {
-          onDestination(HomeTab.Automations)
+        item("workbench") {
+          SidebarRow(R.string.tab_workbench, R.drawable.tab_progress, "chat-sidebar-workbench", badge = attention) {
+            onDestination(HomeTab.Progress)
+          }
         }
-        SidebarRow(R.string.library_title, R.drawable.tab_notes, "chat-sidebar-library") {
-          onDestination(HomeTab.Notes)
+        item("automations") {
+          SidebarRow(R.string.progress_automations, R.drawable.action_clock, "chat-sidebar-automations") {
+            onDestination(HomeTab.Automations)
+          }
         }
-        SidebarRow(R.string.capability_title, R.drawable.action_capabilities, "chat-sidebar-capabilities") {
-          onDestination(HomeTab.Capabilities)
+        item("library") {
+          SidebarRow(R.string.library_title, R.drawable.tab_notes, "chat-sidebar-library") { onDestination(HomeTab.Notes) }
         }
-        Text(stringResource(R.string.chat_recent_conversations),
-          Modifier.padding(start = 10.dp, top = 16.dp, bottom = 4.dp), style = MaterialTheme.typography.labelMedium,
-          color = scheme.onSurfaceVariant)
-        val recent = connection.recentConversations.orEmpty().filter {
-          it.id != personal?.conversationId && it.id != connection.pendingDeleteId && it.isRecentSidebarCandidate
-        }.take(RECENT_CONVERSATION_LIMIT)
-        recent.forEach { item ->
+        item("capabilities") {
+          SidebarRow(R.string.capability_title, R.drawable.action_capabilities, "chat-sidebar-capabilities") {
+            onDestination(HomeTab.Capabilities)
+          }
+        }
+        items(recent, key = { "conversation-${it.id}" }) { item ->
           Text(item.title, Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
             .background(if (item.id == connection.selectedConversationId) scheme.surfaceContainerHigh else Color.Transparent)
             .clickable(role = Role.Button) { onConversation(item.id) }.heightIn(min = 46.dp)
             .padding(horizontal = 10.dp, vertical = 12.dp).testTag("chat-sidebar-session-${item.id}"),
             maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge, color = scheme.onSurface)
         }
-        if (connection.recentConversationsLoading && connection.recentConversations == null)
-          BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp)
-        else if (connection.recentConversationsError && recent.isEmpty()) Row(Modifier.fillMaxWidth().padding(start = 10.dp),
-          verticalAlignment = Alignment.CenterVertically) {
-          Text(stringResource(R.string.chat_load_error), Modifier.weight(1f),
-            style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-          TextButton(onClick = onRetry, modifier = Modifier.testTag("chat-sidebar-retry")) {
-            Text(stringResource(R.string.progress_refresh))
+        if (connection.recentConversationsLoading) {
+          item("loading") { BrandLoadingIndicator(Modifier.padding(10.dp), extent = 24.dp) }
+        } else if (connection.recentConversationsError) {
+          item("retry") {
+            Row(Modifier.fillMaxWidth().padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+              Text(stringResource(R.string.chat_load_error), Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+              TextButton(onClick = if (nextOffset == null) onRetry else onLoadMore,
+                modifier = Modifier.testTag("chat-sidebar-retry")) {
+                Text(stringResource(R.string.progress_refresh))
+              }
+            }
           }
-        }
-        SidebarRow(R.string.assistant_view_more, R.drawable.tab_conversations, "chat-sidebar-history") {
-          onDestination(HomeTab.Conversations)
+        } else if (nextOffset != null) {
+          item("load-more") {
+            Spacer(Modifier.height(32.dp))
+            LaunchedEffect(nextOffset, state.open) {
+              if (state.open) requestMore()
+            }
+          }
         }
       }
       Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -223,7 +242,7 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
         Spacer(Modifier.weight(1f))
         IconButton(onClick = { onDestination(HomeTab.Me) }, modifier = Modifier
           .background(scheme.surfaceContainer, CircleShape).testTag("chat-sidebar-profile")) {
-          Icon(painterResource(R.drawable.settings_gear), stringResource(R.string.settings_title), Modifier.size(22.dp),
+          Icon(painterResource(R.drawable.settings_sliders), stringResource(R.string.settings_title), Modifier.size(22.dp),
             tint = scheme.onSurface)
         }
       }

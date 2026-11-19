@@ -6,6 +6,7 @@ import {
   type ProviderConfig,
   validateModelsConfig,
 } from '../config/models-json.js';
+import { assertCurrentModelProvider, isRetiredModelProvider } from '../providers/provider-policy.js';
 
 const PROVIDER_ID_REGEX = /^[a-z0-9]([a-z0-9-_]*[a-z0-9])?$/;
 
@@ -23,7 +24,7 @@ export interface CustomImageProviderRecord extends CustomImageProviderInput {
 
 export function listCustomImageProviders(config: ModelsJsonConfig): CustomImageProviderRecord[] {
   return Object.entries(config.providers).flatMap(([providerId, provider]) => {
-    if (!provider.imageGeneration) return [];
+    if (isRetiredModelProvider(providerId) || !provider.imageGeneration) return [];
     return [{
       providerId,
       baseUrl: provider.baseUrl!,
@@ -39,6 +40,7 @@ export function upsertCustomImageProvider(
   input: unknown,
 ): ModelsJsonConfig {
   const providerId = normalizeProviderId(providerIdRaw);
+  assertCurrentModelProvider(providerId);
   const parsed = CustomImageProviderInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '));

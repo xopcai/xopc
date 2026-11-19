@@ -95,8 +95,6 @@ export async function *runGatewayAgent(
   const inputReceivedAtMs = runOptions?.inputReceivedAtMs ?? runStartedAtMs;
   let firstTextSeen = false;
   let reactionWindow: AbortController | undefined;
-  let reactionPending = false;
-  let publishReactionFallback: (() => void) | undefined;
   const cappedAttachments =
     attachments && attachments.length > MAX_CHAT_ATTACHMENTS
       ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
@@ -223,7 +221,6 @@ export async function *runGatewayAgent(
       if (channel === 'webchat') {
         publishRealtime(runTopic, event.type, event);
       }
-      if (reactionClosed || (event.type === 'user_message' && !reactionPending)) publishReactionFallback?.();
       yield event;
     }
   };
@@ -272,18 +269,12 @@ export async function *runGatewayAgent(
           const target = { ...identity, conversationId, runId, transcriptId: webchatTranscriptId,
             actorAgentId: webchatMetadata!.agentId };
           const publish = (reaction: SessionAgentReaction): void => {
-            publishReactionFallback = undefined;
             publishRealtime('sessions', 'session.agent-reaction', reaction);
           };
-          publishReactionFallback = () => reactions.publishFallback(target, deps.getConfig(), publish);
           reactionWindow = new AbortController();
-          reactionPending = true;
           void reactions.consider({ target, text: message, started: runStartedMonotonic,
             signal: AbortSignal.any([mergedSignal, reactionWindow.signal]),
-            eligible: reactionsEnabled, publish }).catch(() => {}).finally(() => {
-            reactionPending = false;
-            publishReactionFallback?.();
-          });
+            eligible: reactionsEnabled, publish }).catch(() => {});
         }
       }
       let streamError: string | undefined;
@@ -375,7 +366,6 @@ export async function *runGatewayAgent(
         return { status: 'error', summary: streamError };
       } finally {
         reactionWindow?.abort();
-        publishReactionFallback?.();
         if (mergedSignal.aborted) {
           terminalStatus = 'cancelled';
           taskRunStatus = 'cancelled';

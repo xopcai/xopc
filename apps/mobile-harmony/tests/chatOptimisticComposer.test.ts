@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import ts from 'typescript';
 
 const source = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
-const methods = source.slice(source.indexOf('  private async send(delivery:'), source.indexOf('  private addReference('));
+const methods = source.slice(source.indexOf('  private defaultSendDelivery('), source.indexOf('  private addReference('));
 const compiled = ts.transpileModule(`class Handler { ${methods} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -34,6 +34,27 @@ describe('optimistic composer handoff', () => {
       options: { loading: false, saving: false, modelId: 'provider/model' },
     });
     await view.send(); expect(view.draft).toBe('keep');
+  });
+  it('steers successive Personal Agent messages while the same reply is active', async () => {
+    const send = vi.fn((_text, _files, _delivery, _refs, enqueued) => { enqueued(); return Promise.resolve(true); });
+    const view = Object.assign(new Handler(), {
+      personalConversation: true, restoringDraft: false, draft: 'Keep it short', attachments: [], refs: [],
+      chat: { selectedId: 'personal', runId: 'active-run', send },
+      palette: { close: vi.fn() }, followAfterSend: vi.fn(), saveDraft: vi.fn(), setPanel: vi.fn(), visible: true,
+      options: { loading: false, saving: false, modelId: 'provider/model', refreshQueue: vi.fn() },
+    });
+
+    await view.send();
+    expect(view.draft).toBe('');
+    const refs = [{ kind: 'note', sourceId: 'brief' }];
+    view.draft = 'Use this brief';
+    view.refs = refs;
+    await view.send();
+
+    expect(send).toHaveBeenNthCalledWith(1, 'Keep it short', [], 'steer', [], expect.any(Function));
+    expect(send).toHaveBeenNthCalledWith(2, 'Use this brief', [], 'steer', refs, expect.any(Function));
+    expect(view.chat.runId).toBe('active-run');
+    expect(view.refs).toEqual([]);
   });
   it('keeps the first message intact until the local draft has a model', async () => {
     const view = Object.assign(new Handler(), {

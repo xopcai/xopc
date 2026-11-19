@@ -419,7 +419,6 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   'vercel-ai-gateway': { name: 'Vercel AI Gateway', category: 'enterprise', supportsApiKey: true },
   'github-copilot': { name: 'GitHub Copilot (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
   'google-gemini-cli': { name: 'Google Gemini CLI (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
-  'google-antigravity': { name: 'Google Antigravity (OAuth)', category: 'oauth', supportsOAuth: true, supportsApiKey: false },
 };
 
 export function getSortedProviders(): string[] {
@@ -455,7 +454,7 @@ export function providerSupportsOAuth(provider: string): boolean {
 }
 
 export function providerSupportsApiKey(provider: string): boolean {
-  return PROVIDER_META[provider]?.supportsApiKey ?? true;
+  return !isRetiredModelProvider(provider) && (PROVIDER_META[provider]?.supportsApiKey ?? true);
 }
 
 // ============================================

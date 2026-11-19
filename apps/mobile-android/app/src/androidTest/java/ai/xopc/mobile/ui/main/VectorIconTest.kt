@@ -38,7 +38,7 @@ class VectorIconTest {
     "down" to R.drawable.action_chevron_down, "jump" to R.drawable.action_arrow_down,
     "chats" to R.drawable.tab_conversations, "progress" to R.drawable.tab_progress,
     "notes" to R.drawable.tab_notes, "me" to R.drawable.tab_me,
-    "settings" to R.drawable.settings_gear, "bookmark" to R.drawable.message_bookmark)
+    "settings" to R.drawable.settings_sliders, "bookmark" to R.drawable.message_bookmark)
 
   @Test fun lightIconsKeepCompleteContoursAndTransparentCenters() = checkIcons(false)
   @Test fun darkIconsKeepCompleteContoursAndTransparentCenters() = checkIcons(true)
@@ -85,7 +85,9 @@ class VectorIconTest {
     }
     assertTrue("Photo dot must be visible", inkAt(bitmap("photo"), 16.5f, 8.5f))
     assertTrue("Profile head must be hollow", !inkAt(bitmap("me"), 12f, 7.5f))
-    assertTrue("Settings center must be hollow", !inkAt(bitmap("settings"), 12f, 12f))
+    val settings = bitmap("settings")
+    assertTrue("Settings slider knobs must be hollow", !inkAt(settings, 15f, 8f) && !inkAt(settings, 9f, 16f))
+    assertTrue("Settings must have two rails", inkAt(settings, 5f, 8f) && inkAt(settings, 19f, 16f))
     val image = rule.onNodeWithTag("icon-atlas").captureToImage().asAndroidBitmap()
     val resolver = rule.activity.contentResolver
     val uri = requireNotNull(resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {

@@ -132,6 +132,7 @@ class Handler(BaseHTTPRequestHandler):
   keyboard_fixture = path.startswith('/keyboard/')
   suggestion_fixture = path.startswith('/next-turn/')
   bubble_fixture = path.startswith('/bubble-width/')
+  sidebar_fixture = path.startswith('/sidebar-pagination/')
   music_fixture = path.startswith('/music/')
   slow_capabilities = path.startswith('/slow-capabilities/')
   live_music_fixture = path.startswith('/music-live/')
@@ -142,6 +143,7 @@ class Handler(BaseHTTPRequestHandler):
   if keyboard_fixture: path = path.removeprefix('/keyboard')
   if suggestion_fixture: path = path.removeprefix('/next-turn')
   if bubble_fixture: path = path.removeprefix('/bubble-width')
+  if sidebar_fixture: path = path.removeprefix('/sidebar-pagination')
   if music_fixture: path = path.removeprefix('/music')
   if slow_capabilities: path = path.removeprefix('/slow-capabilities')
   if live_music_fixture: path = path.removeprefix('/music-live')
@@ -359,6 +361,10 @@ class Handler(BaseHTTPRequestHandler):
       global_model = change['ref']
       global_model_revision += 1
    data=global_model_payload()
+  elif sidebar_fixture and path=='/api/sessions':
+   rows=[dict(row, key=f'11111111-2026-4000-8000-{i:012d}', name=f'会话 {i}') for i in range(1, 28)]
+   offset=int(query.get('offset',['0'])[0]); limit=min(20, int(query.get('limit',['20'])[0]))
+   data={'items':rows[offset:offset+limit],'total':len(rows),'hasMore':offset+limit<len(rows)}
   elif path=='/api/sessions':
    items=[dict(row,key='draft',name='新对话',messageCount=0),row]
    data={'items':items,'total':2,'hasMore':False,'childrenByConversationId':{parent:{'total':1,'activeCount':0,'items':[{'taskId':'task-child','title':'移动端子任务','phase':'closed','activeConversationId':child}]}}}

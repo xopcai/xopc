@@ -19,6 +19,7 @@ struct AppRootView: View {
     @State private var sidebarDismissDrag: CGFloat = 0
     @State private var reopenSidebar = false
     @State private var recentConversations: [ConversationSummary]?
+    @State private var recentNextOffset: Int?
     @State private var recentScope: String?
     @State private var recentError = false
     @State private var recentLoading = false
@@ -242,6 +243,7 @@ struct AppRootView: View {
             setSidebar(false)
             reopenSidebar = false
             recentConversations = nil
+            recentNextOffset = nil
             recentScope = nil
             recentError = false
             pendingAttention = 0
@@ -249,6 +251,7 @@ struct AppRootView: View {
         }
         .onChange(of: appState.listCacheRevision) {
             recentConversations = nil
+            recentNextOffset = nil
             recentScope = nil
             recentError = false
             recentRevision += 1
@@ -336,7 +339,7 @@ struct AppRootView: View {
                                                             attachment: attachment, origin: origin)
             })
         case let .libraryTask(taskID):
-            TaskDetailView(configuration: configuration, taskID: taskID)
+            TaskConversationView(configuration: configuration, taskID: taskID)
         case let .libraryAutomationRun(runID):
             AutomationRunDetailView(configuration: configuration, runID: runID,
                                     initialRun: nil, onOpenConversation: appState.openConversation)
@@ -391,11 +394,12 @@ struct AppRootView: View {
         let recents = recentScope == currentScope ? recentConversations : nil
         return ChatSidebarView(configuration: configuration, personal: personalAgent.record(using: configuration),
                                openingPersonal: personalAgent.isOpening, selectedID: appState.selectedConversation?.id,
-                               recent: recents ?? [], recentLoading: recents == nil && (recentLoading || !recentError),
-                               recentError: recents == nil && recentError,
+                               recent: recents ?? [], recentNextOffset: recents == nil ? nil : recentNextOffset,
+                               recentLoading: recentLoading || (recents == nil && !recentError), recentError: recentError,
                                attention: pendingAttention, onClose: { setSidebar(false) }, onNavigate: navigate,
                                onPersonal: { Task { await openPersonalAgent(remember: true) } },
-                               onConversation: selectConversation, onNew: startNew, onRetry: { recentRevision += 1 })
+                               onConversation: selectConversation, onNew: startNew, onRetry: { recentRevision += 1 },
+                               onLoadMore: { Task { await loadRecent(using: configuration, more: true) } })
     }
 
     private func navigate(_ route: HomeDestination) {
@@ -433,6 +437,7 @@ struct AppRootView: View {
 
     private func setSidebar(_ open: Bool) {
         if open, !sidebarOpen, !recentLoading {
+            recentNextOffset = nil
             recentRevision += 1
         }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.22)) { sidebarOpen = open }
@@ -479,29 +484,46 @@ struct AppRootView: View {
         recentConversations = cached
     }
 
-    private func loadRecent(using configuration: GatewayConfiguration) async {
+    private func loadRecent(using configuration: GatewayConfiguration, more: Bool = false) async {
         let scope = ComposerDraftStore.accountScope(configuration)
+        let revision = recentRevision
+        guard configuration == appState.gatewayConfiguration else { return }
+        let offset: Int
+        if more {
+            guard sidebarOpen, !recentLoading, recentScope == scope, let recentNextOffset else { return }
+            offset = recentNextOffset
+        } else {
+            offset = 0
+            recentNextOffset = nil
+        }
         let requestedAt = Date.now
         recentError = false
         recentLoading = true
         defer {
-            if !Task.isCancelled, configuration == appState.gatewayConfiguration {
+            if !Task.isCancelled, revision == recentRevision, configuration == appState.gatewayConfiguration {
                 recentLoading = false
             }
         }
-        if recentScope != scope || recentConversations == nil {
+        if !more, recentScope != scope || recentConversations == nil {
             await restoreRecents(using: configuration)
         }
         guard !Task.isCancelled else { return }
         do {
-            let rows = try await GatewayClient(configuration: configuration).fetchRecentConversations()
-            guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+            let page = try await GatewayClient(configuration: configuration).fetchRecentConversations(startOffset: offset)
+            guard !Task.isCancelled, revision == recentRevision,
+                  configuration == appState.gatewayConfiguration else { return }
+            let retained = more ? recentConversations ?? [] : []
+            var seen = Set(retained.map(\.id))
             recentScope = scope
-            recentConversations = rows
-            await RecentConversationsStore.shared.write(rows, scope: scope, requestedAt: requestedAt)
+            recentConversations = retained + page.items.filter { seen.insert($0.id).inserted }
+            recentNextOffset = page.nextOffset
+            if !more {
+                await RecentConversationsStore.shared.write(page.items, scope: scope, requestedAt: requestedAt)
+            }
         } catch is CancellationError {
         } catch {
-            guard !Task.isCancelled, configuration == appState.gatewayConfiguration else { return }
+            guard !Task.isCancelled, revision == recentRevision,
+                  configuration == appState.gatewayConfiguration else { return }
             recentError = true
         }
     }

@@ -22,27 +22,34 @@ describe('session manager Gateway requests', () => {
     expect(paths[1].searchParams.has('channel')).toBe(false);
     expect(Object.fromEntries(paths[1].searchParams)).toEqual({ limit: '20', offset: '20', sortBy: 'updatedAt', sortOrder: 'desc', search: '中文 & ?' });
   });
-  it('fills sidebar recents across pages when the first page has only two usable sessions', async () => {
+  it('continues sidebar pagination from the raw offset after filtering unusable sessions', async () => {
     mock.currentProfile.mockReturnValue({ gatewayId: 'gateway', deviceId: 'device' });
     const row = (key: string, messageCount = 1, status = 'active') =>
       ({ key, messageCount, status, updatedAt: '2026-11-17T00:00:00Z' });
     const personal = row('personal');
     const first = row('one');
     const older = ['two', 'three', 'four', 'five', 'six'].map(key => row(key));
+    const last = row('seven');
     mock.request
       .mockResolvedValueOnce(JSON.stringify({ items: [personal, row('empty', 0), first, row('archived', 1, 'archived')],
         total: 12, hasMore: true }))
-      .mockResolvedValueOnce(JSON.stringify({ items: [first, ...older], total: 12, hasMore: true }));
+      .mockResolvedValueOnce(JSON.stringify({ items: [first, ...older], total: 12, hasMore: true }))
+      .mockResolvedValueOnce(JSON.stringify({ items: [row('empty-again', 0), last], total: 12, hasMore: false }));
     mock.cacheWrite.mockResolvedValue(undefined);
 
-    const page = await new XopcChatRepository().refreshRecent();
+    const repo = new XopcChatRepository();
+    const page = await repo.refreshRecent();
+    expect(page.nextOffset).toBe(10);
+    const next = await repo.recentPage(page.nextOffset!);
 
     expect(page.items).toEqual([personal, first, ...older]);
+    expect(next).toMatchObject({ items: [last], hasMore: false, nextOffset: null });
     expect(mock.request.mock.calls.map(([path]) =>
       Object.fromEntries(new URL(path, 'https://gateway.invalid').searchParams))).toEqual(
-      ['0', '4'].map(offset => ({ limit: '20', offset, rootConversationsOnly: 'true', excludeArchived: 'true',
+      ['0', '4', '10'].map(offset => ({ limit: '20', offset, rootConversationsOnly: 'true', excludeArchived: 'true',
         excludeAutomationRuns: 'true', sortBy: 'updatedAt', sortOrder: 'desc', search: '' })));
     expect(mock.cacheWrite).toHaveBeenCalledWith('gateway', 'device', page);
+    expect(mock.cacheWrite).toHaveBeenCalledTimes(1);
   });
   it('combines scoped history filters and search on the Gateway', async () => {
     const repo = new XopcChatRepository();

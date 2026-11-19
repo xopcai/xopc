@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -75,28 +75,52 @@ describe('CredentialResolver OAuth credentials', () => {
     });
   });
 
-  it.each(['google-gemini-cli', 'google-antigravity'])(
-    'preserves raw OAuth fields for %s',
-    async (providerId) => {
-      const resolver = new CredentialResolver();
-      await resolver.saveOAuthCredentials(providerId, {
-        access: 'raw-google-access',
-        refresh: 'google-refresh',
-        expires: Date.now() + 5 * 60_000,
-        projectId: 'project-1',
-      });
+  it('preserves raw Gemini CLI OAuth fields', async () => {
+    const resolver = new CredentialResolver();
+    await resolver.saveOAuthCredentials('google-gemini-cli', {
+      access: 'raw-google-access',
+      refresh: 'google-refresh',
+      expires: Date.now() + 5 * 60_000,
+      projectId: 'project-1',
+    });
 
-      await expect(resolver.loadOAuthTokenRecord(providerId)).resolves.toMatchObject({
-        access: 'raw-google-access',
-        refresh: 'google-refresh',
-        projectId: 'project-1',
-      });
-      await expect(resolver.resolveApiKey(providerId)).resolves.toBe(
-        JSON.stringify({ token: 'raw-google-access', projectId: 'project-1' }),
-      );
+    await expect(resolver.loadOAuthTokenRecord('google-gemini-cli')).resolves.toMatchObject({
+      access: 'raw-google-access',
+      refresh: 'google-refresh',
+      projectId: 'project-1',
+    });
+    await expect(resolver.resolveApiKey('google-gemini-cli')).resolves.toBe(
+      JSON.stringify({ token: 'raw-google-access', projectId: 'project-1' }),
+    );
+  });
 
-    },
-  );
+  it('ignores a retired Antigravity OAuth credential while allowing explicit removal', async () => {
+    const provider = 'google-antigravity';
+    const oauthDir = join(tempDir, 'credentials', 'oauth');
+    const token = {
+      type: 'oauth',
+      provider,
+      access: 'old-access-token',
+      refresh: 'old-refresh-token',
+      expiresAt: Date.now() + 5 * 60_000,
+      createdAt: new Date().toISOString(),
+    };
+    await mkdir(oauthDir, { recursive: true });
+    await writeFile(join(oauthDir, `${provider}.json`), JSON.stringify(token));
+
+    const resolver = new CredentialResolver();
+    const store = new XopcModelCredentialStore(resolver);
+    expect(getOAuthProviderDefinition(provider)).toBeUndefined();
+    await expect(resolver.loadOAuthTokenRecord(provider)).resolves.toMatchObject(token);
+    await expect(resolver.loadOAuthToken(provider)).resolves.toBeNull();
+    await expect(resolver.resolveApiKey(provider)).rejects.toThrow('Antigravity OAuth has been removed');
+    await expect(resolver.saveOAuthToken(provider, token)).rejects.toThrow('Antigravity OAuth has been removed');
+    await expect(store.read(provider)).resolves.toBeUndefined();
+    await expect(store.list()).resolves.toEqual([]);
+
+    await resolver.deleteOAuthToken(provider);
+    await expect(resolver.loadOAuthTokenRecord(provider)).resolves.toBeNull();
+  });
 
   it('disconnects both default API key profile and OAuth token for a provider', async () => {
     const resolver = new CredentialResolver();

@@ -188,20 +188,84 @@ describe('chat read aloud lifecycle', () => {
     mock.request.mockResolvedValueOnce({ responseCode: 503, result: new ArrayBuffer(8) });
     await reader.speak(context, 'Hello', 'one', 'en'); expect(reader.error).toBe('SPEECH_HTTP_503'); expect(reader.state).toBe('idle'); expect(mock.createPlayer).not.toHaveBeenCalled();
   });
+  it('reads only new replies in order and stops the queue when continuous reading is turned off', async () => {
+    const old = { id: 'old', text: 'Old reply' };
+    const first = { id: 'one', text: 'First new reply' };
+    const second = { id: 'two', text: 'Second new reply' };
+    const third = { id: 'three', text: 'Third new reply' };
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', [old], 'en');
+    await reader.toggleContinuous(1);
+    expect(reader.continuousEnabled).toBe(true);
+    expect(reader.state).toBe('idle');
+
+    const replies = [old, first, second, third];
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', replies, 'en');
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', replies, 'en');
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledOnce());
+    expect(reader.sourceId).toBe(first.id);
+    events.get('stateChange')?.('completed');
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(2));
+    expect(reader.sourceId).toBe(second.id);
+
+    await reader.toggleContinuous(1);
+    expect(reader.continuousEnabled).toBe(false);
+    expect(reader.state).toBe('idle');
+    events.get('stateChange')?.('completed');
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', replies.concat({ id: 'four', text: 'Fourth' }), 'en');
+    expect(mock.request).toHaveBeenCalledTimes(2);
+  });
+  it('keeps a manual read to the selected message while continuous reading is off', async () => {
+    const first = { id: 'one', text: 'First' };
+    const second = { id: 'two', text: 'Second' };
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', [first], 'en');
+    await reader.readFrom(1, first);
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', [first, second], 'en');
+    events.get('stateChange')?.('completed');
+    await vi.waitFor(() => expect(reader.state).toBe('idle'));
+    expect(reader.continuousEnabled).toBe(false);
+    expect(mock.request).toHaveBeenCalledOnce();
+  });
+  it('ignores history added above the baseline even if the initial page had no speakable replies', async () => {
+    const user = { id: 'user', role: 'user', text: 'A question' };
+    const old = { id: 'old', role: 'assistant', text: 'Old reply' };
+    const fresh = { id: 'new', role: 'assistant', text: 'New reply' };
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', [], 'en', true, [user]);
+    await reader.toggleContinuous(1);
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', [old], 'en', true, [old, user]);
+    expect(reader.state).toBe('idle');
+    reader.showConversation(1, context, 'gateway', 'chat', 'transcript', [old, fresh], 'en', true, [old, user, fresh]);
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledOnce());
+    expect(reader.sourceId).toBe(fresh.id);
+  });
+  it('carries the switch into a new draft transcript and waits for competing audio before playing', async () => {
+    const first = { id: 'one', text: 'First' };
+    reader.showConversation(1, context, 'gateway', 'draft', '', [], 'en');
+    await reader.toggleContinuous(1);
+    reader.showConversation(1, context, 'gateway', 'draft', 'transcript', [first], 'en', false);
+    expect(reader.continuousEnabled).toBe(true);
+    expect(reader.state).toBe('idle');
+    reader.showConversation(1, context, 'gateway', 'draft', 'transcript', [first], 'en');
+    await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledOnce());
+    expect(reader.sourceId).toBe(first.id);
+  });
   it('suspends on conversation switch and resumes the saved offset before later replies', async () => {
     const first = { id: 'one', text: 'First' };
     const second = { id: 'two', text: 'Second' };
     const third = { id: 'three', text: 'Third' };
-    reader.showConversation(1, context, 'gateway', 'original', 'a', [first, second], 'en');
+    reader.showConversation(1, context, 'gateway', 'original', 'a', [first], 'en');
+    await reader.toggleContinuous(1);
     await reader.readFrom(1, first);
+    reader.showConversation(1, context, 'gateway', 'original', 'a', [first, second], 'en');
     events.get('stateChange')?.('prepared');
     events.get('stateChange')?.('playing');
     events.get('timeUpdate')?.(450);
     reader.showConversation(2, context, 'gateway', 'other', 'b', [], 'en');
+    expect(reader.continuousEnabled).toBe(false);
     expect(reader.state).toBe('idle');
     expect(player.release).toHaveBeenCalledOnce();
 
     reader.showConversation(1, context, 'gateway', 'original', 'a', [first, second, third], 'en');
+    expect(reader.continuousEnabled).toBe(true);
     await vi.waitFor(() => expect(mock.createPlayer).toHaveBeenCalledTimes(2));
     events.get('stateChange')?.('prepared');
     expect(player.seek).toHaveBeenCalledWith(450);
@@ -214,8 +278,9 @@ describe('chat read aloud lifecycle', () => {
       expect(reader.sourceId).toBe(reply.id);
     }
     events.get('stateChange')?.('completed');
-    await vi.waitFor(() => expect(reader.state).toBe('waiting'));
+    await vi.waitFor(() => expect(reader.state).toBe('idle'));
     reader.showConversation(1, context, 'gateway', 'original', 'a', [first, second, third], 'en');
-    expect(reader.state).toBe('waiting');
+    expect(reader.state).toBe('idle');
+    expect(reader.continuousEnabled).toBe(true);
   });
 });

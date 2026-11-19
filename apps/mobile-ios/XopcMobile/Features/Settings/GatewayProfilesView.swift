@@ -426,7 +426,7 @@ struct GatewayProfileEditor: View {
                     }
                 } else if let onManage {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Gateway 管理", systemImage: "gearshape", action: onManage)
+                        Button(action: onManage) { Label("Gateway 管理", image: "SettingsSliders") }
                     }
                 }
             }

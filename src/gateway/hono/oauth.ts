@@ -14,6 +14,7 @@ import { getOAuthProviderInterfaces } from '../../auth/oauth/registry.js';
 import { CredentialResolver } from '../../auth/credentials.js';
 import { getProviderAuthState, isProviderConfigured } from '../../providers/index.js';
 import { disconnectProvider } from '../../providers/provider-disconnect.js';
+import { isRetiredModelProvider } from '../../providers/provider-policy.js';
 import {
   buildOAuthCompletionReadiness,
   refreshModelCatalogAfterOAuth,
@@ -139,6 +140,9 @@ export function createOAuthHandler(service: GatewayService) {
    */
   oauth.get('/:provider', async (c) => {
     const provider = c.req.param('provider');
+    if (isRetiredModelProvider(provider.toLowerCase())) {
+      return c.json({ error: `Unknown OAuth provider: ${provider}` }, 404);
+    }
     const authState = await getProviderAuthState(provider);
     const configured = await isProviderConfigured(provider);
 

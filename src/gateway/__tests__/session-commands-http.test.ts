@@ -46,11 +46,12 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
   let finish!: (value: { status: string; summary: string }) => void;
   const execute = vi.fn((_input: unknown) => new Promise<{ status: string; summary: string }>(resolve => { finish = resolve; }));
   const interrupt = vi.fn(async () => { finish({ status: 'aborted', summary: '' }); });
+  const steer = vi.fn(async (_id: string, _content: string, _runId?: string, _options?: { onHandled?: () => void }) => true);
   const coordinator = new SessionInputCoordinator({
     prioritizeInput: () => true, interrupt, coalesceWindowMs: 5,
     sessionExists: async () => true, execute, emit: vi.fn(),
     prepareAttachments: async (_id, attachments) => attachments,
-    prepareContexts: async () => [], steer: async () => false,
+    prepareContexts: async () => [], steer,
   });
   const service = {
     currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
@@ -134,6 +135,22 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
       input: { content: 'Just the cost' }, origin: command.origin };
     expect((await post({ ...append, configVersion: configVersion + 1 })).status).toBe(409);
     expect(interrupt).not.toHaveBeenCalled();
+    const initialRunId = coordinator.snapshot(id).activeRunId;
+    const steering = ['Keep it short', 'Use a table'].map(content => ({ ...append, clientMessageId: randomUUID(),
+      delivery: 'steer', interrupt: false, input: { content } }));
+    for (const command of steering) {
+      const response = await post(command, true);
+      expect(response.status, await response.clone().text()).toBe(202);
+      expect((await response.json()).payload).toMatchObject({ effectiveDelivery: 'steer', inputState: { activeRunId: initialRunId } });
+    }
+    expect(steer.mock.calls.map(([, , runId, options]) => [runId, options?.onHandled && true])).toEqual([
+      [initialRunId, true], [initialRunId, true],
+    ]);
+    expect(coordinator.snapshot(id).inputs.filter(input => input.status === 'injecting').map(input => input.content))
+      .toEqual(['Keep it short', 'Use a table']);
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledOnce();
+    for (const [, , , options] of steer.mock.calls) options?.onHandled?.();
     const deferred = { ...append, clientMessageId: randomUUID(), interrupt: false, input: { content: 'Later' } };
     expect((await post(deferred)).status).toBe(202);
     expect(interrupt).not.toHaveBeenCalled();

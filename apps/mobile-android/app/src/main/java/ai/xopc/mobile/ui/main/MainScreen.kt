@@ -359,6 +359,7 @@ fun MainScreen(
   onFetchConversationExperts: suspend () -> List<ConversationAgent> = { emptyList() },
   onRefreshConversations: () -> Unit = {},
   onRefreshRecentConversations: () -> Unit = {},
+  onLoadMoreRecentConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
   onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
@@ -686,6 +687,7 @@ fun MainScreen(
     onFetchConversationExperts = onFetchConversationExperts,
     onRefreshConversations = onRefreshConversations,
     onRefreshRecentConversations = onRefreshRecentConversations,
+    onLoadMoreRecentConversations = onLoadMoreRecentConversations,
     onLoadCapabilities = onLoadCapabilities, onCapabilityPanel = onCapabilityPanel,
     onCapabilitySetupChat = onCapabilitySetupChat,
     onLoadCapabilityDevices = onLoadCapabilityDevices, onSetDeviceCapability = onSetDeviceCapability, onUseConnectedComputer = onUseConnectedComputer,
@@ -891,6 +893,7 @@ internal fun MainContent(
   onFetchConversationExperts: suspend () -> List<ConversationAgent> = { emptyList() },
   onRefreshConversations: () -> Unit = {},
   onRefreshRecentConversations: () -> Unit = {},
+  onLoadMoreRecentConversations: () -> Unit = {},
   onLoadCapabilities: suspend (String) -> CapabilityPage = { CapabilityPage(emptyList()) },
   onCapabilitySetupChat: (String, Boolean) -> Unit = { _, _ -> },
   onCapabilityPanel: suspend (String, String, JSONObject?) -> JSONObject = { _, _, _ -> JSONObject() },
@@ -1183,11 +1186,16 @@ internal fun MainContent(
   }
   var personalPage by rememberSaveable(gatewayId) { mutableStateOf("settings") }
   val taskNavigation = rememberTaskChatNavigation(connection)
+  var taskDetailsOpen by rememberSaveable(gatewayId, connection.taskConversationTaskId) { mutableStateOf(false) }
+  fun openTaskConversation(taskId: String) {
+    taskNavigation.open(taskId, connection, sourceTab = selectedTab, onOpen = onOpenTaskChat)
+  }
   var personalOverviewOpen by rememberSaveable(gatewayId) { mutableStateOf(false) }
   var editingOverviewProfile by remember(gatewayId) { mutableStateOf(false) }
   var overviewMedia by remember(gatewayId) { mutableStateOf<MessagePreviewRequest?>(null) }
   val overviewAgent = connection.personal.agent?.takeIf { it.state == "ready" && it.conversationId == conversationId }
-  val showOverview = personalOverviewOpen && selectedTab == HomeTab.Assistant && overviewAgent != null && !connection.automationConfigurationChat
+  val showOverview = personalOverviewOpen && selectedTab == HomeTab.Assistant && overviewAgent != null &&
+    !isTaskChat(connection) && !connection.automationConfigurationChat
   val overviewState = rememberSaveableStateHolder()
   val playback = MusicPlayback.state.collectAsStateWithLifecycle()
   val currentMusic by remember { derivedStateOf { playback.value?.track } }
@@ -1555,6 +1563,9 @@ internal fun MainContent(
             Modifier.padding(horizontal = 12.dp).padding(bottom = 4.dp))
           if (conversationId != null) ConversationMcpAction(conversationId,
             connection.sending || connection.activeRunId != null, onCapabilityPanel)
+          if (isTaskChat(connection)) TaskDetailsTip(
+            onOpen = { closeKeyboard(); taskDetailsOpen = true },
+            modifier = Modifier.align(Alignment.End).padding(end = 16.dp))
           MainBottomSurface("assistant-bottom-surface", assistantActionsOpen) {
             AssistantComposer(connection, assistantComposerValue, { value ->
               inputVoiceNotice.clear()
@@ -1706,7 +1717,7 @@ internal fun MainContent(
           taskChrome = { search, options ->
             TaskConversationChrome(connection, taskNavigation, onRestoreConversation, onSelectTab,
               onOpenProgressTask, onProgressTaskCommand, onStartProgressTask, onSaveProgressTask,
-              onLoadProgressProjects, search, options, insets.calculateBottomPadding())
+              onLoadProgressProjects, search, options, taskDetailsOpen, { taskDetailsOpen = false })
           })
         }
         else ConversationsScreen(connection, rootInsets,
@@ -1737,7 +1748,7 @@ internal fun MainContent(
           onOpenProgressTask, onProgressTaskSearchChange, onSubmitProgressTaskSearch,
           onProgressTaskCommand, onStartProgressTask, onCreateTaskWithChat,
           onLoadProgressProjects, onOpenProgressProject, onCreateProgressTask,
-          { taskId -> taskNavigation.open(taskId, connection, sourceTab = selectedTab, onOpen = onOpenTaskChat) },
+          ::openTaskConversation,
           onSaveProgressTask, onHomeAction = onProgressHomeAction,
           onLoadAutomations = onLoadAutomations, onOpenAutomation = onOpenAutomation,
           onOpenAutomationRun = onOpenAutomationRun, onAutomationAction = onAutomationAction,
@@ -1811,7 +1822,7 @@ internal fun MainContent(
           SpaceLibraryScreen(rootInsets, profile, spaceLibraryAccess, onExit = exitDestination,
             onSource = { source ->
               when {
-                source.kind == "task" && source.taskId != null -> libraryDelivery.value = "task:${source.taskId}"
+                source.kind == "task" && source.taskId != null -> openTaskConversation(source.taskId)
                 source.kind == "automation" && source.automationRunId != null -> libraryDelivery.value = "automation:${source.automationRunId}"
                 else -> {
                   onSelectConversation(source.conversationId)
@@ -1920,7 +1931,7 @@ internal fun MainContent(
         PersonalAgentOverview(personalOverviewAccess, overviewAgent, connection.personal.agentAvatar,
           connection.clarification?.question, onClose = { personalOverviewOpen = false },
           onEdit = { editingOverviewProfile = true },
-          onTask = { id -> openLinkedDetail(HomeTab.Progress, id) },
+          onTask = ::openTaskConversation,
           onSchedule = { prompt -> arrangeAutomation(null, true, prompt) },
           onOpenSchedule = { id -> openLinkedDetail(HomeTab.Automations, id) },
           onDelivery = { delivery ->
@@ -1936,7 +1947,7 @@ internal fun MainContent(
               }
               media != null -> overviewMedia = MessagePreviewRequest(source, media)
               target?.kind == "note" -> openLinkedDetail(HomeTab.Notes, target.id)
-              target?.kind == "task" -> openLinkedDetail(HomeTab.Progress, target.id)
+              target?.kind == "task" -> openTaskConversation(target.id)
               target?.kind == "automation" -> openLinkedDetail(HomeTab.Automations, target.id)
               target?.kind == "project" -> openLinkedDetail(HomeTab.Projects, target.id)
               else -> {
@@ -1964,6 +1975,7 @@ internal fun MainContent(
       }
     }
     ChatSidebar(sidebar, sidebarWidth, connection, onClose = { sidebar.open = false }, onRetry = onRefreshRecentConversations,
+      onLoadMore = onLoadMoreRecentConversations,
       onDestination = { destination ->
         sidebar.open = false
         linkedDetails = emptyList()
@@ -3338,7 +3350,7 @@ private fun AssistantScreen(connection: ConnectionUiState, readingPosition: Chat
             if (personalAgent == null && selected?.isLocalDraft != true) {
               IconButton(onClick = { optionsOpen = true },
                 modifier = Modifier.background(LocalChatColors.current.card, CircleShape).testTag("assistant-options")) {
-                Icon(painterResource(R.drawable.action_more_horizontal), optionsLabel, Modifier.size(22.dp))
+                Icon(painterResource(R.drawable.settings_sliders), optionsLabel, Modifier.size(22.dp))
               }
             }
           }
@@ -4630,7 +4642,7 @@ private fun ContextDetails(connection: ConnectionUiState, onRetry: () -> Unit,
           summary.environment?.let { environment -> item {
             ContextRow(if (environment.kind == "managed_worktree") "Worktree" else "Local",
               listOf(environment.rootPath, environment.branch.orEmpty()).filter(String::isNotBlank)
-                .joinToString("\n"), "context-environment", iconRes = R.drawable.settings_gear) {
+                .joinToString("\n"), "context-environment", iconRes = R.drawable.settings_sliders) {
               choose(if (summary.project != null) "environment" else "directory")
             }
           } }
@@ -4879,7 +4891,7 @@ private fun PairingScreen(
       Spacer(modifier = Modifier.weight(1f))
       if (onSettings != null) IconButton(onClick = onSettings, enabled = !busy,
         modifier = Modifier.size(44.dp).testTag("pairing-settings")) {
-        Icon(painterResource(R.drawable.settings_gear),
+        Icon(painterResource(R.drawable.settings_sliders),
           contentDescription = stringResource(R.string.settings_title),
           tint = MaterialTheme.colorScheme.onSurfaceVariant)
       }

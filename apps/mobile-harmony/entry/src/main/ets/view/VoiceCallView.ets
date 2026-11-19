@@ -3,6 +3,7 @@ import { XopcClarificationCommand } from '../model/clarification';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcVoiceCall } from '../service/voiceCall';
 import { userErrorMessage } from '../common/userError';
+import { XopcFloatingAudioCard, XopcFloatingAudioPosition } from './FloatingAudioCard';
 
 interface XopcVoiceCallControl {
   label: Resource;
@@ -19,30 +20,12 @@ export struct XopcVoiceCallView {
   @Require @Param call: XopcVoiceCall;
   @Param viewportWidth: number = 0;
   @Param viewportHeight: number = 0;
+  @Local miniPosition: XopcFloatingAudioPosition = new XopcFloatingAudioPosition();
   @Local now: number = Date.now();
-  @Local miniX: number = 16;
-  @Local miniY: number = 66;
   private timer: number = -1;
-  private dragStartX: number = 0;
-  private dragStartY: number = 0;
-  private lastDragAt: number = 0;
 
   aboutToAppear(): void { this.timer = setInterval((): void => { this.now = Date.now(); }, 1000); }
   aboutToDisappear(): void { clearInterval(this.timer); this.timer = -1; }
-
-  @Monitor('viewportWidth', 'viewportHeight')
-  onViewportChange(): void {
-    this.miniX = this.clampX(this.miniX);
-    this.miniY = this.clampY(this.miniY);
-  }
-
-  private clampX(value: number): number {
-    return Math.max(8, Math.min(value, this.viewportWidth > 0 ? Math.max(8, this.viewportWidth * 0.08 - 8) : value));
-  }
-
-  private clampY(value: number): number {
-    return Math.max(8, Math.min(value, this.viewportHeight > 0 ? Math.max(8, this.viewportHeight - 70) : value));
-  }
 
   private elapsed(): string {
     const seconds = Math.max(0, Math.floor((this.now - this.call.startedAt) / 1000));
@@ -108,6 +91,32 @@ export struct XopcVoiceCallView {
     }
   }
 
+  @Builder miniControls() {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 8 }) {
+        Stack() {
+          SymbolGlyph($r('sys.symbol.phone')).fontSize(16).fontColor([this.colors.accent])
+        }.width(32).height(32).borderRadius(16).backgroundColor(this.colors.accentSoft).accessibilityLevel('no')
+        Column({ space: 2 }) {
+          Text(this.call.name || $r('app.string.voice_call_title')).fontSize(13).fontWeight(FontWeight.Medium)
+            .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+          Row({ space: 6 }) {
+            Text(this.status()).fontSize(11).fontColor(this.colors.secondary).maxLines(1).flexShrink(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(this.elapsed()).fontSize(11).fontColor(this.colors.secondary).maxLines(1).flexShrink(0)
+          }.width('100%')
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+      }.width('100%')
+    }.id('voice-call-mini-open').layoutWeight(1).height(44).padding({ left: 4, right: 4 }).backgroundColor(Color.Transparent)
+      .accessibilityDescription($r('app.string.voice_call_return')).onClick((): void => { this.call.expanded = true; })
+    Button({ type: ButtonType.Circle }) {
+      Stack() {
+        SymbolGlyph($r('sys.symbol.phone')).fontSize(17).fontColor([Color.White]).rotate({ angle: 135 })
+      }.width(32).height(32).borderRadius(16).backgroundColor(this.colors.danger)
+    }.id('voice-call-mini-end').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+      .accessibilityText($r('app.string.voice_call_end')).onClick((): void => { this.call.end(); })
+  }
+
   build() {
     if (this.call.phase !== 'idle') {
       if (this.call.expanded) {
@@ -162,25 +171,10 @@ export struct XopcVoiceCallView {
           }.width('100%').justifyContent(FlexAlign.Center).padding({ bottom: 26 })
         }.width('100%').height('100%').padding({ top: 16, left: 16, right: 16 }).backgroundColor(this.colors.surface).zIndex(60)
       } else {
-        Row({ space: 10 }) {
-          SymbolGlyph($r('sys.symbol.waveform')).fontSize(25).fontColor([this.colors.accent])
-          Column({ space: 2 }) {
-            Text(this.call.name || $r('app.string.voice_call_title')).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground).maxLines(1)
-            Text(this.status()).fontSize(11).fontColor(this.colors.secondary).maxLines(1)
-          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          Text(this.elapsed()).fontSize(11).fontColor(this.colors.tertiary)
-          Button() { SymbolGlyph($r('sys.symbol.xmark')).fontSize(18).fontColor([Color.White]) }
-            .width(38).height(38).padding(0).backgroundColor(this.colors.danger).borderRadius(19).onClick((): void => { this.call.end(); })
-        }.id('voice-call-mini').width('92%').height(62).padding({ left: 14, right: 10 }).backgroundColor(this.colors.panel)
-          .borderRadius(this.colors.corner(18)).position({ x: this.miniX, y: this.miniY }).zIndex(60)
-          .gesture(PanGesture({ fingers: 1, direction: PanDirection.All, distance: 6 })
-            .onActionStart((_event: GestureEvent): void => { this.dragStartX = this.miniX; this.dragStartY = this.miniY; })
-            .onActionUpdate((event: GestureEvent): void => {
-              this.miniX = this.clampX(this.dragStartX + event.offsetX);
-              this.miniY = this.clampY(this.dragStartY + event.offsetY);
-            })
-            .onActionEnd((_event: GestureEvent): void => { this.lastDragAt = Date.now(); }))
-          .onClick((): void => { if (Date.now() - this.lastDragAt > 250) this.call.expanded = true; })
+        XopcFloatingAudioCard({ cardId: 'voice-call-mini', viewportWidth: this.viewportWidth,
+          viewportHeight: this.viewportHeight, topClearance: 58, bottomClearance: 52, dragPosition: this.miniPosition,
+          content: () => { this.miniControls(); } })
+          .zIndex(60)
       }
     }
   }

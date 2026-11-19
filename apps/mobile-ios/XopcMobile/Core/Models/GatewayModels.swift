@@ -97,7 +97,6 @@ struct SidebarTask: Decodable, Equatable, Identifiable, Sendable {
 }
 
 struct ConversationSummary: Codable, Equatable, Identifiable, Sendable {
-    static let recentSidebarLimit = 6
 
     var isRecentSidebarCandidate: Bool {
         status != "archived" && messageCount > 0

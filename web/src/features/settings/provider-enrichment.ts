@@ -115,17 +115,6 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     aliases: ['gemini cli', 'gemini-cli'],
     envVars: ['GEMINI_CLI_TOKEN', 'GOOGLE_TOKEN'],
   },
-  'google-antigravity': {
-    apiKeyUrl: 'https://console.cloud.google.com/apis/credentials',
-    pricingUrl: 'https://cloud.google.com/pricing',
-    docsUrl: 'https://cloud.google.com/docs',
-    description: 'Google Antigravity — internal/experimental Google AI endpoint.',
-    descriptionZh: 'Google Antigravity，Google 内部/实验性 AI 端点。',
-    bestFor: ['experimental'],
-    freeTier: false,
-    aliases: ['antigravity', 'google antigravity'],
-    envVars: ['ANTIGRAVITY_API_KEY'],
-  },
   groq: {
     apiKeyUrl: 'https://console.groq.com/keys',
     pricingUrl: 'https://groq.com/pricing/',

@@ -7,6 +7,7 @@ struct ChatSidebarView: View {
     let openingPersonal: Bool
     let selectedID: String?
     let recent: [ConversationSummary]
+    let recentNextOffset: Int?
     let recentLoading: Bool
     let recentError: Bool
     let attention: Int
@@ -16,6 +17,7 @@ struct ChatSidebarView: View {
     let onConversation: (ConversationSummary) -> Void
     let onNew: () -> Void
     let onRetry: () -> Void
+    let onLoadMore: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -24,15 +26,16 @@ struct ChatSidebarView: View {
                     .accessibilityHidden(true)
                 Text(verbatim: "xopc").font(.title2.bold())
                 Spacer()
-                circleButton("关闭导航", symbol: "xmark", action: onClose)
+                circleButton("关闭导航", icon: Image(systemName: "xmark"), action: onClose)
                     .accessibilityIdentifier("chat-sidebar-close")
             }
             .padding(.leading, 10)
-            row("搜索对话", symbol: "magnifyingglass") { onNavigate(.conversationSearch) }
-                .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(20)))
-                .accessibilityIdentifier("chat-sidebar-search")
             ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    row("搜索对话", symbol: "magnifyingglass") { onNavigate(.conversationSearch) }
+                        .background(mobileTheme.input, in: .rect(cornerRadius: mobileTheme.corner(20)))
+                        .padding(.bottom, 4)
+                        .accessibilityIdentifier("chat-sidebar-search")
                     personalRow
                     row("工作台", symbol: "square.grid.2x2", badge: attention) { onNavigate(.progress) }
                         .accessibilityIdentifier("chat-sidebar-workbench")
@@ -42,10 +45,8 @@ struct ChatSidebarView: View {
                         .accessibilityIdentifier("chat-sidebar-library")
                     row("capability_title", symbol: "puzzlepiece") { onNavigate(.capabilities) }
                         .accessibilityIdentifier("chat-sidebar-capabilities")
-                    Text("最近对话").font(.footnote).foregroundStyle(.secondary)
-                        .padding(.leading, 10).padding(.top, 14)
                     let recentRows = recent.filter { $0.id != personal?.conversationId && $0.isRecentSidebarCandidate }
-                    ForEach(recentRows.prefix(ConversationSummary.recentSidebarLimit)) { item in
+                    ForEach(recentRows) { item in
                         Button { onConversation(item) } label: {
                             Text(verbatim: item.displayName)
                                 .lineLimit(1).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -58,21 +59,12 @@ struct ChatSidebarView: View {
                         .accessibilityAddTraits(selectedID == item.id ? .isSelected : [])
                         .accessibilityIdentifier("chat-sidebar-session-\(item.id)")
                     }
-                    if recentLoading {
-                        ProgressView().padding(10)
-                    } else if recentError {
-                        HStack {
-                            Text("无法读取对话").font(.footnote).foregroundStyle(.secondary)
-                            Spacer()
-                            Button("重试", action: onRetry).frame(minHeight: 44)
-                        }.padding(.horizontal, 10)
-                    }
-                    row("查看更多", symbol: "list.bullet") { onNavigate(.conversations) }
-                        .accessibilityIdentifier("chat-sidebar-history")
+                    pagination
                 }
-                .padding(.vertical, 6)
+                .padding(.bottom, 6)
             }
             .scrollIndicators(.hidden)
+            .accessibilityIdentifier("chat-sidebar-list")
             HStack {
                 Button(action: onNew) {
                     Label("新建对话", systemImage: "square.and.pencil")
@@ -85,7 +77,7 @@ struct ChatSidebarView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("chat-sidebar-new")
                 Spacer()
-                circleButton("设置", symbol: "gearshape") { onNavigate(.settings) }
+                circleButton("设置", icon: Image("SettingsSliders")) { onNavigate(.settings) }
                     .accessibilityIdentifier("chat-sidebar-profile")
             }
         }
@@ -93,6 +85,24 @@ struct ChatSidebarView: View {
         .padding(.vertical, 8)
         .background(mobileTheme.panel.ignoresSafeArea(edges: .vertical))
         .accessibilityAction(.escape, onClose)
+    }
+
+    @ViewBuilder
+    private var pagination: some View {
+        if recentLoading {
+            ProgressView().padding(10)
+        } else if recentError {
+            HStack {
+                Text("无法读取对话").font(.footnote).foregroundStyle(.secondary)
+                Spacer()
+                Button("重试", action: recentNextOffset == nil ? onRetry : onLoadMore).frame(minHeight: 44)
+            }.padding(.horizontal, 10)
+        } else if let recentNextOffset {
+            Color.clear.frame(height: 32)
+                .accessibilityHidden(true)
+                .id(recentNextOffset)
+                .onAppear(perform: onLoadMore)
+        }
     }
 
     private var personalRow: some View {
@@ -111,9 +121,9 @@ struct ChatSidebarView: View {
         .accessibilityIdentifier("chat-sidebar-personal")
     }
 
-    private func circleButton(_ title: LocalizedStringKey, symbol: String, action: @escaping () -> Void) -> some View {
+    private func circleButton(_ title: LocalizedStringKey, icon: Image, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.title3)
+            icon.font(.title3)
                 .frame(width: 46, height: 46)
                 .background(mobileTheme.card, in: Circle())
         }

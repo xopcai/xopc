@@ -112,7 +112,6 @@ const PROVIDER_HINTS: Record<string, string> = {
   minimax: 'MiniMax text models; Anthropic-compatible endpoint is preferred for agent workflows.',
   'minimax-cn': 'MiniMax China endpoint for domestic access.',
   'google-gemini-cli': 'Gemini through Google Cloud Code Assist OAuth.',
-  'google-antigravity': 'Gemini/Antigravity OAuth model access.',
 };
 
 const RECOMMENDED_MODEL_PATTERNS: Record<string, RegExp[]> = {

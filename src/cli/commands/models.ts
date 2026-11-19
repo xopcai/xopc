@@ -25,6 +25,7 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors } from '../utils/colors.js';
 import { runCliOAuthLogin } from '../utils/oauth-login.js';
 import { disconnectProvider } from '../../providers/provider-disconnect.js';
+import { isRetiredModelProvider } from '../../providers/provider-policy.js';
 import { XopcCloudAccountService } from '../../providers/xopc-cloud-account-service.js';
 import { creditDecimal } from '@xopcai/gateway-contract';
 
@@ -188,10 +189,10 @@ async function runModelsSet(model: string): Promise<void> {
 async function runAuthList(options: ModelsAuthListOptions): Promise<void> {
   const resolver = new CredentialResolver();
   const profiles = (await resolver.listProfiles()).filter((profile) =>
-    options.provider ? profile.provider === options.provider : true,
+    !isRetiredModelProvider(profile.provider) && (!options.provider || profile.provider === options.provider),
   );
   const oauthTokens = (await resolver.listOAuthTokens()).filter((token) =>
-    options.provider ? token.provider === options.provider : true,
+    !isRetiredModelProvider(token.provider) && (!options.provider || token.provider === options.provider),
   );
 
   if (options.json) {
@@ -258,19 +259,13 @@ async function runAuthLogout(provider: string): Promise<void> {
   console.log(`✅ Credentials removed for ${provider}`);
 }
 
-function attachModelsListOptions(command: Command): Command {
-  return command
-    .option('--json', 'Output as JSON', false)
-    .option('--all, -a', 'Show all built-in models', false)
-    .option('--provider <id>', 'Filter by provider id');
-}
-
 function createModelsCommand(_ctx: CLIContext): Command {
   const cmd = new Command('models')
     .description('List and manage models and model auth')
     .addHelpText(
       'after',
       formatExamples([
+        'xopc models --json',
         'xopc models list',
         'xopc models status',
         'xopc models set deepseek/deepseek-flash',
@@ -280,13 +275,15 @@ function createModelsCommand(_ctx: CLIContext): Command {
       ]),
     );
 
-  attachModelsListOptions(cmd).action(async (options) => {
-    await runModelsList(options);
-  });
-
-  attachModelsListOptions(cmd.command('list').description('List available models')).action(async (options) => {
-    await runModelsList(options);
-  });
+  cmd
+    .command('list', { isDefault: true })
+    .description('List available models (default)')
+    .option('--json', 'Output as JSON', false)
+    .option('--all, -a', 'Show all built-in models', false)
+    .option('--provider <id>', 'Filter by provider id')
+    .action(async (options) => {
+      await runModelsList(options);
+    });
 
   cmd
     .command('status')
@@ -350,7 +347,12 @@ function createModelsCommand(_ctx: CLIContext): Command {
     .option('--method <method>', 'Auth method: oauth or api-key')
     .option('--set-default', 'Set the provider first model as default after login', false)
     .action(async (options: ModelsAuthLoginOptions & { provider: string }) => {
-      await runAuthLogin(options.provider, options);
+      try {
+        await runAuthLogin(options.provider, options);
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
     });
 
   auth

@@ -256,7 +256,7 @@ const PROVIDER_ID_REGEX = /^[a-z0-9]([a-z0-9-_]*[a-z0-9])?$/;
 const RESERVED_PROVIDER_IDS = new Set([
 	'amazon-bedrock', 'anthropic', 'azure', 'cerebras',
 	'cloudflare-ai-gateway', 'cloudflare-workers-ai', 'dashscope', 'deepseek', 'fal', 'fireworks', 'github-copilot',
-	'google', 'google-antigravity', 'google-gemini-cli', 'google-vertex', 'groq',
+	'google', 'google-gemini-cli', 'google-vertex', 'groq',
 	'huggingface', 'kimi-coding', 'minimax', 'minimax-cn', 'mistral', 'moonshotai', 'moonshotai-cn',
 	'openai', 'opencode', 'opencode-go', 'openrouter',
 	'together', 'vercel-ai-gateway', 'xai', 'xiaomi', 'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn',
@@ -290,7 +290,12 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 		try {
 			assertCurrentModelProvider(providerName);
 		} catch (error) {
-			errors.push({ path: `providers.${providerName}`, message: (error as Error).message, severity: 'error' });
+			// Keep other providers in installed models.json files usable after removing Antigravity.
+			errors.push({
+				path: `providers.${providerName}`,
+				message: (error as Error).message,
+				severity: providerName === 'google-antigravity' ? 'warning' : 'error',
+			});
 			continue;
 		}
 		if (providerName === 'xopc-cloud') {

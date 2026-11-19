@@ -125,9 +125,6 @@ export struct XopcChatMessageContent {
         }.id('chat-message-preview-' + this.row.id).width('100%')
           .accessibilityText($r('app.string.chat_message_detail'))
           .onClick((): void => { this.onShowMore(this.row); })
-        Button($r('app.string.chat_view_more')).height(44).fontSize(13)
-          .padding({ left: 0, right: 12 }).backgroundColor(Color.Transparent).fontColor(this.colors.chat.action)
-          .onClick((): void => { this.onShowMore(this.row); })
       } else {
         if (this.row.role !== 'user') {
           ForEach(this.row.refs || [], (ref: XopcContextRef) => {

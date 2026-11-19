@@ -169,7 +169,8 @@ export struct XopcSessionsView {
   private opening: boolean = false;
 
   aboutToAppear(): void {
-    this.historyMode = appSettings.pageSelection('conversation-history', ['recent', 'projects', 'experts'], 'recent');
+    this.historyMode = this.startSearching ? 'recent'
+      : appSettings.pageSelection('conversation-history', ['recent', 'projects', 'experts'], 'recent');
     this.searchOpen = this.startSearching;
   }
   aboutToDisappear(): void { this.catalogRevision++; this.sessions.dispose(); }

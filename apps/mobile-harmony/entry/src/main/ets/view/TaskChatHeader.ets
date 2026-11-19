@@ -2,7 +2,7 @@ import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { taskCriterionState } from '../common/taskManagement';
 import { userErrorMessage } from '../common/userError';
 import { XopcWorkspaceRepository } from '../repository/workspaceRepository';
-import { XopcWorkspaceItem, XopcMobileTaskReceipt, XopcMobileTaskAttention, XopcTaskPhaseChange } from '../model/workspace';
+import { XopcWorkspaceItem, XopcMobileTaskReceipt, XopcMobileTaskAttention, XopcMobileTaskDependency, XopcTaskPhaseChange } from '../model/workspace';
 import { XopcMobileRoute } from '../model/home';
 import { XopcListSkeleton } from './MobileComponents';
 import { layoutState } from '../service/layoutState';
@@ -10,10 +10,8 @@ import { layoutState } from '../service/layoutState';
 @ComponentV2
 export struct XopcTaskChatHeader {
   @Param taskId: string = '';
-  @Param expanded: boolean = false;
+  @Param detailsRequest: number = 0;
   @Param topInset: number = 0;
-  @Param bottomClearance: number = 0;
-  @Event onToggle: () => void = (): void => {};
   @Event onClose: () => void = (): void => {};
   @Event onSearch: () => void = (): void => {};
   @Event onOptions: () => void = (): void => {};
@@ -24,7 +22,7 @@ export struct XopcTaskChatHeader {
   @Local busy: boolean = false;
   @Local propertiesOpen: boolean = false;
   @Local historyOpen: boolean = false;
-  @Local availableHeight: number = 0;
+  @Local detailsOpen: boolean = false;
   @Local headerVisible: boolean = true;
   private repository: XopcWorkspaceRepository = new XopcWorkspaceRepository();
   private timer: number = -1;
@@ -44,6 +42,11 @@ export struct XopcTaskChatHeader {
       if (generation === this.generation) { this.item = item; this.error = ''; }
     } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.busy = false; }
+  }
+  @Monitor('detailsRequest')
+  openDetails(): void {
+    this.detailsOpen = true;
+    void this.refresh();
   }
   private phaseLabel(): ResourceStr {
     if (this.item?.resolution === 'done') return $r('app.string.complete');
@@ -110,6 +113,9 @@ export struct XopcTaskChatHeader {
           Button($r('app.string.refresh')).onClick((): void => { void this.refresh(); })
         }
         if (!this.item) { XopcListSkeleton() }
+        if (this.item) {
+          Text(this.phaseLabel()).fontSize(13).fontColor(this.colors.secondary)
+        }
         if (this.item?.taskDetail?.attention.length) {
           Column({ space: 8 }) {
             Text($r('app.string.task_needs_attention')).fontSize(13).fontColor(this.colors.secondary)
@@ -141,6 +147,18 @@ export struct XopcTaskChatHeader {
             }, (output: string): string => output)
           }.width('100%').alignItems(HorizontalAlign.Start)
         }
+        if (this.item?.taskDetail?.dependencies.length) {
+          Column({ space: 8 }) {
+            Text($r('app.string.task_dependencies')).fontSize(13).fontColor(this.colors.secondary)
+            ForEach(this.item?.taskDetail?.dependencies ?? [], (dependency: XopcMobileTaskDependency) => {
+              Button(dependency.title).width('100%').height(44).backgroundColor(this.colors.input)
+                .fontColor(this.colors.foreground).onClick((): void => {
+                  this.detailsOpen = false;
+                  this.onNavigate({ page: 'task-chat', itemId: dependency.id });
+                })
+            }, (dependency: XopcMobileTaskDependency): string => dependency.id)
+          }.width('100%').alignItems(HorizontalAlign.Start)
+        }
         Column({ space: 8 }) {
           Button($r('app.string.workspace_details')).height(44).backgroundColor(Color.Transparent).fontColor(this.colors.foreground)
             .onClick((): void => { this.propertiesOpen = !this.propertiesOpen; })
@@ -161,53 +179,42 @@ export struct XopcTaskChatHeader {
           }
         }.width('100%').alignItems(HorizontalAlign.Start)
       }.width('100%').padding(20).alignItems(HorizontalAlign.Start)
-    }.id('task-chat-overview').width('100%').height(Math.max(0, Math.min(this.availableHeight * 0.5, this.availableHeight - this.topInset - this.bottomClearance - 64)))
-      .scrollBar(BarState.Auto).backgroundColor(this.colors.panel).borderRadius({ bottomLeft: 14, bottomRight: 14 })
+    }.id('task-chat-overview').width('100%').layoutWeight(1).scrollBar(BarState.Auto)
+  }
+
+  @Builder
+  detailsSheet() {
+    Column() {
+      Row() {
+        Text(this.item?.title || $r('app.string.task_detail_title')).fontSize(18).fontWeight(FontWeight.Bold)
+          .fontColor(this.colors.foreground).layoutWeight(1).maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([this.colors.secondary])
+        }.id('task-chat-details-close').width(44).height(44).padding(0).backgroundColor(this.colors.input)
+          .accessibilityText($r('app.string.close')).onClick((): void => { this.detailsOpen = false; })
+      }.width('100%').padding({ left: 20, right: 16, top: 8 })
+      this.overview()
+    }.width('100%').height('100%')
   }
 
   build() {
-    Stack({ alignContent: Alignment.TopStart }) {
-      if (this.expanded) {
-        Column().id('task-chat-scrim').width('100%')
-          .height(Math.max(0, this.availableHeight - this.topInset - 64 - this.bottomClearance))
-          .position({ x: 0, y: this.topInset + 64 }).backgroundColor('#18000000')
-          .onClick((): void => { this.onToggle(); })
-      }
-      Column() {
-        Row({ space: 4 }) {
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(18).fontColor([this.colors.foreground])
-          }.id('task-chat-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-            .accessibilityText($r('app.string.back')).onClick((): void => { this.onClose(); })
-          Row() {
-            Button({ type: ButtonType.Normal }) {
-              Row({ space: 8 }) {
-                Column({ space: 2 }) {
-                  Text(this.item?.title || $r('app.string.task_detail_title')).fontSize(15).fontWeight(FontWeight.Medium)
-                    .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                  Row({ space: 4 }) {
-                    Text(this.item ? this.phaseLabel() : $r('app.string.task_detail_title')).fontSize(12).fontColor(this.colors.secondary)
-                    if (this.latestReceipt()?.summary) {
-                      Text('· ' + (this.latestReceipt()?.summary ?? '')).fontSize(12).fontColor(this.colors.secondary)
-                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-                    }
-                  }.width('100%')
-                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(14).fontColor([this.colors.secondary])
-              }.width('100%').padding({ left: 12, right: 10 })
-            }.id('task-chat-summary-toggle').constraintSize({ maxWidth: '85%' }).height(48).padding(0)
-              .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
-              .onClick((): void => { this.onToggle(); })
-          }.layoutWeight(1)
-          Button({ type: ButtonType.Circle }) {
-            SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(20).fontColor([this.colors.foreground])
-          }.id('task-chat-menu').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
-            .accessibilityText($r('app.string.more')).bindMenu(this.taskMenu)
-        }.id('task-chat-header').width('100%').height(64).padding({ left: 8, right: 8 })
-        if (this.expanded) { this.overview() }
-      }.width('100%').padding({ top: this.topInset }).backgroundColor(Color.Transparent)
-    }.width('100%').height('100%').hitTestBehavior(HitTestMode.Transparent)
-      .onAreaChange((_previous: Area, current: Area): void => { this.availableHeight = Number(current.height); })
+    Row({ space: 10 }) {
+      Button({ type: ButtonType.Circle }) {
+        SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(18).fontColor([this.colors.foreground])
+      }.id('task-chat-close').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+        .accessibilityText($r('app.string.back')).onClick((): void => { this.onClose(); })
+      Text(this.item?.title || $r('app.string.task_detail_title')).fontSize(16).fontWeight(FontWeight.Medium)
+        .fontColor(this.colors.foreground).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        .layoutWeight(1)
+      Button({ type: ButtonType.Circle }) {
+        SymbolGlyph($r('sys.symbol.slider_horizontal_2')).fontSize(20).fontColor([this.colors.foreground])
+      }.id('task-chat-menu').width(44).height(44).padding(0).backgroundColor(this.colors.chat.card)
+        .accessibilityText($r('app.string.more')).bindMenu(this.taskMenu)
+    }.id('task-chat-header').width('100%').height(this.topInset + 64).padding({ left: 12, right: 12, top: this.topInset })
+      .backgroundColor(this.colors.chat.canvas)
+      .bindSheet($$this.detailsOpen, this.detailsSheet, {
+        height: '74%', dragBar: true, showClose: false, backgroundColor: this.colors.panel })
       .onVisibleAreaChange([0, 0.1], (visible: boolean, ratio: number): void => {
         const returning = !this.headerVisible && visible && ratio > 0;
         this.headerVisible = visible && ratio > 0;

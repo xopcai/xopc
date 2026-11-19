@@ -1,10 +1,35 @@
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { personalPromptNeedsAttention, personalWorkStatus, XopcPersonalWorkItem } from '../model/personalOverview';
+import { personalPromptNeedsAttention, XopcPersonalWorkItem } from '../model/personalOverview';
 import { XopcPersonalChatActivityViewModel } from '../viewmodel/personalChatActivityViewModel';
 
 interface XopcPersonalChatWorkSlide {
   task: XopcPersonalWorkItem;
-  index: number;
+}
+
+const PERSONAL_WORK_TOUCH_HEIGHT: number = 44;
+const PERSONAL_WORK_PILL_HEIGHT: number = 32;
+const PERSONAL_WORK_PILL_MAX_WIDTH: number = 156;
+
+@ComponentV2
+struct XopcPersonalWorkPillFill {
+  @Param animate: boolean = false;
+  @Local colors: XopcThemeColors = appThemeColors;
+  @Local highlighted: boolean = false;
+
+  @Monitor('animate')
+  onAnimationChange(): void { this.highlighted = this.animate; }
+
+  build() {
+    Stack() {
+      Column().width('100%').height('100%').backgroundColor(this.colors.accentSoft)
+        .opacity(this.highlighted ? 0.9 : 0)
+        .animation({ duration: this.animate ? 1400 : 0, curve: Curve.EaseInOut,
+          iterations: this.animate ? -1 : 1, playMode: PlayMode.Alternate })
+    }.width('100%').height(PERSONAL_WORK_PILL_HEIGHT).backgroundColor(this.colors.chat.card)
+      .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
+      .hitTestBehavior(HitTestMode.None).accessibilityLevel('no-hide-descendants')
+      .onAppear((): void => { this.highlighted = this.animate; })
+  }
 }
 
 @ComponentV2
@@ -39,39 +64,50 @@ export struct XopcPersonalChatActivity {
   @Monitor('runId', 'refreshRevision', 'promptId')
   refresh(): void { void this.model.refresh(); }
 
-  private statusLabel(item: XopcPersonalWorkItem): Resource {
-    switch (personalWorkStatus(item)) {
-      case 'allocating': return $r('app.string.chat_personal_task_allocating');
-      case 'queued': return $r('app.string.chat_personal_task_queued');
-      case 'waiting': return $r('app.string.task_execution_waiting');
-      case 'verifying': return $r('app.string.task_execution_verifying');
-      default: return $r('app.string.task_phase_in_progress');
-    }
-  }
-
   @Builder taskRow($$: XopcPersonalChatWorkSlide) {
     Button({ type: ButtonType.Normal }) {
-      Row({ space: 8 }) {
-        SymbolGlyph($r('sys.symbol.clock')).fontSize(17).fontColor([this.colors.chat.action]).accessibilityLevel('no')
-        Column({ space: 2 }) {
-          Text($$.task.title).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-            .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.statusLabel($$.task)).fontSize(12).fontColor(this.colors.chat.secondary).maxLines(1)
-        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        if (this.model.working.length > 1) {
-          Text(`${$$.index + 1} / ${this.model.working.length}`).fontSize(11).fontColor(this.colors.chat.secondary)
-            .maxLines(1).flexShrink(0)
-        }
-        SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(10).fontColor([this.colors.tertiary]).accessibilityLevel('no')
-      }.width('100%').padding({ left: 12, right: 12 })
+      Text($$.task.title).fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).textAlign(TextAlign.Center)
+        .width('100%').padding({ left: 10, right: 10 })
     }.id('chat-personal-work-' + $$.task.id).width('100%').height('100%').padding(0)
-      .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(14)).clipShape(this.colors.cornerClip(14))
+      .backgroundColor(Color.Transparent).accessibilityText($$.task.title)
       .onClick((): void => { this.onOpenTask($$.task.id); })
   }
 
+  @Builder workingPill() {
+    Stack() {
+      XopcPersonalWorkPillFill({ animate: this.activePage && !this.reduceMotion })
+      if (this.model.working.length === 1) {
+        this.taskRow({ task: this.model.working[0] })
+      } else {
+        Swiper() {
+          ForEach(this.model.working, (item: XopcPersonalWorkItem) => {
+            this.taskRow({ task: item })
+          }, (item: XopcPersonalWorkItem): string => item.id + ':' + item.title)
+        }.id('chat-personal-work-carousel').width('100%').height('100%')
+          .index(this.taskIndex).indicator(false).loop(true).cachedCount(1).interval(5000)
+          .duration(this.reduceMotion ? 0 : 240).autoPlay(this.activePage && !this.reduceMotion)
+          .nestedScroll(SwiperNestedScrollMode.SELF_ONLY)
+          .onChange((index: number): void => { this.visibleTaskId = this.model.working[index]?.id ?? ''; })
+      }
+    }.width('52%').constraintSize({ maxWidth: PERSONAL_WORK_PILL_MAX_WIDTH }).height(PERSONAL_WORK_TOUCH_HEIGHT)
+  }
+
   build() {
-    Column({ space: 6 }) {
-      if (this.attentionCount > 0) {
+    Row({ space: 4 }) {
+      if (this.model.working.length > 0) {
+        this.workingPill()
+        if (this.attentionCount > 0) {
+          Button({ type: ButtonType.Normal }) {
+            Text(this.attentionCount > 99 ? '99+' : this.attentionCount.toString())
+              .fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.colors.attentionForeground)
+              .constraintSize({ minWidth: 32 }).height(32).padding({ left: 6, right: 6 })
+              .textAlign(TextAlign.Center).backgroundColor(this.colors.attentionFill).borderRadius(this.colors.corner(16))
+          }.id('chat-personal-attention-compact').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+            .accessibilityText($r('app.string.chat_attention_count', this.attentionCount))
+            .onClick((): void => { this.onOpenAttention(); })
+        }
+      } else if (this.attentionCount > 0) {
         Button({ type: ButtonType.Normal }) {
           Column({ space: 3 }) {
             Text(this.displayName).id('chat-personal-name-with-attention').fontSize(17).fontWeight(FontWeight.Bold)
@@ -90,23 +126,6 @@ export struct XopcPersonalChatActivity {
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).padding({ left: 14, right: 14, top: 4, bottom: 4 })
           .backgroundColor(this.colors.chat.card).borderRadius(this.colors.corner(14))
       }
-      if (this.model.working.length > 0) {
-        if (this.model.working.length === 1) {
-          Column() { this.taskRow({ task: this.model.working[0], index: 0 }) }
-            .height(52).width('88%').constraintSize({ maxWidth: 320 })
-        } else {
-          Swiper() {
-            ForEach(this.model.working, (item: XopcPersonalWorkItem, index: number) => {
-              this.taskRow({ task: item, index })
-            }, (item: XopcPersonalWorkItem, index: number): string =>
-              item.id + ':' + index + ':' + personalWorkStatus(item) + ':' + item.title)
-          }.id('chat-personal-work-carousel').width('88%').constraintSize({ maxWidth: 320 }).height(52)
-            .index(this.taskIndex).indicator(false).loop(true).cachedCount(1).interval(5000)
-            .duration(this.reduceMotion ? 0 : 240).autoPlay(this.activePage && !this.reduceMotion)
-            .nestedScroll(SwiperNestedScrollMode.SELF_ONLY)
-            .onChange((index: number): void => { this.visibleTaskId = this.model.working[index]?.id ?? ''; })
-        }
-      }
-    }.width('100%').hitTestBehavior(HitTestMode.None)
+    }.width('100%').justifyContent(FlexAlign.Center).hitTestBehavior(HitTestMode.None)
   }
 }

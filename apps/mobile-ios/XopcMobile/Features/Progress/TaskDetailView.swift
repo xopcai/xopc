@@ -1,80 +1,5 @@
 import SwiftUI
 
-struct TaskDetailView: View {
-    let configuration: GatewayConfiguration
-    let taskID: String
-
-    @State private var detail: TaskDetailEnvelope?
-    @State private var error: String?
-    @State private var showingConversation = false
-
-    var body: some View {
-        Group {
-            if let detail {
-                List {
-                    Section {
-                        Text(detail.task.title).mobileTextStyle(.rowTitle)
-                        LabeledContent("运行状态") { Text(LocalizedStringKey(detail.operationalState)) }
-                    }
-                    if let attention = detail.attention, !attention.isEmpty {
-                        Section("需要你处理") {
-                            ForEach(Array(attention.enumerated()), id: \.offset) { entry in
-                                Text(entry.element.summary)
-                            }
-                        }
-                    }
-                    if let receipt = detail.receipts?.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) }),
-                       let summary = receipt.summary, !summary.isEmpty
-                    {
-                        Section("执行结果") { Text(summary).textSelection(.enabled) }
-                    }
-                    if let objective = detail.task.contract?.objective ?? detail.task.body, !objective.isEmpty {
-                        Section("目标") { Text(objective).textSelection(.enabled) }
-                    }
-                    TaskReviewControls(configuration: configuration, detail: detail) { self.detail = $0 }
-                }
-                .safeAreaInset(edge: .bottom) {
-                    if detail.signoffResultID == nil {
-                        Button("继续任务") { showingConversation = true }
-                            .buttonStyle(.borderedProminent).frame(minHeight: 44)
-                            .accessibilityIdentifier("task-detail-continue")
-                    } else {
-                        Button("继续任务") { showingConversation = true }
-                            .buttonStyle(.bordered).frame(minHeight: 44)
-                            .accessibilityIdentifier("task-detail-continue")
-                    }
-                }
-                .refreshable { await load() }
-            } else if let error {
-                ContentUnavailableView {
-                    Label("无法读取任务", systemImage: "exclamationmark.triangle")
-                } description: { Text(error) } actions: {
-                    Button("重试") { Task { await load() } }
-                }
-            } else {
-                ProgressListSkeleton()
-            }
-        }
-        .mobilePageTitle(Text("任务详情"))
-        .navigationDestination(isPresented: $showingConversation) {
-            TaskConversationView(configuration: configuration, taskID: taskID)
-        }
-        .task(id: taskID) { await load() }
-        .onChange(of: showingConversation) { _, showing in
-            if !showing {
-                Task { await load() }
-            }
-        }
-    }
-
-    private func load() async {
-        do {
-            detail = try await GatewayClient(configuration: configuration).fetchTask(id: taskID)
-            error = nil
-        } catch is CancellationError {} catch { self.error = error.localizedDescription }
-    }
-}
-
 // swiftlint:disable:next type_body_length
 struct TaskConversationView: View {
     @Environment(\.mobileTheme) private var mobileTheme
@@ -84,71 +9,58 @@ struct TaskConversationView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var detail: TaskDetailEnvelope?
     @State private var conversation: ConversationSelection?
     @State private var nestedTaskID: String?
     @State private var voiceCall = RealtimeVoiceCall()
     @State private var error: String?
-    @State private var overviewExpanded = false
+    @State private var showingDetails = false
     @State private var showingStatus = false
     @State private var optionsRevision = 0
     @State private var searchRevision = 0
     @State private var editingTask: TaskRecord?
     @State private var confirmsCancel = false
-    @State private var composerHeight: CGFloat = 120
     @State private var isWorking = false
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                if let conversation {
-                    AssistantView(
-                        configuration: configuration, isActive: true, realtimeVoiceCall: voiceCall,
-                        conversation: conversation, personalAgent: nil,
-                        onStartConversation: { _ in }, onStartScopedConversation: { _, _, _ in },
-                        onConversationUpdated: { self.conversation = $0 },
-                        onOpenSettings: { optionsRevision += 1 },
-                        onInputFocusChanged: { focused in
-                            if focused {
-                                overviewExpanded = false
-                            }
-                        },
-                        showsFloatingHeader: false, sessionActionsRequest: optionsRevision, messageSearchRequest: searchRevision
-                    ) { composer in
-                        composer.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
-                    }
-                } else if let error {
-                    ContentUnavailableView {
-                        Label("无法读取任务", systemImage: "exclamationmark.triangle")
-                    } description: { Text(error) } actions: {
-                        Button("重试") { Task { await load() } }
-                    }
-                } else {
-                    VStack(spacing: 20) {
-                        ForEach(0 ..< 4) { _ in
-                            RoundedRectangle(cornerRadius: 8).fill(.quaternary).frame(height: 64)
-                        }
-                        Spacer()
-                    }.padding(.horizontal, 20).padding(.top, 88).redacted(reason: .placeholder)
-                }
-                if overviewExpanded {
-                    Color.black.opacity(0.12)
-                        .padding(.top, 64).padding(.bottom, composerHeight)
-                        .onTapGesture { setExpanded(false) }
-                        .accessibilityLabel("收起任务详情")
-                }
-                VStack(spacing: 0) {
-                    taskHeader
-                    if overviewExpanded, let detail {
-                        overview(detail)
-                            .frame(height: max(0, min(geometry.size.height * 0.5, geometry.size.height - composerHeight - 64)))
-                            .background(mobileTheme.panel)
-                            .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 14, bottomTrailingRadius: 14))
-                            .transition(.move(edge: .top).combined(with: .opacity))
+        ZStack(alignment: .top) {
+            if let conversation {
+                AssistantView(
+                    configuration: configuration, isActive: true, realtimeVoiceCall: voiceCall,
+                    conversation: conversation, personalAgent: nil,
+                    onStartConversation: { _ in }, onStartScopedConversation: { _, _, _ in },
+                    onConversationUpdated: { self.conversation = $0 },
+                    onOpenSettings: { optionsRevision += 1 }, onInputFocusChanged: { _ in },
+                    showsFloatingHeader: false, sessionActionsRequest: optionsRevision, messageSearchRequest: searchRevision
+                ) { composer in
+                    VStack(spacing: 0) {
+                        Button { showingDetails = true } label: {
+                            Label("任务详情", systemImage: "info.circle")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(mobileTheme.secondary)
+                                .padding(.horizontal, 10).frame(height: 28)
+                                .background(mobileTheme.card, in: Capsule())
+                                .frame(minHeight: 44).contentShape(.rect)
+                        }.buttonStyle(.plain).accessibilityIdentifier("task-chat-details-tip")
+                            .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 20)
+                        composer
                     }
                 }
+            } else if let error {
+                ContentUnavailableView {
+                    Label("无法读取任务", systemImage: "exclamationmark.triangle")
+                } description: { Text(error) } actions: {
+                    Button("重试") { Task { await load() } }
+                }
+            } else {
+                VStack(spacing: 20) {
+                    ForEach(0 ..< 4) { _ in
+                        RoundedRectangle(cornerRadius: 8).fill(.quaternary).frame(height: 64)
+                    }
+                    Spacer()
+                }.padding(.horizontal, 20).padding(.top, 88).redacted(reason: .placeholder)
             }
+            taskHeader
         }
         .environment(\.openURL, OpenURLAction { url in
             if case let .route("tasks", id) = ChatMessageLink.resolve(url.absoluteString) {
@@ -172,6 +84,22 @@ struct TaskConversationView: View {
                 guard editingTask == nil, !showingStatus, !isWorking else { continue }
                 await refresh()
             }
+        }
+        .sheet(isPresented: $showingDetails) {
+            NavigationStack {
+                Group {
+                    if let detail { overview(detail) } else { ProgressListSkeleton() }
+                }
+                .navigationTitle("任务详情")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") { showingDetails = false }.accessibilityIdentifier("task-chat-details-close")
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $editingTask, onDismiss: { Task { await refresh() } }) { task in
             TaskEditorView(configuration: configuration, task: task)
@@ -197,10 +125,6 @@ struct TaskConversationView: View {
         })) { Button("好", role: .cancel) { error = nil } } message: { Text(error ?? "") }
     }
 
-    private var latestReceipt: TaskReceipt? {
-        detail?.receipts?.max(by: { ($0.finalizedAt ?? 0) < ($1.finalizedAt ?? 0) })
-    }
-
     private var taskHeader: some View {
         HStack(spacing: 4) {
             if let returnLabel {
@@ -211,27 +135,9 @@ struct TaskConversationView: View {
                 }
                 .accessibilityLabel(Text(returnLabel)).accessibilityIdentifier("task-chat-close")
             }
-            Button { setExpanded(!overviewExpanded) } label: {
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(detail?.task.title ?? AppLocalization.resolve("任务详情")).font(.subheadline.weight(.medium)).lineLimit(1)
-                        if let detail {
-                            HStack(spacing: 4) {
-                                Text(LocalizedStringKey(detail.task.resolution == "done" ? "已完成"
-                                        : detail.task.resolution == "cancelled" ? "cancelled" : detail.task.phase))
-                                if let summary = latestReceipt?.summary, !summary.isEmpty {
-                                    Text("·"); Text(summary).lineLimit(1)
-                                }
-                            }.font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }.frame(maxWidth: 156, alignment: .leading)
-                    Image(systemName: overviewExpanded ? "chevron.up" : "chevron.down").font(.caption)
-                }.padding(.horizontal, 12).frame(minHeight: 48)
-                    .background(mobileTheme.card, in: .rect(cornerRadius: mobileTheme.corner(16)))
-                    .contentShape(.rect)
-            }.disabled(detail == nil).accessibilityIdentifier("task-chat-summary-toggle")
-                .accessibilityValue(overviewExpanded ? "展开" : "收起")
-            Spacer(minLength: 12)
+            Text(detail?.task.title ?? AppLocalization.resolve("任务对话"))
+                .font(.subheadline.weight(.medium)).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Menu {
                 if let detail {
                     Button("编辑") { editingTask = detail.task }
@@ -243,17 +149,20 @@ struct TaskConversationView: View {
                 Button("搜索消息") { searchRevision += 1 }
                 Button("会话选项") { optionsRevision += 1 }
             } label: {
-                Image(systemName: "ellipsis").frame(width: 44, height: 44)
+                Image("SettingsSliders").frame(width: 44, height: 44)
                     .background(mobileTheme.card, in: Circle())
                     .contentShape(.rect)
             }
             .disabled(isWorking).accessibilityLabel("更多").accessibilityIdentifier("task-chat-menu")
-        }.buttonStyle(.plain).foregroundStyle(mobileTheme.foreground).padding(.horizontal, 8).frame(minHeight: 64)
+        }.buttonStyle(.plain).foregroundStyle(mobileTheme.foreground).padding(.horizontal, 12).frame(minHeight: 64)
+            .background(mobileTheme.canvas)
     }
 
     private func overview(_ detail: TaskDetailEnvelope) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                Text(detail.task.title).mobileTextStyle(.rowTitle)
+                LabeledContent("运行状态") { Text(LocalizedStringKey(detail.operationalState)) }
                 if let attention = detail.attention, !attention.isEmpty {
                     overviewSection("需要留意") {
                         ForEach(attention.enumerated().map { TaskAttentionDisplay(index: $0.offset, text: $0.element.summary) }) {
@@ -314,10 +223,6 @@ struct TaskConversationView: View {
             Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
             content()
         }
-    }
-
-    private func setExpanded(_ expanded: Bool) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { overviewExpanded = expanded }
     }
 
     @MainActor private func refresh() async {

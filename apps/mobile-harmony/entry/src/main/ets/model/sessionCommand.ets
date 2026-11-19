@@ -15,7 +15,7 @@ export interface XopcMaterialization { commandId: string; purpose: string; }
 export interface XopcMaterializeCommand { commandId: string; purpose: string; creation: XopcSessionCreation; }
 export interface XopcSessionCommand {
   kind: string; clientMessageId: string; creation?: XopcSessionCreation;
-  expectedTranscriptId?: string; configVersion?: number; delivery?: string;
+  expectedTranscriptId?: string; configVersion?: number; delivery?: string; interrupt?: boolean;
   input: XopcSessionInputContent; origin?: XopcTurnClaim;
 }
 export interface XopcLocalSession {

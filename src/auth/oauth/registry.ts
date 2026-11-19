@@ -1,6 +1,5 @@
 import { anthropicOAuthProvider } from './anthropic.js';
 import { githubCopilotOAuthProvider } from './github-copilot.js';
-import { googleAntigravityOAuthProvider } from './google-antigravity.js';
 import { googleGeminiCliOAuthProvider } from './google-gemini-cli.js';
 import { kimiCodingOAuthProvider } from './kimi-coding.js';
 import { openaiOAuthProvider } from './openai.js';
@@ -38,7 +37,6 @@ export const OAUTH_PROVIDER_DEFINITIONS: Readonly<Record<string, OAuthProviderDe
   'kimi-coding': definition(kimiCodingOAuthProvider, 'models', 'Kimi For Coding (月之暗面)'),
   'github-copilot': definition(githubCopilotOAuthProvider, 'models'),
   'google-gemini-cli': definition(googleGeminiCliOAuthProvider, 'models'),
-  'google-antigravity': definition(googleAntigravityOAuthProvider, 'models'),
   openai: definition(openaiOAuthProvider, 'models'),
 };
 

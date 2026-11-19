@@ -2,6 +2,7 @@ import { listImageProviderSpecs } from '@xopcai/image-providers';
 
 import { loadModelsJson } from '../../../config/models-json.js';
 import type { ModelsJsonConfig } from '../../../config/models-json.js';
+import { isRetiredModelProvider } from '../../../providers/provider-policy.js';
 import { createLogger } from '../../../utils/logger.js';
 
 import { buildCustomOpenAiImagesProvider } from './custom-openai-images-provider.js';
@@ -45,7 +46,7 @@ export function reloadImageGenerationProviders(config?: ModelsJsonConfig): void 
   const builtInIds = new Set(builtInProviders.map((provider) => provider.id));
   const customEntries = Object.entries(resolved.providers)
     .filter((entry): entry is [string, typeof entry[1] & { imageGeneration: NonNullable<typeof entry[1]['imageGeneration']> }] =>
-      Boolean(entry[1].imageGeneration));
+      !isRetiredModelProvider(entry[0]) && Boolean(entry[1].imageGeneration));
   const conflictingId = customEntries.find(([providerId]) => builtInIds.has(providerId))?.[0];
   if (conflictingId) {
     throw new Error(`Custom image generation cannot override built-in provider "${conflictingId}".`);

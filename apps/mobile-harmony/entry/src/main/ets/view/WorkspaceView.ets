@@ -499,6 +499,25 @@ export struct XopcWorkspaceView {
               .onClick((): void => { this.applySheetAction('signoff:' + taskSignoffResult(item)); })
           }
         }
+        if (this.initialTaskAction === 'status' && item.taskDetail?.acceptanceChecks?.length) {
+          ForEach(item.taskDetail?.acceptanceChecks ?? [], (check: XopcTaskAcceptanceCheck, index: number) => {
+            if (item.taskDetail && taskReviewAction(item, check.id, this.criterionState(item.taskDetail, check.criterion, index))) {
+              ListItem() {
+                Row({ space: 8 }) {
+                  Text(check.criterion).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1)
+                  Button(this.criterionState(item.taskDetail!, check.criterion, index) === 'passed'
+                    ? $r('app.string.task_criterion_clear_review') : $r('app.string.task_criterion_mark_passed'))
+                    .buttonStyle(ButtonStyleMode.TEXTUAL).enabled(!this.model.busy)
+                    .onClick((): void => {
+                      if (item.taskDetail) {
+                        this.action(taskReviewAction(item, check.id, this.criterionState(item.taskDetail, check.criterion, index)));
+                      }
+                    })
+                }.width('100%').padding({ left: 12, right: 12 })
+              }
+            }
+          }, (check: XopcTaskAcceptanceCheck): string => check.id)
+        }
         ForEach(['backlog', 'ready', 'active', 'review', 'closed'], (phase: string) => {
           ListItem() {
             Button({ type: ButtonType.Normal }) {
@@ -695,7 +714,7 @@ export struct XopcWorkspaceView {
     }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(18)).clipShape(this.colors.cornerClip(18))
       .onClick((): void => {
         if (this.section === 'projects') this.onNavigate({ page: 'project-detail', itemId: item.id });
-        else if (this.embeddedInWorkbench) this.onNavigate({ page: 'tasks', itemId: item.id });
+        else if (this.section === 'tasks') this.onNavigate({ page: 'task-chat', itemId: item.id });
         else { this.model.open(item.id); }
       }, SEGMENTED_PAGE_TAP_SLOP_VP)
   }

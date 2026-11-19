@@ -59,6 +59,13 @@ describe('Personal Agent message reaction', () => {
       { role: 'user', content: text, timestamp: Date.now(), turnId: target.runId }) };
   }
 
+  function insertLegacyReaction(target: ReturnType<typeof input>['target'], entryId: string) {
+    getSqliteDatabase().prepare(`INSERT INTO session_agent_reactions
+      (conversation_id, transcript_id, client_message_id, entry_id, actor_agent_id, run_id, emoji, created_at_ms)
+      VALUES (?, ?, ?, ?, ?, ?, '💬', ?)`).run(target.conversationId, target.transcriptId, target.clientMessageId,
+      entryId, target.actorAgentId, target.runId, Date.now());
+  }
+
   it('accepts one RGI emoji, including skin tone and ZWJ, and rejects malformed output', () => {
     for (const emoji of ['🎉', '👩🏽‍💻', '🌧️', '🇨🇳']) expect(parseReactionDecision(JSON.stringify({ emoji }))).toBe(emoji);
     for (const invalid of ['{"emoji":null}', '{"emoji":"👍👍"}', '{"emoji":"ok"}', '{"emoji":"👩‍"}',
@@ -68,7 +75,7 @@ describe('Personal Agent message reaction', () => {
     expect(reactionText('Hi\n> quoted text\n```ts\nprivate code\n```\nhttps://example.com @xopc-ref:source `inline`')).toBe('Hi');
   });
 
-  it('attaches once to a committed user input and applies the cooldown only to personalized reactions', async () => {
+  it('attaches once, supplies recent reactions, and ignores legacy defaults in history and cooldown', async () => {
     const first = input('终于上线了！');
     expect(activeReactionEntry(first.target)).toBeUndefined();
     first.start();
@@ -78,7 +85,7 @@ describe('Personal Agent message reaction', () => {
     const waiting = new AgentReactionService(generator).consider({ target: first.target, text: '终于上线了！', started: performance.now(),
       signal: new AbortController().signal, eligible: () => true, publish });
     await vi.waitFor(() => expect(generator).toHaveBeenCalledExactlyOnceWith([{ role: 'user', text: '终于上线了！' }],
-      'Ada', 'warm', expect.any(String), expect.any(AbortSignal)));
+      'Ada', 'warm', expect.any(String), expect.any(AbortSignal), []));
     expect(publish).not.toHaveBeenCalled();
     first.append();
     const entry = activeReactionEntry(first.target)!;
@@ -93,12 +100,22 @@ describe('Personal Agent message reaction', () => {
     second.start(); second.append();
     const secondEntry = activeReactionEntry(second.target)!;
     expect(commitAgentReaction(second.target, secondEntry.entryId, '🎉', 'Ada')).toBeNull();
-    const fallback = commitAgentReaction(second.target, secondEntry.entryId, '💬', 'Ada');
-    expect(fallback?.emoji).toBe('💬');
-    expect(commitAgentReaction(second.target, secondEntry.entryId, '💬', 'Ada')).toBeNull();
+    insertLegacyReaction(second.target, secondEntry.entryId);
+    expect(readAgentReactions(conversationId, transcriptId, [entry.entryId, secondEntry.entryId], 'Ada'))
+      .toEqual([publish.mock.calls[0]![0]]);
     getSqliteDatabase().prepare('UPDATE session_agent_reactions SET created_at_ms = ? WHERE entry_id = ?')
-      .run(fallback!.createdAtMs - 21_000, entry.entryId);
-    expect(reactionCoolingDown(conversationId, fallback!.createdAtMs)).toBe(false);
+      .run(Date.now() - 21_000, entry.entryId);
+    expect(reactionCoolingDown(conversationId, Date.now())).toBe(false);
+    finishSessionInputRun(conversationId, second.target.runId, 'completed');
+    const third = input('下一个版本也上线了！');
+    third.start(); third.append();
+    const thirdEntry = activeReactionEntry(third.target)!;
+    expect(commitAgentReaction(third.target, thirdEntry.entryId, '💬', 'Ada')).toBeNull();
+    generator.mockClear().mockResolvedValue('🙌');
+    await new AgentReactionService(generator).consider({ target: third.target, text: '下一个版本也上线了！', started: performance.now(),
+      signal: new AbortController().signal, eligible: () => true, publish });
+    expect(generator).toHaveBeenCalledExactlyOnceWith(expect.any(Array), 'Ada', 'warm', expect.any(String), expect.any(AbortSignal), ['🎉']);
+    expect(publish).toHaveBeenLastCalledWith(expect.objectContaining({ entryId: thirdEntry.entryId, emoji: '🙌' }));
     resetSessionRecord(conversationId, dir);
     expect(readAgentReactions(conversationId, transcriptId, [entry.entryId], 'Ada')).toEqual([]);
   });
@@ -145,14 +162,14 @@ describe('Personal Agent message reaction', () => {
     ['abstain', 'web-test'],
     ['fast', 'web-test'],
     ['timeout', 'web-test'],
-  ] as const)('synchronizes a %s reaction through realtime and history (%s)', async (scenario, endpointId) => {
+  ] as const)('keeps realtime and history consistent for %s (%s)', async (scenario, endpointId) => {
     const past = input('An older message');
     past.start(); past.append();
+    insertLegacyReaction(past.target, activeReactionEntry(past.target)!.entryId);
     finishSessionInputRun(conversationId, past.target.runId, 'completed');
     const turn = input('We shipped!', endpointId);
     turn.start();
     const slow = scenario !== 'fast';
-    const expectedEmoji = scenario === 'personalized' ? '🎉' : '💬';
     const auth = { mode: 'token' as const, token: 'reaction-test-token' };
     const useSettings = scenario === 'personalized' && endpointId === 'web-test';
     const config = ConfigSchema.parse({ gateway: { auth }, experimental: { personalAgentMessageReactions: useSettings ? undefined : true } });
@@ -160,7 +177,6 @@ describe('Personal Agent message reaction', () => {
     const sessions = new SessionIndex({ config });
     const publishRealtime = vi.fn();
     const gateway = createHonoApp({ service: { currentConfig: config, getResolvedAuth: () => auth, isGatewayReady: () => true,
-      getActiveWebchatRunId: () => turn.target.runId,
       realtime: { broker: { publish: publishRealtime } },
       sessions: { getMessagePage: sessions.getSessionMessagePage.bind(sessions) } } as unknown as GatewayService });
     const server = serve({ fetch: gateway.fetch, hostname: '127.0.0.1', port: 0 });
@@ -192,8 +208,10 @@ describe('Personal Agent message reaction', () => {
       const finish = new Promise<void>(done => { release = done; });
       let decide!: (emoji: string | null) => void;
       const generate = vi.fn(() => new Promise<string | null>(done => { decide = done; }));
+      const reactions = new AgentReactionService(generate);
+      const consider = vi.spyOn(reactions, 'consider');
       const deps = {
-        getConfig: () => config, reactions: new AgentReactionService(generate),
+        getConfig: () => config, reactions,
         agentService: { resolveUserTimezoneForSession: () => 'UTC', beginInboundTurn: () => {}, endInboundTurn: () => {},
           turnDispatcher: { processDirectStreaming: async function* () {
             turn.append();
@@ -218,27 +236,39 @@ describe('Personal Agent message reaction', () => {
           const before = await fetch(path, { headers });
           beforeEtag = before.headers.get('etag');
           const messages = (await before.json()).session.messages;
-          expect(messages.find((row: { turnId: string }) => row.turnId === past.target.runId)?.agentReaction?.emoji).toBe('💬');
+          expect(messages.find((row: { turnId: string }) => row.turnId === past.target.runId)).not.toHaveProperty('agentReaction');
           expect(messages.find((row: { turnId: string }) => row.turnId === turn.target.runId)).not.toHaveProperty('agentReaction');
           await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
           if (scenario !== 'timeout') decide(scenario === 'abstain' ? null : '🎉');
         } else {
           expect(await run).toContain('assistant_delta');
           expect(generate).not.toHaveBeenCalled();
-          const events = publishRealtime.mock.calls.map(([, event]) => event);
-          expect(events).toContain('session.agent-reaction');
-          expect(events.indexOf('session.agent-reaction')).toBeGreaterThan(events.indexOf('assistant_delta'));
         }
-        await vi.waitFor(() => expect(publishRealtime).toHaveBeenCalledWith('sessions', 'session.agent-reaction',
-          expect.objectContaining({ conversationId, transcriptId, clientMessageId: turn.target.clientMessageId, emoji: expectedEmoji })),
-        { timeout: AGENT_REACTION_DEADLINE_MS + 800 });
-        const full = await fetch(path, { headers: { ...headers, ...(beforeEtag ? { 'If-None-Match': beforeEtag } : {}) } });
+        expect(consider).toHaveBeenCalledOnce();
+        await consider.mock.results[0]!.value;
+        const reactionEvents = publishRealtime.mock.calls.filter(([, event]) => event === 'session.agent-reaction');
+        if (scenario === 'personalized') {
+          expect(reactionEvents).toEqual([['sessions', 'session.agent-reaction',
+            expect.objectContaining({ conversationId, transcriptId, clientMessageId: turn.target.clientMessageId, emoji: '🎉' })]]);
+        } else {
+          expect(reactionEvents).toEqual([]);
+        }
+        if (beforeEtag) {
+          const conditional = await fetch(path, { headers: { ...headers, 'If-None-Match': beforeEtag } });
+          expect(conditional.status).toBe(scenario === 'personalized' ? 200 : 304);
+        }
+        const full = await fetch(path, { headers });
         const compact = await fetch(path + '?view=compact', { headers });
         expect(full.status).toBe(200);
         const isCurrentUser = (row: { role: string; turnId: string }) => row.role === 'user' && row.turnId === turn.target.runId;
         const fullMessage = (await full.json()).session.messages.find(isCurrentUser);
         const compactMessage = (await compact.json()).session.messages.find(isCurrentUser);
-        expect(fullMessage.agentReaction).toMatchObject({ emoji: expectedEmoji, entryId: fullMessage.transcriptEntryId });
+        if (scenario === 'personalized') {
+          expect(fullMessage.agentReaction).toMatchObject({ emoji: '🎉', entryId: fullMessage.transcriptEntryId });
+        } else {
+          expect(fullMessage).not.toHaveProperty('agentReaction');
+        }
+        expect(compactMessage).toBeDefined();
         expect(compactMessage.agentReaction).toEqual(fullMessage.agentReaction);
       } finally { decide?.(null); release(); await run; }
       if (useSettings) {

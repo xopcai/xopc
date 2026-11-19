@@ -1169,7 +1169,7 @@ struct AssistantView<Dock: View>: View {
         ZStack(alignment: .top) {
             HStack(spacing: 6) {
                 if let onOpenSidebar {
-                    headerButton("打开导航", symbol: "line.3.horizontal", action: onOpenSidebar)
+                    headerButton("打开导航", icon: Image(systemName: "line.3.horizontal"), action: onOpenSidebar)
                         .accessibilityIdentifier("chat-header-sidebar")
                 }
                 if phone.summary?.available == true, isPersonalConversation {
@@ -1182,11 +1182,11 @@ struct AssistantView<Dock: View>: View {
                 if phone.summary?.available == true, !isPersonalConversation {
                     phoneWorkspaceButton
                 }
-                headerButton("语音通话", symbol: "phone", action: startRealtimeVoice)
+                headerButton("语音通话", icon: Image(systemName: "phone"), action: startRealtimeVoice)
                     .disabled(!canStartRealtimeVoice)
                     .accessibilityIdentifier("chat-header-voice-call")
                 if !isPersonalConversation, conversation?.isDraft != true || onOpenSidebar == nil {
-                    headerButton("会话选项", symbol: "ellipsis") {
+                    headerButton("会话选项", icon: Image("SettingsSliders")) {
                         showingSessionActions = true
                     }
                     .accessibilityIdentifier("assistant-options")
@@ -1237,7 +1237,7 @@ struct AssistantView<Dock: View>: View {
     }
 
     private var phoneWorkspaceButton: some View {
-        headerButton("查看手机", symbol: "iphone") { showingPhone = true }
+        headerButton("查看手机", icon: Image(systemName: "iphone")) { showingPhone = true }
             .overlay(alignment: .topTrailing) {
                 if phone.needsAttention {
                     Circle().fill(mobileTheme.onAttention).frame(width: 6, height: 6).padding(6).allowsHitTesting(false)
@@ -1246,9 +1246,9 @@ struct AssistantView<Dock: View>: View {
             .accessibilityIdentifier("chat-header-phone")
     }
 
-    private func headerButton(_ title: LocalizedStringKey, symbol: String, action: @escaping () -> Void) -> some View {
+    private func headerButton(_ title: LocalizedStringKey, icon: Image, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.title3).frame(width: 44, height: 44)
+            icon.font(.title3).frame(width: 44, height: 44)
                 .foregroundStyle(mobileTheme.foreground)
                 .background(mobileTheme.card, in: Circle())
         }

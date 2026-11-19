@@ -149,7 +149,10 @@ export struct XopcHomeView {
     this.navigationRevision++;
     this.closeSidebar();
     if (route.page === 'project-new-chat') { void this.openProjectChat(route.projectId ?? '', route.title); return; }
-    if (route.page === 'task-chat') { void this.openTaskChat(route); return; }
+    if (route.page === 'task-chat' || (route.page === 'tasks' && route.itemId)) {
+      void this.openTaskChat(route);
+      return;
+    }
     if (route.page === 'automation-setup') { void this.openAutomationChat(route); return; }
     if (route.page === 'understanding-chat') {
       void this.openUnderstandingChat(route);
@@ -460,7 +463,8 @@ export struct XopcHomeView {
   @Builder
   destination(page: string, param: Object) {
     if (page === 'sessions' || page === 'sessions-search') {
-      XopcSessionsView({ startSearching: page === 'sessions-search', currentId: this.activeChatId, personalAgent: this.personalAgent.record,
+      XopcSessionsView({ startSearching: page === 'sessions-search', currentId: this.activeChatId,
+        personalAgent: this.personalAgent.record,
         onExit: (): void => { this.pathStack.pop(); this.openSidebar(); },
         onOpen: (id: string): void => { this.openConversationFromList(id); },
         onTask: (id: string): void => { this.navigate({ page: 'task-chat', itemId: id }); },

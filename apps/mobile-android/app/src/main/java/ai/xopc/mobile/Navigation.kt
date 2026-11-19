@@ -49,6 +49,7 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onFetchConversationExperts = gateway::fetchConversationHistoryExperts,
             onRefreshConversations = { gateway.loadConversations() },
             onRefreshRecentConversations = gateway::loadRecentConversations,
+            onLoadMoreRecentConversations = gateway::loadMoreRecentConversations,
             onLoadCapabilities = { gateway.loadCapabilities(it, catalogLocale) },
             onLoadCapabilityDevices = gateway::loadCapabilityDevices,
             onSetDeviceCapability = gateway::setDeviceCapabilityAccess,

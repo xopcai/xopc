@@ -287,6 +287,7 @@ data class ConnectionUiState(
   val savingMessageNoteId: String? = null,
   val messageNoteFeedback: MessageNoteFeedback? = null,
   val recentConversations: List<ConversationSummary>? = null,
+  val recentConversationsNextOffset: Int? = null,
   val recentConversationsLoading: Boolean = false,
   val recentConversationsError: Boolean = false,
   val conversationsLoading: Boolean = false,
@@ -2985,17 +2986,28 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
   }
 
-  fun loadRecentConversations() {
+  fun loadRecentConversations() = requestRecentConversations(more = false)
+
+  fun loadMoreRecentConversations() = requestRecentConversations(more = true)
+
+  private fun requestRecentConversations(more: Boolean) {
     val current = mutableState.value
     val profile = current.profile ?: return
     if (current.gatewayBusy || current.pairing || recentConversationsJob?.isActive == true) return
+    val offset = if (more) current.recentConversationsNextOffset ?: return else 0
     val requestedAt = System.currentTimeMillis()
-    mutableState.update { it.copy(recentConversationsLoading = true, recentConversationsError = false) }
+    mutableState.update { it.copy(recentConversationsLoading = true, recentConversationsError = false,
+      recentConversationsNextOffset = offset.takeIf { more }) }
     recentConversationsJob = viewModelScope.launch {
       try {
-        val recent = conversations.recent()
-        mutableState.update { it.copy(recentConversations = recent) }
-        withContext(Dispatchers.IO) { conversations.cacheRecent(profile, recent, requestedAt) }
+        val page = conversations.recent(offset)
+        mutableState.update { state ->
+          val retained = if (more) state.recentConversations.orEmpty() else emptyList()
+          val seen = retained.mapTo(mutableSetOf()) { it.id }
+          state.copy(recentConversations = retained + page.items.filter { seen.add(it.id) },
+            recentConversationsNextOffset = page.nextOffset)
+        }
+        if (!more) withContext(Dispatchers.IO) { conversations.cacheRecent(profile, page.items, requestedAt) }
       } catch (error: CancellationException) {
         throw error
       } catch (_: Exception) {

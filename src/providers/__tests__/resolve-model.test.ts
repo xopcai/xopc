@@ -1,9 +1,13 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { getModel as getPiModel } from '@earendil-works/pi-ai/compat';
 import { describe, expect, it } from 'vitest';
 
 import { computerModelProfile } from '../../computer/model-policy.js';
 import { validateModelsConfig } from '../../config/models-json.js';
-import { getAllModels, getAllProviders, isProviderConfigured, isProviderConfiguredSync, providerSupportsOAuth, resolveModel } from '../index.js';
+import { getAllModels, getAllProviders, isProviderConfigured, isProviderConfiguredSync, providerSupportsApiKey, providerSupportsOAuth, resolveModel } from '../index.js';
+import { ModelRegistry } from '../model-registry.js';
 
 describe('resolveModel', () => {
   it('throws a setup-oriented error for an empty model ref', () => {
@@ -41,6 +45,35 @@ describe('resolveModel', () => {
     for (const id of ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna']) {
       const model = resolveModel(`openai/${id}`);
       expect(computerModelProfile(model)).toBe('structured-tools-v1');
+    }
+  });
+
+  it('ignores Antigravity in installed model configs and still loads other providers', async () => {
+    const provider = 'google-antigravity';
+    const config = {
+      providers: {
+        [provider]: { baseUrl: 'https://example.com/old', api: 'openai-completions', models: [{ id: 'old' }] },
+        'custom-models': { baseUrl: 'https://example.com/v1', api: 'openai-completions', models: [{ id: 'custom' }] },
+      },
+    };
+    expect(validateModelsConfig(config)).toMatchObject({
+      valid: true,
+      errors: [expect.objectContaining({ path: `providers.${provider}`, severity: 'warning' })],
+    });
+    expect(getAllProviders()).not.toContain(provider);
+    expect(providerSupportsOAuth(provider)).toBe(false);
+    expect(providerSupportsApiKey(provider)).toBe(false);
+    expect(() => resolveModel(`${provider}/old`)).toThrow('Antigravity OAuth has been removed');
+
+    const dir = await mkdtemp(join(tmpdir(), 'xopc-retired-provider-'));
+    try {
+      const file = join(dir, 'models.json');
+      await writeFile(file, JSON.stringify(config));
+      const registry = new ModelRegistry(file);
+      expect(registry.resolve('custom-models/custom')).toMatchObject({ id: 'custom' });
+      expect(registry.getAll().some((model) => model.provider === provider)).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 });
