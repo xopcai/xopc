@@ -13,14 +13,16 @@ import { channelDetailPath } from '@/features/settings/channels/channels-routes'
 import type { SkillCatalogEntry } from '@/features/skills/skill.types';
 
 describe('capability catalog', () => {
-  it('owns agent and channel management routes', () => {
+  it('owns device, agent, and channel management routes', () => {
     expect(CAPABILITY_SECTIONS).toEqual([
       'extensions',
       'skills',
       'connectors',
+      'devices',
       'agents',
       'channels',
     ]);
+    expect(capabilityPath('devices')).toBe('/capabilities/devices');
     expect(capabilityPath('agents')).toBe('/capabilities/agents');
     expect(capabilityPath('channels')).toBe('/capabilities/channels');
     expect(agentsAppDetailPath('review agent')).toBe('/capabilities/agents/review%20agent');

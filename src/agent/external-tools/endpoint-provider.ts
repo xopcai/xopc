@@ -106,7 +106,10 @@ export class EndpointToolProvider implements ExternalToolProvider {
   private describeResolved(toolRef: string, resolved: NonNullable<ReturnType<EndpointToolProvider['resolve']>>): ExternalToolDescriptor {
     const folders = resolved.folders?.map(({ id, kind, label }) => ({ id, kind, label }));
     const toolDescription = resolved.selectedMobileTool
-      ? resolved.tool.descriptor.description.replace('Uses the device that sent this message,', 'Runs on the phone selected for this chat,')
+      ? resolved.tool.descriptor.description.replace(
+        /Uses the (?:foreground )?device that sent this message\b/u,
+        'Runs on the phone selected for this chat',
+      )
       : resolved.tool.descriptor.description;
     return {
       toolRef,

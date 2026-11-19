@@ -76,6 +76,7 @@ it('searches and reads only the authorized folder of the chosen computer over si
         publicKey: keys.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url') });
       const origin = { type: 'endpoint' as const, endpointId: device.id + ':fixture' };
       const calendar = personalDescriptor('mobile.calendar.query_events');
+      const authorize = vi.fn(async () => {});
       const confirm = vi.fn(async () => true);
       const execute = vi.fn(async (args: Record<string, unknown>) => ({ content: [{ type: 'json' as const, value: {
         startAt: args.startAt, endAt: args.endAt, capturedAt: Date.now(), timeZone: 'UTC',
@@ -83,7 +84,7 @@ it('searches and reads only the authorized folder of the chosen computer over si
       } }] }));
       const toolHost = new EndpointToolHostController({ registry: new EndpointToolRegistry([
         { descriptor: calendar, execute }, { descriptor: personalDescriptor('mobile.contacts.pick'), execute: async () => ({ content: [] }) },
-      ]), getAvailability: () => 'foreground', createMessageId: crypto.randomUUID, confirm });
+      ]), getAvailability: () => 'foreground', createMessageId: crypto.randomUUID, authorize, confirm });
       const hello: EndpointHelloPayload = { endpointId: origin.endpointId, principalId: source.id, connectionInstanceId: crypto.randomUUID(),
         displayName, kind: 'mobile', platform: 'ios', appVersion: '1', availability: 'foreground',
         nonce: crypto.randomUUID(), signedAt: Date.now(), signature: 'pending', tools: [calendar, personalDescriptor('mobile.contacts.pick')] };
@@ -101,7 +102,7 @@ it('searches and reads only the authorized folder of the chosen computer over si
         headers.set('X-Xopc-Proof', `${proof.timestamp}.${proof.nonce}.${proof.digest}.${sign(message, keys.privateKey)}`);
         return fetch(base + target, { method, headers, body });
       };
-      return { device, origin, tokens, request, connectionId, confirm, execute };
+      return { device, origin, tokens, request, connectionId, authorize, confirm, execute };
     }
     const first = phone('Phone with permission'), second = phone('Other phone');
     const login = await fetch(base + '/api/browser-session', {
@@ -138,7 +139,8 @@ it('searches and reads only the authorized folder of the chosen computer over si
     expect(calendarTool.toolRef).toContain(mobileChat.toolName);
     expect(calendarTool.description).toContain('phone selected for this chat');
     await calendarProvider.execute(calendarTool.toolRef, { startAt: 1, endAt: 2 }, undefined, { toolCallId: 'calendar' });
-    expect(first.confirm).toHaveBeenCalledOnce();
+    expect(first.authorize).toHaveBeenCalledOnce();
+    expect(first.confirm).not.toHaveBeenCalled();
     expect(first.execute).toHaveBeenCalledOnce();
     expect(second.execute).not.toHaveBeenCalled();
     endpointTools.registry.heartbeat(first.origin.endpointId, first.connectionId, 'background');
