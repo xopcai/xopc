@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const chat = readFileSync(new URL('../entry/src/main/ets/view/ChatView.ets', import.meta.url), 'utf8');
 const content = readFileSync(new URL('../entry/src/main/ets/view/ChatMessageContent.ets', import.meta.url), 'utf8');
+const markdown = readFileSync(new URL('../entry/src/main/ets/view/MarkdownView.ets', import.meta.url), 'utf8');
 const media = readFileSync(new URL('../entry/src/main/ets/view/ChatMediaView.ets', import.meta.url), 'utf8');
 const resultCapsule = readFileSync(new URL('../entry/src/main/ets/view/ChatResultCapsule.ets', import.meta.url), 'utf8');
 
@@ -24,10 +25,11 @@ describe('chat message layout parity', () => {
     expect(userLayout).toContain('.width(26).height(26)');
     expect(userLayout).toContain('.position({ x: -16, y: -16 }).hitTestBehavior(HitTestMode.None)');
     expect(chat).toContain("if (this.userVoiceOnly(row)) return '132vp'");
-    expect(chat).toContain('if (this.userVoiceMessage(row)) return chatTextBubbleWidth(row.text, 180)');
-    expect(chat).toContain('if (payloadCount > 1) return chatTextBubbleWidth(row.text, 264)');
-    expect(chat).toContain('if (payloadCount === 1) return chatTextBubbleWidth(row.text, 220)');
-    expect(chat).toContain('return chatTextBubbleWidth(row.text, 44)');
+    expect(chat).toContain('const displayText = capabilityText(row.text, this.skillLabels).text;');
+    expect(chat).toContain('if (this.userVoiceMessage(row)) return chatTextBubbleWidth(displayText, 180)');
+    expect(chat).toContain('if (payloadCount > 1) return chatTextBubbleWidth(displayText, 264)');
+    expect(chat).toContain('if (payloadCount === 1) return chatTextBubbleWidth(displayText, 220)');
+    expect(chat).toContain('return chatTextBubbleWidth(displayText, 44)');
     expect(content).toContain(".width(this.row.text ? 148 : '100%')");
     expect(chat).toContain("this.userVoiceOnly(item.item) ? { left: 4, right: 4, top: 0, bottom: 0 }");
   });
@@ -88,9 +90,12 @@ describe('chat message layout parity', () => {
     const imageEnd = content.indexOf('if (this.attachmentMedia.length)', imageStart);
     const imageStrip = content.slice(imageStart, imageEnd);
 
-    expect(userContent.indexOf('if (this.row.text)')).toBeLessThan(userContent.indexOf('ForEach(this.row.refs || []'));
-    expect(userContent).toContain(".width('100%').textAlign(TextAlign.Start)");
-    expect(content).toContain(".fontColor(this.colors.foreground).width('100%').textAlign(TextAlign.Start)");
+    const text = userContent.indexOf('content: this.previewMarkdown');
+    expect(text).toBeGreaterThan(-1);
+    expect(userContent.indexOf('ForEach(this.row.refs || []')).toBeGreaterThan(text);
+    expect(userContent).toContain('XopcMarkdownView({');
+    expect(markdown).toContain("this.alignment === 'center' ? TextAlign.Center : TextAlign.Start");
+    expect(markdown).toContain(".width('100%').alignItems(HorizontalAlign.Start)");
     expect(userContent).not.toContain('textAlign(TextAlign.End)');
     expect(content).toContain("if (this.row.role !== 'user')");
     expect(imageStrip).toContain('XopcChatImageGrid({ files: this.imageMedia, gallery: this.galleryMedia');

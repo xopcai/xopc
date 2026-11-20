@@ -5,19 +5,26 @@ const aboutYou = readFileSync(new URL('../entry/src/main/ets/view/AboutYouView.e
 
 describe('about you understanding layout', () => {
   it('keeps search in the header and conversation editing at the fixed bottom action area', () => {
-    const headerStart = aboutYou.indexOf('private mainHeader()');
-    const filtersStart = aboutYou.indexOf('private understandingFilters()');
-    const footerStart = aboutYou.indexOf('private understandingConversationAction()');
+    const pageStart = aboutYou.indexOf('private sectionPage(');
+    const buildStart = aboutYou.indexOf('  build()', pageStart);
+    const page = aboutYou.slice(pageStart, buildStart);
+    const build = aboutYou.slice(buildStart);
+    const search = build.indexOf("searchId: 'about-you-search'");
+    const pager = build.indexOf('Swiper(this.pager)');
+    const filters = page.indexOf('this.understandingFilters()');
+    const list = page.indexOf('this.understandingList()');
+    const footer = page.indexOf('this.understandingConversationAction()');
 
-    expect(headerStart).toBeGreaterThan(-1);
-    const contentStart = aboutYou.indexOf('  build()');
     expect(aboutYou).toContain("titleMenuId: 'about-you-menu'");
     expect(aboutYou).toContain("searchId: this.section === 1 ? 'about-you-search-open' : ''");
-    expect(aboutYou.indexOf("searchId: 'about-you-search'", contentStart)).toBeLessThan(
-      aboutYou.indexOf('this.understandingFilters()', contentStart));
-    expect(aboutYou.indexOf("searchId: 'about-you-search'", contentStart)).toBeGreaterThan(contentStart);
-    expect(footerStart).toBeGreaterThan(filtersStart);
-    expect(aboutYou).toContain('this.understandingConversationAction()');
+    expect(build.indexOf('this.mainHeader()')).toBeGreaterThan(-1);
+    expect(search).toBeGreaterThan(build.indexOf('this.mainHeader()'));
+    expect(pager).toBeGreaterThan(search);
+    expect(build).toContain('this.sectionPage(section)');
+    expect(filters).toBeGreaterThan(-1);
+    expect(list).toBeGreaterThan(filters);
+    expect(footer).toBeGreaterThan(list);
+    expect(page.slice(list, footer)).toContain("align(Alignment.TopStart).scrollBar(BarState.Off)");
     expect(aboutYou).not.toContain('private understandingTools()');
   });
 

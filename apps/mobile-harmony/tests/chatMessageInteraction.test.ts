@@ -53,8 +53,9 @@ describe('chat message interactions', () => {
     expect(markdown).toContain('.copyOption(this.textSelectable ? CopyOptions.InApp : CopyOptions.None)');
   });
 
-  it('uses compact line and block spacing only for assistant chat content', () => {
-    expect(content).toContain("lineHeight(this.row.role === 'assistant' ? 23 : 25)");
+  it('uses shared compact Markdown line and block spacing in chat', () => {
+    expect(markdown).toContain('.lineHeight(this.textLineHeight)');
+    expect(markdown).toContain('this.compactReading ? markdownBlockGap(');
     expect(content).toContain('compactReading: true');
     expect(markdown).toContain('@Param compactReading: boolean = false;');
     expect(markdown).toContain('markdownBlockGap(this.blocks[index], this.blocks[index - 1])');
