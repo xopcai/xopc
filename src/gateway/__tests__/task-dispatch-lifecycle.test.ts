@@ -3,7 +3,7 @@ import { GatewayService } from '../service.js';
 
 describe('embedded Gateway task dispatch lifecycle', () => {
   function host(enabled?: boolean) {
-    return { stopping: false, serviceConfig: { taskDispatchEnabled: enabled },
+    return { stopping: false, config: { gateway: {} }, serviceConfig: { taskDispatchEnabled: enabled },
       taskAllocationDispatcher: { dispatch: vi.fn() }, taskResultDispatch: vi.fn(),
       taskRunDispatch: vi.fn(), taskMainUpdateDispatch: vi.fn() };
   }
