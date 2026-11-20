@@ -155,11 +155,14 @@ private struct PageSelectionSwipe<Value: Equatable>: ViewModifier {
                 let rtl = direction == .rightToLeft
                 HorizontalSwipeCapture(leftOnly: rtl ? index == pages.count - 1 : index == 0,
                                        rightOnly: rtl ? index == 0 : index == pages.count - 1,
-                                       reserveBackEdge: true, prioritizeSelection: prioritizeSelection) { distance, speed in
+                                       reserveBackEdge: true, prioritizeSelection: prioritizeSelection)
+                { distance, speed in
                     guard abs(distance) >= 64 || (abs(distance) >= 24 && abs(speed) >= 550 && distance * speed > 0)
                     else { return }
                     let target = index + ((distance < 0) != rtl ? 1 : -1)
-                    if pages.indices.contains(target) { onSelect(pages[target]) }
+                    if pages.indices.contains(target) {
+                        onSelect(pages[target])
+                    }
                 }
             }
         }
@@ -167,8 +170,13 @@ private struct PageSelectionSwipe<Value: Equatable>: ViewModifier {
 }
 
 extension View {
-    func pageSelectionSwipe<Value: Equatable>(_ pages: [Value], selected: Value, enabled: Bool = true,
-                                               prioritizeSelection: Bool = false, onSelect: @escaping (Value) -> Void) -> some View {
+    func pageSelectionSwipe<Value: Equatable>(
+        _ pages: [Value],
+        selected: Value,
+        enabled: Bool = true,
+        prioritizeSelection: Bool = false,
+        onSelect: @escaping (Value) -> Void
+    ) -> some View {
         modifier(PageSelectionSwipe(pages: pages, selected: selected, enabled: enabled,
                                     prioritizeSelection: prioritizeSelection, onSelect: onSelect))
     }

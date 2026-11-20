@@ -171,17 +171,7 @@ struct ConversationsView: View {
                         conversationListRow(conversation, page: page)
                     }
                 }
-                if state.isLoadingMore {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .listRowSeparator(.hidden)
-                } else if state.errorMessage != nil, state.hasMore {
-                    Button("加载更多对话") {
-                        Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .listRowSeparator(.hidden)
-                }
+                conversationListFooter
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
@@ -190,6 +180,20 @@ struct ConversationsView: View {
                 guard page == mode else { return }
                 await state.load(using: GatewayClient(configuration: configuration))
             }
+        }
+    }
+
+    @ViewBuilder private var conversationListFooter: some View {
+        if state.isLoadingMore {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .listRowSeparator(.hidden)
+        } else if state.errorMessage != nil, state.hasMore {
+            Button("加载更多对话") {
+                Task { await state.loadMore(using: GatewayClient(configuration: configuration)) }
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .listRowSeparator(.hidden)
         }
     }
 

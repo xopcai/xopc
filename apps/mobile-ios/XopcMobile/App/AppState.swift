@@ -313,7 +313,9 @@ private extension AppState {
         let scope = ComposerDraftStore.accountScope(gatewayConfiguration)
         guard scope != selectionScope else { return }
         selectionScope = scope
-        if !homePath.isEmpty { homePath = [.settings] }
+        if !homePath.isEmpty {
+            homePath = [.settings]
+        }
         do { selectedConversation = try ComposerDraftStore().readSelection(configuration: gatewayConfiguration) }
         catch { selectedConversation = nil; connectionStorageError = error.localizedDescription }
         remembersCurrentConversation = selectedConversation != nil

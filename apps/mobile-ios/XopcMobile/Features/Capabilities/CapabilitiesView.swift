@@ -1170,7 +1170,7 @@ private struct CapabilitySettingsPanel<Icon: View>: View {
     private func textInput(_ field: CapabilityPanelPayload.Field, value: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: field.label).font(.subheadline.weight(.medium))
-            if field.type == "secret" && itemID == "mcp:setup" {
+            if field.type == "secret", itemID == "mcp:setup" {
                 McpCredentialInput(
                     label: field.label, placeholder: field.hint ?? field.label,
                     text: value, focus: $focusedCredential, fieldID: field.id
@@ -1389,28 +1389,36 @@ private struct McpCredentialInput: UIViewRepresentable {
     func updateUIView(_ input: UITextField, context: Context) {
         context.coordinator.field = self
         let masked = String(repeating: "•", count: text.count)
-        if input.text != masked { input.text = masked }
+        if input.text != masked {
+            input.text = masked
+        }
         input.placeholder = placeholder
         input.accessibilityLabel = label
         input.textColor = UIColor(theme.foreground)
-        if input.isFirstResponder && focus != fieldID {
+        if input.isFirstResponder, focus != fieldID {
             input.resignFirstResponder()
         }
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(field: self) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(field: self)
+    }
 
     final class Coordinator: NSObject, UITextFieldDelegate {
         var field: McpCredentialInput
 
-        init(field: McpCredentialInput) { self.field = field }
+        init(field: McpCredentialInput) {
+            self.field = field
+        }
 
-        func textFieldDidBeginEditing(_ textField: UITextField) {
+        func textFieldDidBeginEditing(_: UITextField) {
             field.focus = field.fieldID
         }
 
-        func textFieldDidEndEditing(_ textField: UITextField) {
-            if field.focus == field.fieldID { field.focus = nil }
+        func textFieldDidEndEditing(_: UITextField) {
+            if field.focus == field.fieldID {
+                field.focus = nil
+            }
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -1423,7 +1431,7 @@ private struct McpCredentialInput: UIViewRepresentable {
             guard let start = credential.index(credential.startIndex, offsetBy: range.location, limitedBy: credential.endIndex),
                   let end = credential.index(start, offsetBy: range.length, limitedBy: credential.endIndex) else { return false }
             // Keep the credential in form state so the system input only ever contains bullets.
-            let updated = credential.replacingCharacters(in: start..<end, with: string)
+            let updated = credential.replacingCharacters(in: start ..< end, with: string)
             field.text = updated
             textField.text = String(repeating: "•", count: updated.count)
             let offset = min(range.location + string.count, updated.count)
@@ -1476,8 +1484,8 @@ private struct CapabilityKeyValueEditor: View {
                             label: valueLabel, placeholder: valueLabel, text: cell(index, 1),
                             focus: $credentialFocus, fieldID: "\(prefix)-value-\(index)"
                         )
-                            .accessibilityIdentifier("\(prefix)-value-\(index)")
-                            .padding(10)
+                        .accessibilityIdentifier("\(prefix)-value-\(index)")
+                        .padding(10)
                     }
                     .textFieldStyle(.plain)
                     .textInputAutocapitalization(.never)

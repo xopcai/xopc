@@ -97,7 +97,6 @@ struct SidebarTask: Decodable, Equatable, Identifiable, Sendable {
 }
 
 struct ConversationSummary: Codable, Equatable, Identifiable, Sendable {
-
     var isRecentSidebarCandidate: Bool {
         status != "archived" && messageCount > 0
     }

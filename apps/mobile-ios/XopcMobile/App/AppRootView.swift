@@ -496,11 +496,14 @@ struct AppRootView: View {
             offset = 0
             recentNextOffset = nil
         }
+        let isCurrentRequest = {
+            !Task.isCancelled && revision == recentRevision && configuration == appState.gatewayConfiguration
+        }
         let requestedAt = Date.now
         recentError = false
         recentLoading = true
         defer {
-            if !Task.isCancelled, revision == recentRevision, configuration == appState.gatewayConfiguration {
+            if isCurrentRequest() {
                 recentLoading = false
             }
         }
@@ -510,8 +513,7 @@ struct AppRootView: View {
         guard !Task.isCancelled else { return }
         do {
             let page = try await GatewayClient(configuration: configuration).fetchRecentConversations(startOffset: offset)
-            guard !Task.isCancelled, revision == recentRevision,
-                  configuration == appState.gatewayConfiguration else { return }
+            guard isCurrentRequest() else { return }
             let retained = more ? recentConversations ?? [] : []
             var seen = Set(retained.map(\.id))
             recentScope = scope
@@ -520,10 +522,8 @@ struct AppRootView: View {
             if !more {
                 await RecentConversationsStore.shared.write(page.items, scope: scope, requestedAt: requestedAt)
             }
-        } catch is CancellationError {
         } catch {
-            guard !Task.isCancelled, revision == recentRevision,
-                  configuration == appState.gatewayConfiguration else { return }
+            guard !(error is CancellationError), isCurrentRequest() else { return }
             recentError = true
         }
     }

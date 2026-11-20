@@ -106,29 +106,7 @@ struct ProjectDetailView: View {
     private func projectPage(_ project: ProjectRecord, section: ProjectSection) -> some View {
         List {
             if section == .overview {
-                Section {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text(project.name)
-                            .mobileTextStyle(.detailTitle)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityAddTraits(.isHeader)
-                        HStack {
-                            Text(LocalizedStringKey("project_status_" + project.status))
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(mobileTheme.action.opacity(0.10), in: .capsule)
-                            Spacer()
-                            if let health = project.health, health != "unknown" {
-                                Text(health).mobileTextStyle(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        Text(project.brief ?? project.description
-                            ?? AppLocalization.string("暂无项目说明", locale: AppLocalization.selectedLocale))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.vertical, 8)
-                }
+                projectOverviewSection(project)
             }
             if section == .overview && !deliveries.isEmpty {
                 Section("近期成果") {
@@ -155,6 +133,32 @@ struct ProjectDetailView: View {
             }
         }
         .refreshable { await load() }
+    }
+
+    private func projectOverviewSection(_ project: ProjectRecord) -> some View {
+        Section {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(project.name)
+                    .mobileTextStyle(.detailTitle)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                HStack {
+                    Text(LocalizedStringKey("project_status_" + project.status))
+                        .font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(mobileTheme.action.opacity(0.10), in: .capsule)
+                    Spacer()
+                    if let health = project.health, health != "unknown" {
+                        Text(health).mobileTextStyle(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Text(project.brief ?? project.description
+                    ?? AppLocalization.string("暂无项目说明", locale: AppLocalization.selectedLocale))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.vertical, 8)
+        }
     }
 
     private func projectSessions(_ project: ProjectRecord) -> some View {

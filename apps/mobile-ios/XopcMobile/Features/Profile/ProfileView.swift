@@ -68,8 +68,8 @@ struct PersonalGoalsView: View {
             SegmentedTabs(options: goalTabs, selected: completed, label: "状态", swipeToSelect: !editing) {
                 completed = $0
             }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
             List {
                 if let summary {
                     let goals = summary.goals.filter { ($0.status == "achieved") == completed }
@@ -383,15 +383,18 @@ struct UserUnderstandingView: View {
             }
         }
     }
+}
 
-    @MainActor private func refreshSummary() async {
+@MainActor
+extension UserUnderstandingView {
+    private func refreshSummary() async {
         do {
             summary = try await GatewayClient(configuration: configuration).fetchMobileUserSummary()
             error = nil
         } catch is CancellationError {} catch { self.error = error.localizedDescription }
     }
 
-    @MainActor private func loadAssertions(cursor: String? = nil) async {
+    private func loadAssertions(cursor: String? = nil) async {
         do {
             let page = try await GatewayClient(configuration: configuration)
                 .fetchUserAssertions(filter: filter, query: query, cursor: cursor)
