@@ -1,3 +1,5 @@
+import { stat } from 'node:fs/promises';
+
 import { SessionEnvironmentService } from '../../execution-environments/session-environment-service.js';
 import { resolveGitCommit } from '../../execution-environments/git.js';
 import type { ProjectService } from '../../projects/project-service.js';
@@ -83,7 +85,10 @@ export class SessionPreparationWorker {
     heartbeat.unref();
     try {
       const project = operation.creation.projectId ? this.service.projects.get(operation.creation.projectId) : null;
-      if (!project?.workspaceRoot || !operation.creation.execution) throw new Error('Project workspace is unavailable');
+      if (!project?.workspaceRoot || !operation.creation.execution
+        || !await stat(project.workspaceRoot).then(entry => entry.isDirectory()).catch(() => false)) {
+        throw new Error('Project workspace is unavailable');
+      }
       let baseRef = operation.baseCommit ?? undefined;
       if (operation.creation.execution.mode === 'managed_worktree' && !baseRef) {
         baseRef = await resolveGitCommit(project.workspaceRoot, operation.creation.execution.baseRef ?? 'HEAD');
@@ -112,7 +117,9 @@ export class SessionPreparationWorker {
       clearInterval(heartbeat);
       const preparation = getSessionPreparation(conversationId);
       if (preparation) this.service.emit('session.input-state', {
-        ...this.service.getSessionInputState(conversationId), preparation,
+        ...this.service.getSessionInputState(conversationId), preparation: {
+          ...preparation, executionMode: preparation.creation.execution?.mode,
+        },
       });
     }
   }

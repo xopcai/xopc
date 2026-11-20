@@ -90,6 +90,7 @@ export type SessionPreparationState = 'preparing' | 'ready' | 'preparation_faile
 export const sessionPreparationViewSchema = z.object({
   operationId: z.string(), revision: z.number().int(),
   state: z.enum(['preparing', 'ready', 'preparation_failed']), lastError: z.string().nullable(),
+  executionMode: z.enum(['local_checkout', 'managed_worktree']).optional(),
 });
 export type SessionPreparationView = z.infer<typeof sessionPreparationViewSchema>;
 

@@ -123,7 +123,7 @@ export interface XopcQueuedInput {
   attachments?: XopcChatAttachment[]; contextRefs?: XopcQueuedContextRef[]; thinking?: string; error?: string;
 }
 export interface XopcQueuedContextRef { kind: string; sourceId: string; version: string; title?: string; }
-export interface XopcSessionPreparation { operationId: string; revision: number; state: string; lastError?: string; }
+export interface XopcSessionPreparation { operationId: string; revision: number; state: string; lastError?: string; executionMode?: string; }
 export interface XopcQueueState { conversationId: string; activeRunId?: string; inputs: XopcQueuedInput[]; preparation?: XopcSessionPreparation; }
 export interface XopcQueueUpdate {
   content?: string; attachments?: XopcChatAttachment[]; contextRefs?: XopcContextRef[]; thinking?: string; position?: number;

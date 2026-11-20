@@ -18,7 +18,7 @@ import {
 import { XopcProjectResult } from '../model/workspace';
 
 interface XopcSuggestionFeedback { suggestionId: string; impressionId: string; event: string; edited?: boolean; }
-interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; }
+interface XopcPreparationRetry { operationId: string; expectedRevision: number; idempotencyKey: string; executionMode?: string; }
 interface XopcQueuePatchCommand {
   version: number; content?: string; attachments?: XopcInputAttachment[]; contextRefs?: XopcContextRef[]; thinking?: string; position?: number;
 }
@@ -448,8 +448,9 @@ export class XopcChatRepository {
     await gatewaySession.request(path, 'POST', JSON.stringify(feedback));
   }
 
-  async retryPreparation(id: string, operationId: string, revision: number): Promise<void> {
-    const body: XopcPreparationRetry = { operationId, expectedRevision: revision, idempotencyKey: operationId + ':' + revision.toString() };
+  async retryPreparation(id: string, operationId: string, revision: number, executionMode?: string): Promise<void> {
+    const body: XopcPreparationRetry = { operationId, expectedRevision: revision,
+      idempotencyKey: operationId + ':' + revision.toString(), executionMode };
     await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/preparation/retry', 'POST', JSON.stringify(body));
   }
   async updateQueued(id: string, input: XopcQueuedInput, update: XopcQueueUpdate): Promise<XopcQueueState> {

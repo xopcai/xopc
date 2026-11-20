@@ -34,6 +34,7 @@ export class XopcChatOptionsViewModel {
   async load(id: string, agentId: string = '', locale: string = ''): Promise<void> {
     this.pause(); const generation = ++this.generation;
     this.queueRequest++; this.conversationId = id; this.agentId = agentId; this.queued = [];
+    this.preparation = undefined; this.queueError = ''; this.queueBusy = false;
     this.configVersion = undefined;
     this.models = []; this.agents = []; this.modelId = ''; this.thinkingLevel = 'off'; this.error = ''; this.loading = true;
     this.resume();
@@ -153,15 +154,21 @@ export class XopcChatOptionsViewModel {
     catch (error) { if (generation === this.generation) { await this.refreshQueue(); this.queueError = (error as Error).message; } }
     finally { this.queueBusy = false; }
   }
-  async retryQueue(): Promise<void> {
+  async retryQueue(useLocalCheckout: boolean = false): Promise<void> {
     if (this.queueBusy) return;
+    const preparation = this.preparation;
+    if (useLocalCheckout && (preparation?.state !== 'preparation_failed' || preparation.executionMode !== 'managed_worktree')) return;
+    const id = this.conversationId;
+    const generation = this.generation;
     this.queueBusy = true;
+    this.queueRequest++;
     try {
-      if (this.preparation?.state === 'preparation_failed') {
-        await this.repository.retryPreparation(this.conversationId, this.preparation.operationId, this.preparation.revision);
+      if (preparation?.state === 'preparation_failed') {
+        await this.repository.retryPreparation(id, preparation.operationId, preparation.revision,
+          useLocalCheckout ? 'local_checkout' : undefined);
       }
-      await this.refreshQueue();
-    } catch (error) { this.queueError = (error as Error).message; }
-    finally { this.queueBusy = false; }
+      if (generation === this.generation) await this.refreshQueue();
+    } catch (error) { if (generation === this.generation) this.queueError = (error as Error).message; }
+    finally { if (generation === this.generation) this.queueBusy = false; }
   }
 }

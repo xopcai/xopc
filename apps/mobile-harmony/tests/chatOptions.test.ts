@@ -48,6 +48,22 @@ describe('chat options and queue', () => {
     expect(mock.updateQueued).toHaveBeenCalledWith('one', input('a', 1), { position: 2 });
     await vi.waitFor(() => expect(model.queueBusy).toBe(false)); model.dispose();
   });
+  it('switches a failed Worktree preparation while keeping the original queued input', async () => {
+    const model = new XopcChatOptionsViewModel();
+    const preparation = { operationId: 'operation', revision: 3, state: 'preparation_failed', executionMode: 'managed_worktree' };
+    mock.queue.mockResolvedValue({ conversationId: 'one', preparation, inputs: [input('first', 1)] });
+    await model.load('one');
+    expect(model.queued.map(item => item.id)).toEqual(['first']);
+    mock.retryPreparation.mockResolvedValue(undefined);
+    mock.queue.mockResolvedValue({ conversationId: 'one', preparation: {
+      ...preparation, state: 'preparing', executionMode: 'local_checkout',
+    }, inputs: [input('first', 1)] });
+    await model.retryQueue(true);
+    expect(mock.retryPreparation).toHaveBeenCalledExactlyOnceWith('one', 'operation', 3, 'local_checkout');
+    expect(model.preparation?.executionMode).toBe('local_checkout');
+    expect(model.queueError).toBe('');
+    model.dispose();
+  });
   it('remembers the selected model for this agent only after Gateway confirmation', async () => {
     const model = new XopcChatOptionsViewModel(); mock.config.mockResolvedValueOnce({ model: 'p/a', thinkingLevel: 'high' });
     await model.load('one', 'main'); expect(await model.selectModel('p/b')).toBe(true);

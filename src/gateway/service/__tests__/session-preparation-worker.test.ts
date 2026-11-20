@@ -48,7 +48,8 @@ it.each(['local_checkout', 'managed_worktree'] as const)('prepares %s asynchrono
   const drain = vi.fn(async () => {
     expect(getSessionPreparation(id)?.state).toBe('ready');
     const binding = environments.resolveBinding(id)!;
-    expect(environments.get(binding.environmentId)?.status).toBe('ready');
+    const environment = environments.get(binding.environmentId);
+    expect(environment?.status).toBe('ready');
   });
   const service = { projects, drainSessionInputs: drain, getSessionInputState: () => ({}), emit: vi.fn() } as unknown as GatewayService;
   const worker = new SessionPreparationWorker(service);
@@ -58,11 +59,13 @@ it.each(['local_checkout', 'managed_worktree'] as const)('prepares %s asynchrono
     expect(drain).not.toHaveBeenCalled();
     const failed = getSessionPreparation(id)!;
     expect(failed.state).toBe('preparation_failed');
-    writeFileSync(join(repository, 'file.txt'), 'initial');
+    git('add', 'file.txt');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Resolve dirty checkout');
     retrySessionPreparation(id, 'owner', { operationId: failed.operationId, expectedRevision: failed.revision, idempotencyKey: 'retry' });
   }
   worker.wake(id); worker.wake(id); await worker.stop();
   expect(drain).toHaveBeenCalledOnce();
+  expect(environments.get(environments.resolveBinding(id)!.environmentId)?.baseSha).toBe(git('rev-parse', 'HEAD').toString().trim());
   worker.wake(id); await worker.stop();
   expect(drain).toHaveBeenCalledOnce();
 }, 30_000);

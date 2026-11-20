@@ -107,7 +107,8 @@ export function bumpSessionInputRevision(db: ReturnType<typeof getSqliteDatabase
 
 export function getSessionInputState(conversationId: string): SessionInputState {
   const db = getSqliteDatabase();
-  const preparation = db.prepare('SELECT operation_id AS operationId, revision, state, last_error AS lastError FROM session_preparations WHERE conversation_id=?')
+  const preparation = db.prepare(`SELECT operation_id AS operationId, revision, state, last_error AS lastError,
+    json_extract(creation_json, '$.execution.mode') AS executionMode FROM session_preparations WHERE conversation_id=?`)
     .get(conversationId) as SessionPreparationView | undefined;
   const runtime = db.prepare(`SELECT revision, active_run_id, active_input_id
     FROM session_input_runtime WHERE conversation_id = ?`).get(conversationId) as

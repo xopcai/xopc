@@ -2,7 +2,8 @@ import { EndpointRegistry } from '../../endpoint-tools/registry.js';
 import { EndpointContextStore } from '../../endpoint-tools/context-store.js';
 import { createEndpointPrincipal } from '../../storage/sqlite/endpoint-principal-repository.js';
 import { getSessionInputById } from '../../storage/sqlite/session-input-repository.js';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,6 +19,9 @@ import { getSessionInputState } from '../../storage/sqlite/session-input-reposit
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { getSessionConfig } from '../../storage/sqlite/config-repository.js';
 import { SessionInputCoordinator } from '../service/session-input-coordinator.js';
+import { SessionPreparationWorker } from '../service/session-preparation-worker.js';
+import { ProjectService } from '../../projects/project-service.js';
+import { SessionEnvironmentService } from '../../execution-environments/session-environment-service.js';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
@@ -53,11 +57,12 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     prepareAttachments: async (_id, attachments) => attachments,
     prepareContexts: async () => [], steer,
   });
+  const projects = new ProjectService();
   const service = {
     currentConfig: ConfigSchema.parse({ gateway: { auth: { mode: 'token', token } } }),
     getResolvedAuth: () => ({ mode: 'token', token }), getAuthToken: () => token,
     isGatewayReady: () => true, getExtensionLoader: () => null,
-    projects: { get: () => null },
+    projects,
     endpointTools: { registry, contexts },
     sessions: { getSession: async (id: string) => getSessionMetadata(id), getAgentConfig: async () => ({ model: 'test/model', thinkingLevel: 'off', fixedModel: true }) },
     getSessionInputState,
@@ -66,8 +71,10 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     withSessionInputSubmission: coordinator.withSubmission.bind(coordinator),
     prepareSessionCommandInput: coordinator.prepareInput.bind(coordinator),
     dispatchAcceptedSessionInput: coordinator.dispatchAcceptedInput.bind(coordinator),
-    drainSessionInputs: coordinator.drain.bind(coordinator), sessionPreparations: { wake: vi.fn() },
+    drainSessionInputs: coordinator.drain.bind(coordinator),
   } as unknown as GatewayService;
+  const preparations = new SessionPreparationWorker(service);
+  Object.assign(service, { sessionPreparations: preparations });
   const app = createHonoApp({ service });
   const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
   try {
@@ -207,7 +214,49 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     deleteSessionRecord(id);
     expect((await post(command)).status).toBe(410);
     expect((await fetch(receiptPath, { headers })).status).toBe(410);
+
+    const workspaceRoot = join(dir, 'project');
+    mkdirSync(workspaceRoot);
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: workspaceRoot, stdio: 'pipe' });
+    git('init');
+    const file = join(workspaceRoot, 'draft.txt');
+    writeFileSync(file, 'committed');
+    git('add', 'draft.txt');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Initial');
+    writeFileSync(file, 'uncommitted');
+    const project = projects.create({ name: 'Worktree project', workspaceRoot, executionMode: 'managed_worktree' });
+    const projectConversationId = randomUUID();
+    const projectSession = `${base}/api/sessions/${projectConversationId}`;
+    const projectPost = (suffix: string, body: object) => fetch(projectSession + suffix, { method: 'POST', headers, body: JSON.stringify(body) });
+    const firstProjectInput = { ...command, creation: { ...command.creation, projectId: project.id,
+      execution: { mode: 'managed_worktree' }, workingDirectory: undefined }, input: { content: 'Project message' } };
+    const projectAccepted = await projectPost('/inputs', firstProjectInput);
+    expect(projectAccepted.status, await projectAccepted.clone().text()).toBe(202);
+    const projectReceipt = (await projectAccepted.json()).payload.receipt;
+    await preparations.stop();
+    const projectQueue = await fetch(projectSession + '/input-state', { headers });
+    expect(projectQueue.status).toBe(200);
+    const failed = (await projectQueue.json()).payload;
+    expect(failed.preparation).toMatchObject({ state: 'preparation_failed', executionMode: 'managed_worktree',
+      lastError: expect.stringContaining('Repository has uncommitted changes:') });
+    expect(failed.inputs).toMatchObject([{ id: projectReceipt.inputId, content: 'Project message', status: 'queued' }]);
+    expect(execute).toHaveBeenCalledTimes(6);
+    const useProjectFolder = { operationId: failed.preparation.operationId, expectedRevision: failed.preparation.revision,
+      idempotencyKey: randomUUID(), executionMode: 'local_checkout' };
+    const recovered = await projectPost('/preparation/retry', useProjectFolder);
+    expect(recovered.status, await recovered.clone().text()).toBe(202);
+    expect((await projectPost('/preparation/retry', useProjectFolder)).status).toBe(202);
+    expect((await projectPost('/preparation/retry', { ...useProjectFolder, idempotencyKey: randomUUID() })).status).toBe(409);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(7));
+    expect(execute.mock.calls[6]![0]).toMatchObject({ content: 'Project message' });
+    expect(coordinator.snapshot(projectConversationId).inputs).toMatchObject([{ id: projectReceipt.inputId, status: 'running' }]);
+    expect(new SessionEnvironmentService().get(projectConversationId)).toMatchObject({ kind: 'local_checkout', projectId: project.id });
+    expect(projects.get(project.id)?.executionMode).toBe('managed_worktree');
+    expect(readFileSync(file, 'utf8')).toBe('uncommitted');
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(coordinator.snapshot(projectConversationId).activeRunId).toBeUndefined());
   } finally {
+    await preparations.stop();
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true });
   }

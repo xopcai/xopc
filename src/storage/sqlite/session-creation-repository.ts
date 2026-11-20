@@ -156,7 +156,7 @@ export function pendingSessionPreparations(): string[] {
 }
 
 export function retrySessionPreparation(conversationId: string, principalId: string,
-  input: { operationId: string; expectedRevision: number; idempotencyKey: string }): SessionPreparation {
+  input: { operationId: string; expectedRevision: number; idempotencyKey: string; executionMode?: 'local_checkout' }): SessionPreparation {
   return runSqliteWriteTransaction(db => {
     if (isConversationDeleted(conversationId)) throw new SessionCommandError('SESSION_DELETED', 'Conversation was deleted');
     const operation = getSessionPreparation(conversationId);
@@ -164,19 +164,38 @@ export function retrySessionPreparation(conversationId: string, principalId: str
     const owner = db.prepare('SELECT principal_id FROM session_input_receipts WHERE conversation_id=? ORDER BY accepted_at LIMIT 1')
       .get(conversationId) as { principal_id: string } | undefined;
     if (owner?.principal_id !== principalId) throw new SessionCommandError('FORBIDDEN', 'Preparation belongs to another principal');
+    const useLocalCheckout = input.executionMode === 'local_checkout';
+    const retryKey = useLocalCheckout ? '\0local_checkout:' + input.idempotencyKey : input.idempotencyKey;
     const previous = db.prepare('SELECT * FROM session_preparation_retries WHERE conversation_id=? AND idempotency_key=?')
-      .get(conversationId, input.idempotencyKey) as { operation_id: string; expected_revision: number; principal_id: string } | undefined;
+      .get(conversationId, retryKey) as { operation_id: string; expected_revision: number; principal_id: string } | undefined;
     if (previous) {
       if (previous.operation_id !== input.operationId || previous.expected_revision !== input.expectedRevision
         || previous.principal_id !== principalId) throw new SessionCommandError('IDEMPOTENCY_CONFLICT', 'Retry identity was reused');
       return operation;
     }
-    const changed = db.prepare(`UPDATE session_preparations SET state='preparing', revision=revision+1,
-      lease_until=0,last_error=NULL,updated_at=? WHERE conversation_id=? AND operation_id=? AND revision=? AND state='preparation_failed'`)
-      .run(Date.now(), conversationId, input.operationId, input.expectedRevision).changes;
-    if (!changed) throw new SessionCommandError('SESSION_CHANGED', 'Preparation state changed');
+    if (operation.operationId !== input.operationId || operation.revision !== input.expectedRevision || operation.state !== 'preparation_failed') {
+      throw new SessionCommandError('SESSION_CHANGED', 'Preparation state changed');
+    }
+    const reserved = db.prepare('SELECT 1 FROM execution_environments WHERE environment_id=?').get(operation.environmentId);
+    const now = Date.now();
+    if (useLocalCheckout) {
+      const binding = db.prepare('SELECT 1 FROM execution_environment_bindings WHERE conversation_id=? AND released_at IS NULL').get(conversationId);
+      if (operation.creation.execution?.mode !== 'managed_worktree' || binding) {
+        throw new SessionCommandError('SESSION_CHANGED', 'Only an unbound Worktree preparation can switch to the project folder');
+      }
+      if (reserved) {
+        db.prepare(`INSERT INTO session_preparation_cleanup (environment_id,conversation_id,not_before)
+          VALUES (?,?,?) ON CONFLICT(environment_id) DO NOTHING`).run(operation.environmentId, conversationId, now + 5_000);
+      }
+    }
+    const creation = useLocalCheckout ? { ...operation.creation, execution: { mode: 'local_checkout' } } : operation.creation;
+    // A failed preflight has no worktree to recover. Resolve the ref again after the user fixes the checkout.
+    const baseCommit = !useLocalCheckout && reserved ? operation.baseCommit : null;
+    db.prepare(`UPDATE session_preparations SET state='preparing',revision=revision+1,lease_until=0,last_error=NULL,
+      updated_at=?,creation_json=?,environment_id=?,base_commit=? WHERE conversation_id=?`)
+      .run(now, JSON.stringify(creation), useLocalCheckout ? randomUUID() : operation.environmentId, baseCommit, conversationId);
     db.prepare('INSERT INTO session_preparation_retries VALUES (?,?,?,?,?)')
-      .run(conversationId, input.idempotencyKey, input.operationId, input.expectedRevision, principalId);
+      .run(conversationId, retryKey, input.operationId, input.expectedRevision, principalId);
     return getSessionPreparation(conversationId)!;
   });
 }

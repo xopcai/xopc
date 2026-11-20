@@ -62,6 +62,21 @@ export struct XopcChatOptions {
     return chatThinkingSummary(this.model);
   }
 
+  private queueErrorMessage(): ResourceStr {
+    const error = this.model.queueError;
+    if (this.model.preparation?.state === 'preparation_failed') {
+      if (error.startsWith('Repository has uncommitted changes:')) return $r('app.string.chat_worktree_dirty');
+      if (error.startsWith('git rev-parse failed:')) return $r('app.string.chat_worktree_git_unavailable');
+      if (error === 'Project workspace is unavailable' || error.startsWith('Local checkout does not exist:')) {
+        return $r('app.string.chat_project_folder_unavailable');
+      }
+      if (error === this.model.preparation?.lastError || error === 'SESSION_PREPARATION_FAILED') {
+        return $r('app.string.chat_project_preparation_failed');
+      }
+    }
+    return userErrorMessage(error, 'save');
+  }
+
   private agentText(label: ResourceStr): string {
     return typeof label === 'string' ? label : this.getUIContext().getHostContext()?.resourceManager.getStringSync(label) ?? '';
   }
@@ -155,8 +170,13 @@ export struct XopcChatOptions {
           if (this.model.queueError) {
             ListItem() {
               Column({ space: 8 }) {
-                Text(userErrorMessage(this.model.queueError, 'save')).fontColor(this.colors.danger)
+                Text(this.queueErrorMessage()).fontColor(this.colors.danger)
                 Button($r('app.string.retry')).enabled(!this.model.queueBusy).onClick((): void => { this.model.retryQueue(); })
+                if (this.model.preparation?.state === 'preparation_failed'
+                  && this.model.preparation?.executionMode === 'managed_worktree') {
+                  Button($r('app.string.chat_send_from_project_folder'), { buttonStyle: ButtonStyleMode.NORMAL })
+                    .enabled(!this.model.queueBusy).onClick((): void => { this.model.retryQueue(true); })
+                }
               }
             }
           }

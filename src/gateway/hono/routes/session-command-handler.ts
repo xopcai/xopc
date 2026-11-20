@@ -108,7 +108,12 @@ export async function handleSessionInputReceipt(c: Context, deps: AuthenticatedR
   } catch (error) { return commandError(c, error); }
 }
 
-const preparationRetrySchema = z.strictObject({ operationId: z.string().uuid(), expectedRevision: z.number().int().positive(), idempotencyKey: z.string().min(1).max(128) });
+const preparationRetrySchema = z.strictObject({
+  operationId: z.string().uuid(),
+  expectedRevision: z.number().int().positive(),
+  idempotencyKey: z.string().min(1).max(128).refine(key => !key.includes('\0')),
+  executionMode: z.literal('local_checkout').optional(),
+});
 export async function handleSessionPreparationRetry(c: Context, deps: AuthenticatedRouteDeps) {
   const id = conversationIdSchema.safeParse(c.req.param('conversationId'));
   const parsed = preparationRetrySchema.safeParse(await c.req.json().catch(() => null));
