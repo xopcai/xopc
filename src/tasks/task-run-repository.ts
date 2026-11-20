@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { taskCheckId } from '@xopcai/gateway-contract';
+import { ActorRefSchema, taskCheckId } from '@xopcai/gateway-contract';
 import type {
   ActorRef,
   TaskExecutorKind,
@@ -21,6 +21,12 @@ import { recordTaskResultVersion } from './task-result-versions.js';
 import { inspectTaskWorkspace } from './task-workspace-verification.js';
 
 const ACTIVE_RUN_STATUSES: TaskRunStatus[] = ['queued', 'running', 'waiting', 'verifying'];
+
+export function mcpDelegatedRunPrincipal(run: TaskRun | undefined): string | undefined {
+  if (!run || run.executorKind !== 'agent' || run.parentRunId) return undefined;
+  const actor = ActorRefSchema.safeParse(run.trigger.actor);
+  return actor.success && actor.data.kind === 'integration' && actor.data.id?.startsWith('mcp:') ? actor.data.id : undefined;
+}
 
 // Cancellation identities survive process loss; never infer them from the Task's current Run.
 const CANCELLED_ACTIVE_RUNS = `SELECT run.run_id FROM task_runs run
@@ -725,11 +731,11 @@ export class TaskRunRepository {
     });
   }
 
-  listEvents(runId: string): TaskRunEvent[] {
+  listEvents(runId: string, afterSequence = 0, limit = -1): TaskRunEvent[] {
     const rows = getSqliteDatabase().prepare(
       `SELECT event_id, run_id, sequence, type, payload_json, actor_json, occurred_at
-       FROM task_run_events WHERE run_id = ? ORDER BY sequence`,
-    ).all(runId) as Array<{
+       FROM task_run_events WHERE run_id = ? AND sequence > ? ORDER BY sequence LIMIT ?`,
+    ).all(runId, afterSequence, limit) as Array<{
       event_id: string;
       run_id: string;
       sequence: number;

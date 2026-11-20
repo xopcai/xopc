@@ -67,7 +67,7 @@ import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import {
   defineTaskContract,
   TaskRepository,
-  TaskRunRepository,
+  mcpDelegatedRunPrincipal, TaskRunRepository,
 } from '../../tasks/index.js';
 import { TaskDeletionService } from '../../tasks/task-deletion-service.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
@@ -914,8 +914,14 @@ async function handleTask(
       return { ok: false, error: 'Message kind is not allowed for this Agent role' };
     }
     if (main && tasks.get(taskId)?.phase === 'closed') return { ok: false, error: 'Task is closed' };
-    if (worker && kind === 'question' && !['running', 'verifying'].includes(runs.getActiveRoot(taskId)?.status ?? '')) {
-      return { ok: false, error: 'An active TaskRun is required before asking the owner' };
+    if (worker && kind === 'question') {
+      const workerRun = active?.runId ? runs.get(active.runId) : runs.getActiveRoot(taskId);
+      if (mcpDelegatedRunPrincipal(workerRun)) {
+        return { ok: false, error: 'Use clarify to ask the MCP requester and pause this run.' };
+      }
+      if (!['running', 'verifying'].includes(runs.getActiveRoot(taskId)?.status ?? '')) {
+        return { ok: false, error: 'An active TaskRun is required before asking the owner' };
+      }
     }
     const causationId = trimString(args.causationId);
     if ((kind === 'ack' || kind === 'answer') && !causationId) {

@@ -18,7 +18,7 @@ const ClarifySchema = Type.Object({
   choiceDetails: Type.Optional(Type.Array(Type.Object({ id: Type.String(), label: Type.String(), description: Type.Optional(Type.String()) }), { minItems: 2, maxItems: 10, description: 'Answer choices with stable unique IDs and optional descriptions.' })),
   recommendedChoiceId: Type.Optional(Type.String()),
   schemaVersion: Type.Optional(Type.Literal(2)),
-  questions: Type.Optional(Type.Array(QuestionSchema, { minItems: 1, maxItems: 3, description: 'Independent questions answered together. Only supported by capable Web/Electron main chats. Never use for approvals.' })),
+  questions: Type.Optional(Type.Array(QuestionSchema, { minItems: 1, maxItems: 3, description: 'Independent questions answered together. Supported by capable Web/Electron main chats and delegated MCP runs. Never use for approvals.' })),
 }, { additionalProperties: false, anyOf: [{ required: ['question'] }, { required: ['schemaVersion', 'questions'] }] });
 
 export type ClarifyRequestPayload = ClarificationPresentation & {

@@ -8,7 +8,7 @@ import { personalRequestForExecution } from '../../personal-agent/request-reposi
 import { getXopcDatabase, isXopcDatabaseOpen } from '../../storage/sqlite/connection.js';
 import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
-import { TaskRunRepository } from '../../tasks/task-run-repository.js';
+import { mcpDelegatedRunPrincipal, TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { allowsReadOnlyRetryTool } from '../../tasks/task-retry-policy.js';
 
 export const TASK_EXECUTION_TOOL_IDS: readonly string[] = ['task_collaboration', 'publish_task_result'];
@@ -21,6 +21,7 @@ export const PERSONAL_REQUEST_TOOL_IDS = [
 export type ExecutionToolPolicy = Readonly<{
   surface: 'agent' | 'personal_main' | 'personal_request_worker';
   taskExecution: boolean;
+  mcpDelegation?: boolean;
   privateRoutine?: boolean;
   followUp?: boolean;
   readOnly?: boolean;
@@ -45,14 +46,16 @@ export function resolveExecutionToolPolicy(conversationId: string): ExecutionToo
   const interaction = getSessionInteractionPolicy(conversationId);
   const readOnly = interaction.mode === 'plan' || interaction.access === 'read-only';
   const taskSession = isXopcDatabaseOpen() ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId) : undefined;
-  const readOnlyRetry = Boolean(taskSession?.runId && new TaskRunRepository().get(taskSession.runId)?.trigger.readOnlyRetry === true);
+  const taskRun = taskSession?.runId ? new TaskRunRepository().get(taskSession.runId) : undefined;
+  const readOnlyRetry = taskRun?.trigger.readOnlyRetry === true;
   const followUp = Boolean(taskSession && getXopcDatabase().db.prepare('SELECT 1 FROM home_followup_steps WHERE task_id=? UNION ALL SELECT 1 FROM home_followups WHERE root_task_id=? LIMIT 1').get(taskSession.taskId,taskSession.taskId));
   const privateRoutine = followUp || Boolean(taskSession && getXopcDatabase().db.prepare(`SELECT 1 FROM observation_routine_executions WHERE task_id=?
     UNION ALL SELECT 1 FROM observation_methods WHERE validation_task_id=?
     UNION ALL SELECT 1 FROM home_observation_trials WHERE task_id=? LIMIT 1`).get(taskSession.taskId, taskSession.taskId, taskSession.taskId));
   const unrestricted = !privateRoutine && configured && !readOnly && !readOnlyRetry && (!authority || authority.unrestrictedTools);
   const taskExecution = Boolean(taskSession);
-  return { surface, taskExecution, privateRoutine, followUp, readOnly, readOnlyRetry, nativeMcp: unrestricted, externalMaterialization: unrestricted,
+  const mcpDelegation = Boolean(mcpDelegatedRunPrincipal(taskRun));
+  return { surface, taskExecution, ...(mcpDelegation ? { mcpDelegation } : {}), privateRoutine, followUp, readOnly, readOnlyRetry, nativeMcp: unrestricted, externalMaterialization: unrestricted,
     discovery: unrestricted, codemode: unrestricted, revision: `unified-tool-discovery-v1:${interaction.mode}:${interaction.access}:${interaction.sandbox ?? 'configured'}:${interaction.network ?? false}:${authority?.revision ?? ''}:${privateRoutine ? 'private-routine' : ''}:${readOnlyRetry}` };
 }
 

@@ -74,8 +74,12 @@ export function defineExternalCapability<I extends z.ZodType, O extends z.ZodTyp
 }
 
 type CapabilityDefinition<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodType> = ReadCapability<I, O> | AtomicCapability<I, O> | ExternalCapability<I, O>;
+type McpProjection = { input?: z.ZodType; output: z.ZodType; description?: string };
+
 type CapabilityEntry = {
   definition: CapabilityDefinition;
+  mcp?: McpProjection;
+  mcpDescriptor?: CapabilityDescriptor;
   descriptors?: { descriptor: CapabilityDescriptor; extensionDescriptor?: CapabilityDescriptor };
 };
 
@@ -105,6 +109,11 @@ export class CapabilityDispatcher {
     });
   }
 
+  exposeToMcp(id: string, projection: McpProjection): void {
+    const entry = this.entries.get(id);
+    if (entry) entry.mcp = projection;
+  }
+
   private buildDescriptors(definition: CapabilityDefinition) {
     const descriptor = {
       id: definition.id,
@@ -132,31 +141,54 @@ export class CapabilityDispatcher {
   }
 
   private readDescriptor(entry: CapabilityEntry, surface: CapabilitySurface): CapabilityDescriptor {
+    if (surface === 'mcp' && entry.mcp) {
+      if (entry.mcpDescriptor) return structuredClone(entry.mcpDescriptor);
+      const { definition, mcp } = entry;
+      const descriptor = {
+        id: definition.id,
+        majorVersion: definition.majorVersion,
+        description: mcp.description ?? definition.description,
+        effect: definition.effect,
+        surfaces: ['mcp' as const],
+        inputSchema: z.toJSONSchema(mcp.input ?? definition.input, { io: 'input' }),
+        outputSchema: z.toJSONSchema(mcp.output, { io: 'output' }),
+      };
+      entry.mcpDescriptor = {
+        ...descriptor,
+        descriptorDigest: createHash('sha256').update(canonicalCapabilityJson({ ...descriptor, scopes: definition.scopes })).digest('hex'),
+      };
+      return structuredClone(entry.mcpDescriptor);
+    }
     const { descriptor, extensionDescriptor } = entry.descriptors ??= this.buildDescriptors(entry.definition);
     return structuredClone(surface === 'extension' && extensionDescriptor ? extensionDescriptor : descriptor);
   }
 
-  private visible(definition: CapabilityDefinition, context: CapabilityContext): boolean {
+  private visible({ definition, mcp }: CapabilityEntry, context: CapabilityContext): boolean {
     return Boolean(context.principalId)
-      && definition.surfaces.includes(context.surface)
+      && (context.surface === 'mcp' ? Boolean(mcp) : definition.surfaces.includes(context.surface))
       && (!context.allowedCapabilities || context.allowedCapabilities.includes(definition.id))
       && definition.scopes.every(scope => context.scopes.includes('gateway.admin') || context.scopes.includes(scope));
   }
 
   list(context: CapabilityContext): CapabilityDescriptor[] {
-    return [...this.entries.values()].filter(entry => this.visible(entry.definition, context))
+    return [...this.entries.values()].filter(entry => this.visible(entry, context))
       .map(entry => this.readDescriptor(entry, context.surface));
   }
 
   describe(id: string, context: CapabilityContext): CapabilityDescriptor {
     const entry = this.entries.get(id);
-    if (!entry || !this.visible(entry.definition, context)) throw new CapabilityError('NOT_FOUND', 'Capability not available');
+    if (!entry || !this.visible(entry, context)) throw new CapabilityError('NOT_FOUND', 'Capability not available');
     return this.readDescriptor(entry, context.surface);
   }
 
   async validateInput(id: string, input: unknown, context: CapabilityContext): Promise<unknown> {
     this.describe(id, context);
-    const { definition } = this.entries.get(id)!;
+    const { definition, mcp } = this.entries.get(id)!;
+    if (context.surface === 'mcp' && mcp?.input) {
+      const projected = mcp.input.safeParse(input);
+      if (!projected.success) throw new CapabilityError('INVALID_INPUT', projected.error.message);
+      input = projected.data;
+    }
     const parsed = definition.input.safeParse(input);
     if (!parsed.success) throw new CapabilityError('INVALID_INPUT', parsed.error.message);
     if (!await context.authorize(id, parsed.data)) throw new CapabilityError('FORBIDDEN', 'Capability resource access denied');
@@ -170,21 +202,25 @@ export class CapabilityDispatcher {
     if (expected && (expected.majorVersion !== descriptor.majorVersion || expected.descriptorDigest !== descriptor.descriptorDigest)) {
       throw new CapabilityError('CONTRACT_CHANGED', 'Capability contract changed; describe it again');
     }
-    const { definition } = this.entries.get(id)!;
+    const { definition, mcp } = this.entries.get(id)!;
     const parsed = { data: await this.validateInput(id, input, context) } as { data: z.output<typeof definition.input> };
+    const output = context.surface === 'mcp' ? mcp?.output
+      : context.surface === 'extension' ? definition.extensionOutput : undefined;
     const validateResult = (result: unknown) => this.validateResult(
-      context.surface === 'extension' && definition.extensionOutput ? { ...definition, output: definition.extensionOutput } : definition, result);
+      output && context.surface !== 'mcp' ? { ...definition, output } : definition, result);
+    const projectResult = (result: unknown) => output && context.surface === 'mcp'
+      ? this.validateResult({ ...definition, output }, result) : result;
     if (definition.effect === 'external-write') {
       const key = expected?.idempotencyKey;
       if (!key?.trim() || key.length > 200) throw new CapabilityError('INVALID_INPUT', 'A stable idempotencyKey is required');
       const normalizedInput = JSON.parse(JSON.stringify(parsed.data));
       const identity = definition.requestScope ? { input: normalizedInput, scope: definition.requestScope(context) } : normalizedInput;
-      return executeExternalOperation({
+      return projectResult(await executeExternalOperation({
         principalId: context.principalId, capabilityId: id, idempotencyKey: key,
         requestDigest: createHash('sha256').update(canonicalCapabilityJson(identity)).digest('hex'),
         descriptorDigest: descriptor.descriptorDigest, surface: context.surface, recovery: definition.recovery,
       }, operationId => definition.execute(parsed.data, { ...context, operationId, idempotencyKey: key }),
-      validateResult);
+      validateResult));
     }
     if (definition.effect === 'local-write') {
       const key = expected?.idempotencyKey;
@@ -220,7 +256,7 @@ export class CapabilityDispatcher {
           result = execute();
         }
         await definition.afterCommit?.(result, parsed.data);
-        return result;
+        return projectResult(result);
       } catch (error) {
         if (error instanceof OperationConflictError) throw new CapabilityError('REVISION_CONFLICT', error.message);
         if (error instanceof SqliteCommitEffectError) {
@@ -231,8 +267,8 @@ export class CapabilityDispatcher {
         throw error;
       }
     }
-    return validateResult(await (context.surface === 'extension' && definition.extensionExecute
-      ? definition.extensionExecute(parsed.data, context) : definition.execute(parsed.data, context)));
+    return projectResult(validateResult(await (context.surface === 'extension' && definition.extensionExecute
+      ? definition.extensionExecute(parsed.data, context) : definition.execute(parsed.data, context))));
   }
 
   private validateResult(definition: CapabilityDefinition, result: unknown): unknown {

@@ -14,4 +14,4 @@ For a server URL, **Authentication** defaults to automatic detection. You can al
 
 For stdio, the Gateway administrator enables mobile command launch with `xopc config set gateway.mobileMcpAllowStdio true`. Review the program, arguments, and working directory before selecting **Run and check**. Environment variable values are stored in the Gateway credential store when the draft is committed. After a successful check, choose **Add connection** to commit the draft.
 
-See the [MCP configuration and migration guide](./cli/mcp.md) for examples, credentials, exposure, and incompatible changes. The inbound `xopc mcp capabilities --allow-capability <id>` bridge remains available.
+See the [MCP configuration and migration guide](./cli/mcp.md) for examples, credentials, exposure, and incompatible changes. To expose Gateway tools to local clients, create a grant with `xopc mcp grant` and run `xopc mcp serve --stdio`.

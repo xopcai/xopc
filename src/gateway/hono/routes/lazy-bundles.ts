@@ -1,5 +1,8 @@
 import type { Hono } from 'hono';
 
+import { MCP_BRIDGE_PATH } from '../../../mcp/connection-grants.js';
+import { MCP_RESOURCE_METADATA_PATH, REMOTE_MCP_PATH } from '../../../mcp/remote-config.js';
+
 import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -118,6 +121,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     load: async () => {
       const { registerLocalAppPreviewRoutes } = await import('./local-app-previews.js');
       return { register: registerLocalAppPreviewRoutes };
+    },
+  },
+  {
+    id: 'mcp-bridge',
+    match: path => path === MCP_BRIDGE_PATH,
+    load: async () => {
+      const { registerMcpBridgeRoutes } = await import('./mcp-bridge.js');
+      return { register: registerMcpBridgeRoutes };
     },
   },
   {
@@ -599,6 +610,15 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
 ];
 
 export const APP_LAZY_ROUTE_BUNDLES: readonly AppLazyRouteBundle[] = [
+  {
+    id: 'mcp-remote',
+    prefixes: [REMOTE_MCP_PATH, MCP_RESOURCE_METADATA_PATH],
+    match: path => path === REMOTE_MCP_PATH || path === MCP_RESOURCE_METADATA_PATH,
+    load: async () => {
+      const { registerRemoteMcpRoutes } = await import('./mcp-remote.js');
+      return { registerOnApp: registerRemoteMcpRoutes };
+    },
+  },
   {
     id: 'shares-public',
     prefixes: ['/s'],

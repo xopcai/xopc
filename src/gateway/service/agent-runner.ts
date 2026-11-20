@@ -43,6 +43,7 @@ import { TaskConversationRepository } from '../../tasks/task-conversation-reposi
 import { TaskCollaborationRepository } from '../../tasks/task-collaboration-repository.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
+import { mcpDelegatedRunPrincipal, TaskRunRepository } from '../../tasks/task-run-repository.js';
 import {
   SessionInputCoordinator,
   type ReplaceLatestTurnInput,
@@ -506,17 +507,20 @@ export class GatewayAgentRunner {
     publishStreamFor: (runId: string) => (event: ClarificationStreamEvent) => void;
   }): Promise<ClarifyRequestResult> {
     const { conversationId, request, publishStreamFor } = opts;
+    const ordinaryInput = request.kind !== 'approval' && !request.deviceInteraction;
+    const taskSession = ordinaryInput || request.schemaVersion === 2
+      ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId) : undefined;
+    const input = taskSession || request.schemaVersion === 2 ? findSessionInputByRunId(conversationId, opts.runId) : undefined;
+    const mcpDelegation = ordinaryInput && taskSession?.runId && taskSession.runId === input?.taskRunId
+      && mcpDelegatedRunPrincipal(new TaskRunRepository().get(taskSession.runId));
     if (request.schemaVersion === 2) {
-      const input = findSessionInputByRunId(conversationId, opts.runId);
       const capable = input?.contextSnapshots?.some(context => context.kind === 'device_context' && context.interactionCapabilities?.clarificationVersions.includes(2));
-      if (process.env.XOPC_CLARIFY_MULTI_QUESTION === 'false' || !capable || this.externalStreamBySession.has(conversationId) || new TaskConversationRepository().resolveActiveExecutionSession(conversationId)) {
+      if (process.env.XOPC_CLARIFY_MULTI_QUESTION === 'false' || (!mcpDelegation && (!capable || taskSession))
+        || this.externalStreamBySession.has(conversationId)) {
         throw new Error('CLARIFICATION_VERSION_UNSUPPORTED: use single-question clarify in this environment');
       }
     }
-    const taskSession = request.kind !== 'approval' && !request.deviceInteraction
-      ? new TaskConversationRepository().resolveActiveExecutionSession(conversationId)
-      : undefined;
-    if (taskSession?.runId) {
+    if (ordinaryInput && taskSession?.runId && !mcpDelegation) {
       const entry = runSqliteWriteTransaction(() => {
         const posted = new TaskCollaborationRepository().append({
           taskId: taskSession.taskId,

@@ -255,7 +255,8 @@ export class SessionInputCoordinator {
     await this.runSubmissionExclusive(input.conversationId, async () => {
       const row = getSessionInputById(conversationId, inputId);
       const state = this.snapshot(input.conversationId);
-      if (!row || row.status !== 'queued' || state.control.paused) return;
+      if (!row || row.status !== 'queued' || state.control.paused
+        || (row.taskRunId && row.effectiveDelivery === 'steer')) return;
       if (row.payload?.connectionAction === 'cancel') this.completeConnectionCancellation(row);
       if (row.payload?.connectionAction || this.connectionTarget(row.conversationId, state)) {
         this.requestConnectionStop(row);
@@ -534,11 +535,38 @@ export class SessionInputCoordinator {
     return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
   }
 
+  async deliverDelegatedTaskSteer(conversationId: string, inputId: string): Promise<void> {
+    const row = runSqliteWriteTransaction(() => {
+      const input = getSessionInputById(conversationId, inputId);
+      if (!input?.taskRunId || !input.targetRunId || input.effectiveDelivery !== 'steer' || input.status !== 'queued') return;
+      const state = this.snapshot(conversationId);
+      const run = new TaskRunRepository().get(input.taskRunId);
+      if (state.activeRunId !== input.targetRunId || state.control.paused || run?.status !== 'running') {
+        setSessionInputStatus(input.id, 'interrupted', { error: 'Target task turn stopped accepting steering' });
+        return;
+      }
+      setSessionInputStatus(input.id, 'injecting');
+      return input;
+    });
+    if (!row) return;
+    try {
+      if (!await this.steerInput(row, row.targetRunId)) {
+        const current = getSessionInputById(conversationId, inputId);
+        if (current?.status === 'injecting') setSessionInputStatus(inputId, 'interrupted', { error: 'Target task turn ended before steering' });
+      }
+    } catch (err) {
+      // The runtime may already have received the message. Never replay an ambiguous injection.
+      log.warn({ err, conversationId, inputId }, 'Delegated steering delivery could not be confirmed');
+    } finally {
+      this.publish(conversationId);
+    }
+  }
+
   private steerInput(row: SessionInput, runId?: string): Promise<boolean> {
     const text = steeringText(row.content, row.contextSnapshots);
     const userTurnDocument = parseUserTurnDocument(row.content);
     const voiceAgentInstruction = isNaturalVoiceDelegation(row);
-    const trackDelivery = row.origin.type === 'endpoint';
+    const trackDelivery = row.origin.type === 'endpoint' || (row.taskRunId !== undefined && row.effectiveDelivery === 'steer');
     if (!trackDelivery && !voiceAgentInstruction && !row.attachments?.length && !row.contextSnapshots?.length) return this.deps.steer(row.conversationId, text, runId);
     return this.deps.steer(row.conversationId, text, runId, {
       attachments: row.attachments as UserTurnAttachment[] | undefined, sourceContexts: row.contextSnapshots,

@@ -189,9 +189,9 @@ export class TaskRunCoordinator {
       ? findUnconfirmedToolEffect(loadTranscriptRowsForSession(run.conversationId), recoveryOptions) : undefined }).effect;
     const unconfirmedEffects = status === 'failed' ? unconfirmedEffect() : undefined;
     const systemSummaries: Record<string, string> = { 'Message processed': '消息已处理', Interrupted: '执行已中断', 'Agent run ended unexpectedly': '助手执行意外结束' };
-    const resultSummary = status === 'succeeded' && currentResearch?.finalText ? currentResearch.finalText
-      : status === 'succeeded' && hasAssistantResult && /^Message processed(?: successfully)?$/.test(input.summary)
-      ? input.assistantText!.trim() : input.summary;
+    const publishedFinalText = status === 'succeeded' ? currentResearch?.finalText : undefined;
+    const resultSummary = publishedFinalText ?? (status === 'succeeded' && hasAssistantResult
+      && /^Message processed(?: successfully)?$/.test(input.summary) ? input.assistantText!.trim() : input.summary);
     const summary = emptySuccess ? (zh ? '助手执行未返回结果或证据' : 'Agent run returned no result or evidence')
       : zh ? systemSummaries[resultSummary] ?? resultSummary : resultSummary;
     const publications = inspectTaskPublications(run.id, currentResearch);
@@ -254,7 +254,8 @@ export class TaskRunCoordinator {
     this.#application.completeRun({
       runId: run.id,
       expectedRunVersion: run.version,
-      resultText: hostArtifact ? publicationText : directionsReviewed ? currentResearch?.finalText : input.assistantText,
+      resultText: hostArtifact ? publicationText : directionsReviewed ? currentResearch?.finalText
+        : publishedFinalText ?? input.assistantText,
       ...(directionsReviewed ? { reviewedInstructionSequence: instructionSequence } : {}),
       hostArtifact,
       ...(unconfirmedEffects || repairBlocked ? { unconfirmedEffect: unconfirmedEffects ?? repairBlocked } : {}),

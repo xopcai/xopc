@@ -347,10 +347,11 @@ export function finishSessionInputRun(conversationId: string, runId: string, sta
       version = version + 1, updated_at_ms = ? WHERE id = ?`)
       .run(status, error ?? null, now, runtime.active_input_id);
     db.prepare(`UPDATE session_inputs SET
-      status = CASE WHEN ? AND json_extract(origin_json, '$.type') != 'endpoint' THEN 'completed' ELSE 'interrupted' END,
-      error = CASE WHEN ? AND json_extract(origin_json, '$.type') != 'endpoint' THEN NULL ELSE 'Current reply ended before steer delivery was confirmed' END,
+      status = CASE WHEN ? AND json_extract(origin_json, '$.type') != 'endpoint' AND task_run_id IS NULL THEN 'completed' ELSE 'interrupted' END,
+      error = CASE WHEN ? AND json_extract(origin_json, '$.type') != 'endpoint' AND task_run_id IS NULL THEN NULL ELSE 'Current reply ended before steer delivery was confirmed' END,
       version = version + 1,
-      updated_at_ms = ? WHERE conversation_id = ? AND target_run_id = ? AND status = 'injecting'`)
+      updated_at_ms = ? WHERE conversation_id = ? AND target_run_id = ?
+        AND (status = 'injecting' OR (status = 'queued' AND effective_delivery = 'steer' AND task_run_id IS NOT NULL))`)
       .run(Number(status === 'completed'), Number(status === 'completed'), now, conversationId, runId);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = NULL, active_input_id = NULL,
       revision = revision + 1, updated_at_ms = ?
@@ -388,6 +389,7 @@ export function mutateQueuedSessionInput(input: {
   return runSqliteWriteTransaction((db) => {
     const row = db.prepare(`${SELECT_INPUTS} WHERE id = ? AND conversation_id = ?`).get(input.id, input.conversationId) as InputRow | undefined;
     if (!row || row.kind !== 'message' || row.status !== 'queued' || row.version !== input.version
+      || (row.task_run_id && row.effective_delivery === 'steer')
       || row.expected_transcript_id && row.expected_transcript_id !== readCurrentTranscriptId(db, input.conversationId)) return false;
     const now = Date.now();
     if (input.position !== undefined) {
@@ -444,7 +446,8 @@ export function recoverSessionInputState(): string[] {
     ) WHERE kind = 'message' AND status IN ('running','injecting')
       AND (payload_json IS NULL OR json_extract(payload_json, '$.connectionBarrier') = 1)`).run();
     db.prepare(`UPDATE session_inputs SET status = 'interrupted', error = 'Gateway restarted during delivery',
-      version = version + 1, updated_at_ms = ? WHERE status IN ('running','injecting')`).run(now);
+      version = version + 1, updated_at_ms = ? WHERE status IN ('running','injecting')
+        OR (status = 'queued' AND effective_delivery = 'steer' AND task_run_id IS NOT NULL)`).run(now);
     // Controls have no model execution or external write; replay their durable, versioned intent.
     db.prepare(`UPDATE session_inputs SET status = 'queued', error = NULL, version = version + 1,
       updated_at_ms = ? WHERE status = 'interrupted' AND kind = 'message'

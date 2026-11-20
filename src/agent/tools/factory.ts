@@ -987,7 +987,8 @@ export class AgentToolsFactory {
       .map(tool => personalToolsConfigured && !tool.name.startsWith('personal_') && PERSONAL_TOOL_DESCRIPTIONS[tool.name]
         ? { ...tool, description: PERSONAL_TOOL_DESCRIPTIONS[tool.name] } : tool);
     return filterExecutionTools(executionToolPolicy, selected)
-      .map(tool => executionToolPolicy.discovery ? withCoreToolExposure(tool) : tool);
+      .map(tool => executionToolPolicy.discovery && !(executionToolPolicy.mcpDelegation && tool.name === 'clarify')
+        ? withCoreToolExposure(tool) : tool);
   }
 
   createCapabilityTools(

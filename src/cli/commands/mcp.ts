@@ -8,10 +8,15 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import { loadConfig } from '../../config/loader.js';
 import { createCapabilityMcpServer } from '../../mcp/capability-server.js';
-import { createGatewayHttpClientFromConfig } from '../../mcp/gateway-http-client.js';
+import { GatewayHttpClient } from '../../mcp/gateway-http-client.js';
+import { createMcpConnection, revokeMcpConnection } from '../../mcp/connection-grants.js';
+import { isMcpProductTool, listMcpProductTools } from '../../mcp/product-tools.js';
+import { createGatewayCredential } from '../../gateway/credential.js';
+import { resolveEffectiveGatewayPort } from '../../gateway/host.js';
+import { grantRemoteMcpConnection, listRemoteMcpGrants, revokeRemoteMcpConnection } from '../../mcp/remote-grants.js';
 import { register, type CLIContext } from '../registry.js';
 
-function createMcpCommand(ctx: CLIContext): Command {
+function createMcpCommand(ctx: CLIContext, getCtx = () => ctx): Command {
   const command = new Command('mcp').description('Manage native pi MCP servers and expose Gateway capabilities');
   for (const action of ['list', 'login', 'logout'] as const) {
     const native = command.command(action).description(`Use pi's native MCP ${action}`);
@@ -39,12 +44,50 @@ function createMcpCommand(ctx: CLIContext): Command {
       ]);
     });
   }
-  command.command('capabilities')
-    .description('Run an opt-in stdio MCP proxy for an explicit capability allowlist')
-    .requiredOption('--allow-capability <ids...>', 'Exact capability IDs; no wildcards')
-    .action(async (options: { allowCapability: string[] }) => {
-      const client = createGatewayHttpClientFromConfig({ config: loadConfig(ctx.configPath) });
-      const server = createCapabilityMcpServer(client, options.allowCapability);
+  command.command('grant')
+    .description('Create a local MCP connection grant for the entire personal workspace')
+    .option('--write', 'Include all published write tools alongside read tools')
+    .option('--allow-capability <ids...>', 'Grant only these exact capability IDs')
+    .action((options: { write?: boolean; allowCapability?: string[] }) => {
+      if (options.write && options.allowCapability) throw new Error('Choose --write or --allow-capability');
+      const ids = options.allowCapability ?? listMcpProductTools(Boolean(options.write));
+      if (ids.some(id => !isMcpProductTool(id))) throw new Error('Unknown MCP capability ID');
+      console.log(JSON.stringify(createMcpConnection(ids)));
+    });
+  command.command('revoke')
+    .description('Revoke a local MCP connection grant')
+    .argument('<connection-id>')
+    .action(revokeMcpConnection);
+  const remote = command.command('remote').description('Manage OAuth grants for the remote MCP server');
+  remote.command('grant')
+    .requiredOption('--subject <subject>', 'Subject claim for the approved user at the configured OAuth issuer')
+    .requiredOption('--client-id <id>', 'Registered OAuth client ID')
+    .option('--write', 'Grant read/write access to the personal workspace')
+    .option('--allow-capability <ids...>', 'Grant only these exact capability IDs')
+    .action((options: { subject: string; clientId: string; write?: boolean; allowCapability?: string[] }) => {
+      const config = loadConfig(getCtx().configPath).gateway?.mcp;
+      if (!config) throw new Error('Configure gateway.mcp before granting access');
+      const { resource, issuer } = config;
+      const grant = grantRemoteMcpConnection({ resource, issuer, subject: options.subject, clientId: options.clientId }, {
+        capabilityIds: options.allowCapability, write: options.write,
+      });
+      console.log(JSON.stringify(grant));
+    });
+  remote.command('list').action(() => console.log(JSON.stringify(listRemoteMcpGrants())));
+  remote.command('revoke').argument('<connection-id>').action((connectionId: string) => {
+    if (!revokeRemoteMcpConnection(connectionId)) throw new Error('Active remote MCP connection not found');
+  });
+  command.command('serve')
+    .description('Run the Gateway MCP server on stdio')
+    .requiredOption('--stdio', 'Use the stdio transport')
+    .option('--port <number>', 'Loopback Gateway port (defaults to gateway.port)')
+    .action(async (options: { port?: string }) => {
+      const credential = createGatewayCredential('token', process.env.XOPC_MCP_TOKEN);
+      if (!credential) throw new Error('Set XOPC_MCP_TOKEN to a token from xopc mcp grant');
+      const port = options.port === undefined ? resolveEffectiveGatewayPort(loadConfig(ctx.configPath)) : Number(options.port);
+      if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('Expected a Gateway port between 1 and 65535');
+      const client = new GatewayHttpClient({ baseUrl: `http://127.0.0.1:${port}`, credential });
+      const server = createCapabilityMcpServer(client);
       const transport = new StdioServerTransport();
       let resolveClosed!: () => void;
       const closed = new Promise<void>(resolve => { resolveClosed = resolve; });
@@ -72,4 +115,4 @@ function createMcpCommand(ctx: CLIContext): Command {
 }
 
 register({ id: 'mcp', name: 'mcp', description: 'Manage native pi MCP servers and expose Gateway capabilities',
-  factory: createMcpCommand, metadata: { category: 'utility', examples: ['xopc mcp capabilities --allow-capability xopc.notes.list'] } });
+  factory: createMcpCommand, metadata: { category: 'utility', examples: ['xopc mcp serve --stdio'] } });

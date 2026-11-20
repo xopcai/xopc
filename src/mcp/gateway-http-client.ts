@@ -53,11 +53,11 @@ export class GatewayHttpClient {
     return h;
   }
 
-  async getJson<T>(path: string): Promise<T> {
+  async getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     const res = await undiciFetch(`${this.opts.baseUrl}${path}`, {
       headers: this.headers(),
       redirect: 'error',
-      signal: AbortSignal.timeout(30_000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const em = `Gateway GET ${path} failed: ${res.status}`;
@@ -71,13 +71,13 @@ export class GatewayHttpClient {
     return body as T;
   }
 
-  async postJson<T>(path: string, data: unknown): Promise<T> {
+  async postJson<T>(path: string, data: unknown, signal?: AbortSignal): Promise<T> {
     const res = await undiciFetch(`${this.opts.baseUrl}${path}`, {
       method: 'POST',
       headers: this.headers({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(data),
       redirect: 'error',
-      signal: AbortSignal.timeout(30_000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const em = `Gateway POST ${path} failed: ${res.status}`;

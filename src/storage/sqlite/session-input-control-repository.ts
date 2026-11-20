@@ -49,8 +49,11 @@ export function acceptSessionInputControl(conversationId: string, command: Sessi
     }
     if (command.action === 'steer' && state.phase !== 'running') throw new SessionInputControlConflict('No active reply to steer');
     if (command.inputId) {
-      const row = db.prepare('SELECT status, version, expected_transcript_id FROM session_inputs WHERE conversation_id = ? AND id = ?')
-        .get(conversationId, command.inputId) as { status: string; version: number; expected_transcript_id: string | null } | undefined;
+      const row = db.prepare('SELECT status, version, expected_transcript_id, task_run_id, effective_delivery FROM session_inputs WHERE conversation_id = ? AND id = ?')
+        .get(conversationId, command.inputId) as { status: string; version: number; expected_transcript_id: string | null; task_run_id: string | null; effective_delivery: string } | undefined;
+      if (row?.task_run_id && row.effective_delivery === 'steer') {
+        throw new SessionInputControlConflict('This steering message belongs to a specific task turn');
+      }
       if (row?.expected_transcript_id && row.expected_transcript_id !== command.expectedTranscriptId) throw new SessionInputControlConflict('Input belongs to an earlier transcript');
       if (!row || (row.status !== 'queued' && !(command.action === 'send' && row.status === 'interrupted')) || row.version !== command.inputVersion) throw new SessionInputControlConflict('This input changed or has started');
     }

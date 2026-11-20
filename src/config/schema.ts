@@ -7,6 +7,8 @@ import semver from 'semver';
 import { TracingConfigSchema } from '../observability/config.js';
 import { OutboundProxySchema } from './outbound-proxy.js';
 import { ComputerConfigSchema } from '../computer/config.js';
+import { RemoteMcpConfigSchema } from '../mcp/remote-config.js';
+import { McpCallbackConfigSchema } from '../mcp/callback-config.js';
 
 import {
   AgentModelsOverrideSchema,
@@ -492,6 +494,8 @@ export const GatewayWebchatConfigSchema = z.object({
 });
 
 export const GatewayConfigSchema = z.object({
+  mcp: RemoteMcpConfigSchema.optional(),
+  mcpCallback: McpCallbackConfigSchema.optional(),
   outboundProxy: OutboundProxySchema.optional(),
   deviceProvidersEnabled: z.boolean().optional(),
   /** Allow paired phones to review and launch stdio MCP processes on this Gateway. */

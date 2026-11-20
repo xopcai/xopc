@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  APP_LAZY_ROUTE_BUNDLES,
   AUTHENTICATED_LAZY_ROUTE_BUNDLES,
   findAuthenticatedLazyRouteBundle,
 } from '../lazy-bundles.js';
@@ -16,6 +17,22 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/commands')?.id).not.toBe('task-retry');
     expect(findAuthenticatedLazyRouteBundle('/api/tasks/task-id/retry/extra')?.id).not.toBe('task-retry');
   });
+  it('mounts remote MCP and its discovery document on their own exact paths', () => {
+    const bundle = APP_LAZY_ROUTE_BUNDLES.find(candidate => candidate.id === 'mcp-remote');
+    expect(bundle?.prefixes).toEqual(['/mcp', '/.well-known/oauth-protected-resource/mcp']);
+    for (const path of bundle!.prefixes) {
+      expect(bundle?.match(path)).toBe(true);
+      expect(bundle?.match(path + '/other')).toBe(false);
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+    }
+  });
+
+  it('isolates the local MCP bridge from outbound MCP routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/bridge')?.id).toBe('mcp-bridge');
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/bridge/other')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers')?.id).toBe('mcp');
+  });
+
   it('routes the mobile catalog through the capability bundle', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities/mobile-catalog')?.id).toBe('capabilities');
     for (const route of ['skills', 'mcp', 'mcp/id', 'plugin/id', 'agent/id', 'panel/plugins', 'panel/skills',

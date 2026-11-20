@@ -7,6 +7,8 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import { VIDEO_IMAGE_MAX_BYTES } from '@xopcai/gateway-contract';
 import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 
+import { authenticateMcpConnection, getMcpBearerToken, MCP_BRIDGE_PATH } from '../../mcp/connection-grants.js';
+import { REMOTE_MCP_PATH } from '../../mcp/remote-config.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GatewayService } from '../service.js';
@@ -269,6 +271,19 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     },
   }));
 
+  // Authenticate before reading potentially large note bodies. The bridge rechecks the grant at dispatch.
+  app.use(MCP_BRIDGE_PATH, async (c, next) => {
+    const host = c.req.header('host') ?? '';
+    const token = getMcpBearerToken(c.req.header('Authorization'));
+    if (!isLoopbackIpAddress(resolveRequestRemoteAddress(c))
+      || !/^(127\.0\.0\.1|localhost|\[::1\])(?::[0-9]+)?$/i.test(host)
+      || ['origin', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip'].some(header => c.req.header(header) !== undefined)
+      || !authenticateMcpConnection(token)) {
+      return c.json({ code: 'FORBIDDEN' }, 403);
+    }
+    await next();
+  });
+
   app.use('/api/*', async (c, next) => {
     const contentType = c.req.header('content-type');
     const isAttachmentInputRequest = (c.req.method === 'POST' && c.req.path === '/api/tasks')
@@ -278,7 +293,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const isEndpointUpload = c.req.method === 'POST'
       && /^\/api\/endpoint-tools\/invocations\/[^/]+\/files$/.test(c.req.path);
     const isVideoUpload = c.req.method === 'POST' && /^\/api\/video-generation\/sessions\/[^/]+\/jobs$/.test(c.req.path);
-    const maxSize = isVideoUpload
+    const maxSize = c.req.path === MCP_BRIDGE_PATH
+      // A 2M-character note can occupy 12MB after JSON escaping.
+      ? 16 * 1024 * 1024
+      : isVideoUpload
       ? VIDEO_IMAGE_MAX_BYTES + 64 * 1024
       : isEndpointUpload
       ? ENDPOINT_MAX_FILE_BYTES
@@ -324,18 +342,18 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   const authenticated = new Hono();
   authenticated.use(routeErrorMiddleware());
-  authenticated.use(
-    auth({
-      getGatewayAuth: () => service.currentConfig.gateway?.auth,
-      getResolvedAuth: () => service.getResolvedAuth(),
-      isPublicTunnelEnabled: () => service.currentConfig.tunnel?.enabled === true,
-      getTrustedProxyContext: () => ({
-        trustedProxies: service.currentConfig.gateway?.trustedProxies,
-        allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
-      }),
+  const gatewayAuth = auth({
+    getGatewayAuth: () => service.currentConfig.gateway?.auth,
+    getResolvedAuth: () => service.getResolvedAuth(),
+    isPublicTunnelEnabled: () => service.currentConfig.tunnel?.enabled === true,
+    getTrustedProxyContext: () => ({
+      trustedProxies: service.currentConfig.gateway?.trustedProxies,
+      allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
     }),
-  );
-  authenticated.use(gatewayScopes());
+  });
+  const enforceGatewayScopes = gatewayScopes();
+  authenticated.use((c, next) => c.req.path === MCP_BRIDGE_PATH ? next() : gatewayAuth(c, next));
+  authenticated.use((c, next) => c.req.path === MCP_BRIDGE_PATH ? next() : enforceGatewayScopes(c, next));
 
   const strictRateLimitMiddleware = createStrictRateLimitMiddleware({
     getTrustedProxyContext: () => ({
@@ -374,6 +392,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }),
   });
 
+  app.use(REMOTE_MCP_PATH, strictRateLimitMiddleware);
   registerAuthenticatedRoutes(app, authenticated, {
     service,
     strictRateLimitMiddleware,

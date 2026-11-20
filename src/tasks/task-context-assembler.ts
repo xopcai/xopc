@@ -4,7 +4,7 @@ import { getSqliteDatabase, isXopcDatabaseOpen } from '../storage/sqlite/index.j
 import { TaskContextRepository } from './task-context-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskRepository, type TaskAggregate } from './task-repository.js';
-import { TaskRunRepository } from './task-run-repository.js';
+import { mcpDelegatedRunPrincipal, TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { getTaskHandoff } from './task-handoff.js';
@@ -110,11 +110,13 @@ export function assembleTaskContext(conversationId: string, userQuery: string): 
 }
 
 export function buildTaskExecutionDirective(conversationId: string): string {
-  const taskId = isXopcDatabaseOpen() ? taskIdForSession(conversationId) : undefined;
-  const brief = taskId ? getTaskExecutionBrief(taskId) : undefined;
+  const conversations = new TaskConversationRepository();
+  const active = isXopcDatabaseOpen() ? conversations.resolveActiveExecutionSession(conversationId) : undefined;
+  const brief = active ? getTaskExecutionBrief(active.taskId) : undefined;
   if (!brief) return '';
   const { task, remainingCriteria } = brief;
-  const handoff = new TaskConversationRepository().getLatestHandoff(task.id);
+  const mcpDelegation = active?.runId && mcpDelegatedRunPrincipal(new TaskRunRepository().get(active.runId));
+  const handoff = conversations.getLatestHandoff(task.id);
   const handoffPayload = handoff?.toConversationId === conversationId
     ? JSON.stringify(handoff.payload).slice(0, 12_000)
     : '';
@@ -164,7 +166,10 @@ export function buildTaskExecutionDirective(conversationId: string): string {
     collaboration.length ? `Recent task collaboration:\n${collaboration.map((entry) =>
       `- ${entry.sequence} id=${entry.id} ${entry.authorKind} ${entry.kind} superseded=${superseded.has(entry.id)} delivery=${entry.deliveryStatus ?? 'none'}${entry.causationId ? ` replyTo=${entry.causationId}` : ''}: ${JSON.stringify(entry.body)}`).join('\n')}` : '',
     `Initial handoff snapshots, source references and toolCallIds are not collaboration entries and require no ack. Before continuing, acknowledge only delivered user/main_agent collaboration entries of kind answer or instruction with ${postTool}, kind ack, causationId equal to its entry ID. Explain your interpretation and how the final output will incorporate it. Acknowledgement records receipt and intent, not proof of completion. Do not act on or acknowledge superseded directions. Apply all remaining applicable user directions on this same Task; report its actual adoption and any unmet requirements in the final result.`,
-    `Report meaningful progress with ${postTool}. If blocked, post a question and stop this execution turn until answered.`,
+    `Report meaningful progress with ${postTool}.`,
+    mcpDelegation
+      ? 'If blocked by a missing decision, ask the MCP requester with clarify and stop this execution turn until answered.'
+      : 'If blocked, post a question and stop this execution turn until answered.',
     (contract.brief?.length ?? 0) > 12000 ? 'Task details above are an excerpt. Read every page with task_collaboration(command="get", section="brief", offset=0) and nextOffset before execution.' : '',
     connected ? `Connected request ${connected.requestId}: retain connector ${connected.connectorId} and account ${connected.accountId}. Text answers and instructions do not authorize account changes or writes. Use personal_request_connection for expired access; only the main connection UI can authorize recovery. Publish the latest adopted result with personal_request_result after all answers/instructions, then call publish_task_result using exact evidence from successful xopc_tool_execute reads to verify the saved summary, structured items and coverage. Correct and resave the connected result before resubmitting evidence. Do not use unavailable artifact tools.` : '',
     connected ? 'Connected results and structured items return to the originating conversation automatically after this Task completes.' : 'For user-facing files, publish completed outputs with publish_artifacts before finishing. image_generate already publishes its images. Return structured artifact references rather than only local file paths. Published final outcomes are delivered automatically to the originating chat. Keep the final summary short and distinguish generated outputs from verified or accepted results.',

@@ -56,8 +56,12 @@ function buildProgram(ctx: CLIContext): Command {
       delete (parsedOpts as Record<string, unknown>)[k];
     }
     Object.assign(parsedOpts, next);
-    // Backup inspects the database before writes; a device host has its own private state.
-    if (['backup', 'device-host'].includes(actionCommand?.name() ?? '') || actionCommand?.parent?.name() === 'backup') return;
+    // MCP ingress commands use their own grant storage without initializing the Agent catalog.
+    const action = actionCommand?.name() ?? '';
+    const parent = actionCommand?.parent?.name();
+    const localMcp = parent === 'mcp' && ['serve', 'grant', 'revoke'].includes(action);
+    const remoteMcp = parent === 'remote' && actionCommand?.parent?.parent?.name() === 'mcp';
+    if (localMcp || remoteMcp || ['backup', 'device-host'].includes(action) || parent === 'backup') return;
     try {
       bootstrapApplicationStateSync();
     } catch (error) {

@@ -16,6 +16,7 @@ import type {
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 import { TaskContextRepository } from './task-context-repository.js';
+import { delegatedRunText } from './delegated-run-result.js';
 import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './task-change-events.js';
 import { TaskDependencyService } from './task-dependency-service.js';
 import { TaskReadModelProjector, type TaskReadModel } from './task-read-model-projector.js';
@@ -26,7 +27,7 @@ import { TaskOriginRepository } from './task-origin-repository.js';
 import type { TurnContextRef } from '../agent/source-context/types.js';
 import { captureTaskHandoff } from './task-handoff.js';
 import { TaskRepository } from './task-repository.js';
-import { TaskRunRepository } from './task-run-repository.js';
+import { mcpDelegatedRunPrincipal, TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
 import { TaskCriterionReviewRepository } from './task-criterion-review-repository.js';
@@ -595,6 +596,9 @@ export class TaskApplicationService {
       });
       if (!finalized) {
         return { ok: false, reason: 'conflict', model: this.#projector.get(run.taskId) };
+      }
+      if (mcpDelegatedRunPrincipal(run) && input.resultText?.trim() && input.resultText.trim() !== 'NO_REPLY') {
+        delegatedRunText.set(run.id, input.resultText);
       }
       const activeConversationId = new TaskConversationRepository().getState(task.id)?.activeConversationId;
       const alreadyWaiting = this.#runs.listActiveWaits(task.id).length > 0;

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { McpConfigSchema, McpServerSchema } from '../schema.js';
+import { GatewayConfigSchema, McpConfigSchema, McpServerSchema } from '../schema.js';
 it('accepts native OAuth options, exposure and seconds-based timeout', () => {
   expect(McpServerSchema.safeParse({ type: 'http', url: 'https://mcp.example.com', oauth: { clientId: 'registered', callbackPort: 8765 }, timeout: 30, exposure: 'deferred' }).success).toBe(true);
 });
@@ -17,4 +17,17 @@ it('rejects names colliding under native pi normalization', () => {
 it('accepts an optional display name without changing server identity', () => {
   expect(McpConfigSchema.parse({ servers: { stable_id: { command: 'node', displayName: '团队知识库' } } })?.servers?.stable_id.displayName).toBe('团队知识库');
   expect(McpServerSchema.safeParse({ command: 'node', displayName: 123 }).success).toBe(false);
+});
+
+
+it('requires an exact MCP resource URL and HTTPS for non-loopback OAuth endpoints', () => {
+  const mcp = { resource: 'https://gateway.example/mcp', issuer: 'https://login.example/', jwksUrl: 'https://login.example/jwks' };
+  expect(GatewayConfigSchema.safeParse({ mcp }).success).toBe(true);
+  for (const resource of ['not a URL', 'http://gateway.example/mcp', 'https://gateway.example/mcp/', 'https://gateway.example/mcp?']) {
+    expect(GatewayConfigSchema.safeParse({ mcp: { ...mcp, resource } }).success).toBe(false);
+  }
+  expect(GatewayConfigSchema.safeParse({ mcp: { ...mcp, jwksUrl: 'https://user:secret@login.example/jwks' } }).success).toBe(false);
+  expect(GatewayConfigSchema.safeParse({ mcp: {
+    resource: 'http://127.0.0.1:18790/mcp', issuer: 'http://127.0.0.1:8000', jwksUrl: 'http://127.0.0.1:8000/jwks',
+  } }).success).toBe(true);
 });

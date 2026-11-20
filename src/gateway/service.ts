@@ -28,7 +28,7 @@ import { getBrowserTabBindingById } from '../storage/sqlite/browser-tab-binding-
 import crypto from 'node:crypto';
 import { WorkDiscoveryService } from '../work-discovery/service.js';
 
-import { findSessionInput, findSessionInputByRunId, getSessionInputState, insertSessionInput, bumpSessionInputRevision } from '../storage/sqlite/session-input-repository.js';
+import { findSessionInput, findSessionInputByRunId, getSessionInputState, insertSessionInput, bumpSessionInputRevision, listActiveSessionInputExecutions } from '../storage/sqlite/session-input-repository.js';
 import { ConnectionRecoveryService } from '../connectors/connection-recovery-service.js';
 
 import { buildVoiceMemoryContext } from '../voice/realtime/memory-context.js';
@@ -84,6 +84,7 @@ import { getExposureManager } from '../remote-access/exposure-manager.js';
 import { sanitizeTunnelConfig } from '../tunnel/tunnel-config.js';
 import { prepareAutomationAgentSession } from './automation-agent-session.js';
 import { getGatewayFileSpaceService } from './file-space-service.js';
+import { McpRunCallbackDispatcher } from '../mcp/run-callbacks.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
@@ -393,6 +394,7 @@ export class GatewayService {
   private readonly readiness = new GatewayReadiness();
   private startupTrace: GatewayStartupTrace | null = null;
   private taskAllocationDispatcher: TaskAllocationDispatcher | null = null;
+  private mcpRunCallbacks: McpRunCallbackDispatcher | null = null;
   private taskRunDispatcher: TaskRunDispatcher | null = null;
   private taskRunDispatchTimer: ReturnType<typeof setInterval> | null = null;
   private managedComposioEventPoller?: ManagedComposioEventPoller;
@@ -1084,6 +1086,10 @@ export class GatewayService {
     this.taskResultDispatch();
     this.taskRunDispatch();
     this.taskMainUpdateDispatch();
+    if (this.config.gateway.mcpCallback) {
+      this.mcpRunCallbacks ??= new McpRunCallbackDispatcher();
+      this.mcpRunCallbacks.dispatch(() => this.config.gateway.mcpCallback);
+    }
   }
 
   async ensureTaskConversation(
@@ -1251,6 +1257,24 @@ export class GatewayService {
 
   abortAgentRun(runId: string) {
     return this.agentRunner.abortAgentRun(runId);
+  }
+
+  deliverDelegatedTaskSteer(conversationId: string, inputId: string): Promise<void> {
+    return this.agentRunner.inputs.deliverDelegatedTaskSteer(conversationId, inputId);
+  }
+
+  resumeDelegatedRunClarification(wait: import('@xopcai/gateway-contract').ClarificationWait): void {
+    this.emit('clarification.updated', wait);
+    void this.agentRunner.inputs.drain(wait.conversationId);
+  }
+
+  stopDelegatedTaskRun(taskRunId: string): void {
+    for (const input of listActiveSessionInputExecutions()) {
+      if (input.taskRunId !== taskRunId) continue;
+      void this.abortAgentRun(input.runId).catch(error => {
+        log.warn({ err: error, taskRunId, runId: input.runId }, 'Failed to interrupt delegated task execution');
+      });
+    }
   }
 
   getActiveWebchatRunId(conversationId: string): string | undefined {
@@ -1904,6 +1928,8 @@ export class GatewayService {
     const { cancelAllPluginCliAuthorizations } = await import('../extensions/agent-plugins/cli-authorization.js');
     cancelAllPluginCliAuthorizations();
     this.taskAllocationDispatcher?.stop();
+    this.mcpRunCallbacks?.stop();
+    this.mcpRunCallbacks = null;
     this.taskRunDispatcher?.stop();
     if (this.taskRunDispatchTimer) {
       clearInterval(this.taskRunDispatchTimer);

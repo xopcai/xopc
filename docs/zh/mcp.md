@@ -6,7 +6,7 @@ xopc 使用 pi 原生 MCP 扩展处理出站连接、工具发现、资源读取
 
 在 Gateway 主机运行 `xopc mcp list --json`、`xopc mcp login <server>`、`xopc mcp logout <server>`。网页支持配置、静态密钥与浏览器授权，授权和远程回调复用 pi 原生流程。
 
-完整配置、发现模式、登录方式及不兼容变更见 [MCP 配置与迁移指南](../cli/mcp.md)。入站 `xopc mcp capabilities --allow-capability <id>` 桥接继续保留。
+完整配置、发现模式、登录方式及不兼容变更见 [MCP 配置与迁移指南](../cli/mcp.md)。本机客户端可使用 `xopc mcp grant` 创建授权，再通过 `xopc mcp serve --stdio` 调用 Gateway 工具。
 
 ## 移动端配置
 

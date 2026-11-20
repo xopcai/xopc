@@ -6,8 +6,8 @@ import { createProductDispatcher } from '../../../capabilities/runtime/product.j
 import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-export function registerCapabilityOperationRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
-  const dispatcher = createProductDispatcher(() => deps.service.notesServiceInstance, {
+export function createGatewayProductDispatcher(deps: Pick<AuthenticatedRouteDeps, 'service'>) {
+  return createProductDispatcher(() => deps.service.notesServiceInstance, {
     getConfig: () => deps.service.currentConfig, getProjects: () => deps.service.projects,
     getAutomations: () => deps.service.automationServiceInstance,
     getWorkDiscovery: () => deps.service.workDiscovery,
@@ -18,6 +18,10 @@ export function registerCapabilityOperationRoutes(app: Hono, deps: Authenticated
       if (liveRunId) await deps.service.abortAgentRun(liveRunId);
     },
   });
+}
+
+export function registerCapabilityOperationRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
+  const dispatcher = createGatewayProductDispatcher(deps);
   app.get('/api/capabilities/operations', c => c.json({ capabilities: dispatcher.list(capabilityHttpContext(c)) }));
   app.get('/api/capabilities/operations/:id', c => {
     try { return c.json(dispatcher.describe(c.req.param('id'), capabilityHttpContext(c))); }
