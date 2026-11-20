@@ -449,6 +449,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   platform: process.platform as "darwin" | "win32" | "linux",
+  screenshotShortcut: ['darwin', 'win32', 'linux'].includes(process.platform) ? {
+    get: () => ipcRenderer.invoke('screenshot-shortcut:get'),
+    setRecording: (active: boolean) => ipcRenderer.invoke('screenshot-shortcut:record', active),
+    set: (shortcut: string) => ipcRenderer.invoke('screenshot-shortcut:set', shortcut),
+  } : undefined,
   voiceInputHotkey: {
     onEvent: (callback: (action: "press" | "release") => void) => {
       const handler = (_: unknown, action: "press" | "release") => callback(action);

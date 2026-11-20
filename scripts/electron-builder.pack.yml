@@ -40,6 +40,7 @@ asarUnpack:
 
 extraMetadata:
   main: out/main/index.js
+  desktopName: ai.xopc.xopc.desktop
 
 extraResources:
   - from: _pack-resources/compliance
@@ -216,6 +217,7 @@ nsis:
   include: _pack-resources/build-resources/external-intake.nsh
 
 linux:
+  syncDesktopName: true
   fileAssociations: *chatFileAssociations
   icon: icons
   category: Utility

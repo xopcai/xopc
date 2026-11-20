@@ -5,6 +5,7 @@ import {
   matchesShortcut,
   shortcutDisplayKeys,
   shortcutFromKeyboardEvent,
+  shortcutFromPhysicalKeyboardEvent,
 } from './quick-capture-shortcut-store';
 
 function keyboardEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
@@ -29,6 +30,14 @@ describe('quick capture shortcut helpers', () => {
     expect(shortcutFromKeyboardEvent(keyboardEvent({ ctrlKey: true, key: '.' }))).toBe('control+.');
     expect(shortcutFromKeyboardEvent(keyboardEvent({ metaKey: true, key: 'k' }))).toBe('meta+k');
     expect(shortcutFromKeyboardEvent(keyboardEvent({ ctrlKey: true, key: 'Control' }))).toBeNull();
+  });
+
+  it.each([
+    [{ altKey: true, code: 'Slash', key: '÷' }, 'alt+/'],
+    [{ ctrlKey: true, shiftKey: true, code: 'Slash', key: '?' }, 'control+shift+/'],
+    [{ metaKey: true, shiftKey: true, code: 'Equal', key: '+' }, 'meta+shift+='],
+  ])('records the base key of a modified punctuation chord', (event, expected) => {
+    expect(shortcutFromPhysicalKeyboardEvent(keyboardEvent(event))).toBe(expected);
   });
 
   it('matches the configured chord exactly', () => {

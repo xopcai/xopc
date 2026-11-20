@@ -25,7 +25,7 @@ import { resolvePersonalResultReference } from '../personal-agent/result-reader.
 import { personalRequestForTask } from '../personal-agent/request-repository.js';
 import { TaskOriginRepository } from './task-origin-repository.js';
 import type { TurnContextRef } from '../agent/source-context/types.js';
-import { captureTaskHandoff } from './task-handoff.js';
+import { captureTaskHandoff, captureWorkspaceFileHandoff, type WorkspaceFileInput } from './task-handoff.js';
 import { TaskRepository } from './task-repository.js';
 import { mcpDelegatedRunPrincipal, TaskRunRepository } from './task-run-repository.js';
 import { TaskCollaborationRepository } from './task-collaboration-repository.js';
@@ -87,6 +87,7 @@ export class TaskApplicationService {
   create(input: TaskCreateRequest, actor: ActorRef = { kind: 'user' }, options?: {
     linkRunningOriginInput?: boolean;
     resultPolicy?: TaskResultPolicy;
+    workspaceHandoff?: { prompt: string; files: readonly WorkspaceFileInput[] };
   }): TaskApplicationResult {
     const existing = this.#tasks.getByIdempotencyKey(input.idempotencyKey);
     if (existing) {
@@ -150,6 +151,8 @@ export class TaskApplicationService {
       }
       if (input.originConversationId && input.activation.mode === 'allocate') {
         captureTaskHandoff(task.id, input.originConversationId, input.body ?? input.contract.objective);
+      } else if (options?.workspaceHandoff?.files.length) {
+        captureWorkspaceFileHandoff(task.id, options.workspaceHandoff.prompt, options.workspaceHandoff.files);
       }
       for (const grant of input.authorityGrants) {
         this.#context.grant({ taskId: task.id, ...grant, grantedBy: actor });

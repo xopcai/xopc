@@ -7,9 +7,10 @@ export function isMacPlatform(): boolean {
 }
 
 export function shortcutDisplayKeys(shortcut: string, isMac = isMacPlatform()): string[] {
+  const platform = typeof window === 'undefined' ? undefined : window.electronAPI?.platform;
   return normalizeShortcut(shortcut).split('+').map((key) => {
     if (key === 'control') return 'Ctrl';
-    if (key === 'meta') return isMac ? '⌘' : 'Win';
+    if (key === 'meta') return isMac ? '⌘' : platform === 'linux' ? 'Super' : 'Win';
     if (key === 'alt') return isMac ? 'Option' : 'Alt';
     if (key === 'shift') return 'Shift';
     if (key === 'space') return 'Space';
@@ -30,11 +31,11 @@ export function normalizeShortcut(shortcut: string): string {
     .join('+');
 }
 
-export function shortcutFromKeyboardEvent(event: KeyboardEvent): string | null {
+export function shortcutFromKeyboardEvent(event: KeyboardEvent, keyOverride = event.key): string | null {
   if (event.key === 'Escape') return null;
   if (['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) return null;
 
-  const key = event.key === ' ' ? 'space' : normalizeKey(event.key);
+  const key = event.key === ' ' ? 'space' : normalizeKey(keyOverride);
   if (!key) return null;
 
   const modifiers = [
@@ -45,6 +46,25 @@ export function shortcutFromKeyboardEvent(event: KeyboardEvent): string | null {
   ].filter(Boolean);
 
   return [...modifiers, key].join('+');
+}
+
+const PHYSICAL_PUNCTUATION: Readonly<Record<string, string>> = {
+  Backquote: '`',
+  Backslash: '\\',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Comma: ',',
+  Equal: '=',
+  Minus: '-',
+  Period: '.',
+  Quote: "'",
+  Semicolon: ';',
+  Slash: '/',
+};
+
+export function shortcutFromPhysicalKeyboardEvent(event: KeyboardEvent): string | null {
+  const key = /^(?:Key|Digit)([A-Z0-9])$/.exec(event.code)?.[1] ?? PHYSICAL_PUNCTUATION[event.code];
+  return shortcutFromKeyboardEvent(event, key);
 }
 
 type QuickCaptureShortcutState = {

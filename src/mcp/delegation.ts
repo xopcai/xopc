@@ -24,6 +24,7 @@ import { agentExists } from '../routing/resolve-route.js';
 import { cancelTaskRun } from '../tasks/capabilities/runs.js';
 import { delegatedRunText, listDelegatedRunArtifacts } from '../tasks/delegated-run-result.js';
 import { TaskApplicationService } from '../tasks/task-application-service.js';
+import type { WorkspaceFileInput } from '../tasks/task-handoff.js';
 import { TaskRepository } from '../tasks/task-repository.js';
 import { mcpDelegatedRunPrincipal, TaskRunRepository } from '../tasks/task-run-repository.js';
 import { subscribeToMcpRunCallback } from './run-callbacks.js';
@@ -112,7 +113,8 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
   const tasks = new TaskApplicationService();
   const records = new TaskRepository();
   const notes = new NotesStore();
-  const preparedFiles = new WeakMap<z.output<typeof referenceInput>[], Map<string, { title: string; relativePath: string }>>();
+  type PreparedFile = WorkspaceFileInput & { relativePath: string };
+  const preparedFiles = new WeakMap<z.output<typeof referenceInput>[], Map<string, PreparedFile>>();
   const policy = { majorVersion: 1, surfaces: ['mcp'] as const };
 
   function ownedRun(runId: string, context: CapabilityContext) {
@@ -160,12 +162,13 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
     }),
     output: startOutput,
     async prepare({ references }) {
-      const files = new Map<string, { title: string; relativePath: string }>();
+      const files = new Map<string, PreparedFile>();
       for (const ref of references) {
         if (ref.kind !== 'file' || files.has(ref.id)) continue;
         const file = !ref.id.startsWith('host-') && await deps.getFiles().resource(ref.id).catch(() => undefined);
         if (!file || file.resource.kind !== 'file') throw new CapabilityError('NOT_FOUND', 'Referenced workspace file not found');
-        files.set(ref.id, { title: file.resource.name, relativePath: file.resource.relativePath });
+        const { id, name, relativePath, revision } = file.resource;
+        files.set(ref.id, { id, title: name, relativePath, version: revision });
       }
       preparedFiles.set(references, files);
     },
@@ -177,12 +180,13 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
       if (!agentExists(executor)) throw new CapabilityError('UNAVAILABLE', 'No ready Agent is available');
       // A delegated prompt is task content, including when it starts with a slash command.
       const objective = prompt.startsWith('/') ? `Task request:\n\n${prompt}` : prompt;
+      const files = preparedFiles.get(references);
       const unique = new Map(references.map(ref => [`${ref.kind}:${ref.id}`, ref]));
       const snapshots = [...unique.values()].map(ref => {
         if (ref.kind === 'file') {
-          const file = preparedFiles.get(references)?.get(ref.id);
+          const file = files?.get(ref.id);
           if (!file) throw new CapabilityError('NOT_FOUND', 'Referenced workspace file not found');
-          return { ...ref, ...file };
+          return { ...ref, id: file.id, title: file.title, relativePath: file.relativePath };
         }
         const record = ref.kind === 'note' ? notes.getNote(ref.id)
           : ref.kind === 'project' ? projects.get(ref.id) : records.get(ref.id);
@@ -202,7 +206,11 @@ export function registerMcpDelegation(dispatcher: CapabilityDispatcher, deps: Mc
         contract: { objective, expectedOutputs: [], acceptanceCriteria: [], constraints: [],
           approvalRequired: [], assumptions: [], risks: [], acceptancePolicy: 'verified_then_review', outputDestinations: [] },
         activation: { mode: 'start', executor: { kind: 'agent', agentId: executor } },
-      }), { kind: 'integration', id: context.principalId });
+      }), { kind: 'integration', id: context.principalId }, {
+        workspaceHandoff: files?.size
+          ? { prompt, files: [...new Map(Array.from(files.values(), file => [file.id, file])).values()] }
+          : undefined,
+      });
       if (!result.ok || !result.runId) throw new CapabilityError('REVISION_CONFLICT', 'Could not queue the Agent run');
       if (callback && !subscribeToMcpRunCallback(result.runId, context.principalId, deps.getConfig().gateway.mcpCallback)) {
         throw new CapabilityError('UNAVAILABLE', 'A Gateway callback destination and signing secret are required');

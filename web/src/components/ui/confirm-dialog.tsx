@@ -15,6 +15,7 @@ export type ConfirmDialogProps = {
   destructive?: boolean;
   overlayClassName?: string;
   contentClassName?: string;
+  descriptionClassName?: string;
   checkboxLabel?: string;
   checkboxChecked?: boolean;
   onCheckboxCheckedChange?: (checked: boolean) => void;
@@ -31,6 +32,7 @@ export function ConfirmDialog({
   destructive,
   overlayClassName,
   contentClassName,
+  descriptionClassName,
   checkboxLabel,
   checkboxChecked = false,
   onCheckboxCheckedChange,
@@ -62,8 +64,11 @@ export function ConfirmDialog({
             contentClassName,
           )}
         >
-          <Dialog.Title className="text-base font-semibold text-fg">{title}</Dialog.Title>
-          <Dialog.Description className="mt-2 max-h-[min(50vh,16rem)] overflow-y-auto text-sm text-fg-muted overscroll-contain whitespace-pre-wrap break-words">
+          <Dialog.Title className="shrink-0 text-base font-semibold text-fg">{title}</Dialog.Title>
+          <Dialog.Description className={cn(
+            'mt-2 max-h-[min(50vh,16rem)] overflow-y-auto text-sm text-fg-muted overscroll-contain whitespace-pre-wrap break-words',
+            descriptionClassName,
+          )}>
             {description}
           </Dialog.Description>
           {checkboxLabel ? (
@@ -78,7 +83,7 @@ export function ConfirmDialog({
               <span>{checkboxLabel}</span>
             </label>
           ) : null}
-          <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <div className="mt-6 flex shrink-0 flex-wrap justify-end gap-2">
             {cancelLabel ? (
               <Button type="button" variant="secondary" onClick={onCancel}>
                 {cancelLabel}

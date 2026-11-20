@@ -22,7 +22,7 @@ const listChineseRequest = new RegExp(`^生成一个名为[ ]*(${FILE})[ ]*的[ 
 export function taskJsonAcceptance(task: TaskAggregate, handoff: TaskHandoff | undefined) {
   const request = handoff?.originalRequest?.trim();
   const contract = task.contract;
-  if (!handoff || !request || request.length > 512 || contract?.acceptancePolicy !== 'verified_auto' || contract.resultPolicy !== 'selected'
+  if (!handoff || handoff.kind === 'workspace_files' || !request || request.length > 512 || contract?.acceptancePolicy !== 'verified_auto' || contract.resultPolicy !== 'selected'
     || !isPersonalConversation(handoff.conversationId) || task.priority === 'critical'
     || contract.constraints.length || contract.risks.length || contract.approvalRequired.length || contract.assumptions.length
     || contract.outputDestinations.length || handoff.attachments.length || handoff.sources.length || handoff.requestedSources?.length

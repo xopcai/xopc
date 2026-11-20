@@ -12,6 +12,7 @@ import { parseTurnContextRefs, type TurnContextRef } from '../agent/source-conte
 import type { Config } from '../config/schema.js';
 import { buildUserAssertionAgentContext } from '../agent/source-context/user-assertion-context.js';
 import { fileSpaceId, parseFileResourceId } from '../files/file-service.js';
+import { createWorkspaceFileSpaceService } from '../files/workspace-file-spaces.js';
 import { resolveMediaReference } from '../media/media-reference.js';
 import { NotesStore } from '../notes/store.js';
 import { getProjectForSession } from '../projects/workspace.js';
@@ -40,10 +41,8 @@ interface ConversationExcerpt {
   contentHash: string;
 }
 
-export interface TaskHandoff {
+interface TaskHandoffContent {
   version: 1;
-  conversationId: string;
-  transcriptId: string;
   inputId?: string;
   originalRequest?: string;
   conversationExcerpts?: ConversationExcerpt[];
@@ -54,6 +53,49 @@ export interface TaskHandoff {
   requestedSources?: TurnContextRef[];
   attachments: unknown[];
   completeness: { originalInput: 'captured' | 'unavailable'; omitted: string[]; unresolvedReferences: string[] };
+}
+
+export type TaskHandoff = TaskHandoffContent & (
+  | { kind?: 'conversation'; conversationId: string; transcriptId: string }
+  | { kind: 'workspace_files'; conversationId?: never; transcriptId?: never }
+);
+
+export type WorkspaceFileInput = { id: string; title: string; version: string };
+
+function handoffBaseline(taskId: string): TaskHandoff['baseline'] {
+  const db = getSqliteDatabase();
+  return {
+    contractVersion: new TaskRepository().require(taskId).latestContractVersion,
+    assignmentEpoch: Number(db.prepare('SELECT assignment_epoch FROM task_conversation_state WHERE task_id = ?').get(taskId)?.assignment_epoch ?? 0),
+    instructionSequence: Number(db.prepare("SELECT COALESCE(MAX(sequence),0) AS n FROM task_collaboration_entries WHERE task_id = ? AND author_kind IN ('main_agent','user') AND kind IN ('instruction','answer')").get(taskId)?.n ?? 0),
+  };
+}
+
+export function captureWorkspaceFileHandoff(taskId: string, prompt: string, files: readonly WorkspaceFileInput[]): void {
+  const text = 'Selected workspace file; use section source to materialize the pinned revision.';
+  const handoff: TaskHandoff = {
+    kind: 'workspace_files', version: 1, originalRequest: prompt, interpretation: prompt, baseline: handoffBaseline(taskId),
+    sources: files.map(file => ({
+      kind: 'file', sourceId: file.id, version: file.version, title: file.title, text,
+      truncated: true, representation: 'metadata', purpose: 'Selected task input; grants no access to the rest of the workspace',
+      contentHash: hash(text),
+    })),
+    attachments: [],
+    completeness: { originalInput: 'captured', omitted: [], unresolvedReferences: [] },
+  };
+  persistHandoff(taskId, handoff, 'Task handoff');
+}
+
+function persistHandoff(taskId: string, handoff: TaskHandoff, title: string): void {
+  const context = new TaskContextRepository();
+  const kind = handoff.kind === 'workspace_files' ? 'workspace_file_handoff' : 'personal_task_handoff';
+  const snapshot = context.captureSnapshot({ ownerKind: 'task', ownerId: taskId, conversationId: handoff.conversationId,
+    query: handoff.originalRequest ?? handoff.interpretation, selectedItems: [handoff], contentHash: hash(JSON.stringify(handoff)),
+    relationshipPolicy: { kind, version: 1, fullConversationIncluded: false },
+    authorizationSnapshot: { conversationId: handoff.conversationId, transcriptId: handoff.transcriptId, scope: 'selected_inputs_only', grantsAuthority: false } });
+  context.add({ taskId, targetKind: 'source', targetId: snapshot.id, role: 'input', pinned: true, title,
+    metadata: { kind, version: 1 }, retrievalPolicy: { scope: 'selected_inputs_only', currentAuthorizationRequired: true },
+    createdBy: { kind: 'system' } });
 }
 
 /** Normalize model-facing references without fetching any source on the submission path. */
@@ -120,8 +162,10 @@ export function parseTaskConversationExcerpts(conversationId: string | undefined
 
 export function readTaskConversationExcerpts(handoff: TaskHandoff, config?: Config) {
   assertTaskHandoffAccess(handoff);
+  const { conversationId } = handoff;
+  if (!conversationId) return [];
   return (handoff.conversationExcerpts ?? []).map(excerpt => {
-    const source = conversationExcerptSource(handoff.conversationId, excerpt.entryId, config);
+    const source = conversationExcerptSource(conversationId, excerpt.entryId, config);
     const text = source?.content.slice(excerpt.start, excerpt.start + excerpt.length);
     return source && text && hash(text) === excerpt.contentHash
       ? { entryId: excerpt.entryId, role: source.role, text }
@@ -162,31 +206,44 @@ export function captureTaskHandoff(taskId: string, conversationId: string, inter
   const handoff: TaskHandoff = { version: 1, conversationId, transcriptId: origin.origin_transcript_id,
     inputId: input?.id, originalRequest: input?.content, interpretation, sources, requestedSources,
     ...(conversationExcerpts.length ? { conversationExcerpts } : {}),
-    baseline: { contractVersion: new TaskRepository().require(taskId).latestContractVersion, assignmentEpoch: Number(db.prepare('SELECT assignment_epoch FROM task_conversation_state WHERE task_id = ?').get(taskId)?.assignment_epoch ?? 0),
-      instructionSequence: Number(db.prepare("SELECT COALESCE(MAX(sequence),0) AS n FROM task_collaboration_entries WHERE task_id = ? AND author_kind IN ('main_agent','user') AND kind IN ('instruction','answer')").get(taskId)?.n ?? 0) }, attachments: input?.attachments ?? [],
+    baseline: handoffBaseline(taskId), attachments: input?.attachments ?? [],
     completeness: { originalInput: input ? 'captured' : 'unavailable', omitted,
       unresolvedReferences: [...(input?.contextRefs ?? []).filter(ref => !sources.some(source => source.kind === ref.kind && source.sourceId === ref.sourceId))
         .map(ref => `${ref.kind}:${ref.sourceId}`), ...requestedSources.map(ref => `${ref.kind}:${ref.sourceId}`)] } };
-  const context = new TaskContextRepository();
-  const snapshot = context.captureSnapshot({ ownerKind: 'task', ownerId: taskId, conversationId,
-    query: input?.content ?? interpretation, selectedItems: [handoff], contentHash: hash(JSON.stringify(handoff)),
-    relationshipPolicy: { kind: 'personal_task_handoff', version: 1, fullConversationIncluded: false },
-    authorizationSnapshot: { conversationId, transcriptId: handoff.transcriptId, scope: 'selected_inputs_only', grantsAuthority: false } });
-  context.add({ taskId, targetKind: 'source', targetId: snapshot.id, role: 'input', pinned: true,
-    title: 'Task handoff', metadata: { kind: 'personal_task_handoff', version: 1 },
-    retrievalPolicy: { scope: 'selected_inputs_only', currentAuthorizationRequired: true }, createdBy: { kind: 'system' } });
+  persistHandoff(taskId, handoff, 'Task handoff');
 }
 
 export function getTaskHandoff(taskId: string): TaskHandoff | undefined {
   const row = getSqliteDatabase().prepare(`SELECT selected_items_json FROM context_snapshots
-    WHERE owner_kind = 'task' AND owner_id = ? AND json_extract(relationship_policy_json, '$.kind') = 'personal_task_handoff'
+    WHERE owner_kind = 'task' AND owner_id = ? AND json_extract(relationship_policy_json, '$.kind') IN ('personal_task_handoff', 'workspace_file_handoff')
     ORDER BY created_at DESC, rowid DESC LIMIT 1`).get(taskId) as { selected_items_json: string } | undefined;
   return row ? JSON.parse(row.selected_items_json)[0] as TaskHandoff : undefined;
 }
 
 export function assertTaskHandoffAccess(handoff: TaskHandoff): void {
+  if (handoff.kind === 'workspace_files') return;
   if (readCurrentTranscriptId(getSqliteDatabase(), handoff.conversationId) !== handoff.transcriptId
     || handoff.inputId && !getSessionInputById(handoff.conversationId, handoff.inputId)) throw new Error('Task source input is no longer available');
+}
+
+function within(base: string, path: string): boolean {
+  const rel = relative(base, path);
+  return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+async function resolveHandoffFile(handoff: TaskHandoff, sourceId: string, config: Config) {
+  const locator = parseFileResourceId(sourceId);
+  if (handoff.kind === 'workspace_files') {
+    if (locator.spaceId.startsWith('host-')) throw new Error('Selected file is outside the workspace');
+    const { absolutePath, resource } = await createWorkspaceFileSpaceService(() => config).resource(sourceId);
+    if (resource.kind !== 'file') throw new Error('Selected workspace file is unavailable');
+    return { path: absolutePath, relativePath: `workspace/${locator.spaceId}/${locator.relativePath}` };
+  }
+  const root = await realpath(effectiveWorkspacePathForSession(config, handoff.conversationId,
+    getSessionConfig(handoff.conversationId), getProjectForSession(handoff.conversationId)));
+  const path = await realpath(resolve(root, locator.relativePath));
+  if (locator.spaceId !== fileSpaceId(root) || !within(root, path)) return undefined;
+  return { path, relativePath: locator.relativePath };
 }
 
 /** Selected result pointers delegate only the pinned source, never the owner's result directory. */
@@ -196,7 +253,7 @@ export async function readTaskHandoffSource(taskId: string, sourceIndex: number,
   assertTaskHandoffAccess(handoff);
   const source = handoff.sources[sourceIndex];
   if (!source) throw new Error('Source is not selected for this Task');
-  if (source.kind === 'result') {
+  if (source.kind === 'result' && handoff.kind !== 'workspace_files') {
     const ref = parseResultReferenceId(source.sourceId);
     if (!ref) throw new Error('Invalid result reference');
     const delivery = resolvePersonalResultReference(handoff.conversationId, ref.resultId);
@@ -218,42 +275,37 @@ export async function readTaskHandoffSource(taskId: string, sourceIndex: number,
   } else if (source.kind === 'session') {
     const session = getSessionMetadata(source.sourceId);
     available = Boolean(session && session.updatedAt === source.version);
-  } else if (source.kind === 'user_assertion') {
+  } else if (source.kind === 'user_assertion' && handoff.kind !== 'workspace_files') {
     available = Boolean(buildUserAssertionAgentContext(source.sourceId, source.version, getSessionMetadata(handoff.conversationId)?.agentId));
   } else if (source.kind === 'browser_tab') {
     const binding = getBrowserTabBindingById(source.sourceId);
     available = Boolean(binding && binding.expiresAt > Date.now() && binding.conversationId === handoff.conversationId && binding.documentId === source.version);
   } else if (source.kind === 'file' && config) {
-    const root = await realpath(effectiveWorkspacePathForSession(config, handoff.conversationId,
-      getSessionConfig(handoff.conversationId), getProjectForSession(handoff.conversationId)));
-    const locator = parseFileResourceId(source.sourceId);
-    const path = await realpath(resolve(root, locator.relativePath));
-    const rel = relative(root, path);
-    if (locator.spaceId === fileSpaceId(root) && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel)) {
-      const info = await stat(path, { bigint: true });
-      available = `${info.mtimeNs}:${info.ctimeNs}:${info.ino}:${info.size}` === source.version;
-      if (available && source.truncated && info.isFile()) {
-        if (!/\.(?:md|txt|csv|tsv|json|jsonl|log|[mc]?js|tsx?|jsx|py|sh|ya?ml|xml|html|css)$/i.test(path)) {
-          return { status: 'unsupported', sourceId: source.sourceId, version: source.version,
-            readOnlyPath: path, reason: 'This selected file requires a binary parser. Use an authorized execution tool; metadata is not file content.' };
-        }
-        const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-        try {
-          const revision = (value: typeof info) => `${value.mtimeNs}:${value.ctimeNs}:${value.ino}:${value.size}`;
-          if (revision(await handle.stat({ bigint: true })) !== source.version) throw new Error('Selected file changed');
-          const offset = Math.max(0, input.offset ?? 0);
-          const bytes = Buffer.alloc(Math.min(4000, Math.max(0, Number(info.size) - offset)));
-          const { bytesRead } = await handle.read(bytes, 0, bytes.length, offset);
-          const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-          const content = decoder.decode(bytes.subarray(0, bytesRead), { stream: offset + bytesRead < Number(info.size) });
-          if (revision(await handle.stat({ bigint: true })) !== source.version) throw new Error('Selected file changed during read');
-          const next = offset + Buffer.byteLength(content);
-          return { kind: source.kind, sourceId: source.sourceId, version: source.version, text: content,
-            offset, offsetUnit: 'utf8_bytes', totalBytes: Number(info.size), contentHash: hash(content),
-            complete: next >= Number(info.size), ...(next < Number(info.size) ? { nextOffset: next } : {}) };
-        } finally { await handle.close(); }
+    const file = await resolveHandoffFile(handoff, source.sourceId, config);
+    if (!file) throw new Error('Selected source is unavailable, revoked or changed; ask the owner to select it again');
+    const { path } = file;
+    const info = await stat(path, { bigint: true });
+    available = `${info.mtimeNs}:${info.ctimeNs}:${info.ino}:${info.size}` === source.version;
+    if (available && source.truncated && info.isFile()) {
+      if (!/\.(?:md|txt|csv|tsv|json|jsonl|log|[mc]?js|tsx?|jsx|py|sh|ya?ml|xml|html|css)$/i.test(path)) {
+        return { status: 'unsupported', sourceId: source.sourceId, version: source.version,
+          ...(handoff.kind === 'workspace_files' ? {} : { readOnlyPath: path }), reason: 'This selected file requires a binary parser. Use an authorized execution tool; metadata is not file content.' };
       }
-
+      const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        const revision = (value: typeof info) => `${value.mtimeNs}:${value.ctimeNs}:${value.ino}:${value.size}`;
+        if (revision(await handle.stat({ bigint: true })) !== source.version) throw new Error('Selected file changed');
+        const offset = Math.max(0, input.offset ?? 0);
+        const bytes = Buffer.alloc(Math.min(4000, Math.max(0, Number(info.size) - offset)));
+        const { bytesRead } = await handle.read(bytes, 0, bytes.length, offset);
+        const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+        const content = decoder.decode(bytes.subarray(0, bytesRead), { stream: offset + bytesRead < Number(info.size) });
+        if (revision(await handle.stat({ bigint: true })) !== source.version) throw new Error('Selected file changed during read');
+        const next = offset + Buffer.byteLength(content);
+        return { kind: source.kind, sourceId: source.sourceId, version: source.version, text: content,
+          offset, offsetUnit: 'utf8_bytes', totalBytes: Number(info.size), contentHash: hash(content),
+          complete: next >= Number(info.size), ...(next < Number(info.size) ? { nextOffset: next } : {}) };
+      } finally { await handle.close(); }
     }
   }
   if (!available) throw new Error('Selected source is unavailable, revoked or changed; ask the owner to select it again');
@@ -268,7 +320,7 @@ export async function readTaskHandoffSource(taskId: string, sourceIndex: number,
 /** Resolve the main Agent's selected history pointers only after the foreground commit. */
 export async function resolveTaskHandoffReferences(taskId: string, config?: Config): Promise<TaskHandoff | undefined> {
   const handoff = getTaskHandoff(taskId);
-  if (!handoff?.requestedSources?.length) return handoff;
+  if (!handoff?.requestedSources?.length || handoff.kind === 'workspace_files') return handoff;
   assertTaskHandoffAccess(handoff);
   const sources = [...handoff.sources];
   for (const ref of handoff.requestedSources) {
@@ -324,13 +376,7 @@ export async function resolveTaskHandoffReferences(taskId: string, config?: Conf
   assertTaskHandoffAccess(handoff);
   const resolved: TaskHandoff = { ...handoff, sources, requestedSources: [], completeness: { ...handoff.completeness,
     unresolvedReferences: handoff.completeness.unresolvedReferences.filter(id => !handoff.requestedSources!.some(ref => id === `${ref.kind}:${ref.sourceId}`) && !sources.some(source => id === `${source.kind}:${source.sourceId}`)) } };
-  const context = new TaskContextRepository();
-  const snapshot = context.captureSnapshot({ ownerKind: 'task', ownerId: taskId, conversationId: handoff.conversationId,
-    query: handoff.originalRequest ?? handoff.interpretation, selectedItems: [resolved], contentHash: hash(JSON.stringify(resolved)),
-    relationshipPolicy: { kind: 'personal_task_handoff', version: 1, fullConversationIncluded: false },
-    authorizationSnapshot: { conversationId: handoff.conversationId, transcriptId: handoff.transcriptId, scope: 'selected_inputs_only', grantsAuthority: false } });
-  context.add({ taskId, targetKind: 'source', targetId: snapshot.id, role: 'input', pinned: true, title: 'Resolved task handoff',
-    metadata: { kind: 'personal_task_handoff', version: 1 }, retrievalPolicy: { currentAuthorizationRequired: true }, createdBy: { kind: 'system' } });
+  persistHandoff(taskId, resolved, 'Resolved task handoff');
   return resolved;
 }
 
@@ -341,12 +387,11 @@ export async function materializeTaskHandoffFile(taskId: string, sourceIndex: nu
   assertTaskHandoffAccess(handoff);
   const source = handoff.sources[sourceIndex];
   if (!source || !['file', 'result'].includes(source.kind)) throw new Error('Materialization requires a selected file or published result artifact; use read for result body text');
-  const within = (base: string, path: string) => { const rel = relative(base, path); return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel); };
   let inputPath: string;
   let relativePath: string;
   let expectedFileVersion: string;
   let expectedSha256: string | undefined;
-  if (source.kind === 'result') {
+  if (source.kind === 'result' && handoff.kind !== 'workspace_files') {
     const ref = parseResultReferenceId(source.sourceId);
     if (!ref || ref.sourceId === 'body') throw new Error('Result body is text; use source read. Select an exact published artifact to materialize bytes');
     const delivery = resolvePersonalResultReference(handoff.conversationId, ref.resultId);
@@ -359,12 +404,10 @@ export async function materializeTaskHandoffFile(taskId: string, sourceIndex: nu
     expectedFileVersion = `${info.mtimeNs}:${info.ctimeNs}:${info.ino}:${info.size}`;
     expectedSha256 = artifact.sha256;
   } else {
-    const root = await realpath(effectiveWorkspacePathForSession(config, handoff.conversationId,
-      getSessionConfig(handoff.conversationId), getProjectForSession(handoff.conversationId)));
-    const locator = parseFileResourceId(source.sourceId);
-    inputPath = await realpath(resolve(root, locator.relativePath));
-    if (locator.spaceId !== fileSpaceId(root) || !within(root, inputPath)) throw new Error('Selected file is outside the originating workspace');
-    relativePath = locator.relativePath;
+    const file = await resolveHandoffFile(handoff, source.sourceId, config);
+    if (!file) throw new Error('Selected file is outside the originating workspace');
+    inputPath = file.path;
+    relativePath = file.relativePath;
     expectedFileVersion = source.version;
   }
   const executionRoot = await realpath(workspace);
@@ -378,7 +421,7 @@ export async function materializeTaskHandoffFile(taskId: string, sourceIndex: nu
     await mkdir(directory).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; });
     if (!within(executionRoot, await realpath(directory))) throw new Error('Task input directory escapes the executor workspace');
   }
-  const input = await open(inputPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const input = await open(inputPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   let output: Awaited<ReturnType<typeof open>> | undefined;
   let created = false;
   let verified = false;
@@ -401,7 +444,7 @@ export async function materializeTaskHandoffFile(taskId: string, sourceIndex: nu
     if (expectedSha256 && expectedSha256 !== sha256) throw new Error('Published artifact content differs from its immutable revision');
     if (output) await output.chmod(0o444);
     else {
-      const existing = await open(destination, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const existing = await open(destination, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       try {
         const info = await existing.stat();
         if (!info.isFile() || info.size !== offset) throw new Error('Existing Task input differs; refusing to overwrite it');
@@ -412,6 +455,7 @@ export async function materializeTaskHandoffFile(taskId: string, sourceIndex: nu
       } finally { await existing.close(); }
     }
     assertTaskHandoffAccess(handoff);
+    if (handoff.kind === 'workspace_files' && !new TaskRepository().get(taskId)) throw new Error('Task is no longer available');
     verified = true;
     return { materialized: true, sourceId: source.sourceId, version: source.version, readOnlyPath: destination,
       executionInputRoot: inputRoot, sha256, bytes: offset, scope: 'selected_input_copy_only' };
@@ -423,7 +467,7 @@ export async function materializeTaskHandoffFile(taskId: string, sourceIndex: nu
 
 export function assertTaskHandoffExecutorAccess(taskId: string, agentId: string): void {
   const handoff = getTaskHandoff(taskId);
-  if (!handoff) return;
+  if (!handoff || handoff.kind === 'workspace_files') return;
   assertTaskHandoffAccess(handoff);
   for (const source of handoff.sources) {
     if (source.kind !== 'result') continue;

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,6 +21,7 @@ import { createMcpConnection } from '../../mcp/connection-grants.js';
 import { grantRemoteMcpConnection, revokeRemoteMcpConnection } from '../../mcp/remote-grants.js';
 import { NotesService } from '../../notes/service.js';
 import { NotesStore } from '../../notes/store.js';
+import { delegatedRunText } from '../../tasks/delegated-run-result.js';
 import { buildTaskExecutionDirective } from '../../tasks/task-context-assembler.js';
 import { TaskContextRepository } from '../../tasks/task-context-repository.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
@@ -29,7 +30,7 @@ import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import {
   claimNextSessionInput, closeXopcDatabase, ensureSessionRecord, finishSessionInputRun, insertSessionInput,
-  openXopcDatabase, resetXopcDatabaseSingletonForTest,
+  openXopcDatabase, resetXopcDatabaseSingletonForTest, setSessionConfig,
 } from '../../storage/sqlite/index.js';
 import { createHonoApp } from '../hono/app.js';
 import { getGatewayFileSpaceService } from '../file-space-service.js';
@@ -243,6 +244,7 @@ it('combines OAuth scopes with revocable Gateway authority for remote reads and 
     }
     const conversationId = randomUUID();
     ensureSessionRecord(conversationId, join(directory, 'workspace'), { agentId });
+    setSessionConfig(conversationId, { workingDirectoryOverride: workspace }, workspace);
     const space = await getGatewayFileSpaceService(service).forContext('session', conversationId);
     const outputFileId = fileResourceId(space.id, fileName);
     const contextSnapshot = new TaskContextRepository().captureSnapshot({ ownerKind: 'task_run', ownerId: runId, query: 'Fixture' });
@@ -299,17 +301,37 @@ it('combines OAuth scopes with revocable Gateway authority for remote reads and 
     expect(stopDelegatedTaskRun).toHaveBeenCalledWith(runId);
     expect((await delegate('get', { runId })).structuredContent).toMatchObject({ status: 'cancelled' });
 
+    const selectedPath = join(workspace, 'selected.txt');
+    writeFileSync(selectedPath, 'Pinned workspace input');
+    const selectedFileId = fileResourceId(space.id, 'selected.txt');
     const completionStart = await delegate('start', { ...delegatedInput, idempotencyKey: 'complete',
-      references: [{ kind: 'file', id: outputFileId }] });
+      references: [{ kind: 'file', id: selectedFileId }] });
     expect(completionStart).toMatchObject({ structuredContent: { status: 'queued' } });
     const { runId: completedRunId, taskId: completedTaskId } = completionStart.structuredContent as { runId: string; taskId: string };
     const resultSession = randomUUID();
-    ensureSessionRecord(resultSession, workspace, { agentId });
+    const executorWorkspace = join(directory, 'executor-workspace');
+    mkdirSync(executorWorkspace);
+    ensureSessionRecord(resultSession, executorWorkspace, { agentId });
     new TaskConversationRepository().activateExecutionSession({ taskId: completedTaskId, conversationId: resultSession, agentId, runId: completedRunId });
     const completion = TaskRunCoordinator.start({ runId: completedRunId, fallbackObjective: 'Publish report', context: {
       runId: completedRunId, taskId: completedTaskId, conversationId: resultSession, agentId, channel: 'webchat', origin: 'task', triggerKind: 'user',
     } });
     expect(completion).toBeDefined();
+    const inputTool = createTaskCollaborationTool({
+      getCurrentConversationId: () => resultSession, getCurrentAgentId: () => agentId,
+      getConfig: () => config, getWorkspace: () => executorWorkspace,
+    });
+    const manifest = await inputTool.execute('get-handoff', { command: 'get', section: 'handoff' });
+    expect(manifest.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining(selectedFileId) });
+    const sourceArgs = { command: 'get', section: 'source', sourceIndex: 0, materialize: true } as const;
+    const materialized = await inputTool.execute('copy-source', sourceArgs);
+    const materializedBody = materialized.content[0];
+    if (materializedBody?.type !== 'text') throw new Error('Missing materialized source response');
+    const { readOnlyPath } = JSON.parse(materializedBody.text) as { readOnlyPath: string };
+    expect(readOnlyPath).toContain(join(realpathSync(executorWorkspace), '.task-inputs', completedTaskId));
+    expect(readFileSync(readOnlyPath, 'utf8')).toBe('Pinned workspace input');
+    writeFileSync(selectedPath, 'Changed after task start');
+    await expect(inputTool.execute('copy-changed-source', sourceArgs)).rejects.toThrow('Selected file changed');
     const artifactId = 'fixture-report';
     const finalText = 'a'.repeat(11_999) + '😃 done';
     completion!.captureOutcome({ version: TURN_OUTCOME_VERSION, outcomeId: 'fixture-outcome', runId: completedRunId, turnId,
@@ -336,6 +358,9 @@ it('combines OAuth scopes with revocable Gateway authority for remote reads and 
     expect(remaining.nextOffset).toBeNull();
     expect(Buffer.concat([Buffer.from(artifact.data, 'base64'), Buffer.from(remaining.data, 'base64')])).toEqual(outputBytes);
     expect((await delegate('artifact_read', { runId, artifactId })).isError).toBe(true);
+    expect(delegatedRunText.get(completedRunId)).toBe(finalText);
+    expect(new TaskRepository().delete(completedTaskId)).toBe(true);
+    expect(delegatedRunText.get(completedRunId)).toBeUndefined();
 
     let release!: () => void;
     const pendingRead = new Promise<void>(resolve => { release = resolve; });

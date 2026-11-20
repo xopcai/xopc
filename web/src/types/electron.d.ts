@@ -646,6 +646,11 @@ export interface ElectronAPI {
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;
   platform: "darwin" | "win32" | "linux";
+  screenshotShortcut?: {
+    get(): Promise<{ shortcut: string; defaultShortcut: string; registered: boolean }>;
+    setRecording(active: boolean): Promise<void>;
+    set(shortcut: string): Promise<'ok' | 'invalid' | 'conflict' | 'saveFailed'>;
+  };
   voiceInputHotkey?: ElectronVoiceInputHotkeyAPI;
   menu?: ElectronMenuAPI;
   locale?: ElectronLocaleAPI;

@@ -114,6 +114,7 @@ import {
   stopTunnelStatusPolling,
 } from './tunnel-main.js';
 import { createTray, destroyTray, hasSystemTray, updateTrayLanguage } from './tray.js';
+import { registerScreenshotShortcut } from './screenshot-shortcut.js';
 import {
   startVoiceInputHotkey,
   stopVoiceInputHotkey,
@@ -135,6 +136,7 @@ import {
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
+let stopScreenshotShortcut: (() => void) | undefined;
 let desktopEndpointHost: DesktopEndpointHost | undefined;
 let mainWindowNavigationReady = false;
 let pendingMainWindowNavigation: string | null = null;
@@ -277,6 +279,8 @@ const win32DisableRendererCodeIntegrity =
   process.env['XOPC_ELECTRON_DISABLE_RENDERER_CODE_INTEGRITY'] === '1' || win32StabilityMode;
 const win32DisableNativeWinOcclusion =
   process.env['XOPC_ELECTRON_DISABLE_NATIVE_WIN_OCCLUSION'] === '1' || win32StabilityMode;
+
+if (process.platform === 'linux' && !app.isPackaged) app.setDesktopName('ai.xopc.xopc.desktop');
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('ai.xopc.xopc');
@@ -1332,43 +1336,43 @@ app.whenReady().then(async () => {
   powerMonitor.on('lock-screen', () => { desktopEndpointHost?.setScreenLocked(true); });
   powerMonitor.on('unlock-screen', () => { desktopEndpointHost?.setScreenLocked(false); });
   powerMonitor.on('suspend', () => { void desktopEndpointHost?.stopControl(); });
-  const assertMainComputerRenderer = (event: IpcMainInvokeEvent) => {
+  const assertMainRenderer = (event: IpcMainInvokeEvent) => {
     assertTrustedRenderer(event);
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow?.webContents.mainFrame) {
-      throw new Error('Computer IPC requires the main frame');
+      throw new Error('IPC requires the main frame');
     }
   };
   ipcMain.handle('device-folders:status', (event) => {
-    assertMainComputerRenderer(event);
+    assertMainRenderer(event);
     return desktopEndpointHost?.deviceFolders();
   });
   ipcMain.handle('device-folders:change', (event, input: unknown) => {
-    assertMainComputerRenderer(event);
+    assertMainRenderer(event);
     return desktopEndpointHost?.changeDeviceFolder(input);
   });
   ipcMain.handle('device-capabilities:status', (event) => {
-    assertMainComputerRenderer(event);
+    assertMainRenderer(event);
     return desktopEndpointHost?.deviceCapabilities();
   });
   ipcMain.handle('device-capabilities:change', (event, input: unknown) => {
-    assertMainComputerRenderer(event);
+    assertMainRenderer(event);
     return desktopEndpointHost?.changeDeviceCapability(input);
   });
-  ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
-  registerComputerPreviewIpc(() => desktopEndpointHost, assertMainComputerRenderer);
-  ipcMain.handle('computer:access', async (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.computerAccess(); });
+  ipcMain.handle('computer:status', (event) => { assertMainRenderer(event); return desktopEndpointHost?.snapshot(); });
+  registerComputerPreviewIpc(() => desktopEndpointHost, assertMainRenderer);
+  ipcMain.handle('computer:access', async (event) => { assertMainRenderer(event); return desktopEndpointHost?.computerAccess(); });
   ipcMain.handle('computer:set-all-app-access', async (event, allowed: boolean) => {
-    assertMainComputerRenderer(event);
+    assertMainRenderer(event);
     if (typeof allowed !== 'boolean') throw new Error('Invalid computer access request');
     return desktopEndpointHost?.setComputerAllAppAccess(allowed);
   });
   ipcMain.handle('computer:set-app-access', async (event, appId: string, allowed: boolean) => {
-    assertMainComputerRenderer(event);
+    assertMainRenderer(event);
     if (typeof appId !== 'string' || typeof allowed !== 'boolean') throw new Error('Invalid computer access request');
     return desktopEndpointHost?.setComputerAppAccess(appId, allowed);
   });
-  ipcMain.handle('computer:stop', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.stopControl(); return { ok: true }; });
-  ipcMain.handle('computer:reenroll', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
+  ipcMain.handle('computer:stop', async (event) => { assertMainRenderer(event); await desktopEndpointHost?.stopControl(); return { ok: true }; });
+  ipcMain.handle('computer:reenroll', async (event) => { assertMainRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
   const fileIpcRoots = desktopFileRoots;
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
   const intakeGuard = (event: IpcMainInvokeEvent) => {
@@ -1520,13 +1524,13 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('gateway:connection', (event) => {
-    assertMainComputerRenderer(event);
+    assertMainRenderer(event);
     return { mode: desktopGatewayData?.mode ?? 'local', origin: activeGateway?.origin,
       remoteOrigin: desktopGatewayData?.remote?.origin ?? '', hasCredential: !!desktopGatewayData?.remote,
       endpointConnected: desktopEndpointHost?.snapshot().connected ?? false, error: gatewayConnectionError };
   });
   ipcMain.handle('gateway:switch', async (event, input: unknown) => {
-    assertMainComputerRenderer(event);
+    assertMainRenderer(event);
     if (gatewaySwitching) return { ok: false, error: 'Gateway switch already in progress' };
     gatewaySwitching = true;
     try {
@@ -1575,6 +1579,8 @@ app.whenReady().then(async () => {
   if (!devToolsRegistered) {
     console.warn(`[main] Failed to register global shortcut: ${devToolsHotkey}`);
   }
+
+  stopScreenshotShortcut = registerScreenshotShortcut(() => mainWindow, assertMainRenderer);
 
   appendElectronStartupLog(
     `app ready platform=${process.platform} packaged=${app.isPackaged} ` +
@@ -1627,6 +1633,7 @@ app.on('before-quit', (event) => {
       () => destroyDesktopPetWindow(),
       () => destroyTray(),
       () => stopVoiceInputHotkey(),
+      () => stopScreenshotShortcut?.(),
       () => globalShortcut.unregisterAll(),
       () => stopAllPowerSaveBlockers(),
       () => stopCronDisplayWakeBlocker(),

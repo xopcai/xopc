@@ -1149,6 +1149,8 @@ function NoteDetailPanelInner({
     {conflictingNote ? <ConfirmDialog
       open
       title={n.saveConflictReview}
+      contentClassName="flex h-[min(calc(100dvh-2rem),32rem)] flex-col overflow-hidden"
+      descriptionClassName="min-h-0 max-h-none flex-1"
       description={`${n.saveConflictReviewHint}\n\n${conflictingNote.title ?? ''}\n\n${conflictingNote.markdown ?? ''}`}
       confirmLabel={n.saveConflictOverwrite}
       cancelLabel={n.deleteCancelLabel}

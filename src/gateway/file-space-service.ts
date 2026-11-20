@@ -1,7 +1,5 @@
-import { FileSpaceService } from '../files/file-service.js';
-import { getProjectForSession } from '../projects/workspace.js';
-import { effectiveWorkspacePathForSession } from '../session/session-workspace.js';
-import { listSessionWorkspaceOverrides } from '../storage/sqlite/config-repository.js';
+import type { FileSpaceService } from '../files/file-service.js';
+import { createWorkspaceFileSpaceService } from '../files/workspace-file-spaces.js';
 
 type GatewayFileSpaceHost = {
   currentConfig: ConstructorParameters<typeof FileSpaceService>[0] extends () => infer T ? T : never;
@@ -15,14 +13,10 @@ const services = new WeakMap<GatewayFileSpaceHost, FileSpaceService>();
 export function getGatewayFileSpaceService(service: GatewayFileSpaceHost): FileSpaceService {
   const existing = services.get(service);
   if (existing) return existing;
-  const created = new FileSpaceService(
+  const created = createWorkspaceFileSpaceService(
     () => service.currentConfig,
     service.projects,
     (conversationId) => service.sessions.getEffectiveWorkspacePath(conversationId),
-    () => listSessionWorkspaceOverrides().map(({ conversationId, workingDirectoryOverride }) => ({
-      conversationId,
-      root: effectiveWorkspacePathForSession(service.currentConfig, conversationId, { workingDirectoryOverride }, getProjectForSession(conversationId)),
-    })),
   );
   services.set(service, created);
   return created;

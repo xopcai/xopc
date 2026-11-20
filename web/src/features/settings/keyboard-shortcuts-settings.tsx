@@ -11,6 +11,7 @@ import {
   isMacPlatform,
   shortcutDisplayKeys,
   shortcutFromKeyboardEvent,
+  shortcutFromPhysicalKeyboardEvent,
   useQuickCaptureShortcutStore,
 } from '@/stores/quick-capture-shortcut-store';
 import {
@@ -38,32 +39,63 @@ function ShortcutEditor({
   title,
   description,
   shortcut,
-  otherShortcut,
+  otherShortcuts,
   defaultShortcut,
   setShortcut,
   notice,
+  screenshotShortcut,
+  capturePhysicalKey = false,
 }: {
   title: string;
   description: string;
   shortcut: string;
-  otherShortcut: string;
+  otherShortcuts: string[];
   defaultShortcut: () => string;
-  setShortcut: (shortcut: string) => void;
+  setShortcut: (shortcut: string) => void | Promise<'ok' | 'invalid' | 'conflict' | 'saveFailed'>;
   notice?: ReactNode;
+  screenshotShortcut?: NonNullable<Window['electronAPI']>['screenshotShortcut'];
+  capturePhysicalKey?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const k = messages(language).keyboardShortcutsSettings;
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const detail = { active: recording };
-    window.dispatchEvent(new CustomEvent(APP_SHORTCUT_RECORDING_EVENT, { detail }));
+    if (!recording) return;
+    window.dispatchEvent(new CustomEvent(APP_SHORTCUT_RECORDING_EVENT, { detail: { active: true } }));
+    void screenshotShortcut?.setRecording(true).catch(() => undefined);
     return () => {
-      const inactive = { active: false };
-      window.dispatchEvent(new CustomEvent(APP_SHORTCUT_RECORDING_EVENT, { detail: inactive }));
+      window.dispatchEvent(new CustomEvent(APP_SHORTCUT_RECORDING_EVENT, { detail: { active: false } }));
+      void screenshotShortcut?.setRecording(false).catch(() => undefined);
     };
-  }, [recording]);
+  }, [recording, screenshotShortcut]);
+
+  const applyShortcut = async (next: string) => {
+    const modifier = isMac ? 'meta' : 'control';
+    const reserved = [`${modifier}+k`, `${modifier}+n`, `${modifier}+b`, `${modifier}+,`];
+    if (reserved.includes(next) || otherShortcuts.includes(next)) {
+      setError(k.quickCaptureShortcutConflict);
+      return;
+    }
+
+    setError(null);
+    setRecording(false);
+    setSaving(true);
+    try {
+      const result = await setShortcut(next);
+      if (result === 'conflict') setError(k.quickCaptureShortcutConflict);
+      if (result === 'invalid') {
+        setError(isMac ? k.screenshotShortcutInvalid : k.screenshotShortcutInvalidDesktop);
+      }
+      if (result === 'saveFailed') setError(k.screenshotShortcutSaveFailed);
+    } catch {
+      setError(k.screenshotShortcutSaveFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!recording) return;
@@ -74,25 +106,10 @@ function ShortcutEditor({
       setRecording(false);
       return;
     }
+    if (event.repeat) return;
 
-    const next = shortcutFromKeyboardEvent(event.nativeEvent);
-    if (!next) return;
-
-    const modifier = isMac ? 'meta' : 'control';
-    const reserved = new Set([
-      `${modifier}+k`,
-      `${modifier}+n`,
-      `${modifier}+b`,
-      `${modifier}+,`,
-    ]);
-    if (reserved.has(next) || next === otherShortcut) {
-      setError(k.quickCaptureShortcutConflict);
-      return;
-    }
-
-    setShortcut(next);
-    setError(null);
-    setRecording(false);
+    const next = (capturePhysicalKey ? shortcutFromPhysicalKeyboardEvent : shortcutFromKeyboardEvent)(event.nativeEvent);
+    if (next) void applyShortcut(next);
   };
 
   return (
@@ -116,34 +133,24 @@ function ShortcutEditor({
             'rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors hover:bg-accent-hover',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
           )}
+          disabled={saving}
           onClick={() => {
             setError(null);
-            setRecording(true);
+            setRecording(!recording);
           }}
           onKeyDown={onKeyDown}
+          onBlur={() => setRecording(false)}
         >
-          {k.quickCaptureShortcutChange}
+          {recording ? k.quickCaptureShortcutRecording : k.quickCaptureShortcutChange}
         </button>
         <button
           type="button"
           className="rounded-lg px-3 py-1.5 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          onClick={() => {
-            setShortcut(defaultShortcut());
-            setError(null);
-          }}
+          disabled={saving}
+          onClick={() => void applyShortcut(defaultShortcut())}
         >
           {k.quickCaptureShortcutReset}
         </button>
-        {recording ? (
-          <button
-            type="button"
-            className="rounded-lg bg-accent-soft px-3 py-1.5 text-sm font-medium text-accent-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            onKeyDown={onKeyDown}
-            onClick={() => setRecording(false)}
-          >
-            {k.quickCaptureShortcutRecording}
-          </button>
-        ) : null}
       </div>
       {error ? <p className="mt-2 text-sm text-danger-fg">{error}</p> : null}
       {notice ? <div className="mt-3 rounded-lg bg-surface-base/55 p-3">{notice}</div> : null}
@@ -151,7 +158,12 @@ function ShortcutEditor({
   );
 }
 
-function QuickCaptureShortcutEditor() {
+type ScreenshotShortcutProps = {
+  screenshot?: string;
+  screenshotShortcut?: NonNullable<Window['electronAPI']>['screenshotShortcut'];
+};
+
+function QuickCaptureShortcutEditor({ screenshot, screenshotShortcut }: ScreenshotShortcutProps) {
   const language = useLocaleStore((s) => s.language);
   const k = messages(language).keyboardShortcutsSettings;
   const shortcut = useQuickCaptureShortcutStore((s) => s.shortcut);
@@ -162,14 +174,15 @@ function QuickCaptureShortcutEditor() {
       title={k.quickCaptureShortcutTitle}
       description={k.quickCaptureShortcutDescription}
       shortcut={shortcut}
-      otherShortcut={voiceShortcut}
+      otherShortcuts={screenshot ? [voiceShortcut, screenshot] : [voiceShortcut]}
+      screenshotShortcut={screenshotShortcut}
       defaultShortcut={defaultQuickCaptureShortcut}
       setShortcut={setShortcut}
     />
   );
 }
 
-function VoiceInputShortcutEditor() {
+function VoiceInputShortcutEditor({ screenshot, screenshotShortcut }: ScreenshotShortcutProps) {
   const language = useLocaleStore((s) => s.language);
   const k = messages(language).keyboardShortcutsSettings;
   const shortcut = useVoiceInputShortcutStore((s) => s.shortcut);
@@ -180,7 +193,8 @@ function VoiceInputShortcutEditor() {
       title={k.voiceInputShortcutTitle}
       description={k.voiceInputShortcutDescription}
       shortcut={shortcut}
-      otherShortcut={quickCaptureShortcut}
+      otherShortcuts={screenshot ? [quickCaptureShortcut, screenshot] : [quickCaptureShortcut]}
+      screenshotShortcut={screenshotShortcut}
       defaultShortcut={defaultVoiceInputShortcut}
       setShortcut={setShortcut}
       notice={<MacVoiceHotkeyPermissionNotice />}
@@ -287,6 +301,18 @@ export function KeyboardShortcutsSettingsPanel() {
   const k = m.keyboardShortcutsSettings;
   const quickCaptureShortcut = useQuickCaptureShortcutStore((s) => s.shortcut);
   const voiceInputShortcut = useVoiceInputShortcutStore((s) => s.shortcut);
+  const modifier = isMac ? 'meta' : 'control';
+
+  const screenshotShortcut = window.electronAPI?.screenshotShortcut;
+  const [screenshot, setScreenshot] = useState<Awaited<ReturnType<NonNullable<typeof screenshotShortcut>['get']>>>();
+
+  useEffect(() => {
+    let active = true;
+    void screenshotShortcut?.get().then((result) => {
+      if (active) setScreenshot(result);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [screenshotShortcut]);
 
   const categories: ShortcutCategory[] = [];
 
@@ -345,8 +371,30 @@ export function KeyboardShortcutsSettingsPanel() {
     <SettingsPageFrame gap="gap-6">
       <SettingsPageHeader title={k.pageTitle} subtitle={k.subtitle} />
 
-      <QuickCaptureShortcutEditor />
-      <VoiceInputShortcutEditor />
+      {screenshot && screenshotShortcut ? (
+        <ShortcutEditor
+          title={k.screenshotShortcutTitle}
+          description={k.screenshotShortcutDescription}
+          shortcut={screenshot.shortcut}
+          otherShortcuts={[
+            quickCaptureShortcut, voiceInputShortcut, `${modifier}+shift+b`,
+            ...['0', '1', '2', '3', '8', '9'].map((key) => `${modifier}+shift+${key}`),
+          ]}
+          capturePhysicalKey
+          defaultShortcut={() => screenshot.defaultShortcut}
+          screenshotShortcut={screenshotShortcut}
+          setShortcut={async (next) => {
+            const result = await screenshotShortcut.set(next);
+            if (result === 'ok') setScreenshot(await screenshotShortcut.get());
+            return result;
+          }}
+          notice={screenshot.registered ? undefined : (
+            <p className="text-xs text-fg-muted">{k.screenshotShortcutUnavailable}</p>
+          )}
+        />
+      ) : null}
+      <QuickCaptureShortcutEditor screenshot={screenshot?.shortcut} screenshotShortcut={screenshotShortcut} />
+      <VoiceInputShortcutEditor screenshot={screenshot?.shortcut} screenshotShortcut={screenshotShortcut} />
 
       {categories.map((cat) => (
         <ShortcutSection key={cat.title} {...cat} />

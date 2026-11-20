@@ -16,6 +16,7 @@ import type {
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { resourceScopePredicate, type ResourceRestriction } from '../storage/sqlite/resource-scope.js';
+import { delegatedRunText } from './delegated-run-result.js';
 
 export type TaskExecutionSource = 'chat' | 'cli' | 'cron' | 'channel' | 'api';
 export type TaskUiLocale = 'en' | 'zh';
@@ -507,6 +508,7 @@ export class TaskRepository {
       db.prepare(
         `DELETE FROM context_snapshots WHERE owner_kind = 'task' AND owner_id = ?`,
       ).run(taskId);
+      for (const runId of runIds) delegatedRunText.delete(runId);
       if (runIds.length > 0) {
         db.prepare(
           `DELETE FROM context_snapshots
