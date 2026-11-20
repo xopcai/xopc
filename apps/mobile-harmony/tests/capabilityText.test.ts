@@ -4,6 +4,7 @@ import {
   capabilityText,
   capabilityWireOffset,
   editCapabilityText,
+  nameCapabilityPrompt,
 } from '../entry/src/main/ets/common/capabilityText.ets';
 
 const skill = '/skill:web-clipper-09c38990db7a.web-clipper';
@@ -37,6 +38,17 @@ describe('capability names in chat', () => {
     expect(editCapabilityText(wire, presentation, 'New prompt')).toBe('New prompt');
     const renamed = visible.replace(/My Calendar|网页工具/, 'Other');
     expect(editCapabilityText(wire, presentation, renamed)).toBe(renamed);
+  });
+
+  it('uses the localized catalog title for legacy ID-only plugin prompts', () => {
+    const wire = nameCapabilityPrompt('请使用「web-clipper (web-clipper-09c38990db7a)」帮我：', 'web-clipper', '网页剪藏');
+    expect(wire).toBe('请使用「网页剪藏 (web-clipper-09c38990db7a)」帮我：');
+    expect(nameCapabilityPrompt('请使用「web-clipper」帮我：', 'web-clipper', '网页剪藏'))
+      .toBe('请使用「网页剪藏 (web-clipper)」帮我：');
+    expect(capabilityText(wire).text).toBe('请使用「网页剪藏」帮我：');
+    expect(nameCapabilityPrompt('Use “Gmail (composio-gmail)” to help me with:', 'composio-gmail', 'Gmail'))
+      .toBe('Use “Gmail (composio-gmail)” to help me with:');
+    expect(nameCapabilityPrompt('/skill:web-clipper ', 'web-clipper', '网页剪藏')).toBe('/skill:web-clipper ');
   });
 
   it('keeps the correct underlying reference when matching labels are adjacent', () => {

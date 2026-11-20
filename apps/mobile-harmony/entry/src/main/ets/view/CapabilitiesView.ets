@@ -1,3 +1,4 @@
+import { nameCapabilityPrompt } from '../common/capabilityText';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { appSettings } from '../service/settings';
 import { SEGMENTED_PAGE_TAP_SLOP_VP } from './SegmentedTabs';
@@ -280,7 +281,7 @@ export struct XopcCapabilitiesView {
           if (this.detail?.id && this.detail.id === this.personal?.agentId) this.onPersonalChanged();
         },
         onUseInChat: (prompt: string): void => {
-          this.pendingChatPrompt = prompt;
+          this.pendingChatPrompt = this.detail ? nameCapabilityPrompt(prompt, this.detail.id, this.detail.name) : prompt;
           this.detailOpen = false;
         } })
     }

@@ -36,20 +36,21 @@ afterEach(async () => {
 });
 
 // The same small protocol server runs over real stdio and Streamable HTTP transports.
-const protocol = `
+const protocol = (clippingTools: boolean) => `
 let changed = false;
 function respond(q) {
   if (q.method === 'initialize') return { protocolVersion: '2025-03-26',
     serverInfo: {name: 'sdk-fixture', version: '1'},
     capabilities: {tools: {listChanged: true}, resources: {}} };
-  if (q.method === 'tools/list') return {tools: (changed ? ['fresh'] : ['lookup','invalid','refresh','slow','a-b','a_b']).map(name => ({
-    name, description: 'SDK fixture documentation ' + name,
+  if (q.method === 'tools/list') return {tools: (changed ? ['fresh'] : ${JSON.stringify(clippingTools ? ['clip_save', 'article_read'] : ['lookup', 'invalid', 'refresh', 'slow', 'a-b', 'a_b'])}).map(name => ({
+    name, description: name === 'article_read' ? 'Extract readable text from a supplied webpage or HTML'
+      : name === 'clip_save' ? 'Save a user-requested article as Markdown' : 'SDK fixture documentation ' + name,
     inputSchema: {type: 'object', properties: {}},
     outputSchema: {type: 'object', properties: {records: {type: 'number'}}, required: ['records']}
   }))};
   if (q.method === 'tools/call') {
     if (q.params.name === 'refresh') changed = true;
-    return {content: [{type: 'text', text: 'fixture evidence'}],
+    return {content: [{type: 'text', text: 'fixture evidence: ' + q.params.name}],
       structuredContent: {records: q.params.name === 'invalid' ? 'invalid-number' : 7}};
   }
   if (q.method === 'resources/list') return {resources: [{uri: 'fixture://note', name: 'Note'}]};
@@ -58,18 +59,19 @@ function respond(q) {
   throw new Error('Unsupported fixture method: ' + q.method);
 }`;
 
-async function fixture(transport: 'stdio' | 'http', host = false, exposure: 'deferred' | 'codemode' | 'direct' | 'hidden' = 'deferred') {
+async function fixture(transport: 'stdio' | 'http', host = false, exposure: 'deferred' | 'codemode' | 'direct' | 'hidden' = 'deferred', serverName = 'fixture') {
   const root = await mkdtemp(join(tmpdir(), 'xopc-pi-mcp-sdk-'));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   vi.stubEnv('PI_CODING_AGENT_DIR', root);
   vi.stubEnv('XOPC_STATE_DIR', root);
   vi.stubEnv('OPENAI_API_KEY', 'fixture');
+  const commands = protocol(serverName !== 'fixture');
   const started = join(root, 'request-started');
   const cancelled = join(root, 'request-cancelled');
   let config: McpServerConfig;
   if (transport === 'stdio') {
     const entry = join(root, 'server.mjs');
-    await writeFile(entry, `import {createInterface} from 'node:readline'; import {writeFileSync} from 'node:fs'; ${protocol}
+    await writeFile(entry, `import {createInterface} from 'node:readline'; import {writeFileSync} from 'node:fs'; ${commands}
 createInterface({input: process.stdin}).on('line', line => {
   const q = JSON.parse(line);
   if (q.method === 'notifications/cancelled') writeFileSync(${JSON.stringify(cancelled)}, 'cancelled');
@@ -81,7 +83,7 @@ createInterface({input: process.stdin}).on('line', line => {
 });`);
     config = { command: process.execPath, args: [entry], exposure };
   } else {
-    const respond = new Function(`${protocol}; return respond;`)() as (q: Record<string, unknown>) => unknown;
+    const respond = new Function(`${commands}; return respond;`)() as (q: Record<string, unknown>) => unknown;
     const pendingResponses = new Map<number | string, import('node:http').ServerResponse>();
     const server: Server = createServer(async (req, res) => {
       if (req.method !== 'POST') { res.writeHead(req.method === 'DELETE' ? 200 : 405).end(); return; }
@@ -118,7 +120,7 @@ createInterface({input: process.stdin}).on('line', line => {
     const { prepareNativeMcpConfig } = await import('../../mcp/native-mcp.js');
     const transcriptRuntime = new InMemoryTranscriptRuntime({ runtimeId: crypto.randomUUID(), cwd: root });
     const pool = new EmbeddedSessionRunnerPool({ isEnabled: () => true });
-    const mcp = await prepareNativeMcpConfig({ mcp: { servers: { fixture: config } } } as never, root);
+    const mcp = await prepareNativeMcpConfig({ mcp: { servers: { [serverName]: config } } } as never, root);
     const acquired = await pool.acquire({ runtimeId: transcriptRuntime.runtimeId, transcriptId: transcriptRuntime.transcriptId,
       workspaceDir: root, model, modelRef: 'openai/fixture', tools: [], systemPrompt: 'Native MCP fixture',
       thinkingLevel: 'off', transcriptRuntime, mcp,
@@ -247,6 +249,18 @@ it.each(['stdio', 'http'] as const)('uses native %s MCP inside the actual xopc p
   expect(JSON.stringify(script.result)).toContain('7');
   pool!.evictAll(); await pool!.drainShutdowns();
   expect(pool!.getStats().pooled).toBe(0);
+}, 20_000);
+
+it('finds an MCP tool by its original name on the first search after pi shortens its identifier', async () => {
+  const serverName = 'plugin_web_clipper_09c38990db7a_3fa9eee0682f4282';
+  const { session } = await fixture('stdio', true, 'deferred', serverName);
+  const found = await call(session, 'tool_search', { query: '+web-clipper-09c38990db7a article_read', limit: 1 });
+  const names = session.getActiveToolNames().filter(name => name.startsWith(`mcp__${serverName}__`));
+  expect(names).toHaveLength(1);
+  expect(JSON.stringify(found.result)).toContain('Extract readable text');
+  expect(names[0]).not.toContain('article_read');
+  const invoked = await call(session, names[0], {});
+  expect(JSON.stringify(invoked.result)).toContain('fixture evidence: article_read');
 }, 20_000);
 
 it('aborts native MCP when the actual xopc runner is evicted', async () => {

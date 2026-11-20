@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { AgentSession, SettingsManager } from '@earendil-works/pi-coding-agent';
+import type { AgentSession, ExtensionAPI, SettingsManager } from '@earendil-works/pi-coding-agent';
 import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
@@ -372,7 +372,23 @@ export class EmbeddedSessionRunnerPool {
         ...(discovery ? [createXopcToolSearchExtension(tools, { nativeDiscovery, externalDiscovery, registry,
           ...(registry ? { refreshNative: () => materializeNativeExternalTools({ conversationId: runtimeId,
             tools: tools.filter(tool => !getXopcToolMetadata(tool)?.external) }) } : {}) })] : []),
-        ...(mcp ? [createMcpExtension({ createTransport: createXopcMcpTransport({}, mcp.assertPluginCallAccess), loadConfig: () => mcp, credentials: mcp.credentials, logPath: join(agentDir, 'mcp.log') })] : []),
+        ...(mcp ? [(pi: ExtensionAPI) => createMcpExtension({
+          createTransport: createXopcMcpTransport({}, mcp.assertPluginCallAccess),
+          loadConfig: () => mcp,
+          credentials: mcp.credentials,
+          logPath: join(agentDir, 'mcp.log'),
+        })({
+          ...pi,
+          registerTool(definition) {
+            // pi indexes descriptions but can replace the source name with a hash in provider-facing identifiers.
+            const sourceName = definition.label.split('/').slice(1).join('/');
+            if (definition.name.startsWith('mcp__') && sourceName && !definition.name.endsWith(`__${sourceName}`)) {
+              pi.registerTool({ ...definition, description: `${definition.description}\nOriginal MCP tool name: ${sourceName}` });
+              return;
+            }
+            pi.registerTool(definition);
+          },
+        })] : []),
         createAgentProfileContextExtension(runtimeId),
       ],
     });

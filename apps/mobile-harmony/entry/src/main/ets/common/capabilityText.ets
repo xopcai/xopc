@@ -17,6 +17,14 @@ export function skillDisplayName(id: string): string {
   return name.replace(/\b[a-z]/g, (letter: string): string => letter.toUpperCase());
 }
 
+export function nameCapabilityPrompt(prompt: string, catalogId: string, displayName: string): string {
+  const title = displayName.replace(/\s+/g, ' ').trim();
+  if (!title || title === catalogId || /[」”]/.test(title)) return prompt;
+  const match = /^(请使用「|Use “)([A-Za-z0-9][A-Za-z0-9._:/-]*)(?: \(([A-Za-z0-9][A-Za-z0-9._:/-]*)\))?(」帮我：|” to help me with:)$/.exec(prompt);
+  if (!match || match[2] !== catalogId) return prompt;
+  return match[1] + title + ' (' + (match[3] || catalogId) + ')' + match[4];
+}
+
 export function capabilityText(wire: string, labels: Map<string, string> = new Map<string, string>(),
   editing: boolean = false): XopcCapabilityText {
   const tokens = /(^Use “[^”\r\n]+|^请使用「[^」\r\n]+)( \([A-Za-z0-9][A-Za-z0-9._:/-]*\))(?=” to help me with:|」帮我：)|(^|\s)\/skill:([A-Za-z0-9][A-Za-z0-9._-]*)/g;
