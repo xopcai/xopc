@@ -41,7 +41,7 @@ describe('global media playback', () => {
     root = createRoot(container);
   });
 
-  afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
   function render(chat: boolean) {
     act(() => root.render(<>
@@ -82,6 +82,7 @@ describe('global media playback', () => {
 
     render(false);
     expect(mini()?.querySelector('video')).toBe(video);
+    expect(mini()?.querySelector('[aria-label="Minimize player"]')).toBeNull();
     expect(video.paused).toBe(false);
     expect(video.currentTime).toBe(14);
     render(true);
@@ -94,6 +95,54 @@ describe('global media playback', () => {
     expect(video.paused).toBe(true);
     expect(video.isConnected).toBe(false);
     expect(useGeneratedMediaStore.getState().active).toBeNull();
+  });
+
+  it('minimizes playing music to the upper right and lets the user move and reopen it', async () => {
+    vi.useFakeTimers();
+    render(true);
+    const audio = container.querySelector('audio')!;
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Play"]')!.click());
+    audio.currentTime = 12;
+    render(false);
+
+    const player = mini() as HTMLElement;
+    const button = (label: string) => player.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
+    const details = player.querySelector<HTMLInputElement>('input[type="range"]')!.parentElement!;
+    expect(details.hidden).toBe(false);
+
+    act(() => vi.advanceTimersByTime(4_000));
+    act(() => button('Pause').click());
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(details.hidden).toBe(false);
+    await act(async () => button('Play').click());
+    act(() => vi.advanceTimersByTime(5_000));
+
+    expect(details.hidden).toBe(true);
+    expect(player.style.right).toBe('12px');
+    expect(audio.paused).toBe(false);
+    expect(audio.currentTime).toBe(12);
+
+    const move = button('Move player');
+    vi.spyOn(player, 'getBoundingClientRect').mockReturnValue(new DOMRect(700, 80, 256, 56));
+    const pointer = (type: string, x: number, y: number) => {
+      move.dispatchEvent(Object.assign(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y }), {
+        pointerId: 1, isPrimary: true, pointerType: 'touch',
+      }));
+    };
+    act(() => {
+      pointer('pointerdown', 720, 100);
+      pointer('pointermove', 520, 200);
+      pointer('pointerup', 520, 200);
+      move.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    });
+    expect(player.style.left).toBe('500px');
+    expect(player.style.top).toBe('180px');
+
+    act(() => button('Expand player').click());
+    act(() => vi.advanceTimersByTime(5_000));
+    expect(details.hidden).toBe(false);
+    expect(player.style.left).toBe('500px');
+    expect(audio.currentTime).toBe(12);
   });
 
   it('discards a pending note audio load after the user starts music', async () => {

@@ -16,12 +16,14 @@ export function useGeneratedMedia({ kind, src, title }: GeneratedMediaSource) {
 const mediaEvents = ['loadedmetadata', 'durationchange', 'timeupdate', 'seeked', 'volumechange', 'play', 'playing', 'waiting', 'pause', 'ended', 'error'];
 
 function readMedia(element: HTMLMediaElement | null) {
+  const playing = Boolean(element && !element.paused && !element.ended);
   return {
     position: element?.currentTime ?? 0,
     duration: element && Number.isFinite(element.duration) && element.duration > 0 ? element.duration : 0,
     muted: element?.muted ?? false,
     volume: element?.volume ?? 1,
-    playing: Boolean(element && !element.paused && !element.ended),
+    playing,
+    playbackReady: playing && element !== null && element.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA,
     failed: Boolean(element?.error),
   };
 }

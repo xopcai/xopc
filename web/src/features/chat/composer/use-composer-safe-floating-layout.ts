@@ -20,7 +20,7 @@ function visibleBounds(element: Element, area: Area): DOMRect | null {
     && rect.bottom > area.top && rect.top < area.bottom ? rect : null;
 }
 
-function measureLayout(element: HTMLElement | null, stackAbove?: string) {
+function measureLayout(element: HTMLElement | null, peerSelector?: string, topInset?: number) {
   const viewport = window.visualViewport;
   const x = viewport?.offsetLeft ?? 0;
   const y = viewport?.offsetTop ?? 0;
@@ -33,27 +33,33 @@ function measureLayout(element: HTMLElement | null, stackAbove?: string) {
   const size = element?.getBoundingClientRect();
   const width = Math.min(size?.width ?? 0, area.right - area.left);
   const height = Math.min(size?.height ?? 0, area.bottom - area.top);
+  let dockTop = Math.min(y + (topInset ?? GAP), area.bottom - height);
   let dockBottom = area.bottom;
-  const peer = stackAbove ? document.querySelector(stackAbove) : null;
+  const peer = peerSelector ? document.querySelector(peerSelector) : null;
   const peerBounds = peer && visibleBounds(peer, area);
-  if (peerBounds && peerBounds.right > area.right - width && peerBounds.bottom > area.bottom - height
-    && peerBounds.top - GAP - height >= area.top) {
-    dockBottom = peerBounds.top - GAP;
+  if (peerBounds && peerBounds.right > area.right - width) {
+    if (topInset !== undefined && peerBounds.top < dockTop + height && peerBounds.bottom > dockTop
+      && peerBounds.bottom + GAP + height <= area.bottom) {
+      dockTop = peerBounds.bottom + GAP;
+    } else if (topInset === undefined && peerBounds.bottom > area.bottom - height
+      && peerBounds.top - GAP - height >= area.top) {
+      dockBottom = peerBounds.top - GAP;
+    }
   }
-  return { ...area, dockBottom, width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
+  return { ...area, dockTop, dockBottom, width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
 }
 
 export function useComposerSafeFloatingLayout(
-  ref: RefObject<HTMLElement | null>, visible: boolean, position: Point | null, stackAbove?: string,
+  ref: RefObject<HTMLElement | null>, visible: boolean, position: Point | null, peerSelector?: string, topInset?: number,
 ) {
-  const [layout, setLayout] = useState(() => measureLayout(null));
+  const [layout, setLayout] = useState(() => measureLayout(null, peerSelector, topInset));
 
   useLayoutEffect(() => {
     if (!visible || !ref.current) return;
     const panel = ref.current;
-    const selector = stackAbove ? `${COMPOSER}, ${stackAbove}` : COMPOSER;
+    const selector = peerSelector ? `${COMPOSER}, ${peerSelector}` : COMPOSER;
     const measure = () => {
-      const next = measureLayout(panel, stackAbove);
+      const next = measureLayout(panel, peerSelector, topInset);
       setLayout(previous => (Object.keys(next) as (keyof typeof next)[]).every(key => next[key] === previous[key]) ? previous : next);
     };
     let frame = 0;
@@ -70,7 +76,7 @@ export function useComposerSafeFloatingLayout(
       for (const element of document.querySelectorAll(selector)) {
         resize?.observe(element);
         if (element.parentElement) resize?.observe(element.parentElement);
-        if (stackAbove && element.matches(stackAbove)) peerChanges.observe(element, { attributes: true, attributeFilter: ['style'] });
+        if (peerSelector && element.matches(peerSelector)) peerChanges.observe(element, { attributes: true, attributeFilter: ['style'] });
       }
       measure();
     };
@@ -95,7 +101,7 @@ export function useComposerSafeFloatingLayout(
       viewport?.removeEventListener('resize', measure);
       viewport?.removeEventListener('scroll', schedule);
     };
-  }, [ref, visible, stackAbove]);
+  }, [ref, visible, peerSelector, topInset]);
 
   const clamp = (point: Point) => clampFloatingPosition(point, layout, layout);
   const fitted = position && clamp(position);
@@ -103,8 +109,11 @@ export function useComposerSafeFloatingLayout(
     maxWidth: Math.max(0, layout.right - layout.left),
     maxHeight: Math.max(0, layout.bottom - layout.top),
     ...(fitted ? { left: fitted.x, top: fitted.y, right: 'auto', bottom: 'auto' }
-      : { right: layout.viewportWidth - layout.right,
-        bottom: `max(${layout.viewportHeight - layout.dockBottom}px, env(safe-area-inset-bottom))` }),
+      : topInset !== undefined
+        ? { right: layout.viewportWidth - layout.right,
+          top: `min(max(${layout.dockTop}px, calc(${topInset}px + env(safe-area-inset-top))), ${layout.bottom - layout.height}px)` }
+        : { right: layout.viewportWidth - layout.right,
+          bottom: `max(${layout.viewportHeight - layout.dockBottom}px, env(safe-area-inset-bottom))` }),
   };
   return { area: layout, clamp, style };
 }
