@@ -6,6 +6,7 @@ struct MarkdownBodyView: View {
     let conversationID: String?
     var markdown: String?
     var streaming = false
+    var highlightedPart: UUID?
     @Environment(\.chatTextSelectionEnabled) private var textSelectable
     @State private var projectedParts: [MarkdownPart] = []
 
@@ -19,6 +20,9 @@ struct MarkdownBodyView: View {
             ForEach(displayedParts) { part in
                 MarkdownPartView(block: part.block, configuration: configuration, conversationID: conversationID,
                                  streaming: streaming && part.id == projectedParts.last?.id, mathEnabled: mathEnabled)
+                    .background(highlightedPart == part.id ? Color.accentColor.opacity(0.12) : Color.clear,
+                                in: .rect(cornerRadius: 6))
+                    .id(part.id)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

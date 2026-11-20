@@ -2,18 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
   Object.assign(globalThis, { ObservedV2: (value: unknown) => value, Trace: () => undefined });
-  return { cachedList: vi.fn(), list: vi.fn(), detail: vi.fn(), load: vi.fn(), initialize: vi.fn(), pending: vi.fn(), uuid: vi.fn() };
+  return { cachedList: vi.fn(), list: vi.fn(), detail: vi.fn(), load: vi.fn(), initialize: vi.fn(), pending: vi.fn(), uuid: vi.fn(), save: vi.fn(), remove: vi.fn(), create: vi.fn() };
 });
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn() } }));
 vi.mock('../entry/src/main/ets/repository/noteRepository.ets', () => ({ XopcNoteRepository: class {
   cachedList = mocks.cachedList;
   list = mocks.list;
   detail = mocks.detail;
+  create = mocks.create;
 } }));
 vi.mock('../entry/src/main/ets/service/noteDraftStore.ets', () => ({ XopcNoteDraftStore: class {
   initialize = mocks.initialize;
   pending = mocks.pending;
   load = mocks.load;
+  save = mocks.save;
+  remove = mocks.remove;
 } }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class {
   uuid = mocks.uuid;
@@ -31,6 +34,9 @@ describe('native notes list', () => {
     mocks.pending.mockResolvedValue([]);
     mocks.list.mockResolvedValue(page(['first']));
     mocks.load.mockResolvedValue(undefined);
+    mocks.save.mockResolvedValue(undefined);
+    mocks.remove.mockResolvedValue(undefined);
+    mocks.uuid.mockReturnValue("test-id");
     mocks.detail.mockResolvedValue({ id: 'recorded-note', title: 'Voice note', markdown: '', updatedAt: 10 });
   });
 
@@ -123,6 +129,46 @@ describe('native notes list', () => {
     await Promise.all([starting, opening]);
     expect(vm.selected?.id).toBe('recorded-note');
     expect(mocks.load).toHaveBeenCalledWith('recorded-note');
+  });
+
+  it('opens the new note editor without fetching a list or creating an empty remote note', async () => {
+    const vm = new XopcNoteViewModel();
+    await vm.start({} as never, '', '', 'project-1', false);
+    vm.create();
+    expect(vm.editing).toBe(true);
+    expect(mocks.list).not.toHaveBeenCalled();
+    await vm.closeEditor();
+    expect(vm.editing).toBe(false);
+    expect(vm.draft).toBeUndefined();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('reopens an existing unsynced draft when its remote note cannot be fetched', async () => {
+    mocks.load.mockResolvedValueOnce({
+      noteId: 'recorded-note', title: 'Offline', markdown: 'Local text', baseRevision: 3,
+      updatedAt: 10, localVersion: 1, syncState: 'offline',
+    });
+    mocks.detail.mockRejectedValueOnce(new Error('OFFLINE'));
+    const vm = new XopcNoteViewModel();
+    await vm.start({} as never, 'recorded-note');
+    expect(vm.draft?.markdown).toBe('Local text');
+    expect(vm.editing).toBe(true);
+    expect(vm.error).toBe('OFFLINE');
+  });
+
+  it('retains the conflict while persisting further local edits', async () => {
+    mocks.load.mockResolvedValueOnce({
+      noteId: 'recorded-note', title: 'Local', markdown: 'Original', baseRevision: 3,
+      updatedAt: 10, localVersion: 1, syncState: 'dirty',
+    });
+    mocks.detail.mockResolvedValueOnce({ id: 'recorded-note', markdown: 'Remote', remoteVersion: 4 });
+    const vm = new XopcNoteViewModel();
+    await vm.start({} as never, 'recorded-note');
+    vm.updateMarkdown('Further local edits');
+    expect(vm.remoteConflict?.markdown).toBe('Remote');
+    expect(vm.draft?.syncState).toBe('conflict');
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ markdown: 'Further local edits', syncState: 'conflict' }));
+    expect(await vm.saveNow()).toBe(false);
   });
 
   it('leaves the loading state when draft initialization fails', async () => {

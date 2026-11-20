@@ -1114,4 +1114,10 @@
     <string name="device_execution_offline">离线</string>
     <string name="device_execution_authorization">需授权</string>
     <string name="device_execution_reselect">重新选择</string>
+    <string name="notes_reading_tools">在笔记中查找</string>
+    <string name="notes_outline">目录</string>
+    <string name="notes_find_results">查找结果</string>
+    <string name="notes_search_body">搜索笔记正文</string>
+    <string name="notes_no_headings">暂无标题</string>
+    <string name="notes_no_matches">没有匹配内容</string>
 </resources>

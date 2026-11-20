@@ -54,11 +54,12 @@ export class XopcNoteViewModel {
   private listedSearch: string = '';
   private listedStatus: XopcNoteStatus | '' = '';
 
-  async start(context: common.Context, initialId: string = '', initialStatus: XopcNoteStatus | '' = '', projectId: string = ''): Promise<void> {
+  async start(context: common.Context, initialId: string = '', initialStatus: XopcNoteStatus | '' = '',
+    projectId: string = '', loadList: boolean = true): Promise<void> {
     this.projectId = projectId;
     this.status = initialStatus;
     if (initialId) this.openingId = initialId;
-    else if (!projectId && !initialStatus) {
+    else if (loadList && !projectId && !initialStatus) {
       const cached = this.repository.cachedList();
       if (cached) this.items = cached.items;
     }
@@ -69,7 +70,7 @@ export class XopcNoteViewModel {
         if (this.openingId !== initialId) return;
         await this.open(initialId);
       } else {
-        await this.list();
+        if (loadList) await this.list();
         await this.draftsReady;
       }
       void this.flushPending(initialId);
@@ -112,6 +113,12 @@ export class XopcNoteViewModel {
     } catch (error) {
       if (generation === this.generation) {
         this.error = (error as Error).message;
+        if (!more && !this.items.length) {
+          try {
+            const local = await this.mergePendingDrafts([], this.search, this.status);
+            if (generation === this.generation) this.items = local;
+          } catch (_storeError) {}
+        }
         hilog.warn(0x0000, 'XopcNotes', 'Notes list failed: %{public}s', this.error);
       }
     }
@@ -139,9 +146,10 @@ export class XopcNoteViewModel {
     }
     const generation = ++this.generation;
     this.loading = true; this.error = ''; this.remoteConflict = undefined;
+    let local: XopcNoteDraft | undefined;
     try {
+      local = await this.drafts.load(id);
       const note = await this.repository.detail(id);
-      const local = await this.drafts.load(id);
       if (generation !== this.generation) return;
       this.selected = note;
       if (local && local.syncState !== 'clean') {
@@ -154,7 +162,16 @@ export class XopcNoteViewModel {
       }
       this.editing = false; this.history = []; this.snapshot = undefined; this.aiPreview = undefined;
       this.editorRevision++;
-    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
+    } catch (error) {
+      if (generation === this.generation) {
+        this.error = (error as Error).message;
+        if (local && local.syncState !== 'clean') {
+          this.draft = local;
+          this.editing = true;
+          this.editorRevision++;
+        }
+      }
+    }
     finally { if (generation === this.generation) { this.loading = false; this.openingId = ''; } }
   }
 
@@ -180,7 +197,6 @@ export class XopcNoteViewModel {
     };
     this.remoteConflict = undefined; this.editing = true; this.error = '';
     this.editorRevision++;
-    void this.persistAndSchedule();
   }
 
   updateTitle(value: string): void { this.updateDraft(value, this.draft?.markdown ?? ''); }
@@ -190,8 +206,7 @@ export class XopcNoteViewModel {
     const current = this.draft;
     if (!current || (current.title === title && current.markdown === markdown)) return;
     this.draft = this.copyDraft(current, { title, markdown, localVersion: current.localVersion + 1,
-      updatedAt: Date.now(), syncState: 'dirty' });
-    this.remoteConflict = undefined;
+      updatedAt: Date.now(), syncState: current.syncState === 'conflict' ? 'conflict' : 'dirty' });
     void this.persistAndSchedule();
   }
 
@@ -201,13 +216,16 @@ export class XopcNoteViewModel {
     try { await this.drafts.save(draft); }
     catch (error) { this.error = (error as Error).message; return; }
     this.cancelSaveTimer();
+    if (draft.syncState === 'conflict' || (draft.noteId.startsWith(LOCAL_NOTE_PREFIX) &&
+      !draft.title.trim() && !draft.markdown.trim())) return;
     this.saveTimer = setTimeout((): void => { void this.saveNow(); }, AUTOSAVE_DELAY_MS);
   }
 
-  async saveNow(): Promise<boolean> {
+  async saveNow(allowEmpty: boolean = false): Promise<boolean> {
     this.cancelSaveTimer();
     const draft = this.draft;
     if (!draft || this.saving || draft.syncState === 'clean' || draft.syncState === 'conflict') return draft?.syncState === 'clean';
+    if (!allowEmpty && draft.noteId.startsWith(LOCAL_NOTE_PREFIX) && !draft.title.trim() && !draft.markdown.trim()) return false;
     this.saving = true; this.error = '';
     this.draft = this.copyDraft(draft, { syncState: 'saving' });
     try {
@@ -250,6 +268,16 @@ export class XopcNoteViewModel {
   }
 
   async closeEditor(): Promise<void> {
+    const draft = this.draft;
+    if (!this.saving && draft?.noteId.startsWith(LOCAL_NOTE_PREFIX) && !draft.title.trim() && !draft.markdown.trim()) {
+      this.cancelSaveTimer();
+      try {
+        await this.drafts.remove(draft.noteId);
+        this.draft = undefined;
+        this.editing = false;
+      } catch (error) { this.error = (error as Error).message; }
+      return;
+    }
     if (await this.saveNow()) this.editing = false;
   }
 
@@ -307,7 +335,7 @@ export class XopcNoteViewModel {
 
   async attachPayload(payload: XopcChatAttachment): Promise<boolean> {
     if (!this.draft || this.saving) return false;
-    const saved = await this.saveNow();
+    const saved = await this.saveNow(true);
     const note = this.selected;
     if (!saved || !note) return false;
     this.saving = true; this.error = '';

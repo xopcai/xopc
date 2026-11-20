@@ -1,3 +1,5 @@
+import { markdownBlocks, XopcMarkdownCell, XopcMarkdownTableRow } from '../common/markdown';
+import { markdownReadingBlocks } from '../common/markdownLayout';
 import { common } from '@kit.AbilityKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcNote, XopcNoteAttachment, XopcNoteHistoryEntry, XopcNoteStatus } from '../model/note';
@@ -15,7 +17,13 @@ import { XopcDiscussionReviewPlayer } from './DiscussionReviewPlayer';
 import { XopcDiscussionNoteView } from './DiscussionNoteView';
 import { userErrorMessage } from '../common/userError';
 
-type XopcNoteSheet = 'history' | 'ai' | 'share' | 'tags' | 'more' | 'attachment' | 'voice';
+type XopcNoteSheet = 'history' | 'ai' | 'share' | 'tags' | 'more' | 'attachment' | 'voice' | 'reading';
+
+interface XopcNoteReadingEntry {
+  index: number;
+  text: string;
+  level: number;
+}
 
 /** Dedicated native note list/detail/editor. Notes no longer depend on the generic workspace screen. */
 @ComponentV2
@@ -35,6 +43,12 @@ export struct XopcNotesView {
   @Local shareResult?: XopcShareResult;
   @Local editorPreview?: XopcHistoryMedia;
   @Local voice: XopcVoiceCapture = new XopcVoiceCapture();
+  @Local readingQuery: string = '';
+  @Local readingTarget: number = -1;
+  @Local editorFlush: number = 0;
+  private detailScroller: Scroller = new Scroller();
+  private pendingReadingJump: number = -1;
+  private restoreDetailOffset: number = 0;
   private startTask?: Promise<void>;
   private visible: boolean = false;
 
@@ -45,7 +59,7 @@ export struct XopcNotesView {
   }
 
   private async start(context: common.Context): Promise<void> {
-    await this.model.start(context, this.initialId, '', this.projectId);
+    await this.model.start(context, this.initialId, '', this.projectId, !this.createOnAppear);
     if (this.createOnAppear && !this.model.draft) this.model.create(this.projectId);
   }
 
@@ -63,6 +77,9 @@ export struct XopcNotesView {
     await startup;
     const id = this.initialId;
     if (this.visible && id && this.model.selected?.id !== id && this.model.openingId !== id) {
+      this.readingTarget = -1;
+      this.restoreDetailOffset = 0;
+      this.readingQuery = '';
       await this.model.open(id);
     }
   }
@@ -73,7 +90,7 @@ export struct XopcNotesView {
   }
 
   private sheetHeight(): number | string {
-    if (this.activeSheet === 'history') return '88%';
+    if (this.activeSheet === 'history' || this.activeSheet === 'reading') return '88%';
     if (this.activeSheet === 'ai') return '76%';
     if (this.activeSheet === 'share') return '92%';
     if (this.activeSheet === 'tags') return 260;
@@ -89,7 +106,7 @@ export struct XopcNotesView {
   }
 
   private back(): void {
-    if (this.model.editing) { void this.model.closeEditor(); return; }
+    if (this.model.editing) { this.editorFlush++; return; }
     this.onExit();
   }
 
@@ -178,6 +195,11 @@ export struct XopcNotesView {
       if (this.model.draft) {
         Text(this.syncText()).fontSize(12).fontColor(this.model.draft.syncState === 'conflict' ? this.colors.danger : this.colors.secondary)
       }
+      if (this.model.selected?.markdown && !this.model.editing) {
+        Button() { SymbolGlyph($r('sys.symbol.magnifyingglass')).fontSize(22).fontColor([this.colors.secondary]) }
+          .id('note-reading-tools').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+          .accessibilityText($r('app.string.note_reading_tools')).onClick((): void => { this.openSheet('reading'); })
+      }
       if (this.model.selected && !this.model.editing) {
         Button() { SymbolGlyph($r('sys.symbol.ellipsis_circle')).fontSize(22).fontColor([this.colors.secondary]) }
           .id('note-more').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
@@ -210,6 +232,11 @@ export struct XopcNotesView {
         .width('100%').fontSize(25).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground)
         .backgroundColor(Color.Transparent).onChange((value: string): void => { this.model.updateTitle(value); })
       XopcNativeNoteEditor({ markdown: this.model.draft?.markdown ?? '', revision: this.model.editorRevision,
+        flushRevision: this.editorFlush, onFlushed: (): void => {
+          void this.model.closeEditor().then((): void => {
+            if (!this.model.editing && !this.model.selected && !this.model.draft) this.onExit();
+          });
+        },
         noteId: this.model.selected?.id || '', attachments: this.model.selected?.attachments || [],
         onChange: (value: string): void => { this.model.updateMarkdown(value); },
         onSelection: (value: string): void => { this.model.selectedText = value; },
@@ -238,7 +265,7 @@ export struct XopcNotesView {
         Button($r('app.string.note_add_attachment')).id('note-add-attachment').layoutWeight(1).height(42).backgroundColor(this.colors.input)
           .fontColor(this.colors.foreground).enabled(!this.model.saving).onClick((): void => { this.openSheet('attachment'); })
         Button($r('app.string.note_done')).id('note-done').layoutWeight(1).height(42).backgroundColor(this.colors.accent)
-          .fontColor(this.colors.onAccent).enabled(!this.model.saving).onClick((): void => { void this.model.closeEditor(); })
+          .fontColor(this.colors.onAccent).enabled(!this.model.saving).onClick((): void => { this.editorFlush++; })
       }.width('100%')
     }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 12 }).alignItems(HorizontalAlign.Start)
   }
@@ -247,7 +274,10 @@ export struct XopcNotesView {
   detailToolbar() {
     Button($r('app.string.edit_note')).id('note-edit').width('100%').constraintSize({ minHeight: 49, maxWidth: 480 })
       .fontColor(this.colors.chat.onAction).backgroundColor(this.colors.chat.action)
-      .onClick((): void => { this.model.editing = true; })
+      .onClick((): void => {
+        this.restoreDetailOffset = this.detailScroller.currentOffset().yOffset;
+        this.model.editing = true;
+      })
       .margin({ left: 20, right: 20, bottom: 12 })
   }
 
@@ -255,7 +285,7 @@ export struct XopcNotesView {
   detail() {
     if (this.model.selected) {
       Stack({ alignContent: Alignment.Bottom }) {
-        List({ space: 0 }) {
+        List({ space: 0, scroller: this.detailScroller }) {
           ListItem() {
             Column({ space: 16 }) {
               Column({ space: 7 }) {
@@ -295,7 +325,8 @@ export struct XopcNotesView {
               }
               if (this.model.selected.markdown) {
                 XopcMarkdownView({ content: this.model.selected.markdown, conversationId: this.model.selected.id,
-                  inlineNoteImages: true })
+                  inlineNoteImages: true, noteReaderPrefix: 'note-block-' + this.model.selected.id + '-',
+                  noteReaderTarget: this.readingTarget })
               }
               if (this.model.selected.attachments?.some((attachment: XopcNoteAttachment): boolean =>
                 !this.attachmentInBody(this.model.selected as XopcNote, attachment))) {
@@ -311,6 +342,12 @@ export struct XopcNotesView {
           }
         }.id('note-detail-content').height('100%').width('100%').scrollBar(BarState.Off)
           .contentEndOffset(this.model.selected.kind === 'voice' ? 210 : 92).edgeEffect(EdgeEffect.Spring)
+          .onAreaChange((_previous: Area, current: Area): void => {
+            if (this.restoreDetailOffset <= 0 || Number(current.height) <= 0) return;
+            const offset = this.restoreDetailOffset;
+            this.restoreDetailOffset = 0;
+            this.detailScroller.scrollTo({ xOffset: 0, yOffset: offset });
+          })
         Column({ space: 8 }) {
           if (this.model.selected.kind === 'voice') XopcDiscussionReviewPlayer({ noteId: this.model.selected.id })
           this.detailToolbar()
@@ -478,6 +515,72 @@ export struct XopcNotesView {
     }.width('100%').padding(20).backgroundColor(this.colors.surface).alignItems(HorizontalAlign.Start)
   }
 
+  @Computed get readingEntries(): XopcNoteReadingEntry[] {
+    const blocks = markdownReadingBlocks(markdownBlocks(this.model.selected?.markdown ?? ''));
+    const query = this.readingQuery.trim().toLowerCase();
+    const results: XopcNoteReadingEntry[] = [];
+    for (let index = 0; index < blocks.length; index++) {
+      const block = blocks[index];
+      if (!query) {
+        if (block.kind === 'heading') results.push({ index, text: block.text, level: block.level });
+        continue;
+      }
+      const text = block.kind === 'table'
+        ? (block.rows ?? []).map((row: XopcMarkdownTableRow): string => row.cells.map((cell: XopcMarkdownCell): string => cell.text).join(' ')).join(' ')
+        : block.text;
+      const match = text.toLowerCase().indexOf(query);
+      if (match < 0) continue;
+      const start = Math.max(0, match - 48);
+      results.push({ index, text: (start > 0 ? '…' : '') + text.slice(start, match + query.length + 72), level: 0 });
+    }
+    return results;
+  }
+
+  private jumpToReadingResult(): void {
+    const index = this.pendingReadingJump;
+    this.pendingReadingJump = -1;
+    const note = this.model.selected;
+    if (index < 0 || !note) return;
+    const context = this.getUIContext();
+    const components = context.getComponentUtils();
+    const viewport = components.getRectangleById('note-detail-content');
+    const target = components.getRectangleById('note-block-' + note.id + '-' + index.toString());
+    if (!viewport.size.height || !target.size.height) return;
+    const offset = this.detailScroller.currentOffset().yOffset + context.px2vp(target.windowOffset.y - viewport.windowOffset.y);
+    this.readingTarget = index;
+    this.detailScroller.scrollTo({ xOffset: 0, yOffset: Math.max(0, offset) });
+  }
+
+  @Builder
+  readingSheet() {
+    Column({ space: 12 }) {
+      Text(this.readingQuery.trim() ? $r('app.string.note_find_results') : $r('app.string.note_outline'))
+        .fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
+      TextInput({ text: this.readingQuery, placeholder: $r('app.string.note_search_body') })
+        .id('note-find-query').width('100%').height(48).backgroundColor(this.colors.input)
+        .onChange((value: string): void => { this.readingQuery = value; })
+      if (!this.readingEntries.length) {
+        XopcEmptyHint({ message: this.readingQuery.trim() ? $r('app.string.note_no_matches') : $r('app.string.note_no_headings') })
+      } else {
+        List({ space: 4 }) {
+          ForEach(this.readingEntries, (entry: XopcNoteReadingEntry) => {
+            ListItem() {
+              Button({ type: ButtonType.Normal }) {
+                Text(entry.text).fontSize(15).maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width('100%').textAlign(TextAlign.Start).fontColor(this.colors.foreground)
+              }.width('100%').constraintSize({ minHeight: 48 })
+                .padding({ left: 12 + Math.max(0, entry.level - 1) * 8, right: 12 })
+                .backgroundColor(this.colors.input).onClick((): void => {
+                  this.pendingReadingJump = entry.index;
+                  this.sheetOpen = false;
+                })
+            }
+          }, (entry: XopcNoteReadingEntry): string => entry.index.toString())
+        }.layoutWeight(1).width('100%')
+      }
+    }.width('100%').layoutWeight(1).padding(20).alignItems(HorizontalAlign.Start)
+  }
+
   @Builder
   activeSheetContent() {
     Column() {
@@ -485,7 +588,8 @@ export struct XopcNotesView {
         Text(userErrorMessage(this.model.error, 'save')).fontSize(13).fontColor(this.colors.danger)
           .width('100%').padding({ left: 20, right: 20, bottom: 8 })
       }
-      if (this.activeSheet === 'history') { this.historySheet() }
+      if (this.activeSheet === 'reading') { this.readingSheet() }
+      else if (this.activeSheet === 'history') { this.historySheet() }
       else if (this.activeSheet === 'ai') { this.aiSheet() }
       else if (this.activeSheet === 'share') { this.shareSheet() }
       else if (this.activeSheet === 'tags') { this.tagsSheet() }
@@ -520,7 +624,10 @@ export struct XopcNotesView {
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.sheetOpen, this.activeSheetContent, {
         height: this.sheetHeight(), dragBar: true,
-        onDisappear: (): void => { if (this.activeSheet === 'voice') void this.voice.cancel(); }
+        onDisappear: (): void => {
+          if (this.activeSheet === 'voice') void this.voice.cancel();
+          if (this.activeSheet === 'reading') this.jumpToReadingResult();
+        }
       })
   }
 

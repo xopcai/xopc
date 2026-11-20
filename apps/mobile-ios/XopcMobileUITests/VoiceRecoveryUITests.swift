@@ -73,8 +73,7 @@ final class VoiceRecoveryUITests: XCTestCase {
 
     func testSavedVoiceNoteSurvivesBackgroundAndColdRelaunch() async throws {
         app.openHomeDestination("notes")
-        app.buttons["新建笔记"].tap()
-        app.buttons["语音笔记"].tap()
+        app.buttons["notes-create-voice"].tap()
         app.buttons["开始录音"].tap()
         let consent = app.buttons["同意并开始"]
         if consent.waitForExistence(timeout: 2) {
@@ -157,8 +156,7 @@ final class VoiceRecoveryUITests: XCTestCase {
             throw XCTSkip("A spoken PCM WAV fixture is required")
         }
         app.openHomeDestination("notes")
-        app.buttons["新建笔记"].tap()
-        app.buttons["语音笔记"].tap()
+        app.buttons["notes-create-voice"].tap()
         app.buttons["开始录音"].tap()
         let consent = app.buttons["同意并开始"]
         if consent.waitForExistence(timeout: 2) {

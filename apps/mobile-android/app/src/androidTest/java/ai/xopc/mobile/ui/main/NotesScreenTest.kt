@@ -16,6 +16,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -353,6 +355,23 @@ class NotesScreenTest {
     assertEquals(1, saved)
   }
 
+  @Test fun noteReadingToolsFindPassagesAndNavigateToHeadings() {
+    val detail = NoteDetail("note-1", "Idea", "# First section\nIntro\n\n## Meeting plan\nUnique search phrase",
+      "inbox", "thought", 2000L, false, emptyList(), 3L)
+    composeTestRule.setContent {
+      NotesDetailContent(NotesUiState(selectedId = detail.id, detail = detail), detail.id, {})
+    }
+    composeTestRule.waitUntil(5_000) {
+      composeTestRule.onAllNodesWithTag("note-reading-tools").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeTestRule.onNodeWithTag("note-reading-tools").performClick()
+    composeTestRule.onNode(hasTestTag("note-find-result") and hasText("Meeting plan")).assertExists()
+    composeTestRule.onNodeWithTag("note-find-query").performTextInput("search phrase")
+    composeTestRule.onNodeWithTag("note-find-result").assertTextContains("Unique search phrase").performClick()
+    composeTestRule.onNodeWithTag("note-find-query").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("note-detail-body").assertExists()
+  }
+
   @Test fun markdownToolbarSupportsUndoRedoAndHeadingPreview() {
     var draft by mutableStateOf(NoteDraft("local-00000000-0000-0000-0000-000000000081", "Idea", "Body",
       "00000000-0000-0000-0000-000000000082", 1))
@@ -374,6 +393,9 @@ class NotesScreenTest {
     composeTestRule.onNodeWithTag("notes-preview-toggle").performScrollTo().performClick()
     composeTestRule.onNodeWithTag("notes-draft-preview").assertExists()
     composeTestRule.runOnIdle { draft = draft.copy(markdown = "- [x] Finished task", version = draft.version + 1) }
+    composeTestRule.waitUntil(5_000) {
+      composeTestRule.onAllNodes(hasText("☑ Finished task")).fetchSemanticsNodes().isNotEmpty()
+    }
     composeTestRule.onNodeWithText("☑ Finished task").assertExists()
   }
 }

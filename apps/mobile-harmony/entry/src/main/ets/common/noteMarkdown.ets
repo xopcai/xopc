@@ -95,6 +95,20 @@ export function noteEditorMarkdown(spans: XopcNoteEditorResultSpan[]): string {
   return result;
 }
 
+/** Source editing preserves documents the native editor cannot round-trip. */
+export function noteNativeRoundTrips(markdown: string): boolean {
+  if (/^ {0,3}(?:`{3,}|~{3,}|\|)/m.test(markdown)) return false;
+  const spans = noteEditorSpans(markdown).map((span: XopcNoteEditorSpan): XopcNoteEditorResultSpan => ({
+    text: span.text,
+    fontSize: span.heading === 1 ? 30 : span.heading === 2 ? 24 : span.heading === 3 ? 20 : 17,
+    fontWeight: span.bold || span.heading > 0 ? 700 : 400,
+    italic: span.italic,
+    code: span.code,
+    imageMarkdown: span.imageMarkdown
+  }));
+  return noteEditorMarkdown(spans) === markdown;
+}
+
 /** Applies deterministic AI patch operations without coupling them to RichEditor state. */
 export function applyNotePatch(markdown: string, operations: XopcNotePatchOperation[]): string {
   let result = markdown;

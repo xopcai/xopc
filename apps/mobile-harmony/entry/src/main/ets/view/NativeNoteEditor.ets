@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
 
-import { noteEditorMarkdown, noteEditorSpans, XopcNoteEditorResultSpan, XopcNoteEditorSpan } from '../common/noteMarkdown';
+import { noteEditorMarkdown, noteEditorSpans, noteNativeRoundTrips, XopcNoteEditorResultSpan, XopcNoteEditorSpan } from '../common/noteMarkdown';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
 import { XopcNoteAttachment } from '../model/note';
 import { XopcHistoryMedia } from '../model/chat';
@@ -16,12 +16,15 @@ export struct XopcNativeNoteEditor {
   @Param attachments: XopcNoteAttachment[] = [];
   @Param revision: number = 0;
   @Param readOnly: boolean = false;
+  @Param flushRevision: number = 0;
+  @Event onFlushed: () => void = (): void => {};
   @Event onChange: (markdown: string) => void = (_markdown: string): void => {};
   @Event onSelection: (text: string) => void = (_text: string): void => {};
   @Event onImageTap: (attachmentId: string) => void = (_attachmentId: string): void => {};
   private controller: RichEditorController = new RichEditorController();
   private ready: boolean = false;
   @Local loading: boolean = false;
+  @Local sourceEditing: boolean = false;
   private loadGeneration: number = 0;
   private imageTokens: Map<image.PixelMap, string> = new Map<image.PixelMap, string>();
   private imageOrder: string[] = [];
@@ -32,11 +35,26 @@ export struct XopcNativeNoteEditor {
   private undoStack: string[] = [];
   private redoStack: string[] = [];
 
-  aboutToDisappear(): void { this.cancelChangeTimer(); this.emitChange(); this.loadGeneration++; this.releaseImages(); }
+  aboutToAppear(): void { this.sourceEditing = !noteNativeRoundTrips(this.markdown); }
+
+  aboutToDisappear(): void {
+    this.cancelChangeTimer();
+    if (this.ready && !this.sourceEditing) this.emitChange();
+    this.loadGeneration++;
+    this.releaseImages();
+  }
+
+  @Monitor('flushRevision')
+  flush(): void {
+    this.cancelChangeTimer();
+    if (this.ready && !this.sourceEditing) this.emitChange();
+    this.onFlushed();
+  }
 
   @Monitor('revision')
   onRevisionChanged(): void {
-    if (!this.ready) return;
+    this.sourceEditing = !noteNativeRoundTrips(this.markdown);
+    if (!this.ready || this.sourceEditing) return;
     this.undoStack = []; this.redoStack = [];
     this.loadMarkdown();
   }
@@ -77,15 +95,15 @@ export struct XopcNativeNoteEditor {
     this.addText({ text: token, bold: false, italic: false, heading: 0, code: false });
   }
 
-  private loadMarkdown(): void { void this.renderMarkdown(); }
+  private loadMarkdown(): void { void this.renderMarkdown(this.markdown); }
 
-  private async renderMarkdown(): Promise<void> {
+  private async renderMarkdown(markdown: string): Promise<void> {
     const generation = ++this.loadGeneration;
     this.loading = true;
     this.controller.deleteSpans();
     this.releaseImages();
     try {
-      for (const span of noteEditorSpans(this.markdown)) {
+      for (const span of noteEditorSpans(markdown)) {
         if (generation !== this.loadGeneration) return;
         const attachment = span.imageMarkdown ? this.imageAttachment(span.imageMarkdown) : undefined;
         if (!span.imageMarkdown) { this.addText(span); continue; }
@@ -111,7 +129,7 @@ export struct XopcNativeNoteEditor {
           } finally { await source.release(); }
         } catch (_error) { this.addImageFallback(span.imageMarkdown); }
       }
-      this.lastMarkdown = this.markdown;
+      if (generation === this.loadGeneration) this.lastMarkdown = markdown;
     } finally { if (generation === this.loadGeneration) this.loading = false; }
   }
 
@@ -157,24 +175,16 @@ export struct XopcNativeNoteEditor {
     this.onChange(current);
   }
 
-  private restoreMarkdown(value: string): void {
-    this.loading = true;
-    this.controller.deleteSpans();
-    noteEditorSpans(value).forEach((span: XopcNoteEditorSpan): void => {
-      this.controller.addTextSpan(span.text, { style: {
-        fontColor: this.colors.foreground,
-        fontSize: this.fontSize(span.heading),
-        fontWeight: span.heading > 0 || span.bold ? FontWeight.Bold : FontWeight.Normal,
-        fontStyle: span.italic ? FontStyle.Italic : FontStyle.Normal,
-        fontFamily: span.code ? 'monospace' : undefined
-      } });
-    });
-    this.lastMarkdown = value;
-    this.loading = false;
-    this.onChange(value);
+  private restoreMarkdown(markdown: string): void {
+    this.cancelChangeTimer();
+    this.onChange(markdown);
+    void this.renderMarkdown(markdown);
   }
 
   private undo(): void {
+    if (this.loading) return;
+    this.cancelChangeTimer();
+    this.emitChange();
     const previous = this.undoStack.pop();
     if (previous === undefined) return;
     this.redoStack.push(this.lastMarkdown);
@@ -182,6 +192,7 @@ export struct XopcNativeNoteEditor {
   }
 
   private redo(): void {
+    if (this.loading) return;
     const next = this.redoStack.pop();
     if (next === undefined) return;
     this.undoStack.push(this.lastMarkdown);
@@ -263,6 +274,12 @@ export struct XopcNativeNoteEditor {
 
   build() {
     Column({ space: 8 }) {
+      if (this.sourceEditing) {
+        Text('Markdown').width('100%').fontSize(12).fontColor(this.colors.secondary)
+        TextArea({ text: this.markdown, placeholder: $r('app.string.note_editor_placeholder') })
+          .layoutWeight(1).width('100%').backgroundColor(Color.Transparent)
+          .enabled(!this.readOnly).onChange((markdown: string): void => { this.onChange(markdown); })
+      } else {
       RichEditor({ controller: this.controller })
         .layoutWeight(1).width('100%').padding({ left: 2, right: 2, top: 8, bottom: 28 })
         .enabled(!this.readOnly && !this.loading).backgroundColor(Color.Transparent).placeholder($r('app.string.note_editor_placeholder'), {
@@ -296,6 +313,7 @@ export struct XopcNativeNoteEditor {
             this.tool('—', (): void => { this.insert('\n---\n'); })
           }.padding({ left: 2, right: 2 })
         }.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
+      }
       }
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
   }

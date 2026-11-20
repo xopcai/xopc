@@ -155,6 +155,8 @@ export struct XopcMarkdownView {
   @Param previewLineLimit: number = 0;
   @Param inlineNoteImages: boolean = false;
   @Param streaming: boolean = false;
+  @Param noteReaderPrefix: string = '';
+  @Param noteReaderTarget: number = -1;
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onPreviewTap: () => void = (): void => {};
   @Event onReading: () => void = (): void => {};
@@ -309,7 +311,9 @@ export struct XopcMarkdownView {
           streaming: this.streaming && item.index === this.blocks.length - 1,
           onReading: this.onReading,
           onOpenLink: (href: string): void => { this.openInternalLink(href); } }).width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 }) }
-        }.width('100%').margin({ top: this.blockGap(item.index) }).alignItems(HorizontalAlign.Start)
+        }.id(this.noteReaderPrefix ? this.noteReaderPrefix + item.index.toString() : '')
+          .backgroundColor(this.noteReaderTarget === item.index ? this.colors.accentSoft : Color.Transparent)
+          .width('100%').margin({ top: this.blockGap(item.index) }).alignItems(HorizontalAlign.Start)
       }).key((block: XopcMarkdownBlock): string => block.id)
       if (this.linkedFile) {
         XopcChatMediaView({ file: this.linkedFile, conversationId: this.conversationId, previewOnly: true, previewRequest: this.previewRequest })

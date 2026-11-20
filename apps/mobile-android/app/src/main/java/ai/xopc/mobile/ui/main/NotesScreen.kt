@@ -44,6 +44,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -67,6 +68,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
@@ -84,6 +86,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.ImeAction
@@ -101,6 +109,8 @@ import java.text.DateFormat
 import java.util.Date
 import java.io.File
 
+private val NOTE_INLINE_EMPHASIS = Regex("""(\*\*|__)([^\n]+?)\1|(?<!\*)\*([^*\n]+)\*""")
+private val NOTE_EDITOR_HEADING = Regex("""(?m)^ {0,3}#{1,6} [^\n]+""")
 private val NOTE_LINE_PREFIX = Regex("""^(?:#{1,6} |[-*+] \[[ xX]\] |[-*+] |\d+[.)] |> )""")
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -188,6 +198,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     }
   }
   var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf(initialNoteId) }
+  val detailScroll = key(state.gatewayId, selectedId) { rememberScrollState() }
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(initialProjectDraft) }
   var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var fileSpaceId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
@@ -420,7 +431,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
             }
           }
         }
-      }, onPreviewAttachment = { previewAttachment = it })
+      }, onPreviewAttachment = { previewAttachment = it }, scroll = detailScroll)
   }
   val attachmentToPreview = previewAttachment
   if (attachmentToPreview != null && selectedId != null) {
@@ -779,6 +790,29 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
   onResolveConflict: (Boolean) -> Unit = {}, onAddAttachment: () -> Unit = {},
   attachmentBusy: Boolean = false, attachmentError: Boolean = false) {
   val draft = state.draft
+  val syntaxColor = MaterialTheme.colorScheme.onSurfaceVariant
+  val editFormatting = remember(syntaxColor) {
+    VisualTransformation { source ->
+      val formatted = buildAnnotatedString {
+        append(source)
+        NOTE_EDITOR_HEADING.findAll(source.text).forEach { match ->
+          val end = match.range.last + 1
+          val titleStart = source.text.indexOf(' ', match.range.first + match.value.indexOf('#')) + 1
+          addStyle(SpanStyle(fontWeight = FontWeight.Bold), titleStart, end)
+          addStyle(SpanStyle(color = syntaxColor), match.range.first, titleStart)
+        }
+        NOTE_INLINE_EMPHASIS.findAll(source.text).forEach { match ->
+          val text = match.groups[2] ?: match.groups[3] ?: return@forEach
+          val end = text.range.last + 1
+          addStyle(if (match.groups[2] != null) SpanStyle(fontWeight = FontWeight.Bold)
+            else SpanStyle(fontStyle = FontStyle.Italic), text.range.first, end)
+          addStyle(SpanStyle(color = syntaxColor), match.range.first, text.range.first)
+          addStyle(SpanStyle(color = syntaxColor), end, match.range.last + 1)
+        }
+      }
+      TransformedText(formatted, OffsetMapping.Identity)
+    }
+  }
   var bodyValue by remember(draft?.id) { mutableStateOf(TextFieldValue(draft?.markdown.orEmpty())) }
   var preview by remember(draft?.id) { mutableStateOf(false) }
   var undo by remember(draft?.id) { mutableStateOf<List<String>>(emptyList()) }
@@ -880,6 +914,7 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
       .testTag("notes-draft-preview")) {
       MarkdownContent(bodyValue.text)
     } else BasicTextField(bodyValue, { updateBody(it) },
+      visualTransformation = editFormatting,
       modifier = Modifier.fillMaxWidth().weight(1f).testTag("notes-draft-body")
         .padding(horizontal = 2.dp, vertical = 8.dp),
       textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
@@ -1144,10 +1179,13 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
   modifier: Modifier = Modifier, onEdit: () -> Unit = {}, onMore: () -> Unit = {},
   onHistory: () -> Unit = {}, onAi: () -> Unit = {}, onContinueChat: () -> Unit = {},
   chatBusy: Boolean = false, onOpenLink: (String) -> Unit = {},
-  onPreviewAttachment: (NoteAttachment) -> Unit = {}) {
+  onPreviewAttachment: (NoteAttachment) -> Unit = {}, scroll: ScrollState = rememberScrollState()) {
   val note = state.detail.takeIf { it?.id == id }
+  val reader = remember(id) { MarkdownNoteReadingState() }
+  var readerOpen by rememberSaveable(id) { mutableStateOf(false) }
+  if (readerOpen) NoteReadingDialog(reader, onDismiss = { readerOpen = false })
   Box(modifier = modifier.fillMaxWidth().testTag("note-detail")) {
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)
       .padding(top = 8.dp, bottom = 84.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
       if (state.detailLoading && note == null) BrandLoadingPanel(
         modifier = Modifier.testTag("note-detail-loading"))
@@ -1163,7 +1201,7 @@ internal fun NotesDetailContent(state: NotesUiState, id: String, onRetry: () -> 
         modifier = Modifier.fillMaxWidth().testTag("note-metadata-busy"))
       if (state.deleteBusy) BrandLoadingIndicator(
         modifier = Modifier.fillMaxWidth().testTag("note-delete-busy"))
-      if (note != null) NoteBody(note, onOpenLink, onPreviewAttachment)
+      if (note != null) NoteBody(note, onOpenLink, onPreviewAttachment, reader, { readerOpen = true })
     }
     if (note != null) Row(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
       .padding(bottom = 8.dp).testTag("note-detail-toolbar"),
@@ -1207,12 +1245,17 @@ private fun NoteDetailAction(symbol: String, label: String, onClick: () -> Unit,
 
 @Composable
 private fun NoteBody(note: NoteDetail, onOpenLink: (String) -> Unit,
-  onPreviewAttachment: (NoteAttachment) -> Unit) {
+  onPreviewAttachment: (NoteAttachment) -> Unit, reader: MarkdownNoteReadingState,
+  onReadingTools: () -> Unit) {
   Text(note.title.ifBlank { stringResource(R.string.notes_untitled) },
     style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
     modifier = Modifier.testTag("note-detail-title"))
   Text("${DateFormat.getDateTimeInstance().format(Date(note.updatedAt))} · ${noteStatusLabel(note.status)}",
     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+  if (reader.entries.isNotEmpty()) TextButton(onClick = onReadingTools,
+    modifier = Modifier.testTag("note-reading-tools")) {
+    Text(stringResource(R.string.notes_reading_tools))
+  }
   if (note.tags.isNotEmpty()) Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
     note.tags.forEach { tag ->
@@ -1233,9 +1276,48 @@ private fun NoteBody(note: NoteDetail, onOpenLink: (String) -> Unit,
     }
   }
   if (note.markdown.isNotEmpty()) MarkdownContent(note.markdown,
-    modifier = Modifier.fillMaxWidth().testTag("note-detail-body"), onOpenLink = onOpenLink)
+    modifier = Modifier.fillMaxWidth().testTag("note-detail-body"), onOpenLink = onOpenLink, noteReader = reader)
   else Text(stringResource(R.string.notes_empty_body),
     style = MaterialTheme.typography.bodyLarge, modifier = Modifier.testTag("note-detail-body"))
+}
+
+@Composable
+private fun NoteReadingDialog(reader: MarkdownNoteReadingState, onDismiss: () -> Unit) {
+  var query by rememberSaveable { mutableStateOf("") }
+  val entries = remember(reader.entries, query) {
+    val search = query.trim()
+    reader.entries.mapNotNull { entry ->
+      if (search.isEmpty()) return@mapNotNull entry.takeIf { it.headingLevel > 0 }
+      val index = entry.text.indexOf(search, ignoreCase = true)
+      if (index == -1) return@mapNotNull null
+      val start = (index - 48).coerceAtLeast(0)
+      val end = (index + search.length + 72).coerceAtMost(entry.text.length)
+      entry.copy(text = (if (start == 0) "" else "…") + entry.text.substring(start, end), headingLevel = 0)
+    }
+  }
+  AlertDialog(onDismissRequest = onDismiss,
+    title = { Text(stringResource(if (query.isBlank()) R.string.notes_outline else R.string.notes_find_results)) },
+    text = {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(query, { query = it }, singleLine = true,
+          label = { Text(stringResource(R.string.notes_search_body)) },
+          modifier = Modifier.fillMaxWidth().testTag("note-find-query"))
+        if (entries.isEmpty()) {
+          Text(stringResource(if (query.isBlank()) R.string.notes_no_headings else R.string.notes_no_matches))
+        } else {
+          LazyColumn(Modifier.heightIn(max = 320.dp)) {
+            items(entries, key = { it.id }) { entry ->
+              TextButton(onClick = { reader.jumpTo(entry.id); onDismiss() },
+                modifier = Modifier.fillMaxWidth().testTag("note-find-result")
+                  .padding(start = ((entry.headingLevel - 1).coerceAtLeast(0) * 8).dp)) {
+                Text(entry.text, Modifier.fillMaxWidth(), maxLines = 3, overflow = TextOverflow.Ellipsis)
+              }
+            }
+          }
+        }
+      }
+    },
+    confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.progress_cancel)) } })
 }
 
 @Composable

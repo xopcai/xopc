@@ -1103,7 +1103,7 @@ class GatewayViewModel internal constructor(application: Application, private va
     }
     val next = current.copy(title = title, markdown = markdown, version = current.version + 1)
     mutableState.update { it.copy(notes = it.notes.copy(draft = next, draftError = false,
-      draftLimitReached = false, draftConflict = null,
+      draftLimitReached = false,
       drafts = if (it.notes.drafts.any { saved -> saved.id == next.id })
         it.notes.drafts.map { saved -> if (saved.id == next.id) next else saved }
       else listOf(next) + it.notes.drafts)) }

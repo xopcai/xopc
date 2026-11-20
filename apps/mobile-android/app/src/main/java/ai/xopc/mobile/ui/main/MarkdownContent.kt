@@ -4,7 +4,10 @@ import ai.xopc.mobile.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -139,14 +143,28 @@ internal fun redundantMarkdownImageLink(node: Node, next: Node): Boolean {
   return identity(link.destination) == identity(image.destination)
 }
 
+internal data class MarkdownNoteReadingEntry(val id: String, val text: String, val headingLevel: Int)
+internal data class MarkdownNoteReadingTarget(val id: String, val request: Int)
+
+internal class MarkdownNoteReadingState {
+  var entries by mutableStateOf<List<MarkdownNoteReadingEntry>>(emptyList())
+  var target by mutableStateOf<MarkdownNoteReadingTarget?>(null)
+    private set
+
+  fun jumpTo(id: String) {
+    target = MarkdownNoteReadingTarget(id, (target?.request ?: 0) + 1)
+  }
+}
+
 /** Shared native Markdown renderer for messages, previews, and document content. */
 @Composable
 internal fun MarkdownContent(markdown: String, modifier: Modifier = Modifier,
   maxLines: Int? = null, onOpenLink: ((String) -> Unit)? = null,
   onCopyCode: ((String) -> Unit)? = null, streaming: Boolean = false, selectable: Boolean = true,
-  renderImage: (@Composable (String, String) -> Unit)? = null) {
+  renderImage: (@Composable (String, String) -> Unit)? = null,
+  noteReader: MarkdownNoteReadingState? = null) {
   CompositionLocalProvider(LocalMarkdownSelection provides selectable, LocalMarkdownImageRenderer provides renderImage) {
-    MarkdownDocument(markdown, modifier, maxLines, onOpenLink, onCopyCode, streaming)
+    MarkdownDocument(markdown, modifier, maxLines, onOpenLink, onCopyCode, streaming, noteReader)
   }
 }
 
@@ -162,10 +180,24 @@ private fun MarkdownSelection(content: @Composable () -> Unit) {
 
 @Composable
 private fun MarkdownDocument(markdown: String, modifier: Modifier, maxLines: Int?,
-  onOpenLink: ((String) -> Unit)?, onCopyCode: ((String) -> Unit)?, streaming: Boolean) {
+  onOpenLink: ((String) -> Unit)?, onCopyCode: ((String) -> Unit)?, streaming: Boolean,
+  noteReader: MarkdownNoteReadingState?) {
   val document by produceState<List<MarkdownRenderBlock>>(emptyList(), markdown) {
     val previous = value
     value = withContext(Dispatchers.Default) { projectMarkdown(markdown, previous) }
+  }
+  LaunchedEffect(noteReader, document) {
+    if (noteReader != null) noteReader.entries = withContext(Dispatchers.Default) {
+      document.mapNotNull { block ->
+        val spans = block.node.sourceSpans
+        if (spans.isEmpty()) return@mapNotNull null
+        val start = spans.first().inputIndex.coerceIn(0, markdown.length)
+        val end = (spans.last().inputIndex + spans.last().length).coerceIn(start, markdown.length)
+        val level = (block.node as? Heading)?.level ?: 0
+        val text = markdown.substring(start, end).trim().let { if (level == 0) it else it.trimStart('#').trim() }
+        MarkdownNoteReadingEntry(block.id, text, level)
+      }
+    }
   }
   val linkColor = MaterialTheme.colorScheme.primary
   val mathEnabled = remember(markdown) { MathMarkdownSyntax.candidateCount(markdown) <= 256 }
@@ -189,7 +221,20 @@ private fun MarkdownDocument(markdown: String, modifier: Modifier, maxLines: Int
         key(block.id) {
           androidx.compose.runtime.CompositionLocalProvider(LocalMarkdownSource provides markdown, LocalMathEnabled provides mathEnabled, LocalStreamingMarkdown provides
             (streaming && block.id == document.lastOrNull()?.id && block.node !is TableBlock)) {
-            MarkdownBlock(block.node, linkColor, onOpenLink, onCopyCode)
+            if (noteReader == null) {
+              MarkdownBlock(block.node, linkColor, onOpenLink, onCopyCode)
+            } else {
+              val requester = remember { BringIntoViewRequester() }
+              val target = noteReader.target?.takeIf { it.id == block.id }
+              LaunchedEffect(target) {
+                if (target != null) requester.bringIntoView()
+              }
+              Box(Modifier.fillMaxWidth().bringIntoViewRequester(requester)
+                .background(if (target != null) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                  RoundedCornerShape(6.dp))) {
+                MarkdownBlock(block.node, linkColor, onOpenLink, onCopyCode)
+              }
+            }
           }
         }
       }

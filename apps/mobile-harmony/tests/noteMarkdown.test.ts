@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { applyNotePatch, deriveNoteTitle, noteEditorMarkdown, noteEditorSpans } from '../entry/src/main/ets/common/noteMarkdown';
+import { applyNotePatch, deriveNoteTitle, noteEditorMarkdown, noteEditorSpans, noteNativeRoundTrips } from '../entry/src/main/ets/common/noteMarkdown';
 import { markdownBlocks } from '../entry/src/main/ets/common/markdown';
 import { reconcileNoteSave } from '../entry/src/main/ets/common/noteSync';
 
 describe('Harmony native note Markdown bridge', () => {
+  it('uses source editing when rendering could change an existing document', () => {
+    expect(noteNativeRoundTrips('# Heading\nStrong **text** and _emphasis_')).toBe(true);
+    expect(noteNativeRoundTrips('![diagram](xopc-attachment://notes/id/diagram)')).toBe(true);
+    expect(noteNativeRoundTrips('#### Deep heading')).toBe(false);
+    expect(noteNativeRoundTrips('Alternate *emphasis*')).toBe(false);
+    expect(noteNativeRoundTrips('```text\n# Example\n```')).toBe(false);
+  });
+
   it('creates native spans without leaking heading markers', () => {
     expect(noteEditorSpans('# Title\nBody with **bold** and _italic_').map((span) => ({
       text: span.text, bold: span.bold, italic: span.italic, heading: span.heading,

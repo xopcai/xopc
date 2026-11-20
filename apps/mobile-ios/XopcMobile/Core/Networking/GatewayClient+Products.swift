@@ -99,9 +99,11 @@ extension GatewayClient {
         return response.note
     }
 
-    func createNote(title: String, markdown: String, kind: String = "thought", projectID: String? = nil) async throws -> NoteDetail {
+    func createNote(title: String, markdown: String, kind: String = "thought", projectID: String? = nil,
+                    idempotencyKey: UUID? = nil) async throws -> NoteDetail {
         let body = try encoder.encode(NoteMutation(title: title, markdown: markdown, kind: kind, platform: "ios", projectId: projectID))
-        let response: NoteDetailEnvelope = try await request(path: "/api/notes", method: "POST", body: body)
+        let response: NoteDetailEnvelope = try await request(path: "/api/notes", method: "POST", body: body,
+                                                             idempotencyKey: idempotencyKey)
         return response.note
     }
 
@@ -161,7 +163,8 @@ extension GatewayClient {
         return data
     }
 
-    func uploadNoteAttachment(noteID: String, name: String, mimeType: String, data: Data) async throws {
+    func uploadNoteAttachment(noteID: String, name: String, mimeType: String, data: Data,
+                              idempotencyKey: UUID? = nil) async throws {
         let boundary = "xopc-\(UUID().uuidString.lowercased())"
         let safeName = name.replacingOccurrences(of: "\"", with: "_")
             .replacingOccurrences(of: "\r", with: "_")
@@ -177,6 +180,9 @@ extension GatewayClient {
         request.httpMethod = "POST"
         request.httpBody = body
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let idempotencyKey {
+            request.setValue(idempotencyKey.uuidString, forHTTPHeaderField: "Idempotency-Key")
+        }
         if !configuration.token.isEmpty {
             request.setValue("Bearer \(configuration.token)", forHTTPHeaderField: "Authorization")
         }

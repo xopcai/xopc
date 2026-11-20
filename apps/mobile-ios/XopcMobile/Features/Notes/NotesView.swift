@@ -17,7 +17,6 @@ struct NotesView: View {
     @State private var nextOffset: Int?
     @State private var error: String?
     @State private var presentedSheet: NotesSheet?
-    @State private var pendingCreation: NotesSheet?
     @State private var notesLoadRevision = 0
     @State private var pendingVoiceNote: PendingVoiceNote?
     @State private var pendingVoiceNoteLoadFailed = false
@@ -85,45 +84,19 @@ struct NotesView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 PageSearchButton("搜索笔记", isOpen: $searchOpen, query: $search,
                                  accessibilityID: "notes-open-search")
-                Button("新建笔记", systemImage: "plus") { presentedSheet = .choice }
+                Button("语音笔记", systemImage: "waveform") { presentedSheet = .voice }
+                    .accessibilityIdentifier("notes-create-voice")
+                Button("新建笔记", systemImage: "plus") { presentedSheet = .create }
+                    .accessibilityIdentifier("notes-create-text")
             }
         }
         .sheet(item: $presentedSheet, onDismiss: {
-            if let pendingCreation {
-                self.pendingCreation = nil
-                presentedSheet = pendingCreation
-            } else {
-                Task {
-                    await load()
-                    await refreshPendingVoiceNote()
-                }
+            Task {
+                await load()
+                await refreshPendingVoiceNote()
             }
         }) { sheet in
             switch sheet {
-            case .choice:
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("新建笔记").mobileTextStyle(.detailTitle)
-                    Button {
-                        pendingCreation = .create
-                        presentedSheet = nil
-                    } label: {
-                        Label("文字笔记", systemImage: "square.and.pencil")
-                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                    }
-                    .accessibilityIdentifier("notes-create-text")
-                    Button {
-                        pendingCreation = .voice
-                        presentedSheet = nil
-                    } label: {
-                        Label("语音笔记", systemImage: "waveform")
-                            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-                    }
-                    .accessibilityIdentifier("notes-create-voice")
-                }
-                .buttonStyle(.bordered)
-                .padding(20)
-                .presentationDetents([.height(250)])
-                .presentationDragIndicator(.visible)
             case .create:
                 NoteEditorView(configuration: configuration)
             case let .detail(id):
@@ -274,14 +247,12 @@ struct NotesView: View {
 }
 
 private enum NotesSheet: Identifiable {
-    case choice
     case create
     case voice
     case detail(String)
 
     var id: String {
         switch self {
-        case .choice: "choice"
         case .create: "create"
         case .voice: "voice"
         case let .detail(id): "detail-\(id)"

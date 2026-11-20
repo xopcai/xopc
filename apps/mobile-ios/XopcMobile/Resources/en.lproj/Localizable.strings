@@ -1360,3 +1360,21 @@
 "编号列表" = "Numbered list";
 "核对清单" = "Checklist";
 "未完成" = "Incomplete";
+
+"目录" = "Outline";
+"查找结果" = "Search Results";
+"在笔记中查找" = "Find in Note";
+"搜索笔记正文" = "Search note text";
+"暂无标题" = "No Headings";
+"没有匹配内容" = "No Matching Text";
+"保留草稿并关闭" = "Keep Draft and Close";
+"草稿已存本机" = "Draft Saved on This Device";
+"无法保存本地草稿" = "Could Not Save Local Draft";
+"无法读取本地草稿" = "Could Not Read Local Draft";
+"处理冲突" = "Resolve Conflict";
+"笔记在其他设备上有更新" = "This Note Changed on Another Device";
+"使用我的草稿" = "Use My Draft";
+"使用同步版本" = "Use Synced Version";
+"稍后处理" = "Resolve Later";
+"本地草稿已保留。选定版本后可以继续编辑。" = "Your local draft is safe. Choose a version to continue editing.";
+"继续编辑本地草稿" = "Continue Editing Local Draft";

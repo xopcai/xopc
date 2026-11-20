@@ -4,6 +4,7 @@ import SwiftUI
 struct MarkdownNoteInput: View {
     @Binding var markdown: String
     let configuration: GatewayConfiguration
+    var autofocus = false
     @State private var showsPreview = false
     @State private var selection: TextSelection?
     @State private var undoStack: [String] = []
@@ -13,6 +14,15 @@ struct MarkdownNoteInput: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if showsPreview {
+                ScrollView {
+                    MarkdownBodyView(parts: [], configuration: configuration, conversationID: nil, markdown: markdown)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .accessibilityIdentifier("note-markdown-preview")
+            } else {
+                textEditor
+            }
             ScrollView(.horizontal) {
                 HStack(spacing: 12) {
                     Button(showsPreview ? "编辑" : "预览", systemImage: showsPreview ? "pencil" : "eye") {
@@ -27,15 +37,9 @@ struct MarkdownNoteInput: View {
             }
             .accessibilityLabel("笔记格式")
             .accessibilityIdentifier("note-markdown-toolbar")
-            if showsPreview {
-                ScrollView {
-                    MarkdownBodyView(parts: [], configuration: configuration, conversationID: nil, markdown: markdown)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .accessibilityIdentifier("note-markdown-preview")
-            } else {
-                textEditor
-            }
+        }
+        .task(id: autofocus) {
+            if autofocus && !showsPreview { isEditing = true }
         }
         .onChange(of: markdown) { oldValue, newValue in
             if skipsHistoryChange {

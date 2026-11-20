@@ -29,8 +29,6 @@ export struct XopcNotesTabView {
   @Local contentWidth: number = 0;
   @Local selectedId: string = '';
   @Local recoveriesOpen: boolean = false;
-  @Local creationSheetOpen: boolean = false;
-  @Local pendingCreation: string = '';
   private initialized: boolean = false;
 
   aboutToAppear(): void { this.updateActivity(); }
@@ -53,42 +51,6 @@ export struct XopcNotesTabView {
   private openNote(id: string): void {
     if (this.contentWidth >= 840) this.selectedId = id;
     else this.onNavigate({ page: 'notes', itemId: id });
-  }
-
-  private finishCreationSheet(): void {
-    const action = this.pendingCreation;
-    this.pendingCreation = '';
-    if (action === 'text') this.onNavigate({ page: 'note-create', itemId: '' });
-    else if (action === 'voice') this.onStartVoice();
-  }
-
-  @Builder
-  creationSheet() {
-    Column({ space: 10 }) {
-      Text($r('app.string.new_note')).fontSize(20).fontWeight(FontWeight.Bold)
-        .fontColor(this.colors.foreground).width('100%').padding({ bottom: 6 })
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 14 }) {
-          SymbolGlyph($r('sys.symbol.doc')).fontSize(22).fontColor([this.colors.accent])
-          Text($r('app.string.note_text_option')).fontSize(16).fontWeight(FontWeight.Medium)
-            .fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
-          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-        }.width('100%').height(56).padding({ left: 16, right: 16 })
-      }.id('notes-create-text').width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.input)
-        .onClick((): void => { this.pendingCreation = 'text'; this.creationSheetOpen = false; })
-      Button({ type: ButtonType.Normal }) {
-        Row({ space: 14 }) {
-          SymbolGlyph($r('sys.symbol.mic')).fontSize(22).fontColor([this.colors.danger])
-          Column({ space: 2 }) {
-            Text($r('app.string.note_voice_option')).fontSize(16).fontWeight(FontWeight.Medium)
-              .fontColor(this.colors.foreground)
-            Text($r('app.string.capture_start_hint')).fontSize(12).fontColor(this.colors.secondary)
-          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-          SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-        }.width('100%').height(64).padding({ left: 16, right: 16 })
-      }.id('notes-create-voice').width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.input)
-        .onClick((): void => { this.pendingCreation = 'voice'; this.creationSheetOpen = false; })
-    }.width('100%').padding({ left: 20, right: 20, top: 10, bottom: 16 })
   }
 
   @Monitor('activePage')
@@ -129,14 +91,14 @@ export struct XopcNotesTabView {
       XopcPageHeader({ heading: $r('app.string.notes'), backVisible: true, onBack: this.onExit,
         searchId: 'notes-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.search_notes'),
         onSearch: (): void => { this.toggleSearch(); }, actionLabel: $r('app.string.new_note'),
-        actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.creationSheetOpen = true; } })
+        actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.onNavigate({ page: 'note-create', itemId: '' }); } })
       if (this.searchOpen) {
         Column() {
           XopcPageSearchField({ searchId: 'notes-search', text: this.searchText, placeholder: $r('app.string.search_notes'),
             onChange: (value: string): void => { this.searchText = value; }, onSubmit: (): void => { this.searchAll(); } })
         }.padding({ left: 20, right: 20, bottom: 12 })
       }
-      Column() {
+      Row({ space: 8 }) {
         XopcSegmentedTabs({ options: [
           { key: '', label: $r('app.string.note_all') },
           { key: 'inbox', label: $r('app.string.inbox') },
@@ -145,7 +107,11 @@ export struct XopcNotesTabView {
         ], selectedKey: this.model.status, onSelect: (key: string): void => {
           this.model.status = key as XopcNoteStatus | '';
           void this.model.list(false, true);
-        } })
+        } }).layoutWeight(1)
+        Button({ type: ButtonType.Circle }) {
+          SymbolGlyph($r('sys.symbol.mic')).fontSize(20).fontColor([this.colors.foreground])
+        }.id('notes-create-voice').width(44).height(44).padding(0).backgroundColor(this.colors.panel)
+          .accessibilityText($r('app.string.note_voice_option')).onClick((): void => { this.onStartVoice(); })
       }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
       if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
         Button({ type: ButtonType.Normal }) {
@@ -283,9 +249,5 @@ export struct XopcNotesTabView {
           .clip(true)
     }.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)
       .onAreaChange((_previous: Area, current: Area): void => { this.contentWidth = Number(current.width); })
-      .bindSheet($$this.creationSheetOpen, this.creationSheet, {
-        height: 260, dragBar: true, showClose: false, backgroundColor: this.colors.surface,
-        onDisappear: (): void => { this.finishCreationSheet(); }
-      })
   }
 }

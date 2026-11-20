@@ -496,13 +496,11 @@ final class ParityAcceptanceUITests: XCTestCase {
     func testCreationEditorsAccessibilityAudit() throws {
         openTab("笔记")
         app.buttons["新建笔记"].tap()
-        app.buttons["文字笔记"].tap()
         XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 8))
         try performCoreAccessibilityAudit()
         app.buttons["取消"].tap()
 
-        app.buttons["新建笔记"].tap()
-        app.buttons["语音笔记"].tap()
+        app.buttons["notes-create-voice"].tap()
         XCTAssertTrue(app.navigationBars["语音笔记"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["开始录音"].waitForExistence(timeout: 8))
         try performCoreAccessibilityAudit()
@@ -539,8 +537,7 @@ final class ParityAcceptanceUITests: XCTestCase {
 
     func testVoiceNoteLifecycleAccessibilityAudit() throws {
         openTab("笔记")
-        app.buttons["新建笔记"].tap()
-        app.buttons["语音笔记"].tap()
+        app.buttons["notes-create-voice"].tap()
         let discardPending = app.buttons["丢弃这段录音"]
         if discardPending.waitForExistence(timeout: 3) {
             discardPending.tap()
@@ -913,8 +910,6 @@ final class ParityAcceptanceUITests: XCTestCase {
             XCTAssertTrue(app.buttons["notes-open-search"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.textFields["notes-search-field"].exists)
         }
-        app.buttons["新建笔记"].tap()
-        XCTAssertTrue(app.buttons["notes-create-text"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["notes-create-voice"].exists)
         app.buttons["notes-create-text"].tap()
         XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 5))
@@ -1103,7 +1098,6 @@ final class ParityAcceptanceUITests: XCTestCase {
         openTab("笔记")
 
         app.buttons["新建笔记"].tap()
-        app.buttons["文字笔记"].tap()
         capture("07-note-create")
         app.buttons["粗体"].tap()
         XCTAssertTrue((app.textViews["笔记正文"].value as? String)?.contains("**粗体**") == true)
@@ -1117,8 +1111,7 @@ final class ParityAcceptanceUITests: XCTestCase {
     }
 
     private func captureVoiceNoteJourneys() {
-        app.buttons["新建笔记"].tap()
-        app.buttons["语音笔记"].tap()
+        app.buttons["notes-create-voice"].tap()
         capture("08-voice-ready")
         let start = app.buttons["开始录音"]
         if start.waitForExistence(timeout: 3) {
@@ -1436,7 +1429,6 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
         openTab("笔记")
         app.buttons["新建笔记"].tap()
-        app.buttons["文字笔记"].tap()
         let titleField = app.textFields["标题"]
         XCTAssertTrue(titleField.waitForExistence(timeout: 5))
         titleField.tap()
@@ -1859,6 +1851,37 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.buttons["取消"].tap()
         app.buttons["关闭"].tap()
         XCTAssertTrue(note.waitForExistence(timeout: 5))
+    }
+
+    func testNoteOutlineAndDraftSurviveRelaunch() {
+        tab("notes")
+        let note = app.buttons["note-row-note-1"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        note.tap()
+        let readingTools = app.buttons["note-reading-tools"]
+        XCTAssertTrue(readingTools.waitForExistence(timeout: 5))
+        readingTools.tap()
+        XCTAssertTrue(app.navigationBars["目录"].waitForExistence(timeout: 5))
+        app.buttons["格式示例"].tap()
+        XCTAssertTrue(app.navigationBars["目录"].waitForNonExistence(timeout: 5))
+        app.buttons["关闭"].tap()
+
+        let draftText = "Recovered offline note"
+        app.buttons["notes-create-text"].tap()
+        let title = app.textFields["标题"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText(draftText)
+        XCTAssertEqual(title.value as? String, draftText)
+        app.terminate()
+        app.launch()
+        tab("notes")
+        app.buttons["notes-create-text"].tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.value as? String, draftText)
+        app.buttons["取消"].tap()
+        app.buttons["放弃并关闭"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5))
     }
 
     func testCapabilityNavigationChoiceRestoresAfterAppRelaunch() {

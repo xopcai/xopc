@@ -13,19 +13,24 @@ struct NoteDetailView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var editingNote: NoteDetail?
+    @State private var editingLocalDraft = false
     @State private var confirmsDelete = false
     @State private var discussion: DiscussionDetail?
     @State private var isRetryingDiscussion = false
     @State private var hasLocalRecording = false
     @State private var isImportingFile = false
     @State private var isUploadingFile = false
+    @State private var readingParts: [MarkdownPart] = []
+    @State private var readingToolsOpen = false
+    @State private var readingTarget: UUID?
 
     var body: some View {
         Group {
             if isLoading {
                 ProgressView("正在读取笔记…")
             } else if let note {
-                ScrollView {
+                ScrollViewReader { proxy in
+                  ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         if let title = note.title, !title.isEmpty {
                             Text(verbatim: title).font(.title.bold())
@@ -47,8 +52,8 @@ struct NoteDetailView: View {
                                 if note.markdown.isEmpty {
                                     Text("暂无正文")
                                 } else {
-                                    MarkdownBodyView(parts: [], configuration: configuration, conversationID: nil,
-                                                     markdown: note.markdown)
+                                    MarkdownBodyView(parts: readingParts, configuration: configuration, conversationID: nil,
+                                                     highlightedPart: readingTarget)
                                         .environment(\.chatTextSelectionEnabled, true)
                                 }
                             }
@@ -80,13 +85,23 @@ struct NoteDetailView: View {
                         }
                     }
                     .padding()
+                  }
+                  .onChange(of: readingTarget) { _, target in
+                      guard let target else { return }
+                      proxy.scrollTo(target, anchor: .top)
+                  }
                 }
             } else {
-                ContentUnavailableView(
-                    "无法打开笔记",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(error ?? AppLocalization.string("笔记不存在", locale: AppLocalization.selectedLocale))
-                )
+                ContentUnavailableView {
+                    Label("无法打开笔记", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error ?? AppLocalization.string("笔记不存在", locale: AppLocalization.selectedLocale))
+                } actions: {
+                    if NoteEditorView.hasLocalDraft(configuration: configuration, noteID: noteID) {
+                        Button("继续编辑本地草稿") { editingLocalDraft = true }
+                    }
+                    Button("重试") { Task { await load() } }
+                }
             }
         }
         .mobilePageTitle(Text("笔记"))
@@ -94,6 +109,15 @@ struct NoteDetailView: View {
             if showsCloseButton {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("关闭", systemImage: "xmark") { dismiss() }
+                }
+            }
+            if !readingParts.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("在笔记中查找", systemImage: "magnifyingglass") {
+                        readingTarget = nil
+                        readingToolsOpen = true
+                    }
+                        .accessibilityIdentifier("note-reading-tools")
                 }
             }
             ToolbarItemGroup(placement: .bottomBar) {
@@ -132,6 +156,23 @@ struct NoteDetailView: View {
                 }
             }
         }
+        .task(id: note?.markdown) {
+            guard let markdown = note?.markdown else { return }
+            let previous = readingParts
+            let parts = await Task.detached(priority: .userInitiated) {
+                MarkdownPart.project(MarkdownBlock.parse(markdown), previous: previous)
+            }.value
+            if !Task.isCancelled { readingParts = parts }
+        }
+        .sheet(isPresented: $readingToolsOpen) {
+            NoteReadingTools(parts: readingParts) { target in
+                readingTarget = target
+                readingToolsOpen = false
+            }
+        }
+        .sheet(isPresented: $editingLocalDraft, onDismiss: { Task { await load() } }) {
+            NoteEditorView(configuration: configuration, draftNoteID: noteID)
+        }
         .sheet(item: $editingNote, onDismiss: { Task { await load() } }) { note in
             NoteEditorView(configuration: configuration, existing: note)
         }
@@ -158,7 +199,7 @@ struct NoteDetailView: View {
 
     @MainActor
     private func load() async {
-        isLoading = true
+        isLoading = note == nil
         defer { isLoading = false }
         do { note = try await GatewayClient(configuration: configuration).fetchNote(id: noteID); error = nil }
         catch { self.error = error.localizedDescription }
@@ -309,4 +350,69 @@ extension String {
         }
         return AppLocalization.string(key, locale: AppLocalization.selectedLocale)
     }
+}
+
+
+private struct NoteReadingTools: View {
+    let parts: [MarkdownPart]
+    let select: (UUID) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var entries: [NoteReadingEntry] {
+        let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return parts.compactMap { part in
+            switch part.block {
+            case let .heading(level, text) where search.isEmpty:
+                return NoteReadingEntry(id: part.id, text: text, level: level)
+            default:
+                guard !search.isEmpty, let text = searchableText(part.block),
+                      let match = text.range(of: search, options: [.caseInsensitive, .diacriticInsensitive])
+                else { return nil }
+                let leading = text[..<match.lowerBound].suffix(48)
+                let trailing = text[match.upperBound...].prefix(72)
+                let snippet = (leading.count < text.distance(from: text.startIndex, to: match.lowerBound) ? "…" : "")
+                    + leading + text[match] + trailing
+                return NoteReadingEntry(id: part.id, text: String(snippet), level: 0)
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(entries) { entry in
+                Button {
+                    select(entry.id)
+                } label: {
+                    Text(entry.text)
+                        .lineLimit(3)
+                        .padding(.leading, CGFloat(max(0, entry.level - 1) * 10))
+                }
+            }
+            .overlay {
+                if entries.isEmpty {
+                    ContentUnavailableView(query.isEmpty ? "暂无标题" : "没有匹配内容", systemImage: "doc.text.magnifyingglass")
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索笔记正文")
+            .navigationTitle(query.isEmpty ? "目录" : "查找结果")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
+        }
+    }
+
+    private func searchableText(_ block: MarkdownBlock) -> String? {
+        switch block {
+        case let .heading(_, text), let .paragraph(text), let .bullet(_, text), let .numbered(_, _, text),
+             let .quote(text), let .code(text), let .image(text, _): text
+        case let .table(rows, _): rows.flatMap(\.cells).map(\.text).joined(separator: " ")
+        case .math, .chart, .divider: nil
+        }
+    }
+}
+
+private struct NoteReadingEntry: Identifiable {
+    let id: UUID
+    let text: String
+    let level: Int
 }

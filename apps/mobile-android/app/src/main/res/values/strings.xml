@@ -1114,4 +1114,10 @@
     <string name="device_execution_offline">Offline</string>
     <string name="device_execution_authorization">Needs authorization</string>
     <string name="device_execution_reselect">Select again</string>
+    <string name="notes_reading_tools">Find in note</string>
+    <string name="notes_outline">Outline</string>
+    <string name="notes_find_results">Search results</string>
+    <string name="notes_search_body">Search note text</string>
+    <string name="notes_no_headings">No headings</string>
+    <string name="notes_no_matches">No matching text</string>
 </resources>
