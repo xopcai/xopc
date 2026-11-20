@@ -27,7 +27,7 @@ import { TaskApplicationService } from '../tasks/task-application-service.js';
 import type { WorkspaceFileInput } from '../tasks/task-handoff.js';
 import { TaskRepository } from '../tasks/task-repository.js';
 import { mcpDelegatedRunPrincipal, TaskRunRepository } from '../tasks/task-run-repository.js';
-import { subscribeToMcpRunCallback } from './run-callbacks.js';
+import { subscribeToMcpRunCallback } from './run-callback-subscriptions.js';
 
 export interface McpDelegationDeps {
   getConfig: () => Config;

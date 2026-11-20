@@ -2,26 +2,16 @@ import { createHmac } from 'node:crypto';
 import { request } from 'node:https';
 import { isIP } from 'node:net';
 
-import type { Config } from '../config/schema.js';
 import { assertSafeUrl } from '../media-shared/http/ssrf-guard.js';
 import { isXopcDatabaseOpen } from '../storage/sqlite/connection.js';
-import { DurableState } from '../storage/sqlite/durable-state.js';
 import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { createLogger } from '../utils/logger.js';
 import { readMcpConnectionGrant } from './connection-grants.js';
 import { listRemoteMcpGrants } from './remote-grants.js';
+import { mcpRunCallbackSubscriptions as subscriptions, type CallbackConfig } from './run-callback-subscriptions.js';
 
-type CallbackConfig = Config['gateway']['mcpCallback'];
-type Subscription = { principalId: string; url: string; sequence: number; attempts: number; nextAttemptAt: number };
-const subscriptions = new DurableState<Subscription>('mcp-run-callback');
 const terminalEvents = new Set(['task_run.succeeded', 'task_run.failed', 'task_run.cancelled']);
 const log = createLogger('McpRunCallbacks');
-
-export function subscribeToMcpRunCallback(runId: string, principalId: string, config: CallbackConfig): boolean {
-  if (!config || !process.env[config.secretEnv]) return false;
-  subscriptions.set(runId, { principalId, url: config.url, sequence: 0, attempts: 0, nextAttemptAt: 0 });
-  return true;
-}
 
 async function postEvent(url: URL, secret: string, eventId: string, payload: string, signal: AbortSignal, isActive: () => boolean) {
   const { resolvedIp } = await assertSafeUrl(url);

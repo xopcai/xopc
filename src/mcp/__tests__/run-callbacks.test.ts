@@ -8,7 +8,8 @@ import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { TaskApplicationService } from '../../tasks/task-application-service.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { createMcpConnection, revokeMcpConnection } from '../connection-grants.js';
-import { McpRunCallbackDispatcher, subscribeToMcpRunCallback } from '../run-callbacks.js';
+import { subscribeToMcpRunCallback } from '../run-callback-subscriptions.js';
+import { McpRunCallbackDispatcher } from '../run-callbacks.js';
 
 const { httpsRequest, assertSafeUrl } = vi.hoisted(() => ({ httpsRequest: vi.fn(), assertSafeUrl: vi.fn() }));
 vi.mock('node:https', async importOriginal => ({ ...await importOriginal<typeof import('node:https')>(), request: httpsRequest }));
