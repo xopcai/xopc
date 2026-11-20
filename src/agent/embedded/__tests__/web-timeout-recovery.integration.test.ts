@@ -30,6 +30,15 @@ it.each(['stop', 'aborted', 'error', 'deadline', 'user_cancelled', 'exhausted'])
   const parent = new AbortController();
   const originalTimeout = AbortSignal.timeout.bind(AbortSignal);
   const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => originalTimeout(ms === 25_000 ? 5 : ms));
+  const deadlineMs = 7_919;
+  let expireDeadline: (() => void) | undefined;
+  const schedule = globalThis.setTimeout.bind(globalThis);
+  // Arm the real turn deadline, but expire it only once the fallback request is pending.
+  const deadlineSpy = modelStop === 'deadline' ? vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+    if (delay !== deadlineMs) return schedule(callback, delay, ...args);
+    expireDeadline = () => callback(...args);
+    return schedule(() => undefined, 60_000).unref();
+  }) : undefined;
   let round = 0;
   let active = 0;
   let peak = 0;
@@ -70,7 +79,12 @@ it.each(['stop', 'aborted', 'error', 'deadline', 'user_cancelled', 'exhausted'])
       const abort = () => stream.push({ type: 'error', reason: 'aborted', error: message });
       if (options.signal.aborted) abort();
       else options.signal.addEventListener('abort', abort, { once: true });
-      if (modelStop === 'user_cancelled') setTimeout(() => parent.abort(new AgentRunCancelledError()), 5);
+      if (modelStop === 'deadline') {
+        expect(expireDeadline).toBeDefined();
+        queueMicrotask(() => expireDeadline?.());
+      } else {
+        setTimeout(() => parent.abort(new AgentRunCancelledError()), 5);
+      }
     } else if (interrupted) stream.push({ type: 'error', reason: modelStop === 'error' ? 'error' : 'aborted', error: message });
     else stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
     return stream;
@@ -79,7 +93,7 @@ it.each(['stop', 'aborted', 'error', 'deadline', 'user_cancelled', 'exhausted'])
     const result = await runXopcEmbeddedTurn({ conversationId, runId: crypto.randomUUID(), workspaceDir: root,
       transcriptRuntime: new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: root }),
       userMessage: { role: 'user', content: 'Research MCP authorization.', timestamp: Date.now() },
-      systemPrompt: 'Use alternative sources after a fetch timeout.', modelRef: 'openai/gpt-4.1', timeoutMs: modelStop === 'deadline' ? 300 : 10000,
+      systemPrompt: 'Use alternative sources after a fetch timeout.', modelRef: 'openai/gpt-4.1', timeoutMs: modelStop === 'deadline' ? deadlineMs : 10000,
       model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false,
         input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
       tools: [createWebFetchTool(() => undefined)], abortSignal: parent.signal,
@@ -97,6 +111,7 @@ it.each(['stop', 'aborted', 'error', 'deadline', 'user_cancelled', 'exhausted'])
     expect(round).toBe(modelStop === 'exhausted' ? 5 : ['stop', 'deadline', 'user_cancelled'].includes(modelStop) ? 3 : 4);
     expect(parent.signal.aborted).toBe(modelStop === 'user_cancelled');
   } finally {
+    deadlineSpy?.mockRestore();
     timeoutSpy.mockRestore();
     evictEmbeddedSessionRunner(conversationId);
     await rm(root, { recursive: true, force: true });
