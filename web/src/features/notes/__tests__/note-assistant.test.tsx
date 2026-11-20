@@ -6,13 +6,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   note: { id: 'note', title: 'Meeting', markdown: 'Existing note', kind: 'voice', status: 'inbox', attachments: [], createdAt: 1, updatedAt: 1, remoteVersion: 1 },
-  open: vi.fn(), update: vi.fn(), mutate: vi.fn(), sent: vi.fn(),
+  open: vi.fn(), get: vi.fn(), update: vi.fn(), mutate: vi.fn(), sent: vi.fn(),
 }));
 vi.mock('swr', () => ({ default: (key: unknown) => ({
   data: Array.isArray(key) && key[0] === 'note-detail' ? { ...mocks.note, id: key[1] } : Array.isArray(key) && key[0] === 'note-discussion-document' ? { discussion: { id: 'meeting' } } : [],
   isLoading: false, mutate: mocks.mutate,
 }) }));
-vi.mock('../notes-api', async original => ({ ...await original<object>(), getNote: vi.fn(), listNoteThreads: vi.fn(), openNoteChat: mocks.open, updateNote: mocks.update }));
+vi.mock('../notes-api', async original => ({ ...await original<object>(), getNote: mocks.get, listNoteThreads: vi.fn(), openNoteChat: mocks.open, updateNote: mocks.update }));
 vi.mock('@/features/automations/product-automation-feedback', () => ({ ProductAutomationFeedback: () => null }));
 vi.mock('@/features/discussions/discussion-note-sections', () => ({ DiscussionNoteSections: ({ noteActions, personalNotes, onPersonalNotes, personalNotesActive }: { noteActions: { onChat: () => void }; personalNotes: React.ReactNode; onPersonalNotes: () => void; personalNotesActive: boolean }) => <div><button onClick={noteActions.onChat}>AI chat</button><button onClick={onPersonalNotes}>My notes</button>{personalNotesActive ? personalNotes : null}</div> }));
 vi.mock('@/components/block-editor', () => ({ BlockEditor: ({ content, onChange }: { content: string; onChange: (value: string) => void }) => <textarea aria-label="Editor" defaultValue={content} onChange={event => onChange(event.target.value)} /> }));
@@ -20,7 +20,7 @@ vi.mock('@/features/chat/chat-page', () => ({ ChatPage: ({ conversationId, befor
 
 import { NoteDetailPanel } from '../note-detail-panel';
 let container: HTMLDivElement; let root: ReturnType<typeof createRoot>;
-const button = (text: string) => [...container.querySelectorAll('button')].find(item => item.textContent === text)!;
+const button = (text: string) => [...document.querySelectorAll('button')].find(item => item.textContent === text)!;
 function LocationProbe() { return <output>{useLocation().pathname}</output>; }
 const render = async (id = 'note') => { await act(async () => root.render(<MemoryRouter initialEntries={['/notes/note']}><NoteDetailPanel noteId={id} onBack={() => {}} /><LocationProbe /></MemoryRouter>)); };
 beforeEach(() => {
@@ -93,4 +93,32 @@ it('saves edits made during an in-flight save against the new revision', async (
   await act(async () => finishFirstSave({ ...mocks.note, markdown: 'First edit', remoteVersion: 2 }));
   expect(mocks.update).toHaveBeenCalledTimes(2);
   expect(mocks.update).toHaveBeenNthCalledWith(2, 'note', { markdown: 'Second edit' }, 2);
+});
+
+it('keeps the draft and saves against the revision the user reviewed after a conflict', async () => {
+  const conflict = Object.assign(new Error('Revision conflict'), { status: 409 });
+  mocks.update.mockRejectedValueOnce(conflict).mockRejectedValueOnce(conflict)
+    .mockResolvedValueOnce({ ...mocks.note, markdown: 'Local draft', remoteVersion: 5 });
+  mocks.get.mockResolvedValueOnce({ ...mocks.note, markdown: 'Remote revision three', remoteVersion: 3 })
+    .mockResolvedValueOnce({ ...mocks.note, markdown: 'Remote revision four', remoteVersion: 4 });
+  await render();
+  await act(async () => button('My notes').click());
+  const editor = container.querySelector<HTMLTextAreaElement>('[aria-label="Editor"]')!;
+  const save = () => editor.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(editor, 'Local draft');
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    save();
+  });
+  await act(async () => { save(); });
+  expect(mocks.update).toHaveBeenCalledTimes(1);
+  await act(async () => button('Review latest version').click());
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Remote revision three');
+  await act(async () => button('Save my draft').click());
+  expect(mocks.update).toHaveBeenNthCalledWith(2, 'note', { markdown: 'Local draft' }, 3);
+  await act(async () => button('Review latest version').click());
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Remote revision four');
+  await act(async () => button('Save my draft').click());
+  expect(mocks.update).toHaveBeenNthCalledWith(3, 'note', { markdown: 'Local draft' }, 4);
+  expect(container.querySelector('[role="alert"]')).toBeNull();
 });

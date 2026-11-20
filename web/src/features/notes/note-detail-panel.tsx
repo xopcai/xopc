@@ -155,6 +155,7 @@ export function NoteDetailPanel({
   return (
     <NoteImageLightboxProvider closeLabel={closeLabel}>
       <NoteDetailPanelInner
+        key={noteId}
         noteId={noteId}
         onBack={onBack}
         onSaved={onSaved}
@@ -199,6 +200,8 @@ function NoteDetailPanelInner({
   const [previewSnapshot, setPreviewSnapshot] = useState<NoteSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [reviewingConflict, setReviewingConflict] = useState(false);
+  const [conflictingNote, setConflictingNote] = useState<Note | null>(null);
   const [title, setTitle] = useState('');
   const [sidePanelWidth, setSidePanelWidth] = useState(360);
   const [historyResizing, setHistoryResizing] = useState(false);
@@ -231,6 +234,7 @@ function NoteDetailPanelInner({
   const pendingMarkdownRef = useRef<string | null>(null);
   const pendingTitleRef = useRef<string | null>(null);
   const pendingEditRevision = useRef<number | undefined>(undefined);
+  const saveConflictRef = useRef(false);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [outlineRoot, setOutlineRoot] = useState<HTMLDivElement | null>(null);
   const [outlineOpen, setOutlineOpen] = useState(false);
@@ -342,10 +346,10 @@ function NoteDetailPanelInner({
       pendingEditRevision.current = note?.remoteVersion ?? 1;
     }
   }, [noteId, note?.remoteVersion, saving]);
-  const persistEditorPatch = useCallback(async (patch: Partial<Note>) => {
-    const expected = pendingEditRevision.current ?? note?.remoteVersion ?? 1;
+  const persistEditorPatch = useCallback(async (patch: Partial<Note>, expectedRevision?: number) => {
+    const expected = expectedRevision ?? pendingEditRevision.current ?? note?.remoteVersion ?? 1;
     const saved = await updateNote(noteId, patch, expected);
-    if (pendingEditRevision.current === expected) pendingEditRevision.current = saved.remoteVersion ?? expected + 1;
+    pendingEditRevision.current = saved.remoteVersion ?? expected + 1;
     return saved;
   }, [noteId, note?.remoteVersion]);
 
@@ -398,7 +402,7 @@ function NoteDetailPanelInner({
     };
   }, [language, n.titlePlaceholder, note?.markdown, noteId, previewSnapshot, title]);
 
-  const flushPendingSave = useCallback(async (): Promise<Note | null> => {
+  const flushPendingSave = useCallback(async (reviewedRevision?: number): Promise<Note | null> => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = null;
 
@@ -406,6 +410,7 @@ function NoteDetailPanelInner({
       const saved = await saveInFlightRef.current;
       if (!saved || (pendingMarkdownRef.current === null && pendingTitleRef.current === null)) return saved;
     }
+    if (saveConflictRef.current && reviewedRevision === undefined) return null;
 
     const markdown = pendingMarkdownRef.current;
     const pendingTitle = titleComposingRef.current ? null : pendingTitleRef.current;
@@ -417,14 +422,20 @@ function NoteDetailPanelInner({
     // Keep the draft available while the request is in flight so mode changes see the latest text.
     setSaving(true);
     setSaveError(null);
-    const request = persistEditorPatch(patch).then(async (saved) => {
+    const request = persistEditorPatch(patch, reviewedRevision).then(async (saved) => {
       await mutate(saved, { revalidate: false });
+      saveConflictRef.current = false;
       if (pendingMarkdownRef.current === markdown) pendingMarkdownRef.current = null;
       if (pendingTitleRef.current === pendingTitle) pendingTitleRef.current = null;
       onSaved?.();
       return saved;
     }).catch((err: unknown) => {
-      setSaveError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
+      if (err instanceof Error && 'status' in err && err.status === 409) {
+        saveConflictRef.current = true;
+        setSaveError(n.saveConflict);
+      } else {
+        setSaveError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
+      }
       return null;
     }).finally(() => {
       saveInFlightRef.current = null;
@@ -432,7 +443,21 @@ function NoteDetailPanelInner({
     });
     saveInFlightRef.current = request;
     return request;
-  }, [mutate, n.saveFailed, n.saveFailedHint, note, onSaved, persistEditorPatch]);
+  }, [mutate, n.saveConflict, n.saveFailed, n.saveFailedHint, note, onSaved, persistEditorPatch]);
+
+  const reviewConflict = async () => {
+    setReviewingConflict(true);
+    try {
+      const latest = await getNote(noteId);
+      if (!latest) throw new Error(n.saveConflictMissing);
+      setConflictingNote(latest);
+      setSaveError(n.saveConflict);
+    } catch (error) {
+      setSaveError(`${n.saveFailed}: ${error instanceof Error ? error.message : n.saveFailedHint}`);
+    } finally {
+      setReviewingConflict(false);
+    }
+  };
 
   const flushPendingSaveRef = useRef(flushPendingSave);
   flushPendingSaveRef.current = flushPendingSave;
@@ -939,8 +964,10 @@ function NoteDetailPanelInner({
         {saveError ? (
           <div className="mb-3 flex shrink-0 items-center gap-2 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger">
             <p role="alert" className="min-w-0 flex-1 break-words">{saveError}</p>
-            <button type="button" className="shrink-0 rounded-md px-2 py-1 font-medium hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent" onClick={() => void flushPendingSave()}>
-              {n.home.retry}
+            <button type="button" className="shrink-0 rounded-md px-2 py-1 font-medium hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-accent"
+              disabled={reviewingConflict}
+              onClick={() => void (saveConflictRef.current ? reviewConflict() : flushPendingSave())}>
+              {saveConflictRef.current ? n.saveConflictReview : n.home.retry}
             </button>
           </div>
         ) : null}
@@ -1119,6 +1146,18 @@ function NoteDetailPanelInner({
       </div>
     </div>
     {shareNote ? <NoteShareDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={shareNote} /> : null}
+    {conflictingNote ? <ConfirmDialog
+      open
+      title={n.saveConflictReview}
+      description={`${n.saveConflictReviewHint}\n\n${conflictingNote.title ?? ''}\n\n${conflictingNote.markdown ?? ''}`}
+      confirmLabel={n.saveConflictOverwrite}
+      cancelLabel={n.deleteCancelLabel}
+      onConfirm={() => {
+        setConflictingNote(null);
+        void flushPendingSave(conflictingNote.remoteVersion ?? 1);
+      }}
+      onCancel={() => setConflictingNote(null)}
+    /> : null}
     <ConfirmDialog
       open={deleteConfirmOpen}
       title={n.deleteConfirmTitle}
