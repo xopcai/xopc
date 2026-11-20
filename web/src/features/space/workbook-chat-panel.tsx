@@ -1,4 +1,4 @@
-import { executionModePreferenceForProject, modelPreferenceForAgent, resolveNewSessionSpec } from '@xopcai/gateway-contract';
+import { modelPreferenceForAgent, resolveNewSessionSpec } from '@xopcai/gateway-contract';
 import { TableCellsSplit, X } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 
@@ -48,9 +48,7 @@ async function openWorkbookConversation(id: string, originId?: string, projectId
   const session = await new SessionManager().createSession({
     agentId,
     projectId: scope,
-    executionMode: project?.workspaceRoot?.trim()
-      ? executionModePreferenceForProject(preferences, project.id) ?? 'local_checkout'
-      : undefined,
+    executionMode: project?.workspaceRoot?.trim() ? 'local_checkout' : undefined,
     initialAgentConfig: model ? { model: model.modelRef, thinkingLevel: model.thinkingLevel } : undefined,
   });
   try { localStorage.setItem(key, session.key); } catch { /* Storage is optional. */ }

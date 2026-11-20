@@ -4,26 +4,21 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SWRConfig, type Cache } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { executionModePreferenceForProject } from '@xopcai/gateway-contract';
 
-import {
-  readNewSessionPreferences,
-  rememberProjectExecutionMode,
-} from '@/features/chat/session/new-session-preferences';
 import type { ProjectSessionPreparation } from '@/features/chat/session/use-chat-session-init';
 import type { Project } from '@/features/projects/api';
 import { fetchJson } from '@/lib/fetch';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { ProjectEnvironmentPicker } from '../project-environment-picker';
+import { ProjectDirectoryStatus } from '../project-directory-status';
 import { useProjectSessionComposer, type ProjectSessionComposer } from '../use-project-session-composer';
 import { commitAcceptedSend } from '../commit-accepted-send';
 import { __resetComposerInputHistoryForTests, getComposerInputHistory, recordComposerInputHistory } from '../composer-input-history';
 
 vi.mock('@/lib/fetch', () => ({ fetchJson: vi.fn() }));
 
-describe('composer project environment selection and first send', () => {
+describe('composer project directory and first send', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
   let selection: ProjectSessionComposer;
@@ -41,7 +36,7 @@ describe('composer project environment selection and first send', () => {
   function Harness({ prepared = preparation, conversationId = null, ready = false, sender = onSend }: Props) {
     selection = useProjectSessionComposer({ preparation: prepared, conversationId, ready, onSend: sender });
     return <>
-      {prepared ? <ProjectEnvironmentPicker selection={selection} /> : null}
+      {prepared ? <ProjectDirectoryStatus composer={selection} /> : null}
       <button disabled={selection.busy} onClick={() => void selection.prepareSession()}>Terminal</button>
       <button disabled={selection.busy} onClick={() => commitAcceptedSend(selection.send('Keep draft', attachments, 'off', refs), commit)}>Send</button>
     </>;
@@ -51,7 +46,6 @@ describe('composer project environment selection and first send', () => {
   ));
   const submit = () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Send')!;
   const openTerminal = () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Terminal')!;
-  const select = () => container.querySelector<HTMLButtonElement>('button[aria-label="New session environment"]')!;
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -70,18 +64,10 @@ describe('composer project environment selection and first send', () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 
-  it('shows only two icon choices without a creation button or eager allocation', async () => {
+  it('checks only the project directory and waits for first send to create a session', async () => {
     await render();
-    expect(select().textContent).toBe('Local');
-    expect(select().querySelector('svg')).not.toBeNull();
-    expect(container.textContent).not.toContain('Create session');
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    await act(async () => select().click());
-    const options = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')];
-    expect(options.map((option) => option.textContent)).toEqual(['Local', 'New local worktree']);
-    expect(options.every((option) => option.querySelectorAll('svg').length === 2)).toBe(true);
-    await act(async () => options[1].click());
-    expect(select().textContent).toBe('New local worktree');
+    expect(fetchJson).toHaveBeenCalledWith(expect.stringContaining('/environment-options?mode=local_checkout'));
+    expect(container.textContent).toBe('TerminalSend');
     expect(create).not.toHaveBeenCalled();
     expect(onSend).not.toHaveBeenCalled();
   });
@@ -106,7 +92,6 @@ describe('composer project environment selection and first send', () => {
     await act(async () => { submit().click(); submit().click(); });
     expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout', undefined, expect.any(Function));
     expect(submit().disabled).toBe(true);
-    expect(select().disabled).toBe(true);
     expect(commit).not.toHaveBeenCalled();
     act(() => create.mock.calls[0][2]!('created'));
     expect(selection.getDraftHandoffTarget()).toBe('created');
@@ -146,7 +131,7 @@ describe('composer project environment selection and first send', () => {
     expect(commit).toHaveBeenCalledExactlyOnceWith('existing');
   });
 
-  it('prepares the selected project environment from the terminal action without sending a draft', async () => {
+  it('prepares the project directory from the terminal action without sending a draft', async () => {
     let finish!: (key: string) => void;
     create.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     await render();
@@ -161,61 +146,50 @@ describe('composer project environment selection and first send', () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
-  it('preserves the selected mode and draft after failure; retries without a Local fallback', async () => {
-    create.mockRejectedValueOnce(new Error('Worktree creation failed'));
+  it('keeps the draft after a local preparation failure so it can be sent again', async () => {
+    create.mockRejectedValueOnce(new Error('Directory unavailable'));
     await render();
-    await act(async () => selection.changeMode('managed_worktree'));
     await act(async () => submit().click());
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Worktree creation failed');
-    expect(select().textContent).toBe('New local worktree');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Directory unavailable');
     expect(commit).not.toHaveBeenCalled();
-    expect(submit().disabled).toBe(false);
     await act(async () => submit().click());
     await render({ prepared: null, conversationId: 'created', ready: true });
-    expect(create.mock.calls.map(([mode]) => mode)).toEqual(['managed_worktree', 'managed_worktree']);
+    expect(create.mock.calls.map(([mode]) => mode)).toEqual(['local_checkout', 'local_checkout']);
     expect(onSend).toHaveBeenCalledOnce();
     expect(commit).toHaveBeenCalledOnce();
   });
 
-  it('hides environment selection for a directory without a usable Git commit and sends locally', async () => {
-    vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true, worktreeUnavailableReason: 'git_commit_required' } });
+  it('sends from a dirty project directory despite a remembered Worktree choice', async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true, worktreeUnavailableReason: 'uncommitted_changes' } });
+    localStorage.setItem('xopc.webchat.newSessionPreferences', JSON.stringify({
+      version: 1, executionModeByProject: { code: 'managed_worktree' },
+    }));
     await render();
-    expect(select()).toBeNull();
     expect(container.querySelector('[role="status"]')).toBeNull();
-    expect(selection.mode).toBe('local_checkout');
     expect(selection.allowed).toBe(true);
     await act(async () => submit().click());
     expect(create).toHaveBeenCalledExactlyOnceWith('local_checkout', undefined, expect.any(Function));
   });
 
-  it('keeps dirty Worktree unavailable without showing an inline warning', async () => {
-    vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: true, worktreeUnavailableReason: 'uncommitted_changes' } });
-    rememberProjectExecutionMode(preparation.project.id, 'managed_worktree');
+  it('shows an unavailable project directory without consuming the draft', async () => {
+    vi.mocked(fetchJson).mockResolvedValue({ options: { localAvailable: false } });
     await render();
-    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('Project directory unavailable');
     expect(selection.allowed).toBe(false);
-    expect(container.querySelector('[aria-label="Recheck environment"]')).not.toBeNull();
-    await act(async () => selection.changeMode('local_checkout'));
-    expect(select().textContent).toBe('Local');
-    expect(container.querySelector('[role="status"]')).toBeNull();
-    expect(selection.allowed).toBe(true);
-    await act(async () => select().click());
-    const choices = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')];
-    expect(choices[1]?.disabled).toBe(true);
+    await act(async () => submit().click());
+    expect(create).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it('waits for preflight and allows retrying a failed check without consuming the draft', async () => {
     let fail!: (error: Error) => void;
     vi.mocked(fetchJson).mockReturnValueOnce(new Promise((_resolve, reject) => { fail = reject; }));
     await render();
-    expect(select()).toBeNull();
     await act(async () => submit().click());
     expect(create).not.toHaveBeenCalled();
     await act(async () => fail(new Error('Unavailable')));
     expect(container.querySelector('[role="status"]')?.textContent).toContain('Could not check');
-    expect(select().disabled).toBe(true);
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Recheck environment"]')!.click());
-    expect(select().disabled).toBe(false);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Recheck project directory"]')!.click());
     expect(selection.allowed).toBe(true);
     expect(commit).not.toHaveBeenCalled();
   });
@@ -238,26 +212,6 @@ describe('composer project environment selection and first send', () => {
     await render({ prepared: null, conversationId: 'created', ready: true });
     expect(onSend).not.toHaveBeenCalled();
     expect(commit).not.toHaveBeenCalled();
-  });
-
-  it('restores each new preparation default rather than leaking another project choice', async () => {
-    await render();
-    await act(async () => selection.changeMode('managed_worktree'));
-    expect(select().textContent).toBe('New local worktree');
-    await render({ prepared: { ...preparation, project: { ...preparation.project, id: 'another' } } });
-    expect(select().textContent).toBe('Local');
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it('remembers the last successfully created mode for each project', async () => {
-    await render();
-    await act(async () => selection.changeMode('managed_worktree'));
-    await act(async () => submit().click());
-    expect(executionModePreferenceForProject(readNewSessionPreferences(), 'code')).toBe('managed_worktree');
-
-    const nextPreparation = { ...preparation };
-    await render({ prepared: nextPreparation, conversationId: null });
-    expect(select().textContent).toBe('New local worktree');
   });
 
   it('leaves an existing session submission and explicit thinking level unchanged', async () => {

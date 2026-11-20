@@ -57,6 +57,8 @@ describe('project environment options', () => {
     expect(await (await request()).json()).toEqual({ ok: true, options: { localAvailable: true } });
     writeFileSync(join(repo, 'untracked.txt'), 'draft');
     expect(await (await request()).json()).toMatchObject({ options: { localAvailable: true, worktreeUnavailableReason: 'uncommitted_changes' } });
+    const localOnly = await app.request('/api/projects/project-a/environment-options?mode=local_checkout');
+    expect(await localOnly.json()).toEqual({ ok: true, options: { localAvailable: true } });
     expect(new ExecutionEnvironmentStore().list()).toEqual([]);
     expect(git('rev-parse', 'HEAD')).toBe(head);
     expect(git('status', '--porcelain')).toContain('untracked.txt');

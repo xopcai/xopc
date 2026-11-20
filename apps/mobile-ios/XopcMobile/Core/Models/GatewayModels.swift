@@ -209,7 +209,8 @@ struct ConversationSelection: Codable, Hashable, Identifiable, Sendable {
             model: nil,
             thinkingLevel: nil,
             projectId: project.id,
-            executionMode: project.workspaceRoot == nil ? nil : executionMode ?? project.executionMode ?? "local_checkout"
+            executionMode: project.workspaceRoot?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? executionMode ?? "local_checkout" : nil
         )
     }
 

@@ -21,14 +21,14 @@ export interface ComposerContextBarProps {
   workspacePath?: string | null;
   canChangeWorkspace: boolean;
   disabled: boolean;
-  environmentPicker?: ReactNode;
+  directoryStatus?: ReactNode;
   onProjectChange: (projectId: string | null) => void;
   onWorkspaceChange: (path: string) => Promise<void>;
 }
 
 const controlClass = 'inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-sm text-fg transition-[background-color,transform] hover:bg-surface-hover active:scale-95 disabled:pointer-events-none disabled:opacity-45 motion-reduce:transition-none motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
-export function ComposerContextBar({ conversationId, project, workspacePath, canChangeWorkspace, disabled, environmentPicker, onProjectChange, onWorkspaceChange }: ComposerContextBarProps) {
+export function ComposerContextBar({ conversationId, project, workspacePath, canChangeWorkspace, disabled, directoryStatus, onProjectChange, onWorkspaceChange }: ComposerContextBarProps) {
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const copy = m.chat.composerContext;
@@ -84,8 +84,8 @@ export function ComposerContextBar({ conversationId, project, workspacePath, can
             onChange={(id) => { if (id !== (project?.id ?? '')) onProjectChange(id || null); }}
           />
         </div>
-        {project ? environmentPicker : null}
-        {!environmentPicker && project && environment && (environment.headSha || environment.branch) ? <span className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full bg-surface-hover px-2.5 text-sm text-fg" title={environment.rootPath}>
+        {project ? directoryStatus : null}
+        {project && conversationId && environment && (environment.headSha || environment.branch) ? <span className="inline-flex h-8 min-w-0 items-center gap-1.5 rounded-full bg-surface-hover px-2.5 text-sm text-fg" title={environment.rootPath}>
           {environment.kind === 'managed_worktree' ? <Shuffle className="size-4 shrink-0" strokeWidth={1.75} aria-hidden /> : <Laptop className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />}
           {environment.kind === 'managed_worktree' ? 'Worktree' : 'Local'}
         </span> : null}

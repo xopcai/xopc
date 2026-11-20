@@ -7,7 +7,6 @@ import { drainProjectWorkspaceCreation, queueProjectWorkspaceCreation } from './
 import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { ExecutionEnvironmentStore } from '../execution-environments/store.js';
 import { listPendingProjectUnderstandingRuns } from '../work-discovery/repository.js';
-import { inferProjectExecutionMode } from './project-kind.js';
 import { bindSessionToProject, listProjectConversationIds, unbindSessionFromProject } from './session-bind.js';
 import type { CreateProjectInput, Project, ProjectHealth, ProjectListQuery, ProjectListResult, ProjectMilestone, ProjectUpdate, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
 import {
@@ -82,14 +81,8 @@ export class ProjectService {
     }
     const name = input.name?.trim() || inferProjectNameFromWorkspaceRoot(workspaceRoot) || '';
     const slug = input.slug?.trim() || this.store.generateSlug(name);
-    const executionMode = input.executionMode ?? inferProjectExecutionMode({
-      name,
-      description: input.description,
-      workspaceRoot,
-      projectKind: input.projectKind,
-    });
     return runSqliteWriteTransaction(() => {
-      const project = this.store.create({ ...input, name, slug, workspaceRoot, executionMode });
+      const project = this.store.create({ ...input, name, slug, workspaceRoot });
       if (needsWorkspaceCreation && workspaceRoot) queueProjectWorkspaceCreation(project.id, workspaceRoot);
       emitActivity({
         type: 'project.created',

@@ -34,6 +34,7 @@ export function registerExecutionEnvironmentRoutes(
     const options: ProjectEnvironmentOptions = {
       localAvailable: Boolean(root && await stat(root).then((entry) => entry.isDirectory()).catch(() => false)),
     };
+    if (c.req.query('mode') === 'local_checkout') return c.json({ ok: true, options });
     if (!options.localAvailable) {
       options.worktreeUnavailableReason = 'workspace_unavailable';
     } else {

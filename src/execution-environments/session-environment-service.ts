@@ -57,7 +57,7 @@ export class SessionEnvironmentService {
         `Project ${input.project.id} needs a fixed workspace before an execution environment can be created`,
       );
     }
-    const mode = input.mode ?? input.project.executionMode;
+    const mode = input.mode ?? 'local_checkout';
     const reserved = input.environmentId ? this.store.get(input.environmentId) : undefined;
     if (reserved && (reserved.projectId !== input.project.id || reserved.kind !== mode)) {
       throw new ExecutionEnvironmentConflictError('Reserved execution environment does not match the project and mode');

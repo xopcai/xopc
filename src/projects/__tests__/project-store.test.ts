@@ -226,12 +226,12 @@ describe('ProjectService', () => {
     expect(inference.confidence).toBeGreaterThan(0.7);
   });
 
-  it('defaults coding Git projects to managed worktrees', () => {
+  it('defaults coding Git projects to the project directory', () => {
     const workspaceRoot = join(stateDir, 'coding-repository');
     mkdirSync(join(workspaceRoot, '.git'), { recursive: true });
     writeFileSync(join(workspaceRoot, 'package.json'), '{"name":"coding-repository"}');
 
-    expect(projects.create({ workspaceRoot }).executionMode).toBe('managed_worktree');
+    expect(projects.create({ workspaceRoot }).executionMode).toBe('local_checkout');
   });
 
   it('defaults non-Git projects to the local checkout', () => {

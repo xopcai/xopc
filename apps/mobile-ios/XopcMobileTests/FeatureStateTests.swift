@@ -246,7 +246,8 @@ struct FeatureStateTests {
         #expect(conversation.isDraft)
         #expect(conversation.projectId == project.id)
         #expect(conversation.agentId == "ios-agent")
-        #expect(conversation.executionMode == "managed_worktree")
+        #expect(conversation.executionMode == "local_checkout")
+        #expect(ConversationSelection.projectDraft(project: project, executionMode: "managed_worktree").executionMode == "managed_worktree")
     }
 }
 

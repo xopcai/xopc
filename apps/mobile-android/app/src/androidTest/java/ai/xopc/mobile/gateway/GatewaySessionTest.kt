@@ -246,7 +246,7 @@ class GatewaySessionTest {
     }
   }
 
-  @Test fun projectDraftUsesGatewayExecutionModeAndRepairsOlderDraftBeforeSend() {
+  @Test fun projectDraftUsesProjectFolderAndRepairsOlderDraftBeforeSend() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val credentials = AndroidSecureStore(context, "project_mode_credentials_test_v1",
       "xopc.gateway.credentials.project.mode.test.v1")
@@ -265,7 +265,7 @@ class GatewaySessionTest {
       fake.projectExecutionMode = "managed_worktree"
       val newDraft = repository.createDraft("research", "project-1")
       draftIds += newDraft.conversationId
-      assertEquals("managed_worktree", newDraft.executionMode)
+      assertEquals("local_checkout", newDraft.executionMode)
 
       fake.projectWorkspaceRoot = null
       val olderDraft = repository.createDraft("research", "project-1")
@@ -274,7 +274,7 @@ class GatewaySessionTest {
       fake.projectWorkspaceRoot = "/workspace"
       repository.prepareDraftModel(olderDraft.conversationId)
       repository.send(olderDraft.conversationId, "Project kickoff", TurnClaim("endpoint", "claim"))
-      assertEquals("managed_worktree", fake.lastInputCommand!!.getJSONObject("creation")
+      assertEquals("local_checkout", fake.lastInputCommand!!.getJSONObject("creation")
         .getJSONObject("execution").getString("mode"))
     } finally {
       draftIds.forEach { local.remove("draft.$gatewayId.$it") }

@@ -255,6 +255,26 @@ it('receives strict first inputs through a listening authenticated Gateway, repl
     expect(readFileSync(file, 'utf8')).toBe('uncommitted');
     finish({ status: 'ok', summary: '' });
     await vi.waitFor(() => expect(coordinator.snapshot(projectConversationId).activeRunId).toBeUndefined());
+
+    const defaultConversationId = randomUUID();
+    const defaultProjectInput = { ...firstProjectInput, creation: { ...firstProjectInput.creation, execution: null } };
+    const submitDefault = () => fetch(`${base}/api/sessions/${defaultConversationId}/inputs`, {
+      method: 'POST', headers, body: JSON.stringify(defaultProjectInput),
+    });
+    const localAccepted = await submitDefault();
+    expect(localAccepted.status, await localAccepted.clone().text()).toBe(202);
+    const localReceipt = (await localAccepted.json()).payload.receipt;
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(8));
+    expect(new SessionEnvironmentService().get(defaultConversationId)).toMatchObject({
+      kind: 'local_checkout', projectId: project.id, rootPath: project.workspaceRoot,
+    });
+    const replayedLocal = await submitDefault();
+    expect(replayedLocal.status, await replayedLocal.clone().text()).toBe(202);
+    expect((await replayedLocal.json()).payload.receipt.inputId).toBe(localReceipt.inputId);
+    expect(readFileSync(file, 'utf8')).toBe('uncommitted');
+    finish({ status: 'ok', summary: '' });
+    await vi.waitFor(() => expect(coordinator.snapshot(defaultConversationId).activeRunId).toBeUndefined());
+    expect(execute).toHaveBeenCalledTimes(8);
   } finally {
     await preparations.stop();
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

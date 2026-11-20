@@ -4445,7 +4445,7 @@ class GatewayViewModel internal constructor(application: Application, private va
       val active = session.currentProfile()
       check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }
       conversations.createDraft(project.defaultAgentId?.takeIf(String::isNotBlank) ?: "main",
-        projectId, if (project.workspaceRoot.isNullOrBlank()) null else project.executionMode)
+        projectId, "local_checkout".takeIf { !project.workspaceRoot.isNullOrBlank() })
     }
     val active = mutableState.value.profile
     check(active?.gatewayId == profile.gatewayId && active.deviceId == profile.deviceId) { "GATEWAY_CHANGED" }

@@ -21,7 +21,7 @@ import { PageContextPreview } from '@/features/chat/context/page-context-preview
 import { pageContextDrafts, pageContextDraftKey } from '@/features/chat/context/page-context-draft';
 import { usePersonalUnread } from '@/features/personal-agent/use-personal-unread';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
-import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-environment-picker';
+import { ProjectDirectoryStatus } from '@/features/chat/composer/project-directory-status';
 import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { MAX_COMPOSER_CONTEXT_REFS } from '@/features/chat/composer/composer.types';
@@ -1465,8 +1465,8 @@ export function ChatPage({ beforeSend, prepareSendContext, onRunSettled, compose
                 composerContext={!agentSetup && !embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {
                   project: scopedProject,
                   disabled: updatingContext || projectComposer.busy || (isSessionTransitioning && !session.projectPreparation),
-                  environmentPicker: session.projectPreparation ? (
-                    <ProjectEnvironmentPicker selection={projectComposer} />
+                  directoryStatus: session.projectPreparation ? (
+                    <ProjectDirectoryStatus composer={projectComposer} />
                   ) : undefined,
                   workspacePath: session.effectiveWorkspacePath,
                   canChangeWorkspace: canChangeWorkingDirectory,

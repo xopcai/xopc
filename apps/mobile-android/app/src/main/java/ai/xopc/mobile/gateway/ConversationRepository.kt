@@ -430,10 +430,7 @@ class ConversationRepository(private val gateway: GatewaySession, context: Conte
     require(project.getString("id") == projectId && project.getString("name").isNotBlank()) {
       "INVALID_PROJECT"
     }
-    if (project.isNull("workspaceRoot") || project.optString("workspaceRoot").isBlank()) return null
-    val mode = project.optString("executionMode").ifBlank { "local_checkout" }
-    require(mode in setOf("local_checkout", "managed_worktree")) { "INVALID_EXECUTION_MODE" }
-    return mode
+    return "local_checkout".takeIf { !project.isNull("workspaceRoot") && project.optString("workspaceRoot").isNotBlank() }
   }
 
   fun list(search: String = "", offset: Int = 0, limit: Int = 20,

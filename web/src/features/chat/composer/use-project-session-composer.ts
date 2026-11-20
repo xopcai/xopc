@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  executionModePreferenceForProject,
-  type ProjectEnvironmentOptions,
-  type LocalSessionOptions,
-} from '@xopcai/gateway-contract';
+import type { ProjectEnvironmentOptions } from '@xopcai/gateway-contract';
 import useSWR from 'swr';
 
-import {
-  readNewSessionPreferences,
-  rememberProjectExecutionMode,
-} from '@/features/chat/session/new-session-preferences';
 import type { ProjectSessionPreparation } from '@/features/chat/session/use-chat-session-init';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -17,7 +9,6 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 import type { ComposerSendHandler } from './composer.types';
 
-type ExecutionMode = NonNullable<LocalSessionOptions['executionMode']>;
 type PendingCreation = {
   preparation: ProjectSessionPreparation;
   baseUrl: string;
@@ -28,7 +19,7 @@ type PendingCreation = {
   resolve: (conversationId: string | null) => void;
 };
 
-/** Keeps the first draft in the composer until its chosen environment is ready. */
+/** Keeps the first draft in the composer until its project session is ready. */
 export function useProjectSessionComposer({ preparation, conversationId, ready, onSend }: {
   preparation: ProjectSessionPreparation | null;
   conversationId: string | null;
@@ -37,7 +28,6 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
 }) {
   const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
-  const [selection, setSelection] = useState<{ preparation: ProjectSessionPreparation; mode: ExecutionMode } | null>(null);
   const [failure, setFailure] = useState<{ preparation: ProjectSessionPreparation; message: string } | null>(null);
   const [pending, setPending] = useState<PendingCreation | null>(null);
   const pendingRef = useRef<PendingCreation | null>(null);
@@ -48,18 +38,10 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
   boundConversationRef.current = conversationId;
   const { data: options, error, isValidating, mutate } = useSWR(
     preparation ? ['project-environment-options', baseUrl, token, preparation.project.id] : null,
-    async () => (await fetchJson<{ options: ProjectEnvironmentOptions }>(apiUrl(`/api/projects/${encodeURIComponent(preparation!.project.id)}/environment-options`))).options,
+    async () => (await fetchJson<{ options: ProjectEnvironmentOptions }>(apiUrl(`/api/projects/${encodeURIComponent(preparation!.project.id)}/environment-options?mode=local_checkout`))).options,
     { keepPreviousData: false, revalidateOnFocus: false, shouldRetryOnError: false },
   );
-  const supportsWorktree = Boolean(options?.localAvailable && options.worktreeUnavailableReason !== 'git_commit_required' && options.worktreeUnavailableReason !== 'workspace_unavailable');
-  const mode: ExecutionMode = supportsWorktree
-    ? selection?.preparation === preparation
-      ? selection.mode
-      : preparation
-        ? executionModePreferenceForProject(readNewSessionPreferences(), preparation.project.id) ?? 'local_checkout'
-        : 'local_checkout'
-    : 'local_checkout';
-  const allowed = Boolean(!error && options?.localAvailable && (mode === 'local_checkout' || !options.worktreeUnavailableReason));
+  const allowed = Boolean(!error && options?.localAvailable);
   const finish = useCallback((accepted: boolean) => {
     const current = pendingRef.current;
     pendingRef.current = null;
@@ -118,12 +100,11 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
     };
     pendingRef.current = current;
     setPending(current);
-    void Promise.resolve().then(() => preparation.create(mode, undefined, (key) => {
+    void Promise.resolve().then(() => preparation.create('local_checkout', undefined, (key) => {
       // The route can commit before the creation promise resumes.
       if (pendingRef.current === current) current.openedConversationId = key;
     })).then((key) => {
       if (pendingRef.current !== current) return;
-      rememberProjectExecutionMode(preparation.project.id, mode);
       const created = { ...current, conversationId: key };
       pendingRef.current = created;
       setPending(created);
@@ -134,7 +115,7 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
       finish(false);
     });
     return completion;
-  }, [allowed, baseUrl, finish, isValidating, mode, mutate, preparation, conversationId, token]);
+  }, [allowed, baseUrl, finish, isValidating, mutate, preparation, conversationId, token]);
 
   const send: ComposerSendHandler = async (...args) => {
     let targetConversationId = conversationId;
@@ -158,14 +139,9 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
   };
 
   return {
-    mode, options, checking: isValidating, checkFailed: Boolean(error), allowed,
+    options, checking: isValidating, checkFailed: Boolean(error), allowed,
     busy: Boolean(pending && (pending.preparation === preparation || (pending.conversationId && pending.conversationId === conversationId))),
     failure: failure?.preparation === preparation ? failure.message : null,
-    changeMode: (next: ExecutionMode) => {
-      if (!preparation || pendingRef.current) return;
-      setSelection({ preparation, mode: next });
-      setFailure(null);
-    },
     retry: () => void mutate(),
     getDraftHandoffTarget,
     prepareSession,

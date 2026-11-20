@@ -15,7 +15,7 @@ import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
 import { getPersonalAgentByConversation } from '../../personal-agent/repository.js';
 import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 
-function validateCreation(service: GatewayService, creation: SessionCreation): void {
+function validateCreation(service: GatewayService, creation: SessionCreation): SessionCreation['execution'] {
   if (creation.workingDirectory !== undefined) {
     if (creation.projectId) throw new Error('A project controls the working directory');
     const normalized = normalizeWorkingDirectoryInput(creation.workingDirectory);
@@ -26,10 +26,10 @@ function validateCreation(service: GatewayService, creation: SessionCreation): v
   const agentId = resolveProjectAgentId({ config: service.currentConfig, projects: service.projects,
     explicitAgentId: creation.agentId, projectId: creation.projectId ?? undefined });
   if (agentId !== creation.agentId) throw new Error('Invalid agent identity');
-  if (project?.workspaceRoot?.trim() && !creation.execution) throw new Error('Select an execution environment');
   if (creation.execution && !project?.workspaceRoot?.trim()) throw new Error('Project requires a workspace');
   const model = resolveModel(creation.model);
   if (!getModelThinking(model).options.includes(creation.thinkingLevel as ModelThinkingValue)) throw new Error('Unsupported model thinking level');
+  return project?.workspaceRoot?.trim() ? { mode: 'local_checkout' } : null;
 }
 
 export async function receiveSessionCommand(service: GatewayService, conversationId: string, principalId: string,
@@ -56,8 +56,9 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
       if (session.transcriptId !== command.expectedTranscriptId) throw new SessionCommandError('SESSION_CHANGED', 'Conversation transcript changed');
     }
     if (service.voiceRealtime?.hasConversation(conversationId)) throw new SessionCommandError('SESSION_BUSY', 'End the voice call before sending text');
+    let defaultExecution: SessionCreation['execution'] = null;
     if ('creation' in command) {
-      try { validateCreation(service, command.creation); }
+      try { defaultExecution = validateCreation(service, command.creation); }
       catch (error) { throw new SessionCommandError('BAD_REQUEST', error instanceof Error ? error.message : 'Invalid creation configuration'); }
     }
     const preparedInput = 'input' in command ? await service.prepareSessionCommandInput({
@@ -68,7 +69,7 @@ export async function receiveSessionCommand(service: GatewayService, conversatio
       thinking: configuredThinking ?? (command.kind === 'start' ? command.creation.thinkingLevel : (await service.sessions.getAgentConfig(conversationId)).thinkingLevel),
       origin: command.origin.type === 'endpoint' ? { type: 'endpoint', endpointId: command.origin.endpointId } : command.origin,
     }) : undefined;
-    const receipt = acceptSessionCommand({ conversationId, principalId, command, preparedInput,
+    const receipt = acceptSessionCommand({ conversationId, principalId, command, preparedInput, defaultExecution,
       attachProject: (id, projectId) => service.projects.attachSession(id, projectId) });
     if ('kind' in command && command.kind === 'append' && receipt.inputId) {
       await service.dispatchAcceptedSessionInput(conversationId, receipt.inputId);

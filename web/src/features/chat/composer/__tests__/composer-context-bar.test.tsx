@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchProjects } from '@/features/projects/api';
 import { ComposerContextBar, type ComposerContextBarProps } from '../composer-context-bar';
-import { ProjectEnvironmentPicker } from '../project-environment-picker';
 
 const { refreshContext, environment } = vi.hoisted(() => {
   const environment: {
@@ -107,18 +106,15 @@ describe('ComposerContextBar', () => {
     expect(refreshContext).not.toHaveBeenCalled();
   });
 
-  it('places environment selection beside the project selector in the same context bar', async () => {
+  it('shows directory errors beside the project selector for a new chat', async () => {
     await render({
       conversationId: null, project: { id: 'code', name: 'xopc' }, canChangeWorkspace: false,
-      environmentPicker: <ProjectEnvironmentPicker selection={{ mode: 'managed_worktree', options: { localAvailable: true }, allowed: true, busy: false, checkFailed: false, checking: false, failure: null, changeMode: vi.fn(), retry: vi.fn(), prepareSession: vi.fn(), getDraftHandoffTarget: vi.fn(), send: vi.fn() }} />,
+      directoryStatus: <p role="status">Project directory unavailable</p>,
     });
     const projectSelector = container.querySelector<HTMLButtonElement>('[aria-label="Change the project for this chat"]')!;
-    const environmentSelector = container.querySelector<HTMLButtonElement>('[aria-label="New session environment"]')!;
-    expect(environmentSelector.parentElement).toBe(projectSelector.parentElement!.parentElement);
+    expect(container.querySelector('[role="status"]')?.parentElement).toBe(projectSelector.parentElement!.parentElement);
     expect(projectSelector.disabled).toBe(false);
-    expect(environmentSelector.disabled).toBe(false);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(container.textContent).not.toContain('Create session');
-    expect(environmentSelector.querySelector('svg')).not.toBeNull();
   });
 });

@@ -9,7 +9,6 @@ import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
 import {
   buildProjectLoopOverview,
   inferProjectKind,
-  inferProjectExecutionMode,
   inferSuggestedProjectDefaultAgentId,
   ProjectWorkspaceConflictError,
   ProjectWorkspaceMissingError,
@@ -226,8 +225,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       config: service.currentConfig,
       ...input,
     });
-    const executionMode = inferProjectExecutionMode(input);
-    return c.json({ ok: true, inference, defaultAgentId, executionMode });
+    return c.json({ ok: true, inference, defaultAgentId, executionMode: 'local_checkout' });
   });
 
   authenticated.post('/api/projects/resolve-workspace', async (c) => {

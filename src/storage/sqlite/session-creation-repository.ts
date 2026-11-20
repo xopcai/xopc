@@ -67,6 +67,7 @@ export function acceptSessionCommand(input: {
   conversationId: string; principalId: string; command: SessionInputCommand | SessionMaterializeCommand;
   preparedInput?: Omit<Parameters<typeof insertSessionInput>[0], 'conversationId' | 'id' | 'clientMessageId' | 'expectedTranscriptId'>;
   config?: SessionAgentConfig;
+  defaultExecution?: SessionCreation['execution'];
   sourceChannel?: 'webchat' | 'tui';
   attachProject?: (conversationId: string, projectId: string) => void;
 }): SessionInputReceipt {
@@ -80,7 +81,9 @@ export function acceptSessionCommand(input: {
     const pending = db.prepare(`SELECT count(*) AS count FROM session_inputs WHERE conversation_id=?
       AND status IN ('queued','running','injecting','interrupted')`).get(conversationId) as { count: number };
     if (input.preparedInput && pending.count >= 10) throw new SessionCommandError('QUEUE_FULL', 'Input queue is full');
-    const creation = 'creation' in command ? command.creation : undefined;
+    const creation = 'creation' in command ? {
+      ...command.creation, execution: command.creation.execution ?? input.defaultExecution ?? null,
+    } : undefined;
     let session = getSessionMetadata(conversationId);
     if (creation) {
       if (session) throw new SessionCommandError('CONVERSATION_EXISTS', 'Conversation already exists');

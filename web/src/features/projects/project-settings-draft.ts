@@ -6,7 +6,6 @@ export function projectSettingsDraft(project: Project) {
     description: project.description ?? '',
     status: project.status,
     defaultAgentId: project.defaultAgentId ?? '',
-    executionMode: project.executionMode,
     workspaceRoot: project.workspaceRoot ?? '',
     brief: project.brief ?? '',
     instructions: project.instructions ?? '',

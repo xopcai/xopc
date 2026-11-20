@@ -198,7 +198,7 @@ export class XopcChatRepository {
       const result = JSON.parse(await gatewaySession.request('/api/projects/' + encodeURIComponent(projectId))) as XopcProjectResult;
       if (!result.project?.id || typeof result.project.name !== 'string') throw new Error('INVALID_PROJECT');
       if (!effectiveAgentId) effectiveAgentId = result.project.defaultAgentId || '';
-      if (!effectiveExecutionMode && result.project.workspaceRoot) effectiveExecutionMode = result.project.executionMode || 'local_checkout';
+      if (!effectiveExecutionMode && result.project.workspaceRoot?.trim()) effectiveExecutionMode = 'local_checkout';
     }
     effectiveAgentId = effectiveAgentId || 'main';
     const body: XopcCreateSession = { channel: 'webchat', projectId, agentId: effectiveAgentId, executionMode: effectiveExecutionMode };

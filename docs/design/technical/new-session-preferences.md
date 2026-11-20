@@ -11,7 +11,7 @@ Clients resolve one `NewSessionIntent` before creating a session:
 3. A generic new-chat entry uses the last opened chat scope and selected agent.
 4. A project entry uses the project's default agent unless the entry explicitly names an agent.
 5. Model and thinking preferences are keyed by agent. Opening an existing chat never overwrites them; an explicit model or thinking change does.
-6. Execution-mode preferences are keyed by project and remembered after successful session creation. A project without a remembered choice defaults to Local.
+6. New project conversations use the project directory by default. Previously saved project or browser environment preferences do not change this default.
 
 Web stores the versioned preference in `localStorage`. Mobile stores it in MMKV, isolated by gateway profile. TUI stores it in `tui-settings.json`, isolated by local/remote gateway identity.
 
@@ -23,17 +23,17 @@ Project removal is explicit: clients create a new session with no `projectId`; m
 
 Empty-shell reuse and in-flight request coalescing are client concerns. Cache identity includes gateway, agent, and project scope; forced and temporary creation are not coalesced with reusable creation.
 
-## Local environment selection
+## Project directory
 
-Web project-page, sidebar, and chat project entries use `/chat/new` rather than creating a session before navigation. For a project with a configured workspace, this route shows one environment pill beside the project selector in the chat input's context bar. Its menu has only Local and New local worktree, with icons and a selected checkmark. The project's last successfully created execution mode is the initial selection; a project without a remembered choice starts on Local. Selecting a mode does not create a session or directory; the first send does. There is no separate creation button or environment form. The header context panel stays closed by default and displays context and the actual session environment, without a second picker. Projects without a fixed workspace retain ordinary chat creation.
+Web project-page, sidebar, and chat project entries use `/chat/new`. For a project with a configured workspace, the composer checks the directory on the Gateway host and creates a local session draft when the user first sends or opens a session resource. Projects without a fixed workspace use the ordinary chat flow.
 
-`GET /api/projects/:projectId/environment-options` is a read-only, workspace-read-scoped preflight. It checks directory availability, accessible Git history, and uncommitted changes without allocating any environment. An unavailable remembered Worktree choice remains selected but cannot be submitted; selecting Local is explicit. Local means the machine running the Gateway, not necessarily the browser's machine.
+`GET /api/projects/:projectId/environment-options?mode=local_checkout` checks only directory availability. Explicit Worktree flows can use the full preflight to check Git history and uncommitted changes.
 
-The first send passes `executionMode` through the existing `POST /api/sessions` flow, which validates again and binds the environment before returning. Submission waits for the created session's model configuration, then sends through that session's current handler. The input, attachments, and note references are consumed only when submission is accepted. Navigation away cancels the pending send. Explicit mode requests never reuse an empty shell; request coalescing includes gateway credentials and mode. Worktrees start at current HEAD, remain detached, and do not copy uncommitted changes. Creation failure preserves the choice and draft, surfaces the server reason, and never retries in a different mode. Composer deep links populate the prepared draft for confirmation instead of bypassing the environment choice.
+The first input includes the resolved session configuration. When a client omits an execution mode for a project with a workspace, the Gateway binds the project directory before running the first input. The input, attachments, and note references are consumed when submission is accepted. Navigation away or a change of Gateway credentials cancels pending client handoff.
 
-Existing sessions display their actual environment and link to a new conversation in another environment. They are not relocated, rebound, or deleted by this UI. Navigation or credential changes invalidate stale preparation callbacks. No environment schema, remote execution, branch picker, auto-stash, or Git write actions are added.
+Existing sessions display their bound environment. Implementation delegation creates a separate Worktree from a Git commit. Explicit Worktree requests remain available through environment management.
 
-While a project chat is being prepared, the composer resolves the agent's remembered model or effective default and displays its supported effort. Model and effort changes stay in the draft without allocating a session or resetting the environment choice. First send passes that exact selection as `initialAgentConfig`; successful creation remembers explicit edits. An unavailable selection remains visible and must be replaced before sending.
+While a project chat is being prepared, the composer resolves the agent's remembered model or effective default and displays its supported effort. Model and effort changes stay in the draft and are sent with its session configuration. Successful creation remembers explicit edits.
 
 ## Concrete chat model selection
 

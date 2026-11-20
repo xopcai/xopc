@@ -13,7 +13,7 @@ A project session uses one local execution environment:
 - `local_checkout`: the user's existing directory, which may be shared by sessions. xopc never deletes its files.
 - `managed_worktree`: an isolated, detached, locked Git worktree owned by xopc and bound to at most one session.
 
-New coding projects backed by Git default to managed worktrees. Other projects and existing projects use the local checkout unless the user changes the project setting. The setting applies to future sessions.
+New project conversations use the project's local checkout by default, including conversations in coding repositories. Implementation delegation provisions a separate managed worktree for the task. Existing session bindings and explicit Worktree requests retain their execution environment.
 
 Tools use the bound local directory directly. This feature has no remote host registry, execution transport, cross-host handoff, or workspace snapshot format. Bindings belong to sessions, not hypothetical future run types.
 
@@ -37,7 +37,7 @@ State changes append diagnostic events. There are no busy, snapshotting, handoff
 
 ## Product behavior
 
-- Project settings choose managed worktree or local checkout.
+- The regular project chat composer uses the project directory without asking for an environment choice.
 - Session creation provisions and binds the environment before returning the session.
 - Session inspection shows the effective directory and locks working-directory editing.
 - Environment APIs list, inspect, reconcile, release, and delete local environments.
