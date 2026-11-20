@@ -167,7 +167,7 @@ export struct XopcProjectSpaceView {
     { key: 'overview', label: $r('app.string.project_overview'), id: 'project-tab-overview' },
     { key: 'sessions', label: $r('app.string.conversations'), id: 'project-tab-sessions' },
     { key: 'tasks', label: $r('app.string.tasks'), id: 'project-tab-tasks' },
-    { key: 'notes', label: $r('app.string.library_title'), id: 'project-tab-notes' },
+    { key: 'notes', label: $r('app.string.notes'), id: 'project-tab-notes' },
     { key: 'automations', label: $r('app.string.automations'), id: 'project-tab-automations' }
   ];
 

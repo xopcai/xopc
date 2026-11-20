@@ -1,13 +1,12 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { common } from '@kit.AbilityKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcNote, XopcNoteAttachment, XopcNoteHistoryEntry, XopcNoteIndexEntry, XopcNoteStatus } from '../model/note';
+import { XopcNote, XopcNoteAttachment, XopcNoteHistoryEntry, XopcNoteStatus } from '../model/note';
 import { XopcHistoryMedia } from '../model/chat';
 import { XopcShareResult } from '../model/share';
 import { shareService } from '../service/shareService';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
 import { XopcMarkdownView } from './MarkdownView';
-import { XopcBrandLoading, XopcEmptyHint, XopcHubRow, XopcListSkeleton, XopcPaginationFooter } from './MobileComponents';
+import { XopcBrandLoading, XopcEmptyHint, XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { XopcNativeNoteEditor } from './NativeNoteEditor';
 import { XopcShareResultView } from './ShareResultView';
 import { XopcVoiceCapture } from '../service/voiceCapture';
@@ -23,7 +22,6 @@ type XopcNoteSheet = 'history' | 'ai' | 'share' | 'tags' | 'more' | 'attachment'
 export struct XopcNotesView {
   @Local colors: XopcThemeColors = appThemeColors;
   @Param initialId: string = '';
-  @Param initialStatus: XopcNoteStatus | '' = '';
   @Param createOnAppear: boolean = false;
   @Param projectId: string = '';
   @Param embedded: boolean = false;
@@ -47,7 +45,7 @@ export struct XopcNotesView {
   }
 
   private async start(context: common.Context): Promise<void> {
-    await this.model.start(context, this.initialId, this.initialStatus, this.projectId);
+    await this.model.start(context, this.initialId, '', this.projectId);
     if (this.createOnAppear && !this.model.draft) this.model.create(this.projectId);
   }
 
@@ -92,10 +90,6 @@ export struct XopcNotesView {
 
   private back(): void {
     if (this.model.editing) { void this.model.closeEditor(); return; }
-    // Direct detail/create routes return to their caller instead of exposing another note list.
-    if (this.embedded || this.initialId || this.createOnAppear) { this.onExit(); return; }
-    if (this.model.openingId) { this.model.backToList(); return; }
-    if (this.model.selected || this.model.draft) { this.model.backToList(); return; }
     this.onExit();
   }
 
@@ -189,96 +183,7 @@ export struct XopcNotesView {
           .id('note-more').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
           .accessibilityText($r('app.string.more')).onClick((): void => { this.openSheet('more'); })
       }
-      if (!this.model.selected && !this.model.draft && !this.model.openingId) {
-        Button() { SymbolGlyph($r('sys.symbol.plus')).fontSize(22).fontColor([this.colors.accent]) }
-          .width(44).height(44).padding(0).backgroundColor(this.colors.accentSoft).borderRadius(22)
-          .accessibilityText($r('app.string.new_note')).onClick((): void => { this.model.create(); })
-      }
     }.width('100%').padding({ left: 12, right: 16, top: 10, bottom: 8 })
-  }
-
-  @Builder
-  list() {
-    Column({ space: 12 }) {
-      Row({ space: 8 }) {
-        TextInput({ text: this.model.search, placeholder: $r('app.string.search_notes') })
-          .layoutWeight(1).height(44).backgroundColor(this.colors.input)
-          .borderRadius(this.colors.corner(14)).fontColor(this.colors.foreground).placeholderColor(this.colors.tertiary)
-          .onChange((value: string): void => { this.model.search = value; })
-          .onSubmit((): void => { void this.model.list(false, true); })
-      }.width('100%')
-      XopcSegmentedTabs({ options: [
-        { key: '', label: $r('app.string.note_all') },
-        { key: 'inbox', label: $r('app.string.inbox') },
-        { key: 'processed', label: $r('app.string.note_processed') },
-        { key: 'archived', label: $r('app.string.archive') }
-      ], selectedKey: this.model.status, swipeToSelect: true,
-        onSelect: (key: string): void => {
-          this.model.status = key as XopcNoteStatus | '';
-          void this.model.list(false, true);
-        } })
-      if (this.model.loading) {
-        XopcListSkeleton()
-      } else if (!this.model.items.length) {
-        XopcEmptyHint({ message: $r('app.string.no_notes') })
-      } else {
-        List({ space: 12 }) {
-          ForEach(this.model.items, (item: XopcNoteIndexEntry) => {
-            ListItem() {
-              Button({ type: ButtonType.Normal }) {
-                Row({ space: 12 }) {
-                  Column({ space: 5 }) {
-                    Row({ space: 6 }) {
-                      if (item.pinned) { SymbolGlyph($r('sys.symbol.pin')).fontSize(13).fontColor([this.colors.accent]) }
-                      Text(item.kind === 'voice' && /^Discussion · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(item.title) ? $r('app.string.note_voice_option') : item.title || $r('app.string.untitled')).fontSize(17).fontWeight(FontWeight.Medium)
-                        .fontColor(this.colors.foreground).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    }.width('100%')
-                    Text(item.snippet ?? '').fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
-                      .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                    Row({ space: 8 }) {
-                      Text(new Date(item.updatedAt).toLocaleDateString()).fontSize(12).fontColor(this.colors.tertiary)
-                      Text(this.statusLabel(item.status)).fontSize(12).fontColor(this.colors.tertiary)
-                    }.width('100%')
-                    if (item.tags?.length) {
-                      Text(item.tags.slice(0, 2).map((tag: string): string => '#' + tag).join('  '))
-                        .fontSize(12).fontColor(this.colors.accent).maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                    }
-                  }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                  SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
-                  if (this.model.selecting) {
-                    SymbolGlyph(this.model.selectedIds.includes(item.id) ? $r('sys.symbol.checkmark_circle_fill')
-                      : $r('sys.symbol.circle')).fontSize(21).fontColor([this.colors.accent])
-                  }
-                }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
-              }.width('100%').constraintSize({ minHeight: 96 }).padding(0).backgroundColor(this.colors.panel)
-                .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
-                .onClick((): void => {
-                  if (this.model.selecting) this.model.toggleSelection(item.id); else void this.model.open(item.id);
-                }, SEGMENTED_PAGE_TAP_SLOP_VP)
-                .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => { this.model.toggleSelection(item.id); }))
-            }
-          }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
-          if (this.model.hasMore) {
-            ListItem() {
-              XopcPaginationFooter({ loadingPage: this.model.loadingMore, failedPage: !!this.model.error,
-                onLoad: (): void => { void this.model.list(true); } })
-            }
-          }
-        }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
-      }
-      if (this.model.selecting) {
-        Row({ space: 4 }) {
-          Button($r('app.string.pin')).layoutWeight(1).height(44).enabled(!this.model.saving)
-            .onClick((): void => { void this.model.batch('pin'); })
-          Button($r('app.string.archive')).layoutWeight(1).height(44).enabled(!this.model.saving)
-            .onClick((): void => { void this.model.batch('archive'); })
-          Button($r('app.string.delete')).layoutWeight(1).height(44).fontColor(this.colors.danger).enabled(!this.model.saving)
-            .onClick((): void => { void this.model.batch('delete'); })
-          Button($r('app.string.cancel')).layoutWeight(1).height(44).onClick((): void => { this.model.clearSelection(); })
-        }.width('100%').padding({ top: 4 })
-      }
-    }.layoutWeight(1).width('100%').padding({ left: 20, right: 20, bottom: 16 }).alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -599,8 +504,8 @@ export struct XopcNotesView {
           Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
             .width('100%').padding({ left: 20, right: 20, bottom: 8 })
           if (!this.model.loading && !this.model.openingId && !this.model.editing && !this.model.selected
-            && !this.model.hasMore) {
-            Button($r('app.string.retry')).onClick((): void => { void this.model.list(false, true); })
+            && this.initialId) {
+            Button($r('app.string.retry')).onClick((): void => { void this.model.open(this.initialId); })
           }
         }
         if (this.model.openingId) {
@@ -609,8 +514,8 @@ export struct XopcNotesView {
           this.editor()
         } else if (this.model.selected) {
           this.detail()
-        } else {
-          this.list()
+        } else if (!this.model.error) {
+          XopcListSkeleton()
         }
     }.width('100%').height('100%').backgroundColor(this.colors.surface)
       .bindSheet($$this.sheetOpen, this.activeSheetContent, {

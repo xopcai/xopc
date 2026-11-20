@@ -149,6 +149,9 @@ export struct XopcChatSidebar {
             this.shortcut($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
           }
           ListItem() {
+            this.shortcut($r('app.string.notes'), $r('sys.symbol.doc_text'), 'notes-list')
+          }
+          ListItem() {
             this.shortcut($r('app.string.library_title'), $r('sys.symbol.doc'), 'library')
           }
           ListItem() {

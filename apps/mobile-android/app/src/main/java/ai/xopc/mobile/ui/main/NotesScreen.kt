@@ -47,6 +47,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
@@ -64,6 +65,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +101,8 @@ import java.text.DateFormat
 import java.util.Date
 import java.io.File
 
+private val NOTE_LINE_PREFIX = Regex("""^(?:#{1,6} |[-*+] \[[ xX]\] |[-*+] |\d+[.)] |> )""")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
@@ -121,17 +125,12 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     throw IllegalStateException("MEDIA_UNAVAILABLE")
   },
   onLoadAttachment: suspend (String, String) -> ByteArray = { _, _ -> byteArrayOf() },
-  onStartVoice: (() -> Unit)? = null,
   onNoteFileSpaces: suspend () -> List<ManagedFileSpace> = { emptyList() },
   onNoteFiles: suspend (String?, String, String) -> List<ManagedFile> = { _, _, _ -> emptyList() },
-  onNoteFileText: suspend (String) -> String = { "" },
   onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
   onExit: (() -> Unit)? = null,
   initialNoteId: String? = null,
-  initialProjectDraft: Boolean = false,
-  deliveries: List<ProgressDelivery> = emptyList(),
-  deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
-  onRefreshDeliveries: () -> Unit = {}, onOpenDelivery: (ProgressDelivery) -> Unit = {}) {
+  initialProjectDraft: Boolean = false) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
   val scope = rememberCoroutineScope()
@@ -174,7 +173,9 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia(), ::attach)
   val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::attach)
   val uriHandler = LocalUriHandler.current
-  var query by rememberSaveable(state.gatewayId) { mutableStateOf("") }
+  var query by rememberSaveable(state.gatewayId) { mutableStateOf(state.search) }
+  val notesListState = rememberLazyListState()
+  val filtersOpen = rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var searchOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   fun toggleSearch() {
     searchOpen = !searchOpen
@@ -188,18 +189,14 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   var selectedId by rememberSaveable(state.gatewayId) { mutableStateOf(initialNoteId) }
   var editorOpen by rememberSaveable(state.gatewayId) { mutableStateOf(initialProjectDraft) }
-  var creationSheetOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var fileBrowserOpen by rememberSaveable(state.gatewayId) { mutableStateOf(false) }
   var fileSpaceId by rememberSaveable(state.gatewayId) { mutableStateOf<String?>(null) }
   var filePath by rememberSaveable(state.gatewayId) { mutableStateOf("") }
-  val previewFromLibrary = remember(state.gatewayId) { mutableStateOf(false) }
   var selectedFile by remember(state.gatewayId) { mutableStateOf<ManagedFile?>(null) }
   var fileRefreshRevision by rememberSaveable(state.gatewayId) { mutableStateOf(0) }
   var fileSpaces by remember(state.gatewayId) { mutableStateOf<List<ManagedFileSpace>>(emptyList()) }
   var recentFileItems by remember(state.gatewayId) { mutableStateOf<List<ManagedFile>?>(null) }
   var folderItems by remember(state.gatewayId, fileSpaceId, filePath) { mutableStateOf<List<ManagedFile>>(emptyList()) }
-  val libraryFilesRevision = remember(state.gatewayId) { mutableStateOf(0) }
-  val libraryFiles = rememberLibraryFiles(state.gatewayId, query, libraryFilesRevision.value, onNoteFiles)
   var fileContent by remember(state.gatewayId, selectedFile?.id) { mutableStateOf<ByteArray?>(null) }
   var fileContentLoading by remember(state.gatewayId, selectedFile?.id) {
     mutableStateOf(selectedFile?.let {
@@ -273,11 +270,6 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
   }
   val closeFile = {
     when {
-      previewFromLibrary.value -> {
-        previewFromLibrary.value = false
-        selectedFile = null
-        fileBrowserOpen = false
-      }
       selectedFile != null -> selectedFile = null
       filePath.isNotEmpty() -> filePath = filePath.substringBeforeLast('/', "")
       fileSpaceId != null -> fileSpaceId = null
@@ -342,7 +334,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           selectedId != null -> closeNote
           else -> onExit
         }
-        IconButton(onClick = back, modifier = Modifier.testTag("library-back")) {
+        IconButton(onClick = back, modifier = Modifier.testTag("notes-back")) {
           Icon(painterResource(R.drawable.action_chevron_left), stringResource(R.string.progress_back))
         }
       }
@@ -361,14 +353,12 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.width(72.dp), maxLines = 1)
       } else {
-        Text(stringResource(R.string.library_title), style = MaterialTheme.typography.headlineSmall,
+        Text(stringResource(R.string.tab_notes),
+          style = MaterialTheme.typography.headlineSmall,
           fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(end = 12.dp),
           maxLines = 1, overflow = TextOverflow.Ellipsis)
-        PageSearchButton(searchOpen, R.string.library_search, "notes-open-search", ::toggleSearch)
-        IconButton(onClick = { fileBrowserOpen = true }, modifier = Modifier.testTag("notes-files")) {
-          ActionIcon(R.drawable.action_folder, size = 24.dp, contentDescription = stringResource(R.string.notes_files))
-        }
-        IconButton(onClick = { creationSheetOpen = true },
+        PageSearchButton(searchOpen, R.string.notes_search, "notes-open-search", ::toggleSearch)
+        IconButton(onClick = { editorOpen = true; onNew() },
           enabled = !state.draftLoading && !state.draftSaving,
           modifier = Modifier.testTag("notes-new")) {
           ActionIcon(R.drawable.action_add, size = 24.dp, contentDescription = stringResource(R.string.notes_new))
@@ -377,7 +367,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     }
     val visibleFileSpaces = if (fileSpaceId == null) fileSpaces else emptyList()
     val visibleFileItems = if (fileSpaceId != null) folderItems else
-      recentFileItems ?: if (query.isBlank()) libraryFiles.items else emptyList()
+      recentFileItems.orEmpty()
     if (fileBrowserOpen) NotesFilesContent(visibleFileSpaces, visibleFileItems, selectedFile, fileContent,
       if (selectedFile != null) fileContentLoading else filesLoading,
       selectedFile == null && filesError, { fileRefreshRevision++ }, { space ->
@@ -393,22 +383,7 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
       NotesListContent(state, query, { query = it },
       { onSearch(query.trim(), state.status) }, { status -> onSearch(query.trim(), status) },
       { id -> selectedId = id; onOpen(id) }, onLoadMore, Modifier.weight(1f),
-      { id -> editorOpen = true; onOpenDraft(id) }, { fileBrowserOpen = true }, libraryFiles.items,
-      { file ->
-        fileBrowserOpen = true
-        if (file.kind == "directory") {
-          selectedFile = null
-          fileSpaceId = file.spaceId
-          filePath = file.relativePath
-        } else {
-          previewFromLibrary.value = true
-          selectedFile = file
-        }
-      },
-      deliveries = deliveries, deliveriesLoading = deliveriesLoading, deliveryError = deliveryError,
-      onRefreshDeliveries = onRefreshDeliveries, onOpenDelivery = onOpenDelivery,
-      filesLoading = libraryFiles.loading, filesError = libraryFiles.error,
-      onRefreshFiles = { libraryFilesRevision.value++ }, searchOpen = searchOpen)
+      { id -> editorOpen = true; onOpenDraft(id) }, searchOpen = searchOpen, listState = notesListState, filtersOpen = filtersOpen)
     } else NotesDetailContent(state, selectedId!!, { onOpen(selectedId!!) }, Modifier.weight(1f),
       { editorOpen = true; onEditNote() }, { moreOpen = true }, {
         historyTimestamp = null
@@ -628,39 +603,6 @@ internal fun NotesScreen(state: NotesUiState, insets: PaddingValues,
     } }, confirmButton = { TextButton(onClick = noteVoice::cancel) {
       Text(stringResource(R.string.progress_cancel))
     } })
-  if (creationSheetOpen) ModalBottomSheet(onDismissRequest = { creationSheetOpen = false },
-    modifier = Modifier.testTag("notes-create-sheet")) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp)) {
-      Text(stringResource(R.string.notes_new), style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
-      Card(onClick = { creationSheetOpen = false; editorOpen = true; onNew() },
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("notes-create-text")) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp),
-          horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-          Icon(painterResource(R.drawable.tab_notes), contentDescription = null)
-          Text(stringResource(R.string.notes_create_text), modifier = Modifier.weight(1f))
-          ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
-        }
-      }
-      Card(onClick = { creationSheetOpen = false; onStartVoice?.invoke() },
-        enabled = onStartVoice != null,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).testTag("notes-create-voice")) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp),
-          horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-          Icon(painterResource(R.drawable.action_microphone), contentDescription = null,
-            tint = MaterialTheme.colorScheme.error)
-          Column(modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.notes_create_voice))
-            Text(stringResource(R.string.notes_create_voice_hint),
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant)
-          }
-          ActionIcon(R.drawable.action_chevron_right, size = 16.dp)
-        }
-      }
-    }
-  }
   val detail = state.detail?.takeIf { it.id == selectedId }
   if (historyOpen && detail != null) ModalBottomSheet(onDismissRequest = { historyOpen = false },
     modifier = Modifier.testTag("note-history-sheet")) {
@@ -862,13 +804,16 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
     val caret = if (selected.isEmpty()) start + prefix.length else start + replacement.length
     updateBody(TextFieldValue(text, TextRange(caret)))
   }
-  fun setHeading(level: Int) {
-    val start = bodyValue.text.lastIndexOf('\n', (bodyValue.selection.min - 1).coerceAtLeast(0)) + 1
-    val end = bodyValue.text.indexOf('\n', start).let { if (it < 0) bodyValue.text.length else it }
-    val line = bodyValue.text.substring(start, end).replace(Regex("^#{1,3} "), "")
-    val heading = "#".repeat(level) + " " + line
-    val text = bodyValue.text.replaceRange(start, end, heading)
-    updateBody(TextFieldValue(text, TextRange((start + heading.length).coerceAtMost(text.length))))
+  fun formatLine(prefix: String) {
+    val selection = bodyValue.selection
+    val start = bodyValue.text.lastIndexOf('\n', selection.min - 1) + 1
+    val existing = NOTE_LINE_PREFIX.find(bodyValue.text.substring(start))?.value.orEmpty()
+    val replacement = if (existing == prefix) "" else prefix
+    val text = bodyValue.text.replaceRange(start, start + existing.length, replacement)
+    val delta = replacement.length - existing.length
+    val selectionStart = maxOf(start + replacement.length, selection.start + delta)
+    val selectionEnd = maxOf(start + replacement.length, selection.end + delta)
+    updateBody(TextFieldValue(text, TextRange(selectionStart, selectionEnd)))
   }
   Column(modifier = modifier,
     verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -919,13 +864,14 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
           modifier = tool.testTag("notes-format-${label.lowercase()}")) { Text(label) }
       }
       (1..3).forEach { level ->
-        TextButton(onClick = { setHeading(level) }, enabled = !blocked,
+        TextButton(onClick = { formatLine("#".repeat(level) + " ") }, enabled = !blocked,
           modifier = tool.testTag("notes-heading-$level")) { Text("H$level") }
       }
-      listOf("•" to "- ", "☐" to "- [ ] ", "❝" to "> ", "</>" to "`code`",
-        "🔗" to "[link](https://)", "—" to "\n---\n").forEach { (label, value) ->
-        TextButton(onClick = { insertMarkdown(value) }, enabled = !blocked,
-          modifier = tool) { Text(label) }
+      listOf("•" to "- ", "1." to "1. ", "☐" to "- [ ] ", "❝" to "> ").forEach { (label, prefix) ->
+        TextButton(onClick = { formatLine(prefix) }, enabled = !blocked, modifier = tool) { Text(label) }
+      }
+      listOf("</>" to "`code`", "🔗" to "[link](https://)", "—" to "\n---\n").forEach { (label, value) ->
+        TextButton(onClick = { insertMarkdown(value) }, enabled = !blocked, modifier = tool) { Text(label) }
       }
       }
     }
@@ -997,59 +943,12 @@ internal fun NoteDraftContent(state: NotesUiState, onChange: (String, String) ->
   }
 }
 
-private data class LibraryFiles(val items: List<ManagedFile> = emptyList(), val loading: Boolean = true,
-  val error: Boolean = false)
-
-@Composable
-private fun rememberLibraryFiles(gatewayId: String?, query: String, refresh: Int,
-  load: suspend (String?, String, String) -> List<ManagedFile>): LibraryFiles {
-  val result = remember(gatewayId, query) { mutableStateOf(LibraryFiles()) }
-  LaunchedEffect(gatewayId, query, refresh) {
-    result.value = result.value.copy(loading = true, error = false)
-    try {
-      if (query.isNotBlank()) delay(350)
-      result.value = LibraryFiles(items = load(null, "", query.trim()), loading = false)
-    } catch (cancelled: kotlinx.coroutines.CancellationException) {
-      throw cancelled
-    } catch (_: Exception) {
-      result.value = result.value.copy(loading = false, error = true)
-    }
-  }
-  return result.value
-}
-
 @Composable
 internal fun NotesListContent(state: NotesUiState, search: String, onSearchChange: (String) -> Unit,
   onSubmit: () -> Unit, onStatus: (String) -> Unit, onOpen: (String) -> Unit,
   onLoadMore: () -> Unit, modifier: Modifier = Modifier, onOpenDraft: (String) -> Unit = {},
-  onOpenFiles: (() -> Unit)? = null, searchFiles: List<ManagedFile> = emptyList(),
-  onOpenSearchFile: (ManagedFile) -> Unit = {},
-  deliveries: List<ProgressDelivery> = emptyList(),
-  deliveriesLoading: Boolean = false, deliveryError: Boolean = false,
-  onRefreshDeliveries: () -> Unit = {}, onOpenDelivery: (ProgressDelivery) -> Unit = {},
-  filesLoading: Boolean = false, filesError: Boolean = false, onRefreshFiles: () -> Unit = {},
-  searchOpen: Boolean = false) {
-  var category by rememberSaveable(state.gatewayId) { mutableStateOf("all") }
-  val showNotes = category == "all" || category == "notes"
-  val showFiles = category == "all" || category == "files"
-  val showDeliveries = category == "all" || category == "deliveries"
-  val query = search.trim()
-  val preview = category == "all" && query.isEmpty()
-  val visibleFiles = if (preview) searchFiles.take(3) else searchFiles
-  val matchingDeliveries = deliveries.filter {
-    query.isEmpty() || it.title.contains(query, ignoreCase = true) || it.summary.contains(query, ignoreCase = true)
-  }
-  val visibleDeliveries = if (preview) matchingDeliveries.take(3) else matchingDeliveries
-  val libraryCategories = listOf("all" to R.string.notes_all, "notes" to R.string.tab_notes,
-    "files" to R.string.notes_files, "deliveries" to R.string.library_results).map { (id, label) ->
-    SegmentOption(id, stringResource(label), "library-category-$id")
-  }
-  fun selectCategory(id: String) {
-    category = id
-    if (id != "notes" && state.status.isNotEmpty()) onStatus("")
-  }
-  val libraryListState = rememberLazyListState()
-  var filtersOpen by rememberSaveable { mutableStateOf(false) }
+  searchOpen: Boolean = false, listState: LazyListState = rememberLazyListState(),
+  filtersOpen: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) }) {
   Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
     if (searchOpen) Row(modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
       .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14)),
@@ -1061,94 +960,56 @@ internal fun NotesListContent(state: NotesUiState, search: String, onSearchChang
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
         decorationBox = { inner -> Box {
-          if (search.isEmpty()) Text(stringResource(R.string.library_search),
+          if (search.isEmpty()) Text(stringResource(R.string.notes_search),
             color = MaterialTheme.colorScheme.onSurfaceVariant)
           inner()
         } })
       IconButton(onClick = onSubmit, enabled = !state.loading,
         modifier = Modifier.size(48.dp).testTag("notes-refresh")) {
-        Icon(painterResource(R.drawable.action_search), stringResource(R.string.library_search))
+        Icon(painterResource(R.drawable.action_search), stringResource(R.string.notes_search))
       }
     }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
-      verticalAlignment = Alignment.CenterVertically) {
-      SegmentedTabs(libraryCategories, category, ::selectCategory, Modifier.weight(1f), swipeToSelect = true)
-      IconButton(onClick = { filtersOpen = !filtersOpen }, enabled = showNotes,
-        modifier = Modifier.size(48.dp)
-          .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14))
-          .testTag("notes-filter-menu")) {
-        Icon(painterResource(R.drawable.action_filter), stringResource(R.string.notes_filter),
-          tint = if (filtersOpen || state.status.isNotEmpty()) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant)
-      }
+    IconButton(onClick = { filtersOpen.value = !filtersOpen.value },
+      modifier = Modifier.align(Alignment.End).size(48.dp)
+        .background(MaterialTheme.colorScheme.surfaceContainer, themedCorners(14))
+        .testTag("notes-filter-menu")) {
+      Icon(painterResource(R.drawable.action_filter), stringResource(R.string.notes_filter),
+        tint = if (filtersOpen.value || state.status.isNotEmpty()) MaterialTheme.colorScheme.primary
+          else MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    if (showNotes && filtersOpen) SegmentedTabs(
+    if (filtersOpen.value) SegmentedTabs(
       listOf("" to R.string.notes_all, "inbox" to R.string.notes_inbox,
         "processed" to R.string.notes_processed, "archived" to R.string.notes_archived).map { (status, label) ->
         SegmentOption(status, stringResource(label), "notes-filter-${status.ifEmpty { "all" }}")
       }, state.status, onStatus,
     )
-    LazyColumn(state = libraryListState, modifier = Modifier.weight(1f).testTag("notes-list")
-      .swipePageSelection(libraryCategories.map { it.value }, category, !searchOpen, ::selectCategory),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
+    LazyColumn(state = listState, modifier = Modifier.weight(1f).testTag("notes-list"),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
       contentPadding = PaddingValues(bottom = 20.dp)) {
-      if (category == "all" && !state.loading && !filesLoading && !deliveriesLoading &&
-        !state.listError && !filesError && !deliveryError && state.items.isEmpty() && state.drafts.isEmpty() &&
-        visibleFiles.isEmpty() && visibleDeliveries.isEmpty()) {
-        item { Text(stringResource(R.string.library_empty), modifier = Modifier.testTag("notes-empty")) }
+      if (state.loading && state.items.isEmpty()) item {
+        BrandLoadingPanel(modifier = Modifier.testTag("notes-loading"))
       }
-      if (showNotes) {
-        if (state.loading && state.items.isEmpty()) item {
-          BrandLoadingPanel(modifier = Modifier.testTag("notes-loading"))
-        }
-        if (state.listError) item { OutlinedButton(onClick = onSubmit,
-          modifier = Modifier.testTag("notes-retry")) {
-          Text(stringResource(R.string.progress_load_failed))
-        } }
-        if (category == "notes" && !state.loading && !state.listError && state.items.isEmpty()) item {
-          if (state.drafts.isEmpty()) Text(stringResource(R.string.notes_empty),
-            modifier = Modifier.testTag("notes-empty"))
-        }
-        items(state.drafts, key = { "draft-${it.id}" }) { draft ->
-          NoteDraftCard(draft, onOpenDraft)
-        }
-        items(if (preview) state.items.take(3) else state.items, key = { it.id }) { note -> NoteCard(note, onOpen) }
-        if (state.hasMore) item {
-          OutlinedButton(onClick = { if (preview) category = "notes"; onLoadMore() }, enabled = !state.loadingMore,
-            modifier = Modifier.fillMaxWidth().testTag("notes-load-more")) {
-            if (state.loadingMore) BrandLoadingIndicator(extent = 20.dp)
-            Text(stringResource(R.string.notes_load_more))
-          }
-        }
-        if (state.moreError) item { Text(stringResource(R.string.notes_more_error),
-          color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("notes-more-error")) }
+      if (state.listError) item { OutlinedButton(onClick = onSubmit,
+        modifier = Modifier.testTag("notes-retry")) {
+        Text(stringResource(R.string.progress_load_failed))
+      } }
+      if (!state.loading && !state.listError && state.items.isEmpty()) item {
+        if (state.drafts.isEmpty()) Text(stringResource(R.string.notes_empty),
+          modifier = Modifier.testTag("notes-empty"))
       }
-      if (showFiles && (visibleFiles.isNotEmpty() || filesLoading || filesError || category == "files")) {
-        item { Text(stringResource(R.string.notes_files), style = MaterialTheme.typography.titleSmall) }
-        if (filesLoading && visibleFiles.isEmpty()) item { BrandLoadingPanel() }
-        if (filesError) item { OutlinedButton(onClick = onRefreshFiles) { Text(stringResource(R.string.assistant_context_retry)) } }
-        items(visibleFiles, key = { "file-${it.id}" }) { file -> ManagedFileCard(file, onOpenSearchFile) }
-        if (category == "files" && onOpenFiles != null) item {
-          OutlinedButton(onClick = onOpenFiles) { Text(stringResource(R.string.library_browse_files)) }
+      items(state.drafts, key = { "draft-${it.id}" }) { draft ->
+        NoteDraftCard(draft, onOpenDraft)
+      }
+      items(state.items, key = { it.id }) { note -> NoteCard(note, onOpen) }
+      if (state.hasMore) item {
+        OutlinedButton(onClick = onLoadMore, enabled = !state.loadingMore,
+          modifier = Modifier.fillMaxWidth().testTag("notes-load-more")) {
+          if (state.loadingMore) BrandLoadingIndicator(extent = 20.dp)
+          Text(stringResource(R.string.notes_load_more))
         }
       }
-      if (showDeliveries && (visibleDeliveries.isNotEmpty() || deliveriesLoading || deliveryError || category == "deliveries")) {
-        item { Text(stringResource(R.string.library_recent_results), style = MaterialTheme.typography.titleSmall) }
-        if (deliveriesLoading && visibleDeliveries.isEmpty()) item { BrandLoadingPanel() }
-        if (deliveryError) item { OutlinedButton(onClick = onRefreshDeliveries) { Text(stringResource(R.string.assistant_context_retry)) } }
-        if (category == "deliveries" && !deliveriesLoading && !deliveryError && visibleDeliveries.isEmpty()) item {
-          Text(stringResource(R.string.library_no_results))
-        }
-        items(visibleDeliveries, key = { "delivery-${it.id}" }) { delivery ->
-          Card(onClick = { onOpenDelivery(delivery) }, modifier = Modifier.fillMaxWidth()
-            .testTag("library-delivery-${delivery.id}")) {
-            Column(Modifier.padding(12.dp)) {
-              Text(delivery.title, style = MaterialTheme.typography.titleSmall)
-              if (delivery.summary.isNotBlank()) Text(delivery.summary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-          }
-        }
-      }
+      if (state.moreError) item { Text(stringResource(R.string.notes_more_error),
+        color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("notes-more-error")) }
     }
   }
 }
@@ -1266,6 +1127,9 @@ private fun NoteCard(note: NoteSummary, onOpen: (String) -> Unit) {
         val statusLabel = noteStatusLabel(note.status)
         Text("${DateFormat.getDateInstance().format(Date(note.updatedAt))} · $statusLabel",
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (note.projectNames.isNotEmpty()) Text(note.projectNames.joinToString(" · "),
+          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (note.tags.isNotEmpty()) Text(note.tags.take(2).joinToString("  ") { "#$it" },
           style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
           maxLines = 1, overflow = TextOverflow.Ellipsis)

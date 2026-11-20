@@ -41,6 +41,8 @@ struct ChatSidebarView: View {
                         .accessibilityIdentifier("chat-sidebar-workbench")
                     row("自动化", symbol: "clock") { onNavigate(.automations) }
                         .accessibilityIdentifier("chat-sidebar-automations")
+                    row("笔记", symbol: "note.text") { onNavigate(.notes) }
+                        .accessibilityIdentifier("chat-sidebar-notes")
                     row("资料库", symbol: "doc") { onNavigate(.library) }
                         .accessibilityIdentifier("chat-sidebar-library")
                     row("capability_title", symbol: "puzzlepiece") { onNavigate(.capabilities) }

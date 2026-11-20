@@ -343,6 +343,8 @@ struct AppRootView: View {
             WorkPagesView(configuration: configuration, initialPage: .projects, onOpenConversation: appState.openConversation)
         case .automations:
             AutomationsView(configuration: configuration, onOpenConversation: appState.openConversation)
+        case .notes:
+            NotesView(configuration: configuration, onOpenConversation: appState.openConversation)
         case .library:
             SpaceLibraryView(configuration: configuration, onOpenSource: { source in
                 if source.kind == "task", let taskID = source.taskId {

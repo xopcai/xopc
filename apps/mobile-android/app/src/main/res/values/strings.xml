@@ -402,9 +402,7 @@
     <string name="automation_discard_edit_message">Your unsaved automation changes will be lost.</string>
     <string name="automation_managed_schedule_only">This managed automation only permits schedule changes.</string>
     <string name="notes_new">New note</string>
-    <string name="notes_create_text">Text note</string>
     <string name="notes_create_voice">Voice recording</string>
-    <string name="notes_create_voice_hint">Live transcription</string>
     <string name="notes_resume_draft">Resume local draft</string>
     <string name="notes_local_draft">Local draft</string>
     <string name="notes_title">Title</string>

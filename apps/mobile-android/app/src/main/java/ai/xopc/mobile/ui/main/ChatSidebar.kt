@@ -193,8 +193,11 @@ internal fun ChatSidebar(state: ChatSidebarState, width: Dp, connection: Connect
             onDestination(HomeTab.Automations)
           }
         }
+        item("notes") {
+          SidebarRow(R.string.tab_notes, R.drawable.tab_notes, "chat-sidebar-notes") { onDestination(HomeTab.Notes) }
+        }
         item("library") {
-          SidebarRow(R.string.library_title, R.drawable.tab_notes, "chat-sidebar-library") { onDestination(HomeTab.Notes) }
+          SidebarRow(R.string.library_title, R.drawable.action_folder, "chat-sidebar-library") { onDestination(HomeTab.Library) }
         }
         item("capabilities") {
           SidebarRow(R.string.capability_title, R.drawable.action_capabilities, "chat-sidebar-capabilities") {

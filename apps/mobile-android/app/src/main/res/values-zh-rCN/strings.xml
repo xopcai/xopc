@@ -402,9 +402,7 @@
     <string name="automation_discard_edit_message">未保存的自动化修改将丢失。</string>
     <string name="automation_managed_schedule_only">此受管理自动化仅允许修改运行时间。</string>
     <string name="notes_new">新建笔记</string>
-    <string name="notes_create_text">文字笔记</string>
     <string name="notes_create_voice">语音记录</string>
-    <string name="notes_create_voice_hint">实时转写</string>
     <string name="notes_resume_draft">继续本地草稿</string>
     <string name="notes_local_draft">本地草稿</string>
     <string name="notes_title">标题</string>

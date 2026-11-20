@@ -495,7 +495,7 @@ class MainScreenTest {
       assertEquals("note-1", openedNote)
       assertEquals(HomeTab.Notes, selectedTab)
     }
-    composeTestRule.onNodeWithTag("library-back").performClick()
+    composeTestRule.onNodeWithTag("notes-back").performClick()
     composeTestRule.onNodeWithTag("message-media-media-1").performClick()
     composeTestRule.onNodeWithTag("file-preview-text").assertTextContains("hello")
     saveAcceptanceScreenshot("message-parity-preview.png", "message-media-preview")
@@ -1496,7 +1496,7 @@ class MainScreenTest {
     var loads = 0
     var opened = ""
     composeTestRule.setContent {
-      MainContent(selectedTab = HomeTab.Notes, onSelectTab = {}, connection = state.value,
+      MainScreen(connection = state.value,
         onLoadNotes = { _, _ -> loads++ }, onOpenNote = { id ->
           opened = id
           state.value = state.value.copy(notes = state.value.notes.copy(selectedId = id,
@@ -1504,40 +1504,23 @@ class MainScreenTest {
               false, emptyList(), 3L)))
         })
     }
+    composeTestRule.onNodeWithTag("chat-header-sidebar").performClick()
+    composeTestRule.onNodeWithTag("chat-sidebar-notes").performClick()
+    composeTestRule.onNodeWithTag("notes-open-search").assertIsDisplayed()
     composeTestRule.onNodeWithTag("note-note-1").performClick()
     assert(opened == "note-1")
     composeTestRule.onNodeWithTag("note-detail-body").assertExists()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("notes-back").assertDoesNotExist()
+    composeTestRule.onNodeWithTag("notes-back").assertIsDisplayed()
     androidx.test.espresso.Espresso.closeSoftKeyboard()
     androidx.test.espresso.Espresso.pressBack()
     composeTestRule.onNodeWithTag("note-note-1").assertExists()
     composeTestRule.onNodeWithTag("secondary-bottom-surface").assertDoesNotExist()
     composeTestRule.onNodeWithTag("main-tab-dock").assertDoesNotExist()
-    assert(loads == 1)
-  }
-
-  @Test fun libraryDeliveryOpensTaskDetailAndReturnsToTheSelectedFilter() {
-    val profile = GatewayProfile("gateway", "Test", "key", "device", emptyList(), "")
-    val task = ProgressTask("task-library", "Review the handoff", "", "closed", "done", 10, 10, null)
-    val delivery = ai.xopc.mobile.gateway.ProgressDelivery(
-      "task:run-1", "task", task.id, "Library delivery", "Ready to review")
-    var connection by mutableStateOf(ConnectionUiState(profile = profile,
-      progress = ProgressUiState(gatewayId = "gateway", deliveries = listOf(delivery))))
-    var requestedTask = ""
-    composeTestRule.setContent {
-      XopcTheme {
-        MainContent(selectedTab = HomeTab.Notes, onSelectTab = {}, connection = connection,
-          onOpenTaskChat = { requestedTask = it })
-      }
-    }
-    composeTestRule.onNodeWithTag("library-category-deliveries").performClick()
-    composeTestRule.onNodeWithTag("library-delivery-${delivery.id}").performClick()
-    composeTestRule.onNodeWithTag("progress-task-detail").assertDoesNotExist()
-    assertEquals(task.id, requestedTask)
-    composeTestRule.onNodeWithTag("library-category-deliveries").assertIsSelected()
-    composeTestRule.onNodeWithTag("library-delivery-${delivery.id}").assertExists()
+    assertEquals(1, loads)
+    Espresso.pressBack()
+    composeTestRule.onNodeWithTag("chat-header-sidebar").assertIsDisplayed()
   }
 
   @Test fun workbenchMenuAndSwipesStayInSync() {
@@ -2124,26 +2107,6 @@ class MainScreenTest {
     }
     Espresso.pressBack()
     composeTestRule.onNodeWithTag("message-target-project-project-1").assertIsDisplayed()
-  }
-
-  @Test fun writableWorkspaceFilesPreviewWithoutVersionControls() {
-    val file = ai.xopc.mobile.gateway.ManagedFile("file-1", "space", "brief.txt",
-      "brief.txt", "file", "text/plain", 16, "revision-1", setOf("preview", "save_version"))
-    composeTestRule.setContent {
-      NotesScreen(NotesUiState(gatewayId = "gateway"), androidx.compose.foundation.layout.PaddingValues(),
-        onSearch = { _, _ -> }, onLoadMore = {}, onOpen = {},
-        onNoteFiles = { _, _, _ -> listOf(file) },
-        onNoteFileContent = { "File contents".toByteArray() })
-    }
-    composeTestRule.onNodeWithTag("notes-files").performClick()
-    composeTestRule.waitUntil(4_000) {
-      composeTestRule.onAllNodesWithTag("notes-file-file-1").fetchSemanticsNodes().isNotEmpty()
-    }
-    composeTestRule.onNodeWithTag("notes-file-file-1").performClick()
-    composeTestRule.waitUntil(4_000) {
-      composeTestRule.onAllNodesWithText("File contents").fetchSemanticsNodes().isNotEmpty()
-    }
-    composeTestRule.onNodeWithTag("file-save-version").assertDoesNotExist()
   }
 
   @Test

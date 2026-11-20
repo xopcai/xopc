@@ -140,7 +140,7 @@ internal fun TaskChatChrome(taskId: String, title: String, state: ProgressUiStat
       IconButton(onClick = onClose, modifier = Modifier.background(headerFill, CircleShape).testTag("task-chat-close")) {
         Icon(painterResource(R.drawable.action_close), stringResource(when (returnTab) {
           HomeTab.Assistant -> R.string.task_chat_return_conversation
-          HomeTab.Progress, HomeTab.Projects, HomeTab.Automations, HomeTab.Notes -> R.string.task_chat_return_task
+          HomeTab.Progress, HomeTab.Projects, HomeTab.Automations, HomeTab.Notes, HomeTab.Library -> R.string.task_chat_return_task
           else -> R.string.task_chat_return_history
         }))
       }

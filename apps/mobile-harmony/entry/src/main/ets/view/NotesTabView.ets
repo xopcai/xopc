@@ -1,16 +1,13 @@
-import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcPageSwipe, XopcSegmentedTabs, XopcSegmentOption } from './SegmentedTabs';
+import { SEGMENTED_PAGE_TAP_SLOP_VP, XopcSegmentedTabs } from './SegmentedTabs';
 import { generatedMusicPlayback, XopcGeneratedMusicPlayback } from '../service/generatedMusicPlayback';
 import { XopcMusicMiniPlayer } from './MusicPlaybackView';
 import { XopcLocalRecording } from '../service/discussionRecordingStore';
 import { common } from '@kit.AbilityKit';
 import { appThemeColors, XopcThemeColors } from '../common/themePalette';
-import { XopcHomeDelivery, XopcMobileRoute } from '../model/home';
-import { mobileRoute } from '../common/homeProtocol';
-import { XopcNoteIndexEntry } from '../model/note';
+import { XopcMobileRoute } from '../model/home';
+import { XopcNoteIndexEntry, XopcNoteProjectReference, XopcNoteStatus } from '../model/note';
 import { XopcNoteViewModel } from '../viewmodel/noteViewModel';
-import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
-import { XopcFile } from '../model/files';
-import { XopcEmptyHint, XopcHubRow, XopcListSkeleton, XopcPageHeader, XopcPageSearchField, XopcPaginationFooter } from './MobileComponents';
+import { XopcEmptyHint, XopcListSkeleton, XopcPageHeader, XopcPageSearchField, XopcPaginationFooter } from './MobileComponents';
 import { XopcNotesView } from './NotesView';
 import { userErrorMessage } from '../common/userError';
 import { discussionCapture, XopcDiscussionCapture } from '../service/discussionCapture';
@@ -22,21 +19,13 @@ export struct XopcNotesTabView {
   @Local music: XopcGeneratedMusicPlayback = generatedMusicPlayback;
   @Local capture: XopcDiscussionCapture = discussionCapture;
   @Param activePage: boolean = false;
-  @Param deliveries: XopcHomeDelivery[] = [];
-  @Param deliveriesLoading: boolean = true;
-  @Param deliveryError: string = '';
-  @Event onRefreshDeliveries: () => void = (): void => {};
-  @Local category: string = 'all';
-  @Local gridView: boolean = true;
-  @Local menuOpen: boolean = false;
-  @Local submittedQuery: string = '';
+  @Param initialStatus: XopcNoteStatus | '' = '';
   @Local searchText: string = '';
   @Local searchOpen: boolean = false;
   @Event onExit: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onStartVoice: () => void = (): void => {};
   @Local model: XopcNoteViewModel = new XopcNoteViewModel();
-  @Local files: XopcFilesViewModel = new XopcFilesViewModel();
   @Local contentWidth: number = 0;
   @Local selectedId: string = '';
   @Local recoveriesOpen: boolean = false;
@@ -45,13 +34,11 @@ export struct XopcNotesTabView {
   private initialized: boolean = false;
 
   aboutToAppear(): void { this.updateActivity(); }
-  aboutToDisappear(): void { this.model.dispose(); this.files.dispose(); this.initialized = false; }
+  aboutToDisappear(): void { this.model.dispose(); this.initialized = false; }
 
   private searchAll(): void {
-    this.submittedQuery = this.searchText.trim();
-    this.model.search = this.submittedQuery;
+    this.model.search = this.searchText.trim();
     void this.model.list(false, true);
-    void this.files.load(this.submittedQuery, true);
   }
 
   private toggleSearch(): void {
@@ -59,33 +46,8 @@ export struct XopcNotesTabView {
     if (!this.searchOpen) {
       this.getUIContext().getFocusController().clearFocus();
       this.searchText = '';
-      if (this.submittedQuery) this.searchAll();
+      if (this.model.search) this.searchAll();
     }
-  }
-
-  @Computed get visibleFiles(): XopcFile[] {
-    if (this.category !== 'all' && this.category !== 'files') return [];
-    return this.category === 'all' && !this.submittedQuery ? this.files.items.slice(0, 3) : this.files.items;
-  }
-
-  @Computed get visibleDeliveries(): XopcHomeDelivery[] {
-    if (this.category !== 'all' && this.category !== 'deliveries') return [];
-    const query = this.submittedQuery.toLowerCase();
-    const matched = this.deliveries.filter((item: XopcHomeDelivery): boolean => {
-      const route = mobileRoute(item.href);
-      return !!route && (route.page === 'tasks' || route.page === 'automation-run' || route.page === 'files' || route.page === 'notes')
-        && (!query || item.title.toLowerCase().includes(query) || item.summary.toLowerCase().includes(query));
-    });
-    return this.category === 'all' && !query ? matched.slice(0, 3) : matched;
-  }
-
-  @Computed get showsNotes(): boolean { return this.category === 'all' || this.category === 'notes'; }
-  @Computed get showsFiles(): boolean { return this.category === 'all' || this.category === 'files'; }
-  @Computed get showsDeliveries(): boolean { return this.category === 'all' || this.category === 'deliveries'; }
-
-  private openDelivery(item: XopcHomeDelivery): void {
-    const route = mobileRoute(item.href);
-    if (route) this.onNavigate(route);
   }
 
   private openNote(id: string): void {
@@ -98,7 +60,6 @@ export struct XopcNotesTabView {
     this.pendingCreation = '';
     if (action === 'text') this.onNavigate({ page: 'note-create', itemId: '' });
     else if (action === 'voice') this.onStartVoice();
-    else if (action === 'file') this.onNavigate({ page: 'file-upload', itemId: '' });
   }
 
   @Builder
@@ -127,22 +88,17 @@ export struct XopcNotesTabView {
         }.width('100%').height(64).padding({ left: 16, right: 16 })
       }.id('notes-create-voice').width('100%').padding(0).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16)).backgroundColor(this.colors.input)
         .onClick((): void => { this.pendingCreation = 'voice'; this.creationSheetOpen = false; })
-      XopcHubRow({ heading: $r('app.string.upload'), symbol: $r('sys.symbol.arrow_up'),
-        onOpen: (): void => { this.pendingCreation = 'file'; this.creationSheetOpen = false; } })
     }.width('100%').padding({ left: 20, right: 20, top: 10, bottom: 16 })
   }
 
   @Monitor('activePage')
   updateActivity(): void {
     if (!this.activePage) return;
-    this.submittedQuery = this.model.search.trim();
-    void this.files.load(this.submittedQuery, true);
-    this.onRefreshDeliveries();
     void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext);
     if (!this.initialized) {
       this.initialized = true;
       const context = this.getUIContext().getHostContext() as common.Context;
-      void this.model.start(context);
+      void this.model.start(context, '', this.initialStatus);
     } else {
       void this.model.list();
     }
@@ -156,107 +112,42 @@ export struct XopcNotesTabView {
     void this.model.list(); this.onNavigate({ page: 'notes', itemId: noteId });
   }
 
-  @Computed get hasGrid(): boolean {
-    return this.gridView && this.category === 'all' && !this.submittedQuery
-      && this.visibleFiles.length + this.visibleDeliveries.length + this.model.items.length > 0;
-  }
-
-  @Builder
-  libraryMenu() {
-    Column({ space: 6 }) {
-      Text($r('app.string.library_title')).fontSize(20).fontWeight(FontWeight.Bold).fontColor(this.colors.foreground).width('100%')
-      XopcHubRow({ heading: $r('app.string.library_grid_view'), symbol: $r('sys.symbol.square_grid_2x2'),
-        onOpen: (): void => { this.gridView = true; this.category = 'all'; this.menuOpen = false; } })
-      XopcHubRow({ heading: $r('app.string.library_list_view'), symbol: $r('sys.symbol.list_bullet'),
-        onOpen: (): void => { this.gridView = false; this.menuOpen = false; } })
-      XopcHubRow({ heading: $r('app.string.library_browse_files'), symbol: $r('sys.symbol.folder'),
-        onOpen: (): void => { this.menuOpen = false; this.onNavigate({ page: 'files', itemId: '' }); } })
-      XopcHubRow({ heading: $r('app.string.share_center'), symbol: $r('sys.symbol.share'),
-        onOpen: (): void => { this.menuOpen = false; this.onNavigate({ page: 'sharing', itemId: '' }); } })
-    }.width('100%').padding({ top: 12, left: 20, right: 20 })
-  }
-
-  @Builder
-  libraryTile(title: ResourceStr, metadata: ResourceStr, icon: Resource, id: string, page: string) {
-    Button({ type: ButtonType.Normal }) {
-      Column({ space: 6 }) {
-        Row() {
-          SymbolGlyph(icon).fontSize(26).fontColor([this.colors.accent])
-        }.width('100%').height(53).padding({ left: 12 }).backgroundColor(this.colors.accentSoft).borderRadius(this.colors.corner(11))
-        Text(title).fontSize(15).lineHeight(21).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-        Text(metadata).fontSize(12).fontColor(this.colors.secondary).maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-      }.width('100%').height(133).alignItems(HorizontalAlign.Start).padding(10)
-    }.id('library-tile-' + page + '-' + id).width('100%').padding(0).backgroundColor(this.colors.panel)
-      .borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
-      .onClick((): void => {
-        if (page === 'notes') this.openNote(id);
-        else if (page === 'files') this.onNavigate({ page, itemId: id });
-        else {
-          const delivery = this.visibleDeliveries.find((item: XopcHomeDelivery): boolean => item.id === id);
-          if (delivery) this.openDelivery(delivery);
-        }
-      })
-  }
-
-  @Builder
-  libraryGrid() {
-    Column({ space: 10 }) {
-      Row() {
-        Text($r('app.string.library_recently_used')).fontSize(16).fontWeight(FontWeight.Medium)
-          .fontColor(this.colors.foreground).layoutWeight(1)
-        Button($r('app.string.library_list_view')).id('library-switch-list').height(44).padding(0).fontSize(13)
-          .fontColor(this.colors.accent).backgroundColor(Color.Transparent).onClick((): void => { this.gridView = false; })
-      }.width('100%')
-      Grid() {
-        ForEach(this.visibleDeliveries.slice(0, 2), (delivery: XopcHomeDelivery) => {
-          GridItem() { this.libraryTile(delivery.title, $r('app.string.library_results'), $r('sys.symbol.checkmark_circle'), delivery.id, 'deliveries') }
-        }, (delivery: XopcHomeDelivery): string => delivery.id + ':' + delivery.title)
-        ForEach(this.model.items.slice(0, 2), (note: XopcNoteIndexEntry) => {
-          GridItem() { this.libraryTile(note.title || $r('app.string.untitled'),
-            note.kind === 'voice' ? $r('app.string.note_voice_option') : $r('app.string.notes'),
-            note.kind === 'voice' ? $r('sys.symbol.mic') : $r('sys.symbol.doc_text'), note.id, 'notes') }
-        }, (note: XopcNoteIndexEntry): string => note.id + ':' + note.updatedAt)
-        ForEach(this.visibleFiles.slice(0, 2), (file: XopcFile) => {
-          GridItem() { this.libraryTile(file.name, $r('app.string.files'), $r('sys.symbol.doc'), file.id, 'files') }
-        }, (file: XopcFile): string => file.id + ':' + file.revision)
-      }.columnsTemplate('1fr 1fr').columnsGap(12).rowsGap(12).width('100%').enableScrollInteraction(false)
-        .height(Math.ceil((Math.min(this.visibleDeliveries.length, 2) + Math.min(this.model.items.length, 2)
-          + Math.min(this.visibleFiles.length, 2)) / 2) * 145)
-    }.width('100%')
-  }
-
-  private categoryOptions: XopcSegmentOption[] = [
-    { key: 'all', label: $r('app.string.library_all'), testId: 'library-filter-all' },
-    { key: 'notes', label: $r('app.string.notes'), testId: 'library-filter-notes' },
-    { key: 'files', label: $r('app.string.files'), testId: 'library-filter-files' },
-    { key: 'deliveries', label: $r('app.string.library_results'), testId: 'library-filter-deliveries' }
-  ];
-
-  private selectCategory(key: string): void {
-    this.category = key;
-    if (!this.showsNotes) this.selectedId = '';
+  private async confirmBatchDelete(): Promise<void> {
+    try {
+      const result = await this.getUIContext().getPromptAction().showDialog({
+        title: $r('app.string.delete'), message: $r('app.string.notes_delete_selection_confirm'),
+        buttons: [{ text: $r('app.string.cancel'), color: this.colors.secondary },
+          { text: $r('app.string.delete'), color: this.colors.danger }]
+      });
+      if (result.index === 1) await this.model.batch('delete');
+    } catch (error) { this.model.error = (error as Error).message; }
   }
 
   @Builder
   listPane() {
     Column() {
-      XopcPageHeader({ heading: $r('app.string.library_title'), backVisible: true, onBack: this.onExit,
-        searchId: 'library-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.library_search'),
-        onSearch: (): void => { this.toggleSearch(); }, actionLabel: $r('app.string.more'), actionIcon: $r('sys.symbol.ellipsis_circle'),
-        onAction: (): void => { this.menuOpen = true; } })
+      XopcPageHeader({ heading: $r('app.string.notes'), backVisible: true, onBack: this.onExit,
+        searchId: 'notes-open-search', searchOpen: this.searchOpen, searchLabel: $r('app.string.search_notes'),
+        onSearch: (): void => { this.toggleSearch(); }, actionLabel: $r('app.string.new_note'),
+        actionIcon: $r('sys.symbol.plus'), onAction: (): void => { this.creationSheetOpen = true; } })
       if (this.searchOpen) {
         Column() {
-          XopcPageSearchField({ searchId: 'library-search', text: this.searchText, placeholder: $r('app.string.library_search'),
+          XopcPageSearchField({ searchId: 'notes-search', text: this.searchText, placeholder: $r('app.string.search_notes'),
             onChange: (value: string): void => { this.searchText = value; }, onSubmit: (): void => { this.searchAll(); } })
         }.padding({ left: 20, right: 20, bottom: 12 })
       }
       Column() {
-        XopcSegmentedTabs({ options: this.categoryOptions, selectedKey: this.category, swipeToSelect: true,
-          onSelect: (key: string): void => { this.selectCategory(key); } })
+        XopcSegmentedTabs({ options: [
+          { key: '', label: $r('app.string.note_all') },
+          { key: 'inbox', label: $r('app.string.inbox') },
+          { key: 'processed', label: $r('app.string.note_processed') },
+          { key: 'archived', label: $r('app.string.archive') }
+        ], selectedKey: this.model.status, onSelect: (key: string): void => {
+          this.model.status = key as XopcNoteStatus | '';
+          void this.model.list(false, true);
+        } })
       }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
-      if (this.showsNotes && this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
+      if (this.capture.pendingRecordings.length && this.capture.phase !== 'recording' && this.capture.phase !== 'paused') {
         Button({ type: ButtonType.Normal }) {
           Row({ space: 8 }) {
             Text($r('app.string.capture_recovery_list')).fontSize(14).fontColor(this.colors.foreground).layoutWeight(1).textAlign(TextAlign.Start)
@@ -291,7 +182,7 @@ export struct XopcNotesTabView {
         }.width('100%').height(260)
         }
       }
-      if (this.showsNotes && this.model.error) {
+      if (this.model.error) {
         Row({ space: 12 }) {
           Text(userErrorMessage(this.model.error, 'collection')).fontSize(13).fontColor(this.colors.secondary)
             .layoutWeight(1)
@@ -300,20 +191,13 @@ export struct XopcNotesTabView {
             .onClick((): void => { void this.model.list(); })
         }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
       }
-        List({ space: 12 }) {
-          if (this.hasGrid) { ListItem() { this.libraryGrid() } } else {
-          if (this.category === 'all' && !this.model.loading && !this.files.busy && !this.deliveriesLoading
-            && !this.model.error && !this.files.error && !this.deliveryError
-            && !this.model.items.length && !this.visibleFiles.length && !this.visibleDeliveries.length) {
-            ListItem() { XopcEmptyHint({ message: $r('app.string.library_empty') }) }
+        List({ space: 8 }) {
+          if (this.model.loading && !this.model.items.length) {
+            ListItem() { XopcListSkeleton() }
+          } else if (!this.model.items.length && !this.model.error) {
+            ListItem() { XopcEmptyHint({ message: $r('app.string.no_notes') }) }
           }
-          if (this.showsNotes) {
-            if (this.model.loading && !this.model.items.length) {
-              ListItem() { XopcListSkeleton() }
-            } else if (this.category === 'notes' && !this.model.items.length && !this.model.error) {
-              ListItem() { XopcEmptyHint({ message: $r('app.string.no_notes') }) }
-            }
-          ForEach(this.category === 'all' && !this.submittedQuery ? this.model.items.slice(0, 3) : this.model.items, (item: XopcNoteIndexEntry) => {
+          ForEach(this.model.items, (item: XopcNoteIndexEntry) => {
             ListItem() {
               Button({ type: ButtonType.Normal }) {
                 Row({ space: 12 }) {
@@ -326,6 +210,11 @@ export struct XopcNotesTabView {
                     Text(item.snippet ?? '').fontSize(14).lineHeight(20).fontColor(this.colors.secondary)
                       .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
                     Text(new Date(item.updatedAt).toLocaleString()).fontSize(12).fontColor(this.colors.tertiary).width('100%')
+                    if (item.projects?.length) {
+                      Text(item.projects.map((project: XopcNoteProjectReference): string => project.name).join(' · '))
+                        .fontSize(12).fontColor(this.colors.secondary).maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+                    }
                     if (item.tags?.length) {
                       Text(item.tags.slice(0, 2).map((tag: string): string => '#' + tag).join('  '))
                         .fontSize(12).fontColor(this.colors.accent).maxLines(1)
@@ -333,84 +222,42 @@ export struct XopcNotesTabView {
                     }
                   }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                   SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([this.colors.tertiary])
+                  if (this.model.selecting) {
+                    SymbolGlyph(this.model.selectedIds.includes(item.id) ? $r('sys.symbol.checkmark_circle_fill')
+                      : $r('sys.symbol.circle')).fontSize(21).fontColor([this.colors.accent])
+                  }
                 }.width('100%').padding({ left: 16, right: 14, top: 16, bottom: 16 })
               }.width('100%').constraintSize({ minHeight: 96 }).padding(0)
                 .backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
-                .onClick((): void => { this.openNote(item.id); }, SEGMENTED_PAGE_TAP_SLOP_VP)
+                .onClick((): void => {
+                  if (this.model.selecting) this.model.toggleSelection(item.id);
+                  else this.openNote(item.id);
+                }, SEGMENTED_PAGE_TAP_SLOP_VP)
+                .gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => {
+                  this.model.toggleSelection(item.id);
+                }))
             }
           }, (item: XopcNoteIndexEntry): string => item.id + ':' + item.updatedAt)
-          if (this.model.hasMore && (this.category === 'notes' || !!this.submittedQuery)) {
+          if (this.model.hasMore) {
             ListItem() {
               XopcPaginationFooter({ loadingPage: this.model.loading || this.model.loadingMore, failedPage: !!this.model.error,
                 onLoad: (): void => { void this.model.list(true); } })
             }
           }
-          }
-          if (this.showsFiles && (this.visibleFiles.length || this.files.busy || this.files.error || this.category === 'files')) {
-            ListItem() { Text($r('app.string.files')).fontSize(15).fontWeight(FontWeight.Bold)
-              .fontColor(this.colors.secondary).padding({ top: 14, bottom: 6 }).width('100%') }
-            if (this.files.busy && !this.visibleFiles.length) { ListItem() { XopcListSkeleton() } }
-            if (this.files.error) {
-              ListItem() {
-                Button($r('app.string.retry')).height(44).onClick((): void => { void this.files.load(this.submittedQuery, true); })
-              }
-            }
-            if (this.category === 'files') {
-              ListItem() {
-                Button($r('app.string.library_browse_files')).height(44)
-                  .onClick((): void => { this.onNavigate({ page: 'files', itemId: '' }); })
-              }
-            }
-            ForEach(this.visibleFiles, (file: XopcFile) => {
-              ListItem() {
-                Button({ type: ButtonType.Normal }) {
-                  Row({ space: 12 }) {
-                    SymbolGlyph(file.kind === 'directory' ? $r('sys.symbol.folder') : $r('sys.symbol.doc'))
-                      .fontSize(20).fontColor([this.colors.secondary])
-                    Column({ space: 4 }) {
-                      Text(file.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor(this.colors.foreground)
-                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                      Text(file.relativePath).fontSize(12).fontColor(this.colors.tertiary).maxLines(1)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-                    }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-                  }.width('100%').padding(14)
-                }.width('100%').padding(0).backgroundColor(this.colors.panel).borderRadius(this.colors.corner(16)).clipShape(this.colors.cornerClip(16))
-                  .onClick((): void => { this.onNavigate({ page: 'files', itemId: file.id }); }, SEGMENTED_PAGE_TAP_SLOP_VP)
-              }
-            }, (file: XopcFile): string => file.id)
-          }
-          if (this.showsDeliveries && (this.visibleDeliveries.length || this.deliveriesLoading || this.deliveryError || this.category === 'deliveries')) {
-            ListItem() { Text($r('app.string.library_recent_results')).fontSize(15).fontWeight(FontWeight.Bold)
-              .fontColor(this.colors.secondary).padding({ top: 14, bottom: 6 }).width('100%') }
-            if (this.deliveriesLoading) { ListItem() { XopcListSkeleton() } }
-            if (this.deliveryError) {
-              ListItem() { Button($r('app.string.retry')).height(44).onClick((): void => { this.onRefreshDeliveries(); }) }
-            }
-            if (this.category === 'deliveries' && !this.visibleDeliveries.length && !this.deliveriesLoading && !this.deliveryError) {
-              ListItem() { XopcEmptyHint({ message: $r('app.string.library_no_results') }) }
-            }
-            ForEach(this.visibleDeliveries, (item: XopcHomeDelivery) => {
-              ListItem() {
-                XopcHubRow({ heading: item.title, summary: item.summary, symbol: $r('sys.symbol.checkmark_circle'),
-                  onOpen: (): void => { this.openDelivery(item); } })
-              }
-            }, (item: XopcHomeDelivery): string => item.id + ':' + item.summary)
-          }
-          }
         }.layoutWeight(1).width('100%').padding({ left: 20, right: 20 }).scrollBar(BarState.Off)
-          .gestureModifier(new XopcPageSwipe(this.categoryOptions.map((option: XopcSegmentOption): string => option.key),
-            this.category, (key: string): void => { this.selectCategory(key); }, !this.searchOpen))
+      if (this.model.selecting) {
+        Row({ space: 4 }) {
+          Button($r('app.string.pin')).layoutWeight(1).height(44).enabled(!this.model.saving)
+            .onClick((): void => { void this.model.batch('pin'); })
+          Button($r('app.string.archive')).layoutWeight(1).height(44).enabled(!this.model.saving)
+            .onClick((): void => { void this.model.batch('archive'); })
+          Button($r('app.string.delete')).layoutWeight(1).height(44).fontColor(this.colors.danger).enabled(!this.model.saving)
+            .onClick((): void => { void this.confirmBatchDelete(); })
+          Button($r('app.string.cancel')).layoutWeight(1).height(44).onClick((): void => { this.model.clearSelection(); })
+        }.width('100%').padding({ left: 20, right: 20, bottom: 8 })
+      }
       if (this.activePage && this.music.track) {
         XopcMusicMiniPlayer()
-      }
-      if (this.category !== 'deliveries') {
-        Button(this.category === 'notes' ? $r('app.string.new_note') : this.category === 'files'
-          ? $r('app.string.upload') : $r('app.string.library_create_import'))
-          .id('library-primary-action').height(49).width('100%').fontColor(this.colors.chat.onAction)
-          .backgroundColor(this.colors.chat.action).onClick((): void => {
-            if (this.category === 'files') this.onNavigate({ page: 'file-upload', itemId: '' });
-            else this.creationSheetOpen = true;
-          })
       }
     }.id('notes-tab-list-pane').width(this.contentWidth >= 840 ? 400 : '100%').height('100%')
       .backgroundColor(this.contentWidth >= 840 ? this.colors.grouped : Color.Transparent)
@@ -436,10 +283,8 @@ export struct XopcNotesTabView {
           .clip(true)
     }.id('notes-tab-root').width('100%').height('100%').backgroundColor(this.colors.surface)
       .onAreaChange((_previous: Area, current: Area): void => { this.contentWidth = Number(current.width); })
-      .bindSheet($$this.menuOpen, this.libraryMenu, { height: 390, dragBar: true, showClose: false,
-        backgroundColor: this.colors.surface })
       .bindSheet($$this.creationSheetOpen, this.creationSheet, {
-        height: 320, dragBar: true, showClose: false, backgroundColor: this.colors.surface,
+        height: 260, dragBar: true, showClose: false, backgroundColor: this.colors.surface,
         onDisappear: (): void => { this.finishCreationSheet(); }
       })
   }

@@ -33,7 +33,7 @@ struct NoteEditorView: View {
                     .font(.title2.weight(.semibold))
                     .padding(.top, 16)
                 if #available(iOS 18.0, *) {
-                    MarkdownNoteInput(markdown: $markdown)
+                    MarkdownNoteInput(markdown: $markdown, configuration: configuration)
                 } else {
                     TextEditor(text: $markdown)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

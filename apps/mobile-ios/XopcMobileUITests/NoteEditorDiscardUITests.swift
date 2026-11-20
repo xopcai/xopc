@@ -18,7 +18,7 @@ final class NoteEditorDiscardUITests: XCTestCase {
         let project = app.cells.element(boundBy: 1)
         XCTAssertTrue(project.waitForExistence(timeout: 10))
         project.tap()
-        app.buttons["library-category-notes"].tap()
+        app.selectPageOption("project-tab-notes", from: "project-tabs")
         app.buttons["新建项目笔记"].tap()
         XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 5))
         let titleField = app.textFields["标题"]

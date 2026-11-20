@@ -5,7 +5,8 @@ import org.json.JSONObject
 import org.json.JSONArray
 
 data class NoteSummary(val id: String, val title: String, val snippet: String, val status: String,
-  val kind: String, val updatedAt: Long, val pinned: Boolean, val tags: List<String>)
+  val kind: String, val updatedAt: Long, val pinned: Boolean, val tags: List<String>,
+  val projectNames: List<String> = emptyList())
 data class NotePage(val items: List<NoteSummary>, val total: Int, val hasMore: Boolean)
 data class NoteDetail(val id: String, val title: String, val markdown: String, val status: String,
   val kind: String, val updatedAt: Long, val pinned: Boolean, val tags: List<String>,
@@ -336,8 +337,13 @@ class NoteRepository(private val gateway: GatewaySession) {
         require(values.length() <= 100) { "INVALID_NOTE_TAGS" }
         (0 until values.length()).map { values.getString(it).take(512) }
       } ?: emptyList()
+      val projectNames = row.optJSONArray("projects")?.let { projects ->
+        (0 until minOf(projects.length(), 100)).mapNotNull { index ->
+          projects.optJSONObject(index)?.optString("name")?.take(512)?.takeIf(String::isNotBlank)
+        }
+      }.orEmpty()
       return NoteSummary(id, row.optString("title").take(1000), row.optString("snippet").take(2000),
-        status, kind, updatedAt, row.optBoolean("pinned"), tags)
+        status, kind, updatedAt, row.optBoolean("pinned"), tags, projectNames)
     }
   }
 }

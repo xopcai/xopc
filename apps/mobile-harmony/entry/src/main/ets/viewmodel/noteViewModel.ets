@@ -448,14 +448,6 @@ export class XopcNoteViewModel {
 
   discardAiPreview(): void { this.aiPreview = undefined; }
 
-  backToList(): void {
-    this.generation++; this.loading = false;
-    this.cancelSaveTimer();
-    this.selected = undefined; this.draft = undefined; this.remoteConflict = undefined; this.openingId = '';
-    this.editing = false; this.showingHistory = false; this.showingAi = false;
-    void this.list();
-  }
-
   private async flushPending(excludedId: string = ''): Promise<void> {
     const pending = await this.drafts.pending();
     for (const draft of pending) {

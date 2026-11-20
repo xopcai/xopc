@@ -20,11 +20,17 @@ struct NoteSummary: Decodable, Identifiable, Hashable, Sendable {
     let voiceAttachmentId: String?
     let voiceDurationSec: Double?
     let attachmentNames: [String]?
+    let projects: [NoteProjectReference]?
+    let pinned: Bool?
 
     var displayTitle: String {
         title?.trimmedNonEmpty ?? snippet?.trimmedNonEmpty
             ?? AppLocalization.string("未命名笔记", locale: AppLocalization.selectedLocale)
     }
+}
+
+struct NoteProjectReference: Decodable, Hashable, Sendable {
+    let name: String
 }
 
 struct NoteDetailEnvelope: Decodable, Sendable {

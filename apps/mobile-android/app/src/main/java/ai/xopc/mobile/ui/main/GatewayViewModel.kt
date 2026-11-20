@@ -926,10 +926,6 @@ class GatewayViewModel internal constructor(application: Application, private va
   suspend fun noteFiles(spaceId: String? = null, path: String = "", search: String = ""):
     List<ManagedFile> = withContext(Dispatchers.IO) { fileRepository.list(spaceId, path, search) }
 
-  suspend fun noteFileText(id: String): String = withContext(Dispatchers.IO) {
-    fileRepository.text(id)
-  }
-
   suspend fun noteFileContent(id: String): ByteArray = withContext(Dispatchers.IO) {
     fileRepository.content(id)
   }

@@ -72,12 +72,16 @@ extension GatewayClient {
         guard result.ok else { throw GatewayClientError.server("进展操作未完成") }
     }
 
-    func fetchNotes(search: String = "", status: String = "", projectID: String? = nil) async throws -> NotePage {
+    func fetchNotes(search: String = "", status: String = "", projectID: String? = nil,
+                    offset: Int = 0) async throws -> NotePage {
         var query = [
             URLQueryItem(name: "limit", value: "100"),
             URLQueryItem(name: "sortBy", value: "updatedAt"),
             URLQueryItem(name: "sortOrder", value: "desc")
         ]
+        if offset > 0 {
+            query.append(URLQueryItem(name: "offset", value: String(offset)))
+        }
         if !search.isEmpty {
             query.append(URLQueryItem(name: "search", value: search))
         }

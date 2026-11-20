@@ -905,28 +905,19 @@ final class ParityAcceptanceUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["assistant-chat-composer"].waitForExistence(timeout: 5))
     }
 
-    func testLibraryCanBeReopenedAfterRelaunch() {
+    func testNotesCanBeReopenedAfterRelaunch() {
         for _ in 0 ..< 3 {
             relaunch()
-            openTab("资料")
-            XCTAssertTrue(app.navigationBars["资料"].waitForExistence(timeout: 5))
+            openTab("笔记")
+            XCTAssertTrue(app.navigationBars["笔记"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.buttons["notes-open-search"].waitForExistence(timeout: 5))
             XCTAssertFalse(app.textFields["notes-search-field"].exists)
         }
-        XCTAssertTrue(app.buttons["notes-files-button"].exists)
         app.buttons["新建笔记"].tap()
         XCTAssertTrue(app.buttons["notes-create-text"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["notes-create-voice"].exists)
         app.buttons["notes-create-text"].tap()
         XCTAssertTrue(app.navigationBars["新建笔记"].waitForExistence(timeout: 5))
-    }
-
-    func testNotesFilesEntryOpensFileLibrary() {
-        openTab("笔记")
-        let files = app.buttons["notes-files-button"]
-        XCTAssertTrue(files.waitForExistence(timeout: 5))
-        files.tap()
-        XCTAssertTrue(app.navigationBars["文件"].waitForExistence(timeout: 5))
     }
 
     func testCompletedDiscussionShowsOrganizedSummary() async throws {
@@ -1480,7 +1471,7 @@ final class ParityAcceptanceUITests: XCTestCase {
 
     private func openTab(_ label: String) {
         let destination = ["助手": "assistant", "对话": "conversations", "进展": "progress", "笔记": "notes",
-                           "资料": "notes", "设置": "profile"][label] ?? label
+                           "设置": "profile"][label] ?? label
         app.openHomeDestination(destination)
     }
 
@@ -1519,7 +1510,7 @@ final class ParityAcceptanceUITests: XCTestCase {
     }
 
     private func captureTextNoteJourneys() {
-        XCTAssertTrue(app.navigationBars["资料"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["笔记"].waitForExistence(timeout: 5))
         app.swipeDown()
         let noteSearch = app.searchFields.firstMatch
         guard noteSearch.waitForExistence(timeout: 5) else { return }
@@ -1852,6 +1843,22 @@ final class MobileLayoutParityUITests: XCTestCase {
         app.launchEnvironment["XOPC_UI_TEST_RESET_NAVIGATION"] = "1"
         app.launch()
         XCTAssertTrue(app.buttons["chat-header-sidebar"].waitForExistence(timeout: 10))
+    }
+
+    func testGlobalNotesOpenRichDetailAndEditor() {
+        tab("notes")
+        XCTAssertTrue(app.navigationBars["笔记"].waitForExistence(timeout: 5))
+        let note = app.buttons["note-row-note-1"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        note.tap()
+        XCTAssertTrue(app.staticTexts["格式示例"].waitForExistence(timeout: 5))
+        app.buttons["编辑"].tap()
+        XCTAssertTrue(app.buttons["预览"].waitForExistence(timeout: 5))
+        app.buttons["预览"].tap()
+        XCTAssertTrue(app.staticTexts["格式示例"].waitForExistence(timeout: 5))
+        app.buttons["取消"].tap()
+        app.buttons["关闭"].tap()
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
     }
 
     func testCapabilityNavigationChoiceRestoresAfterAppRelaunch() {
@@ -3618,7 +3625,7 @@ extension XCUIApplication {
             buttons["chat-sidebar-close"].tap()
             return
         }
-        let identifier = ["conversations": "search", "notes": "library", "progress": "workbench"][destination] ?? destination
+        let identifier = ["conversations": "search", "progress": "workbench"][destination] ?? destination
         let button = buttons["chat-sidebar-\(identifier)"]
         XCTAssertTrue(button.waitForExistence(timeout: 5))
         button.tap()

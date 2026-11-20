@@ -120,7 +120,6 @@ fun MainNavigation(appearanceMode: String, onAppearanceModeChange: (String) -> U
             onLoadNotes = gateway::loadNotes,
             onNoteFileSpaces = gateway::noteFileSpaces,
             onNoteFiles = gateway::noteFiles,
-            onNoteFileText = gateway::noteFileText,
             onNoteFileContent = gateway::noteFileContent,
             onLoadMoreNotes = gateway::loadMoreNotes,
             onOpenNote = gateway::openNote,

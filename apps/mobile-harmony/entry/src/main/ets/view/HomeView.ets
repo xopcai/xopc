@@ -141,7 +141,7 @@ export struct XopcHomeView {
   }
 
   @Computed get showDetailMusic(): boolean {
-    return !!this.music.track && this.detailVisible && this.detailRoute !== 'library' &&
+    return !!this.music.track && this.detailVisible && this.detailRoute !== 'library' && this.detailRoute !== 'notes-list' &&
       this.detailRoute !== 'project-chat' && this.detailRoute !== 'task-conversation' &&
       this.detailRoute !== 'automation-configuration-chat';
   }
@@ -512,11 +512,11 @@ export struct XopcHomeView {
             else this.openConversationFromList(source.conversationId);
           }, onUseInChat: (file: XopcChatAttachment, source?: XopcLibraryOrigin): Promise<void> => this.useLibraryFile(file, source) })
       }.hideTitleBar(true).backgroundColor(this.colors.surface).onBackPressed((): boolean => this.libraryBackHandler?.() ?? false)
-    } else if (page === 'note-recovery') {
+    } else if (page === 'notes-list' || ((page === 'notes' || page === 'inbox') && !(param as XopcMobileRoute).itemId)) {
       NavDestination() {
-        XopcNotesTabView({ activePage: true, onExit: (): void => { this.pathStack.pop(); }, deliveries: this.attention.deliveries,
-          deliveriesLoading: this.attention.loading, deliveryError: this.attention.homeError,
-          onRefreshDeliveries: (): void => { void this.attention.refresh(); },
+        XopcNotesTabView({ activePage: this.detailRoute === page && this.layout.foreground,
+          initialStatus: page === 'inbox' ? 'inbox' : '',
+          onExit: (): void => { this.pathStack.pop(); },
           onStartVoice: (): void => { void this.startNoteCapture(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
       }.hideTitleBar(true).backgroundColor(this.colors.surface)
@@ -544,7 +544,7 @@ export struct XopcHomeView {
           onClose: (): void => { this.pathStack.pop(); } })
       }.hideTitleBar(true).onHidden((): void => { this.profileOptions.dispose(); this.profileOptions = new XopcChatOptionsViewModel(); })
     } else if (page === 'notes' || page === 'inbox' || page === 'note-create') {
-      XopcNotesView({ initialId: (param as XopcMobileRoute).itemId, initialStatus: page === 'inbox' ? 'inbox' : '',
+      XopcNotesView({ initialId: (param as XopcMobileRoute).itemId,
         createOnAppear: page === 'note-create', projectId: (param as XopcMobileRoute).projectId ?? '',
         onExit: (): void => { this.pathStack.pop(); },
         onOpenConversation: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } })
@@ -729,7 +729,7 @@ export struct XopcHomeView {
         XopcDiscussionRecordingPanelView({ panel: this.recordingPanel,viewportWidth: this.recordingViewportWidth,viewportHeight: this.recordingViewportHeight,
           onSaved: (_id: string): void => {},
           onOpenNote: (id: string): void => { this.recordingPanel.setCompact(true); this.navigate({ page: 'notes',itemId: id }); },
-          onRecovery: (): void => { this.pathStack.clear(); this.navigate({ page: 'note-recovery', itemId: '' }); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
+          onRecovery: (): void => { this.pathStack.clear(); this.navigate({ page: 'notes-list', itemId: '' }); void this.capture.refreshPending(this.getUIContext().getHostContext() as common.UIAbilityContext); } })
       }
       XopcShareIntakeDialog({ currentConversationId: this.activeChatId, onExplore: async (value: XopcIncomingShare, targetId: string): Promise<boolean> => await this.exploreShare(value, targetId),
         onSaved: (noteId: string): void => { this.navigate({ page: 'notes', itemId: noteId }); } })

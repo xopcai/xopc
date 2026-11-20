@@ -277,18 +277,25 @@ private fun MarkdownParagraph(node: Paragraph, linkColor: Color, onOpenLink: ((S
 private fun MarkdownInlineText(node: Node, linkColor: Color,
   onOpenLink: ((String) -> Unit)?, modifier: Modifier = Modifier,
   style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
-  bold: Boolean = false, prefix: String = "") {
+  bold: Boolean = false, prefix: String = "", taskMarker: String? = null) {
   val rawSource = LocalMarkdownSource.current
   val original = node.sourceSpans.map { rawSource.substring(it.inputIndex.coerceAtMost(rawSource.length), (it.inputIndex + it.length).coerceAtMost(rawSource.length)) }.joinToString("\n")
-  if (MathMarkdownSyntax.mayContain(original)) {
-    MathMarkdownView(prefix + original, LocalStreamingMarkdown.current, modifier, fontSize = style.fontSize.value,
+  val readingText = original.removePrefix(taskMarker.orEmpty())
+  if (MathMarkdownSyntax.mayContain(readingText)) {
+    MathMarkdownView(prefix + readingText, LocalStreamingMarkdown.current, modifier, fontSize = style.fontSize.value,
       enabled = LocalMathEnabled.current, onOpenLink = onOpenLink)
     return
   }
-  val content = remember(node, linkColor, onOpenLink, prefix) {
+  val content = remember(node, linkColor, onOpenLink, prefix, taskMarker) {
     buildAnnotatedString {
       append(prefix)
-      node.children().forEach { appendInline(it, linkColor, onOpenLink) }
+      node.children().forEachIndexed { index, child ->
+        if (index == 0 && taskMarker != null && child is MarkdownTextNode) {
+          append(child.literal.removePrefix(taskMarker))
+        } else {
+          appendInline(child, linkColor, onOpenLink)
+        }
+      }
     }
   }
   val readingStyle = if (prefix.isNotEmpty()) {
@@ -348,10 +355,20 @@ private fun MarkdownList(node: Node, linkColor: Color,
         when (child) {
           is BulletList, is OrderedList -> MarkdownList(child, linkColor, onOpenLink,
             onCopyCode, depth + 1)
-          is Paragraph -> MarkdownInlineText(child, linkColor, onOpenLink,
-            modifier = Modifier.fillMaxWidth().padding(start = indentation)
-              .testTag("markdown-list-paragraph"),
-            prefix = if (childIndex == 0) marker else "")
+          is Paragraph -> {
+            val firstText = (child.firstChild as? MarkdownTextNode)?.literal
+            val taskMarker = firstText?.take(4)?.takeIf {
+              childIndex == 0 && node is BulletList && (it == "[ ] " || it.equals("[x] ", ignoreCase = true))
+            }
+            val visibleMarker = when {
+              taskMarker != null -> if (taskMarker[1] == ' ') "☐ " else "☑ "
+              childIndex == 0 -> marker
+              else -> ""
+            }
+            MarkdownInlineText(child, linkColor, onOpenLink,
+              modifier = Modifier.fillMaxWidth().padding(start = indentation).testTag("markdown-list-paragraph"),
+              prefix = visibleMarker, taskMarker = taskMarker)
+          }
           else -> Column(modifier = Modifier.fillMaxWidth().padding(start = indentation)) {
             if (childIndex == 0) Text(marker.trimEnd(), style = MaterialTheme.typography.bodyLarge)
             MarkdownBlock(child, linkColor, onOpenLink, onCopyCode)

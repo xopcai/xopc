@@ -47,7 +47,9 @@ struct NoteDetailView: View {
                                 if note.markdown.isEmpty {
                                     Text("暂无正文")
                                 } else {
-                                    Text(.init(note.markdown))
+                                    MarkdownBodyView(parts: [], configuration: configuration, conversationID: nil,
+                                                     markdown: note.markdown)
+                                        .environment(\.chatTextSelectionEnabled, true)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)

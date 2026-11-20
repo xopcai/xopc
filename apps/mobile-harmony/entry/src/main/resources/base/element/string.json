@@ -122,6 +122,7 @@
     {"name": "library_create_import", "value": "Create or import"},
     {"name": "file_view_in_library", "value": "View in Library"},
     { "name": "library_empty", "value": "No matching library items" },
+    { "name": "notes_delete_selection_confirm", "value": "Move the selected notes to Trash?" },
     { "name": "library_title", "value": "Library" },
     { "name": "library_search", "value": "Search library" },
     { "name": "library_all", "value": "All" },

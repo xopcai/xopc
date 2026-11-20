@@ -227,7 +227,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 
-internal enum class HomeTab { Assistant, Conversations, Progress, Projects, Automations, Notes, Capabilities, Me }
+internal enum class HomeTab { Assistant, Conversations, Progress, Projects, Automations, Notes, Library, Capabilities, Me }
 private data class LinkedDetail(val source: HomeTab, val destination: HomeTab, val id: String)
 
 private data class WelcomeRecommendation(val title: String, val reason: String, val prompt: String)
@@ -489,7 +489,6 @@ internal fun MainScreen(
   onLoadNotes: (String, String) -> Unit = { _, _ -> },
   onNoteFileSpaces: suspend () -> List<ManagedFileSpace> = { emptyList() },
   onNoteFiles: suspend (String?, String, String) -> List<ManagedFile> = { _, _, _ -> emptyList() },
-  onNoteFileText: suspend (String) -> String = { "" },
   onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
   onLoadMoreNotes: () -> Unit = {},
   onOpenNote: (String) -> Unit = {},
@@ -793,7 +792,7 @@ internal fun MainScreen(
       Toast.makeText(context, R.string.assistant_copied, Toast.LENGTH_SHORT).show()
     },
     onLoadNotes = onLoadNotes, onNoteFileSpaces = onNoteFileSpaces,
-    onNoteFiles = onNoteFiles, onNoteFileText = onNoteFileText,
+    onNoteFiles = onNoteFiles,
     onNoteFileContent = onNoteFileContent,
     onLoadMoreNotes = onLoadMoreNotes, onOpenNote = onOpenNote,
     onNewNote = onNewNote, onNoteDraftChange = onNoteDraftChange, onSaveNoteDraft = onSaveNoteDraft,
@@ -1022,7 +1021,6 @@ internal fun MainContent(
   onLoadNotes: (String, String) -> Unit = { _, _ -> },
   onNoteFileSpaces: suspend () -> List<ManagedFileSpace> = { emptyList() },
   onNoteFiles: suspend (String?, String, String) -> List<ManagedFile> = { _, _, _ -> emptyList() },
-  onNoteFileText: suspend (String) -> String = { "" },
   onNoteFileContent: suspend (String) -> ByteArray = { byteArrayOf() },
   onLoadMoreNotes: () -> Unit = {},
   onOpenNote: (String) -> Unit = {},
@@ -1339,8 +1337,8 @@ internal fun MainContent(
     if (linkedDetailId == null && selectedTab == HomeTab.Projects && isPaired) onLoadProgressProjects()
     if (linkedDetailId == null && selectedTab == HomeTab.Automations && isPaired) onLoadAutomations()
   }
-  LaunchedEffect(selectedTab, gatewayId, linkedDetailId) {
-    if (selectedTab == HomeTab.Notes && isPaired && linkedDetailId != null) {
+  LaunchedEffect(selectedTab, gatewayId, linkedDetailId, isPaired) {
+    if (isPaired && selectedTab == HomeTab.Notes) {
       onLoadNotes(connection.notes.search, connection.notes.status)
     }
   }
@@ -1705,12 +1703,12 @@ internal fun MainContent(
           onSelectTab(HomeTab.Me)
         })
     } else {
-    val showLibraryDelivery = selectedTab == HomeTab.Notes && linkedDetailId == null && libraryDeliveryId.isNotEmpty()
+    val showLibraryDelivery = selectedTab == HomeTab.Library && libraryDeliveryId.isNotEmpty()
     val contentTab = if (showLibraryDelivery) HomeTab.Progress else selectedTab
     val tabStateKey = when {
       showLibraryDelivery -> "library-delivery-${gatewayId}-$libraryDeliveryKind-$libraryDeliveryId"
       linkedDetailId != null -> "linked-detail-$gatewayId-${contentTab.name}-$linkedDetailId"
-      selectedTab == HomeTab.Notes -> "library-root-${gatewayId}"
+      selectedTab == HomeTab.Library -> "library-root-${gatewayId}"
       else -> "${gatewayId}:${selectedTab.name}"
     }
     tabStateHolder.SaveableStateProvider(tabStateKey) {
@@ -1881,10 +1879,10 @@ internal fun MainContent(
         onLoadDevices = onLoadCapabilityDevices, onSetDeviceCapability = onSetDeviceCapability, onUseComputer = onUseConnectedComputer,
         onShareDeviceFile = onShareDeviceConnectionFile, onPairDevice = onScanPairing,
         deviceScope = connection.profile?.let { it.gatewayId + ':' + it.deviceId })
-      HomeTab.Notes -> if (!isPaired) PairingScreen(
+      HomeTab.Library -> if (!isPaired) PairingScreen(
         stringResource(R.string.library_title), connection, onPair, onCancelPairing, onScanPairing,
         pairingScanning, pairingScanError, insets)
-      else if (linkedDetailId == null) {
+      else {
         val profile = connection.profile
         if (spaceLibraryAccess != null) {
           SpaceLibraryScreen(rootInsets, profile, spaceLibraryAccess, onExit = exitDestination,
@@ -1899,7 +1897,11 @@ internal fun MainContent(
               }
             }, onUse = onUseLibraryFile)
         }
-      } else {
+      }
+      HomeTab.Notes -> if (!isPaired) PairingScreen(
+        stringResource(R.string.tab_notes), connection, onPair, onCancelPairing, onScanPairing,
+        pairingScanning, pairingScanError, insets)
+      else {
         NotesScreen(connection.notes.takeIf { it.gatewayId == gatewayId }
         ?: NotesUiState(gatewayId = gatewayId), rootInsets,
         onLoadNotes, onLoadMoreNotes, onOpenNote, onNewNote,
@@ -1915,12 +1917,12 @@ internal fun MainContent(
         onLoadAttachment = onLoadNoteAttachment,
         onOpenChat = { onSelectTab(HomeTab.Assistant) },
         onNoteFileSpaces = onNoteFileSpaces,
-        onNoteFiles = onNoteFiles, onNoteFileText = onNoteFileText,
+        onNoteFiles = onNoteFiles,
         onNoteFileContent = onNoteFileContent,
-        initialNoteId = linkedDetailId.takeUnless { it.startsWith("project-note-") },
-        initialProjectDraft = linkedDetailId.startsWith("project-note-"),
+        initialNoteId = linkedDetailId?.takeUnless { it.startsWith("project-note-") },
+        initialProjectDraft = linkedDetailId?.startsWith("project-note-") == true,
         onExit = {
-          linkedDetailId.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
+          linkedDetailId?.takeIf { it.startsWith("project-note-") }?.removePrefix("project-note-")
             ?.takeIf { it == connection.progress.projectId }?.let(onOpenProgressProject)
           tabStateHolder.removeState(tabStateKey)
           exitDestination()

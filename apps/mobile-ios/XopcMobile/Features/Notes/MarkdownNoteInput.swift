@@ -3,6 +3,8 @@ import SwiftUI
 @available(iOS 18.0, *)
 struct MarkdownNoteInput: View {
     @Binding var markdown: String
+    let configuration: GatewayConfiguration
+    @State private var showsPreview = false
     @State private var selection: TextSelection?
     @State private var undoStack: [String] = []
     @State private var redoStack: [String] = []
@@ -13,36 +15,27 @@ struct MarkdownNoteInput: View {
         VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal) {
                 HStack(spacing: 12) {
-                    Button("撤销", systemImage: "arrow.uturn.backward", action: undo)
-                        .disabled(undoStack.isEmpty)
-                    Button("重做", systemImage: "arrow.uturn.forward", action: redo)
-                        .disabled(redoStack.isEmpty)
-                    Button("粗体", systemImage: "bold") { wrapSelection(with: "**", placeholder: "粗体") }
-                    Button("斜体", systemImage: "italic") { wrapSelection(with: "*", placeholder: "斜体") }
-                    Button("一级标题") { prefixLine("# ") }
-                    Button("二级标题") { prefixLine("## ") }
-                    Button("三级标题") { prefixLine("### ") }
-                    Button("列表", systemImage: "list.bullet") { prefixLine("- ") }
+                    Button(showsPreview ? "编辑" : "预览", systemImage: showsPreview ? "pencil" : "eye") {
+                        isEditing = false
+                        showsPreview.toggle()
+                    }
+                    if !showsPreview {
+                        formattingControls
+                    }
                 }
                 .buttonStyle(.bordered)
             }
-            .accessibilityLabel("Markdown 格式")
+            .accessibilityLabel("笔记格式")
             .accessibilityIdentifier("note-markdown-toolbar")
-            ZStack(alignment: .topLeading) {
-                if markdown.isEmpty, !isEditing {
-                    Text("开始记录…")
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, 8)
-                        .padding(.leading, 5)
-                        .allowsHitTesting(false)
+            if showsPreview {
+                ScrollView {
+                    MarkdownBodyView(parts: [], configuration: configuration, conversationID: nil, markdown: markdown)
                 }
-                TextEditor(text: $markdown, selection: $selection)
-                    .focused($isEditing)
-                    .scrollContentBackground(.hidden)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("笔记正文")
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .accessibilityIdentifier("note-markdown-preview")
+            } else {
+                textEditor
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onChange(of: markdown) { oldValue, newValue in
             if skipsHistoryChange {
@@ -55,6 +48,40 @@ struct MarkdownNoteInput: View {
                 redoStack.removeAll()
             }
         }
+    }
+
+    @ViewBuilder private var formattingControls: some View {
+        Button("撤销", systemImage: "arrow.uturn.backward", action: undo)
+            .disabled(undoStack.isEmpty)
+        Button("重做", systemImage: "arrow.uturn.forward", action: redo)
+            .disabled(redoStack.isEmpty)
+        Button("粗体", systemImage: "bold") { wrapSelection(with: "**", placeholder: "粗体") }
+        Button("斜体", systemImage: "italic") { wrapSelection(with: "*", placeholder: "斜体") }
+        Button("一级标题") { prefixLine("# ") }
+        Button("二级标题") { prefixLine("## ") }
+        Button("三级标题") { prefixLine("### ") }
+        Button("列表", systemImage: "list.bullet") { prefixLine("- ") }
+        Button("编号列表", systemImage: "list.number") { prefixLine("1. ") }
+        Button("核对清单", systemImage: "checklist") { prefixLine("- [ ] ") }
+        Button("引用", systemImage: "quote.opening") { prefixLine("> ") }
+    }
+
+    private var textEditor: some View {
+        ZStack(alignment: .topLeading) {
+            if markdown.isEmpty, !isEditing {
+                Text("开始记录…")
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 8)
+                    .padding(.leading, 5)
+                    .allowsHitTesting(false)
+            }
+            TextEditor(text: $markdown, selection: $selection)
+                .focused($isEditing)
+                .scrollContentBackground(.hidden)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityLabel("笔记正文")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func undo() {
@@ -94,10 +121,22 @@ struct MarkdownNoteInput: View {
 
     private func prefixLine(_ prefix: String) {
         let range = selectedRange
-        let insertionOffset = markdown.distance(from: markdown.startIndex, to: range.upperBound) + prefix.count
+        let lowerOffset = markdown.distance(from: markdown.startIndex, to: range.lowerBound)
+        let upperOffset = markdown.distance(from: markdown.startIndex, to: range.upperBound)
         let lineStart = markdown[..<range.lowerBound].lastIndex(of: "\n")
             .map { markdown.index(after: $0) } ?? markdown.startIndex
-        markdown.insert(contentsOf: prefix, at: lineStart)
-        selection = TextSelection(insertionPoint: markdown.index(markdown.startIndex, offsetBy: insertionOffset))
+        let lineEnd = markdown[range.lowerBound...].firstIndex(of: "\n") ?? markdown.endIndex
+        let line = String(markdown[lineStart ..< lineEnd])
+        let marker = line.range(of: #"^(?:#{1,6} |[-*+] \[[ xX]\] |[-*+] |\d+[.)] |> )"#,
+                                options: .regularExpression)
+        let markerLength = marker.map { line[$0].count } ?? 0
+        let replacement = marker.map { line[$0] == prefix ? "" : prefix } ?? prefix
+        let startOffset = markdown.distance(from: markdown.startIndex, to: lineStart)
+        let markerEnd = markdown.index(lineStart, offsetBy: markerLength)
+        markdown.replaceSubrange(lineStart ..< markerEnd, with: replacement)
+        let delta = replacement.count - markerLength
+        let start = markdown.index(markdown.startIndex, offsetBy: max(startOffset + replacement.count, lowerOffset + delta))
+        let end = markdown.index(markdown.startIndex, offsetBy: max(startOffset + replacement.count, upperOffset + delta))
+        selection = start == end ? TextSelection(insertionPoint: start) : TextSelection(range: start ..< end)
     }
 }

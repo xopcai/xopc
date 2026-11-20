@@ -64,10 +64,22 @@ private struct MarkdownPartView: View {
                 .padding(.top, level <= 2 ? 8 : 3)
                 .accessibilityAddTraits(.isHeader)
         case let .bullet(level, text):
-            HStack(alignment: .firstTextBaseline, spacing: 4) { Text("•"); inline(text).frame(maxWidth: .infinity, alignment: .leading) }
-                .mobileTextStyle(.body)
-                .padding(.leading, CGFloat(min(max(level, 0), 3)) * 12)
-                .fixedSize(horizontal: false, vertical: true)
+            let checklistMarker = text.prefix(4).lowercased()
+            let isChecklist = checklistMarker == "[ ] " || checklistMarker == "[x] "
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if isChecklist {
+                    Image(systemName: checklistMarker == "[x] " ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(.tint)
+                        .accessibilityLabel(checklistMarker == "[x] " ? "已完成" : "未完成")
+                } else {
+                    Text("•")
+                }
+                inline(isChecklist ? String(text.dropFirst(4)) : text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .mobileTextStyle(.body)
+            .padding(.leading, CGFloat(min(max(level, 0), 3)) * 12)
+            .fixedSize(horizontal: false, vertical: true)
         case let .numbered(number, level, text):
             HStack(alignment: .firstTextBaseline, spacing: 4) { Text("\(number)."); inline(text).frame(maxWidth: .infinity, alignment: .leading) }
                 .mobileTextStyle(.body)

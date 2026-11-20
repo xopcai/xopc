@@ -83,7 +83,12 @@ export interface XopcNote {
 }
 
 /** Lightweight list entry returned by the list endpoint. */
+export interface XopcNoteProjectReference {
+  name: string;
+}
+
 export interface XopcNoteIndexEntry {
+  projects?: XopcNoteProjectReference[];
   /** Stable note identifier. */
   id: string;
   projectId?: string;

@@ -122,6 +122,7 @@
     {"name": "library_create_import", "value": "新建或导入"},
     {"name": "file_view_in_library", "value": "在资料库中查看"},
     { "name": "library_empty", "value": "没有匹配的资料" },
+    { "name": "notes_delete_selection_confirm", "value": "将所选笔记移到废纸篓？" },
     { "name": "library_title", "value": "资料库" },
     { "name": "library_search", "value": "搜索资料" },
     { "name": "library_all", "value": "全部" },

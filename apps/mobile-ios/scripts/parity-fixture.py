@@ -459,6 +459,7 @@ class Handler(BaseHTTPRequestHandler):
    else:
     status=201; data={'version':{'id':key,'revision':file_fixture['revision']}}
   elif path=='/api/notes': data={'items':[{'id':'note-1','title':'布局检查笔记','kind':'note','status':'active','createdAt':now,'updatedAt':now,'snippet':'用于模拟器验证。'}],'total':1,'hasMore':False}
+  elif path=='/api/notes/note-1': data={'note':{'id':'note-1','title':'布局检查笔记','markdown':'## 格式示例\n\n- [x] 完成示例','kind':'note','status':'active','createdAt':now,'updatedAt':now}}
   elif path=='/api/user-model/mobile-summary': data={'profile':{'callName':'Tester','role':'工程师'},'settings':{'memoryEnabled':True,'showMemoryReferences':True,'sensitiveWritePolicy':'confirm'},'counts':{'total':0,'explicit':0,'learned':0,'review':0,'workMemory':len(work_memory)},'goals':goals,'recent':[]}
   elif path=='/api/user-model/assertions': data={'items':[]}
   elif path=='/api/knowledge-memory' and query.get('view')==['manage']:

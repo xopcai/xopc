@@ -9,8 +9,6 @@ import ai.xopc.mobile.gateway.NoteHistoryEntry
 import ai.xopc.mobile.gateway.NoteSnapshot
 import ai.xopc.mobile.gateway.NoteShare
 import ai.xopc.mobile.gateway.NoteAiPreview
-import ai.xopc.mobile.gateway.ManagedFile
-import ai.xopc.mobile.gateway.ManagedFileSpace
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import org.junit.Assert.assertEquals
@@ -274,7 +273,6 @@ class NotesScreenTest {
         onCreatedHandled = { state = state.copy(createdNoteId = null) })
     }
     composeTestRule.onNodeWithTag("notes-new").performClick()
-    composeTestRule.onNodeWithTag("notes-create-text").performClick()
     composeTestRule.runOnIdle { state = state.copy(draft = local.copy(id = remote.id,
       baseRemoteVersion = 1), selectedId = remote.id, detail = remote,
       draftSyncedVersion = local.version) }
@@ -295,7 +293,6 @@ class NotesScreenTest {
         onSaveDraft = { saves++ })
     }
     composeTestRule.onNodeWithTag("notes-new").performClick()
-    composeTestRule.onNodeWithTag("notes-create-text").performClick()
     composeTestRule.onNodeWithTag("notes-back").assertDoesNotExist()
     androidx.test.espresso.Espresso.closeSoftKeyboard()
     androidx.test.espresso.Espresso.pressBack()
@@ -347,7 +344,6 @@ class NotesScreenTest {
         }, { saved++ })
     }
     composeTestRule.onNodeWithTag("notes-new").assertIsEnabled().performClick()
-    composeTestRule.onNodeWithTag("notes-create-text").performClick()
     composeTestRule.onNodeWithTag("notes-draft-title").performTextInput("Idea")
     composeTestRule.onNodeWithTag("notes-draft-body").performTextInput("Body")
     composeTestRule.onNodeWithTag("notes-draft-save").performClick()
@@ -357,7 +353,7 @@ class NotesScreenTest {
     assertEquals(1, saved)
   }
 
-  @Test fun markdownToolbarSupportsUndoAndRedo() {
+  @Test fun markdownToolbarSupportsUndoRedoAndHeadingPreview() {
     var draft by mutableStateOf(NoteDraft("local-00000000-0000-0000-0000-000000000081", "Idea", "Body",
       "00000000-0000-0000-0000-000000000082", 1))
     composeTestRule.setContent {
@@ -371,44 +367,13 @@ class NotesScreenTest {
     assertEquals("Body", draft.markdown)
     composeTestRule.onNodeWithTag("notes-redo").performClick()
     assertEquals("Body updated", draft.markdown)
-  }
-
-  @Test fun createSheetExposesTextAndVoiceWithoutStartingEitherAutomatically() {
-    var started = 0
-    var voice = 0
-    composeTestRule.setContent {
-      NotesScreen(NotesUiState(gatewayId = "test"),
-        androidx.compose.foundation.layout.PaddingValues(), { _, _ -> }, {}, {},
-        onNew = { started++ }, onStartVoice = { voice++ })
-    }
-    composeTestRule.onNodeWithTag("notes-new").performClick()
-    assertEquals(0, started)
-    assertEquals(0, voice)
-    composeTestRule.onNodeWithTag("notes-create-voice").performClick()
-    assertEquals(1, voice)
-  }
-
-  @Test fun fileSearchResultOpensPreviewThroughFilesSurface() {
-    val file = ManagedFile("space.abc", "space", "readme.txt", "readme.txt",
-      "file", "text/plain", 4)
-    var query = ""
-    composeTestRule.setContent {
-      NotesScreen(NotesUiState(gatewayId = "test", search = query),
-        androidx.compose.foundation.layout.PaddingValues(), { text, _ -> query = text }, {}, {},
-        onNoteFileSpaces = { listOf(ManagedFileSpace("space", "Workspace", false)) },
-        onNoteFiles = { _, _, search -> if (search.isNotEmpty()) listOf(file) else emptyList() },
-        onNoteFileContent = { "test".toByteArray() })
-    }
-    composeTestRule.onNodeWithTag("notes-search").assertDoesNotExist()
-    composeTestRule.onNodeWithTag("notes-open-search").performClick()
-    composeTestRule.onNodeWithTag("notes-search").performTextInput("readme")
-    composeTestRule.waitUntil(5_000) {
-      composeTestRule.onAllNodesWithTag("notes-file-${file.id}").fetchSemanticsNodes().isNotEmpty()
-    }
-    composeTestRule.onNodeWithTag("notes-file-${file.id}").performClick()
-    composeTestRule.waitUntil(5_000) {
-      composeTestRule.onAllNodesWithTag("notes-file-preview").fetchSemanticsNodes().isNotEmpty()
-    }
-    composeTestRule.onNodeWithText("test").assertExists()
+    composeTestRule.onNodeWithTag("notes-heading-1").performScrollTo().performClick()
+    assertEquals("# Body updated", draft.markdown)
+    composeTestRule.onNodeWithTag("notes-heading-2").performScrollTo().performClick()
+    assertEquals("## Body updated", draft.markdown)
+    composeTestRule.onNodeWithTag("notes-preview-toggle").performScrollTo().performClick()
+    composeTestRule.onNodeWithTag("notes-draft-preview").assertExists()
+    composeTestRule.runOnIdle { draft = draft.copy(markdown = "- [x] Finished task", version = draft.version + 1) }
+    composeTestRule.onNodeWithText("☑ Finished task").assertExists()
   }
 }

@@ -1354,3 +1354,9 @@
 "device_execution_offline" = "Offline";
 "device_execution_authorization" = "Needs authorization";
 "device_execution_reselect" = "Select again";
+
+"笔记格式" = "Note formatting";
+"预览" = "Preview";
+"编号列表" = "Numbered list";
+"核对清单" = "Checklist";
+"未完成" = "Incomplete";
